@@ -638,6 +638,77 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void ApplyLoadedPivotStyles_StylesLoadedOutlineParentRowsAcrossBlankFootprintCells()
+    {
+        var workbook = new Workbook("LoadedPivotOutlineParentStyleTest");
+        var sheet = workbook.AddSheet("Pivot");
+        var loadedThemeFontStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontName = "Calibri",
+            FontSize = 10,
+            FontScheme = CellFontScheme.Minor
+        });
+        sheet.SetCell(Addr(sheet, "A3"), new Cell { Value = new TextValue("Sum of Sales"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C3"), new Cell { Value = new TextValue("Category"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A4"), new Cell { Value = new TextValue("Region"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B4"), new Cell { Value = new TextValue("Channel"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C4"), new Cell { Value = new TextValue("Hardware"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A5"), new Cell { Value = new TextValue("East"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B6"), new Cell { Value = new TextValue("Direct"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C6"), new Cell { Value = new NumberValue(2360), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B7"), new Cell { Value = new TextValue("Partner"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "D7"), new Cell { Value = new NumberValue(980), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A8"), new Cell { Value = new TextValue("East Total"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C8"), new Cell { Value = new NumberValue(2360), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A9"), new Cell { Value = new TextValue("North"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B10"), new Cell { Value = new TextValue("Direct"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "D10"), new Cell { Value = new NumberValue(2140), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A11"), new Cell { Value = new TextValue("Grand Total"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C11"), new Cell { Value = new NumberValue(2360), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "D11"), new Cell { Value = new NumberValue(3120), StyleId = loadedThemeFontStyle });
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotSubtotalGrandTotals",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D2"),
+            TargetRange = Range(sheet, "A3", "E11"),
+            LastRenderedRange = Range(sheet, "A3", "E11"),
+            StyleName = "PivotStyleMedium9",
+            ReportLayout = PivotReportLayout.Outline,
+            FirstDataRow = 2,
+            FirstDataColumn = 2,
+            ShowRowStripes = false,
+            ShowColumnStripes = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(2));
+        pivot.DataFields.Add(new PivotDataFieldModel(3, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        var expectedGroupFill = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().Be(expectedGroupFill);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .Bold.Should().BeTrue();
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FontColor.Should().Be(CellColor.Black);
+        sheet.GetCell(Addr(sheet, "B5"))!.Value.Should().Be(BlankValue.Instance);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
+            .FillColor.Should().Be(expectedGroupFill);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
+            .FillColor.Should().Be(expectedGroupFill);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B6"))!.StyleId)
+            .FillColor.Should().Be(CellColor.White);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A8"))!.StyleId)
+            .FillColor.Should().Be(expectedGroupFill, "subtotal rows keep the same Medium9 fill but are detected separately from parent rows");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A9"))!.StyleId)
+            .FillColor.Should().Be(expectedGroupFill);
+    }
+
+    [Fact]
     public void ApplyLoadedPivotStyles_PreservesExistingFontIdentityWhenApplyingVisualStyle()
     {
         var workbook = new Workbook("LoadedPivotFontIdentityStyleTest");
