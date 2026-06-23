@@ -10,6 +10,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -65,6 +66,7 @@ public sealed partial class MainWindow
             MinWidth = 220,
             Text = selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty,
         };
+        ApplyDataToolsTextBoxChrome(dataRangeBox);
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
         AutomationProperties.SetName(dataRangeBox, UiText.Get("Sparkline_DataRange"));
 
@@ -73,10 +75,12 @@ public sealed partial class MainWindow
             MinWidth = 220,
             Text = FormatCellReference(_session.ActiveCell),
         };
+        ApplyDataToolsTextBoxChrome(locationBox);
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
         AutomationProperties.SetName(locationBox, UiText.Get("Sparkline_LocationRange"));
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
+        ApplyDataToolsComboBoxChrome(typeBox);
 
         var dialog = new Window
         {
@@ -90,8 +94,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "InsertSparklineDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyDataToolsButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "InsertSparklineOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyDataToolsButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "InsertSparklineCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -111,11 +117,11 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_DataRange"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_DataRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(dataRangeBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_LocationRange"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_LocationRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(locationBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
         content.Children.Add(new StackPanel
         {
@@ -163,6 +169,7 @@ public sealed partial class MainWindow
         var selectedColor = current.SeriesColor;
 
         var typeBox = BuildKindComboBox("SparklineEditTypeBox", current.Kind);
+        ApplyDataToolsComboBoxChrome(typeBox);
 
         var toggleBoxes = new Dictionary<SparklinePointToggle, CheckBox>();
         foreach (var toggle in SparklinePlanner.PointToggles)
@@ -187,6 +194,7 @@ public sealed partial class MainWindow
         SyncToggleAvailability();
 
         var colorButton = new Button { Content = UiText.Get("Sparkline_EditColor"), MinWidth = 120 };
+        ApplyDataToolsButtonChrome(colorButton, 120);
         AutomationProperties.SetAutomationId(colorButton, "SparklineColorButton");
         var colorSwatch = new Border
         {
@@ -209,6 +217,7 @@ public sealed partial class MainWindow
             }
         };
         var clearColorButton = new Button { Content = UiText.Get("Sparkline_DefaultColor"), MinWidth = 120 };
+        ApplyDataToolsButtonChrome(clearColorButton, 120);
         AutomationProperties.SetAutomationId(clearColorButton, "SparklineClearColorButton");
         clearColorButton.Click += (_, _) =>
         {
@@ -228,22 +237,25 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "EditSparklineDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyDataToolsButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "EditSparklineOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyDataToolsButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "EditSparklineCancelButton");
         var clear = new Button { Content = UiText.Get("Sparkline_Clear"), MinWidth = 80 };
+        ApplyDataToolsButtonChrome(clear, 80);
         AutomationProperties.SetAutomationId(clear, "EditSparklineClearButton");
         cancel.Click += (_, _) => dialog.Close("cancel");
         ok.Click += (_, _) => dialog.Close("ok");
         clear.Click += (_, _) => dialog.Close("clear");
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_ShowHeader"), Foreground = HeaderForeground, Margin = new Thickness(0, 6, 0, 0) });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_ShowHeader"), Foreground = HeaderForeground, Margin = new Thickness(0, 6, 0, 0), FontSize = 12, FontFamily = FormulaBarFontFamily });
         foreach (var toggle in SparklinePlanner.PointToggles)
             content.Children.Add(toggleBoxes[toggle]);
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_ColorHeader"), Foreground = HeaderForeground, Margin = new Thickness(0, 6, 0, 0) });
+        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_ColorHeader"), Foreground = HeaderForeground, Margin = new Thickness(0, 6, 0, 0), FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,

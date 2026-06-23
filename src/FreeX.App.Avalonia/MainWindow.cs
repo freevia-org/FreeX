@@ -12341,6 +12341,50 @@ public sealed partial class MainWindow : Window
         radioButton.Template = SortOptionsRadioButtonTemplate;
     }
 
+    // ── Data Tools / Sparkline dialog chrome helpers ─────────────────────────────
+    private static void ApplyDataToolsButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        button.MinWidth = width;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyDataToolsTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyDataToolsComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+        cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
     {
         const string normalFirstKeySortOrder = "Normal";
@@ -12556,6 +12600,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 0,
             Margin = new Thickness(0, 4),
         };
+        ApplyDataToolsTextBoxChrome(setCellBox);
         AutomationProperties.SetName(setCellBox, "Set cell");
         AutomationProperties.SetAutomationId(setCellBox, "GoalSeekSetCellBox");
         AutomationProperties.SetHelpText(setCellBox, "Formula cell to solve.");
@@ -12566,6 +12611,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 0,
             Margin = new Thickness(0, 4),
         };
+        ApplyDataToolsTextBoxChrome(targetValueBox);
         AutomationProperties.SetName(targetValueBox, "To value");
         AutomationProperties.SetAutomationId(targetValueBox, "GoalSeekTargetValueBox");
         AutomationProperties.SetHelpText(targetValueBox, "Target value for the set cell.");
@@ -12576,6 +12622,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 0,
             Margin = new Thickness(0, 4),
         };
+        ApplyDataToolsTextBoxChrome(changingCellBox);
         AutomationProperties.SetName(changingCellBox, "By changing cell");
         AutomationProperties.SetAutomationId(changingCellBox, "GoalSeekChangingCellBox");
         AutomationProperties.SetHelpText(changingCellBox, "Input cell Goal Seek can change.");
@@ -12598,6 +12645,7 @@ public sealed partial class MainWindow : Window
             IsDefault = true,
             Margin = new Thickness(0, 0, 6, 0),
         };
+        ApplyDataToolsButtonChrome(okButton, 75, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "GoalSeekOkButton");
         AutomationProperties.SetHelpText(okButton, "Run Goal Seek with these inputs.");
@@ -12609,6 +12657,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 75,
             IsCancel = true,
         };
+        ApplyDataToolsButtonChrome(cancelButton, 75);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "GoalSeekCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Goal Seek without running.");
@@ -12719,6 +12768,8 @@ public sealed partial class MainWindow : Window
             Text = FormatGoalSeekStatus(result),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -12737,11 +12788,12 @@ public sealed partial class MainWindow : Window
             var restoreButton = new Button
             {
                 Content = "Restore Original Values",
-                Width = 180,
-                MinWidth = 180,
+                Width = 152,
+                MinWidth = 152,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true,
             };
+            ApplyDataToolsButtonChrome(restoreButton, 152);
             AutomationProperties.SetName(restoreButton, "Restore Original Values");
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
             AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
@@ -12754,6 +12806,7 @@ public sealed partial class MainWindow : Window
                 Margin = new Thickness(4, 0, 0, 0),
                 IsDefault = true,
             };
+            ApplyDataToolsButtonChrome(keepButton, 104, isDefault: true);
             AutomationProperties.SetName(keepButton, "Keep Result");
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
             AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
@@ -12783,6 +12836,7 @@ public sealed partial class MainWindow : Window
                 IsDefault = true,
                 IsCancel = true,
             };
+            ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
             AutomationProperties.SetName(okButton, "OK");
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
             AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
@@ -12912,6 +12966,7 @@ public sealed partial class MainWindow : Window
             Text = label,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 4),
+            FontSize = 12,
         };
         AddGridChild(grid, labelBlock, row, 0);
         AddGridChild(grid, input, row, 1);
@@ -14024,12 +14079,14 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Scenario Manager",
-            Width = 560,
+            Width = 460,
             Height = 500,
             MinWidth = 460,
             MinHeight = 430,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
 
@@ -14071,6 +14128,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 260,
         };
+        ApplyDataToolsTextBoxChrome(nameBox);
         AutomationProperties.SetName(nameBox, "Scenario name");
         AutomationProperties.SetAutomationId(nameBox, "ScenarioManagerNameBox");
         AutomationProperties.SetHelpText(nameBox, "Scenario name.");
@@ -14079,6 +14137,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 260,
         };
+        ApplyDataToolsTextBoxChrome(commentBox);
         AutomationProperties.SetName(commentBox, "Comment");
         AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
         AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
@@ -14096,9 +14155,10 @@ public sealed partial class MainWindow : Window
         var saveButton = new Button
         {
             Content = "Save/Add",
+            Width = 92,
             MinWidth = 92,
-            Padding = new Thickness(10, 4),
         };
+        ApplyDataToolsButtonChrome(saveButton, 92);
         AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
@@ -14106,9 +14166,10 @@ public sealed partial class MainWindow : Window
         var showButton = new Button
         {
             Content = "Show",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 82,
+            MinWidth = 82,
         };
+        ApplyDataToolsButtonChrome(showButton, 82);
         AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
         AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
@@ -14116,9 +14177,10 @@ public sealed partial class MainWindow : Window
         var deleteButton = new Button
         {
             Content = "Delete",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 82,
+            MinWidth = 82,
         };
+        ApplyDataToolsButtonChrome(deleteButton, 82);
         AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
         AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
@@ -14126,9 +14188,10 @@ public sealed partial class MainWindow : Window
         var summaryButton = new Button
         {
             Content = "Summary Report",
+            Width = 128,
             MinWidth = 128,
-            Padding = new Thickness(10, 4),
         };
+        ApplyDataToolsButtonChrome(summaryButton, 128);
         AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
         AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
@@ -14136,9 +14199,10 @@ public sealed partial class MainWindow : Window
         var closeButton = new Button
         {
             Content = "Close",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 72,
+            MinWidth = 72,
         };
+        ApplyDataToolsButtonChrome(closeButton, 72);
         AutomationProperties.SetName(closeButton, "Close");
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
         AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
@@ -14403,7 +14467,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = label, FontSize = 12 },
                 control,
             },
         };
@@ -14438,12 +14502,17 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Data Table",
-            Width = 460,
-            Height = 290,
+            Width = 380,
+            Height = 260,
             MinWidth = 380,
             MinHeight = 260,
+            MaxWidth = 380,
+            MaxHeight = 260,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "DataTableCompactDialog");
 
@@ -14461,6 +14530,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 240,
         };
+        ApplyDataToolsTextBoxChrome(rowInputBox);
         AutomationProperties.SetName(rowInputBox, "Row input cell");
         AutomationProperties.SetAutomationId(rowInputBox, "DataTableRowInputCellBox");
         AutomationProperties.SetHelpText(rowInputBox, "Cell whose value is substituted from the top row.");
@@ -14469,6 +14539,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 240,
         };
+        ApplyDataToolsTextBoxChrome(columnInputBox);
         AutomationProperties.SetName(columnInputBox, "Column input cell");
         AutomationProperties.SetAutomationId(columnInputBox, "DataTableColumnInputCellBox");
         AutomationProperties.SetHelpText(columnInputBox, "Cell whose value is substituted from the first column.");
@@ -14485,9 +14556,11 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsDefault = true,
         };
+        ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
         AutomationProperties.SetHelpText(okButton, "Create the Data Table.");
@@ -14495,9 +14568,11 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsCancel = true,
         };
+        ApplyDataToolsButtonChrome(cancelButton, 76);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "DataTableCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Data Table without creating it.");
@@ -14630,7 +14705,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = label, FontSize = 12 },
                 control,
             },
         };
@@ -14665,12 +14740,17 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Forecast Sheet",
-            Width = 420,
-            Height = 250,
+            Width = 360,
+            Height = 220,
             MinWidth = 360,
-            MinHeight = 230,
+            MinHeight = 220,
+            MaxWidth = 360,
+            MaxHeight = 220,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "ForecastSheetCompactDialog");
 
@@ -14689,6 +14769,7 @@ public sealed partial class MainWindow : Window
             Text = ForecastSheetPlanner.DefaultForecastPeriods.ToString(CultureInfo.InvariantCulture),
             MinWidth = 160,
         };
+        ApplyDataToolsTextBoxChrome(periodsBox);
         AutomationProperties.SetName(periodsBox, "Forecast periods");
         AutomationProperties.SetAutomationId(periodsBox, "ForecastPeriodsBox");
         AutomationProperties.SetHelpText(periodsBox, "Enter the positive whole number of periods to forecast.");
@@ -14705,9 +14786,11 @@ public sealed partial class MainWindow : Window
         var createButton = new Button
         {
             Content = "Create",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsDefault = true,
         };
+        ApplyDataToolsButtonChrome(createButton, 76, isDefault: true);
         AutomationProperties.SetName(createButton, "Create");
         AutomationProperties.SetAutomationId(createButton, "ForecastSheetCreateButton");
         AutomationProperties.SetHelpText(createButton, "Create the Forecast Sheet.");
@@ -14715,9 +14798,11 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            Width = 76,
+            MinWidth = 76,
+            IsCancel = true,
         };
+        ApplyDataToolsButtonChrome(cancelButton, 76);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "ForecastSheetCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Forecast Sheet without creating it.");
@@ -14822,7 +14907,7 @@ public sealed partial class MainWindow : Window
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = label, FontSize = 12 },
                 control,
             },
         };
