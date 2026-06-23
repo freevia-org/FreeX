@@ -2403,7 +2403,8 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"136,40,*,54\")");
         drawingFormatSource.Should().Contain("Grid.SetColumn(directionBox, 1);");
         drawingFormatSource.Should().Contain("Grid.SetColumnSpan(directionBox, 3);");
-        drawingFormatSource.Should().Contain("Content = UiText.Get(\"Common_Ok\"), IsDefault = true, MinWidth = 76, Width = 76");
+        drawingFormatSource.Should().Contain("var ok = CreateGradientDialogButton(UiText.Get(\"Common_Ok\"), isDefault: true);");
+        drawingFormatSource.Should().Contain("private static Button CreateGradientDialogButton(string text, bool isDefault)");
 
         selectionPaneSource.Should().Contain("Width = 520");
         selectionPaneSource.Should().Contain("Height = 440");
