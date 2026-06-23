@@ -592,6 +592,52 @@ public sealed partial class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void ApplyLoadedPivotStyles_MaterializesWhiteBodySurfaceForLoadedNativePivotWithoutBodyFill()
+    {
+        var workbook = new Workbook("LoadedPivotWhiteBodySurfaceTest");
+        var sheet = workbook.AddSheet("Pivot");
+        var loadedThemeFontStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontName = "Calibri",
+            FontSize = 10,
+            FontScheme = CellFontScheme.Minor
+        });
+        sheet.SetCell(Addr(sheet, "A3"), new Cell { Value = new TextValue("Row Labels"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B3"), new Cell { Value = new TextValue("Sum of Sales"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A4"), new Cell { Value = new TextValue("East"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "C4"), new Cell { Value = new NumberValue(1250), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "A5"), new Cell { Value = new TextValue("West"), StyleId = loadedThemeFontStyle });
+        sheet.SetCell(Addr(sheet, "B5"), new Cell { Value = new TextValue("Direct"), StyleId = loadedThemeFontStyle });
+        sheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "NativePivotSubtotalGrandTotals",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C2"),
+            TargetRange = Range(sheet, "A3", "D6"),
+            LastRenderedRange = Range(sheet, "A3", "D6"),
+            StyleName = "PivotStyleMedium9",
+            FirstHeaderRow = 1,
+            FirstDataRow = 1,
+            FirstDataColumn = 2,
+            ShowRowStripes = false,
+            ShowColumnStripes = false
+        });
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
+            .FillColor.Should().Be(CellColor.White, "Excel's dynamic PivotTable style layer hides sheet gridlines through unfilled body cells");
+        sheet.GetCell(Addr(sheet, "B4"))!.Value.Should().Be(BlankValue.Instance);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B4"))!.StyleId)
+            .FillColor.Should().Be(CellColor.White, "blank cells in the loaded native pivot footprint need the same body surface");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "C4"))!.StyleId)
+            .FillColor.Should().Be(CellColor.White);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
+            .FillColor.Should().Be(CellColor.White);
+        AssertLoadedPivotFontIdentity(workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId));
+    }
+
+    [Fact]
     public void ApplyLoadedPivotStyles_PreservesExistingFontIdentityWhenApplyingVisualStyle()
     {
         var workbook = new Workbook("LoadedPivotFontIdentityStyleTest");
@@ -737,7 +783,7 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
             .FillColor.Should().Be(new CellColor(21, 96, 130));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
-            .FillColor.Should().BeNull();
+            .FillColor.Should().Be(CellColor.White);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId)
             .FillColor.Should().Be(new CellColor(126, 53, 14));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E5"))!.StyleId)
@@ -794,7 +840,7 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
             .FillColor.Should().Be(new CellColor(232, 239, 242));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
-            .FillColor.Should().BeNull();
+            .FillColor.Should().Be(CellColor.White);
     }
 
     [Fact]
@@ -834,7 +880,7 @@ public sealed partial class PivotTableRefreshServiceTests
             .FillColor.Should().Be(new CellColor(21, 96, 130));
         sheet.GetCell(Addr(sheet, "C5"))!.Value.Should().Be(BlankValue.Instance);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
-            .FillColor.Should().BeNull("native firstDataCol keeps row-label columns out of column striping");
+            .FillColor.Should().Be(CellColor.White, "native firstDataCol keeps row-label columns out of column striping while the loaded body layer still hides sheet gridlines");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "C5"))!.StyleId)
             .FillColor.Should().Be(new CellColor(232, 239, 242));
     }
@@ -917,9 +963,9 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
             .FillColor.Should().Be(new CellColor(21, 96, 130));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
-            .FillColor.Should().BeNull();
+            .FillColor.Should().Be(CellColor.White);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "B6"))!.StyleId)
-            .FillColor.Should().BeNull();
+            .FillColor.Should().Be(CellColor.White);
     }
 
     [Fact]
