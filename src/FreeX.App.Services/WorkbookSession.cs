@@ -2378,6 +2378,26 @@ public sealed class WorkbookSession
         return result;
     }
 
+    public WorkbookCellEditResult MoveSelectedRangeTo(GridRange sourceRange, GridRange targetRange)
+    {
+        if (!sourceRange.Start.Sheet.Equals(ActiveSheet.Id) ||
+            !sourceRange.End.Sheet.Equals(ActiveSheet.Id) ||
+            !targetRange.Start.Sheet.Equals(ActiveSheet.Id) ||
+            !targetRange.End.Sheet.Equals(ActiveSheet.Id))
+        {
+            return new WorkbookCellEditResult(false, "Move source and destination must be on the active sheet.", [], RecalcReport: null);
+        }
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new MoveRangeCommand(ActiveSheet.Id, sourceRange, targetRange.Start));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, targetRange);
+        return result;
+    }
+
     public WorkbookCellEditResult FlashFillSelectedRange()
     {
         var range = SelectedRange;

@@ -16,10 +16,25 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AddRowResizeHandle(header, row, metric, zoomFactor)");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
+        source.Should().Contain("args.Pointer.Capture(_sheetGridHost)");
+        source.Should().Contain("_sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;");
+        source.Should().Contain("_sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
         source.Should().Contain("_session.SetSelectedColumnsWidth(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize))");
         source.Should().Contain("_session.SetSelectedRowsHeight(clampedSize)");
+    }
+
+    [Fact]
+    public void WorksheetHeaderBoundaryDoubleClick_RoutesToAutoFit()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("handle.DoubleTapped += (_, args) =>");
+        source.Should().Contain("AutoFitColumnFromHeader(col);");
+        source.Should().Contain("AutoFitRowFromHeader(row);");
+        source.Should().Contain("AutoFitSelectedColumnWidth();");
+        source.Should().Contain("AutoFitSelectedRowHeight();");
     }
 
     [Fact]
@@ -32,6 +47,8 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("border.PointerMoved += (_, args) => ContinueCellSelectionDrag(args, address);");
         source.Should().Contain("border.PointerReleased += (_, args) => EndCellSelectionDrag(args);");
         source.Should().Contain("args.Pointer.Capture(capture);");
+        source.Should().Contain("TryResolveCellPointerAddress(args, out var pointerAddress)");
+        source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");
         source.Should().Contain("_session.SelectRange(new GridRange(anchor, address));");
     }
@@ -54,6 +71,25 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_formulaBox.Foreground = Brushes.Transparent;");
         source.Should().Contain("new Run(text) { Foreground = brush }");
         source.Should().Contain("RefreshShell(\"Ready\");");
+    }
+
+    [Fact]
+    public void WorksheetCells_WireAutofillHandleAndSelectionMoveDrag()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "WorkbookSession.cs"));
+
+        source.Should().Contain("AddAutofillHandleAdorner(border, zoomFactor);");
+        source.Should().Contain("TryBeginAutofillDrag(args, border, address)");
+        source.Should().Contain("GridAutofillPlanner.IsOnHandle(");
+        source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)");
+        source.Should().Contain("_session.FillSelectedRange(direction)");
+        source.Should().Contain("TryBeginSelectionMoveDrag(args, border, address)");
+        source.Should().Contain("GridSelectionMovePlanner.IsOnMoveBorder(");
+        source.Should().Contain("GridSelectionMovePlanner.CalculateTargetRange(");
+        source.Should().Contain("_session.MoveSelectedRangeTo(source, target)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult MoveSelectedRangeTo(GridRange sourceRange, GridRange targetRange)");
+        sessionSource.Should().Contain("new MoveRangeCommand(ActiveSheet.Id, sourceRange, targetRange.Start)");
     }
 
     [Fact]
@@ -107,8 +143,11 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("MoveOrExtendActiveCell(1, 0, extendSelection);");
         source.Should().Contain("MoveOrExtendActiveCell(0, -1, extendSelection);");
         source.Should().Contain("MoveOrExtendActiveCell(0, 1, extendSelection);");
-        source.Should().Contain("var anchor = _session.SelectedRange.Start;");
-        source.Should().Contain("var cursor = _session.SelectedRange.End;");
+        source.Should().Contain("private CellAddress? _selectionExtensionAnchor;");
+        source.Should().Contain("private CellAddress? _selectionExtensionCursor;");
+        source.Should().Contain("var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;");
+        source.Should().Contain("var cursor = _selectionExtensionCursor ?? _session.ActiveCell;");
+        source.Should().Contain("_selectionExtensionCursor = target;");
         source.Should().Contain("_session.SelectRange(new GridRange(anchor, target));");
     }
 
