@@ -271,4 +271,263 @@ public class MailMergeTests
         mergedTable.Rows[0].Cells[0].GridSpan.Should().Be(2);
         mergedTable.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
     }
+
+    // ── FieldMapping / AutoMatchFields ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AutoMatchFields_MatchesFirstNameAndLastName_CaseInsensitive()
+    {
+        var mapping = MailMerge.AutoMatchFields(["first name", "LAST NAME", "Company"]);
+
+        mapping[FieldRole.FirstName].Should().Be("first name");
+        mapping[FieldRole.LastName].Should().Be("LAST NAME");
+        mapping[FieldRole.Company].Should().Be("Company");
+    }
+
+    [Fact]
+    public void AutoMatchFields_MatchesConcatenatedVariants()
+    {
+        var mapping = MailMerge.AutoMatchFields(["FirstName", "LastName", "PostalCode"]);
+
+        mapping[FieldRole.FirstName].Should().Be("FirstName");
+        mapping[FieldRole.LastName].Should().Be("LastName");
+        mapping[FieldRole.PostalCode].Should().Be("PostalCode");
+    }
+
+    [Fact]
+    public void AutoMatchFields_UnmatchedRole_IsNull()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Name"]);
+
+        // "Name" alone matches neither FirstName nor LastName synonyms exactly.
+        mapping[FieldRole.MiddleName].Should().BeNull();
+        mapping[FieldRole.Suffix].Should().BeNull();
+    }
+
+    [Fact]
+    public void AutoMatchFields_EmptyHeader_AllRolesNull()
+    {
+        var mapping = MailMerge.AutoMatchFields([]);
+
+        foreach (FieldRole role in Enum.GetValues(typeof(FieldRole)))
+            mapping[role].Should().BeNull($"role {role} should be unmatched for an empty header");
+    }
+
+    [Fact]
+    public void AutoMatchFields_ZipSynonym_MatchesPostalCode()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Zip"]);
+
+        mapping[FieldRole.PostalCode].Should().Be("Zip");
+    }
+
+    [Fact]
+    public void AutoMatchFields_AddressSynonym_MatchesAddress1()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Address", "City", "State"]);
+
+        mapping[FieldRole.Address1].Should().Be("Address");
+        mapping[FieldRole.City].Should().Be("City");
+        mapping[FieldRole.State].Should().Be("State");
+    }
+
+    // ── ComposeAddressBlock ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComposeAddressBlock_FullRecord_FormatsCorrectly()
+    {
+        var mapping = MailMerge.AutoMatchFields(["FirstName", "LastName", "Company", "Address1", "City", "State", "PostalCode"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstName"] = "Ada", ["LastName"] = "Lovelace", ["Company"] = "Babbage Inc.",
+            ["Address1"] = "1 Engine Way", ["City"] = "London", ["State"] = "England", ["PostalCode"] = "EC1A 1BB"
+        };
+
+        var block = MailMerge.ComposeAddressBlock(row, mapping);
+
+        block.Should().Be("Ada Lovelace\nBabbage Inc.\n1 Engine Way\nLondon, England EC1A 1BB");
+    }
+
+    [Fact]
+    public void ComposeAddressBlock_MissingCity_OmitsCityStateSeparator()
+    {
+        var mapping = MailMerge.AutoMatchFields(["FirstName", "LastName", "State", "PostalCode"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstName"] = "Grace", ["LastName"] = "Hopper",
+            ["State"] = "CT", ["PostalCode"] = "06830"
+        };
+
+        var block = MailMerge.ComposeAddressBlock(row, mapping);
+
+        // No city → state is used alone on the city-state line (no leading comma).
+        block.Should().Contain("CT 06830");
+        block.Should().NotContain(", CT");
+    }
+
+    [Fact]
+    public void ComposeAddressBlock_AllFieldsUnmapped_ReturnsEmpty()
+    {
+        var block = MailMerge.ComposeAddressBlock(
+            new Dictionary<string, string>(),
+            new FieldMapping());
+
+        block.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ComposeAddressBlock_WithCountry_AppendsCountryOnLastLine()
+    {
+        var mapping = new FieldMapping();
+        mapping[FieldRole.FirstName] = "F";
+        mapping[FieldRole.LastName]  = "L";
+        mapping[FieldRole.Country]   = "Country";
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            { ["F"] = "Marie", ["L"] = "Curie", ["Country"] = "France" };
+
+        var block = MailMerge.ComposeAddressBlock(row, mapping);
+
+        block.Should().EndWith("\nFrance");
+    }
+
+    // ── ComposeGreetingLine ──────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComposeGreetingLine_TitleAndLastName_UsesTitleLastNameForm()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Title", "FirstName", "LastName"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            { ["Title"] = "Dr.", ["FirstName"] = "Ada", ["LastName"] = "Lovelace" };
+
+        MailMerge.ComposeGreetingLine(row, mapping).Should().Be("Dear Dr. Lovelace,");
+    }
+
+    [Fact]
+    public void ComposeGreetingLine_NoTitle_UsesFirstLastForm()
+    {
+        var mapping = MailMerge.AutoMatchFields(["FirstName", "LastName"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            { ["FirstName"] = "Grace", ["LastName"] = "Hopper" };
+
+        MailMerge.ComposeGreetingLine(row, mapping).Should().Be("Dear Grace Hopper,");
+    }
+
+    [Fact]
+    public void ComposeGreetingLine_NoNameFields_FallsBackToSirOrMadam()
+    {
+        MailMerge.ComposeGreetingLine(
+            new Dictionary<string, string>(),
+            new FieldMapping())
+            .Should().Be("Dear Sir or Madam,");
+    }
+
+    [Fact]
+    public void ComposeGreetingLine_CustomGreetingPrefix()
+    {
+        var mapping = MailMerge.AutoMatchFields(["LastName"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["LastName"] = "Turing" };
+
+        MailMerge.ComposeGreetingLine(row, mapping, greetingFormat: "Hello").Should().Be("Hello Turing,");
+    }
+
+    [Fact]
+    public void ComposeGreetingLine_OnlyFirstName_UsesFirstName()
+    {
+        var mapping = MailMerge.AutoMatchFields(["FirstName"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["FirstName"] = "Linus" };
+
+        MailMerge.ComposeGreetingLine(row, mapping).Should().Be("Dear Linus,");
+    }
+
+    // ── SubstituteSpecial (Next Record / Merge Record #) ────────────────────────────────────────────
+
+    [Fact]
+    public void SubstituteSpecial_MergeRecordNumber_InjectsOneBasedIndex()
+    {
+        var row = new Dictionary<string, string>();
+        var result = MailMerge.SubstituteSpecial(
+            $"Record {MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}",
+            row, recordIndex: 3, out var advance);
+
+        result.Should().Be("Record 3");
+        advance.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SubstituteSpecial_NextRecord_SetsAdvanceFlagAndProducesNoOutput()
+    {
+        var row = new Dictionary<string, string>();
+        var result = MailMerge.SubstituteSpecial(
+            $"A{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}B",
+            row, recordIndex: 1, out var advance);
+
+        // «Next Record» emits nothing (only the surrounding literal text remains).
+        result.Should().Be("AB");
+        advance.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SubstituteSpecial_NextRecord_CaseInsensitive()
+    {
+        var row = new Dictionary<string, string>();
+        MailMerge.SubstituteSpecial(
+            $"{MailMerge.FieldOpen}NEXT RECORD{MailMerge.FieldClose}",
+            row, recordIndex: 1, out var advance);
+
+        advance.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SubstituteSpecial_MergeRecordNumber_CaseInsensitive()
+    {
+        var row = new Dictionary<string, string>();
+        var result = MailMerge.SubstituteSpecial(
+            $"{MailMerge.FieldOpen}merge record #{MailMerge.FieldClose}",
+            row, recordIndex: 7, out _);
+
+        result.Should().Be("7");
+    }
+
+    [Fact]
+    public void SubstituteSpecial_RegularField_StillSubstituted()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = "Ada" };
+        var result = MailMerge.SubstituteSpecial(
+            $"Hi {MailMerge.FieldOpen}Name{MailMerge.FieldClose}",
+            row, recordIndex: 1, out _);
+
+        result.Should().Be("Hi Ada");
+    }
+
+    [Fact]
+    public void SubstituteSpecial_NoPlaceholders_ReturnsSameString()
+    {
+        var row = new Dictionary<string, string>();
+        var result = MailMerge.SubstituteSpecial("plain text", row, recordIndex: 1, out var advance);
+
+        result.Should().Be("plain text");
+        advance.Should().BeFalse();
+    }
+
+    // ── FieldMapping accessors ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void FieldMapping_SetAndGetRoundTrips()
+    {
+        var m = new FieldMapping();
+        m[FieldRole.City] = "MyCityColumn";
+
+        m[FieldRole.City].Should().Be("MyCityColumn");
+        m[FieldRole.State].Should().BeNull("unmapped role returns null");
+    }
+
+    [Fact]
+    public void FieldMapping_SetToNull_UnmapsRole()
+    {
+        var m = new FieldMapping();
+        m[FieldRole.Country] = "Country";
+        m[FieldRole.Country] = null;
+
+        m[FieldRole.Country].Should().BeNull();
+    }
 }

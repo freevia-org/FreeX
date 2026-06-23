@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -817,6 +818,14 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
+        // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
+        registry.Register("freew.merge-address-block", new InsertAddressBlockCommand(editor, mergeSession));
+        registry.Register("freew.merge-greeting-line", new InsertGreetingLineCommand(editor, mergeSession));
+        registry.Register("freew.merge-match-fields", new MatchFieldsCommand(editor, mergeSession));
+        // Special merge fields: «Next Record» and «Merge Record #» (inserted as plain placeholders;
+        // the engine recognises them during substitution via SubstituteSpecial).
+        registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
+        registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
         registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Register("freew.merge-preview-first", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
         registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
@@ -3875,6 +3884,10 @@ internal static class FreeWRibbonCommands
 
         public int CurrentIndex { get; set; }
 
+        // Role→column mapping for Address Block / Greeting Line composition. Null until the user loads
+        // data (SetMergeDataCommand seeds it via AutoMatchFields) or opens Match Fields.
+        public FieldMapping? Mapping { get; set; }
+
         public bool IsPreviewing => Template is not null;
 
         public void Clear()
@@ -3883,6 +3896,23 @@ internal static class FreeWRibbonCommands
             Template = null;
             CurrentIndex = 0;
             Mode = MailMergeOutputMode.Letters;
+            Mapping = null;
+        }
+
+        /// <summary>
+        /// Build an augmented row dictionary that adds synthetic «AddressBlock» and «GreetingLine»
+        /// keys so the standard Substitute path resolves both composite placeholders per-record.
+        /// When no mapping is set the synthetic keys map to empty strings.
+        /// </summary>
+        public IReadOnlyDictionary<string, string> AugmentRow(
+            IReadOnlyDictionary<string, string> row,
+            string greetingFormat = "Dear")
+        {
+            var augmented = new Dictionary<string, string>(row, StringComparer.OrdinalIgnoreCase);
+            var mapping = Mapping ?? new FieldMapping();
+            augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
+            augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
+            return augmented;
         }
     }
 
@@ -3922,6 +3952,93 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Mailings > Insert Address Block: insert the «AddressBlock» composite placeholder at the caret.
+    // The placeholder is resolved at preview/merge time via the session's FieldMapping (auto-matched or
+    // user-customised via Match Fields). Opens Match Fields first if no data is loaded so the user can
+    // configure the mapping before the placeholder lands in the document.
+    private sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is null)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then insert an Address Block.",
+                    "Mail Merge");
+                return;
+            }
+
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Insert Greeting Line: insert the «GreetingLine» composite placeholder at the caret.
+    // Resolved per-record at preview/merge time using the session's FieldMapping.
+    private sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is null)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then insert a Greeting Line.",
+                    "Mail Merge");
+                return;
+            }
+
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Match Fields: let the user override the auto-matched role→column bindings. Opens the
+    // MatchFieldsDialog seeded with the current (auto-matched) mapping. Saves changes back to the
+    // session so subsequent Address Block / Greeting Line insertions and preview/merge use the new bindings.
+    private sealed class MatchFieldsCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is not { } data)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then match fields.",
+                    "Mail Merge");
+                return;
+            }
+
+            var current = session.Mapping ?? MailMerge.AutoMatchFields(data.Header);
+            var result = MatchFieldsDialog.Ask(Window.GetWindow(editor), data.Header, current);
+            if (result is not null)
+            {
+                session.Mapping = result;
+                // Invalidate any in-progress preview since the mapping changed.
+                if (session.IsPreviewing)
+                {
+                    editor.LoadModel(session.Template!);
+                    session.Template = null;
+                    session.CurrentIndex = 0;
+                }
+            }
+
+            editor.Focus();
+        }
+    }
+
+    // Mailings > Rules (special fields): insert «Next Record» or «Merge Record #» as a plain placeholder.
+    // The engine's SubstituteSpecial path recognises these names and handles them at merge time.
+    private sealed class InsertSpecialMergeFieldCommand(DocumentView editor, string fieldName) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
+        }
+    }
+
     // Mailings > Select Recipients: open a dialog to paste/type CSV (first line = headers). The parsed MergeData
     // is stored on the session. If the document already has merge fields, they are shown as a hint so the
     // user knows which columns to provide.
@@ -3941,6 +4058,9 @@ internal static class FreeWRibbonCommands
             session.Data = parsed;
             session.Template = null; // any in-progress preview is invalidated by new data
             session.CurrentIndex = 0;
+            // Auto-seed the field mapping from the new header so Address Block / Greeting Line
+            // immediately compose correctly without requiring the user to open Match Fields.
+            session.Mapping = MailMerge.AutoMatchFields(parsed.Header);
 
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
@@ -3983,7 +4103,7 @@ internal static class FreeWRibbonCommands
 
             var index = Math.Clamp(session.CurrentIndex, 0, data.Count - 1);
             session.CurrentIndex = index;
-            editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+            editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
 
             var action = PreviewNavigationDialog.Ask(Window.GetWindow(editor), index, data.Count);
             switch (action.Kind)
@@ -3991,7 +4111,7 @@ internal static class FreeWRibbonCommands
                 case PreviewAction.Move:
                     index = Math.Clamp(action.TargetIndex, 0, data.Count - 1);
                     session.CurrentIndex = index;
-                    editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+                    editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
                     break;
                 case PreviewAction.Done:
                     // Restore the editable template so the user can keep editing fields.
@@ -4019,7 +4139,7 @@ internal static class FreeWRibbonCommands
 
             var index = MailMergePreviewNavigationPlanner.TargetIndex(action, session.CurrentIndex, data.Count);
             session.CurrentIndex = index;
-            editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+            editor.LoadModel(MailMerge.MergeRecord(template, session.AugmentRow(data.Rows[index])));
             editor.Focus();
         }
     }
@@ -4082,7 +4202,11 @@ internal static class FreeWRibbonCommands
                 template = editor.Model;
             }
 
-            var merged = MailMerge.MergeAll(template, data);
+            // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
+            // placeholders in the template resolve correctly across every record.
+            var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();
+            var augmentedData = new MergeData(data.Header, augmentedRows.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+            var merged = MailMerge.MergeAll(template, augmentedData);
             var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
 
             editor.LoadModel(combined);
@@ -4307,6 +4431,125 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Mailings > Match Fields dialog. Shows each semantic role with a ComboBox of available columns (plus
+    // "(not matched)"). Pre-selects the auto-matched column when one was found. Returns an updated
+    // FieldMapping on OK, or null on cancel. The dialog is non-resizable and modal; it follows the same
+    // Window-building idiom as MergeDataDialog / FilterSortRecipientsDialog.
+    private static class MatchFieldsDialog
+    {
+        private static readonly FieldRole[] AllRoles = (FieldRole[])Enum.GetValues(typeof(FieldRole));
+
+        // Display labels for each role, matching Word's "Match Fields" dialog wording.
+        private static readonly Dictionary<FieldRole, string> RoleLabels = new()
+        {
+            [FieldRole.Title]      = "Title (Mr., Mrs., …)",
+            [FieldRole.FirstName]  = "First Name",
+            [FieldRole.MiddleName] = "Middle Name",
+            [FieldRole.LastName]   = "Last Name",
+            [FieldRole.Suffix]     = "Suffix (Jr., Sr., …)",
+            [FieldRole.Company]    = "Company",
+            [FieldRole.Address1]   = "Address 1",
+            [FieldRole.Address2]   = "Address 2",
+            [FieldRole.City]       = "City",
+            [FieldRole.State]      = "State",
+            [FieldRole.PostalCode] = "Postal Code",
+            [FieldRole.Country]    = "Country or Region",
+        };
+
+        public static FieldMapping? Ask(Window? owner, IReadOnlyList<string> header, FieldMapping current)
+        {
+            FieldMapping? result = null;
+
+            // One ComboBox per role, keyed by role.
+            var combos = new Dictionary<FieldRole, System.Windows.Controls.ComboBox>();
+
+            var grid = new Grid { Margin = new Thickness(14) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            for (var i = 0; i < AllRoles.Length + 1; i++)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            for (var i = 0; i < AllRoles.Length; i++)
+            {
+                var role = AllRoles[i];
+                var label = new System.Windows.Controls.TextBlock
+                {
+                    Text = RoleLabels.TryGetValue(role, out var lbl) ? lbl : role.ToString(),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 3, 12, 3)
+                };
+                Grid.SetRow(label, i);
+                Grid.SetColumn(label, 0);
+                grid.Children.Add(label);
+
+                var combo = new System.Windows.Controls.ComboBox { MinWidth = 180, Margin = new Thickness(0, 3, 0, 3) };
+                combo.Items.Add("(not matched)");
+                foreach (var h in header)
+                    combo.Items.Add(h);
+
+                // Pre-select the currently mapped column (or "(not matched)").
+                var mapped = current[role];
+                if (mapped is not null && header.Contains(mapped, StringComparer.OrdinalIgnoreCase))
+                    combo.SelectedItem = header.First(h => h.Equals(mapped, StringComparison.OrdinalIgnoreCase));
+                else
+                    combo.SelectedIndex = 0;
+
+                combos[role] = combo;
+                Grid.SetRow(combo, i);
+                Grid.SetColumn(combo, 1);
+                grid.Children.Add(combo);
+            }
+
+            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
+            var buttonRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            buttonRow.Children.Add(ok);
+            buttonRow.Children.Add(cancel);
+            Grid.SetRow(buttonRow, AllRoles.Length);
+            Grid.SetColumnSpan(buttonRow, 2);
+            grid.Children.Add(buttonRow);
+
+            var dialog = new Window
+            {
+                Title = "Match Fields",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            ok.Click += (_, _) =>
+            {
+                var mapping = new FieldMapping();
+                foreach (var (role, combo) in combos)
+                {
+                    var sel = combo.SelectedItem as string;
+                    mapping[role] = sel == "(not matched)" || sel is null ? null : sel;
+                }
+                result = mapping;
+                dialog.DialogResult = true;
+            };
+
+            var scroll = new System.Windows.Controls.ScrollViewer
+            {
+                Content = grid,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                MaxHeight = 520
+            };
+            dialog.Content = scroll;
+
             return dialog.ShowDialog() == true ? result : null;
         }
     }
