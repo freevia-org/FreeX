@@ -1534,6 +1534,22 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set an exact space-before value (points) on every paragraph spanned by the selection.
+    /// Unlike <see cref="ToggleSpaceBefore"/> this always writes the supplied amount directly,
+    /// making it suitable for the numeric combo box in Layout &gt; Paragraph. Reversible via the bus.
+    /// </summary>
+    public void FormatSelectedParagraphSpaceBefore(double spacePt) =>
+        FormatSelectedModelParagraphs(f => f with { SpaceBeforePt = Math.Max(0, spacePt) });
+
+    /// <summary>
+    /// Set an exact space-after value (points) on every paragraph spanned by the selection.
+    /// Unlike <see cref="ToggleSpaceAfter"/> this always writes the supplied amount directly,
+    /// making it suitable for the numeric combo box in Layout &gt; Paragraph. Reversible via the bus.
+    /// </summary>
+    public void FormatSelectedParagraphSpaceAfter(double spacePt) =>
+        FormatSelectedModelParagraphs(f => f with { SpaceAfterPt = Math.Max(0, spacePt) });
+
+    /// <summary>
     /// Increase the left indent of every paragraph spanned by the selection by one step
     /// (<paramref name="stepPt"/> points, default 36pt = 0.5in), via the pure
     /// <see cref="Indentation.IncreaseIndent"/> helper. Reversible through the undo/redo bus, then re-rendered.
