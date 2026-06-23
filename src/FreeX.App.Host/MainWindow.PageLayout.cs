@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -174,7 +173,9 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand("Sheet Background", sheetId => new SetWorksheetBackgroundCommand(sheetId, background)))
+        if (!TryExecuteGroupedSheetCommand(
+                "Sheet Background",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background)))
             return;
 
         UpdateViewport();
@@ -182,7 +183,9 @@ public partial class MainWindow
 
     private void BackgroundClearMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryExecuteGroupedSheetCommand("Clear Sheet Background", sheetId => new ClearWorksheetBackgroundCommand(sheetId)))
+        if (!TryExecuteGroupedSheetCommand(
+                "Clear Sheet Background",
+                sheetId => PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheetId)))
             return;
 
         UpdateViewport();
@@ -467,7 +470,7 @@ public partial class MainWindow
             return;
         }
 
-        ShowPageBreakDialog(GetDefaultPageBreakDialogValue());
+        ShowPageBreakDialog(PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange));
     }
 
     private void InsertPageBreakMenuItem_Click(object sender, RoutedEventArgs e)
@@ -519,43 +522,20 @@ public partial class MainWindow
         ApplyPageBreakDialogResult(dialog.Result);
     }
 
-    private string GetDefaultPageBreakDialogValue()
-    {
-        if (SheetGrid.SelectedRange is not { } selectedRange)
-            return "row 2";
-
-        if (SelectionRangeService.IsWholeColumnSelection(selectedRange))
-            return $"column {selectedRange.Start.Col.ToString(CultureInfo.InvariantCulture)}";
-
-        return $"row {selectedRange.Start.Row.ToString(CultureInfo.InvariantCulture)}";
-    }
-
     private void ApplyPageBreakDialogResult(PageBreakDialogResult result)
     {
-        if (result.Action == PageBreakDialogAction.Clear)
-        {
-            var resetPlan = PageLayoutRibbonCommandPlanner.PlanResetPageBreaks();
-            TryExecuteGroupedSheetCommand(
-                "Page Breaks",
-                sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, resetPlan));
-            return;
-        }
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
+        if (sheet is null && result.Action != PageBreakDialogAction.Clear)
             return;
 
-        var rowBreaks = sheet.RowPageBreaks.ToList();
-        var columnBreaks = sheet.ColumnPageBreaks.ToList();
-
-        if (result.RowBreak is { } rowBreak && !rowBreaks.Contains(rowBreak))
-            rowBreaks.Add(rowBreak);
-        if (result.ColumnBreak is { } columnBreak && !columnBreaks.Contains(columnBreak))
-            columnBreaks.Add(columnBreak);
+        var plan = PageBreakDialogPlanner.PlanPageBreaks(
+            result,
+            sheet?.RowPageBreaks ?? [],
+            sheet?.ColumnPageBreaks ?? []);
 
         TryExecuteGroupedSheetCommand(
             "Page Breaks",
-            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, plan));
     }
 
     private void PrintTitlesBtn_Click(object sender, RoutedEventArgs e)

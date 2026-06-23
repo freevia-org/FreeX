@@ -38,6 +38,32 @@ public sealed class PageLayoutRibbonCommandPlannerTests
     }
 
     [Fact]
+    public void BuildSetBackgroundCommand_SetsSheetBackground()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var background = new WorksheetBackgroundImage([1, 2, 3], "image/png", "background.png");
+
+        var command = PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheet.Id, background);
+
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        sheet.BackgroundImage.Should().Be(background);
+    }
+
+    [Fact]
+    public void BuildClearBackgroundCommand_ClearsSheetBackground()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.BackgroundImage = new WorksheetBackgroundImage([1, 2, 3], "image/png", "background.png");
+
+        var command = PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand(sheet.Id);
+
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        sheet.BackgroundImage.Should().BeNull();
+    }
+
+    [Fact]
     public void ResolveScaleToFitFromPageDimensions_PrefersFitModeWhenEitherAxisProvided()
     {
         var current = new WorksheetScaleToFit(85, null, null);

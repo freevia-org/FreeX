@@ -121,6 +121,24 @@ public sealed class PresentationPortabilityGuardTests
             .BeFalse("WPF host should use the shared workbook range codec instead of carrying a renderer-local copy");
     }
 
+    [Fact]
+    public void PageBreakDialogPlanner_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var hostDialogPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PageBreakDialog.cs");
+
+        File.Exists(Path.Combine(presentationRoot, "PageLayout", "PageBreakDialogPlanner.cs"))
+            .Should()
+            .BeTrue("page-break dialog result parsing and command planning should be shared by renderers");
+        File.ReadAllText(hostDialogPath)
+            .Should()
+            .NotContain("public enum PageBreakDialogAction")
+            .And
+            .NotContain("public sealed record PageBreakDialogResult");
+    }
+
     private static bool IsPortableSourceFile(string path)
     {
         if (!SourceExtensions.Contains(Path.GetExtension(path)))

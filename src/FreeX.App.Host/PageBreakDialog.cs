@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -8,15 +7,6 @@ using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
-public enum PageBreakDialogAction
-{
-    Clear,
-    AddRow,
-    AddColumn
-}
-
-public sealed record PageBreakDialogResult(PageBreakDialogAction Action, uint? RowBreak, uint? ColumnBreak);
-
 public sealed class PageBreakDialog : Window
 {
     private readonly RadioButton _insertRowButton = new() { Content = UiText.Get("PageBreak_InsertRowPageBreak"), IsChecked = true };
@@ -25,7 +15,7 @@ public sealed class PageBreakDialog : Window
     private readonly TextBox _rowBreakBox = new();
     private readonly TextBox _columnBreakBox = new();
 
-    public PageBreakDialogResult Result { get; private set; } = CreateClearResult();
+    public PageBreakDialogResult Result { get; private set; } = PageBreakDialogPlanner.CreateClearResult();
 
     public PageBreakDialog(string defaultValue)
     {
@@ -44,61 +34,26 @@ public sealed class PageBreakDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PageBreakDialogResult CreateClearResult() =>
-        new(PageBreakDialogAction.Clear, null, null);
-
-    public static bool TryCreateResult(string input, out PageBreakDialogResult result)
-    {
-        result = CreateClearResult();
-        var trimmed = input.Trim();
-        if (trimmed.Equals("clear", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (PageLayoutInputParser.TryParseBreakInput(trimmed, "row", out var rowBreak) &&
-            PageLayoutInputParser.IsValidRowBreak(rowBreak))
-        {
-            result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, rowBreak, null);
-            return true;
-        }
-
-        if ((PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "col", out var columnBreak) ||
-             PageLayoutInputParser.TryParseColumnBreakInput(trimmed, "column", out columnBreak)) &&
-            PageLayoutInputParser.IsValidColumnBreak(columnBreak))
-        {
-            result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
-            return true;
-        }
-
-        return false;
-    }
-
     private void Accept()
     {
-        PageBreakDialogResult result;
-        if (_resetAllButton.IsChecked == true)
-            result = CreateClearResult();
-        else if (_insertColumnButton.IsChecked == true)
+        var action = _resetAllButton.IsChecked == true
+            ? PageBreakDialogAction.Clear
+            : _insertColumnButton.IsChecked == true
+                ? PageBreakDialogAction.AddColumn
+                : PageBreakDialogAction.AddRow;
+
+        if (!PageBreakDialogPlanner.TryCreateResult(action, _rowBreakBox.Text, _columnBreakBox.Text, out var result))
         {
-            if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak))
+            if (action == PageBreakDialogAction.AddColumn)
             {
                 DialogMessageHelper.ShowWarning(this, UiText.Get("PageBreak_EnterAColumnNumberOrLetterWithinTheWorksheetForThePageBreak"), Title);
                 FocusInvalidBreakInput(_columnBreakBox);
                 return;
             }
 
-            result = new PageBreakDialogResult(PageBreakDialogAction.AddColumn, null, columnBreak);
-        }
-        else
-        {
-            if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) ||
-                !PageLayoutInputParser.IsValidRowBreak(rowBreak))
-            {
-                DialogMessageHelper.ShowWarning(this, UiText.Get("PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak"), Title);
-                FocusInvalidBreakInput(_rowBreakBox);
-                return;
-            }
-
-            result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, rowBreak, null);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak"), Title);
+            FocusInvalidBreakInput(_rowBreakBox);
+            return;
         }
 
         Result = result;
@@ -135,14 +90,14 @@ public sealed class PageBreakDialog : Window
 
     private void SeedDefault(string defaultValue)
     {
-        if (!TryCreateResult(defaultValue, out var result))
-            result = new PageBreakDialogResult(PageBreakDialogAction.AddRow, 2, null);
+        if (!PageBreakDialogPlanner.TryCreateResult(defaultValue, out var result))
+            result = PageBreakDialogPlanner.CreateRowResult(2);
 
         _insertRowButton.IsChecked = result.Action == PageBreakDialogAction.AddRow;
         _insertColumnButton.IsChecked = result.Action == PageBreakDialogAction.AddColumn;
         _resetAllButton.IsChecked = result.Action == PageBreakDialogAction.Clear;
-        _rowBreakBox.Text = (result.RowBreak ?? 2).ToString(CultureInfo.InvariantCulture);
-        _columnBreakBox.Text = (result.ColumnBreak ?? 2).ToString(CultureInfo.InvariantCulture);
+        _rowBreakBox.Text = (result.RowBreak ?? 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _columnBreakBox.Text = (result.ColumnBreak ?? 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_rowBreakBox, UiText.Get("PageBreak_RowPageBreak"));
         AutomationProperties.SetAutomationId(_rowBreakBox, "PageBreakRowBreakBox");
         AutomationProperties.SetHelpText(_rowBreakBox, UiText.Get("PageBreak_EnterTheRowNumberWhereTheHorizontalPageBreakShouldBeInserted"));
