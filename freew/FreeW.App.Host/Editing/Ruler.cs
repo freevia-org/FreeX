@@ -22,10 +22,15 @@ namespace FreeW.App.Host.Editing;
 /// <c>DocumentView.ApplyPageChrome</c> places the page on the grey workspace — so the ruler's ticks line up
 /// with the text column underneath.
 ///
-/// The horizontal ruler also exposes the backed Word-style editing affordances FreeW can faithfully
+/// The horizontal ruler exposes the backed Word-style editing affordances FreeW can faithfully
 /// support today: choose a tab-stop type from the selector, click the text ruler to add that tab stop,
 /// drag an existing tab mark to move or remove it, or drag the indent markers to update the selected
 /// paragraph indents through the editor's undoable model commands.
+///
+/// The vertical ruler exposes top/bottom page-margin editing: hovering within <c>HitRadius</c> DIP of
+/// either margin boundary shows a <see cref="Cursors.SizeNS"/> cursor, and dragging commits the new
+/// margin through <see cref="DocumentView.ApplyPageSettings"/> — the same commit + re-render path used
+/// by the Page Setup dialog and the Layout ribbon margin presets.
 /// </summary>
 public sealed class Ruler : FrameworkElement
 {
@@ -68,11 +73,8 @@ public sealed class Ruler : FrameworkElement
         _editor.LayoutChanged += (_, _) => Refresh();
         _editor.ZoomChanged += (_, _) => Refresh();
 
-        if (orientation == Orientation.Horizontal)
-        {
-            Focusable = true;
-            Cursor = Cursors.Arrow;
-        }
+        Focusable = true;
+        Cursor = Cursors.Arrow;
     }
 
     /// <summary>Force a redraw (used by the host on caret/selection changes so the markers follow the caret).</summary>
@@ -93,9 +95,9 @@ public sealed class Ruler : FrameworkElement
         }
     }
 
-    internal enum DragKind { None, LeftIndent, FirstLineIndent, RightIndent, TabStop, NewTabStop }
+    internal enum DragKind { None, LeftIndent, FirstLineIndent, RightIndent, TabStop, NewTabStop, TopMargin, BottomMargin }
 
-    private sealed record DragOperation(DragKind Kind, int TabIndex, ParagraphFormatting StartFormatting, Point Start);
+    private sealed record DragOperation(DragKind Kind, int TabIndex, ParagraphFormatting StartFormatting, Point Start, double StartMarginPt = 0);
 
     internal sealed record HorizontalMetrics(double ContentStart, double ContentEnd, double Zoom)
     {
@@ -103,6 +105,46 @@ public sealed class Ruler : FrameworkElement
             Math.Clamp((x - ContentStart) / (DipPerPoint * Zoom), 0, Math.Max(0, (ContentEnd - ContentStart) / (DipPerPoint * Zoom)));
 
         public double ContentPtToX(double pt) => ContentStart + PageLayout.PointsToDip(pt) * Zoom;
+    }
+
+    // Vertical ruler hit geometry: the two margin boundary Y positions (in ruler/screen DIP) computed
+    // from the same pageY=0 anchor used by RenderVertical, so grab points line up exactly with the
+    // drawn shading edges. PageHeight, TopMargin, and BottomMargin are in points; all Y values in DIP.
+    internal sealed record VerticalMetrics(double TopBoundaryY, double BottomBoundaryY, double PageHeightPt, double Zoom)
+    {
+        /// <summary>
+        /// Convert a Y-delta in DIP (positive = down) into a margin delta in points, preserving sign.
+        /// Divides by (DipPerPoint * Zoom) — the exact inverse of PointsToDip(pt) * zoom.
+        /// </summary>
+        public double DipDeltaToPointsDelta(double dipDelta) => dipDelta / (DipPerPoint * Zoom);
+    }
+
+    internal static VerticalMetrics? TryVerticalMetrics(PageSettings page, double zoom)
+    {
+        if (zoom <= 0)
+            return null;
+
+        // Mirror RenderVertical's anchor: pageY = 0, so the top-margin boundary sits at `top` DIP
+        // from the strip origin, and the bottom-margin boundary at pageHeight - bottomMargin DIP.
+        var pageHeightDip = PageLayout.PointsToDip(page.HeightPt) * zoom;
+        var topDip        = PageLayout.PointsToDip(page.MarginTopPt) * zoom;
+        var bottomDip     = PageLayout.PointsToDip(page.MarginBottomPt) * zoom;
+
+        return new VerticalMetrics(
+            TopBoundaryY:    topDip,
+            BottomBoundaryY: pageHeightDip - bottomDip,
+            PageHeightPt:    page.HeightPt,
+            Zoom:            zoom);
+    }
+
+    // Clamp a new margin so it is non-negative and leaves at least a 1-pt content strip on the page
+    // (top + bottom < pageHeight). Mirrors the implicit guarantee in PageLayout.ContentAreaDip.
+    internal static double ClampVerticalMargin(double newMarginPt, double otherMarginPt, double pageHeightPt)
+    {
+        var clamped = Math.Max(0, newMarginPt);
+        // Ensure top + bottom does not consume the entire page; keep at least 1 pt of content.
+        var maxAllowed = Math.Max(0, pageHeightPt - otherMarginPt - 1);
+        return Math.Min(clamped, maxAllowed);
     }
 
     internal static IReadOnlyList<TabStop> MoveOrAddLeftTabStop(
@@ -215,34 +257,104 @@ public sealed class Ruler : FrameworkElement
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
-        if (_orientation != Orientation.Horizontal || !_editor.PrintLayoutEnabled || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+        if (!_editor.PrintLayoutEnabled)
             return;
 
-        Focus();
-        var point = e.GetPosition(this);
-        var formatting = _editor.CurrentParagraphFormatting;
-        _drag = HitTest(point, metrics, formatting);
-        CaptureMouse();
-        e.Handled = true;
+        if (_orientation == Orientation.Horizontal)
+        {
+            if (TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+                return;
+            Focus();
+            var point = e.GetPosition(this);
+            var formatting = _editor.CurrentParagraphFormatting;
+            _drag = HitTest(point, metrics, formatting);
+            CaptureMouse();
+            e.Handled = true;
+        }
+        else
+        {
+            // Vertical ruler: start a top- or bottom-margin drag on the boundary hit.
+            var page = _editor.Model.Page;
+            if (TryVerticalMetrics(page, _editor.ZoomLevel) is not { } vm)
+                return;
+            var point = e.GetPosition(this);
+            var kind = VerticalHitTest(point.Y, vm);
+            if (kind == DragKind.None)
+                return;
+            var startMargin = kind == DragKind.TopMargin ? page.MarginTopPt : page.MarginBottomPt;
+            Focus();
+            _drag = new DragOperation(kind, -1, _editor.CurrentParagraphFormatting, point, startMargin);
+            CaptureMouse();
+            e.Handled = true;
+        }
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (_orientation != Orientation.Horizontal || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
-            return;
 
-        var point = e.GetPosition(this);
-        Cursor = HitTest(point, metrics, _editor.CurrentParagraphFormatting).Kind switch
+        if (_orientation == Orientation.Horizontal)
         {
-            DragKind.LeftIndent or DragKind.FirstLineIndent or DragKind.RightIndent or DragKind.TabStop => Cursors.SizeWE,
-            _ => Cursors.Arrow
-        };
+            if (TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
+                return;
+            var point = e.GetPosition(this);
+            Cursor = HitTest(point, metrics, _editor.CurrentParagraphFormatting).Kind switch
+            {
+                DragKind.LeftIndent or DragKind.FirstLineIndent or DragKind.RightIndent or DragKind.TabStop => Cursors.SizeWE,
+                _ => Cursors.Arrow
+            };
+        }
+        else
+        {
+            // Vertical ruler: show SizeNS cursor when hovering near a margin boundary (or while dragging).
+            if (!_editor.PrintLayoutEnabled)
+                return;
+            var page = _editor.Model.Page;
+            if (TryVerticalMetrics(page, _editor.ZoomLevel) is not { } vm)
+                return;
+            var point = e.GetPosition(this);
+            var hoveredKind = _drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin }
+                ? _drag.Kind
+                : VerticalHitTest(point.Y, vm);
+            Cursor = hoveredKind is DragKind.TopMargin or DragKind.BottomMargin
+                ? Cursors.SizeNS
+                : Cursors.Arrow;
+        }
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
+
+        if (_drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin } vDrag)
+        {
+            // Vertical margin drag: commit the new margin via the backed ApplyPageSettings path.
+            var page = _editor.Model.Page;
+            if (TryVerticalMetrics(page, _editor.ZoomLevel) is { } vm)
+            {
+                var releaseY  = e.GetPosition(this).Y;
+                var deltaDip  = releaseY - vDrag.Start.Y;
+                var deltaPt   = vm.DipDeltaToPointsDelta(deltaDip);
+                if (vDrag.Kind == DragKind.TopMargin)
+                {
+                    var newTop = ClampVerticalMargin(vDrag.StartMarginPt + deltaPt, page.MarginBottomPt, vm.PageHeightPt);
+                    _editor.ApplyPageSettings(p => p.MarginTopPt = newTop);
+                }
+                else
+                {
+                    // Bottom margin drag: positive Y-delta (drag down) shrinks the bottom margin.
+                    var newBottom = ClampVerticalMargin(vDrag.StartMarginPt - deltaPt, page.MarginTopPt, vm.PageHeightPt);
+                    _editor.ApplyPageSettings(p => p.MarginBottomPt = newBottom);
+                }
+            }
+
+            ReleaseMouseCapture();
+            _drag = null;
+            Refresh();
+            e.Handled = true;
+            return;
+        }
+
         if (_drag is not { } drag || TryMetrics(RenderSize, _editor.Model.Page, _editor.ZoomLevel) is not { } metrics)
         {
             ReleaseMouseCapture();
@@ -313,6 +425,17 @@ public sealed class Ruler : FrameworkElement
         }
 
         return new DragOperation(DragKind.NewTabStop, -1, f, point);
+    }
+
+    // Vertical hit-test: return TopMargin if the Y coordinate is within HitRadius of the top-margin
+    // boundary, BottomMargin if within HitRadius of the bottom-margin boundary, else None.
+    internal static DragKind VerticalHitTest(double y, VerticalMetrics vm)
+    {
+        if (Math.Abs(y - vm.TopBoundaryY) <= HitRadius)
+            return DragKind.TopMargin;
+        if (Math.Abs(y - vm.BottomBoundaryY) <= HitRadius)
+            return DragKind.BottomMargin;
+        return DragKind.None;
     }
 
     internal static HorizontalMetrics? TryMetrics(Size size, PageSettings page, double zoom)
