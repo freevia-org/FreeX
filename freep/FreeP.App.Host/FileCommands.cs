@@ -41,6 +41,10 @@ internal sealed class FileCommands
     private static readonly IReadOnlyList<FileDialogFormatDescriptor> Formats =
         [new FileDialogFormatDescriptor(FxpFormat.Extension, "FreeP presentations")];
 
+    // Export-only target: PDF is a fixed-layout publish format, not a FreeP document format.
+    private static readonly IReadOnlyList<FileDialogFormatDescriptor> PdfFormats =
+        [new FileDialogFormatDescriptor(".pdf", "PDF documents")];
+
     private static readonly FileOpenDialogPlan OpenDialogPlan =
         FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats);
 
@@ -116,6 +120,32 @@ internal sealed class FileCommands
         var plan = BuildSaveAsDialogPlan(_workflow.CurrentPath);
         var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
         return result.Chosen && SaveTo(result.FileName!);
+    }
+
+    /// <summary>
+    /// File &gt; Export to PDF. Prompts for a target and writes a fixed-layout PDF (one page per slide) via the
+    /// shared portable PDF tier. Does not change the dirty/saved state (the <c>.fxp</c> is the document of record).
+    /// </summary>
+    public bool ExportPdf()
+    {
+        var sourceName = _workflow.CurrentPath is { } current ? Path.GetFileName(current) : null;
+        var plan = FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(
+            PdfFormats, sourceName, "Presentation", ".pdf");
+        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
+        if (!result.Chosen)
+            return false;
+
+        try
+        {
+            var bytes = PresentationPdfExporter.ExportToBytes(_getModel());
+            ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Could not export the presentation to PDF", ex);
+            return false;
+        }
     }
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
