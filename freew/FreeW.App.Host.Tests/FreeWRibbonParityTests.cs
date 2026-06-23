@@ -380,6 +380,10 @@ public sealed class FreeWRibbonParityTests
                 "freew.merge-edit-recipients",
                 "freew.merge-field",
                 "freew.merge-preview",
+                "freew.merge-preview-first",
+                "freew.merge-preview-previous",
+                "freew.merge-preview-next",
+                "freew.merge-preview-last",
                 "freew.merge-finish");
         Labels(mailings)
             .Should()
@@ -389,6 +393,10 @@ public sealed class FreeWRibbonParityTests
                 "Edit Recipient List",
                 "Insert Merge Field",
                 "Preview Results",
+                "First Record",
+                "Previous Record",
+                "Next Record",
+                "Last Record",
                 "Finish & Merge");
 
         var startMailMerge = mailings.Groups.Single(g => g.Id == "merge-data").Controls

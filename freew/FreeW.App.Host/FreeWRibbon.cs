@@ -407,6 +407,10 @@ internal static class FreeWRibbon
                 tab.Group("merge-preview", "Preview Results", "P", 120, g =>
                 {
                     g.Medium("freew.merge-preview", "Preview Results", RibbonCommandIconKind.PreviewResults);
+                    g.Icon("freew.merge-preview-first", "First Record", RibbonCommandIconKind.Previous);
+                    g.Icon("freew.merge-preview-previous", "Previous Record", RibbonCommandIconKind.Previous);
+                    g.Icon("freew.merge-preview-next", "Next Record", RibbonCommandIconKind.Next);
+                    g.Icon("freew.merge-preview-last", "Last Record", RibbonCommandIconKind.Next);
                 });
                 tab.Group("merge-finish", "Finish", "F", 110, g =>
                 {

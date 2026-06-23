@@ -254,6 +254,10 @@ internal static class FreeWRibbonIcons
             ["freew.merge-edit-recipients"] = RibbonCommandIconKind.Recipients,
             ["freew.merge-field"] = RibbonCommandIconKind.MergeField,
             ["freew.merge-preview"] = RibbonCommandIconKind.PreviewResults,
+            ["freew.merge-preview-first"] = RibbonCommandIconKind.Previous,
+            ["freew.merge-preview-previous"] = RibbonCommandIconKind.Previous,
+            ["freew.merge-preview-next"] = RibbonCommandIconKind.Next,
+            ["freew.merge-preview-last"] = RibbonCommandIconKind.Next,
             ["freew.merge-finish"] = RibbonCommandIconKind.FinishMerge,
 
             // Review

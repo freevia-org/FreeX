@@ -701,9 +701,9 @@ internal static class FreeWRibbonCommands
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
         // MailMergeSession: Start Mail Merge selects the output mode; "Select Recipients" / "Edit
         // Recipient List" capture CSV/typed records; "Insert Merge Field" drops a «Name» placeholder at
-        // the caret; "Preview Results" loads MergeRecord(template, row) into the editor with next/prev
-        // (restoring the template when exited); "Finish & Merge" combines every merged record according
-        // to the selected output mode.
+        // the caret; "Preview Results" loads MergeRecord(template, row) into the editor, and the preview
+        // navigation commands move through real recipient rows; "Finish & Merge" combines every merged
+        // record according to the selected output mode.
         var mergeSession = new MailMergeSession();
         registry.Register("freew.start-mail-merge", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
         registry.Register("freew.start-mail-merge-letters", new SetMergeModeCommand(mergeSession, MailMergeOutputMode.Letters));
@@ -713,6 +713,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
         registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
+        registry.Register("freew.merge-preview-first", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
+        registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
+        registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
+        registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
 
         return registry;
@@ -3228,25 +3232,11 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (session.Data is not { Count: > 0 } data)
+            if (!EnsurePreviewing(editor, session, out var data, out var template))
             {
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Select recipients first (Mailings > Select Recipients), then preview a record.",
-                    "Mail Merge");
                 return;
             }
 
-            // On first preview, capture the editable template and immediately show record 0; subsequent
-            // previews reuse the template and resume at the last viewed record.
-            if (!session.IsPreviewing)
-            {
-                editor.CommitToModel();
-                session.Template = editor.Model;
-                session.CurrentIndex = 0;
-            }
-
-            var template = session.Template!;
             var index = Math.Clamp(session.CurrentIndex, 0, data.Count - 1);
             session.CurrentIndex = index;
             editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
@@ -3271,6 +3261,53 @@ internal static class FreeWRibbonCommands
 
             editor.Focus();
         }
+    }
+
+    private sealed class NavigateMergePreviewCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        MailMergePreviewNavigationAction action) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!EnsurePreviewing(editor, session, out var data, out var template))
+                return;
+
+            var index = MailMergePreviewNavigationPlanner.TargetIndex(action, session.CurrentIndex, data.Count);
+            session.CurrentIndex = index;
+            editor.LoadModel(MailMerge.MergeRecord(template, data.Rows[index]));
+            editor.Focus();
+        }
+    }
+
+    private static bool EnsurePreviewing(
+        DocumentView editor,
+        MailMergeSession session,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out MergeData? data,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TextDocument? template)
+    {
+        data = session.Data;
+        template = session.Template;
+        if (data is not { Count: > 0 })
+        {
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                "Select recipients first (Mailings > Select Recipients), then preview a record.",
+                "Mail Merge");
+            return false;
+        }
+
+        // On first preview, capture the editable template and immediately show record 0; subsequent
+        // previews reuse the template and resume at the last viewed record.
+        if (!session.IsPreviewing)
+        {
+            editor.CommitToModel();
+            session.Template = editor.Model;
+            session.CurrentIndex = 0;
+        }
+
+        template = session.Template!;
+        return true;
     }
 
     // Mailings > Finish & Merge: produce the merged documents and load the concatenation of every record
