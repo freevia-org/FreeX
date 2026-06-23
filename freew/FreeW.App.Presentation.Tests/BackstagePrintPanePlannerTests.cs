@@ -1,7 +1,7 @@
-using FreeW.App.Host.Backstage;
+using FreeW.App.Presentation.Backstage;
 using FreeW.Core.Model;
 
-namespace FreeW.App.Host.Tests;
+namespace FreeW.App.Presentation.Tests;
 
 public sealed class BackstagePrintPanePlannerTests
 {

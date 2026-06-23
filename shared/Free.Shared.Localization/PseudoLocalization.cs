@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace FreeX.App.Localization;
+namespace Free.Shared.Localization;
 
 /// <summary>
 /// Expands neutral English text into a pseudo-localized form so that culture-sensitive

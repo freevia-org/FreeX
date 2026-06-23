@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using Xunit;
 

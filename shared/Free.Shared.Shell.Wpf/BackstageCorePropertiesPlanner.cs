@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace Free.Shared.Shell.Wpf;
 
 public sealed record BackstageCoreProperties(

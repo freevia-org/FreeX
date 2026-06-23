@@ -53,7 +53,25 @@ internal sealed class BackstageView : UserControl
             _actions.SaveAs,
             BuildRecentPane,
             BuildNewPane,
-            BuildOptionsPane));
+            BuildOptionsPane)
+        {
+            BuildExportPane = BuildExportPane,
+        });
+    }
+
+    private UIElement BuildExportPane()
+    {
+        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText("Export"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Create a PDF copy of this presentation — one page per slide, with selectable text.",
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+        panel.Children.Add(Kit.LinkButton("Export to PDF…", () => { Hide(); _actions.ExportPdf(); }));
+        return panel;
     }
 
     private UIElement BuildInfoPane()
@@ -106,6 +124,7 @@ internal sealed record BackstageActions(
     Action<string> OpenPath,
     Action Save,
     Action SaveAs,
+    Action ExportPdf,
     Func<FreePOptions> CurrentOptions,
     Action OnClosed,
     Func<string> DataFolder);

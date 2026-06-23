@@ -6,5 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <!-- Portable (no-WPF) PDF emitter shared with FreeX/FreeW for selectable-text PDF export. -->
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
   </ItemGroup>
 </Project>

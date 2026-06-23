@@ -1,8 +1,8 @@
 using System.Linq;
 using Free.Shared.AppServices;
-using FreeW.App.Host.Backstage;
+using FreeW.App.Presentation.Backstage;
 
-namespace FreeW.App.Host.Tests;
+namespace FreeW.App.Presentation.Tests;
 
 public sealed class BackstageHomePanePlannerTests
 {

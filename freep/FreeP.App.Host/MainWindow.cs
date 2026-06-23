@@ -109,6 +109,7 @@ public sealed class MainWindow : Window
             OpenPath: path => _file.OpenPath(path),
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
+            ExportPdf: () => _file.ExportPdf(),
             CurrentOptions: () => _options,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));

@@ -1,10 +1,10 @@
 using System.IO;
 using Free.Shared.AppServices;
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal static class BackstageHomePanePlanner
+public static class BackstageHomePanePlanner
 {
     private const int MaxRecentDocuments = 6;
 

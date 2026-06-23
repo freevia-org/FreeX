@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Localization;
 using FreeX.App.Host;
 using FreeX.App.Localization;
 

@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Backstage;
