@@ -14,6 +14,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -125,6 +126,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(combo, "Chart type");
         AutomationProperties.SetAutomationId(combo, "ChangeChartTypeCombo");
+        ApplyChartComboBoxChrome(combo);
         combo.SelectedItem =
             choices.FirstOrDefault(c => c.Type == currentType)
             ?? (choices.Count > 0 ? choices[0] : null);
@@ -147,10 +149,12 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
+        ApplyChartButtonChrome(okButton, 80, isDefault: true);
         okButton.Click += (_, _) => dialog.Close(combo.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
+        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
         dialog.Content = new StackPanel
@@ -160,7 +164,7 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType") },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType"), FontSize = 12 },
                 combo,
                 new StackPanel
                 {
@@ -223,6 +227,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(rangeBox, "Chart data range");
         AutomationProperties.SetAutomationId(rangeBox, "SelectChartDataRangeBox");
+        ApplyChartTextBoxChrome(rangeBox);
 
         var categoriesCheck = new CheckBox
         {
@@ -249,10 +254,12 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "SelectChartDataOkButton");
+        ApplyChartButtonChrome(okButton, 80, isDefault: true);
         okButton.Click += (_, _) => dialog.Close(((string, bool)?)(rangeBox.Text ?? string.Empty, categoriesCheck.IsChecked == true));
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "SelectChartDataCancelButton");
+        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close(((string, bool)?)null);
 
         dialog.Content = new StackPanel
@@ -262,7 +269,7 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel") },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel"), FontSize = 12 },
                 rangeBox,
                 categoriesCheck,
                 new StackPanel
@@ -310,10 +317,13 @@ public sealed partial class MainWindow
     {
         var chartTitleBox = new TextBox { Text = chartTitle, Width = 260 };
         AutomationProperties.SetAutomationId(chartTitleBox, "ChartTitleBox");
+        ApplyChartTextBoxChrome(chartTitleBox);
         var xAxisBox = new TextBox { Text = xAxisTitle, Width = 260 };
         AutomationProperties.SetAutomationId(xAxisBox, "ChartXAxisTitleBox");
+        ApplyChartTextBoxChrome(xAxisBox);
         var yAxisBox = new TextBox { Text = yAxisTitle, Width = 260 };
         AutomationProperties.SetAutomationId(yAxisBox, "ChartYAxisTitleBox");
+        ApplyChartTextBoxChrome(yAxisBox);
 
         var dialog = new Window
         {
@@ -327,6 +337,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChartTitlesOkButton");
+        ApplyChartButtonChrome(okButton, 80, isDefault: true);
         okButton.Click += (_, _) => dialog.Close(((string, string, string)?)(
             chartTitleBox.Text ?? string.Empty,
             xAxisBox.Text ?? string.Empty,
@@ -334,6 +345,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChartTitlesCancelButton");
+        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close(((string, string, string)?)null);
 
         dialog.Content = new StackPanel
@@ -343,11 +355,11 @@ public sealed partial class MainWindow
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChartTitleLabel") },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChartTitleLabel"), FontSize = 12 },
                 chartTitleBox,
-                new TextBlock { Text = UiText.Get("ChartLoc_HorizontalAxisTitleLabel") },
+                new TextBlock { Text = UiText.Get("ChartLoc_HorizontalAxisTitleLabel"), FontSize = 12 },
                 xAxisBox,
-                new TextBlock { Text = UiText.Get("ChartLoc_VerticalAxisTitleLabel") },
+                new TextBlock { Text = UiText.Get("ChartLoc_VerticalAxisTitleLabel"), FontSize = 12 },
                 yAxisBox,
                 new StackPanel
                 {
@@ -406,6 +418,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(positionCombo, "Legend position");
         AutomationProperties.SetAutomationId(positionCombo, "ChartLegendPositionCombo");
+        ApplyChartComboBoxChrome(positionCombo);
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
@@ -422,6 +435,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChartLegendOkButton");
+        ApplyChartButtonChrome(okButton, 80, isDefault: true);
         okButton.Click += (_, _) =>
         {
             var chosenPosition = positionCombo.SelectedItem is ChartLegendPositionChoice picked
@@ -432,6 +446,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChartLegendCancelButton");
+        ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((ChartLegendInput?)null);
 
         dialog.Content = new StackPanel
@@ -442,7 +457,7 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartLoc_LegendPositionLabel") },
+                new TextBlock { Text = UiText.Get("ChartLoc_LegendPositionLabel"), FontSize = 12 },
                 positionCombo,
                 new StackPanel
                 {

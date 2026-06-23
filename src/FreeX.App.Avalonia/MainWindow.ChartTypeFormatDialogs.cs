@@ -65,9 +65,11 @@ public sealed partial class MainWindow
         var gapWidthBox = new TextBox { Text = current.BarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(gapWidthBox, "Gap width");
         AutomationProperties.SetAutomationId(gapWidthBox, "ChartBarFormatGapWidthBox");
+        ApplyChartTextBoxChrome(gapWidthBox);
         var overlapBox = new TextBox { Text = current.BarOverlap.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(overlapBox, "Series overlap");
         AutomationProperties.SetAutomationId(overlapBox, "ChartBarFormatOverlapBox");
+        ApplyChartTextBoxChrome(overlapBox);
 
         var dialog = NewChartDialog(UiText.Get("ChartFmt_BarTitle"), "ChartBarFormatDialog");
 
@@ -92,9 +94,9 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_BarGapWidthLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_BarGapWidthLabel"), FontSize = 12 },
                 gapWidthBox,
-                new TextBlock { Text = UiText.Get("ChartFmt_BarOverlapLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_BarOverlapLabel"), FontSize = 12 },
                 overlapBox,
                 buttonRow,
             },
@@ -141,9 +143,11 @@ public sealed partial class MainWindow
         var angleBox = new TextBox { Text = current.FirstSliceAngle.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(angleBox, "First slice angle");
         AutomationProperties.SetAutomationId(angleBox, "ChartPieFormatAngleBox");
+        ApplyChartTextBoxChrome(angleBox);
         var explodedIndexBox = new TextBox { Text = current.ExplodedSliceIndex.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(explodedIndexBox, "Exploded slice index");
         AutomationProperties.SetAutomationId(explodedIndexBox, "ChartPieFormatExplodedIndexBox");
+        ApplyChartTextBoxChrome(explodedIndexBox);
         var explodedDistBox = new TextBox
         {
             Text = ((int)Math.Round(current.ExplodedSliceDistance * 100)).ToString(CultureInfo.InvariantCulture),
@@ -151,6 +155,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(explodedDistBox, "Exploded slice distance percent");
         AutomationProperties.SetAutomationId(explodedDistBox, "ChartPieFormatExplodedDistanceBox");
+        ApplyChartTextBoxChrome(explodedDistBox);
         var holeBox = new TextBox
         {
             Text = ((int)Math.Round(current.DoughnutHoleSize * 100)).ToString(CultureInfo.InvariantCulture),
@@ -158,6 +163,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetName(holeBox, "Doughnut hole size percent");
         AutomationProperties.SetAutomationId(holeBox, "ChartPieFormatHoleSizeBox");
+        ApplyChartTextBoxChrome(holeBox);
 
         var dialog = NewChartDialog(UiText.Get("ChartFmt_PieTitle"), "ChartPieFormatDialog");
 
@@ -198,15 +204,15 @@ public sealed partial class MainWindow
         cancelButton.Click += (_, _) => dialog.Close((ChartPieFormatInput?)null);
 
         var panel = new StackPanel { Margin = new Thickness(16), Spacing = 8, MinWidth = 300 };
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieFirstSliceAngleLabel") });
+        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieFirstSliceAngleLabel"), FontSize = 12 });
         panel.Children.Add(angleBox);
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedIndexLabel") });
+        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedIndexLabel"), FontSize = 12 });
         panel.Children.Add(explodedIndexBox);
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedDistanceLabel") });
+        panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieExplodedDistanceLabel"), FontSize = 12 });
         panel.Children.Add(explodedDistBox);
         if (isDoughnut)
         {
-            panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieHoleSizeLabel") });
+            panel.Children.Add(new TextBlock { Text = UiText.Get("ChartFmt_PieHoleSizeLabel"), FontSize = 12 });
             panel.Children.Add(holeBox);
         }
 
@@ -254,6 +260,7 @@ public sealed partial class MainWindow
         var scaleBox = new TextBox { Text = current.BubbleScale.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(scaleBox, "Bubble scale");
         AutomationProperties.SetAutomationId(scaleBox, "ChartBubbleFormatScaleBox");
+        ApplyChartTextBoxChrome(scaleBox);
 
         var negativeCheck = new CheckBox { Content = UiText.Get("ChartFmt_BubbleShowNegative"), IsChecked = current.ShowNegativeBubbles };
         AutomationProperties.SetAutomationId(negativeCheck, "ChartBubbleFormatNegativeCheck");
@@ -262,6 +269,7 @@ public sealed partial class MainWindow
         var sizeCombo = new ComboBox { Width = 260, ItemsSource = sizeChoices };
         AutomationProperties.SetName(sizeCombo, "Bubble size represents");
         AutomationProperties.SetAutomationId(sizeCombo, "ChartBubbleFormatSizeCombo");
+        ApplyChartComboBoxChrome(sizeCombo);
         sizeCombo.SelectedItem = current.BubbleSizeRepresents;
 
         var dialog = NewChartDialog(UiText.Get("ChartFmt_BubbleTitle"), "ChartBubbleFormatDialog");
@@ -287,10 +295,10 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_BubbleScaleLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_BubbleScaleLabel"), FontSize = 12 },
                 scaleBox,
                 negativeCheck,
-                new TextBlock { Text = UiText.Get("ChartFmt_BubbleSizeRepresentsLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_BubbleSizeRepresentsLabel"), FontSize = 12 },
                 sizeCombo,
                 buttonRow,
             },
@@ -339,16 +347,23 @@ public sealed partial class MainWindow
         var gapWidthBox = new TextBox { Text = current.UpDownBarGapWidth.ToString(CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(gapWidthBox, "Up/down bar gap width");
         AutomationProperties.SetAutomationId(gapWidthBox, "ChartStockFormatGapWidthBox");
+        ApplyChartTextBoxChrome(gapWidthBox);
 
         var upFillButton = ColorPickerButton("ChartFmt_StockUpBarFill", "ChartStockFormatUpFillButton", current.UpBarFillColor);
+        ApplyChartButtonChrome(upFillButton, 260);
         var upBorderButton = ColorPickerButton("ChartFmt_StockUpBarBorder", "ChartStockFormatUpBorderButton", current.UpBarBorderColor);
+        ApplyChartButtonChrome(upBorderButton, 260);
         var downFillButton = ColorPickerButton("ChartFmt_StockDownBarFill", "ChartStockFormatDownFillButton", current.DownBarFillColor);
+        ApplyChartButtonChrome(downFillButton, 260);
         var downBorderButton = ColorPickerButton("ChartFmt_StockDownBarBorder", "ChartStockFormatDownBorderButton", current.DownBarBorderColor);
+        ApplyChartButtonChrome(downBorderButton, 260);
         var highLowButton = ColorPickerButton("ChartFmt_StockHighLowLineColor", "ChartStockFormatHighLowButton", current.HighLowLineColor);
+        ApplyChartButtonChrome(highLowButton, 260);
 
         var thicknessBox = new TextBox { Text = current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), Width = 260 };
         AutomationProperties.SetName(thicknessBox, "High-low line thickness");
         AutomationProperties.SetAutomationId(thicknessBox, "ChartStockFormatThicknessBox");
+        ApplyChartTextBoxChrome(thicknessBox);
 
         upFillButton.Click += async (_, _) =>
         {
@@ -424,16 +439,16 @@ public sealed partial class MainWindow
             MinWidth = 300,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartFmt_StockGapWidthLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_StockGapWidthLabel"), FontSize = 12 },
                 gapWidthBox,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockBarsLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartFmt_StockBarsLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 upFillButton,
                 upBorderButton,
                 downFillButton,
                 downBorderButton,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockHighLowLabel"), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = UiText.Get("ChartFmt_StockHighLowLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 highLowButton,
-                new TextBlock { Text = UiText.Get("ChartFmt_StockLineThicknessLabel") },
+                new TextBlock { Text = UiText.Get("ChartFmt_StockLineThicknessLabel"), FontSize = 12 },
                 thicknessBox,
                 buttonRow,
             },
