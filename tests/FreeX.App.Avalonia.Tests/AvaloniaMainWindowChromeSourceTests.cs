@@ -394,9 +394,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PageSetupDialogModel.PageOrderChoices");
         source.Should().Contain("PageSetupDialogModel.PrintErrorValueChoices");
         source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
+        source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
         source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().Contain("PageSetupDialogModel.GetValidationRoute(build.Target)");
+        source.Should().NotContain("private static int PageSetupPresetIndex");
+        source.Should().NotContain("var presetLabels = new[]");
         source.Should().NotContain("initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0");
         source.Should().NotContain("WorksheetPrintErrorValue ReadErrorValue()");
         source.Should().NotContain("WorksheetPrintComments ReadComments()");

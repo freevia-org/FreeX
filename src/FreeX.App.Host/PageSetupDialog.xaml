@@ -128,36 +128,10 @@
                     </Grid.ColumnDefinitions>
 
                     <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_HeaderPreset}" Target="{Binding ElementName=HeaderPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="HeaderPresetBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="HeaderPresetBox_SelectionChanged">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None}" Tag=""/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1}" Tag="&amp;[Page]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Sheet1}" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1}" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1Xlsx}" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_ConfidentialPage1}" Tag="Confidential, Page &amp;[Page]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_SheetName}" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FileName}" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
-                    </ComboBox>
+                    <ComboBox x:Name="HeaderPresetBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="HeaderPresetBox_SelectionChanged"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_FooterPreset}" Target="{Binding ElementName=FooterPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
-                    <ComboBox x:Name="FooterPresetBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="FooterPresetBox_SelectionChanged">
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None}" Tag=""/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1}" Tag="&amp;[Page]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Sheet1}" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1}" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1Xlsx}" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Date}" Tag="&amp;[Date]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Time}" Tag="&amp;[Time]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
-                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FileName}" Tag="&amp;[File]"/>
-                    </ComboBox>
+                    <ComboBox x:Name="FooterPresetBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="FooterPresetBox_SelectionChanged"/>
 
                     <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="{local:Loc Key=PageSetup_Preview}" Margin="0,2,0,10">
                         <Grid Margin="8">

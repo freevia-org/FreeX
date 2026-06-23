@@ -49,6 +49,44 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
+    public void HeaderFooterPresetChoices_DefineRendererNeutralPresetCatalogs()
+    {
+        PageSetupDialogModel.HeaderPresetChoices.Select(choice => choice.LabelResourceKey)
+            .Should()
+            .ContainInOrder(
+                "PageSetup_None",
+                "PageSetup_Page1",
+                "PageSetup_Page1Of",
+                "PageSetup_Sheet1",
+                "PageSetup_Book1",
+                "PageSetup_Book1Xlsx",
+                "PageSetup_Book1XlsxSheet1",
+                "PageSetup_ConfidentialPage1",
+                "PageSetup_DatePage1",
+                "PageSetup_SheetName",
+                "PageSetup_FileName",
+                "PageSetup_FilePath");
+        PageSetupDialogModel.FooterPresetChoices.Select(choice => choice.LabelResourceKey)
+            .Should()
+            .ContainInOrder(
+                "PageSetup_None",
+                "PageSetup_Page1",
+                "PageSetup_Page1Of",
+                "PageSetup_Sheet1",
+                "PageSetup_Book1",
+                "PageSetup_Book1Xlsx",
+                "PageSetup_Book1XlsxSheet1",
+                "PageSetup_Date",
+                "PageSetup_Time",
+                "PageSetup_DatePage1",
+                "PageSetup_FilePath",
+                "PageSetup_FileName");
+        PageSetupDialogModel.HeaderFooterPresetChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(PageSetupDialogModel.HeaderFooterPresets);
+    }
+
+    [Fact]
     public void ChoiceHelpers_FallbackUnknownValuesAndIndexes()
     {
         PageSetupDialogModel.ChoiceIndex(
@@ -81,6 +119,33 @@ public sealed class PageSetupDialogModelTests
                 WorksheetPageOrder.DownThenOver)
             .Should()
             .Be(WorksheetPageOrder.DownThenOver);
+    }
+
+    [Fact]
+    public void HeaderFooterPresetHelpers_SelectValuesAndBuildPreviewText()
+    {
+        PageSetupDialogModel.HeaderFooterPresetIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Confidential, Page &[Page]")
+            .Should()
+            .Be(7);
+        PageSetupDialogModel.HeaderFooterPresetValue(
+                PageSetupDialogModel.FooterPresetChoices,
+                selectedIndex: 8)
+            .Should()
+            .Be("&[Time]");
+        PageSetupDialogModel.HeaderFooterPresetValue(
+                PageSetupDialogModel.FooterPresetChoices,
+                selectedIndex: 99)
+            .Should()
+            .BeEmpty();
+
+        PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("&[File]", "", "&[Date]"), "(none)")
+            .Should()
+            .Be("&[File] | &[Date]");
+        PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("", "", ""), "(none)")
+            .Should()
+            .Be("(none)");
     }
 
     [Theory]
