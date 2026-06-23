@@ -144,6 +144,9 @@ public sealed class LocTests
         keys.Should().Contain("CreateTable_Title");
         keys.Should().Contain("CreateTable_RangeLabel");
         keys.Should().Contain("CreateTable_HeadersCheckBox");
+        keys.Should().Contain("MainWindow_Header_RecommendedPivotTables");
+        keys.Should().Contain("RecommendedPivotTables_BlankPivotTable");
+        keys.Should().Contain("RecommendedPivotTables_NoRecommendationsHeading");
     }
 
     [Fact]
