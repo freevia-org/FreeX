@@ -136,6 +136,7 @@ public sealed partial class MainWindow
         ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
         ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
         ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
+        ("dialog.AddWatch", () => ShowAddWatchParityDialogAsync()),
         ("dialog.WorkbookStatistics", () => ShowWorkbookStatisticsDialogAsync()),
         ("dialog.RenameSheet", () => ShowRenameSheetParityDialogAsync()),
         ("dialog.UnhideSheet", () => ShowUnhideSheetParityDialogAsync()),
@@ -345,6 +346,9 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 2, 2),
             new CellAddress(_session.ActiveSheet.Id, 3, 3),
             ShowWatchWindowDialogAsync);
+
+    private Task ShowAddWatchParityDialogAsync() =>
+        ShowAddWatchDialogAsync("Sheet1!$B$2");
 
     private async Task ShowRenameSheetParityDialogAsync() =>
         await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);

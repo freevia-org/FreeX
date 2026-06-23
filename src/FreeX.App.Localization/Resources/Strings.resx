@@ -1532,6 +1532,16 @@
   <data name="EvaluateFormula_CloseButton" xml:space="preserve"><value>Close</value></data>
   <data name="EvaluateFormula_HelpButton" xml:space="preserve"><value>Help on this Function</value></data>
   <data name="EvaluateFormula_HelpBody" xml:space="preserve"><value>Use Evaluate to step through the selected formula. Step In opens a referenced formula when one is available; Step Out returns to the containing formula.</value></data>
+  <data name="AddWatch_Title" xml:space="preserve"><value>Add Watch</value></data>
+  <data name="AddWatch_SelectedRangeLabel" xml:space="preserve"><value>Selected range:</value></data>
+  <data name="AddWatch_SelectedRangeAutomationName" xml:space="preserve"><value>Selected range</value></data>
+  <data name="AddWatch_SelectedRangeHelpText" xml:space="preserve"><value>Shows the selected worksheet cells that will be watched.</value></data>
+  <data name="AddWatch_BodyText" xml:space="preserve"><value>The selected cells will be added to the Watch Window.</value></data>
+  <data name="AddWatch_AddButton" xml:space="preserve"><value>Add</value></data>
+  <data name="AddWatch_AddAutomationName" xml:space="preserve"><value>Add</value></data>
+  <data name="AddWatch_AddHelpText" xml:space="preserve"><value>Add the selected cells to the Watch Window.</value></data>
+  <data name="AddWatch_CancelAutomationName" xml:space="preserve"><value>Cancel</value></data>
+  <data name="AddWatch_CancelHelpText" xml:space="preserve"><value>Close the Add Watch dialog without adding cells.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>
