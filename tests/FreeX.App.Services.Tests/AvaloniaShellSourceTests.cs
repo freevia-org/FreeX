@@ -2255,6 +2255,7 @@ public sealed class AvaloniaShellSourceTests
         var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
         var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
+        var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
@@ -2289,6 +2290,17 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
+        parityCaptureSource.Should().Contain("CreateFormulaEvaluationSummary(_session.ActiveSheet.Id)");
+        parityCaptureSource.Should().Contain("new FormulaEvaluationSummary(");
+        parityCaptureSource.Should().Contain("new FormulaEvaluationStep(\"SUM(D2:D5)\", \"469\")");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSummary(_session.Workbook, _session.ActiveCell)");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSession(summary)");
+        evaluateFormulaSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"EvaluateFormulaDialog\")");
+        evaluateFormulaSource.Should().Contain("UiText.Get(EvaluateFormulaDialogPlanner.TitleKey)");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.StepPositionTextKey");
+        evaluateFormulaSource.Should().Contain("Width = 600");
+        evaluateFormulaSource.Should().Contain("Height = 360");
+        evaluateFormulaSource.Should().NotContain("\"Evaluate Formula\"");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
         parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");

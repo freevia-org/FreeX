@@ -126,6 +126,9 @@ public sealed class LocTests
         keys.Should().Contain("SelectionPane_SearchLabel");
         keys.Should().Contain("SelectionPane_FilterLabel");
         keys.Should().Contain("SelectionPane_RenameButton");
+        keys.Should().Contain("EvaluateFormula_Title");
+        keys.Should().Contain("EvaluateFormula_EvaluateButton");
+        keys.Should().Contain("EvaluateFormula_SelectFormulaMessage");
     }
 
     [Fact]

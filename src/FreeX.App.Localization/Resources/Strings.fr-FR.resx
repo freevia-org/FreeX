@@ -1493,6 +1493,21 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Trié de A à Z</value></data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Trié de Z à A</value></data>
   <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Échec de la mise à jour du filtre.</value></data>
+  <data name="EvaluateFormula_Title" xml:space="preserve"><value>Evaluer la formule</value></data>
+  <data name="EvaluateFormula_SelectFormulaMessage" xml:space="preserve"><value>Selectionnez une cellule contenant une formule.</value></data>
+  <data name="EvaluateFormula_EvaluationLabel" xml:space="preserve"><value>Evaluation :</value></data>
+  <data name="EvaluateFormula_FormulaPrefix" xml:space="preserve"><value>Formule : </value></data>
+  <data name="EvaluateFormula_ResultText" xml:space="preserve"><value>Resultat : {0}</value></data>
+  <data name="EvaluateFormula_StepPositionText" xml:space="preserve"><value>Etape {0} sur {1}</value></data>
+  <data name="EvaluateFormula_NoIntermediateStepsText" xml:space="preserve"><value>Aucune etape intermediaire d'evaluation.</value></data>
+  <data name="EvaluateFormula_ValueText" xml:space="preserve"><value>Valeur : {0}</value></data>
+  <data name="EvaluateFormula_EvaluateButton" xml:space="preserve"><value>Evaluer</value></data>
+  <data name="EvaluateFormula_StepInButton" xml:space="preserve"><value>Pas a pas detaille</value></data>
+  <data name="EvaluateFormula_StepOutButton" xml:space="preserve"><value>Pas a pas sortant</value></data>
+  <data name="EvaluateFormula_RestartButton" xml:space="preserve"><value>Redemarrer</value></data>
+  <data name="EvaluateFormula_CloseButton" xml:space="preserve"><value>Fermer</value></data>
+  <data name="EvaluateFormula_HelpButton" xml:space="preserve"><value>Aide sur cette fonction</value></data>
+  <data name="EvaluateFormula_HelpBody" xml:space="preserve"><value>Utilisez Evaluer pour parcourir la formule selectionnee. Pas a pas detaille ouvre une formule referencee lorsqu'elle existe ; Pas a pas sortant revient a la formule contenant la reference.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>Nouveau classeur</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Ouvrir...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Ouvrir recent</value></data>
