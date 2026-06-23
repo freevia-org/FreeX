@@ -52,13 +52,14 @@ public static class PivotRowLabelAdornmentPlanner
                 indentLevel < pivotTable.RowFields.Count - 1 &&
                 NextVisibleLabelIndent(workbook, sheet, pivotTable, row, labelCol) > indentLevel;
 
-            if (!showButton)
+            var reserveChildLabelPadding = pivotTable.ShowExpandCollapseButtons && indentLevel > 0;
+            if (!showButton && !reserveChildLabelPadding)
                 continue;
 
             adornments.Add(new PivotRowLabelAdornment(
                 address,
                 indentLevel,
-                ShowExpandCollapseButton: true,
+                ShowExpandCollapseButton: showButton,
                 IsExpanded: true));
         }
     }

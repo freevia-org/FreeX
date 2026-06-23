@@ -34,11 +34,31 @@ public sealed class PivotRowLabelAdornmentPlannerTests
 
         var adornments = PivotRowLabelAdornmentPlanner.BuildAdornments(workbook, sheet);
 
-        adornments.Should().ContainSingle()
-            .Which.Should().Be(new FreeX.App.UI.PivotRowLabelAdornment(
+        adornments.Should().Equal(
+            new FreeX.App.UI.PivotRowLabelAdornment(
                 new CellAddress(sheet.Id, 4, 1),
                 IndentLevel: 0,
                 ShowExpandCollapseButton: true,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 5, 1),
+                IndentLevel: 1,
+                ShowExpandCollapseButton: false,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 6, 1),
+                IndentLevel: 1,
+                ShowExpandCollapseButton: false,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 7, 1),
+                IndentLevel: 1,
+                ShowExpandCollapseButton: false,
+                IsExpanded: true),
+            new FreeX.App.UI.PivotRowLabelAdornment(
+                new CellAddress(sheet.Id, 8, 1),
+                IndentLevel: 1,
+                ShowExpandCollapseButton: false,
                 IsExpanded: true));
     }
 
