@@ -326,10 +326,23 @@ public sealed partial class MainWindow
             async () => { await ShowInsertHyperlinkInputDialogAsync(); });
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            ShowEvaluateFormulaDialogAsync);
+        ShowEvaluateFormulaDialogAsync(CreateFormulaEvaluationSummary(_session.ActiveSheet.Id));
+
+    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
+    {
+        var address = new CellAddress(sheetId, 6, 4);
+        return new FormulaEvaluationSummary(
+            sheetId,
+            "Sheet1",
+            address,
+            "=SUM(D2:D5)",
+            "469",
+            [
+                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
+                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
+                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
+            ]);
+    }
 
     private Task ShowWatchWindowParityDialogAsync() =>
         ShowWithParitySelectionAsync(
@@ -369,7 +382,38 @@ public sealed partial class MainWindow
 
     private async Task ShowSelectionPaneParityDialogAsync()
     {
-        _ = EnsureParityShape();
+        var chart = EnsureParityChart();
+        if (chart is not null)
+            chart.Name = "Revenue Chart";
+
+        var shape = EnsureParityShape();
+        if (shape is not null)
+            shape.Name = "Rectangle 1";
+
+        if (chart is not null && shape is not null)
+        {
+            var items = new[]
+            {
+                new SelectionPaneItem(
+                    SelectionPaneObjectKind.Chart,
+                    chart.Id,
+                    chart.Name ?? "Revenue Chart",
+                    chart.IsVisible,
+                    CanMoveUp: false,
+                    CanMoveDown: false),
+                new SelectionPaneItem(
+                    SelectionPaneObjectKind.Shape,
+                    shape.Id,
+                    shape.Name ?? "Rectangle 1",
+                    shape.IsVisible,
+                    CanMoveUp: false,
+                    CanMoveDown: false),
+            };
+
+            await OpenSelectionPaneDialogAsync(items);
+            return;
+        }
+
         await OpenSelectionPaneDialogAsync();
     }
 
@@ -881,8 +925,8 @@ public sealed partial class MainWindow
         Task openerTask;
         try
         {
-            // Fire-and-forget: ShowDialog blocks until the window closes, so we must NOT await it here.
-            openerTask = opener();
+            // Fire-and-forget: schedule the modal opener after this method starts polling for its owned window.
+            openerTask = RunParityModalOpenerAsync(opener);
         }
         catch (Exception ex)
         {
@@ -916,6 +960,26 @@ public sealed partial class MainWindow
         }
 
         return result;
+    }
+
+    private static Task RunParityModalOpenerAsync(Func<Task> opener)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(
+            async () =>
+            {
+                try
+                {
+                    await opener();
+                    completion.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            },
+            DispatcherPriority.Background);
+        return completion.Task;
     }
 
     private async Task<Window?> WaitForOwnedDialogAsync(HashSet<Window> preexisting)

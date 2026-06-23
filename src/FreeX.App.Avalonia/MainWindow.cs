@@ -3350,9 +3350,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatusBarViewButtons()
     {
-        ApplyStatusBarViewButtonState(_statusNormalViewButton, !_isPageBreakPreviewActive);
-        ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, _isPageBreakPreviewActive);
-        ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, _isPageBreakPreviewActive);
+        var state = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode);
+        ApplyStatusBarViewButtonState(_statusNormalViewButton, state.NormalChecked);
+        ApplyStatusBarViewButtonState(_statusPageLayoutViewButton, state.PageLayoutChecked);
+        ApplyStatusBarViewButtonState(_statusPageBreakPreviewButton, state.PageBreakPreviewChecked);
     }
 
     private static void ApplyStatusBarViewButtonState(ToggleButton button, bool isChecked)
@@ -3747,7 +3748,7 @@ public sealed partial class MainWindow : Window
         _pageSetupMenuItem.IsEnabled = isIdle;
         _printPreviewMenuItem.IsEnabled = isIdle;
         _pageBreakPreviewMenuItem.IsEnabled = isIdle;
-        _pageBreakPreviewMenuItem.IsChecked = _isPageBreakPreviewActive;
+        _pageBreakPreviewMenuItem.IsChecked = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).PageBreakPreviewChecked;
     }
 
     private int FindActiveSheetTabIndex()
@@ -4011,7 +4012,7 @@ public sealed partial class MainWindow : Window
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
 
-        var pageBreakOverlay = _isPageBreakPreviewActive
+        var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ActiveSheet.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
             : null;
 
@@ -17728,12 +17729,14 @@ public sealed partial class MainWindow : Window
         UpdateSaveButton();
         try
         {
-            _statusText.Text = "Opening...";
+            _statusText.Text = WorkbookProgressTextFormatter
+                .FormatOpen("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                .Detail;
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookOpenProgressUpdate>(
                 update =>
                 {
-                    _statusText.Text = FormatOpenStatus(update);
+                    _statusText.Text = WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
@@ -18476,12 +18479,14 @@ public sealed partial class MainWindow : Window
         UpdateSaveButton();
         try
         {
-            _statusText.Text = "Saving...";
+            _statusText.Text = WorkbookProgressTextFormatter
+                .FormatSave("preparing", TimeSpan.Zero, percent: null, UiText.Get)
+                .Detail;
             _statusText.Foreground = Brush(67, 113, 83);
             var progress = new Progress<WorkbookSaveProgressUpdate>(
                 update =>
                 {
-                    _statusText.Text = FormatSaveStatus(update);
+                    _statusText.Text = WorkbookProgressTextFormatter.FormatSave(update, UiText.Get).Detail;
                     _statusText.Foreground = Brush(67, 113, 83);
                 });
 
@@ -18940,25 +18945,6 @@ public sealed partial class MainWindow : Window
         _session.IsFallback ||
         status.Contains("Unsupported XLSX", StringComparison.Ordinal) ||
         status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
-
-    private static string FormatSaveStatus(WorkbookSaveProgressUpdate update) =>
-        update.Phase switch
-        {
-            WorkbookSavePhase.Preparing => "Preparing save...",
-            WorkbookSavePhase.Writing => "Writing file...",
-            WorkbookSavePhase.Completed => "Saved",
-            _ => "Saving..."
-        };
-
-    private static string FormatOpenStatus(WorkbookOpenProgressUpdate update) =>
-        update.Phase switch
-        {
-            WorkbookOpenPhase.Reading => "Reading file...",
-            WorkbookOpenPhase.Inspecting => "Inspecting workbook...",
-            WorkbookOpenPhase.Parsing => "Opening workbook...",
-            WorkbookOpenPhase.Calculating => "Calculating workbook...",
-            _ => "Opening..."
-        };
 
     private static string FormatCellReference(CellAddress address) =>
         CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);

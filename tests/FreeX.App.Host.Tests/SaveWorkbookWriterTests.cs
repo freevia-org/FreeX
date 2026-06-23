@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using System.IO;
@@ -10,18 +11,18 @@ public sealed class SaveWorkbookWriterTests
     [Fact]
     public void FormatSavingFileDetail_ChangesEveryThreeSeconds()
     {
-        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(0))
+        FormatSavingFileDetail("writing", TimeSpan.FromSeconds(0))
             .Should().Be("Saving file (writing)");
-        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(3))
+        FormatSavingFileDetail("writing", TimeSpan.FromSeconds(3))
             .Should().Be("Saving file (writing bytes)");
-        SaveWorkbookWriter.FormatSavingFileDetail("writing", TimeSpan.FromSeconds(6))
+        FormatSavingFileDetail("writing", TimeSpan.FromSeconds(6))
             .Should().Be("Saving file (flushing package)");
     }
 
     [Fact]
     public void FormatSavingFileDetail_PreservesTrimmedCaseInsensitivePhaseMatching()
     {
-        SaveWorkbookWriter.FormatSavingFileDetail(" Serializing ", TimeSpan.FromSeconds(6))
+        FormatSavingFileDetail(" Serializing ", TimeSpan.FromSeconds(6))
             .Should().Be("Saving file (packaging sheets)");
     }
 
@@ -102,4 +103,7 @@ public sealed class SaveWorkbookWriterTests
         adapterInvoked.Should().BeFalse();
         File.Exists(tempPath).Should().BeFalse();
     }
+
+    private static string FormatSavingFileDetail(string phase, TimeSpan elapsed) =>
+        WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent: null, UiText.Get).Detail;
 }

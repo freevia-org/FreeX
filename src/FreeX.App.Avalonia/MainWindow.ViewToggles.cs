@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Avalonia;
 
 /// <summary>
@@ -13,7 +15,7 @@ namespace FreeX.App.Avalonia;
 ///   layout (rendering each printed page with margins and rulers) is out of scope for this shell, which
 ///   has no paginated canvas. Instead, selecting Page Layout turns ON the existing page-break overlay
 ///   (page boundaries, out-of-print-area masks, automatic break lines, and "Page N" watermarks) so the
-///   user sees where pages fall. This reuses <c>_isPageBreakPreviewActive</c> and the overlay built by
+///   user sees where pages fall. This reuses the active sheet's view mode and the overlay built by
 ///   <c>BuildPageBreakPreviewOverlay</c>. This is NOT Excel page-layout fidelity — it is the page-break
 ///   visualization, surfaced under the Page Layout button. <c>view.normal</c> (already wired) clears it.</item>
 /// </list>
@@ -69,8 +71,12 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        if (!_isPageBreakPreviewActive)
-            _isPageBreakPreviewActive = true;
+        var result = _session.SetWorksheetViewMode(WorksheetViewMode.PageLayout);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_PageLayoutView"));
+            return;
+        }
 
         RefreshShell(UiText.Get("ShellLoc_PageLayoutView"));
     }

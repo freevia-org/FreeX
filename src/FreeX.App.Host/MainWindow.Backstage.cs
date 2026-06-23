@@ -466,10 +466,7 @@ public partial class MainWindow
                 return;
 
             _operationProgressFileName = System.IO.Path.GetFileName(path);
-            ShowOpenProgress(
-                OpenWorkbookProgressPlanner.ProgressTitle(),
-                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing", TimeSpan.Zero),
-                1);
+            ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
@@ -507,18 +504,12 @@ public partial class MainWindow
             // (skip suppressed snapshots/transient paths); the MRU store write stays FreeX-specific.
             if (FileLifecyclePlanner.PlanRecentRegistration(path, suppressRecentFiles) == RecentFileRegistration.Register)
                 _recentFiles.AddOrUpdate(path);
-            ShowOpenProgress(
-                OpenWorkbookProgressPlanner.ProgressTitle(),
-                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing view", TimeSpan.Zero),
-                null);
+            ShowOpenProgress(CreateOpenProgress("preparing view", TimeSpan.Zero, null));
             operationCancellation.Token.ThrowIfCancellationRequested();
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
-            ShowOpenProgress(
-                OpenWorkbookProgressPlanner.ProgressTitle(),
-                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("done", TimeSpan.Zero),
-                100);
+            ShowOpenProgress(CreateOpenProgress("done", TimeSpan.Zero, 100));
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
@@ -560,8 +551,14 @@ public partial class MainWindow
         }
     }
 
-    public static string FormatLoadingFileDetail(string phase, TimeSpan elapsed)
-        => OpenWorkbookProgressPlanner.FormatLoadingFileDetail(phase, elapsed);
+    private static OpenProgressUpdate CreateOpenProgress(string phase, TimeSpan elapsed, double? percent) =>
+        FromSharedOpenProgressText(WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get));
+
+    private static OpenProgressUpdate FromSharedOpenProgressText(WorkbookProgressText text) =>
+        new(text.Title, text.Detail, text.Percent);
+
+    private void ShowOpenProgress(OpenProgressUpdate update) =>
+        ShowOpenProgress(update.Title, update.Detail, update.Percent);
 
     private void ApplyOpenedWorksheetViewState()
     {
@@ -982,10 +979,7 @@ public partial class MainWindow
             // the generation check below is belt-and-suspenders.
             SetFileOperationInputEnabled(false);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
-            ShowSaveProgress(
-                SaveWorkbookWriter.ProgressTitle(),
-                SaveWorkbookWriter.FormatSavingFileDetail("preparing", TimeSpan.Zero),
-                1);
+            ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             var saveWarnings = await new SaveWorkbookWriter().SaveAsync(
@@ -1068,6 +1062,15 @@ public partial class MainWindow
     {
         ShowOperationFooterProgress(title, detail, percent);
     }
+
+    private void ShowSaveProgress(SaveProgressUpdate update) =>
+        ShowSaveProgress(update.Title, update.Detail, update.Percent);
+
+    private static SaveProgressUpdate CreateSaveProgress(string phase, TimeSpan elapsed, double? percent) =>
+        FromSharedSaveProgressText(WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get));
+
+    private static SaveProgressUpdate FromSharedSaveProgressText(WorkbookProgressText text) =>
+        new(text.Title, text.Detail, text.Percent);
 
     private void HideSaveProgress()
     {

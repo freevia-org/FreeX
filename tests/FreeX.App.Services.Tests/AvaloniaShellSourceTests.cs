@@ -2254,6 +2254,8 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
+        var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
+        var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
@@ -2288,6 +2290,17 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
+        parityCaptureSource.Should().Contain("CreateFormulaEvaluationSummary(_session.ActiveSheet.Id)");
+        parityCaptureSource.Should().Contain("new FormulaEvaluationSummary(");
+        parityCaptureSource.Should().Contain("new FormulaEvaluationStep(\"SUM(D2:D5)\", \"469\")");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSummary(_session.Workbook, _session.ActiveCell)");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSession(summary)");
+        evaluateFormulaSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"EvaluateFormulaDialog\")");
+        evaluateFormulaSource.Should().Contain("UiText.Get(EvaluateFormulaDialogPlanner.TitleKey)");
+        evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.StepPositionTextKey");
+        evaluateFormulaSource.Should().Contain("Width = 600");
+        evaluateFormulaSource.Should().Contain("Height = 360");
+        evaluateFormulaSource.Should().NotContain("\"Evaluate Formula\"");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
         parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");
@@ -2307,6 +2320,10 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private Task ShowTextToColumnsParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowSparklineParityDialogAsync()");
         parityCaptureSource.Should().Contain("private async Task ShowSelectionPaneParityDialogAsync()");
+        parityCaptureSource.Should().Contain("chart.Name = \"Revenue Chart\";");
+        parityCaptureSource.Should().Contain("shape.Name = \"Rectangle 1\";");
+        parityCaptureSource.Should().Contain("new SelectionPaneItem(");
+        parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync(items);");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync();");
         parityCaptureSource.Should().Contain("private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)");
         parityCaptureSource.Should().Contain("private async Task ShowPivotTableOptionsParityDialogAsync()");
@@ -2344,6 +2361,20 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("Grid.SetColumn(directionBox, 1);");
         drawingFormatSource.Should().Contain("Grid.SetColumnSpan(directionBox, 3);");
         drawingFormatSource.Should().Contain("Content = UiText.Get(\"Common_Ok\"), IsDefault = true, MinWidth = 76, Width = 76");
+
+        selectionPaneSource.Should().Contain("Width = 520");
+        selectionPaneSource.Should().Contain("Height = 440");
+        selectionPaneSource.Should().Contain("var searchBox = new TextBox { MinWidth = 160");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(searchBox, \"SelectionPaneSearchBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(filterBox, \"SelectionPaneFilterBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(renameBox, \"SelectionPaneRenameBox\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(toggleVisibilityButton, \"SelectionPaneToggleVisibilityButton\")");
+        selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
+        selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
+        selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton }");
+        selectionPaneSource.Should().Contain("Children = { ok, cancel }");
+        selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
+        selectionPaneSource.Should().NotContain("SelectionPane_Hint");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -29,8 +30,13 @@ public sealed partial class MainWindow
     /// <summary>View ▸ Normal — leave Page Break Preview.</summary>
     private void SetNormalView()
     {
-        if (_isPageBreakPreviewActive)
-            _isPageBreakPreviewActive = false;
+        var result = _session.SetWorksheetViewMode(WorksheetViewMode.Normal);
+        if (!result.Success)
+        {
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_NormalView"));
+            return;
+        }
+
         RefreshShell(UiText.Get("InsertLoc_NormalView"));
     }
 

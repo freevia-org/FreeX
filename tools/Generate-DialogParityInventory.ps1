@@ -187,7 +187,7 @@ $routes = @(
     @{
         RouteId = "dialog.TextToColumns"; DisplayName = "Text to Columns"
         Wpf = @("screenshots\data-tools-dialogs-tour\freex_data_tools_text_to_columns_*.png")
-        Shared = @("src\FreeX.App.Presentation\TextToColumns\*.cs")
+        Shared = @("src\FreeX.App.Presentation\CellReferenceInputParser.cs", "src\FreeX.App.Presentation\TextToColumns\*.cs")
     },
     @{
         RouteId = "dialog.AdvancedFilter"; DisplayName = "Advanced Filter"
@@ -263,6 +263,7 @@ $routes = @(
     @{
         RouteId = "dialog.EvaluateFormula"; DisplayName = "Evaluate Formula"
         Wpf = @("screenshots\formula-diagnostics-tour\freex_formula_diagnostics_evaluate_*.png")
+        Shared = @("src\FreeX.App.Services\EvaluateFormulaDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.WatchWindow"; DisplayName = "Watch Window"
@@ -281,7 +282,7 @@ $routes = @(
     @{
         RouteId = "dialog.SelectionPane"; DisplayName = "Selection Pane"
         Wpf = @("screenshots\page-layout-setup-tour\freex_page_layout_setup_arrange_selection_pane_dialog.png")
-        Shared = @("src\FreeX.App.Presentation\DrawingUI\SelectionPane*.cs")
+        Shared = @("src\FreeX.App.Services\SelectionPane*.cs", "src\FreeX.App.Presentation\DrawingUI\SelectionPane*.cs")
     },
     @{
         RouteId = "dialog.InsertSlicer"; DisplayName = "Insert Slicer"

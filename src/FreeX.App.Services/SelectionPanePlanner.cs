@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -186,6 +187,32 @@ public static class SelectionPanePlanner
             CreateVisibilityChanges(originalItems, currentStates),
             CreateRenameChanges(originalItems, currentStates),
             moveChanges);
+
+    public static bool HasChanges(
+        IReadOnlyList<SelectionPaneVisibilityChange> visibility,
+        IReadOnlyList<SelectionPaneRenameChange> rename,
+        IReadOnlyList<SelectionPaneMoveChange> moves) =>
+        visibility.Count > 0 || rename.Count > 0 || moves.Count > 0;
+
+    public static IWorkbookCommand? CreateCommand(
+        SheetId sheetId,
+        IReadOnlyList<SelectionPaneVisibilityChange> visibility,
+        IReadOnlyList<SelectionPaneRenameChange> rename,
+        IReadOnlyList<SelectionPaneMoveChange> moves)
+    {
+        if (!HasChanges(visibility, rename, moves))
+            return null;
+
+        var commands = new List<IWorkbookCommand>(rename.Count + visibility.Count + moves.Count);
+        foreach (var change in rename)
+            commands.Add(new RenameSelectionPaneObjectCommand(sheetId, change.Kind, change.Id, change.Name));
+        foreach (var change in visibility)
+            commands.Add(new SetSelectionPaneObjectVisibilityCommand(sheetId, change.Kind, change.Id, change.IsVisible));
+        foreach (var change in moves)
+            commands.Add(new MoveSelectionPaneObjectCommand(sheetId, change.Kind, change.Id, change.Forward));
+
+        return new CompositeWorkbookCommand("Selection Pane", commands);
+    }
 
     public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,

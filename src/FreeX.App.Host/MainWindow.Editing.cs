@@ -568,7 +568,7 @@ public partial class MainWindow
             return;
 
         ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(
-            StatusBarViewMode.Normal,
+            GetCurrentStatusBarViewMode(),
             zoomPercent: 0,
             text));
     }

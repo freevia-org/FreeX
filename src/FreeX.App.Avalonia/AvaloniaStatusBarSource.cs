@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -11,6 +13,9 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 internal static class AvaloniaStatusBarSource
 {
+    private static readonly IStatusBarTextProvider TextProvider =
+        new ResourceKeyStatusBarTextProvider(UiText.Get);
+
     /// <summary>
     /// Default per-option visibility, keyed by the <c>StatusBarCustomizeContextMenuPlanner</c> OptionTag
     /// values. Avalonia uses the same Excel-default profile as the WPF host, so the shared planner stays
@@ -21,17 +26,23 @@ internal static class AvaloniaStatusBarSource
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the given selection stats and zoom using
-    /// the shared <see cref="StatusBarDisplayModelBuilder"/> and English text provider. The Avalonia
-    /// session has no page-layout / page-break view yet, so the view mode is <see cref="StatusBarViewMode.Normal"/>.
+    /// the shared <see cref="StatusBarDisplayModelBuilder"/> and resource-key text provider.
     /// </summary>
-    public static StatusBarViewModel BuildModel(WorkbookSelectionStats stats, int zoomPercent, string readyText) =>
-        stats.IsEmpty
-            ? StatusBarDisplayModelBuilder.Ready(StatusBarViewMode.Normal, zoomPercent, readyText)
+    public static StatusBarViewModel BuildModel(
+        WorkbookSelectionStats stats,
+        int zoomPercent,
+        string readyText,
+        WorksheetViewMode viewMode = WorksheetViewMode.Normal)
+    {
+        var statusBarViewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(viewMode);
+        return stats.IsEmpty
+            ? StatusBarDisplayModelBuilder.Ready(statusBarViewMode, zoomPercent, readyText)
             : StatusBarDisplayModelBuilder.Stats(
-                StatusBarViewMode.Normal,
+                statusBarViewMode,
                 zoomPercent,
                 stats,
-                EnglishStatusBarTextProvider.Instance);
+                TextProvider);
+    }
 
     /// <summary>
     /// Joins the model's visible aggregate readouts (filtered by <paramref name="optionVisibility"/>)
@@ -61,9 +72,8 @@ internal static class AvaloniaStatusBarSource
         StatusBarVisibilityPlanner.ReadoutOptionTag(kind);
 
     /// <summary>
-    /// Resolves the customize-menu header text for a planner resource key. The Avalonia shell has no
-    /// <c>UiText</c> resource system, so it uses the shared English fallback labels for the same keys.
+    /// Resolves the customize-menu header text for a planner resource key through the portable app catalog.
     /// </summary>
     public static string CustomizeHeader(string resourceKey) =>
-        StatusBarCustomizeLabelPlanner.EnglishHeader(resourceKey);
+        UiText.Get(resourceKey);
 }

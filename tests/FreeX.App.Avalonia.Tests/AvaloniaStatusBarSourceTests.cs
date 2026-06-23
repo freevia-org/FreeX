@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -27,14 +28,18 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public void BuildModel_ProducesSharedStatsModel_ForRepresentativeSelection()
     {
-        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
+        var model = AvaloniaStatusBarSource.BuildModel(
+            SampleStats(),
+            zoomPercent: 100,
+            readyText: "Ready",
+            WorksheetViewMode.PageBreakPreview);
 
-        Assert.Equal(StatusBarViewMode.Normal, model.ViewMode);
+        Assert.Equal(StatusBarViewMode.PageBreak, model.ViewMode);
         Assert.Equal(100, model.ZoomPercent);
         Assert.True(model.AreStatsVisible);
         Assert.False(model.IsReadyVisible);
 
-        // The model carries the shared builder's readouts in order with the shared English provider's labels.
+        // The model carries the shared builder's readouts in order with the portable resource provider's labels.
         Assert.Equal("Average: 20", model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value);
         Assert.Equal("Count: 4", model.FindReadout(StatusBarReadoutKind.Count)!.Value.Value);
         Assert.Equal("Numerical Count: 3", model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.Value);
@@ -47,8 +52,13 @@ public sealed class AvaloniaStatusBarSourceTests
     public void BuildModel_EmptySelection_ProducesReadyModel()
     {
         var empty = new WorkbookSelectionStats(0, 0, 0, null, null, null);
-        var model = AvaloniaStatusBarSource.BuildModel(empty, zoomPercent: 80, readyText: "Ready");
+        var model = AvaloniaStatusBarSource.BuildModel(
+            empty,
+            zoomPercent: 80,
+            readyText: "Ready",
+            WorksheetViewMode.PageLayout);
 
+        Assert.Equal(StatusBarViewMode.PageLayout, model.ViewMode);
         Assert.True(model.IsReadyVisible);
         Assert.False(model.AreStatsVisible);
         Assert.Equal("Ready", model.ReadyText);

@@ -173,8 +173,8 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.IndexOf("FileSavePlanner.CanSkipCleanSave", StringComparison.Ordinal)
             .Should()
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
-        saveTargetMethod.Should().Contain("SaveWorkbookWriter.ProgressTitle()");
-        saveTargetMethod.Should().Contain("SaveWorkbookWriter.FormatSavingFileDetail(\"preparing\", TimeSpan.Zero)");
+        saveTargetMethod.Should().Contain("ShowSaveProgress(CreateSaveProgress(\"preparing\", TimeSpan.Zero, 1));");
+        backstageSource.Should().Contain("WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get)");
         saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
         saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(false);");
         saveTargetMethod.Should().Contain("operationCancellation.Token");
@@ -454,14 +454,14 @@ public sealed partial class MainWindowSourceHygieneTests
         var saveWarningMethod = ExtractMethodSource(backstageSource, "private bool ConfirmUnsupportedXlsxFeatureSave()");
         var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
 
-        openMethod.Should().Contain("OpenWorkbookProgressPlanner.ProgressTitle()");
-        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing\", TimeSpan.Zero)");
+        openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing\", TimeSpan.Zero, 1));");
         openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
         openMethod.Should().Contain("loader.LoadAsync(path, adapter, ext, format!, progress, operationCancellation.Token)");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
-        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing view\", TimeSpan.Zero)");
+        openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing view\", TimeSpan.Zero, null));");
         openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
-        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"done\", TimeSpan.Zero)");
+        openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"done\", TimeSpan.Zero, 100));");
+        backstageSource.Should().Contain("WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get)");
         openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
         openMethod.Should().Contain("UiText.Format(\"MainWindowMessage_OpenFileFailed\", ex.Message)");
         openMethod.Should().Contain("UiText.Get(\"MainWindowMessage_OpenErrorTitle\")");

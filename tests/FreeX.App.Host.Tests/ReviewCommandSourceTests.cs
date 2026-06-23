@@ -16,7 +16,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
-        source.Should().Contain("AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
+        source.Should().Contain("DrawingTargetResolver.GetTargetAltTextObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
+        source.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        source.Should().NotContain("AltTextTargetResolver.Resolve(");
+        source.Should().NotContain("AltTextObjectKind.");
         source.Should().Contain("CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr)");
         source.Should().Contain("SheetGrid.BeginNoteInlineEdit(addr, addr.ToA1(), defaultText);");
         source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(addr, addr.ToA1(), existing);");

@@ -299,10 +299,14 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
+        contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
 
+        contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
+        contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");
@@ -367,6 +371,25 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("var plan = PagePaginationPlanner.Paginate(");
         sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRange(sheet, out var printRange)");
         sharedSource.Should().Contain("PagePaginationPlanner.Paginate(");
+    }
+
+    [Fact]
+    public void WorkbookProgressStatus_DelegatesOpenAndSaveTextToSharedFormatter()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("WorkbookProgressTextFormatter");
+        source.Should().Contain(".FormatOpen(\"preparing\", TimeSpan.Zero, percent: null, UiText.Get)");
+        source.Should().Contain("WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get).Detail");
+        source.Should().Contain(".FormatSave(\"preparing\", TimeSpan.Zero, percent: null, UiText.Get)");
+        source.Should().Contain("WorkbookProgressTextFormatter.FormatSave(update, UiText.Get).Detail");
+
+        source.Should().NotContain("private static string FormatOpenStatus(");
+        source.Should().NotContain("private static string FormatSaveStatus(");
+        source.Should().NotContain("\"Opening...\"");
+        source.Should().NotContain("\"Saving...\"");
+        source.Should().NotContain("\"Preparing save...\"");
+        source.Should().NotContain("\"Writing file...\"");
     }
 
     [Fact]

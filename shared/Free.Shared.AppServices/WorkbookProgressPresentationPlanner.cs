@@ -9,6 +9,45 @@ public static class WorkbookProgressPresentationPlanner
     public const string OpenTitleResourceKey = "Progress_OpeningWorkbook";
     public const string SaveTitleResourceKey = "Progress_SavingWorkbook";
 
+    public static IReadOnlyList<string> RequiredResourceKeys { get; } =
+    [
+        OpenTitleResourceKey,
+        SaveTitleResourceKey,
+        "Progress_LoadingFileReading",
+        "Progress_LoadingFileReadingBytes",
+        "Progress_LoadingFileCheckingPackage",
+        "Progress_LoadingFileInspecting",
+        "Progress_LoadingFileCheckingWorkbookParts",
+        "Progress_LoadingFileDetectingFeatures",
+        "Progress_LoadingFileParsing",
+        "Progress_LoadingFilePhaseFormat",
+        "Progress_LoadingFileReadingWorksheets",
+        "Progress_LoadingFileBuildingWorkbook",
+        "Progress_LoadingFileLoadingStyles",
+        "Progress_LoadingFileCalculating",
+        "Progress_LoadingFileEvaluatingFormulas",
+        "Progress_LoadingFileRefreshingValues",
+        "Progress_LoadingFilePreparingView",
+        "Progress_LoadingFileLayingOutWorksheet",
+        "Progress_LoadingFileRestoringSelection",
+        "Progress_LoadingFilePreparing",
+        "Progress_LoadingFileDone",
+        "Progress_LoadingFileWorking",
+        "Progress_SavingFileSerializing",
+        "Progress_SavingFileBuildingWorkbookParts",
+        "Progress_SavingFilePackagingSheets",
+        "Progress_SavingFileWriting",
+        "Progress_SavingFileWritingBytes",
+        "Progress_SavingFileFlushingPackage",
+        "Progress_SavingFilePhaseFormat",
+        "Progress_SavingFilePreparing",
+        "Progress_SavingFileDone",
+        "Progress_SavingFileWorking",
+        "Progress_ExportingFile",
+        "Progress_ExportingFileRendering",
+        "Progress_ExportingFileWriting"
+    ];
+
     public static double? CalculateServiceStagePercent(
         double startPercent,
         double endPercent,

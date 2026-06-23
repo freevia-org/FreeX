@@ -266,13 +266,14 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     {
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host/MainWindow.ViewCommands.cs");
 
-        source.Should().Contain("_ribbonState.SetChecked(\"Normal\", viewMode == WorksheetViewMode.Normal);");
-        source.Should().Contain("_ribbonState.SetChecked(\"Page Layout\", viewMode == WorksheetViewMode.PageLayout);");
-        source.Should().Contain("_ribbonState.SetChecked(\"Page Break Preview\", viewMode == WorksheetViewMode.PageBreakPreview);");
-        source.Should().Contain("StatusNormalViewButton.IsChecked = viewMode == WorksheetViewMode.Normal;");
-        source.Should().Contain("StatusPageLayoutViewButton.IsChecked = viewMode == WorksheetViewMode.PageLayout;");
-        source.Should().Contain("StatusPageBreakPreviewButton.IsChecked = viewMode == WorksheetViewMode.PageBreakPreview;");
-        source.Should().Contain("SyncStatusViewShortcutState(viewMode);");
+        source.Should().Contain("var state = WorksheetViewModeUiStatePlanner.Build(viewMode);");
+        source.Should().Contain("_ribbonState.SetChecked(\"Normal\", state.NormalChecked);");
+        source.Should().Contain("_ribbonState.SetChecked(\"Page Layout\", state.PageLayoutChecked);");
+        source.Should().Contain("_ribbonState.SetChecked(\"Page Break Preview\", state.PageBreakPreviewChecked);");
+        source.Should().Contain("StatusNormalViewButton.IsChecked = state.NormalChecked;");
+        source.Should().Contain("StatusPageLayoutViewButton.IsChecked = state.PageLayoutChecked;");
+        source.Should().Contain("StatusPageBreakPreviewButton.IsChecked = state.PageBreakPreviewChecked;");
+        source.Should().Contain("SyncStatusViewShortcutState(state);");
     }
 
     [Fact]

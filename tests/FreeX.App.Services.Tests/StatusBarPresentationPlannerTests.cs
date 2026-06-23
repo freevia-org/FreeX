@@ -80,5 +80,23 @@ public sealed class StatusBarPresentationPlannerTests
             StatusBarViewMode.Normal,
             zoomPercent: 100,
             new WorkbookSelectionStats(Sum: 60, Count: 4, NumericalCount: 3, Average: 20, Min: 10, Max: 30),
-            EnglishStatusBarTextProvider.Instance);
+            new ResourceKeyStatusBarTextProvider(GetText));
+
+    private static string GetText(string resourceKey) =>
+        resourceKey switch
+        {
+            StatusBarTextResourceKeys.AverageFormat => "Average: {0}",
+            StatusBarTextResourceKeys.CountFormat => "Count: {0}",
+            StatusBarTextResourceKeys.NumericalCountFormat => "Numerical Count: {0}",
+            StatusBarTextResourceKeys.SumFormat => "Sum: {0}",
+            StatusBarTextResourceKeys.MinimumFormat => "Min: {0}",
+            StatusBarTextResourceKeys.MaximumFormat => "Max: {0}",
+            StatusBarTextResourceKeys.Average => "Average",
+            StatusBarTextResourceKeys.Count => "Count",
+            StatusBarTextResourceKeys.NumericalCount => "Numerical Count",
+            StatusBarTextResourceKeys.Sum => "Sum",
+            StatusBarTextResourceKeys.Minimum => "Minimum",
+            StatusBarTextResourceKeys.Maximum => "Maximum",
+            _ => resourceKey
+        };
 }
