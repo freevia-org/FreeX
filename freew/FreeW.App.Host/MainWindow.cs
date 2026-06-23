@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
@@ -672,8 +673,8 @@ public sealed class MainWindow : Window
         return _status;
     }
 
-    // The Word-style view-switch cluster on the right of the status bar: a Read Mode button plus the three
-    // mutually-exclusive print-family view toggles (Print Layout / Web Layout / Draft). They reuse the same
+    // The Word-style view-switch cluster on the right of the status bar: compact icon shortcuts for Read
+    // Mode plus the three mutually-exclusive print-family views (Print Layout / Web Layout / Draft). They reuse the same
     // MainWindow state the View ribbon drives (ToggleReadMode / SetViewMode), so the ribbon Views group and
     // these buttons stay in lock-step. The print-family buttons are ChromeStatusToggleButtons so the active
     // view reads as pressed; RefreshViewModeChecks keeps exactly one checked.
@@ -681,45 +682,57 @@ public sealed class MainWindow : Window
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
 
-        Button ViewButton(string label, string tip, Action onClick)
+        Button ViewButton(string label, string tip, RibbonCommandIconKind icon, Action onClick)
         {
             var button = new Button
             {
-                Content = label,
+                Content = StatusViewIcon(icon),
                 Style = (Style)FindResource("ChromeStatusButtonStyle"),
-                Padding = new Thickness(8, 1, 8, 1),
-                Margin = new Thickness(2, 3, 2, 3),
+                Width = 24,
+                Height = 22,
+                Padding = new Thickness(4, 2, 4, 2),
+                Margin = new Thickness(1, 2, 1, 2),
                 ToolTip = tip
             };
+            AutomationProperties.SetName(button, label);
+            AutomationProperties.SetHelpText(button, tip);
             button.Click += (_, _) => onClick();
             return button;
         }
 
-        ToggleButton ViewToggle(string label, string tip, DocumentViewMode mode)
+        ToggleButton ViewToggle(string label, string tip, RibbonCommandIconKind icon, DocumentViewMode mode)
         {
             var toggle = new ToggleButton
             {
-                Content = label,
+                Content = StatusViewIcon(icon),
                 Style = (Style)FindResource("ChromeStatusToggleButtonStyle"),
-                Margin = new Thickness(2, 3, 2, 3),
+                Width = 24,
+                Height = 22,
+                Padding = new Thickness(4, 2, 4, 2),
+                Margin = new Thickness(1, 2, 1, 2),
                 ToolTip = tip
             };
+            AutomationProperties.SetName(toggle, label);
+            AutomationProperties.SetHelpText(toggle, tip);
             // Clicking always lands on this mode (re-checking the active one is a no-op); never let the
             // toggle uncheck itself, since exactly one print-family view is always active.
             toggle.Click += (_, _) => SetViewMode(mode);
             return toggle;
         }
 
-        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", DocumentViewMode.PrintLayout);
-        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", DocumentViewMode.WebLayout);
-        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", DocumentViewMode.Draft);
+        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", RibbonCommandIconKind.PrintLayout, DocumentViewMode.PrintLayout);
+        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", RibbonCommandIconKind.WebLayout, DocumentViewMode.WebLayout);
+        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", RibbonCommandIconKind.Draft, DocumentViewMode.Draft);
 
-        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", ToggleReadMode));
+        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", RibbonCommandIconKind.ReadMode, ToggleReadMode));
         panel.Children.Add(_printLayoutSwitch);
         panel.Children.Add(_webLayoutSwitch);
         panel.Children.Add(_draftSwitch);
         return panel;
     }
+
+    private static FrameworkElement StatusViewIcon(RibbonCommandIconKind icon) =>
+        Free.Shared.Ribbon.Wpf.RibbonIconFactory.CreateIcon(new RibbonCommandIcon(icon), 13, Brushes.White);
 
     // The left navigation pane: a header plus a ListBox of heading outline entries (indented by level).
     // Collapsed by default; ToggleNavPane shows/hides it. Selecting an entry scrolls that heading into
