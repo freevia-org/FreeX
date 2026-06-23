@@ -57,25 +57,31 @@ public sealed partial class MainWindow
         // ── General ─────────────────────────────────────────────────────────────
         var fontBox = new ComboBox { MinWidth = 200, ItemsSource = OptionsDialogPlanner.FontNames };
         fontBox.SelectedIndex = OptionsDialogPlanner.DefaultFontToIndex(current.DefaultFontName);
+        ApplyOptionsComboBoxChrome(fontBox);
         AutomationProperties.SetAutomationId(fontBox, "OptionsDefaultFontComboBox");
 
         var fontSizeBox = new ComboBox { MinWidth = 100, ItemsSource = OptionsDialogPlanner.FontSizes };
         fontSizeBox.SelectedItem = current.DefaultFontSize.ToString();
+        ApplyOptionsComboBoxChrome(fontSizeBox);
         AutomationProperties.SetAutomationId(fontSizeBox, "OptionsDefaultFontSizeComboBox");
 
         var sheetCountBox = new TextBox { MinWidth = 100, Text = current.DefaultSheetCount.ToString() };
+        ApplyOptionsTextBoxChrome(sheetCountBox);
         AutomationProperties.SetAutomationId(sheetCountBox, "OptionsDefaultSheetCountBox");
 
         var userNameBox = new TextBox { MinWidth = 200, Text = current.UserName };
+        ApplyOptionsTextBoxChrome(userNameBox);
         AutomationProperties.SetAutomationId(userNameBox, "OptionsUserNameBox");
 
         var screenTipsBox = new CheckBox { Content = UiText.Get("Options_ShowScreenTips"), IsChecked = current.ShowScreenTips };
+        ApplyOptionsCheckBoxChrome(screenTipsBox);
         AutomationProperties.SetAutomationId(screenTipsBox, "OptionsShowScreenTipsCheckBox");
         var collapseRibbonBox = new CheckBox
         {
             Content = OptionsText("Options_CollapseTheRibbonAutomatically"),
             IsEnabled = false,
         };
+        ApplyOptionsCheckBoxChrome(collapseRibbonBox);
         AutomationProperties.SetAutomationId(collapseRibbonBox, "OptionsCollapseRibbonAutomaticallyCheckBox");
 
         var generalPanel = OptionsCategoryPanel(
@@ -92,14 +98,18 @@ public sealed partial class MainWindow
 
         // ── Formulas ────────────────────────────────────────────────────────────
         var calcAutoButton = new RadioButton { Content = UiText.Get("Options_CalcAutomatic"), GroupName = "OptionsCalcMode", IsChecked = current.AutoCalculate };
+        ApplyOptionsRadioButtonChrome(calcAutoButton);
         AutomationProperties.SetAutomationId(calcAutoButton, "OptionsCalcAutomaticButton");
         var calcManualButton = new RadioButton { Content = UiText.Get("Options_CalcManual"), GroupName = "OptionsCalcMode", IsChecked = !current.AutoCalculate };
+        ApplyOptionsRadioButtonChrome(calcManualButton);
         AutomationProperties.SetAutomationId(calcManualButton, "OptionsCalcManualButton");
 
         var r1c1Box = new CheckBox { Content = UiText.Get("Options_R1C1ReferenceStyle"), IsChecked = current.UseR1C1ReferenceStyle };
+        ApplyOptionsCheckBoxChrome(r1c1Box);
         AutomationProperties.SetAutomationId(r1c1Box, "OptionsR1C1ReferenceStyleCheckBox");
 
         var errorCheckingBox = new CheckBox { Content = UiText.Get("Options_EnableErrorChecking"), IsChecked = current.ErrorCheckingEnabled };
+        ApplyOptionsCheckBoxChrome(errorCheckingBox);
         AutomationProperties.SetAutomationId(errorCheckingBox, "OptionsEnableErrorCheckingCheckBox");
 
         var formulasPanel = OptionsCategoryPanel(
@@ -110,38 +120,43 @@ public sealed partial class MainWindow
             OptionsDescription(OptionsText("Options_InManualModePressF9ToRecalculateTheWorkbook"), leftMargin: 18),
             OptionsSectionHeader(OptionsText("Options_WorkingWithFormulas")),
             r1c1Box,
-            new CheckBox { Content = OptionsText("Options_EnableAutoCompleteForCellValues"), IsChecked = true, IsEnabled = false },
+            OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_ErrorCheckingRules")),
             OptionsDescription(OptionsText("Options_EnableBackgroundErrorChecksFor")),
             errorCheckingBox);
 
         // ── Proofing ────────────────────────────────────────────────────────────
         var ignoreUppercaseBox = new CheckBox { Content = UiText.Get("Options_IgnoreUppercase"), IsChecked = current.ProofingIgnoreUppercase };
+        ApplyOptionsCheckBoxChrome(ignoreUppercaseBox);
         AutomationProperties.SetAutomationId(ignoreUppercaseBox, "OptionsIgnoreUppercaseCheckBox");
         var ignoreNumbersBox = new CheckBox { Content = UiText.Get("Options_IgnoreNumbers"), IsChecked = current.ProofingIgnoreNumbers };
+        ApplyOptionsCheckBoxChrome(ignoreNumbersBox);
         AutomationProperties.SetAutomationId(ignoreNumbersBox, "OptionsIgnoreNumbersCheckBox");
 
         var proofingPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_AutoCorrectOptions")),
-            new CheckBox { Content = OptionsText("Options_CheckSpellingAsYouType"), IsChecked = true, IsEnabled = false },
+            OptionsCheckBox(OptionsText("Options_CheckSpellingAsYouType"), isChecked: true, isEnabled: false),
             ignoreUppercaseBox,
             ignoreNumbersBox,
-            new CheckBox { Content = OptionsText("Options_FlagRepeatedWords"), IsEnabled = false },
+            OptionsCheckBox(OptionsText("Options_FlagRepeatedWords"), isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_CustomDictionary")),
             OptionsDescription(OptionsText("Options_CustomDictionaryDescription")));
 
         // ── View ────────────────────────────────────────────────────────────────
         var showFormulaBarBox = new CheckBox { Content = UiText.Get("Options_ShowFormulaBar"), IsChecked = current.ShowFormulaBar };
+        ApplyOptionsCheckBoxChrome(showFormulaBarBox);
         AutomationProperties.SetAutomationId(showFormulaBarBox, "OptionsShowFormulaBarCheckBox");
         var showGridlinesBox = new CheckBox { Content = UiText.Get("Options_ShowGridlines"), IsChecked = current.ShowGridlines };
+        ApplyOptionsCheckBoxChrome(showGridlinesBox);
         AutomationProperties.SetAutomationId(showGridlinesBox, "OptionsShowGridlinesCheckBox");
         var showHeadingsBox = new CheckBox { Content = UiText.Get("Options_ShowHeadings"), IsChecked = current.ShowHeadings };
+        ApplyOptionsCheckBoxChrome(showHeadingsBox);
         AutomationProperties.SetAutomationId(showHeadingsBox, "OptionsShowHeadingsCheckBox");
 
         var viewPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_WorkbookViewOptions")),
             showFormulaBarBox,
-            new CheckBox { Content = OptionsText("Options_ExpandFormulaBar"), IsEnabled = showFormulaBarBox.IsChecked == true });
+            OptionsCheckBox(OptionsText("Options_ExpandFormulaBar"), isEnabled: showFormulaBarBox.IsChecked == true));
 
         // ── Save ────────────────────────────────────────────────────────────────
         var defaultFormatBox = new ComboBox
@@ -150,94 +165,87 @@ public sealed partial class MainWindow
             ItemsSource = new[] { UiText.Get("Options_DefaultFormatXlsx"), UiText.Get("Options_DefaultFormatNative") },
             SelectedIndex = OptionsDialogPlanner.DefaultFormatToIndex(current.DefaultFormat),
         };
+        ApplyOptionsComboBoxChrome(defaultFormatBox);
         AutomationProperties.SetAutomationId(defaultFormatBox, "OptionsDefaultFormatComboBox");
 
         var savePanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_SaveWorkbooks")),
             OptionsLabeled(OptionsText("Options_SaveFilesInThisFormat"), defaultFormatBox),
             OptionsSectionHeader(OptionsText("Options_FileLocations")),
-            OptionsLabeled(OptionsText("Options_RecentFilesLocation"), new TextBox
-            {
-                Text = System.IO.Path.Combine(
+            OptionsLabeled(OptionsText("Options_RecentFilesLocation"), OptionsReadOnlyTextBox(
+                System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "FreeX",
                     "recent.json"),
-                IsReadOnly = true,
-                MinWidth = 280,
-            }, stretchField: true));
+                minWidth: 280), stretchField: true));
 
         var languagePanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_ChooseDisplayLanguage")),
-            OptionsLabeled(OptionsText("Options_AppLanguage"), new ComboBox
-            {
-                MinWidth = 240,
-                ItemsSource = new[] { UiText.Get("Options_AppLanguageSystemDefault"), UiText.Get("Options_AppLanguageEnglishUnitedStates") },
-                SelectedIndex = 0,
-                IsEnabled = false,
-            }),
+            OptionsLabeled(OptionsText("Options_AppLanguage"), OptionsComboBox(
+                new[] { UiText.Get("Options_AppLanguageSystemDefault"), UiText.Get("Options_AppLanguageEnglishUnitedStates") },
+                selectedIndex: 0,
+                isEnabled: false,
+                minWidth: 240)),
             OptionsDescription(OptionsText("Options_AppLanguageRestartNotice")));
 
         var easePanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_EaseOfAccessOptions")),
-            new CheckBox { Content = OptionsText("Options_ProvideFeedbackWithSound"), IsEnabled = false },
-            new CheckBox { Content = OptionsText("Options_ShowQuickAnalysisOptionsOnSelection"), IsChecked = true, IsEnabled = false },
-            new CheckBox { Content = OptionsText("Options_OptimizeDisplayForAccessibility"), IsEnabled = false });
+            OptionsCheckBox(OptionsText("Options_ProvideFeedbackWithSound"), isEnabled: false),
+            OptionsCheckBox(OptionsText("Options_ShowQuickAnalysisOptionsOnSelection"), isChecked: true, isEnabled: false),
+            OptionsCheckBox(OptionsText("Options_OptimizeDisplayForAccessibility"), isEnabled: false));
 
         var advancedPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_EditingOptions")),
-            new CheckBox { Content = OptionsText("Options_AfterPressingEnterMoveSelection"), IsChecked = true, IsEnabled = false },
-            OptionsLabeled(OptionsText("Options_Direction"), new ComboBox
-            {
-                ItemsSource = new[]
+            OptionsCheckBox(OptionsText("Options_AfterPressingEnterMoveSelection"), isChecked: true, isEnabled: false),
+            OptionsLabeled(OptionsText("Options_Direction"), OptionsComboBox(
+                new[]
                 {
                     OptionsText("Options_AfterEnterDirectionDown"),
                     OptionsText("Options_AfterEnterDirectionRight"),
                     OptionsText("Options_AfterEnterDirectionUp"),
                     OptionsText("Options_AfterEnterDirectionLeft"),
                 },
-                SelectedIndex = 0,
-                IsEnabled = false,
-            }, labelWidth: 160, fieldWidth: 140),
-            new CheckBox { Content = OptionsText("Options_EnableFillHandleAndCellDragAndDrop"), IsChecked = true, IsEnabled = false },
-            new CheckBox { Content = OptionsText("Options_EnableAutoCompleteForCellValues"), IsChecked = true, IsEnabled = false },
+                selectedIndex: 0,
+                isEnabled: false,
+                minWidth: 140), labelWidth: 160, fieldWidth: 140),
+            OptionsCheckBox(OptionsText("Options_EnableFillHandleAndCellDragAndDrop"), isChecked: true, isEnabled: false),
+            OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook")),
             showGridlinesBox,
             showHeadingsBox,
-            OptionsLabeled(OptionsText("Options_ForObjectsShow"), new ComboBox
-            {
-                ItemsSource = new[]
+            OptionsLabeled(OptionsText("Options_ForObjectsShow"), OptionsComboBox(
+                new[]
                 {
                     OptionsText("Options_ObjectsDisplayAll"),
                     OptionsText("Options_ObjectsDisplayPlaceholders"),
                     OptionsText("Options_ObjectsDisplayNothing"),
                 },
-                SelectedIndex = 0,
-                IsEnabled = false,
-            }));
+                selectedIndex: 0,
+                isEnabled: false)));
 
         var customizeRibbonPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheRibbon")),
             OptionsDescription(OptionsText("Options_ChooseCommandsFromPopularCommands")),
-            new Button { Content = OptionsText("Options_ImportExport"), Width = 130, Height = 26, IsEnabled = false, HorizontalAlignment = AvaloniaHorizontalAlignment.Left });
+            OptionsButton(OptionsText("Options_ImportExport"), width: 130, isEnabled: false));
 
         var quickAccessPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_CustomizeTheQuickAccessToolbar")),
-            new CheckBox { Content = OptionsText("Options_ShowQuickAccessToolbarBelowTheRibbon"), IsEnabled = false },
+            OptionsCheckBox(OptionsText("Options_ShowQuickAccessToolbarBelowTheRibbon"), isEnabled: false),
             OptionsDescription(OptionsText("Options_QuickAccessToolbarCommands")));
 
         var addInsPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_ViewAndManageAddIns")),
             OptionsDescription(OptionsText("Options_ActiveApplicationAddIns")),
-            new Button { Content = OptionsText("Options_Go"), Width = 72, Height = 26, IsEnabled = false, HorizontalAlignment = AvaloniaHorizontalAlignment.Left });
+            OptionsButton(OptionsText("Options_Go"), width: 72, isEnabled: false));
 
         var trustCenterPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_TrustCenter2")),
             OptionsDescription(OptionsText("Options_SecurityAndPrivacySettingsForFreeX")),
-            new CheckBox { Content = OptionsText("Options_SendOptInCrashReports"), IsEnabled = false },
+            OptionsCheckBox(OptionsText("Options_SendOptInCrashReports"), isEnabled: false),
             OptionsDescription(OptionsText("Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest")),
             OptionsSectionHeader(OptionsText("Options_LocalTesterDiagnostics")),
             OptionsDescription(OptionsText("Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr")),
-            new Button { Content = OptionsText("Options_TrustCenterSettings"), Width = 150, Height = 26, IsEnabled = false, HorizontalAlignment = AvaloniaHorizontalAlignment.Left });
+            OptionsButton(OptionsText("Options_TrustCenterSettings"), width: 150, isEnabled: false));
 
         // ── Category list + content host ──────────────────────────────────────────
         var panels = new[]
@@ -343,8 +351,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(warningText, "OptionsWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyOptionsButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "OptionsOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyOptionsButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "OptionsCancelButton");
 
         bool TryCommit()
@@ -468,6 +478,91 @@ public sealed partial class MainWindow
             SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);
 
         RefreshShell(UiText.Get("Options_Saved"));
+    }
+
+    private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.MinWidth = minWidth;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyOptionsTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyOptionsComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyOptionsCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+    }
+
+    private static void ApplyOptionsRadioButtonChrome(RadioButton radioButton)
+    {
+        radioButton.MinHeight = 20;
+        radioButton.FontSize = 12;
+        radioButton.FontFamily = FormulaBarFontFamily;
+    }
+
+    private static CheckBox OptionsCheckBox(string text, bool isChecked = false, bool isEnabled = true)
+    {
+        var cb = new CheckBox { Content = text, IsChecked = isChecked, IsEnabled = isEnabled };
+        ApplyOptionsCheckBoxChrome(cb);
+        return cb;
+    }
+
+    private static ComboBox OptionsComboBox(string[] items, int selectedIndex = 0, bool isEnabled = true, double minWidth = 140)
+    {
+        var cb = new ComboBox { ItemsSource = items, SelectedIndex = selectedIndex, IsEnabled = isEnabled, MinWidth = minWidth };
+        ApplyOptionsComboBoxChrome(cb);
+        return cb;
+    }
+
+    private static Button OptionsButton(string text, double width, bool isEnabled = true)
+    {
+        var btn = new Button { Content = text, IsEnabled = isEnabled, HorizontalAlignment = AvaloniaHorizontalAlignment.Left };
+        ApplyOptionsButtonChrome(btn, width);
+        return btn;
+    }
+
+    private static TextBox OptionsReadOnlyTextBox(string text, double minWidth = 200)
+    {
+        var tb = new TextBox { Text = text, IsReadOnly = true, MinWidth = minWidth };
+        ApplyOptionsTextBoxChrome(tb);
+        return tb;
     }
 
     private static StackPanel OptionsCategoryPanel(params Control[] children)
@@ -603,7 +698,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = label, VerticalAlignment = AvaloniaVerticalAlignment.Center, Width = labelWidth },
+                new TextBlock { Text = label, VerticalAlignment = AvaloniaVerticalAlignment.Center, Width = labelWidth, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 field,
             },
         };
