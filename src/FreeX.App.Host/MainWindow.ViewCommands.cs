@@ -424,10 +424,10 @@ public partial class MainWindow
     private void ZoomPresetMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as System.Windows.Controls.MenuItem)?.Tag is not string tag ||
-            !FreeX.App.UI.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent))
+            !FreeX.App.Services.ZoomLevelMapper.TryParseZoomPercent(tag, out var zoomPercent))
             return;
 
-        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
     }
     private void ZoomCustomMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -444,7 +444,7 @@ public partial class MainWindow
                 SheetGrid.ActualHeight,
                 SheetGrid.SelectedRange?.ColCount ?? 1,
                 SheetGrid.SelectedRange?.RowCount ?? 1);
-            ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         }
         finally
         {
@@ -479,7 +479,7 @@ public partial class MainWindow
             SheetGrid.ActualHeight,
             range.ColCount,
             range.RowCount);
-        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(fitPct);
+        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(fitPct);
     }
     private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -496,7 +496,7 @@ public partial class MainWindow
             sliderVal = 100.0;
         }
 
-        double zoomPct = FreeX.App.UI.ZoomLevelMapper.SliderToZoomPercent(sliderVal);
+        double zoomPct = FreeX.App.Services.ZoomLevelMapper.SliderToZoomPercent(sliderVal);
         var roundedZoomPct = (int)Math.Round(zoomPct);
         if (!TryExecuteGroupedSheetCommand(
                 "Zoom",
@@ -529,7 +529,7 @@ public partial class MainWindow
         _suppressZoomSync = true;
         try
         {
-            ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+            ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         }
         finally
         {

@@ -5106,7 +5106,7 @@ public partial class MainWindow
 
     private async Task SetStatusFooterTourZoomAsync(int zoomPercent)
     {
-        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         RefreshStatusBar();
         UpdateViewport();
         await Task.Delay(250);
@@ -6183,7 +6183,7 @@ public partial class MainWindow
 
     private async Task SetViewPanesZoomTourZoomAsync(int zoomPercent)
     {
-        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
+        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         RefreshStatusBar();
         UpdateViewport();
         await Task.Delay(250);
