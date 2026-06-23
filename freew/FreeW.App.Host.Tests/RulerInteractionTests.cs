@@ -203,7 +203,7 @@ public sealed class RulerInteractionTests
     [Fact]
     public void VerticalHitTest_ReturnsTopMargin_WhenWithinHitRadius()
     {
-        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1, ScrollOffsetDip: 0);
 
         Ruler.VerticalHitTest(96, vm).Should().Be(Ruler.DragKind.TopMargin);
         Ruler.VerticalHitTest(96 + 7, vm).Should().Be(Ruler.DragKind.TopMargin);   // edge of radius
@@ -214,7 +214,7 @@ public sealed class RulerInteractionTests
     [Fact]
     public void VerticalHitTest_ReturnsBottomMargin_WhenWithinHitRadius()
     {
-        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1, ScrollOffsetDip: 0);
 
         Ruler.VerticalHitTest(960, vm).Should().Be(Ruler.DragKind.BottomMargin);
         Ruler.VerticalHitTest(960 + 7, vm).Should().Be(Ruler.DragKind.BottomMargin);
@@ -225,7 +225,7 @@ public sealed class RulerInteractionTests
     [Fact]
     public void VerticalHitTest_ReturnsNone_WhenFarFromBothBoundaries()
     {
-        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1);
+        var vm = new Ruler.VerticalMetrics(TopBoundaryY: 96, BottomBoundaryY: 960, PageHeightPt: 792, Zoom: 1, ScrollOffsetDip: 0);
 
         Ruler.VerticalHitTest(500, vm).Should().Be(Ruler.DragKind.None);
         Ruler.VerticalHitTest(0, vm).Should().Be(Ruler.DragKind.None);
@@ -260,5 +260,94 @@ public sealed class RulerInteractionTests
     {
         // 0 + 0 = 0, leaving the full page as content.
         Ruler.ClampVerticalMargin(0, otherMarginPt: 0, pageHeightPt: 792).Should().Be(0);
+    }
+
+    // ── Scroll-adjusted vertical metrics ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TryVerticalMetrics_OffsetsBoundariesByScrollOffset()
+    {
+        // At scroll offset 0, boundaries are at topDip and pageHeightDip - bottomDip.
+        // With a positive scroll offset (user scrolled down), the page top moves upward in the ruler,
+        // so both boundaries shift UP by the same scroll amount.
+        var page = new PageSettings
+        {
+            HeightPt       = 792,  // 11 in → 1056 DIP at zoom 1
+            MarginTopPt    = 72,   // 1 in  →   96 DIP at zoom 1
+            MarginBottomPt = 72
+        };
+
+        const double scrollDip = 200.0; // 200 DIP of scroll
+
+        var vm = Ruler.TryVerticalMetrics(page, zoom: 1, scrollOffsetDip: scrollDip)!;
+
+        // topDip = 72 * (96/72) = 96; expectedTop = 96 - 200 = -104
+        var expectedTop    = -104.0;
+        // pageHeightDip = 792*(96/72) = 1056; bottomDip=96; expectedBottom = 1056-96-200 = 760
+        var expectedBottom =  760.0;
+
+        vm.TopBoundaryY.Should().BeApproximately(expectedTop,    0.001);
+        vm.BottomBoundaryY.Should().BeApproximately(expectedBottom, 0.001);
+        vm.ScrollOffsetDip.Should().Be(scrollDip);
+    }
+
+    [Fact]
+    public void TryVerticalMetrics_ScrollOffset_ScalesWithZoom()
+    {
+        // The scroll offset is in device-independent pixels (already screen-space), so it is NOT
+        // multiplied by zoom — it subtracts directly from the page-top anchor in ruler coordinates.
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+
+        const double zoom      = 1.5;
+        const double scrollDip = 100.0;
+        const double dipPerPt  = 96.0 / 72.0;
+
+        var vm = Ruler.TryVerticalMetrics(page, zoom: zoom, scrollOffsetDip: scrollDip)!;
+
+        // Top boundary: pageY + topDip*zoom = -scrollDip + 72*(96/72)*1.5 = -100 + 144 = 44
+        var expectedTop = 72 * dipPerPt * zoom - scrollDip;
+        vm.TopBoundaryY.Should().BeApproximately(expectedTop, 0.001);
+    }
+
+    [Fact]
+    public void TryVerticalMetrics_ZeroScrollOffset_MatchesNoScrollOverload()
+    {
+        // Calling with scrollOffsetDip=0 must produce the same result as the default overload.
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+
+        var vmDefault = Ruler.TryVerticalMetrics(page, zoom: 1.25)!;
+        var vmExplicit = Ruler.TryVerticalMetrics(page, zoom: 1.25, scrollOffsetDip: 0)!;
+
+        vmExplicit.TopBoundaryY.Should().BeApproximately(vmDefault.TopBoundaryY, 0.0001);
+        vmExplicit.BottomBoundaryY.Should().BeApproximately(vmDefault.BottomBoundaryY, 0.0001);
+    }
+
+    [Fact]
+    public void VerticalHitTest_StillLandsOnBoundary_AfterSimulatedScroll()
+    {
+        // Simulate 200 DIP of vertical scroll. The top boundary moves to (96 - 200) = -104 DIP,
+        // which is off-screen; the bottom boundary moves to (960 - 200) = 760 DIP.
+        // Hit-testing at the scroll-shifted boundary Y should still return the correct drag kind,
+        // confirming that RenderVertical and TryVerticalMetrics share the same anchor.
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+
+        const double scrollDip = 200.0;
+
+        var vm = Ruler.TryVerticalMetrics(page, zoom: 1, scrollOffsetDip: scrollDip)!;
+
+        // Bottom boundary is now at 960 - 200 = 760; hit-test should find BottomMargin there.
+        Ruler.VerticalHitTest(vm.BottomBoundaryY, vm).Should().Be(Ruler.DragKind.BottomMargin);
+        // Top boundary is off-screen (-104); hit-test should still report TopMargin if asked.
+        Ruler.VerticalHitTest(vm.TopBoundaryY, vm).Should().Be(Ruler.DragKind.TopMargin);
+        // Mid-page is not near either boundary.
+        Ruler.VerticalHitTest(300, vm).Should().Be(Ruler.DragKind.None);
+    }
+
+    [Fact]
+    public void TryVerticalMetrics_ScrollOffsetDip_IsReturnedOnRecord()
+    {
+        var page = new PageSettings { HeightPt = 792, MarginTopPt = 72, MarginBottomPt = 72 };
+        var vm   = Ruler.TryVerticalMetrics(page, zoom: 1, scrollOffsetDip: 123.4)!;
+        vm.ScrollOffsetDip.Should().Be(123.4);
     }
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.Core.Model;
@@ -57,6 +58,11 @@ public sealed class Ruler : FrameworkElement
     private DragOperation? _drag;
     private TabStopAlignment _selectedTabStopAlignment = TabStopAlignment.Left;
 
+    // Live-drag preview: while a vertical margin drag is in progress, holds the clamped margin value
+    // being previewed so RenderVertical can draw the boundary at the drag position before the model
+    // is committed on mouse-up. Null when no drag is in progress or the drag is horizontal.
+    private double? _dragPreviewMarginPt;
+
     public Ruler(DocumentView editor, Orientation orientation)
     {
         _editor = editor;
@@ -72,6 +78,12 @@ public sealed class Ruler : FrameworkElement
         // change so the indent/tab markers follow the caret.
         _editor.LayoutChanged += (_, _) => Refresh();
         _editor.ZoomChanged += (_, _) => Refresh();
+
+        // Scroll sync: repaint the vertical ruler whenever the editor scrolls so the drawn margin
+        // boundaries stay aligned with the on-screen page. TextBoxBase.ScrollChanged fires on every
+        // scroll step (mouse wheel, drag, keyboard). It is a RoutedEvent so we subscribe via AddHandler.
+        if (orientation == Orientation.Vertical)
+            _editor.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) => Refresh()));
 
         Focusable = true;
         Cursor = Cursors.Arrow;
@@ -108,9 +120,11 @@ public sealed class Ruler : FrameworkElement
     }
 
     // Vertical ruler hit geometry: the two margin boundary Y positions (in ruler/screen DIP) computed
-    // from the same pageY=0 anchor used by RenderVertical, so grab points line up exactly with the
-    // drawn shading edges. PageHeight, TopMargin, and BottomMargin are in points; all Y values in DIP.
-    internal sealed record VerticalMetrics(double TopBoundaryY, double BottomBoundaryY, double PageHeightPt, double Zoom)
+    // from the scroll-adjusted pageY anchor used by RenderVertical, so grab points line up exactly with
+    // the drawn shading edges at any scroll position. PageHeight, TopMargin, and BottomMargin are in
+    // points; all Y values in DIP. ScrollOffsetDip holds the editor's VerticalOffset at the time the
+    // metrics were computed, so callers can detect staleness if needed.
+    internal sealed record VerticalMetrics(double TopBoundaryY, double BottomBoundaryY, double PageHeightPt, double Zoom, double ScrollOffsetDip)
     {
         /// <summary>
         /// Convert a Y-delta in DIP (positive = down) into a margin delta in points, preserving sign.
@@ -119,22 +133,31 @@ public sealed class Ruler : FrameworkElement
         public double DipDeltaToPointsDelta(double dipDelta) => dipDelta / (DipPerPoint * Zoom);
     }
 
-    internal static VerticalMetrics? TryVerticalMetrics(PageSettings page, double zoom)
+    /// <summary>
+    /// Compute the vertical ruler hit geometry for <paramref name="page"/> at <paramref name="zoom"/>,
+    /// offset by the editor's current vertical scroll position (<paramref name="scrollOffsetDip"/>).
+    /// Both <see cref="RenderVertical"/> and <see cref="TryVerticalMetrics"/> use the same
+    /// <c>pageY = -scrollOffsetDip</c> anchor so the drawn boundary lines and the drag grab points
+    /// are always co-located, regardless of scroll position.
+    /// </summary>
+    internal static VerticalMetrics? TryVerticalMetrics(PageSettings page, double zoom, double scrollOffsetDip = 0)
     {
         if (zoom <= 0)
             return null;
 
-        // Mirror RenderVertical's anchor: pageY = 0, so the top-margin boundary sits at `top` DIP
-        // from the strip origin, and the bottom-margin boundary at pageHeight - bottomMargin DIP.
+        // The page top (in ruler DIP) accounts for the editor's scroll: at offset 0 the page top sits
+        // at ruler Y=0; scrolling down moves it upward (negative pageY).
+        var pageY         = -scrollOffsetDip;
         var pageHeightDip = PageLayout.PointsToDip(page.HeightPt) * zoom;
         var topDip        = PageLayout.PointsToDip(page.MarginTopPt) * zoom;
         var bottomDip     = PageLayout.PointsToDip(page.MarginBottomPt) * zoom;
 
         return new VerticalMetrics(
-            TopBoundaryY:    topDip,
-            BottomBoundaryY: pageHeightDip - bottomDip,
+            TopBoundaryY:    pageY + topDip,
+            BottomBoundaryY: pageY + pageHeightDip - bottomDip,
             PageHeightPt:    page.HeightPt,
-            Zoom:            zoom);
+            Zoom:            zoom,
+            ScrollOffsetDip: scrollOffsetDip);
     }
 
     // Clamp a new margin so it is non-negative and leaves at least a 1-pt content strip on the page
@@ -275,7 +298,7 @@ public sealed class Ruler : FrameworkElement
         {
             // Vertical ruler: start a top- or bottom-margin drag on the boundary hit.
             var page = _editor.Model.Page;
-            if (TryVerticalMetrics(page, _editor.ZoomLevel) is not { } vm)
+            if (TryVerticalMetrics(page, _editor.ZoomLevel, _editor.VerticalOffset) is not { } vm)
                 return;
             var point = e.GetPosition(this);
             var kind = VerticalHitTest(point.Y, vm);
@@ -307,10 +330,14 @@ public sealed class Ruler : FrameworkElement
         else
         {
             // Vertical ruler: show SizeNS cursor when hovering near a margin boundary (or while dragging).
+            // During an active drag, also update the live preview and repaint so the boundary indicator
+            // follows the pointer — matching the visual feedback pattern of the horizontal ruler (which
+            // redraws on every mouse-move while mouse is captured). The model is NOT mutated here;
+            // the commit via ApplyPageSettings happens on mouse-up as before.
             if (!_editor.PrintLayoutEnabled)
                 return;
             var page = _editor.Model.Page;
-            if (TryVerticalMetrics(page, _editor.ZoomLevel) is not { } vm)
+            if (TryVerticalMetrics(page, _editor.ZoomLevel, _editor.VerticalOffset) is not { } vm)
                 return;
             var point = e.GetPosition(this);
             var hoveredKind = _drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin }
@@ -319,6 +346,18 @@ public sealed class Ruler : FrameworkElement
             Cursor = hoveredKind is DragKind.TopMargin or DragKind.BottomMargin
                 ? Cursors.SizeNS
                 : Cursors.Arrow;
+
+            if (_drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin } vDrag)
+            {
+                // Compute the preview margin from the current pointer position (same math as mouse-up
+                // commit, but clamped and stored for RenderVertical to draw the dashed preview line).
+                var deltaDip = point.Y - vDrag.Start.Y;
+                var deltaPt  = vm.DipDeltaToPointsDelta(deltaDip);
+                _dragPreviewMarginPt = vDrag.Kind == DragKind.TopMargin
+                    ? ClampVerticalMargin(vDrag.StartMarginPt + deltaPt, page.MarginBottomPt, vm.PageHeightPt)
+                    : ClampVerticalMargin(vDrag.StartMarginPt - deltaPt, page.MarginTopPt, vm.PageHeightPt);
+                Refresh();
+            }
         }
     }
 
@@ -329,8 +368,10 @@ public sealed class Ruler : FrameworkElement
         if (_drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin } vDrag)
         {
             // Vertical margin drag: commit the new margin via the backed ApplyPageSettings path.
+            // Clear the live-preview value first so RenderVertical reverts to the committed geometry.
+            _dragPreviewMarginPt = null;
             var page = _editor.Model.Page;
-            if (TryVerticalMetrics(page, _editor.ZoomLevel) is { } vm)
+            if (TryVerticalMetrics(page, _editor.ZoomLevel, _editor.VerticalOffset) is { } vm)
             {
                 var releaseY  = e.GetPosition(this).Y;
                 var deltaDip  = releaseY - vDrag.Start.Y;
@@ -452,26 +493,59 @@ public sealed class Ruler : FrameworkElement
         return contentEnd <= contentStart ? null : new HorizontalMetrics(contentStart, contentEnd, zoom);
     }
 
+    // Dashed pen for the live-drag preview line: a thin blue rule that previews the margin boundary
+    // position as the user drags, before the commit on mouse-up. Matches the Word blue-indent colour.
+    private static readonly Pen DragPreviewPen = MakeDragPreviewPen();
+
+    private static Pen MakeDragPreviewPen()
+    {
+        // Mirror the FrozenPen helper: freeze the brush first, then assign it to the pen, then freeze
+        // the whole pen (which also deep-freezes the DashStyle sub-object).
+        var pen = new Pen(Frozen(Color.FromRgb(0x2B, 0x57, 0x9A)), 1.0)
+        {
+            DashStyle = new DashStyle(new double[] { 4, 3 }, 0)
+        };
+        pen.Freeze();
+        return pen;
+    }
+
     private void RenderVertical(DrawingContext dc, Size size, PageSettings page, double zoom)
     {
-        var pageHeight = PageLayout.PointsToDip(page.HeightPt) * zoom;
-        var top = PageLayout.PointsToDip(page.MarginTopPt) * zoom;
+        var pageHeight   = PageLayout.PointsToDip(page.HeightPt) * zoom;
+        var topMargin    = PageLayout.PointsToDip(page.MarginTopPt) * zoom;
         var bottomMargin = PageLayout.PointsToDip(page.MarginBottomPt) * zoom;
 
-        // The editor pins the page top under the ribbon (it scrolls, but for a static read-only scale we
-        // anchor the band at the strip top, mirroring the horizontal ruler's left-anchored content).
-        var pageY = 0.0;
+        // Scroll sync: offset the page-top anchor by the editor's vertical scroll so the drawn margin
+        // shading and tick scale stay aligned with the on-screen page as the document scrolls.
+        // TryVerticalMetrics uses the same anchor so hit-test grab points track the drawn edges exactly.
+        var pageY     = -_editor.VerticalOffset;
         var rightEdge = size.Width;
 
+        // Clip the drawing to the visible strip so margin fills don't bleed outside the strip bounds.
+        dc.PushClip(new RectangleGeometry(new Rect(size)));
+
         dc.DrawRectangle(PageFill, null, new Rect(0, pageY, rightEdge, pageHeight));
-        dc.DrawRectangle(MarginFill, null, new Rect(0, pageY, rightEdge, top));
+        dc.DrawRectangle(MarginFill, null, new Rect(0, pageY, rightEdge, topMargin));
         dc.DrawRectangle(MarginFill, null, new Rect(0, pageY + pageHeight - bottomMargin, rightEdge, bottomMargin));
         dc.DrawLine(PageEdgePen, new Point(rightEdge, pageY), new Point(rightEdge, pageY + pageHeight));
 
-        var contentStart = pageY + top;
-        var contentEnd = pageY + pageHeight - bottomMargin;
+        // If a live-drag preview margin is set, overdraw a dashed horizontal rule at the preview
+        // boundary position so the user sees continuous feedback as they drag — no model mutation yet.
+        if (_dragPreviewMarginPt is { } previewPt && _drag is { Kind: DragKind.TopMargin or DragKind.BottomMargin } activeDrag)
+        {
+            var previewDip = PageLayout.PointsToDip(previewPt) * zoom;
+            var previewY   = activeDrag.Kind == DragKind.TopMargin
+                ? pageY + previewDip                               // top: offset from page top
+                : pageY + pageHeight - previewDip;                 // bottom: offset from page bottom
+            dc.DrawLine(DragPreviewPen, new Point(0, previewY), new Point(rightEdge, previewY));
+        }
+
+        var contentStart = pageY + topMargin;
+        var contentEnd   = pageY + pageHeight - bottomMargin;
         var step = DipPerInch * zoom;
         DrawTicks(dc, contentStart, contentEnd, step, rightEdge, horizontal: false);
+
+        dc.Pop(); // end clip
     }
 
     // Draw the inch ticks (major lines + numerals) and half-inch minor ticks along an axis. `cross` is the
