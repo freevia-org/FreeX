@@ -24,7 +24,7 @@ public sealed record WpfSaveFileDialogResult(string? FileName, int FilterIndex)
 public static class WpfFileDialogService
 {
     public static WpfOpenFileDialogResult ShowOpenDialog(
-        Window owner,
+        Window? owner,
         FileOpenDialogPlan plan,
         bool checkFileExists = true,
         bool multiselect = false,
@@ -42,14 +42,13 @@ public static class WpfFileDialogService
     }
 
     public static WpfOpenFileDialogResult ShowOpenDialog(
-        Window owner,
+        Window? owner,
         string filter,
         string defaultExtensionWithDot = "",
         bool checkFileExists = true,
         bool multiselect = false,
         string? title = null)
     {
-        ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(filter);
 
         var dialog = new OpenFileDialog
@@ -74,7 +73,7 @@ public static class WpfFileDialogService
     }
 
     public static WpfSaveFileDialogResult ShowSaveDialog(
-        Window owner,
+        Window? owner,
         FileSaveDialogPlan plan,
         string? title = null)
     {
@@ -90,14 +89,13 @@ public static class WpfFileDialogService
     }
 
     public static WpfSaveFileDialogResult ShowSaveDialog(
-        Window owner,
+        Window? owner,
         string filter,
         string suggestedFileName,
         string defaultExtensionWithDot,
         int filterIndex,
         string? title = null)
     {
-        ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(suggestedFileName);
         ArgumentNullException.ThrowIfNull(defaultExtensionWithDot);

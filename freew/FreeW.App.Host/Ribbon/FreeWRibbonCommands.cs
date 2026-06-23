@@ -5,7 +5,6 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
@@ -1756,23 +1755,24 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Word Documents (*.docx)|*.docx|All files (*.*)|*.*",
-                Title = "Insert Text from File"
-            };
-            if (dialog.ShowDialog(Window.GetWindow(editor)) != true)
+            var owner = Window.GetWindow(editor);
+            var result = WpfFileDialogService.ShowOpenDialog(
+                owner,
+                "Word Documents (*.docx)|*.docx|All files (*.*)|*.*",
+                defaultExtensionWithDot: ".docx",
+                title: "Insert Text from File");
+            if (!result.Chosen)
                 return;
 
             try
             {
-                var source = DocxReader.Read(dialog.FileName);
+                var source = DocxReader.Read(result.FileName!);
                 editor.Focus();
                 editor.InsertDocument(source);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(editor), $"Could not insert the file:\n{ex.Message}",
+                MessageBox.Show(owner, $"Could not insert the file:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1786,23 +1786,23 @@ internal static class FreeWRibbonCommands
 
         public void Execute(RibbonCommandContext context)
         {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*",
-                Title = "Insert Picture"
-            };
-            if (dialog.ShowDialog(Window.GetWindow(editor)) != true)
+            var owner = Window.GetWindow(editor);
+            var result = WpfFileDialogService.ShowOpenDialog(
+                owner,
+                "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*",
+                title: "Insert Picture");
+            if (!result.Chosen)
                 return;
 
             try
             {
-                var image = LoadAsInlineImage(dialog.FileName);
+                var image = LoadAsInlineImage(result.FileName!);
                 editor.Focus();
                 editor.InsertImage(image);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(Window.GetWindow(editor), $"Could not insert the image:\n{ex.Message}",
+                MessageBox.Show(owner, $"Could not insert the image:\n{ex.Message}",
                     "FreeW", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

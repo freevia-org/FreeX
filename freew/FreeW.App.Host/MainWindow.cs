@@ -1606,19 +1606,17 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToPdf()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Export to PDF",
-            Filter = "PDF document (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = _file.DisplayName + ".pdf"
-        };
-        if (dialog.ShowDialog(this) != true)
+        var saveResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            "PDF document (*.pdf)|*.pdf",
+            _file.DisplayName + ".pdf",
+            ".pdf",
+            1,
+            "Export to PDF");
+        if (!saveResult.Chosen)
             return;
 
-        var path = dialog.FileName;
+        var path = saveResult.FileName!;
         try
         {
             // Render on the UI thread (walks the WPF visual tree), then write atomically.
@@ -1653,19 +1651,17 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToXps()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Export to XPS",
-            Filter = "XPS document (*.xps)|*.xps",
-            DefaultExt = ".xps",
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = _file.DisplayName + ".xps"
-        };
-        if (dialog.ShowDialog(this) != true)
+        var saveResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            "XPS document (*.xps)|*.xps",
+            _file.DisplayName + ".xps",
+            ".xps",
+            1,
+            "Export to XPS");
+        if (!saveResult.Chosen)
             return;
 
-        var path = dialog.FileName;
+        var path = saveResult.FileName!;
         try
         {
             // Render on the UI thread (walks the WPF visual tree), then write atomically.
