@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeX.App.Presentation;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 

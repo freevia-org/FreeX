@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using FreeX.App.Presentation;
 
 namespace FreeX.App.Host;
 
