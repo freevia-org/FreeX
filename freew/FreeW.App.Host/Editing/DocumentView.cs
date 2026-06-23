@@ -3802,23 +3802,25 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline BuildRun(ModelRun run, ModelParagraph paragraph, TextDocument document)
     {
+        var effectSet = DocumentEffectSet.FromTheme(document.Theme);
+
         if (run.Image is { } image)
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
 
         if (run.Shape is { } shape)
-            return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape));
+            return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape, effectSet));
 
         if (run.Chart is { } chart)
-            return WrapHyperlinkIfNeeded(run, BuildChartRun(chart));
+            return WrapHyperlinkIfNeeded(run, BuildChartRun(chart, effectSet));
 
         if (run.WordArt is { } wordArt)
-            return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt));
+            return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt, effectSet));
 
         if (run.Equation is { } equation)
             return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation));
 
         if (run.SmartArt is { } smartArt)
-            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt));
+            return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
 
         if (run.EmbeddedObject is { } embedded)
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
@@ -4928,10 +4930,34 @@ public sealed class DocumentView : RichTextBox
     /// render as a System.Windows.Shapes.Ellipse-backed border; rectangles / rounded rectangles / text
     /// boxes render as a Border (with a corner radius for rounded). A text box shows its plain text.
     /// </summary>
-    private static InlineUIContainer BuildShapeRun(Shape shape)
+    private static double EffectLineThickness(DocumentEffectSet effectSet) =>
+        Math.Max(1, effectSet.LineWidthEmu / 12700.0 * PxPerPoint);
+
+    private static DropShadowEffect? CreateObjectEffect(DocumentEffectSet effectSet)
+    {
+        if (!effectSet.OuterShadow && !effectSet.SoftEdges)
+            return null;
+
+        var shadow = new DropShadowEffect
+        {
+            Color = Color.FromRgb(0x40, 0x40, 0x40),
+            BlurRadius = effectSet.SoftEdges ? 10 : 5,
+            ShadowDepth = effectSet.SoftEdges ? 2 : 1,
+            Direction = 315,
+            Opacity = effectSet.SoftEdges ? 0.30 : 0.22
+        };
+        shadow.Freeze();
+        return shadow;
+    }
+
+    private static void ApplyObjectEffect(FrameworkElement element, DocumentEffectSet effectSet) =>
+        element.Effect = CreateObjectEffect(effectSet);
+
+    private static InlineUIContainer BuildShapeRun(Shape shape, DocumentEffectSet effectSet)
     {
         var widthPx = shape.WidthPt * PxPerPoint;
         var heightPx = shape.HeightPt * PxPerPoint;
+        var strokeThickness = EffectLineThickness(effectSet);
 
         System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
             ? new SolidColorBrush(fillColor)
@@ -4947,7 +4973,7 @@ public sealed class DocumentView : RichTextBox
                 Height = heightPx,
                 Fill = fill,
                 Stroke = stroke,
-                StrokeThickness = 1,
+                StrokeThickness = strokeThickness,
             };
         }
         else
@@ -4958,7 +4984,7 @@ public sealed class DocumentView : RichTextBox
                 Height = heightPx,
                 Background = fill,
                 BorderBrush = stroke,
-                BorderThickness = new Thickness(1),
+                BorderThickness = new Thickness(strokeThickness),
                 CornerRadius = shape.Kind == ShapeKind.RoundedRectangle ? new CornerRadius(6) : new CornerRadius(0),
             };
             if (shape.HasText)
@@ -4972,6 +4998,7 @@ public sealed class DocumentView : RichTextBox
             element = border;
         }
 
+        ApplyObjectEffect(element, effectSet);
         element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
@@ -5006,7 +5033,7 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="WordArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The text is
     /// drawn at the WordArt's font size with a style-derived fill/outline as a lightweight visual stand-in.
     /// </summary>
-    private static InlineUIContainer BuildWordArtRun(WordArt wordArt)
+    private static InlineUIContainer BuildWordArtRun(WordArt wordArt, DocumentEffectSet effectSet)
     {
         var fill = wordArt.Style switch
         {
@@ -5028,6 +5055,7 @@ public sealed class DocumentView : RichTextBox
             element.Foreground = System.Windows.Media.Brushes.White;
             element.Effect = null;
         }
+        ApplyObjectEffect(element, effectSet);
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
 
@@ -5047,10 +5075,11 @@ public sealed class DocumentView : RichTextBox
     /// DrawingML chart. Sizes the plot Canvas explicitly so the code-positioned children land correctly in
     /// the headless print/measure pass (there is no live layout to query ActualWidth).
     /// </summary>
-    private static InlineUIContainer BuildChartRun(Chart chart)
+    private static InlineUIContainer BuildChartRun(Chart chart, DocumentEffectSet effectSet)
     {
         var widthPx = chart.WidthPt * PxPerPoint;
         var heightPx = chart.HeightPt * PxPerPoint;
+        var strokeThickness = EffectLineThickness(effectSet);
 
         var root = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
 
@@ -5106,10 +5135,11 @@ public sealed class DocumentView : RichTextBox
             Height = heightPx,
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(strokeThickness),
             Child = root,
             Tag = chart // carries the model chart so CommitToModel can round-trip it
         };
+        ApplyObjectEffect(element, effectSet);
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
@@ -5348,7 +5378,7 @@ public sealed class DocumentView : RichTextBox
     public void InsertShape(Shape shape)
     {
         CommitToModel();
-        var container = BuildShapeRun(shape);
+        var container = BuildShapeRun(shape, DocumentEffectSet.FromTheme(_model.Theme));
         var caret = CaretPosition.GetInsertionPosition(LogicalDirection.Forward) ?? CaretPosition;
         if (caret.Paragraph is { } paragraph)
             paragraph.Inlines.Add(container);
@@ -5388,10 +5418,12 @@ public sealed class DocumentView : RichTextBox
     /// border sketches the diagram's top-level node texts as a simple labelled stack (a lightweight visual
     /// stand-in — the diagram's real layout is recomputed by Word on open).
     /// </summary>
-    private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt)
+    private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt, DocumentEffectSet effectSet)
     {
         var widthPx = smartArt.WidthPt * PxPerPoint;
         var heightPx = smartArt.HeightPt * PxPerPoint;
+        var strokeThickness = EffectLineThickness(effectSet);
+        var nodeEffect = CreateObjectEffect(effectSet);
 
         // Lay top-level nodes out left-to-right for Process, top-to-bottom otherwise, as labelled boxes.
         var horizontal = smartArt.Kind == SmartArtKind.Process;
@@ -5408,6 +5440,9 @@ public sealed class DocumentView : RichTextBox
                 CornerRadius = new CornerRadius(3),
                 Margin = new Thickness(4),
                 Padding = new Thickness(8, 4, 8, 4),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3B, 0x62, 0x8F)),
+                BorderThickness = new Thickness(strokeThickness),
+                Effect = nodeEffect,
                 Child = new TextBlock
                 {
                     Text = node.Text,
@@ -5422,10 +5457,11 @@ public sealed class DocumentView : RichTextBox
             Height = heightPx,
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(strokeThickness),
             Child = nodes,
             Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
         };
+        ApplyObjectEffect(element, effectSet);
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
@@ -5482,13 +5518,13 @@ public sealed class DocumentView : RichTextBox
     public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
 
     /// <summary>Inserts an inline chart at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart));
+    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt));
+    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt, DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt));
+    public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts an inline embedded OLE object at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertEmbeddedObject(EmbeddedObject embedded) => InsertInlineContainer(BuildEmbeddedObjectRun(embedded));
