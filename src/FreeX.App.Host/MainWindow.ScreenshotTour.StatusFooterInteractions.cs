@@ -157,7 +157,7 @@ public partial class MainWindow
             SheetGrid.ActualHeight,
             SheetGrid.SelectedRange?.ColCount ?? 1,
             SheetGrid.SelectedRange?.RowCount ?? 1);
-        ZoomSlider.Value = FreeX.App.UI.ZoomLevelMapper.ZoomPercentToSlider(plannedZoom);
+        ZoomSlider.Value = FreeX.App.Services.ZoomLevelMapper.ZoomPercentToSlider(plannedZoom);
         RefreshStatusBar();
         UpdateViewport();
     }
