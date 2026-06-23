@@ -18783,7 +18783,7 @@ public sealed partial class MainWindow : Window
             IsReadOnly = true,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 13,
+            FontSize = 12,
             Padding = new Thickness(8),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
@@ -18796,9 +18796,20 @@ public sealed partial class MainWindow : Window
         var okButton = new Button
         {
             Content = "OK",
+            IsDefault = true,
+            IsCancel = true,
             Width = 84,
-            Padding = new Thickness(10, 4),
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(8, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
         };
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AboutFreeXOkButton");

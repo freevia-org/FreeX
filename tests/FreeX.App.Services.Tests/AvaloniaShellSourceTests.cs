@@ -989,6 +989,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
         source.Should().Contain("AutomationProperties.SetAutomationId(aboutTextBox, \"AboutFreeXText\");");
         source.Should().Contain("Content = \"OK\",");
+        source.Should().Contain("IsDefault = true,");
+        source.Should().Contain("IsCancel = true,");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AboutFreeXOkButton\");");
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
         source.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
