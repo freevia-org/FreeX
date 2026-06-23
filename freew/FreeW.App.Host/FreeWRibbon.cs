@@ -503,7 +503,14 @@ internal static class FreeWRibbon
                 // Each Mailings group is a single labelled command so Word's command names stay readable.
                 tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>
                 {
-                    g.Medium("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField);
+                    g.Medium("freew.merge-address-block", "Address Block", RibbonCommandIconKind.Recipients, "A");
+                    g.Medium("freew.merge-greeting-line", "Greeting Line", RibbonCommandIconKind.GreetingLine, "G");
+                    g.Medium("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField, "F");
+                    g.Medium("freew.merge-match-fields", "Match Fields", RibbonCommandIconKind.MergeField, "H");
+                    // Rules: special merge fields exposed in Word's "Rules" dropdown; surfaced here as
+                    // individual small items for parity without needing a full expression evaluator.
+                    g.Medium("freew.merge-next-record", "Next Record", RibbonCommandIconKind.Next, "N");
+                    g.Medium("freew.merge-record-number", "Merge Record #", RibbonCommandIconKind.Field, "R");
                 });
                 tab.Group("merge-preview", "Preview Results", "P", 120, g =>
                 {

@@ -3,6 +3,47 @@ using System.Text;
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// The semantic roles Word maps recipient-list columns to when composing an Address Block or Greeting
+/// Line. Each role represents a distinct piece of contact information; the <see cref="FieldMapping"/>
+/// records which data-source column name is bound to each role.
+/// </summary>
+public enum FieldRole
+{
+    Title,
+    FirstName,
+    MiddleName,
+    LastName,
+    Suffix,
+    Company,
+    Address1,
+    Address2,
+    City,
+    State,
+    PostalCode,
+    Country
+}
+
+/// <summary>
+/// Maps each <see cref="FieldRole"/> to a column name in the active data source. A null value means the
+/// role is unmapped (the field is omitted from the composed block). Instances are mutable so the Match
+/// Fields dialog can update individual bindings without creating a new object.
+/// </summary>
+public sealed class FieldMapping
+{
+    private readonly Dictionary<FieldRole, string?> _map = new();
+
+    /// <summary>Get or set the column name bound to <paramref name="role"/> (null = unmapped).</summary>
+    public string? this[FieldRole role]
+    {
+        get => _map.TryGetValue(role, out var v) ? v : null;
+        set => _map[role] = value;
+    }
+
+    /// <summary>All roles explicitly stored in this mapping (mapped or null).</summary>
+    public IEnumerable<FieldRole> MappedRoles => _map.Keys;
+}
+
+/// <summary>
 /// A simple mail-merge data source: an ordered header of field names plus zero or more rows, each row
 /// mapping a field name to its value for that record. Field names are matched case-insensitively (so a
 /// template field «Name» binds to a "name" header), mirroring how Word treats merge-field names. The
@@ -180,6 +221,244 @@ public static class MailMerge
 
     /// <summary>The closing merge-field delimiter (right guillemet, U+00BB).</summary>
     public const char FieldClose = '»';
+
+    /// <summary>
+    /// The placeholder text (without guillemets) for the «Next Record» special field. During
+    /// <see cref="SubstituteSpecial"/> this causes the record index to advance by one so a single
+    /// template can emit multiple records (used in directory / label layouts).
+    /// </summary>
+    public const string NextRecordField = "Next Record";
+
+    /// <summary>
+    /// The placeholder text (without guillemets) for the «Merge Record #» special field. During
+    /// <see cref="SubstituteSpecial"/> this is replaced by the 1-based record index.
+    /// </summary>
+    public const string MergeRecordNumberField = "Merge Record #";
+
+    // ── Canonical synonyms for each role used by AutoMatchFields (case-insensitive) ────────────────
+    private static readonly Dictionary<FieldRole, string[]> RoleSynonyms = new()
+    {
+        [FieldRole.Title]      = ["title", "salutation", "honorific"],
+        [FieldRole.FirstName]  = ["firstname", "first name", "first", "givenname", "given name"],
+        [FieldRole.MiddleName] = ["middlename", "middle name", "middle", "middleinitial", "middle initial"],
+        [FieldRole.LastName]   = ["lastname", "last name", "last", "surname", "familyname", "family name"],
+        [FieldRole.Suffix]     = ["suffix"],
+        [FieldRole.Company]    = ["company", "organization", "organisation", "companyname", "company name", "org"],
+        [FieldRole.Address1]   = ["address1", "address 1", "address", "street", "streetaddress", "street address", "addr1"],
+        [FieldRole.Address2]   = ["address2", "address 2", "addr2"],
+        [FieldRole.City]       = ["city", "town", "locality"],
+        [FieldRole.State]      = ["state", "province", "region"],
+        [FieldRole.PostalCode] = ["postalcode", "postal code", "zip", "zipcode", "zip code", "postcode", "post code"],
+        [FieldRole.Country]    = ["country", "countryorregion", "country or region", "nation"],
+    };
+
+    /// <summary>
+    /// Auto-match a list of column headers to <see cref="FieldRole"/>s using case-insensitive
+    /// heuristics (synonym matching). Each role is bound to the first header that matches any of its
+    /// known synonyms; unmatched roles are left null. The returned mapping seeds the Match Fields dialog.
+    /// </summary>
+    public static FieldMapping AutoMatchFields(IReadOnlyList<string> header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+
+        var mapping = new FieldMapping();
+        // Build a lookup from normalized header → original header name.
+        var normalized = header
+            .Select(h => (Normalized: Normalize(h), Original: h))
+            .ToList();
+
+        foreach (var (role, synonyms) in RoleSynonyms)
+        {
+            foreach (var (norm, orig) in normalized)
+            {
+                if (Array.Exists(synonyms, s => s.Equals(norm, StringComparison.OrdinalIgnoreCase)))
+                {
+                    mapping[role] = orig;
+                    break;
+                }
+            }
+        }
+
+        return mapping;
+
+        static string Normalize(string s) => s.Trim().Replace("_", " ");
+    }
+
+    /// <summary>
+    /// Compose a formatted postal address block from <paramref name="row"/> using the role bindings in
+    /// <paramref name="mapping"/>. The format follows Word's default address-block layout:
+    /// <code>
+    ///   [Title] FirstName [MiddleName] LastName [Suffix]
+    ///   [Company]
+    ///   Address1
+    ///   [Address2]
+    ///   City, State PostalCode
+    ///   [Country]
+    /// </code>
+    /// Lines that contain only unmapped/empty values are omitted. Returns an empty string when no
+    /// address information is available. Pure and deterministic.
+    /// </summary>
+    public static string ComposeAddressBlock(IReadOnlyDictionary<string, string> row, FieldMapping mapping)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(mapping);
+
+        string Get(FieldRole role) => mapping[role] is { } col ? Lookup(row, col) : string.Empty;
+
+        // Name line: Title FirstName MiddleName LastName Suffix
+        var nameParts = new List<string>();
+        var title  = Get(FieldRole.Title);
+        var first  = Get(FieldRole.FirstName);
+        var middle = Get(FieldRole.MiddleName);
+        var last   = Get(FieldRole.LastName);
+        var suffix = Get(FieldRole.Suffix);
+        if (title.Length  > 0) nameParts.Add(title);
+        if (first.Length  > 0) nameParts.Add(first);
+        if (middle.Length > 0) nameParts.Add(middle);
+        if (last.Length   > 0) nameParts.Add(last);
+        if (suffix.Length > 0) nameParts.Add(suffix);
+
+        var company   = Get(FieldRole.Company);
+        var address1  = Get(FieldRole.Address1);
+        var address2  = Get(FieldRole.Address2);
+        var city      = Get(FieldRole.City);
+        var state     = Get(FieldRole.State);
+        var postal    = Get(FieldRole.PostalCode);
+        var country   = Get(FieldRole.Country);
+
+        // City, State PostalCode line — only include non-empty parts.
+        var cityStateParts = new List<string>();
+        var cityState = city.Length > 0 && state.Length > 0 ? $"{city}, {state}"
+                      : city.Length  > 0 ? city
+                      : state.Length > 0 ? state
+                      : string.Empty;
+        if (cityState.Length > 0) cityStateParts.Add(cityState);
+        if (postal.Length    > 0) cityStateParts.Add(postal);
+        var cityStateLine = string.Join(" ", cityStateParts);
+
+        var lines = new List<string>();
+        if (nameParts.Count > 0)  lines.Add(string.Join(" ", nameParts));
+        if (company.Length  > 0)  lines.Add(company);
+        if (address1.Length > 0)  lines.Add(address1);
+        if (address2.Length > 0)  lines.Add(address2);
+        if (cityStateLine.Length > 0) lines.Add(cityStateLine);
+        if (country.Length  > 0)  lines.Add(country);
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>
+    /// Compose a greeting line from <paramref name="row"/> using the role bindings in
+    /// <paramref name="mapping"/>. <paramref name="greetingFormat"/> is the prefix text that precedes
+    /// the recipient name (e.g. <c>"Dear"</c>); the composed greeting is:
+    /// <c>{greetingFormat} {Title} {LastName},</c>
+    /// falling back to <c>Dear Sir or Madam,</c> when no name fields are bound/populated.
+    /// Pure and deterministic.
+    /// </summary>
+    public static string ComposeGreetingLine(
+        IReadOnlyDictionary<string, string> row,
+        FieldMapping mapping,
+        string greetingFormat = "Dear")
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(mapping);
+        ArgumentNullException.ThrowIfNull(greetingFormat);
+
+        string Get(FieldRole role) => mapping[role] is { } col ? Lookup(row, col) : string.Empty;
+
+        var title = Get(FieldRole.Title);
+        var first = Get(FieldRole.FirstName);
+        var last  = Get(FieldRole.LastName);
+
+        // Build the name portion: prefer "Title LastName", fall back to "FirstName LastName",
+        // then just the non-empty name part, then the generic fallback.
+        string namePart;
+        if (title.Length > 0 && last.Length > 0)
+            namePart = $"{title} {last}";
+        else if (first.Length > 0 && last.Length > 0)
+            namePart = $"{first} {last}";
+        else if (last.Length > 0)
+            namePart = last;
+        else if (first.Length > 0)
+            namePart = first;
+        else
+            namePart = string.Empty;
+
+        var prefix = greetingFormat.TrimEnd();
+        return namePart.Length > 0 ? $"{prefix} {namePart}," : $"{prefix} Sir or Madam,";
+    }
+
+    /// <summary>
+    /// Replace every <c>«Field»</c> placeholder in <paramref name="text"/> with the matching value from
+    /// <paramref name="row"/>, and also resolve the special placeholders <c>«Merge Record #»</c> (the
+    /// 1-based <paramref name="recordIndex"/>) and <c>«Next Record»</c> (sets
+    /// <paramref name="advanceRecord"/> to true so the caller can move to the next row). A standard
+    /// merge-field lookup occurs for all other names.
+    /// </summary>
+    public static string SubstituteSpecial(
+        string text,
+        IReadOnlyDictionary<string, string> row,
+        int recordIndex,
+        out bool advanceRecord)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(row);
+
+        advanceRecord = false;
+        if (text.IndexOf(FieldOpen) < 0)
+            return text;
+
+        var sb = new StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            var c = text[i];
+            if (c == FieldOpen)
+            {
+                var close = text.IndexOf(FieldClose, i + 1);
+                if (close < 0)
+                {
+                    sb.Append(text, i, text.Length - i);
+                    break;
+                }
+
+                var name = text.Substring(i + 1, close - i - 1).Trim();
+                if (name.Equals(NextRecordField, StringComparison.OrdinalIgnoreCase))
+                {
+                    advanceRecord = true;
+                    // «Next Record» produces no visible output — it is a control directive only.
+                }
+                else if (name.Equals(MergeRecordNumberField, StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(recordIndex);
+                }
+                else if (name.Equals("AddressBlock", StringComparison.OrdinalIgnoreCase))
+                {
+                    // «AddressBlock» without a mapping is a plain substitution from a named field if present,
+                    // otherwise empty. Full resolution (via FieldMapping) is done by the caller before
+                    // SubstituteSpecial; if it reaches here the field just resolves via the row dictionary.
+                    sb.Append(Lookup(row, name));
+                }
+                else if (name.Equals("GreetingLine", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(Lookup(row, name));
+                }
+                else
+                {
+                    sb.Append(Lookup(row, name));
+                }
+
+                i = close + 1;
+            }
+            else
+            {
+                sb.Append(c);
+                i++;
+            }
+        }
+
+        return sb.ToString();
+    }
 
     /// <summary>
     /// The distinct merge-field names appearing in <paramref name="text"/>, in first-appearance order.
