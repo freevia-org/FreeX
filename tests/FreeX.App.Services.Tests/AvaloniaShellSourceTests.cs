@@ -2264,6 +2264,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Sparkline\", () => ShowSparklineParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.SymbolPicker\", () => ShowSymbolPickerAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.EvaluateFormula\", () => ShowEvaluateFormulaParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.WatchWindow\", () => ShowWatchWindowParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AddWatch\", () => ShowAddWatchParityDialogAsync()),");
@@ -2425,6 +2426,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.Subtotal",
             "dialog.Sparkline",
             "dialog.InsertHyperlink",
+            "dialog.SymbolPicker",
             "dialog.EvaluateFormula",
             "dialog.WatchWindow",
             "dialog.AddWatch",

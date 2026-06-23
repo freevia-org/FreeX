@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
