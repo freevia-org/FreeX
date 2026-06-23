@@ -457,6 +457,9 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.InsertHyperlink", outDir, () =>
             new HyperlinkDialog("https://freex.local/report", "Quarterly report"));
 
+        CaptureDialog(results, "dialog.SymbolPicker", outDir, () =>
+            new SymbolPickerDialog());
+
         CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
             new EvaluateFormulaDialog(CreateFormulaEvaluationSummary(sheet.Id)));
 

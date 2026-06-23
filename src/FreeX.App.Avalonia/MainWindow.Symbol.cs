@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
@@ -59,10 +60,11 @@ public sealed partial class MainWindow
         if (picked is null)
             return;
 
+        var selection = SymbolPickerSelectionPlanner.CreateSelection(picked);
         var current = FormatEditText(_session.ActiveSheet.GetCell(_session.ActiveCell), _session.ActiveCell);
-        var result = _session.CommitCellText(current + picked);
+        var result = _session.CommitCellText(current + selection.Symbol);
         RefreshShell(result.Success
-            ? $"Inserted {picked} into {FormatCellReference(_session.ActiveCell)}"
+            ? $"Inserted {selection.Symbol} into {FormatCellReference(_session.ActiveCell)}"
             : result.ErrorMessage ?? "Could not insert the symbol.");
     }
 }

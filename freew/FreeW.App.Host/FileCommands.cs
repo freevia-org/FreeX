@@ -128,7 +128,13 @@ internal sealed class FileCommands
     /// Returns false if the user cancels at either step.
     /// </summary>
     public bool Open() =>
-        _workflow.Open("opening another document", PromptOpenPath, OpenPath);
+        _workflow.Open("opening another document", () => PromptOpenPath(), OpenPath);
+
+    public bool OpenRecentPath(string path) =>
+        _workflow.Open("opening another document", () => path, OpenPath);
+
+    public bool OpenFromFolder(string folderPath) =>
+        _workflow.Open("opening another document", () => PromptOpenPath(folderPath), OpenPath);
 
     /// <summary>
     /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
@@ -294,10 +300,10 @@ internal sealed class FileCommands
         return true;
     }
 
-    private string? PromptOpenPath()
+    private string? PromptOpenPath(string? initialDirectory = null)
     {
         var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters);
-        var result = WpfFileDialogService.ShowOpenDialog(_window, plan);
+        var result = WpfFileDialogService.ShowOpenDialog(_window, plan, initialDirectory: initialDirectory);
         return result.Chosen ? result.FileName : null;
     }
 

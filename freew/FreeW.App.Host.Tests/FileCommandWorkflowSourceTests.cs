@@ -26,6 +26,11 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         if (appFolder == "freew")
         {
+            source.Should().Contain("OpenRecentPath(string path)");
+            source.Should().Contain("_workflow.Open(\"opening another document\", () => path, OpenPath)");
+            source.Should().Contain("OpenFromFolder(string folderPath)");
+            source.Should().Contain("PromptOpenPath(folderPath)");
+            source.Should().Contain("initialDirectory: initialDirectory");
             source.Should().Contain("SaveAsSuggested(string? suggestedFileName, string? preferredExtension)");
             source.Should().Contain("TryPromptSaveTarget(preferredExtension, suggestedFileName");
         }

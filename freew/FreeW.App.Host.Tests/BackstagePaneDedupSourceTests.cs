@@ -39,8 +39,12 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("_file.SaveFormats");
             source.Should().Contain("BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(");
             source.Should().Contain("BuildOpenPane = BuildOpenPane");
-            source.Should().Contain("BackstageOpenPanePlanner.Build(");
+            source.Should().Contain("BackstageOpenPanePlanner.BuildPlan(");
             source.Should().Contain("_file.RecentEntries");
+            source.Should().Contain("Search recent documents");
+            source.Should().Contain("new TabItem { Header = \"Documents\"");
+            source.Should().Contain("new TabItem { Header = \"Folders\"");
+            source.Should().Contain("OpenFolder");
             source.Should().Contain("BuildSharePane = BuildSharePane");
             source.Should().Contain("BackstageSharePanePlanner.Build(");
             source.Should().Contain("OpenContainingFolder");
