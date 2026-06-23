@@ -5696,6 +5696,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+
             if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
@@ -5970,7 +5971,6 @@ public sealed partial class MainWindow : Window
         _formulaBox.SelectionStart = caret;
         _formulaBox.SelectionEnd = caret;
         _formulaBox.Focus();
-        RefreshShell("Ready");
         return true;
     }
 
