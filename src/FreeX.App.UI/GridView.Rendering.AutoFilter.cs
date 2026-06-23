@@ -10,7 +10,7 @@ public partial class GridView
     private const double AutoFilterButtonMargin = 2;
     private const double PivotHeaderDropdownButtonSize = 17;
     private const double PivotHeaderDropdownButtonMargin = 1;
-    private const double PivotExpandCollapseButtonSize = 10;
+    private const double PivotExpandCollapseButtonSize = 8;
     private const double PivotExpandCollapseButtonReserve = 15;
 
     private static readonly Brush AutoFilterButtonBrush = CreateAutoFilterButtonBrush();
