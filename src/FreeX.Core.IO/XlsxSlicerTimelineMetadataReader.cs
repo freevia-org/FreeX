@@ -210,14 +210,17 @@ internal static class XlsxSlicerTimelineMetadataReader
     private static TimelineCacheMetadata ReadTimelineCache(XDocument xml)
     {
         var root = xml.Root;
+        var state = FirstDescendantByLocalName(root, "state");
+        var selection = FirstDescendantByLocalName(state, "selection");
+        var bounds = FirstDescendantByLocalName(state, "bounds");
         return new TimelineCacheMetadata(
             root?.Attribute("name")?.Value ?? "",
             root?.Attribute("sourceName")?.Value,
             ReadPivotTableName(root),
-            root?.Attribute("startDate")?.Value,
-            root?.Attribute("endDate")?.Value,
-            root?.Attribute("selectedStartDate")?.Value,
-            root?.Attribute("selectedEndDate")?.Value);
+            NormalizeTimelineDate(root?.Attribute("startDate")?.Value ?? bounds?.Attribute("startDate")?.Value),
+            NormalizeTimelineDate(root?.Attribute("endDate")?.Value ?? bounds?.Attribute("endDate")?.Value),
+            NormalizeTimelineDate(root?.Attribute("selectedStartDate")?.Value ?? selection?.Attribute("startDate")?.Value),
+            NormalizeTimelineDate(root?.Attribute("selectedEndDate")?.Value ?? selection?.Attribute("endDate")?.Value));
     }
 
     /// <summary>
@@ -283,13 +286,16 @@ internal static class XlsxSlicerTimelineMetadataReader
         return (controlName, metadata);
     }
 
-    // The slicer/timeline link is <sle:slicer name="..."/> (drawing/2010 or 2012 slicer) or
-    // <tle:timeline name="..."/> inside a:graphicData. Match by local name to stay namespace-tolerant.
+    // The slicer/timeline link is <sle:slicer name="..."/> (drawing/2010 slicer),
+    // <tle:timeline name="..."/>, or Excel's DrawingML 2012 <tsle:timeslicer name="..."/>.
+    // Match by local name to stay namespace-tolerant.
     private static string? ReadSlicerTimelineLinkName(XElement root)
     {
         foreach (var element in root.Descendants())
         {
-            if ((HasLocalName(element, "slicer") || HasLocalName(element, "timeline")) &&
+            if ((HasLocalName(element, "slicer") ||
+                 HasLocalName(element, "timeline") ||
+                 HasLocalName(element, "timeslicer")) &&
                 element.Attribute("name")?.Value is { Length: > 0 } name)
             {
                 return name;
@@ -415,6 +421,15 @@ internal static class XlsxSlicerTimelineMetadataReader
 
     private static int ParseColumnCount(string? text) =>
         TryReadInt(text, out var value) && value > 0 ? value : 1;
+
+    private static string? NormalizeTimelineDate(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+            return parsed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return text.Trim();
+    }
 
     // OOXML boolean attribute: "0"/"false" => false, "1"/"true" => true, absent/unknown => default.
     private static bool ParseBool(string? text, bool defaultValue)
