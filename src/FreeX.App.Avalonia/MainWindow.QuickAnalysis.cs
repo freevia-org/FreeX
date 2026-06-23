@@ -140,44 +140,34 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var route = QuickAnalysisCommandRouter.Route(item);
-        switch (route.Kind)
+        var action = QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited);
+        switch (action.Kind)
         {
-            case QuickAnalysisCommandKind.ConditionalFormat
-                when route.ConditionalFormat is { } conditionalFormat &&
+            case QuickAnalysisShellActionKind.ApplyConditionalFormat
+                when action.ConditionalFormat is { } conditionalFormat &&
                      TryMapQuickAnalysisConditionalFormatPreset(conditionalFormat, out var preset):
                 ApplyConditionalFormatPreset(preset);
                 break;
 
-            case QuickAnalysisCommandKind.InsertTotalFormula
-                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.Aggregate &&
-                     route.TotalFunction is { } function &&
-                     IsQuickAnalysisAutoSumFunction(function):
+            case QuickAnalysisShellActionKind.InsertAggregateTotalFormula
+                when action.TotalFunction is { } function:
                 InsertAutoSumFormula(function);
                 break;
 
-            case QuickAnalysisCommandKind.Sparkline when route.SparklineKind is { } sparklineKind:
+            case QuickAnalysisShellActionKind.InsertSparkline when action.SparklineKind is { } sparklineKind:
                 InsertQuickAnalysisSparklines(sparklineKind);
                 break;
 
-            case QuickAnalysisCommandKind.InsertChart when route.ChartType is { } chartType:
+            case QuickAnalysisShellActionKind.InsertChart when action.ChartType is { } chartType:
                 InsertChartFromSelection(chartType);
                 break;
 
-            case QuickAnalysisCommandKind.Table:
+            case QuickAnalysisShellActionKind.CreateTable:
                 InsertTableFromSelection();
                 break;
 
-            case QuickAnalysisCommandKind.PivotTable:
-                RefreshShell("Converting to a PivotTable is not yet available on macOS.");
-                break;
-
-            case QuickAnalysisCommandKind.InsertTotalFormula:
-                RefreshShell("This total is not yet available on macOS.");
-                break;
-
-            default:
-                RefreshShell(route.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
+            case QuickAnalysisShellActionKind.Deferred:
+                RefreshShell(action.DeferredNote ?? UiText.Get("TableLoc_QaSuggestionNotAvailable"));
                 break;
         }
     }
@@ -209,13 +199,6 @@ public sealed partial class MainWindow
 
         return Enum.IsDefined(command);
     }
-
-    private static bool IsQuickAnalysisAutoSumFunction(string function) =>
-        string.Equals(function, "SUM", StringComparison.Ordinal) ||
-        string.Equals(function, "AVERAGE", StringComparison.Ordinal) ||
-        string.Equals(function, "COUNT", StringComparison.Ordinal) ||
-        string.Equals(function, "MAX", StringComparison.Ordinal) ||
-        string.Equals(function, "MIN", StringComparison.Ordinal);
 
     /// <summary>
     /// Inserts one sparkline per data row beside the selection through the shared session command path,

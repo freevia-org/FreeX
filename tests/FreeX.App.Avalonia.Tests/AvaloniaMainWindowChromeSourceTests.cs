@@ -17,6 +17,25 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void QuickAnalysisShell_UsesSharedActionPlanning()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
+        var plannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellActionPlanner.cs"));
+
+        source.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
+        source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
+        source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
+        source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
+        source.Should().NotContain("QuickAnalysisCommandKind.PivotTable");
+        plannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
+        plannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+    }
+
+    [Fact]
     public void WorksheetChrome_UsesCompactGridMetricsAndExcelSheetTabOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
