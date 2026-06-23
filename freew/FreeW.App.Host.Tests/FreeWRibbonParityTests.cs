@@ -225,6 +225,51 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void HomeFormattingVisibility_ExposesBackedWordStyleToggles()
+    {
+        var definition = FreeWRibbon.Build();
+        var home = definition.FindTab("home");
+        var paragraph = home!.FindGroup("paragraph");
+        var formatting = home.FindGroup("formatting");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onToggleRevealFormatting: () => { },
+            isRevealFormattingVisible: () => false);
+
+        paragraph.Should().NotBeNull();
+        formatting.Should().NotBeNull();
+        CommandIds(paragraph!)
+            .Should()
+            .Contain("freew.formatting-marks", "Word keeps the paragraph mark toggle with Home > Paragraph");
+        Labels(paragraph!)
+            .Should()
+            .Contain("Show ¶");
+        CommandIds(formatting!)
+            .Should()
+            .Contain("freew.reveal-formatting", "FreeW keeps the backed Shift+F1 pane near Home formatting controls");
+        Labels(formatting!)
+            .Should()
+            .Contain("Reveal Formatting");
+
+        registry.TryGet("freew.formatting-marks", out var formattingMarks).Should().BeTrue();
+        formattingMarks.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        registry.TryGet("freew.reveal-formatting", out var revealFormatting).Should().BeTrue();
+        revealFormatting.Should().BeAssignableTo<IRibbonStatefulCommand>();
+    }
+
+    [StaFact]
     public void ReviewComments_ExposesAndRegistersWordStyleThreadActions()
     {
         var definition = FreeWRibbon.Build();
@@ -457,10 +502,10 @@ public sealed class FreeWRibbonParityTests
         show.Should().NotBeNull();
         CommandIds(show!)
             .Should()
-            .Equal("freew.ruler", "freew.nav-pane", "freew.formatting-marks", "freew.reveal-formatting");
+            .Equal("freew.ruler", "freew.nav-pane");
         Labels(show!)
             .Should()
-            .Equal("Ruler", "Navigation Pane", "Show ¶", "Reveal Formatting");
+            .Equal("Ruler", "Navigation Pane");
 
         registry.TryGet("freew.ruler", out var command).Should().BeTrue("Word exposes View > Show > Ruler");
         command.Should().BeAssignableTo<IRibbonStatefulCommand>();

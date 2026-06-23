@@ -95,6 +95,7 @@ internal static class FreeWRibbon
                     g.Icon("freew.align-right", "Align Right", RibbonCommandIconKind.AlignRight);
                     g.Icon("freew.align-justify", "Justify", RibbonCommandIconKind.AlignJustify);
                     g.Icon("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    g.IconToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
                     g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
                     {
                         Items = new[] { "1.0", "1.15", "1.5", "2.0" },
@@ -125,6 +126,10 @@ internal static class FreeWRibbon
                     g.Button("freew.style-title", "Title", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.new-style", "New Style", b => Icon(b, RibbonCommandIconKind.TextBox));
                     g.Button("freew.manage-styles", "Manage Styles", b => Icon(b, RibbonCommandIconKind.TextBox));
+                });
+                tab.Group("formatting", "Formatting", "M", 70, g =>
+                {
+                    g.MediumToggle("freew.reveal-formatting", "Reveal Formatting", RibbonCommandIconKind.Info);
                 });
                 tab.Group("editing", "Editing", "E", 75, g =>
                 {
@@ -364,8 +369,6 @@ internal static class FreeWRibbon
                 {
                     g.MediumToggle("freew.ruler", "Ruler", RibbonCommandIconKind.Ruler);
                     g.MediumToggle("freew.nav-pane", "Navigation Pane", RibbonCommandIconKind.NavigationPane);
-                    g.MediumToggle("freew.formatting-marks", "Show ¶", RibbonCommandIconKind.FormattingMarks);
-                    g.MediumToggle("freew.reveal-formatting", "Reveal Formatting", RibbonCommandIconKind.Info);
                 });
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
                 tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));

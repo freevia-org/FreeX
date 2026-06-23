@@ -665,7 +665,7 @@ internal static class FreeWRibbonCommands
         if (onDraftView is not null && isDraftViewActive is not null)
             registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
 
-        // View tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
+        // Home tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
         // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the
         // ribbon's toggle button reflects whether the pane is currently shown.
         if (onToggleRevealFormatting is not null && isRevealFormattingVisible is not null)
@@ -677,7 +677,7 @@ internal static class FreeWRibbonCommands
         if (onZoomDialog is not null)
             registry.Register("freew.zoom-dialog", new ActionCommand(onZoomDialog));
 
-        // View tab — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
+        // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
         // space-dot / tab-arrow overlay. The marks are drawn as a non-editable adorner computed from the
         // document's text geometry, so they never enter the model/text; executing flips the overlay and
         // (being in `stateful`) pushes the new state into the shared store so the ribbon button reflects it.
