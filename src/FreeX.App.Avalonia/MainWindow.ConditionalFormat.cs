@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.ConditionalFormatting;
@@ -11,6 +13,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 using AvaloniaGrid = Avalonia.Controls.Grid;
 
 namespace FreeX.App.Avalonia;
@@ -259,6 +262,7 @@ public sealed partial class MainWindow
             ItemsSource = ConditionalFormatRuleTypeChoices.Select(c => c.Label).ToList(),
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(ruleTypeBox);
         AutomationProperties.SetAutomationId(ruleTypeBox, "ConditionalFormatRuleTypeBox");
         AutomationProperties.SetName(ruleTypeBox, "Rule type");
 
@@ -267,6 +271,7 @@ public sealed partial class MainWindow
             ItemsSource = ConditionalFormatPresetChoices.Select(c => c.Label).ToList(),
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(presetBox);
         AutomationProperties.SetAutomationId(presetBox, "ConditionalFormatPresetBox");
         AutomationProperties.SetName(presetBox, "Preset");
 
@@ -276,19 +281,26 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(operatorBox);
         AutomationProperties.SetAutomationId(operatorBox, "ConditionalFormatOperatorBox");
 
         var value1Box = new TextBox { MinWidth = 220 };
+        ApplyCfTextBoxChrome(value1Box);
         AutomationProperties.SetAutomationId(value1Box, "ConditionalFormatValue1Box");
         var value2Box = new TextBox { MinWidth = 220 };
+        ApplyCfTextBoxChrome(value2Box);
         AutomationProperties.SetAutomationId(value2Box, "ConditionalFormatValue2Box");
         var formulaBox = new TextBox { MinWidth = 220 };
+        ApplyCfTextBoxChrome(formulaBox);
         AutomationProperties.SetAutomationId(formulaBox, "ConditionalFormatFormulaBox");
         var textBox = new TextBox { MinWidth = 220 };
+        ApplyCfTextBoxChrome(textBox);
         AutomationProperties.SetAutomationId(textBox, "ConditionalFormatTextBox");
         var rankBox = new TextBox { MinWidth = 220, Text = "10" };
+        ApplyCfTextBoxChrome(rankBox);
         AutomationProperties.SetAutomationId(rankBox, "ConditionalFormatRankBox");
         var percentBox = new CheckBox { Content = UiText.Get("ConditionalFormat_PercentOfRange") };
+        ApplyCfCheckBoxChrome(percentBox);
         AutomationProperties.SetAutomationId(percentBox, "ConditionalFormatPercentBox");
         var topBottomBox = new ComboBox
         {
@@ -296,6 +308,7 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(topBottomBox);
         AutomationProperties.SetAutomationId(topBottomBox, "ConditionalFormatTopBottomBox");
         AutomationProperties.SetName(topBottomBox, "Top or bottom");
         var iconSetBox = new ComboBox
@@ -304,15 +317,20 @@ public sealed partial class MainWindow
             SelectedItem = ConditionalFormatIconSetCatalog.DefaultStyle,
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(iconSetBox);
         AutomationProperties.SetAutomationId(iconSetBox, "ConditionalFormatIconSetBox");
         var threeColorBox = new CheckBox { Content = UiText.Get("ConditionalFormat_UseThreeColorScale"), IsChecked = true };
+        ApplyCfCheckBoxChrome(threeColorBox);
         AutomationProperties.SetAutomationId(threeColorBox, "ConditionalFormatThreeColorBox");
 
         var minColorBox = new TextBox { MinWidth = 220, Text = "99,190,123" };
+        ApplyCfTextBoxChrome(minColorBox);
         AutomationProperties.SetAutomationId(minColorBox, "ConditionalFormatMinColorBox");
         var midColorBox = new TextBox { MinWidth = 220, Text = "255,235,132" };
+        ApplyCfTextBoxChrome(midColorBox);
         AutomationProperties.SetAutomationId(midColorBox, "ConditionalFormatMidColorBox");
         var maxColorBox = new TextBox { MinWidth = 220, Text = "248,105,107" };
+        ApplyCfTextBoxChrome(maxColorBox);
         AutomationProperties.SetAutomationId(maxColorBox, "ConditionalFormatMaxColorBox");
 
         var highlightBox = new ComboBox
@@ -321,6 +339,7 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
+        ApplyCfComboBoxChrome(highlightBox);
         AutomationProperties.SetAutomationId(highlightBox, "ConditionalFormatHighlightBox");
 
         var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
@@ -342,6 +361,8 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(errorText, "ConditionalFormatErrorText");
 
@@ -429,8 +450,10 @@ public sealed partial class MainWindow
         UpdateFieldVisibility();
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyCfButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ConditionalFormatOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyCfButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "ConditionalFormatCancelButton");
 
         okButton.Click += (_, _) =>
@@ -479,6 +502,8 @@ public sealed partial class MainWindow
                                 Text = UiText.Format("ConditionalFormat_AppliesToFormat", FormatRangeReference(range)),
                                 Foreground = HeaderForeground,
                                 TextWrapping = TextWrapping.Wrap,
+                                FontSize = 12,
+                                FontFamily = FormulaBarFontFamily,
                             },
                             CreateDataValidationField(UiText.Get("ConditionalFormat_RuleTypeLabel"), ruleTypeBox),
                             presetField,
@@ -639,6 +664,59 @@ public sealed partial class MainWindow
     private static string FormatRgb(RgbColor color) =>
         $"{color.R},{color.G},{color.B}";
 
+    // ── Chrome helpers ────────────────────────────────────────────────────────
+
+    private static void ApplyCfButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        button.MinWidth = width;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyCfTextBoxChrome(TextBox tb)
+    {
+        tb.Height = 24;
+        tb.MinHeight = 24;
+        tb.MaxHeight = 24;
+        tb.Padding = new Thickness(4, 1);
+        tb.FontSize = 12;
+        tb.FontFamily = FormulaBarFontFamily;
+        tb.BorderBrush = Brush(130, 130, 130);
+        tb.BorderThickness = new Thickness(1);
+        tb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyCfComboBoxChrome(ComboBox cb)
+    {
+        cb.Height = 24;
+        cb.MinHeight = 24;
+        cb.MaxHeight = 24;
+        cb.Padding = new Thickness(5, 0, 4, 0);
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.BorderBrush = Brush(130, 130, 130);
+        cb.BorderThickness = new Thickness(1);
+        cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyCfCheckBoxChrome(CheckBox cb)
+    {
+        cb.FontSize = 12;
+        cb.FontFamily = FormulaBarFontFamily;
+        cb.MinHeight = 20;
+        cb.MaxHeight = 20;
+    }
+
     /// <summary>A tiny single-value prompt used by the Highlight &gt; Greater Than preset.</summary>
     private async Task<string?> ShowConditionalFormatValuePromptAsync(string title, string prompt, string initial)
     {
@@ -654,10 +732,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "ConditionalFormatValuePromptDialog");
 
         var valueBox = new TextBox { Text = initial, MinWidth = 240 };
+        ApplyCfTextBoxChrome(valueBox);
         AutomationProperties.SetAutomationId(valueBox, "ConditionalFormatValuePromptBox");
 
         var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 84 };
+        ApplyCfButtonChrome(okButton, 84, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 84 };
+        ApplyCfButtonChrome(cancelButton, 84);
         okButton.Click += (_, _) =>
         {
             result = valueBox.Text ?? string.Empty;
@@ -684,7 +765,7 @@ public sealed partial class MainWindow
                 new StackPanel
                 {
                     Spacing = 8,
-                    Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap }, valueBox },
+                    Children = { new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily }, valueBox },
                 },
             },
         };
@@ -731,6 +812,15 @@ public sealed partial class MainWindow
             Background = Brushes.White,
             BorderThickness = new Thickness(0),
         };
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(2, 0)),
+                new Setter(global::Avalonia.Controls.Control.MinHeightProperty, 24.0),
+                new Setter(TemplatedControl.FontSizeProperty, 12.0),
+            },
+        });
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
 
@@ -739,9 +829,12 @@ public sealed partial class MainWindow
             Text = UiText.Get("ConditionalFormat_NoRules"),
             Foreground = HeaderForeground,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
 
         var appliesToBox = new TextBox { MinWidth = 160, IsVisible = false };
+        ApplyCfTextBoxChrome(appliesToBox);
         AutomationProperties.SetAutomationId(appliesToBox, "ManageConditionalFormatsAppliesToBox");
         AutomationProperties.SetName(appliesToBox, UiText.Get("ManageConditionalFormats_AppliesToColumn"));
 
@@ -756,6 +849,7 @@ public sealed partial class MainWindow
             SelectedIndex = 1,
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
         };
+        ApplyCfComboBoxChrome(scopeBox);
         AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
         AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
@@ -791,26 +885,35 @@ public sealed partial class MainWindow
         }
 
         var newButton = new Button { Content = UiText.Get("ManageConditionalFormats_NewRule"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+        ApplyCfButtonChrome(newButton, 104);
         AutomationProperties.SetAutomationId(newButton, "ManageConditionalFormatsNewButton");
         var editButton = new Button { Content = UiText.Get("ManageConditionalFormats_EditRule"), Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        ApplyCfButtonChrome(editButton, 94);
         AutomationProperties.SetAutomationId(editButton, "ManageConditionalFormatsEditButton");
         var duplicateButton = new Button { Content = UiText.Get("ManageConditionalFormats_DuplicateRule"), Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
+        ApplyCfButtonChrome(duplicateButton, 118);
         AutomationProperties.SetAutomationId(duplicateButton, "ManageConditionalFormatsDuplicateButton");
         var deleteButton = new Button { Content = UiText.Get("ManageConditionalFormats_DeleteRule"), Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
+        ApplyCfButtonChrome(deleteButton, 100);
         AutomationProperties.SetAutomationId(deleteButton, "ManageConditionalFormatsDeleteButton");
         var moveUpButton = new Button { Content = "\u25B2", Width = 32, Margin = new Thickness(0, 0, 4, 0), IsEnabled = false };
+        ApplyCfButtonChrome(moveUpButton, 32);
         AutomationProperties.SetAutomationId(moveUpButton, "ManageConditionalFormatsMoveUpButton");
         AutomationProperties.SetName(moveUpButton, UiText.Get("ManageConditionalFormats_MoveUp"));
         ToolTip.SetTip(moveUpButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"));
         var moveDownButton = new Button { Content = "\u25BC", Width = 32, IsEnabled = false };
+        ApplyCfButtonChrome(moveDownButton, 32);
         AutomationProperties.SetAutomationId(moveDownButton, "ManageConditionalFormatsMoveDownButton");
         AutomationProperties.SetName(moveDownButton, UiText.Get("ManageConditionalFormats_MoveDown"));
         ToolTip.SetTip(moveDownButton, UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"));
         var applyAppliesToButton = new Button { Content = UiText.Get("ManageConditionalFormats_Apply"), Width = 72 };
+        ApplyCfButtonChrome(applyAppliesToButton, 72);
         AutomationProperties.SetAutomationId(applyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton");
         var closeButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
+        ApplyCfButtonChrome(closeButton, 72, isDefault: true);
         AutomationProperties.SetAutomationId(closeButton, "ManageConditionalFormatsCloseButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 72, Margin = new Thickness(0, 0, 6, 0) };
+        ApplyCfButtonChrome(cancelButton, 72);
         AutomationProperties.SetAutomationId(cancelButton, "ManageConditionalFormatsCancelButton");
 
         void SyncCommandState()
@@ -946,6 +1049,8 @@ public sealed partial class MainWindow
                     Text = UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal),
                     VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 6, 0),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                 },
                 scopeBox,
             },
@@ -974,6 +1079,8 @@ public sealed partial class MainWindow
             {
                 Text = text,
                 FontWeight = FontWeight.SemiBold,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
                 Padding = new Thickness(5, 3),
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
                 [AvaloniaGrid.ColumnProperty] = column,
@@ -1030,6 +1137,8 @@ public sealed partial class MainWindow
                         new TextBlock
                         {
                             Text = UiText.Get("ManageConditionalFormats_Rules").Replace("_", string.Empty, StringComparison.Ordinal),
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
                         },
                         rulesFrame,
                         appliesToBox,
