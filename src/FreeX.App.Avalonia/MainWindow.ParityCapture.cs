@@ -911,8 +911,8 @@ public sealed partial class MainWindow
         Task openerTask;
         try
         {
-            // Fire-and-forget: ShowDialog blocks until the window closes, so we must NOT await it here.
-            openerTask = opener();
+            // Fire-and-forget: schedule the modal opener after this method starts polling for its owned window.
+            openerTask = RunParityModalOpenerAsync(opener);
         }
         catch (Exception ex)
         {
@@ -946,6 +946,26 @@ public sealed partial class MainWindow
         }
 
         return result;
+    }
+
+    private static Task RunParityModalOpenerAsync(Func<Task> opener)
+    {
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(
+            async () =>
+            {
+                try
+                {
+                    await opener();
+                    completion.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            },
+            DispatcherPriority.Background);
+        return completion.Task;
     }
 
     private async Task<Window?> WaitForOwnedDialogAsync(HashSet<Window> preexisting)
