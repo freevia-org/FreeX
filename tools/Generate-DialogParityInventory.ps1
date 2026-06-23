@@ -262,6 +262,7 @@ $routes = @(
     @{
         RouteId = "dialog.ErrorChecking"; DisplayName = "Error Checking"
         Wpf = @("screenshots\formula-diagnostics-tour\freex_formula_diagnostics_error_checking_dialog.png")
+        Shared = @("src\FreeX.App.Services\ErrorCheckingDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.EvaluateFormula"; DisplayName = "Evaluate Formula"

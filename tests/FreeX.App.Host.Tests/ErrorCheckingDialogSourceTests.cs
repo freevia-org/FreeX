@@ -13,8 +13,8 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = ReadErrorCheckingDialogSource();
 
-        source.Should().Contain("UiText.Format(\"ErrorChecking_IssueCountHeader\", _issues.Count)");
-        source.Should().Contain("Header = UiText.Get(\"ErrorChecking_IssueColumnHeader\")");
+        source.Should().Contain("UiText.Format(ErrorCheckingDialogPlanner.IssueCountHeaderKey, _issues.Count)");
+        source.Should().Contain("Header = UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey)");
         source.Should().NotContain("error(s) found.");
         source.Should().NotContain("Header = \"Error\"");
         UiText.Get("ErrorChecking_IssueColumnHeader").Should().Be("Issue");
@@ -38,7 +38,7 @@ public sealed class ErrorCheckingDialogSourceTests
         var backstageSource = ReadMainWindowBackstageSource();
 
         dialogSource.Should().Contain("Action? openOptions");
-        dialogSource.Should().Contain("Content = UiText.Get(\"ErrorChecking_OptionsButton\")");
+        dialogSource.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.OptionsButtonKey)");
         dialogSource.Should().Contain("_openOptions?.Invoke()");
         formulaSource.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
         backstageSource.Should().Contain("private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)");
@@ -73,17 +73,17 @@ public sealed class ErrorCheckingDialogSourceTests
 
         foreach (var content in new[]
         {
-            "ErrorChecking_GoToButton",
-            "ErrorChecking_PreviousButton",
-            "ErrorChecking_NextButton",
-            "ErrorChecking_IgnoreErrorButton",
-            "ErrorChecking_TraceErrorButton",
-            "ErrorChecking_OptionsButton",
-            "ErrorChecking_CloseButton"
+            "GoToButtonKey",
+            "PreviousButtonKey",
+            "NextButtonKey",
+            "IgnoreErrorButtonKey",
+            "TraceErrorButtonKey",
+            "OptionsButtonKey",
+            "CloseButtonKey"
         })
-            source.Should().Contain($"Content = UiText.Get(\"{content}\")");
+            source.Should().Contain($"Content = UiText.Get(ErrorCheckingDialogPlanner.{content})");
 
-        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_CloseButton\"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.CloseButtonKey), Width = ErrorCheckingDialogPlanner.CloseButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
         UiText.Get("ErrorChecking_CloseButton").Should().Be("_Close");
     }
 
@@ -120,8 +120,9 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = ReadErrorCheckingDialogSource();
 
-        source.Should().Contain("new Label { Content = UiText.Get(\"ErrorChecking_IssuesLabel\"), Target = _listView");
-        source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"ErrorChecking_IssuesAutomationName\"));");
+        source.Should().Contain("new Label { Content = UiText.Get(ErrorCheckingDialogPlanner.IssuesLabelKey), Target = _listView");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_listView, ErrorCheckingDialogPlanner.IssuesAutomationId);");
+        source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));");
         UiText.Get("ErrorChecking_IssuesLabel").Should().Be("_Issues:");
     }
 
@@ -130,12 +131,12 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = ReadErrorCheckingDialogSource();
 
-        source.Should().Contain("UiText.Get(\"ErrorChecking_HelpGroupHeader\")");
-        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_HelpButton\")");
+        source.Should().Contain("UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey)");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.HelpButtonKey)");
         source.Should().Contain("ShowSelectedIssueHelp");
-        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_ShowCalculationStepsButton\")");
-        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_IgnoreErrorButton\")");
-        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_EditInFormulaBarButton\")");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.ShowCalculationStepsButtonKey)");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey)");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.EditInFormulaBarButtonKey)");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
         UiText.Get("ErrorChecking_HelpGroupHeader").Should().Be("Error help");
     }
@@ -201,9 +202,9 @@ public sealed class ErrorCheckingDialogSourceTests
         dialogSource.Should().Contain("_showCalculationSteps = showCalculationSteps ?? traceError;");
         dialogSource.Should().Contain("_showStepsButton.Click += (_, _) => ShowCalculationStepsSelected();");
         dialogSource.Should().Contain("private static bool HasCalculationSteps(FormulaErrorIssue issue) =>");
-        dialogSource.Should().Contain("!string.IsNullOrWhiteSpace(issue.FormulaText)");
-        dialogSource.Should().Contain("_showStepsButton.IsEnabled = hasSelection &&");
-        dialogSource.Should().Contain("HasCalculationSteps(selectedIssue)");
+        dialogSource.Should().Contain("ErrorCheckingDialogPlanner.HasCalculationSteps(issue)");
+        dialogSource.Should().Contain("ErrorCheckingDialogPlanner.CreateCommandState");
+        dialogSource.Should().Contain("_showStepsButton.IsEnabled = state.CanShowCalculationSteps;");
         dialogSource.Should().Contain("private void ShowCalculationStepsSelected()");
         dialogSource.Should().Contain("if (_listView.SelectedItem is FormulaErrorIssue issue && HasCalculationSteps(issue))");
         dialogSource.Should().Contain("_showCalculationSteps(issue);");

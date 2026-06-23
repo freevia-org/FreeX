@@ -1532,6 +1532,32 @@
   <data name="EvaluateFormula_CloseButton" xml:space="preserve"><value>Close</value></data>
   <data name="EvaluateFormula_HelpButton" xml:space="preserve"><value>Help on this Function</value></data>
   <data name="EvaluateFormula_HelpBody" xml:space="preserve"><value>Use Evaluate to step through the selected formula. Step In opens a referenced formula when one is available; Step Out returns to the containing formula.</value></data>
+  <data name="ErrorChecking_ActionIntroText" xml:space="preserve"><value>Choose an action for the selected issue.</value></data>
+  <data name="ErrorChecking_CellColumnHeader" xml:space="preserve"><value>Cell</value></data>
+  <data name="ErrorChecking_CloseButton" xml:space="preserve"><value>_Close</value></data>
+  <data name="ErrorChecking_DescriptionColumnHeader" xml:space="preserve"><value>Description</value></data>
+  <data name="ErrorChecking_EditInFormulaBarButton" xml:space="preserve"><value>_Edit in Formula Bar</value></data>
+  <data name="ErrorChecking_FormulaColumnHeader" xml:space="preserve"><value>Formula</value></data>
+  <data name="ErrorChecking_GoToButton" xml:space="preserve"><value>_Go To</value></data>
+  <data name="ErrorChecking_HelpButton" xml:space="preserve"><value>_Help on this error</value></data>
+  <data name="ErrorChecking_HelpGroupHeader" xml:space="preserve"><value>Error help</value></data>
+  <data name="ErrorChecking_HelpTitle" xml:space="preserve"><value>Error Checking Help</value></data>
+  <data name="ErrorChecking_IgnoreErrorButton" xml:space="preserve"><value>_Ignore Error</value></data>
+  <data name="ErrorChecking_IssueColumnHeader" xml:space="preserve"><value>Issue</value></data>
+  <data name="ErrorChecking_IssueCountHeader" xml:space="preserve"><value>{0} issue(s) found.</value></data>
+  <data name="ErrorChecking_IssuesAutomationName" xml:space="preserve"><value>Issues</value></data>
+  <data name="ErrorChecking_IssuesLabel" xml:space="preserve"><value>_Issues:</value></data>
+  <data name="ErrorChecking_NextButton" xml:space="preserve"><value>_Next</value></data>
+  <data name="ErrorChecking_NoSelectionHelpBody" xml:space="preserve"><value>Select an issue to see its description and available correction actions.</value></data>
+  <data name="ErrorChecking_OptionsButton" xml:space="preserve"><value>_Options...</value></data>
+  <data name="ErrorChecking_PreviousButton" xml:space="preserve"><value>_Previous</value></data>
+  <data name="ErrorChecking_SelectedIssueHelpBody" xml:space="preserve"><value>{0}&#x0A;&#x0A;{1}&#x0A;&#x0A;Use Show Calculation Steps to trace the formula, Ignore Error to suppress this issue, or Edit in Formula Bar to correct the formula.</value></data>
+  <data name="ErrorChecking_SheetColumnHeader" xml:space="preserve"><value>Sheet</value></data>
+  <data name="ErrorChecking_ShowCalculationStepsButton" xml:space="preserve"><value>Show _Calculation Steps</value></data>
+  <data name="ErrorChecking_Title" xml:space="preserve"><value>Error Checking</value></data>
+  <data name="ErrorChecking_TraceErrorButton" xml:space="preserve"><value>_Trace Error</value></data>
+  <data name="MainWindowMessage_ErrorCheckingNoIssues" xml:space="preserve"><value>No issues found.</value></data>
+  <data name="MainWindowMessage_ErrorCheckingTitle" xml:space="preserve"><value>Error Checking</value></data>
   <data name="AddWatch_Title" xml:space="preserve"><value>Add Watch</value></data>
   <data name="AddWatch_SelectedRangeLabel" xml:space="preserve"><value>Selected range:</value></data>
   <data name="AddWatch_SelectedRangeAutomationName" xml:space="preserve"><value>Selected range</value></data>

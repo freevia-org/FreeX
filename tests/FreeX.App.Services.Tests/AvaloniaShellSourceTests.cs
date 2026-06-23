@@ -2256,6 +2256,7 @@ public sealed class AvaloniaShellSourceTests
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
         var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
         var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
+        var errorCheckingSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs"));
         var ribbonMenuDialogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
         var insertObjectsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
         var recommendedPivotTablesSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RecommendedPivotTables.cs"));
@@ -2268,6 +2269,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SymbolPicker\", () => ShowSymbolPickerAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.EvaluateFormula\", () => ShowEvaluateFormulaParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ErrorChecking\", () => ShowErrorCheckingParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.WatchWindow\", () => ShowWatchWindowParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.AddWatch\", () => ShowAddWatchParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.WorkbookStatistics\", () => ShowWorkbookStatisticsDialogAsync()),");
@@ -2308,6 +2310,14 @@ public sealed class AvaloniaShellSourceTests
         evaluateFormulaSource.Should().Contain("Width = 600");
         evaluateFormulaSource.Should().Contain("Height = 360");
         evaluateFormulaSource.Should().NotContain("\"Evaluate Formula\"");
+        errorCheckingSource.Should().Contain("private async Task CheckFormulaErrorsAsync()");
+        errorCheckingSource.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_session.Workbook, _session.ActiveSheet.Id)");
+        errorCheckingSource.Should().Contain("SetFormulaErrorIgnoredCommand(issue.SheetId, issue.Address, ignored: true)");
+        errorCheckingSource.Should().Contain("FormulaEvaluationSummaryService.GetSummary(_session.Workbook, issue.Address)");
+        errorCheckingSource.Should().Contain("TraceFormulaPrecedents();");
+        errorCheckingSource.Should().Contain("ErrorCheckingDialogPlanner.CreateCommandState");
+        errorCheckingSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId)");
+        errorCheckingSource.Should().Contain("private Task ShowErrorCheckingParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
         parityCaptureSource.Should().Contain("private Task ShowAddWatchParityDialogAsync()");
@@ -2435,6 +2445,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.InsertHyperlink",
             "dialog.SymbolPicker",
             "dialog.EvaluateFormula",
+            "dialog.ErrorChecking",
             "dialog.WatchWindow",
             "dialog.AddWatch",
             "dialog.WorkbookStatistics",
