@@ -16714,9 +16714,14 @@ public sealed partial class MainWindow : Window
 
     internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
     {
-        var nativeTopLevelMenuOrder = string.Join("|", _nativeMenu?.Items.OfType<NativeMenuItem>()
-            .Select(static item => item.Header?.ToString())
-            .Where(static header => !string.IsNullOrWhiteSpace(header)) ?? []);
+        var nativeTopLevelMenuOrder = GetNativeTopLevelMenuOrder(_nativeMenu);
+        var nativeDockMenu = Application.Current is { } app
+            ? NativeDock.GetMenu(app)
+            : null;
+        var nativeDockTopLevelMenuOrder = GetNativeTopLevelMenuOrder(nativeDockMenu);
+        var hasNativeDockMenu = nativeDockMenu is not null;
+        var hasNativeDockFileMenu = HasNativeTopLevelMenu(nativeDockMenu, "File");
+        var nativeDockFileMenuItemCount = CountNativeTopLevelMenuItems(nativeDockMenu, "File");
         var hasNativeFileMenu = HasNativeTopLevelMenu("File");
         var hasNativeHomeMenu = HasNativeTopLevelMenu("Home");
         var hasNativeInsertMenu = HasNativeTopLevelMenu("Insert");
@@ -16828,6 +16833,10 @@ public sealed partial class MainWindow : Window
             HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets"),
             HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
             NativeTopLevelMenuOrder: nativeTopLevelMenuOrder,
+            NativeDockTopLevelMenuOrder: nativeDockTopLevelMenuOrder,
+            HasNativeDockMenu: hasNativeDockMenu,
+            HasNativeDockFileMenu: hasNativeDockFileMenu,
+            NativeDockFileMenuItemCount: nativeDockFileMenuItemCount,
             HasNativeFileMenu: hasNativeFileMenu,
             HasNativeHomeMenu: hasNativeHomeMenu,
             HasNativeInsertMenu: hasNativeInsertMenu,
@@ -16995,9 +17004,24 @@ public sealed partial class MainWindow : Window
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
 
     private bool HasNativeTopLevelMenu(string expectedHeader) =>
-        _nativeMenu?.Items.OfType<NativeMenuItem>().Any(item =>
+        HasNativeTopLevelMenu(_nativeMenu, expectedHeader);
+
+    private static bool HasNativeTopLevelMenu(NativeMenu? menu, string expectedHeader) =>
+        FindNativeTopLevelSubmenu(menu, expectedHeader) is not null;
+
+    private static string GetNativeTopLevelMenuOrder(NativeMenu? menu) =>
+        string.Join("|", menu?.Items.OfType<NativeMenuItem>()
+            .Select(static item => item.Header?.ToString())
+            .Where(static header => !string.IsNullOrWhiteSpace(header)) ?? []);
+
+    private static NativeMenu? FindNativeTopLevelSubmenu(NativeMenu? menu, string expectedHeader) =>
+        menu?.Items.OfType<NativeMenuItem>().FirstOrDefault(item =>
             string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-            item.Menu is not null) == true;
+            item.Menu is not null)?.Menu;
+
+    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, string expectedHeader) =>
+        FindNativeTopLevelSubmenu(menu, expectedHeader)?.Items.OfType<NativeMenuItem>()
+            .Count(static item => !string.IsNullOrWhiteSpace(item.Header?.ToString())) ?? 0;
 
     private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
         string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
