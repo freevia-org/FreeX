@@ -14,7 +14,7 @@ public partial class PageSetupDialog
         if (SelectedPresetValue(HeaderPresetBox.SelectedItem) is not { } preset)
             return;
 
-        Header = Header with { Center = preset };
+        Header = HeaderFooterEditorPlanner.ApplyCenterPreset(Header, preset);
         UpdateHeaderFooterPreview();
     }
 
@@ -23,7 +23,7 @@ public partial class PageSetupDialog
         if (SelectedPresetValue(FooterPresetBox.SelectedItem) is not { } preset)
             return;
 
-        Footer = Footer with { Center = preset };
+        Footer = HeaderFooterEditorPlanner.ApplyCenterPreset(Footer, preset);
         UpdateHeaderFooterPreview();
     }
 

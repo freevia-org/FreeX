@@ -405,12 +405,26 @@ public sealed partial class MainWindow
         headerPresetBox.SelectionChanged += (_, _) =>
         {
             var idx = headerPresetBox.SelectedIndex;
-            headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(headerPresetChoices, idx);
+            var preset = PageSetupDialogModel.HeaderFooterPresetValue(headerPresetChoices, idx);
+            var header = HeaderFooterEditorPlanner.ApplyCenterPreset(
+                new WorksheetHeaderFooter(
+                    headerLeftBox.Text ?? "",
+                    headerCenterBox.Text ?? "",
+                    headerRightBox.Text ?? ""),
+                preset);
+            headerCenterBox.Text = header.Center;
         };
         footerPresetBox.SelectionChanged += (_, _) =>
         {
             var idx = footerPresetBox.SelectedIndex;
-            footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(footerPresetChoices, idx);
+            var preset = PageSetupDialogModel.HeaderFooterPresetValue(footerPresetChoices, idx);
+            var footer = HeaderFooterEditorPlanner.ApplyCenterPreset(
+                new WorksheetHeaderFooter(
+                    footerLeftBox.Text ?? "",
+                    footerCenterBox.Text ?? "",
+                    footerRightBox.Text ?? ""),
+                preset);
+            footerCenterBox.Text = footer.Center;
         };
 
         var differentFirstPageCheck = new CheckBox

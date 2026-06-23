@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -146,17 +147,29 @@ public partial class HeaderFooterDialog : Window
             EvenFooterCenterBox,
             EvenFooterRightBox);
 
-        if (_activeTextBox is null || !_activeTextBox.IsEnabled || !IsActiveTextBoxInSelectedTab(_activeTextBox))
-            _activeTextBox = GetDefaultTextBoxForSelectedTab();
+        _activeTextBox = CoerceActiveTextBox(_activeTextBox);
         UpdatePictureButtonState();
     }
 
     private TextBox GetActiveTextBox()
     {
-        if (_activeTextBox is null || !_activeTextBox.IsEnabled || !IsActiveTextBoxInSelectedTab(_activeTextBox))
-            _activeTextBox = GetDefaultTextBoxForSelectedTab();
+        _activeTextBox = CoerceActiveTextBox(_activeTextBox);
 
         return _activeTextBox;
+    }
+
+    private TextBox CoerceActiveTextBox(TextBox? candidate)
+    {
+        if (candidate is null || !IsActiveTextBoxInSelectedTab(candidate))
+            return GetDefaultTextBoxForSelectedTab();
+
+        var target = ResolvePictureTarget(candidate);
+        var coerced = HeaderFooterEditorPlanner.CoerceToEnabledTarget(
+            target,
+            DifferentFirstPageBox.IsChecked == true,
+            DifferentOddEvenBox.IsChecked == true);
+
+        return GetTextBox(coerced);
     }
 
     private TextBox GetDefaultTextBoxForSelectedTab() =>

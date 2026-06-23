@@ -4,14 +4,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
 public partial class HeaderFooterDialog
 {
-    private const string PictureToken = "&[Picture]";
-
     private async void PictureButton_Click(object sender, RoutedEventArgs e)
     {
         var result = WpfFileDialogService.ShowOpenDialog(
@@ -30,8 +29,8 @@ public partial class HeaderFooterDialog
             width,
             height);
         SetPictureForActiveBox(picture);
-        if (!GetActiveTextBox().Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
-            InsertTokenIntoActiveBox(PictureToken);
+        if (!HeaderFooterEditorPlanner.ContainsPictureToken(GetActiveTextBox().Text))
+            InsertTokenIntoActiveBox(HeaderFooterEditorPlanner.PictureToken);
         UpdatePictureButtonState();
     }
 
@@ -50,44 +49,15 @@ public partial class HeaderFooterDialog
             return;
 
         SetPictureForActiveBox(dialog.Result);
-        if (!GetActiveTextBox().Text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase))
-            InsertTokenIntoActiveBox(PictureToken);
+        if (!HeaderFooterEditorPlanner.ContainsPictureToken(GetActiveTextBox().Text))
+            InsertTokenIntoActiveBox(HeaderFooterEditorPlanner.PictureToken);
         UpdatePictureButtonState();
     }
 
-    private static WorksheetHeaderFooterPictureSet PrunePicturesWithoutTokens(
-        WorksheetHeaderFooter text,
-        WorksheetHeaderFooterPictureSet pictures) =>
-        new(
-            ContainsPictureToken(text.Left) ? pictures.Left : null,
-            ContainsPictureToken(text.Center) ? pictures.Center : null,
-            ContainsPictureToken(text.Right) ? pictures.Right : null);
-
-    private static bool ContainsPictureToken(string text) =>
-        text.Contains(PictureToken, StringComparison.OrdinalIgnoreCase);
-
     private WorksheetHeaderFooterPicture? GetPictureForActiveBox()
     {
-        var target = GetActiveTextBox();
-        if (ReferenceEquals(target, HeaderLeftBox)) return HeaderPictures.Left;
-        if (ReferenceEquals(target, HeaderCenterBox)) return HeaderPictures.Center;
-        if (ReferenceEquals(target, HeaderRightBox)) return HeaderPictures.Right;
-        if (ReferenceEquals(target, FooterLeftBox)) return FooterPictures.Left;
-        if (ReferenceEquals(target, FooterCenterBox)) return FooterPictures.Center;
-        if (ReferenceEquals(target, FooterRightBox)) return FooterPictures.Right;
-        if (ReferenceEquals(target, FirstHeaderLeftBox)) return FirstPageHeaderPictures.Left;
-        if (ReferenceEquals(target, FirstHeaderCenterBox)) return FirstPageHeaderPictures.Center;
-        if (ReferenceEquals(target, FirstHeaderRightBox)) return FirstPageHeaderPictures.Right;
-        if (ReferenceEquals(target, FirstFooterLeftBox)) return FirstPageFooterPictures.Left;
-        if (ReferenceEquals(target, FirstFooterCenterBox)) return FirstPageFooterPictures.Center;
-        if (ReferenceEquals(target, FirstFooterRightBox)) return FirstPageFooterPictures.Right;
-        if (ReferenceEquals(target, EvenHeaderLeftBox)) return EvenPageHeaderPictures.Left;
-        if (ReferenceEquals(target, EvenHeaderCenterBox)) return EvenPageHeaderPictures.Center;
-        if (ReferenceEquals(target, EvenHeaderRightBox)) return EvenPageHeaderPictures.Right;
-        if (ReferenceEquals(target, EvenFooterLeftBox)) return EvenPageFooterPictures.Left;
-        if (ReferenceEquals(target, EvenFooterCenterBox)) return EvenPageFooterPictures.Center;
-        if (ReferenceEquals(target, EvenFooterRightBox)) return EvenPageFooterPictures.Right;
-        return null;
+        var target = ResolvePictureTarget(GetActiveTextBox());
+        return HeaderFooterEditorPlanner.GetPicture(GetPictureSet(target.Scope), target.Section);
     }
 
     private void UpdatePictureButtonState()
@@ -112,50 +82,101 @@ public partial class HeaderFooterDialog
 
     private static string ActiveBoxLabel(TextBox target)
     {
-        var scope = target.Name switch
-        {
-            "HeaderLeftBox" or "HeaderCenterBox" or "HeaderRightBox" => UiText.Get("HeaderFooter_Header"),
-            "FooterLeftBox" or "FooterCenterBox" or "FooterRightBox" => UiText.Get("HeaderFooter_Footer"),
-            "FirstHeaderLeftBox" or "FirstHeaderCenterBox" or "FirstHeaderRightBox" => UiText.Get("HeaderFooter_FirstPageHeader"),
-            "FirstFooterLeftBox" or "FirstFooterCenterBox" or "FirstFooterRightBox" => UiText.Get("HeaderFooter_FirstPageFooter"),
-            "EvenHeaderLeftBox" or "EvenHeaderCenterBox" or "EvenHeaderRightBox" => UiText.Get("HeaderFooter_EvenPageHeader"),
-            "EvenFooterLeftBox" or "EvenFooterCenterBox" or "EvenFooterRightBox" => UiText.Get("HeaderFooter_EvenPageFooter"),
-            _ => string.Empty
-        };
-        var section = ActiveBoxSectionLabel(target);
+        var editorTarget = ResolvePictureTarget(target);
+        var scope = UiText.Get(HeaderFooterEditorPlanner.ScopeLabelResourceKey(editorTarget.Scope));
+        var section = UiText.Get(HeaderFooterEditorPlanner.SectionLabelResourceKey(editorTarget.Section));
         return string.IsNullOrWhiteSpace(scope) ? section : $"{scope} {section}";
-    }
-
-    private static string ActiveBoxSectionLabel(TextBox target)
-    {
-        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_LeftSection");
-        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_CenterSection");
-        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_RightSection");
-        return UiText.Get("HeaderFooterPicture_CurrentSection");
     }
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)
     {
-        var target = GetActiveTextBox();
-        if (ReferenceEquals(target, HeaderLeftBox)) HeaderPictures = HeaderPictures with { Left = picture };
-        else if (ReferenceEquals(target, HeaderCenterBox)) HeaderPictures = HeaderPictures with { Center = picture };
-        else if (ReferenceEquals(target, HeaderRightBox)) HeaderPictures = HeaderPictures with { Right = picture };
-        else if (ReferenceEquals(target, FooterLeftBox)) FooterPictures = FooterPictures with { Left = picture };
-        else if (ReferenceEquals(target, FooterCenterBox)) FooterPictures = FooterPictures with { Center = picture };
-        else if (ReferenceEquals(target, FooterRightBox)) FooterPictures = FooterPictures with { Right = picture };
-        else if (ReferenceEquals(target, FirstHeaderLeftBox)) FirstPageHeaderPictures = FirstPageHeaderPictures with { Left = picture };
-        else if (ReferenceEquals(target, FirstHeaderCenterBox)) FirstPageHeaderPictures = FirstPageHeaderPictures with { Center = picture };
-        else if (ReferenceEquals(target, FirstHeaderRightBox)) FirstPageHeaderPictures = FirstPageHeaderPictures with { Right = picture };
-        else if (ReferenceEquals(target, FirstFooterLeftBox)) FirstPageFooterPictures = FirstPageFooterPictures with { Left = picture };
-        else if (ReferenceEquals(target, FirstFooterCenterBox)) FirstPageFooterPictures = FirstPageFooterPictures with { Center = picture };
-        else if (ReferenceEquals(target, FirstFooterRightBox)) FirstPageFooterPictures = FirstPageFooterPictures with { Right = picture };
-        else if (ReferenceEquals(target, EvenHeaderLeftBox)) EvenPageHeaderPictures = EvenPageHeaderPictures with { Left = picture };
-        else if (ReferenceEquals(target, EvenHeaderCenterBox)) EvenPageHeaderPictures = EvenPageHeaderPictures with { Center = picture };
-        else if (ReferenceEquals(target, EvenHeaderRightBox)) EvenPageHeaderPictures = EvenPageHeaderPictures with { Right = picture };
-        else if (ReferenceEquals(target, EvenFooterLeftBox)) EvenPageFooterPictures = EvenPageFooterPictures with { Left = picture };
-        else if (ReferenceEquals(target, EvenFooterCenterBox)) EvenPageFooterPictures = EvenPageFooterPictures with { Center = picture };
-        else if (ReferenceEquals(target, EvenFooterRightBox)) EvenPageFooterPictures = EvenPageFooterPictures with { Right = picture };
+        var target = ResolvePictureTarget(GetActiveTextBox());
+        SetPictureSet(
+            target.Scope,
+            HeaderFooterEditorPlanner.SetPicture(GetPictureSet(target.Scope), target.Section, picture));
     }
+
+    private WorksheetHeaderFooterPictureSet GetPictureSet(HeaderFooterEditorScope scope) =>
+        scope switch
+        {
+            HeaderFooterEditorScope.Footer => FooterPictures,
+            HeaderFooterEditorScope.FirstPageHeader => FirstPageHeaderPictures,
+            HeaderFooterEditorScope.FirstPageFooter => FirstPageFooterPictures,
+            HeaderFooterEditorScope.EvenPageHeader => EvenPageHeaderPictures,
+            HeaderFooterEditorScope.EvenPageFooter => EvenPageFooterPictures,
+            _ => HeaderPictures
+        };
+
+    private void SetPictureSet(HeaderFooterEditorScope scope, WorksheetHeaderFooterPictureSet pictures)
+    {
+        switch (scope)
+        {
+            case HeaderFooterEditorScope.Footer:
+                FooterPictures = pictures;
+                break;
+            case HeaderFooterEditorScope.FirstPageHeader:
+                FirstPageHeaderPictures = pictures;
+                break;
+            case HeaderFooterEditorScope.FirstPageFooter:
+                FirstPageFooterPictures = pictures;
+                break;
+            case HeaderFooterEditorScope.EvenPageHeader:
+                EvenPageHeaderPictures = pictures;
+                break;
+            case HeaderFooterEditorScope.EvenPageFooter:
+                EvenPageFooterPictures = pictures;
+                break;
+            default:
+                HeaderPictures = pictures;
+                break;
+        }
+    }
+
+    private static HeaderFooterEditorTarget ResolvePictureTarget(TextBox target) =>
+        target.Name switch
+        {
+            "HeaderLeftBox" => new(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Left),
+            "HeaderRightBox" => new(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Right),
+            "FooterLeftBox" => new(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Left),
+            "FooterCenterBox" => new(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center),
+            "FooterRightBox" => new(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Right),
+            "FirstHeaderLeftBox" => new(HeaderFooterEditorScope.FirstPageHeader, HeaderFooterEditorSection.Left),
+            "FirstHeaderCenterBox" => new(HeaderFooterEditorScope.FirstPageHeader, HeaderFooterEditorSection.Center),
+            "FirstHeaderRightBox" => new(HeaderFooterEditorScope.FirstPageHeader, HeaderFooterEditorSection.Right),
+            "FirstFooterLeftBox" => new(HeaderFooterEditorScope.FirstPageFooter, HeaderFooterEditorSection.Left),
+            "FirstFooterCenterBox" => new(HeaderFooterEditorScope.FirstPageFooter, HeaderFooterEditorSection.Center),
+            "FirstFooterRightBox" => new(HeaderFooterEditorScope.FirstPageFooter, HeaderFooterEditorSection.Right),
+            "EvenHeaderLeftBox" => new(HeaderFooterEditorScope.EvenPageHeader, HeaderFooterEditorSection.Left),
+            "EvenHeaderCenterBox" => new(HeaderFooterEditorScope.EvenPageHeader, HeaderFooterEditorSection.Center),
+            "EvenHeaderRightBox" => new(HeaderFooterEditorScope.EvenPageHeader, HeaderFooterEditorSection.Right),
+            "EvenFooterLeftBox" => new(HeaderFooterEditorScope.EvenPageFooter, HeaderFooterEditorSection.Left),
+            "EvenFooterCenterBox" => new(HeaderFooterEditorScope.EvenPageFooter, HeaderFooterEditorSection.Center),
+            "EvenFooterRightBox" => new(HeaderFooterEditorScope.EvenPageFooter, HeaderFooterEditorSection.Right),
+            _ => new(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Center)
+        };
+
+    private TextBox GetTextBox(HeaderFooterEditorTarget target) =>
+        target switch
+        {
+            { Scope: HeaderFooterEditorScope.Header, Section: HeaderFooterEditorSection.Left } => HeaderLeftBox,
+            { Scope: HeaderFooterEditorScope.Header, Section: HeaderFooterEditorSection.Right } => HeaderRightBox,
+            { Scope: HeaderFooterEditorScope.Footer, Section: HeaderFooterEditorSection.Left } => FooterLeftBox,
+            { Scope: HeaderFooterEditorScope.Footer, Section: HeaderFooterEditorSection.Center } => FooterCenterBox,
+            { Scope: HeaderFooterEditorScope.Footer, Section: HeaderFooterEditorSection.Right } => FooterRightBox,
+            { Scope: HeaderFooterEditorScope.FirstPageHeader, Section: HeaderFooterEditorSection.Left } => FirstHeaderLeftBox,
+            { Scope: HeaderFooterEditorScope.FirstPageHeader, Section: HeaderFooterEditorSection.Center } => FirstHeaderCenterBox,
+            { Scope: HeaderFooterEditorScope.FirstPageHeader, Section: HeaderFooterEditorSection.Right } => FirstHeaderRightBox,
+            { Scope: HeaderFooterEditorScope.FirstPageFooter, Section: HeaderFooterEditorSection.Left } => FirstFooterLeftBox,
+            { Scope: HeaderFooterEditorScope.FirstPageFooter, Section: HeaderFooterEditorSection.Center } => FirstFooterCenterBox,
+            { Scope: HeaderFooterEditorScope.FirstPageFooter, Section: HeaderFooterEditorSection.Right } => FirstFooterRightBox,
+            { Scope: HeaderFooterEditorScope.EvenPageHeader, Section: HeaderFooterEditorSection.Left } => EvenHeaderLeftBox,
+            { Scope: HeaderFooterEditorScope.EvenPageHeader, Section: HeaderFooterEditorSection.Center } => EvenHeaderCenterBox,
+            { Scope: HeaderFooterEditorScope.EvenPageHeader, Section: HeaderFooterEditorSection.Right } => EvenHeaderRightBox,
+            { Scope: HeaderFooterEditorScope.EvenPageFooter, Section: HeaderFooterEditorSection.Left } => EvenFooterLeftBox,
+            { Scope: HeaderFooterEditorScope.EvenPageFooter, Section: HeaderFooterEditorSection.Center } => EvenFooterCenterBox,
+            { Scope: HeaderFooterEditorScope.EvenPageFooter, Section: HeaderFooterEditorSection.Right } => EvenFooterRightBox,
+            _ => HeaderCenterBox
+        };
 
     private static (double Width, double Height) GetImageSize(byte[] bytes)
     {

@@ -403,6 +403,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
         source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
         source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
+        source.Should().Contain("HeaderFooterEditorPlanner.ApplyCenterPreset(");
         source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
         source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
@@ -411,6 +412,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("SelectValidationRoute(validation.Route)");
         source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
+        source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
         source.Should().NotContain("private static int PageSetupPresetIndex");
         source.Should().NotContain("var presetLabels = new[]");
         source.Should().NotContain("initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0");
