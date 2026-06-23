@@ -263,6 +263,7 @@ $routes = @(
     @{
         RouteId = "dialog.EvaluateFormula"; DisplayName = "Evaluate Formula"
         Wpf = @("screenshots\formula-diagnostics-tour\freex_formula_diagnostics_evaluate_*.png")
+        Shared = @("src\FreeX.App.Services\EvaluateFormulaDialogPlanner.cs")
     },
     @{
         RouteId = "dialog.WatchWindow"; DisplayName = "Watch Window"

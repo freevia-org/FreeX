@@ -322,10 +322,23 @@ public sealed partial class MainWindow
             async () => { await ShowInsertHyperlinkInputDialogAsync(); });
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            ShowEvaluateFormulaDialogAsync);
+        ShowEvaluateFormulaDialogAsync(CreateFormulaEvaluationSummary(_session.ActiveSheet.Id));
+
+    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
+    {
+        var address = new CellAddress(sheetId, 6, 4);
+        return new FormulaEvaluationSummary(
+            sheetId,
+            "Sheet1",
+            address,
+            "=SUM(D2:D5)",
+            "469",
+            [
+                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
+                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
+                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
+            ]);
+    }
 
     private Task ShowWatchWindowParityDialogAsync() =>
         ShowWithParitySelectionAsync(

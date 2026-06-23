@@ -1517,6 +1517,21 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Sorted A to Z</value></data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Sorted Z to A</value></data>
   <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Filter update failed.</value></data>
+  <data name="EvaluateFormula_Title" xml:space="preserve"><value>Evaluate Formula</value></data>
+  <data name="EvaluateFormula_SelectFormulaMessage" xml:space="preserve"><value>Select a cell that contains a formula.</value></data>
+  <data name="EvaluateFormula_EvaluationLabel" xml:space="preserve"><value>Evaluation:</value></data>
+  <data name="EvaluateFormula_FormulaPrefix" xml:space="preserve"><value>Formula: </value></data>
+  <data name="EvaluateFormula_ResultText" xml:space="preserve"><value>Result: {0}</value></data>
+  <data name="EvaluateFormula_StepPositionText" xml:space="preserve"><value>Step {0} of {1}</value></data>
+  <data name="EvaluateFormula_NoIntermediateStepsText" xml:space="preserve"><value>No intermediate evaluation steps.</value></data>
+  <data name="EvaluateFormula_ValueText" xml:space="preserve"><value>Value: {0}</value></data>
+  <data name="EvaluateFormula_EvaluateButton" xml:space="preserve"><value>Evaluate</value></data>
+  <data name="EvaluateFormula_StepInButton" xml:space="preserve"><value>Step In</value></data>
+  <data name="EvaluateFormula_StepOutButton" xml:space="preserve"><value>Step Out</value></data>
+  <data name="EvaluateFormula_RestartButton" xml:space="preserve"><value>Restart</value></data>
+  <data name="EvaluateFormula_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="EvaluateFormula_HelpButton" xml:space="preserve"><value>Help on this Function</value></data>
+  <data name="EvaluateFormula_HelpBody" xml:space="preserve"><value>Use Evaluate to step through the selected formula. Step In opens a referenced formula when one is available; Step Out returns to the containing formula.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>

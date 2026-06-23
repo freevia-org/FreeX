@@ -135,6 +135,9 @@ public sealed class LocTests
         keys.Should().Contain("StatusBar_AverageFormat");
         keys.Should().Contain("StatusBar_EditMode");
         keys.Should().Contain("StatusBar_CustomizeStatusBar");
+        keys.Should().Contain("EvaluateFormula_Title");
+        keys.Should().Contain("EvaluateFormula_EvaluateButton");
+        keys.Should().Contain("EvaluateFormula_SelectFormulaMessage");
     }
 
     [Fact]
