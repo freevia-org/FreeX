@@ -148,4 +148,31 @@ public sealed class ThreadedCommentCommandTests
         plain.MoveToPreviousComment().Should().BeFalse();
         plain.DeleteCommentAtCaret().Should().BeFalse();
     }
+
+    [StaFact]
+    public void CommentNavigation_HandlesCommentsInsideTableCells()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Table reviewed text") { CommentId = 4 });
+        paragraph.Runs.Add(Run.CommentReference(4));
+        cell.Paragraphs.Add(paragraph);
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+        doc.Comments[4] = new Comment(4, "Table note", "Drew", "D");
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.MoveToNextComment().Should().BeTrue();
+        view.ToggleResolveCommentAtCaret().Should().BeTrue();
+        view.DeleteCommentAtCaret().Should().BeTrue();
+        view.Model.Comments.Should().NotContainKey(4);
+    }
 }

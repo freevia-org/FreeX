@@ -240,7 +240,19 @@ public sealed class FreeWRibbonParityTests
                 "freew.previous-comment",
                 "freew.next-comment",
                 "freew.reply-comment",
-                "freew.resolve-comment");
+                "freew.resolve-comment",
+                "freew.show-comments");
+
+        Labels(comments!)
+            .Should()
+            .Equal(
+                "New Comment",
+                "Delete",
+                "Previous",
+                "Next",
+                "Reply",
+                "Resolve",
+                "Show Comments");
 
         foreach (var commandId in CommandIds(comments!))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Review comments group");

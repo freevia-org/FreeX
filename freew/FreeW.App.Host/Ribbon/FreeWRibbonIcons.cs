@@ -271,6 +271,7 @@ internal static class FreeWRibbonIcons
             ["freew.delete-comment"] = RibbonCommandIconKind.Delete,
             ["freew.previous-comment"] = RibbonCommandIconKind.Previous,
             ["freew.next-comment"] = RibbonCommandIconKind.Next,
+            ["freew.show-comments"] = RibbonCommandIconKind.Comment,
             ["freew.track-changes"] = RibbonCommandIconKind.History,
             ["freew.accept-all"] = RibbonCommandIconKind.AcceptChange,
             ["freew.reject-all"] = RibbonCommandIconKind.RejectChange,

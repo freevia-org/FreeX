@@ -395,6 +395,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.delete-comment", new DeleteCommentCommand(editor));
         registry.Register("freew.previous-comment", new NavigateCommentCommand(editor, previous: true));
         registry.Register("freew.next-comment", new NavigateCommentCommand(editor, previous: false));
+        registry.Register("freew.show-comments", new ShowCommentsCommand(editor));
 
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
@@ -2314,6 +2315,79 @@ internal static class FreeWRibbonCommands
             if (!moved)
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
                     "This document does not contain any comments.", previous ? "Previous Comment" : "Next Comment");
+        }
+    }
+
+    // Review > Comments > Show Comments: open a backed read-only list of the document's actual comment
+    // threads in document order. This mirrors Word's visible comments-pane affordance without inventing
+    // cloud/collaboration behavior.
+    private sealed class ShowCommentsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var items = CommentListPlanner.Build(editor.Model);
+            if (items.Count == 0)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "This document does not contain any comments.",
+                    "Comments");
+                return;
+            }
+
+            CommentListDialog.Show(Window.GetWindow(editor), items);
+        }
+    }
+
+    private static class CommentListDialog
+    {
+        public static void Show(Window? owner, IReadOnlyList<CommentListItem> items)
+        {
+            var list = new System.Windows.Controls.ListBox
+            {
+                MinWidth = 440,
+                MinHeight = 260,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            foreach (var item in items)
+            {
+                var status = item.Resolved ? "Resolved" : "Open";
+                var replies = item.ReplyCount == 1 ? "1 reply" : $"{item.ReplyCount} replies";
+                list.Items.Add($"#{item.Id + 1} {status} - {item.Author} - {item.Text} ({replies})");
+            }
+
+            var dialog = new Window
+            {
+                Title = "Comments",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var close = new System.Windows.Controls.Button
+            {
+                Content = "Close",
+                IsCancel = true,
+                MinWidth = 72,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = $"{items.Count} comment thread{(items.Count == 1 ? string.Empty : "s")}",
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            panel.Children.Add(list);
+            panel.Children.Add(close);
+            dialog.Content = panel;
+
+            dialog.ShowDialog();
         }
     }
 

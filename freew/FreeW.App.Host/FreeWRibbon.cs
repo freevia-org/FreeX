@@ -447,6 +447,7 @@ internal static class FreeWRibbon
                     g.RowBreak();
                     g.Medium("freew.reply-comment", "Reply", RibbonCommandIconKind.Comment);
                     g.Medium("freew.resolve-comment", "Resolve", RibbonCommandIconKind.AcceptChange);
+                    g.Medium("freew.show-comments", "Show Comments", RibbonCommandIconKind.Comment);
                 });
                 tab.Group("tracking", "Tracking", "G", 90, g =>
                 {
