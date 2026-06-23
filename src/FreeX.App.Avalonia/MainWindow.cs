@@ -5920,6 +5920,10 @@ public sealed partial class MainWindow : Window
     {
         var existing = border.Child;
         var handleSize = Math.Max(4, 6 * zoomFactor);
+        // Detach 'existing' from 'border' before re-parenting it into the new layer Grid.
+        // Avalonia (unlike WPF) throws InvalidOperationException if a control still has a
+        // visual parent when it is added to a second parent's Children collection.
+        border.Child = null;
         var layer = new AvaloniaGrid
         {
             Children =
