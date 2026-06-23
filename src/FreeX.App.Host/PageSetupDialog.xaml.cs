@@ -97,14 +97,15 @@ public partial class PageSetupDialog : Window
     private void Accept(PageSetupDialogAction requestedAction)
     {
         var fields = ReadFields();
-        var build = PageSetupDialogModel.TryBuildCommandPlan(_sourceSheet, fields);
-        if (!build.Success)
+        var submission = PageSetupSubmissionPlanner.TryBuild(_sourceSheet, fields, requestedAction);
+        if (!submission.Success)
         {
+            var validation = submission.Validation!;
             DialogMessageHelper.ShowWarning(
                 this,
-                PageSetupValidationMessage(build.Target, build.Error),
-                UiText.Get("PageSetup_PageSetup"));
-            FocusValidationTarget(build.Target);
+                validation.Message.Resolve(UiText.Get),
+                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
+            FocusValidationTarget(validation.Target);
             return;
         }
 
@@ -113,7 +114,7 @@ public partial class PageSetupDialog : Window
         DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
         ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true;
         AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true;
-        RequestedAction = requestedAction;
+        RequestedAction = submission.Submission!.RequestedAction;
         DialogResult = true;
         Close();
     }
@@ -171,20 +172,6 @@ public partial class PageSetupDialog : Window
             AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true
         };
     }
-
-    private static string PageSetupValidationMessage(PageSetupValidationTarget? target, string? fallback) =>
-        target switch
-        {
-            PageSetupValidationTarget.HeaderMargin or PageSetupValidationTarget.FooterMargin =>
-                UiText.Get("PageSetup_InvalidHeaderFooterMarginsMessage"),
-            PageSetupValidationTarget.Scaling => UiText.Get("PageSetup_InvalidScalingMessage"),
-            PageSetupValidationTarget.FirstPageNumber => UiText.Get("PageSetup_InvalidFirstPageNumberMessage"),
-            PageSetupValidationTarget.PrintQuality => UiText.Get("PageSetup_InvalidPrintQualityMessage"),
-            PageSetupValidationTarget.PrintArea => UiText.Get("PageSetup_InvalidPrintAreaMessage"),
-            PageSetupValidationTarget.RepeatRows or PageSetupValidationTarget.RepeatColumns =>
-                UiText.Get("PageSetup_InvalidPrintTitlesMessage"),
-            _ => fallback ?? UiText.Get("PageSetup_PageSetup")
-        };
 
     private void FocusValidationTarget(PageSetupValidationTarget? target)
     {
@@ -266,12 +253,4 @@ public partial class PageSetupDialog : Window
             PageSetupDialogModel.PrintCommentChoices,
             PrintCommentsBox.SelectedIndex,
             WorksheetPrintComments.None);
-}
-
-public enum PageSetupDialogAction
-{
-    Ok,
-    Print,
-    PrintPreview,
-    Options
 }

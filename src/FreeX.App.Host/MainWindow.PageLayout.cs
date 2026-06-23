@@ -584,30 +584,46 @@ public partial class MainWindow
             return;
 
         var fields = dialog.Fields;
-        var validation = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
-        if (!validation.Success)
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction);
+        if (!submission.Success)
         {
+            var validation = submission.Validation!;
             DialogMessageHelper.ShowWarning(
                 this,
-                validation.Error ?? UiText.Get("PageSetup_PageSetup"),
-                UiText.Get("PageSetup_PageSetup"));
+                validation.Message.Resolve(UiText.Get),
+                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
-                "Page Setup",
-                sheetId => PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()))
+        var targetCommandBuilds = CurrentGroupedEditSheetIds()
+            .Select(sheetId => submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheetId))
+            .ToList();
+        var invalidTargetCommand = targetCommandBuilds.FirstOrDefault(build => !build.Success);
+        if (invalidTargetCommand is not null)
+        {
+            var validation = invalidTargetCommand.Validation!;
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation.Message.Resolve(UiText.Get),
+                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
+            return;
+        }
+
+        var command = targetCommandBuilds.Count > 1
+            ? new CompositeWorkbookCommand("Page Setup", targetCommandBuilds.Select(build => build.Command!).ToList())
+            : targetCommandBuilds[0].Command!;
+        if (!TryExecuteCommand(command, "Page Setup"))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
-        if (dialog.RequestedAction == PageSetupDialogAction.Options)
+        if (submission.Submission!.RequestedAction == PageSetupDialogAction.Options)
         {
             ShowPageSetupPrinterOptions();
             return;
         }
 
-        if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
+        if (submission.Submission.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
             PrintButton_Click(this, new RoutedEventArgs());
     }
 

@@ -471,7 +471,8 @@ public sealed class PageSetupDialogXamlTests
             "PageSetupDialog.xaml.cs");
 
         source.Should().Contain("var fields = dialog.Fields");
-        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
         source.Should().Contain("Header = Header");
@@ -491,7 +492,7 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("var fields = dialog.Fields");
         source.Should().Contain("PrintAreaText = PrintAreaBox.Text");
-        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
     }
 
     [Fact]
@@ -509,9 +510,9 @@ public sealed class PageSetupDialogXamlTests
                 SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
-                var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, dialog.Fields);
-                build.Success.Should().BeTrue(build.Error);
-                var outcome = build.Plan!.ToComposite().Apply(new TestCommandContext(workbook));
+                var build = PageSetupSubmissionPlanner.TryBuild(sheet, dialog.Fields);
+                build.Success.Should().BeTrue(build.Validation?.Message.FallbackText);
+                var outcome = build.Submission!.CommandPlan.ToComposite().Apply(new TestCommandContext(workbook));
 
                 outcome.Success.Should().BeTrue(outcome.ErrorMessage);
                 sheet.CenterHorizontallyOnPage.Should().BeTrue();

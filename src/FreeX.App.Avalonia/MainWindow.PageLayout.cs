@@ -60,14 +60,14 @@ public sealed partial class MainWindow
 
     private void ApplyPageSetupFields(Sheet sheet, PageSetupDialogFields fields)
     {
-        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
-        if (!build.Success)
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
+        if (!submission.Success)
         {
-            ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_PageSetupInvalid"));
+            ShowEditIssue(ResolvePageSetupValidationIssue(submission.Validation!));
             return;
         }
 
-        var plan = build.Plan!;
+        var plan = submission.Submission!.CommandPlan;
         var pageSetupResult = _session.ExecuteReviewCommand(plan.PageSetupCommand);
         if (!pageSetupResult.Success)
         {
@@ -87,6 +87,9 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
     }
+
+    private static string ResolvePageSetupValidationIssue(PageSetupSubmissionValidation validation) =>
+        validation.Message.Resolve(UiText.Get, "ShellLoc_PageSetupInvalid");
 
     private bool ApplyPrintArea(Sheet sheet, GridRange? printArea, IWorkbookCommand command)
     {
@@ -732,11 +735,12 @@ public sealed partial class MainWindow
         void Accept()
         {
             var fields = ReadFields();
-            var build = PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields);
-            if (!build.Success)
+            var submission = PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields);
+            if (!submission.Success)
             {
-                SelectValidationRoute(PageSetupDialogModel.GetValidationRoute(build.Target));
-                validationText.Text = build.Error;
+                var validation = submission.Validation!;
+                SelectValidationRoute(validation.Route);
+                validationText.Text = ResolvePageSetupValidationIssue(validation);
                 validationText.IsVisible = true;
                 return;
             }

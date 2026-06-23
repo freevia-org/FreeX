@@ -44,7 +44,10 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanInsertPageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.PlanRemovePageBreaks(");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks)");
-        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
+        source.Should().Contain("TryExecuteCommand(command, \"Page Setup\")");
+        source.Should().NotContain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(_currentSheetId, isChecked, sheet?.PrintHeadings ?? false)");
         source.Should().Contain("PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(_currentSheetId, sheet?.PrintGridlines ?? false, isChecked)");
