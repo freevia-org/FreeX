@@ -1356,6 +1356,20 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set the wrapping mode for the currently selected image. No-op without an image selection.
+    /// The backing model and DOCX writer already carry the Word-style wrapping modes.
+    /// </summary>
+    public void SetSelectedImageWrapping(ImageWrapping wrapping)
+    {
+        CommitToModel();
+        var image = SelectedImageLocation().Image;
+        if (image is null)
+            return;
+        image.Wrapping = wrapping;
+        Render();
+    }
+
+    /// <summary>
     /// Toggle a box border on every paragraph touched by the current selection/caret. If any selected
     /// paragraph lacks a border, all get one (<paramref name="colorHex"/>/<paramref name="widthPt"/>);
     /// otherwise the border is cleared. Re-renders so it round-trips through the model on the next commit.
@@ -2317,7 +2331,10 @@ public sealed class DocumentView : RichTextBox
     private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocation()
     {
         // An InlineUIContainer hosting our tagged Image is the selected picture; find it around the caret.
-        var image = ImageInElement(CaretPosition?.Parent as TextElement)
+        var image = ImageAtPointer(CaretPosition)
+            ?? ImageAtPointer(Selection.Start)
+            ?? ImageAtPointer(Selection.End)
+            ?? ImageInElement(CaretPosition?.Parent as TextElement)
             ?? ImageInElement(Selection.Start.Parent as TextElement)
             ?? ImageInElement(Selection.End.Parent as TextElement);
         if (image is null)
@@ -2336,6 +2353,21 @@ public sealed class DocumentView : RichTextBox
         }
         return (-1, -1, null);
     }
+
+    private static InlineImage? ImageAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (ImageInElement(pointer.Parent as TextElement) is { } parentImage)
+            return parentImage;
+        return ImageFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? ImageFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static InlineImage? ImageFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: Image { Tag: InlineImage modelImage } }
+            ? modelImage
+            : null;
 
     private static InlineImage? ImageInElement(TextElement? element)
     {

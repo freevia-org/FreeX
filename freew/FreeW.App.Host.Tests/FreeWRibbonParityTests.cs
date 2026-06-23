@@ -121,7 +121,15 @@ public sealed class FreeWRibbonParityTests
             .NotContain(new[] { "media", "quick-parts" });
         CommandIds(insert)
             .Should()
-            .NotContain(new[] { "freew.image-size", "freew.image-alt-text", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right" });
+            .NotContain(new[]
+            {
+                "freew.image-size",
+                "freew.image-alt-text",
+                "freew.image-wrap",
+                "freew.image-align-left",
+                "freew.image-align-center",
+                "freew.image-align-right"
+            });
 
         var backedParityCommandIds = new[]
         {
@@ -666,6 +674,50 @@ public sealed class FreeWRibbonParityTests
 
         foreach (var commandId in CommandIds(tableDesign))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
+    }
+
+    [StaFact]
+    public void PictureFormat_ContextualTabExposesBackedWrapTextMenu()
+    {
+        var definition = FreeWRibbon.Build();
+        var picture = definition.FindTab("picture-format");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        picture.Should().NotBeNull();
+        picture!.Context.Should().NotBeNull();
+        picture.Context!.ActivationKey.Should().Be("picture");
+        picture.Context.Label.Should().Be("Picture Tools");
+        picture.Context.Color.Should().Be(RibbonContextColor.Orange);
+        picture.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("picture-arrange", "picture-size");
+
+        CommandIds(picture.FindGroup("picture-arrange")!)
+            .Should()
+            .Equal("freew.image-wrap", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right");
+
+        var wrap = picture.FindGroup("picture-arrange")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.image-wrap");
+        wrap.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.image-wrap-inline", "In Line with Text"),
+                ("freew.image-wrap-square", "Square"),
+                ("freew.image-wrap-tight", "Tight"),
+                ("freew.image-wrap-top-bottom", "Top and Bottom"),
+                ("freew.image-wrap-behind", "Behind Text"),
+                ("freew.image-wrap-front", "In Front of Text"));
+
+        foreach (var commandId in MenuCommandIds(wrap).Concat(CommandIds(picture)))
+        {
+            if (commandId == "freew.image-wrap")
+                continue;
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Picture Format");
+        }
     }
 
     [StaFact]

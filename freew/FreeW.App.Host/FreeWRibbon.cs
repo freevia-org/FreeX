@@ -527,6 +527,15 @@ internal static class FreeWRibbon
             {
                 tab.Group("picture-arrange", "Arrange", "A", 100, g =>
                 {
+                    g.Medium("freew.image-wrap", "Wrap Text", RibbonCommandIconKind.Wrap, menu: m =>
+                    {
+                        m.Item("freew.image-wrap-inline", "In Line with Text", "I");
+                        m.Item("freew.image-wrap-square", "Square", "S");
+                        m.Item("freew.image-wrap-tight", "Tight", "T");
+                        m.Item("freew.image-wrap-top-bottom", "Top and Bottom", "B");
+                        m.Item("freew.image-wrap-behind", "Behind Text", "H");
+                        m.Item("freew.image-wrap-front", "In Front of Text", "F");
+                    });
                     g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
