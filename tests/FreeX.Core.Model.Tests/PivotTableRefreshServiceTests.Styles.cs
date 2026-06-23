@@ -1204,7 +1204,8 @@ public sealed partial class PivotTableRefreshServiceTests
             .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
         CellColor? expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
                                             styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
-                                            styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase)
+                                            styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase) ||
+                                            styleName.Equals("PivotStyleMedium13", StringComparison.OrdinalIgnoreCase)
             ? null
             : styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
                 ? theme.ResolveColor(expectedSlot, 0.8)
