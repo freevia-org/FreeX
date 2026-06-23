@@ -15,10 +15,12 @@ public sealed class FileCommandsSourceTests
 
         source.Should().Contain("FileDialogRequestPlanner.BuildPerFormatOpenDialogPlan(Formats)");
         source.Should().Contain("FileDialogRequestPlanner.BuildPerFormatSaveDialogPlanFromSourceName(");
-        source.Should().Contain("Filter = OpenDialogPlan.Filter");
-        source.Should().Contain("DefaultExt = OpenDialogPlan.DefaultExtensionWithDot");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         source.Should().NotContain("FileDialogFilterBuilder.BuildPerFormatFilter(Formats)");
         source.Should().NotContain("FileDialogFilterBuilder.GetDefaultExtension(Formats)");
+        source.Should().NotContain("new OpenFileDialog");
+        source.Should().NotContain("new SaveFileDialog");
     }
 
     private static string FindRepositoryRoot()

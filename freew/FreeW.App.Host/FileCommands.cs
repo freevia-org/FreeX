@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Windows;
-using Microsoft.Win32;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using FreeW.App.Host.Editing;
@@ -267,19 +266,11 @@ internal sealed class FileCommands
             "Document",
             currentExtension);
 
-        var dialog = new SaveFileDialog
-        {
-            Filter = plan.Filter,
-            FilterIndex = plan.FilterIndex,
-            DefaultExt = plan.DefaultExtensionWithDot,
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = plan.SuggestedFileName,
-        };
-        if (dialog.ShowDialog(_window) != true)
+        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
+        if (!result.Chosen)
             return false;
 
-        var chosenExtension = Path.GetExtension(dialog.FileName);
+        var chosenExtension = Path.GetExtension(result.FileName!);
         var resolved = DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
         if (resolved is null)
         {
@@ -289,7 +280,7 @@ internal sealed class FileCommands
             return false;
         }
 
-        path = dialog.FileName;
+        path = result.FileName!;
         adapter = resolved;
         return true;
     }
@@ -297,8 +288,8 @@ internal sealed class FileCommands
     private string? PromptOpenPath()
     {
         var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters);
-        var dialog = new OpenFileDialog { Filter = plan.Filter };
-        return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
+        var result = WpfFileDialogService.ShowOpenDialog(_window, plan);
+        return result.Chosen ? result.FileName : null;
     }
 
     private void SetSaved(string path, bool suppressRecentFiles)
