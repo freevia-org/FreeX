@@ -1,0 +1,206 @@
+using FreeX.Core.Model;
+
+namespace FreeX.App.Presentation.QuickAnalysis;
+
+/// <summary>
+/// Host-facing Quick Analysis action plan. Renderers still execute native commands and own controls; this
+/// keeps the route-to-shell-action decision and small label/kind mappings in shared code.
+/// </summary>
+public enum QuickAnalysisShellActionKind
+{
+    OpenConditionalFormatDialog,
+    ApplyConditionalFormat,
+    ClearConditionalFormatting,
+    InsertChart,
+    OpenChartPicker,
+    InsertAggregateTotalFormula,
+    InsertPercentTotalFormula,
+    InsertRunningTotalFormula,
+    CreateTable,
+    CreatePivotTable,
+    InsertSparkline,
+    Deferred
+}
+
+public sealed record QuickAnalysisShellAction(
+    QuickAnalysisShellActionKind Kind,
+    QuickAnalysisCommandRoute Route,
+    QuickAnalysisConditionalFormatCommand? ConditionalFormat = null,
+    string? ConditionalFormatDialogTitle = null,
+    ChartType? ChartType = null,
+    string? TotalFunction = null,
+    SparklineKind? SparklineKind = null,
+    string? SparklineDialogKind = null,
+    string? DeferredNote = null);
+
+public sealed record QuickAnalysisShellCapabilities(
+    bool OpensConditionalFormatDialogs,
+    bool SupportsClearConditionalFormatting,
+    bool SupportsChartPicker,
+    bool SupportsPercentTotalFormulas,
+    bool SupportsRunningTotalFormulas,
+    bool SupportsPivotTables,
+    string DeferredPlatformName)
+{
+    public static QuickAnalysisShellCapabilities DialogBacked { get; } =
+        new(
+            OpensConditionalFormatDialogs: true,
+            SupportsClearConditionalFormatting: true,
+            SupportsChartPicker: true,
+            SupportsPercentTotalFormulas: true,
+            SupportsRunningTotalFormulas: true,
+            SupportsPivotTables: true,
+            DeferredPlatformName: "Windows");
+
+    public static QuickAnalysisShellCapabilities DirectApplyLimited { get; } =
+        new(
+            OpensConditionalFormatDialogs: false,
+            SupportsClearConditionalFormatting: false,
+            SupportsChartPicker: false,
+            SupportsPercentTotalFormulas: false,
+            SupportsRunningTotalFormulas: false,
+            SupportsPivotTables: false,
+            DeferredPlatformName: "macOS");
+}
+
+public static class QuickAnalysisShellActionPlanner
+{
+    public static QuickAnalysisShellAction Plan(
+        QuickAnalysisDisplayItem item,
+        QuickAnalysisShellCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        return Plan(QuickAnalysisCommandRouter.Route(item), capabilities);
+    }
+
+    public static QuickAnalysisShellAction Plan(
+        QuickAnalysisCommandRoute route,
+        QuickAnalysisShellCapabilities capabilities)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(capabilities);
+
+        return route.Kind switch
+        {
+            QuickAnalysisCommandKind.ConditionalFormat
+                when route.ConditionalFormat is { } command &&
+                     capabilities.OpensConditionalFormatDialogs =>
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.OpenConditionalFormatDialog,
+                    route,
+                    ConditionalFormat: command,
+                    ConditionalFormatDialogTitle: ConditionalFormatDialogTitle(command)),
+
+            QuickAnalysisCommandKind.ConditionalFormat
+                when route.ConditionalFormat is { } command =>
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.ApplyConditionalFormat,
+                    route,
+                    ConditionalFormat: command),
+
+            QuickAnalysisCommandKind.ClearConditionalFormatting
+                when capabilities.SupportsClearConditionalFormatting =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.ClearConditionalFormatting, route),
+
+            QuickAnalysisCommandKind.InsertChart
+                when route.ChartType is { } chartType =>
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.InsertChart,
+                    route,
+                    ChartType: chartType),
+
+            QuickAnalysisCommandKind.MoreCharts
+                when capabilities.SupportsChartPicker =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.OpenChartPicker, route),
+
+            QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.Aggregate &&
+                     IsAutoSumAggregate(route.TotalFunction) =>
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.InsertAggregateTotalFormula,
+                    route,
+                    TotalFunction: route.TotalFunction),
+
+            QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.PercentTotal &&
+                     capabilities.SupportsPercentTotalFormulas =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.InsertPercentTotalFormula, route),
+
+            QuickAnalysisCommandKind.InsertTotalFormula
+                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.RunningTotal &&
+                     capabilities.SupportsRunningTotalFormulas =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.InsertRunningTotalFormula, route),
+
+            QuickAnalysisCommandKind.Table =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.CreateTable, route),
+
+            QuickAnalysisCommandKind.PivotTable
+                when capabilities.SupportsPivotTables =>
+                new QuickAnalysisShellAction(QuickAnalysisShellActionKind.CreatePivotTable, route),
+
+            QuickAnalysisCommandKind.Sparkline
+                when route.SparklineKind is { } sparklineKind =>
+                new QuickAnalysisShellAction(
+                    QuickAnalysisShellActionKind.InsertSparkline,
+                    route,
+                    SparklineKind: sparklineKind,
+                    SparklineDialogKind: SparklineDialogKind(sparklineKind)),
+
+            _ => Deferred(route, capabilities)
+        };
+    }
+
+    public static string ConditionalFormatDialogTitle(QuickAnalysisConditionalFormatCommand command) =>
+        command switch
+        {
+            QuickAnalysisConditionalFormatCommand.DataBar => "Data Bar",
+            QuickAnalysisConditionalFormatCommand.ColorScale => "Color Scale",
+            QuickAnalysisConditionalFormatCommand.IconSet => "Icon Set",
+            QuickAnalysisConditionalFormatCommand.GreaterThan => "Greater Than",
+            QuickAnalysisConditionalFormatCommand.LessThan => "Less Than",
+            QuickAnalysisConditionalFormatCommand.Between => "Between",
+            QuickAnalysisConditionalFormatCommand.EqualTo => "Equal To",
+            QuickAnalysisConditionalFormatCommand.TextContains => "Text Contains",
+            QuickAnalysisConditionalFormatCommand.DateOccurring => "Date Occurring",
+            QuickAnalysisConditionalFormatCommand.DuplicateValues => "Duplicate Values",
+            QuickAnalysisConditionalFormatCommand.Top10Items => "Top 10 Items",
+            QuickAnalysisConditionalFormatCommand.Top10Percent => "Top 10%",
+            QuickAnalysisConditionalFormatCommand.Bottom10Items => "Bottom 10 Items",
+            QuickAnalysisConditionalFormatCommand.Bottom10Percent => "Bottom 10%",
+            QuickAnalysisConditionalFormatCommand.AboveAverage => "Above Average",
+            QuickAnalysisConditionalFormatCommand.BelowAverage => "Below Average",
+            _ => command.ToString()
+        };
+
+    public static string SparklineDialogKind(SparklineKind kind) =>
+        kind switch
+        {
+            SparklineKind.Column => "column",
+            SparklineKind.WinLoss => "winloss",
+            _ => "line"
+        };
+
+    private static bool IsAutoSumAggregate(string? function) =>
+        string.Equals(function, "SUM", StringComparison.Ordinal) ||
+        string.Equals(function, "AVERAGE", StringComparison.Ordinal) ||
+        string.Equals(function, "COUNT", StringComparison.Ordinal) ||
+        string.Equals(function, "MAX", StringComparison.Ordinal) ||
+        string.Equals(function, "MIN", StringComparison.Ordinal);
+
+    private static QuickAnalysisShellAction Deferred(
+        QuickAnalysisCommandRoute route,
+        QuickAnalysisShellCapabilities capabilities) =>
+        new(
+            QuickAnalysisShellActionKind.Deferred,
+            route,
+            DeferredNote: route.Kind switch
+            {
+                QuickAnalysisCommandKind.PivotTable =>
+                    $"Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.",
+                QuickAnalysisCommandKind.InsertTotalFormula =>
+                    $"This total is not yet available on {capabilities.DeferredPlatformName}.",
+                _ => route.DeferredNote
+            });
+}
