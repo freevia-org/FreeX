@@ -2176,7 +2176,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.SelectedImage() is null)
             {
-                MessageBox.Show("Select a picture first.", "Wrap Text", MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Wrap Text");
                 return;
             }
 
