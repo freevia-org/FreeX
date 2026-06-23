@@ -1517,6 +1517,21 @@
   <data name="ShellLoc_SortedAToZ" xml:space="preserve"><value>Sorted A to Z</value></data>
   <data name="ShellLoc_SortedZToA" xml:space="preserve"><value>Sorted Z to A</value></data>
   <data name="ShellLoc_FilterUpdateFailed" xml:space="preserve"><value>Filter update failed.</value></data>
+  <data name="EvaluateFormula_Title" xml:space="preserve"><value>Evaluate Formula</value></data>
+  <data name="EvaluateFormula_SelectFormulaMessage" xml:space="preserve"><value>Select a cell that contains a formula.</value></data>
+  <data name="EvaluateFormula_EvaluationLabel" xml:space="preserve"><value>Evaluation:</value></data>
+  <data name="EvaluateFormula_FormulaPrefix" xml:space="preserve"><value>Formula: </value></data>
+  <data name="EvaluateFormula_ResultText" xml:space="preserve"><value>Result: {0}</value></data>
+  <data name="EvaluateFormula_StepPositionText" xml:space="preserve"><value>Step {0} of {1}</value></data>
+  <data name="EvaluateFormula_NoIntermediateStepsText" xml:space="preserve"><value>No intermediate evaluation steps.</value></data>
+  <data name="EvaluateFormula_ValueText" xml:space="preserve"><value>Value: {0}</value></data>
+  <data name="EvaluateFormula_EvaluateButton" xml:space="preserve"><value>Evaluate</value></data>
+  <data name="EvaluateFormula_StepInButton" xml:space="preserve"><value>Step In</value></data>
+  <data name="EvaluateFormula_StepOutButton" xml:space="preserve"><value>Step Out</value></data>
+  <data name="EvaluateFormula_RestartButton" xml:space="preserve"><value>Restart</value></data>
+  <data name="EvaluateFormula_CloseButton" xml:space="preserve"><value>Close</value></data>
+  <data name="EvaluateFormula_HelpButton" xml:space="preserve"><value>Help on this Function</value></data>
+  <data name="EvaluateFormula_HelpBody" xml:space="preserve"><value>Use Evaluate to step through the selected formula. Step In opens a referenced formula when one is available; Step Out returns to the containing formula.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>
@@ -1529,4 +1544,65 @@
   <data name="AvaloniaNativeMenu_WorkbookStatistics" xml:space="preserve"><value>Workbook Statistics...</value></data>
   <data name="AvaloniaNativeMenu_CloseWorkbook" xml:space="preserve"><value>Close Workbook</value></data>
   <data name="AvaloniaNativeMenu_NewSheet" xml:space="preserve"><value>New Sheet</value></data>
+  <data name="MainWindow_Text_Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Progress_LoadingFileBuildingWorkbook" xml:space="preserve"><value>Loading file (building workbook)</value></data>
+  <data name="Progress_LoadingFileCalculating" xml:space="preserve"><value>Loading file (calculating)</value></data>
+  <data name="Progress_LoadingFileCheckingPackage" xml:space="preserve"><value>Loading file (checking package)</value></data>
+  <data name="Progress_LoadingFileCheckingWorkbookParts" xml:space="preserve"><value>Loading file (checking workbook parts)</value></data>
+  <data name="Progress_LoadingFileDetectingFeatures" xml:space="preserve"><value>Loading file (detecting features)</value></data>
+  <data name="Progress_LoadingFileDone" xml:space="preserve"><value>Loading file (done)</value></data>
+  <data name="Progress_LoadingFileEvaluatingFormulas" xml:space="preserve"><value>Loading file (evaluating formulas)</value></data>
+  <data name="Progress_LoadingFileInspecting" xml:space="preserve"><value>Loading file (inspecting)</value></data>
+  <data name="Progress_LoadingFileLayingOutWorksheet" xml:space="preserve"><value>Loading file (laying out worksheet)</value></data>
+  <data name="Progress_LoadingFileLoadingStyles" xml:space="preserve"><value>Loading file (loading styles)</value></data>
+  <data name="Progress_LoadingFileParsing" xml:space="preserve"><value>Loading file (parsing)</value></data>
+  <data name="Progress_LoadingFilePhaseFormat" xml:space="preserve"><value>Loading file ({0})</value></data>
+  <data name="Progress_LoadingFilePreparing" xml:space="preserve"><value>Loading file (preparing)</value></data>
+  <data name="Progress_LoadingFilePreparingView" xml:space="preserve"><value>Loading file (preparing view)</value></data>
+  <data name="Progress_LoadingFileReading" xml:space="preserve"><value>Loading file (reading)</value></data>
+  <data name="Progress_LoadingFileReadingBytes" xml:space="preserve"><value>Loading file (reading bytes)</value></data>
+  <data name="Progress_LoadingFileReadingWorksheets" xml:space="preserve"><value>Loading file (reading worksheets)</value></data>
+  <data name="Progress_LoadingFileRefreshingValues" xml:space="preserve"><value>Loading file (refreshing values)</value></data>
+  <data name="Progress_LoadingFileRestoringSelection" xml:space="preserve"><value>Loading file (restoring selection)</value></data>
+  <data name="Progress_LoadingFileWorking" xml:space="preserve"><value>Loading file (working)</value></data>
+  <data name="Progress_OpeningWorkbook" xml:space="preserve"><value>Opening workbook</value></data>
+  <data name="Progress_ExportingFile" xml:space="preserve"><value>Exporting file</value></data>
+  <data name="Progress_ExportingFileRendering" xml:space="preserve"><value>Exporting file (rendering pages)</value></data>
+  <data name="Progress_ExportingFileWriting" xml:space="preserve"><value>Exporting file (writing)</value></data>
+  <data name="Progress_SavingFileBuildingWorkbookParts" xml:space="preserve"><value>Saving file (building workbook parts)</value></data>
+  <data name="Progress_SavingFileDone" xml:space="preserve"><value>Saving file (done)</value></data>
+  <data name="Progress_SavingFileFlushingPackage" xml:space="preserve"><value>Saving file (flushing package)</value></data>
+  <data name="Progress_SavingFilePackagingSheets" xml:space="preserve"><value>Saving file (packaging sheets)</value></data>
+  <data name="Progress_SavingFilePhaseFormat" xml:space="preserve"><value>Saving file ({0})</value></data>
+  <data name="Progress_SavingFilePreparing" xml:space="preserve"><value>Saving file (preparing)</value></data>
+  <data name="Progress_SavingFileSerializing" xml:space="preserve"><value>Saving file (serializing)</value></data>
+  <data name="Progress_SavingFileWriting" xml:space="preserve"><value>Saving file (writing)</value></data>
+  <data name="Progress_SavingFileWritingBytes" xml:space="preserve"><value>Saving file (writing bytes)</value></data>
+  <data name="Progress_SavingFileWorking" xml:space="preserve"><value>Saving file (working)</value></data>
+  <data name="Progress_SavingWorkbook" xml:space="preserve"><value>Saving workbook</value></data>
+  <data name="StatusBar_AverageFormat" xml:space="preserve"><value>Average: {0}</value></data>
+  <data name="StatusBar_CountFormat" xml:space="preserve"><value>Count: {0}</value></data>
+  <data name="StatusBar_NumericalCountFormat" xml:space="preserve"><value>Numerical Count: {0}</value></data>
+  <data name="StatusBar_SumFormat" xml:space="preserve"><value>Sum: {0}</value></data>
+  <data name="StatusBar_MinFormat" xml:space="preserve"><value>Min: {0}</value></data>
+  <data name="StatusBar_MaxFormat" xml:space="preserve"><value>Max: {0}</value></data>
+  <data name="StatusBar_Average" xml:space="preserve"><value>Average</value></data>
+  <data name="StatusBar_CellMode" xml:space="preserve"><value>Cell Mode</value></data>
+  <data name="StatusBar_Count" xml:space="preserve"><value>Count</value></data>
+  <data name="StatusBar_CustomizeStatusBar" xml:space="preserve"><value>Customize Status Bar</value></data>
+  <data name="StatusBar_EditMode" xml:space="preserve"><value>Edit</value></data>
+  <data name="StatusBar_EndMode" xml:space="preserve"><value>End Mode</value></data>
+  <data name="StatusBar_EnterMode" xml:space="preserve"><value>Enter</value></data>
+  <data name="StatusBar_PointMode" xml:space="preserve"><value>Point</value></data>
+  <data name="StatusBar_ExtendSelectionMode" xml:space="preserve"><value>Extend Selection</value></data>
+  <data name="StatusBar_AddToSelectionMode" xml:space="preserve"><value>Add to Selection</value></data>
+  <data name="StatusBar_Maximum" xml:space="preserve"><value>Maximum</value></data>
+  <data name="StatusBar_Minimum" xml:space="preserve"><value>Minimum</value></data>
+  <data name="StatusBar_NumericalCount" xml:space="preserve"><value>Numerical Count</value></data>
+  <data name="StatusBar_PageNumber" xml:space="preserve"><value>Page Number</value></data>
+  <data name="StatusBar_SelectionMode" xml:space="preserve"><value>Selection Mode</value></data>
+  <data name="StatusBar_Sum" xml:space="preserve"><value>Sum</value></data>
+  <data name="StatusBar_ViewShortcuts" xml:space="preserve"><value>View Shortcuts</value></data>
+  <data name="StatusBar_Zoom" xml:space="preserve"><value>Zoom</value></data>
+  <data name="StatusBar_ZoomSlider" xml:space="preserve"><value>Zoom Slider</value></data>
 </root>

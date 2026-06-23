@@ -126,6 +126,18 @@ public sealed class LocTests
         keys.Should().Contain("SelectionPane_SearchLabel");
         keys.Should().Contain("SelectionPane_FilterLabel");
         keys.Should().Contain("SelectionPane_RenameButton");
+        keys.Should().Contain("Progress_OpeningWorkbook");
+        keys.Should().Contain("Progress_ExportingFileRendering");
+        keys.Should().Contain("Progress_LoadingFileReadingWorksheets");
+        keys.Should().Contain("Progress_SavingFilePhaseFormat");
+        keys.Should().Contain("Progress_SavingFileFlushingPackage");
+        keys.Should().Contain("MainWindow_Text_Ready");
+        keys.Should().Contain("StatusBar_AverageFormat");
+        keys.Should().Contain("StatusBar_EditMode");
+        keys.Should().Contain("StatusBar_CustomizeStatusBar");
+        keys.Should().Contain("EvaluateFormula_Title");
+        keys.Should().Contain("EvaluateFormula_EvaluateButton");
+        keys.Should().Contain("EvaluateFormula_SelectFormulaMessage");
     }
 
     [Fact]

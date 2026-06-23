@@ -13,7 +13,6 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
-using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -323,10 +322,23 @@ public sealed partial class MainWindow
             async () => { await ShowInsertHyperlinkInputDialogAsync(); });
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            new CellAddress(_session.ActiveSheet.Id, 2, 3),
-            ShowEvaluateFormulaDialogAsync);
+        ShowEvaluateFormulaDialogAsync(CreateFormulaEvaluationSummary(_session.ActiveSheet.Id));
+
+    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
+    {
+        var address = new CellAddress(sheetId, 6, 4);
+        return new FormulaEvaluationSummary(
+            sheetId,
+            "Sheet1",
+            address,
+            "=SUM(D2:D5)",
+            "469",
+            [
+                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
+                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
+                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
+            ]);
+    }
 
     private Task ShowWatchWindowParityDialogAsync() =>
         ShowWithParitySelectionAsync(
@@ -378,19 +390,17 @@ public sealed partial class MainWindow
         {
             var items = new[]
             {
-                new SelectionPaneViewPlanner.Item(
+                new SelectionPaneItem(
                     SelectionPaneObjectKind.Chart,
                     chart.Id,
                     chart.Name ?? "Revenue Chart",
-                    UiText.Get("SelectionPane_KindChart"),
                     chart.IsVisible,
                     CanMoveUp: false,
                     CanMoveDown: false),
-                new SelectionPaneViewPlanner.Item(
+                new SelectionPaneItem(
                     SelectionPaneObjectKind.Shape,
                     shape.Id,
                     shape.Name ?? "Rectangle 1",
-                    UiText.Get("SelectionPane_KindShape"),
                     shape.IsVisible,
                     CanMoveUp: false,
                     CanMoveDown: false),

@@ -95,22 +95,29 @@ public sealed partial class MainWindow
     /// Resolves the selected picture on the active sheet, or reports an explanatory status and returns null.
     /// </summary>
     private bool HasSelectedPictureForRibbonCommand() =>
-        _selectedDrawingObjectKind == SelectionPaneObjectKind.Picture &&
-        _selectedDrawingObjectId is { } id &&
-        _session.ActiveSheet.Pictures.Any(p => p.Id == id);
+        DrawingTargetResolver.ResolveSelectedPicture(
+                _session.ActiveSheet,
+                _selectedDrawingObjectKind,
+                _selectedDrawingObjectId)
+            .HasTarget;
 
     private PictureModel? ResolveSelectedPicture()
     {
-        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Picture || _selectedDrawingObjectId is not { } id)
+        var result = DrawingTargetResolver.ResolveSelectedPicture(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        if (result.Target is { } picture)
+            return picture;
+
+        if (result.Failure == DrawingObjectSelectionFailure.MissingSelection)
         {
             RefreshShell(UiText.Get("Drawing_SelectPictureFirst"));
             return null;
         }
 
-        var picture = _session.ActiveSheet.Pictures.FirstOrDefault(p => p.Id == id);
-        if (picture is null)
-            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-        return picture;
+        RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+        return null;
     }
 
     /// <summary>
@@ -118,16 +125,21 @@ public sealed partial class MainWindow
     /// </summary>
     private DrawingShapeModel? ResolveSelectedShape()
     {
-        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Shape || _selectedDrawingObjectId is not { } id)
+        var result = DrawingTargetResolver.ResolveSelectedDrawingShape(
+            _session.ActiveSheet,
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId);
+        if (result.Target is { } shape)
+            return shape;
+
+        if (result.Failure == DrawingObjectSelectionFailure.MissingSelection)
         {
             RefreshShell(UiText.Get("Drawing_SelectShapeFirst"));
             return null;
         }
 
-        var shape = _session.ActiveSheet.DrawingShapes.FirstOrDefault(s => s.Id == id);
-        if (shape is null)
-            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
-        return shape;
+        RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+        return null;
     }
 
     /// <summary>Runs a drawing-object command and reports success/failure on the status bar.</summary>

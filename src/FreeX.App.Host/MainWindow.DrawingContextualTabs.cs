@@ -39,7 +39,7 @@ public partial class MainWindow
 
     private DrawingObjectTarget? GetSelectedDrawingObjectContextualTarget(Sheet? sheet)
     {
-        var selectedKind = GetSelectedDrawingObjectTargetKind();
+        var selectedKind = GetSelectedDrawingObjectSelectionKind();
         if (selectedKind is null || SheetGrid.SelectedObjectId == Guid.Empty)
             return null;
 
@@ -54,18 +54,11 @@ public partial class MainWindow
 
     private PictureModel? GetSelectedPictureOnSheet(Sheet? sheet)
     {
-        if (sheet is null ||
-            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Picture ||
-            SheetGrid.SelectedObjectId == Guid.Empty)
-            return null;
-
-        foreach (var picture in sheet.Pictures)
-        {
-            if (picture.Id == SheetGrid.SelectedObjectId && picture.IsVisible)
-                return picture;
-        }
-
-        return null;
+        return DrawingTargetResolver.ResolveSelectedPicture(
+                sheet,
+                GetSelectedDrawingObjectSelectionKind(),
+                SheetGrid.SelectedObjectId)
+            .Target;
     }
 
     private void SetDrawingObjectContextualTabsVisible(bool shapeVisible, bool pictureVisible)

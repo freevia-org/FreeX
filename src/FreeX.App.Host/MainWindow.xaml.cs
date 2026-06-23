@@ -64,7 +64,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private WorkbookId? _lastQuickAccessCommandStateWorkbookId;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
     private readonly StatusBarViewModelCache _statusBarDisplayStateCache =
-        new(UiTextStatusBarTextProvider.Instance);
+        new(new ResourceKeyStatusBarTextProvider(UiText.Get));
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarDisplayState;
     // Cache for UpdateStatusStatsPanelAutomation: avoid the string[]/LINQ allocation when the inputs are unchanged.
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarAutomationState;

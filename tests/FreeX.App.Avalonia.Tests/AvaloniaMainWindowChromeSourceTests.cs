@@ -299,10 +299,14 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         contextualTabsSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
+        contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
+        contextualTabsSource.Should().Contain("DrawingTargetResolver.ResolveSelectedDrawingShape(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         formatDialogSource.Should().Contain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
 
+        contextualTabsSource.Should().NotContain("_session.ActiveSheet.Pictures.FirstOrDefault(");
+        contextualTabsSource.Should().NotContain("_session.ActiveSheet.DrawingShapes.FirstOrDefault(");
         contextualTabsSource.Should().NotContain("new MoveSelectionPaneObjectCommand(");
         contextualTabsSource.Should().NotContain("new BringDrawingShapeForwardCommand(");
         contextualTabsSource.Should().NotContain("new SendDrawingShapeBackwardCommand(");

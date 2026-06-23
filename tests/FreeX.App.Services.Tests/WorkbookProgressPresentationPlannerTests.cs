@@ -158,6 +158,14 @@ public sealed class WorkbookProgressPresentationPlannerTests
     }
 
     [Fact]
+    public void RequiredResourceKeys_HasNoDuplicates()
+    {
+        WorkbookProgressPresentationPlanner.RequiredResourceKeys
+            .Should()
+            .OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void WorkbookOpenAndSaveServices_UseSharedProgressRunner()
     {
         var openSource = File.ReadAllText(RepositoryFileLocator.Find(

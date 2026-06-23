@@ -742,7 +742,9 @@ public partial class MainWindow
         bool includePictures)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        var selectedKind = preferredKind ?? GetSelectedDrawingObjectTargetKind();
+        var selectedKind = preferredKind is { } kind
+            ? DrawingObjectKindMapper.ToSelectionPaneObjectKind(kind)
+            : GetSelectedDrawingObjectSelectionKind();
         var selectedObjectId = selectedKind is null ? Guid.Empty : SheetGrid.SelectedObjectId;
         return DrawingTargetResolver.GetTargetDrawingObject(
             sheet,
@@ -752,14 +754,19 @@ public partial class MainWindow
             includePictures);
     }
 
-    private DrawingObjectTargetKind? GetSelectedDrawingObjectTargetKind() =>
+    private SelectionPaneObjectKind? GetSelectedDrawingObjectSelectionKind() =>
         SheetGrid.SelectedObjectKind switch
         {
-            FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture,
-            FreeX.App.UI.ObjectKind.Shape => DrawingObjectTargetKind.Shape,
-            FreeX.App.UI.ObjectKind.TextBox => DrawingObjectTargetKind.TextBox,
+            FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture,
+            FreeX.App.UI.ObjectKind.Shape => SelectionPaneObjectKind.Shape,
+            FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
             _ => null
         };
+
+    private DrawingObjectTargetKind? GetSelectedDrawingObjectTargetKind() =>
+        GetSelectedDrawingObjectSelectionKind() is { } kind
+            ? DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind)
+            : null;
 
     private DrawingObjectZOrderTarget? GetTargetDrawingZOrderObject(
         SheetId sheetId,

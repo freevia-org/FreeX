@@ -1,10 +1,9 @@
-using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
-internal static class SelectionPaneGroupedCommandPlanner
+public static class SelectionPaneGroupedCommandPlanner
 {
     public static bool HasChanges(SelectionPaneDialogResult result) =>
         result.RenameChanges.Count > 0 ||
@@ -227,7 +226,7 @@ internal static class SelectionPaneGroupedCommandPlanner
         left.Row == right.Row && left.Col == right.Col;
 
     private static IWorkbookCommand CreateMissingTargetCommand() =>
-        new FailedWorkbookCommand("Selection pane object was not found.");
+        new MissingSelectionPaneObjectCommand();
 
     private readonly record struct SelectionPaneObjectSignature(
         CellAddress Anchor,
@@ -235,4 +234,16 @@ internal static class SelectionPaneGroupedCommandPlanner
         int AnchorOrdinal);
 
     private readonly record struct SelectionPaneObjectSnapshot(Guid Id, CellAddress Anchor);
+
+    private sealed class MissingSelectionPaneObjectCommand : IWorkbookCommand
+    {
+        public string Label => "Selection Pane";
+
+        public CommandOutcome Apply(ICommandContext ctx) =>
+            new(false, "Selection pane object was not found.");
+
+        public void Revert(ICommandContext ctx)
+        {
+        }
+    }
 }

@@ -75,7 +75,7 @@ public static class DrawingObjectCommandPlanner
         DrawingObjectTargetKind kind,
         Guid objectId,
         double degrees) =>
-        new SetDrawingObjectRotationCommand(sheetId, ToSelectionPaneObjectKind(kind), objectId, degrees);
+        new SetDrawingObjectRotationCommand(sheetId, DrawingObjectKindMapper.ToSelectionPaneObjectKind(kind), objectId, degrees);
 
     public static IWorkbookCommand BuildRotateCommand(
         SheetId sheetId,
@@ -118,22 +118,10 @@ public static class DrawingObjectCommandPlanner
         BuildAltTextCommand(sheetId, RequireDrawingObjectTargetKind(kind), objectId, altText);
 
     public static SelectionPaneObjectKind ToSelectionPaneObjectKind(DrawingObjectTargetKind kind) =>
-        kind switch
-        {
-            DrawingObjectTargetKind.Picture => SelectionPaneObjectKind.Picture,
-            DrawingObjectTargetKind.Shape => SelectionPaneObjectKind.Shape,
-            DrawingObjectTargetKind.TextBox => SelectionPaneObjectKind.TextBox,
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Drawing object kind is not supported.")
-        };
+        DrawingObjectKindMapper.ToSelectionPaneObjectKind(kind);
 
     public static DrawingObjectTargetKind? ToDrawingObjectTargetKind(SelectionPaneObjectKind kind) =>
-        kind switch
-        {
-            SelectionPaneObjectKind.Picture => DrawingObjectTargetKind.Picture,
-            SelectionPaneObjectKind.Shape => DrawingObjectTargetKind.Shape,
-            SelectionPaneObjectKind.TextBox => DrawingObjectTargetKind.TextBox,
-            _ => null
-        };
+        DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind);
 
     private static DrawingObjectTargetKind RequireDrawingObjectTargetKind(SelectionPaneObjectKind kind) =>
         ToDrawingObjectTargetKind(kind) ??

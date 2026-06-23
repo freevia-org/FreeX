@@ -9,7 +9,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
-using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -23,16 +23,16 @@ namespace FreeX.App.Avalonia;
 /// sheet (charts, pictures, shapes, text boxes) and lets the user select one, toggle its visibility, rename it,
 /// reorder its z-order (bring forward / send backward via per-row up/down), and Show All / Hide All. All of the
 /// object-list building, the can-move-up/down reasoning, the reorder math and the change-to-Core-command
-/// translation come from the portable <see cref="SelectionPaneViewPlanner"/> so this behaves identically to the
+/// translation come from the portable <see cref="SelectionPanePlanner"/> so this behaves identically to the
 /// WPF host's Selection Pane and is reusable on macOS. Reached from the Picture/Shape Format contextual tabs'
 /// "Selection Pane" buttons (pictureFormat.selectionPane / shapeFormat.selectionPane).
 /// </summary>
 public sealed partial class MainWindow
 {
     /// <summary>A mutable working row for the Selection Pane dialog (visibility + name edited in place).</summary>
-    private sealed class SelectionPaneRow(SelectionPaneViewPlanner.Item item)
+    private sealed class SelectionPaneRow(SelectionPaneItem item)
     {
-        public SelectionPaneViewPlanner.Item Item { get; set; } = item;
+        public SelectionPaneItem Item { get; set; } = item;
         public Guid Id => Item.Id;
         public SelectionPaneObjectKind Kind => Item.Kind;
         public bool IsVisible { get; set; } = item.IsVisible;
@@ -43,13 +43,13 @@ public sealed partial class MainWindow
         OpenSelectionPaneDialogAsync(captureItems: null);
 
     private async System.Threading.Tasks.Task OpenSelectionPaneDialogAsync(
-        IReadOnlyList<SelectionPaneViewPlanner.Item>? captureItems)
+        IReadOnlyList<SelectionPaneItem>? captureItems)
     {
         if (_isOpening || _isSaving)
             return;
 
         var sheet = _session.ActiveSheet;
-        var planned = captureItems ?? SelectionPaneViewPlanner.BuildItems(sheet, SelectionPaneText());
+        var planned = captureItems ?? SelectionPanePlanner.BuildItems(sheet, SelectionPaneText());
         if (planned.Count == 0)
         {
             RefreshShell(UiText.Get("SelectionPane_NoObjects"));
@@ -94,7 +94,7 @@ public sealed partial class MainWindow
             var search = searchBox.Text?.Trim() ?? string.Empty;
             if (search.Length > 0 &&
                 !row.Name.Contains(search, System.StringComparison.OrdinalIgnoreCase) &&
-                !row.Item.KindLabel.Contains(search, System.StringComparison.OrdinalIgnoreCase))
+                !SelectionPaneKindLabel(row.Kind).Contains(search, System.StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -140,8 +140,10 @@ public sealed partial class MainWindow
                 return;
             }
 
-            moveUpButton.IsEnabled = selected.Item.CanMoveUp;
-            moveDownButton.IsEnabled = selected.Item.CanMoveDown;
+            var currentStates = ToItemStates(rows);
+            var currentIndex = rows.FindIndex(row => row.Id == selected.Id);
+            moveUpButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(currentStates, currentIndex, forward: true) >= 0;
+            moveDownButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(currentStates, currentIndex, forward: false) >= 0;
             if (!string.Equals(renameBox.Text, selected.Name, System.StringComparison.Ordinal))
                 renameBox.Text = selected.Name;
             renameButton.IsEnabled = true;
@@ -150,28 +152,24 @@ public sealed partial class MainWindow
 
         // Pending move changes accumulate across button presses (z-order is applied as a sequence of one-step
         // moves so it round-trips through the existing MoveSelectionPaneObjectCommand and undo/redo).
-        var moveChanges = new List<SelectionPaneViewPlanner.MoveChange>();
+        var moveChanges = new List<SelectionPaneMoveChange>();
 
         void Move(bool forward)
         {
             if (listBox.SelectedItem is not SelectionPaneRow selected)
                 return;
 
-            var currentItems = ToItems(rows);
-            var currentIndex = rows.FindIndex(r => r.Id == selected.Id);
-            var plan = SelectionPaneViewPlanner.PlanMove(currentItems, currentIndex, forward);
-            if (plan is not { } result)
+            var plan = SelectionPanePlanner.PlanMove(ToItemStates(rows), selected.Id, forward);
+            if (plan is null)
                 return;
 
-            moveChanges.Add(result.Change);
-            // Re-order the working rows to match the planned order, refreshing the move flags.
+            moveChanges.AddRange(plan.MoveChanges);
             var byId = rows.ToDictionary(r => r.Id);
             rows.Clear();
-            foreach (var item in result.Ordered)
+            foreach (var id in plan.OrderedIds)
             {
-                var row = byId[item.Id];
-                row.Item = item;
-                rows.Add(row);
+                if (byId.TryGetValue(id, out var row))
+                    rows.Add(row);
             }
 
             Rebind(selected.Id);
@@ -237,7 +235,7 @@ public sealed partial class MainWindow
 
             var kindText = new TextBlock
             {
-                Text = row.Item.KindLabel,
+                Text = SelectionPaneKindLabel(row.Kind),
                 Foreground = HeaderForeground,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 MinWidth = 64,
@@ -411,14 +409,14 @@ public sealed partial class MainWindow
     }
 
     private void ApplySelectionPaneChanges(
-        IReadOnlyList<SelectionPaneViewPlanner.Item> originals,
+        IReadOnlyList<SelectionPaneItem> originals,
         IReadOnlyList<SelectionPaneRow> rows,
-        IReadOnlyList<SelectionPaneViewPlanner.MoveChange> moveChanges)
+        IReadOnlyList<SelectionPaneMoveChange> moveChanges)
     {
-        var current = ToItems(rows);
-        var visibilityChanges = SelectionPaneViewPlanner.CreateVisibilityChanges(originals, current);
-        var renameChanges = SelectionPaneViewPlanner.CreateRenameChanges(originals, current);
-        var command = SelectionPaneViewPlanner.CreateCommand(
+        var current = ToItemStates(rows);
+        var visibilityChanges = SelectionPanePlanner.CreateVisibilityChanges(originals, current);
+        var renameChanges = SelectionPanePlanner.CreateRenameChanges(originals, current);
+        var command = SelectionPanePlanner.CreateCommand(
             _session.ActiveSheet.Id,
             visibilityChanges,
             renameChanges,
@@ -439,12 +437,12 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("SelectionPane_Applied"));
     }
 
-    private static IReadOnlyList<SelectionPaneViewPlanner.Item> ToItems(IReadOnlyList<SelectionPaneRow> rows) =>
+    private static IReadOnlyList<SelectionPaneItemState> ToItemStates(IReadOnlyList<SelectionPaneRow> rows) =>
         rows
-            .Select(row => row.Item with { IsVisible = row.IsVisible, Name = row.Name })
+            .Select(row => new SelectionPaneItemState(row.Kind, row.Id, row.Name, row.IsVisible))
             .ToList();
 
-    private static SelectionPaneViewPlanner.Text SelectionPaneText() =>
+    private static SelectionPanePlannerText SelectionPaneText() =>
         new(
             UiText.Get("SelectionPane_DefaultChartName"),
             UiText.Get("SelectionPane_DefaultPictureName"),
@@ -452,9 +450,15 @@ public sealed partial class MainWindow
             UiText.Get("SelectionPane_DefaultShapeNameFormat"),
             UiText.Get("SelectionPane_DefaultEllipseName"),
             UiText.Get("SelectionPane_DefaultLineName"),
-            UiText.Get("SelectionPane_DefaultRectangleName"),
-            UiText.Get("SelectionPane_KindChart"),
-            UiText.Get("SelectionPane_KindPicture"),
-            UiText.Get("SelectionPane_KindShape"),
-            UiText.Get("SelectionPane_KindTextBox"));
+            UiText.Get("SelectionPane_DefaultRectangleName"));
+
+    private static string SelectionPaneKindLabel(SelectionPaneObjectKind kind) =>
+        kind switch
+        {
+            SelectionPaneObjectKind.Chart => UiText.Get("SelectionPane_KindChart"),
+            SelectionPaneObjectKind.Picture => UiText.Get("SelectionPane_KindPicture"),
+            SelectionPaneObjectKind.Shape => UiText.Get("SelectionPane_KindShape"),
+            SelectionPaneObjectKind.TextBox => UiText.Get("SelectionPane_KindTextBox"),
+            _ => kind.ToString()
+        };
 }

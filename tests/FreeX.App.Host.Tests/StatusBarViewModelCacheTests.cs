@@ -7,7 +7,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class StatusBarViewModelCacheTests
 {
     private static StatusBarViewModelCache CreateCache() =>
-        new(UiTextStatusBarTextProvider.Instance);
+        new(new ResourceKeyStatusBarTextProvider(UiText.Get));
 
     [Fact]
     public void GetStats_ReusesNeutralModelWhenStatsAreUnchanged()

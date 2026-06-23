@@ -562,7 +562,7 @@ public sealed partial class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("SetStatusStatisticTextIfChanged(StatusSumText, plan.SumText");
         gridStatusSource.Should().Contain("UiText.Get(\"MainWindow_Text_Ready\")");
         // Readout formatting now lives in the platform-neutral shared builder, keyed by readout kind
-        // (the WPF host's UiTextStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
+        // (ResourceKeyStatusBarTextProvider maps each kind to its StatusBar_*Format resource).
         WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarDisplayModelBuilder.cs")
             .Should()
             .Contain("CountReadout(StatusBarReadoutKind.Count")
@@ -574,7 +574,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .Contain("ReadoutValue(model, StatusBarReadoutKind.Count)")
             .And.Contain("ReadoutValue(model, StatusBarReadoutKind.NumericalCount)")
             .And.Contain("ReadoutValue(model, StatusBarReadoutKind.Sum)");
-        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "UiTextStatusBarTextProvider.cs")
+        WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.AppServices", "StatusBarTextResourceKeys.cs")
             .Should()
             .Contain("StatusBar_CountFormat")
             .And.Contain("StatusBar_NumericalCountFormat")
