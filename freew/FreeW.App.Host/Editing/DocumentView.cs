@@ -1161,6 +1161,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Insert a full blank page after the block the caret sits in. FreeW represents this with two
+    /// page-break-before paragraphs so following content moves after the inserted blank page.
+    /// </summary>
+    public void InsertBlankPage()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+
+        foreach (var block in DocumentOps.BuildBlankPage())
+            _commands.Execute(new InsertBlockCommand(index++, block));
+    }
+
+    /// <summary>
     /// Insert a horizontal rule (an empty paragraph with a bottom-only border) after the block the caret
     /// sits in, routing through the undo/redo bus. Re-renders the surface.
     /// </summary>

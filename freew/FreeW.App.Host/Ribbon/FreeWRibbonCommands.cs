@@ -193,9 +193,10 @@ internal static class FreeWRibbonCommands
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
         }));
 
-        // Insert tab — Pages: prepend a cover page, or drop a horizontal rule / page break at the caret.
+        // Insert tab — Pages: prepend a cover page, insert a blank page, or drop a horizontal rule / page break at the caret.
         // Each mutates the model through the view's undo/redo bus and re-renders.
         registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(); }));
+        registry.Register("freew.blank-page", new ActionCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
         registry.Register("freew.horizontal-rule", new ActionCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
         registry.Register("freew.page-break", new ActionCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
 

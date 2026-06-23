@@ -154,6 +154,29 @@ public sealed class FreeWRibbonParityTests
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Insert tab");
     }
 
+    [StaFact]
+    public void InsertPages_ExposesBackedWordStyleBlankPage()
+    {
+        var definition = FreeWRibbon.Build();
+        var pages = definition.FindTab("insert")!.FindGroup("pages");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(pages!)
+            .Should()
+            .ContainInOrder("freew.cover-page", "freew.blank-page", "freew.page-break");
+        registry.TryGet("freew.blank-page", out var command).Should().BeTrue("Insert > Pages > Blank Page is visible");
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        command!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Blocks.Should().HaveCount(3);
+        editor.Model.Blocks.Skip(1).OfType<Paragraph>()
+            .Should()
+            .OnlyContain(paragraph => paragraph.Formatting.PageBreakBefore && paragraph.PlainText.Length == 0);
+    }
+
     [Fact]
     public void ReferencesTab_GroupsImplementedReferenceCommandsLikeWord()
     {
