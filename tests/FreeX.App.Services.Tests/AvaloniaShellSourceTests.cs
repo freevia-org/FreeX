@@ -2258,9 +2258,11 @@ public sealed class AvaloniaShellSourceTests
         var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
         var ribbonMenuDialogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
         var insertObjectsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
+        var recommendedPivotTablesSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RecommendedPivotTables.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.CreateTable\", () => ShowCreateTableParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.RecommendedPivotTables\", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Sparkline\", () => ShowSparklineParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
@@ -2326,6 +2328,10 @@ public sealed class AvaloniaShellSourceTests
         insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId)");
         insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId)");
         insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId)");
+        recommendedPivotTablesSource.Should().Contain("UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey)");
+        recommendedPivotTablesSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, RecommendedPivotTablesDialogPlanner.DialogAutomationId)");
+        recommendedPivotTablesSource.Should().Contain("AutomationProperties.SetAutomationId(blankPivotTable, RecommendedPivotTablesDialogPlanner.BlankPivotTableAutomationId)");
+        recommendedPivotTablesSource.Should().Contain("RecommendedPivotTablesDialogResult.BlankPivotTable");
         parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);");
         parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
@@ -2412,6 +2418,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.GoTo",
             "dialog.GoToSpecial",
             "dialog.CreateTable",
+            "dialog.RecommendedPivotTables",
             "dialog.Sort",
             "dialog.SortOptions",
             "dialog.TextToColumns",

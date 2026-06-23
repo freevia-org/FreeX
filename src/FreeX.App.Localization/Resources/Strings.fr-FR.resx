@@ -1541,4 +1541,10 @@
   <data name="AvaloniaNativeMenu_WorkbookStatistics" xml:space="preserve"><value>Statistiques du classeur...</value></data>
   <data name="AvaloniaNativeMenu_CloseWorkbook" xml:space="preserve"><value>Fermer le classeur</value></data>
   <data name="AvaloniaNativeMenu_NewSheet" xml:space="preserve"><value>Nouvelle feuille</value></data>
+  <data name="MainWindow_Header_RecommendedPivotTables" xml:space="preserve"><value>Tableaux croises dynamiques recommandes</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTable" xml:space="preserve"><value>Tableau croise dynamique vide...</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationHelpText" xml:space="preserve"><value>Ouvrir la boite de dialogue standard Creer un tableau croise dynamique.</value></data>
+  <data name="RecommendedPivotTables_BlankPivotTableAutomationName" xml:space="preserve"><value>Tableau croise dynamique vide</value></data>
+  <data name="RecommendedPivotTables_NoRecommendationsBody" xml:space="preserve"><value>FreeX peut toujours creer un tableau croise dynamique vide a partir des donnees selectionnees.</value></data>
+  <data name="RecommendedPivotTables_NoRecommendationsHeading" xml:space="preserve"><value>Aucun tableau croise dynamique recommande n'est disponible</value></data>
 </root>

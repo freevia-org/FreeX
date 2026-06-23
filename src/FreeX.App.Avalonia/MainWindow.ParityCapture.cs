@@ -125,6 +125,7 @@ public sealed partial class MainWindow
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
+        ("dialog.RecommendedPivotTables", async () => { await ShowRecommendedPivotTablesDialogAsync(); }),
         ("dialog.Sort", () => ShowSortDialogAsync()),
         ("dialog.SortOptions", async () => { await ShowSortOptionsDialogAsync(new SortDialogOptions()); }),
         ("dialog.TextToColumns", () => ShowTextToColumnsParityDialogAsync()),
