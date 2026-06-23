@@ -11,7 +11,56 @@ public sealed class FreeWRibbonParityTests
     {
         FreeWRibbon.Build().VisibleTabs.Select(tab => tab.Id)
             .Should()
-            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "developer");
+            .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
+    }
+
+    [StaFact]
+    public void HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var help = definition.FindTab("help");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onHelpOnline: () => { },
+            onFeedback: () => { },
+            onCopyDiagnostics: () => { },
+            onCheckForUpdates: () => { },
+            onAbout: () => { },
+            onLegalNotices: () => { });
+
+        help.Should().NotBeNull();
+        help!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("help", "product");
+
+        CommandIds(help)
+            .Should()
+            .Equal(
+                "freew.help-online",
+                "freew.feedback",
+                "freew.copy-diagnostics",
+                "freew.check-updates",
+                "freew.about",
+                "freew.legal-notices");
+
+        Labels(help)
+            .Should()
+            .Equal("Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeW", "Legal Notices");
+
+        foreach (var commandId in CommandIds(help))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed before it appears on the Help tab");
     }
 
     [Fact]

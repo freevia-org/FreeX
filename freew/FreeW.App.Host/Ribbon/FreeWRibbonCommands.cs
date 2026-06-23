@@ -105,7 +105,13 @@ internal static class FreeWRibbonCommands
         Action? onNextChange = null,
         Action? onFindReplace = null,
         Action? onToggleRuler = null,
-        Func<bool>? isRulerVisible = null)
+        Func<bool>? isRulerVisible = null,
+        Action? onHelpOnline = null,
+        Action? onFeedback = null,
+        Action? onCopyDiagnostics = null,
+        Action? onCheckForUpdates = null,
+        Action? onAbout = null,
+        Action? onLegalNotices = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -678,6 +684,19 @@ internal static class FreeWRibbonCommands
         var formattingMarks = new ToggleActionCommand(() => editor.ToggleFormattingMarks(), () => editor.ShowFormattingMarks);
         registry.Register("freew.formatting-marks", formattingMarks);
         stateful.Add(("freew.formatting-marks", formattingMarks));
+
+        if (onHelpOnline is not null)
+            registry.Register("freew.help-online", new ActionCommand(onHelpOnline));
+        if (onFeedback is not null)
+            registry.Register("freew.feedback", new ActionCommand(onFeedback));
+        if (onCopyDiagnostics is not null)
+            registry.Register("freew.copy-diagnostics", new ActionCommand(onCopyDiagnostics));
+        if (onCheckForUpdates is not null)
+            registry.Register("freew.check-updates", new ActionCommand(onCheckForUpdates));
+        if (onAbout is not null)
+            registry.Register("freew.about", new ActionCommand(onAbout));
+        if (onLegalNotices is not null)
+            registry.Register("freew.legal-notices", new ActionCommand(onLegalNotices));
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a

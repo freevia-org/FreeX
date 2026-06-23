@@ -205,7 +205,13 @@ public sealed class MainWindow : Window
             onNextChange: () => StepRevision(+1),
             onFindReplace: OpenFindReplace,
             onToggleRuler: ToggleRulers,
-            isRulerVisible: () => _rulersVisible);
+            isRulerVisible: () => _rulersVisible,
+            onHelpOnline: () => OpenExternalHelpLink(FreeWAppInfo.HelpUrl, "Help Online"),
+            onFeedback: () => OpenExternalHelpLink(FreeWAppInfo.FeedbackUrl, "Feedback"),
+            onCopyDiagnostics: CopyDiagnostics,
+            onCheckForUpdates: () => OpenExternalHelpLink(FreeWAppInfo.LatestReleaseUrl, "Check for Updates"),
+            onAbout: ShowAboutDialog,
+            onLegalNotices: ShowLegalNoticesDialog);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
@@ -434,6 +440,51 @@ public sealed class MainWindow : Window
             return;
 
         Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+    }
+
+    private void OpenExternalHelpLink(string url, string title)
+    {
+        var result = ExternalUriLauncher.Open(
+            url,
+            uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+
+        if (result == ExternalUriLaunchResult.Launched)
+            return;
+
+        DialogMessageHelper.ShowWarning(
+            this,
+            $"FreeW could not open {title}. The link is:\n\n{url}",
+            title);
+    }
+
+    private void CopyDiagnostics()
+    {
+        var diagnosticsDirectory = AppStoragePathPlanner.GetDiagnosticsDirectory(PlatformAppDiagnosticsPathProvider.Instance);
+        var optionsPath = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+        var diagnosticsText = FreeWAppInfo.CreateDiagnosticsText(diagnosticsDirectory, optionsPath);
+
+        try
+        {
+            Clipboard.SetText(diagnosticsText, TextDataFormat.UnicodeText);
+            Clipboard.Flush();
+            DialogMessageHelper.ShowInfo(this, "FreeW diagnostics were copied to the clipboard.", "Copy Diagnostics");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Threading.ThreadStateException)
+        {
+            DialogMessageHelper.ShowWarning(this, $"FreeW could not access the clipboard: {ex.Message}", "Copy Diagnostics");
+        }
+    }
+
+    private void ShowAboutDialog()
+    {
+        var dialog = new AboutDialog { Owner = this };
+        dialog.ShowDialog();
+    }
+
+    private void ShowLegalNoticesDialog()
+    {
+        var dialog = new LegalNoticesDialog { Owner = this };
+        dialog.ShowDialog();
     }
 
     // Toggle the editor's AdornerLayer (page-break markers, etc.) so they don't draw over the backstage.

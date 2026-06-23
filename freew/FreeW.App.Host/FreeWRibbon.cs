@@ -370,6 +370,21 @@ internal static class FreeWRibbon
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
                 tab.Group("zoom", "Zoom", "Z", 80, g => g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom));
             })
+            .Tab("help", "Help", "Y", tab =>
+            {
+                tab.Group("help", "Help", "H", 100, g =>
+                {
+                    g.Large("freew.help-online", "Help Online", RibbonCommandIconKind.Help, "H", accent: RibbonCommandIconAccent.Help);
+                    g.Large("freew.feedback", "Feedback", RibbonCommandIconKind.Feedback, "F", accent: RibbonCommandIconAccent.Help);
+                    g.Large("freew.copy-diagnostics", "Copy Diagnostics", RibbonCommandIconKind.Info, "D", accent: RibbonCommandIconAccent.Help);
+                });
+                tab.Group("product", "Product", "P", 90, g =>
+                {
+                    g.Large("freew.check-updates", "Check for Updates", RibbonCommandIconKind.Refresh, "U", accent: RibbonCommandIconAccent.Help);
+                    g.Large("freew.about", "About FreeW", RibbonCommandIconKind.Info, "A", accent: RibbonCommandIconAccent.Help);
+                    g.Large("freew.legal-notices", "Legal Notices", RibbonCommandIconKind.Book, "L", accent: RibbonCommandIconAccent.Help);
+                });
+            })
             .Tab("mailings", "Mailings", "M", tab =>
             {
                 tab.Group("merge-data", "Start Mail Merge", "D", 155, g =>
@@ -556,6 +571,7 @@ internal static class FreeWRibbon
             "mailings",
             "review",
             "view",
+            "help",
             "developer"
         ];
 

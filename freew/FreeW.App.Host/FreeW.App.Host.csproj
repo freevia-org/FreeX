@@ -57,6 +57,11 @@
 
   <ItemGroup>
     <Resource Include="Resources\FreeW.ico" />
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeW.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="..\..\docs\legal\legal-notices.md" LogicalName="FreeW.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
   </ItemGroup>
 
   <ItemGroup>
