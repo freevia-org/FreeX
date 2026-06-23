@@ -400,6 +400,10 @@ public sealed partial class MainWindow : Window
     private readonly Slider _statusZoomSlider = new();
     private readonly TextBlock _cellAddressText = new();
     private readonly TextBox _formulaBox = new();
+    private TextBox? _inlineCellEditor;
+    private CellAddress? _inlineCellEditAddress;
+    private string? _inlineCellEditText;
+    private int? _pendingInlineCellCaretIndex;
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
     private readonly Button _openButton = new();
@@ -3438,8 +3442,10 @@ public sealed partial class MainWindow : Window
 
     private void RefreshShell(string status)
     {
-        var preserveFormulaEdit = _formulaBox.IsFocused && _session.FormulaEditAddress is not null;
-        var formulaText = _formulaBox.Text;
+        var preserveFormulaEdit =
+            (_formulaBox.IsFocused || _inlineCellEditor?.IsFocused == true || _inlineCellEditAddress is not null) &&
+            _session.FormulaEditAddress is not null;
+        var formulaText = _inlineCellEditText ?? _inlineCellEditor?.Text ?? _formulaBox.Text;
         var formulaCaretIndex = _formulaBox.CaretIndex;
         var formulaSelectionStart = _formulaBox.SelectionStart;
         var formulaSelectionEnd = _formulaBox.SelectionEnd;
@@ -5351,10 +5357,205 @@ public sealed partial class MainWindow : Window
         border.PointerReleased += (_, args) => EndCellSelectionDrag(args);
         border.DoubleTapped += (_, args) =>
         {
-            BeginFormulaEdit(address);
+            var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+            var caretIndex = CalculateInlineCellCaretIndex(
+                editText,
+                args.GetPosition(border).X,
+                cellWidth,
+                fontSize * zoomFactor,
+                fontWeight,
+                fontStyle,
+                (8 + indentPadding) * zoomFactor,
+                textAlignment);
+            BeginInlineCellEdit(address, editText, caretIndex);
             args.Handled = true;
         };
+        if (Equals(_inlineCellEditAddress, address))
+        {
+            border.Cursor = new Cursor(StandardCursorType.Ibeam);
+            border.Child = CreateInlineCellEditor(
+                address,
+                background,
+                foreground,
+                textAlignment,
+                fontWeight,
+                fontStyle,
+                fontSize,
+                indentPadding,
+                zoomFactor,
+                cellHeight);
+        }
         return DecorateAutoFilterHeaderCell(border, address);
+    }
+
+    private TextBox CreateInlineCellEditor(
+        CellAddress address,
+        IBrush background,
+        IBrush foreground,
+        TextAlignment textAlignment,
+        FontWeight fontWeight,
+        FontStyle fontStyle,
+        double fontSize,
+        double indentPadding,
+        double zoomFactor,
+        double cellHeight)
+    {
+        var editor = new TextBox
+        {
+            Text = _inlineCellEditText ?? "",
+            Background = background,
+            Foreground = foreground,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness((8 + indentPadding) * zoomFactor, 0, 8 * zoomFactor, 0),
+            FontSize = Math.Max(1, fontSize * zoomFactor),
+            FontWeight = fontWeight,
+            FontStyle = fontStyle,
+            TextAlignment = textAlignment,
+            AcceptsReturn = false,
+            TextWrapping = TextWrapping.NoWrap,
+            MinHeight = 0,
+            Height = cellHeight,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(editor, "WorksheetInlineCellEditor");
+        editor.TextChanged += (_, _) =>
+        {
+            if (!Equals(_inlineCellEditAddress, address))
+                return;
+
+            _inlineCellEditText = editor.Text ?? "";
+            _formulaBox.Text = _inlineCellEditText;
+        };
+        editor.KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Enter || args.Key == Key.Tab)
+            {
+                var rowDelta = args.Key == Key.Enter
+                    ? args.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1
+                    : 0;
+                var colDelta = args.Key == Key.Tab
+                    ? args.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1
+                    : 0;
+                CommitInlineCellEdit(rowDelta, colDelta);
+                args.Handled = true;
+            }
+            else if (args.Key == Key.Escape)
+            {
+                CancelInlineCellEdit();
+                args.Handled = true;
+            }
+        };
+
+        _inlineCellEditor = editor;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
+                return;
+
+            editor.Focus();
+            var caret = Math.Clamp(_pendingInlineCellCaretIndex ?? editor.Text?.Length ?? 0, 0, editor.Text?.Length ?? 0);
+            editor.CaretIndex = caret;
+            editor.SelectionStart = caret;
+            editor.SelectionEnd = caret;
+            _pendingInlineCellCaretIndex = null;
+        }, DispatcherPriority.Input);
+
+        return editor;
+    }
+
+    private void BeginInlineCellEdit(CellAddress address, string editText, int caretIndex)
+    {
+        ClearSelectedDrawingObject();
+        _inlineCellEditAddress = address;
+        _inlineCellEditText = editText;
+        _pendingInlineCellCaretIndex = Math.Clamp(caretIndex, 0, editText.Length);
+        _formulaBox.Text = editText;
+        _formulaBoxEditOriginalText = editText;
+        _session.BeginFormulaEdit(address);
+        RefreshShell("Ready");
+    }
+
+    private void CommitInlineCellEdit(int rowDelta, int colDelta)
+    {
+        _formulaBox.Text = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
+        ClearInlineCellEditorState();
+        if (CommitFormulaBox())
+        {
+            if (rowDelta != 0 || colDelta != 0)
+                _session.MoveActiveCell(rowDelta, colDelta);
+
+            RefreshShell("Ready");
+            FocusShellRegion(ShellFocusRegion.Worksheet);
+        }
+    }
+
+    private void CancelInlineCellEdit()
+    {
+        _session.CancelFormulaEdit();
+        _formulaBoxEditOriginalText = null;
+        ClearInlineCellEditorState();
+        RefreshShell("Ready");
+        FocusShellRegion(ShellFocusRegion.Worksheet);
+    }
+
+    private void ClearInlineCellEditorState()
+    {
+        _inlineCellEditor = null;
+        _inlineCellEditAddress = null;
+        _inlineCellEditText = null;
+        _pendingInlineCellCaretIndex = null;
+    }
+
+    private static int CalculateInlineCellCaretIndex(
+        string text,
+        double pointerX,
+        double cellWidth,
+        double fontSize,
+        FontWeight fontWeight,
+        FontStyle fontStyle,
+        double leftPadding,
+        TextAlignment textAlignment)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+
+        var textWidth = MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle);
+        var textLeft = textAlignment switch
+        {
+            TextAlignment.Center => Math.Max(leftPadding, (cellWidth - textWidth) / 2),
+            TextAlignment.Right => Math.Max(leftPadding, cellWidth - leftPadding - textWidth),
+            _ => leftPadding
+        };
+        var relativeX = Math.Clamp(pointerX - textLeft, 0, textWidth);
+        var closestIndex = 0;
+        var closestDistance = double.MaxValue;
+        for (var i = 0; i <= text.Length; i++)
+        {
+            var prefixWidth = i == 0
+                ? 0
+                : MeasureInlineCellTextWidth(text[..i], fontSize, fontWeight, fontStyle);
+            var distance = Math.Abs(prefixWidth - relativeX);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestIndex = i;
+            }
+        }
+
+        return closestIndex;
+    }
+
+    private static double MeasureInlineCellTextWidth(string text, double fontSize, FontWeight fontWeight, FontStyle fontStyle)
+    {
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Calibri", fontStyle, fontWeight),
+            Math.Max(1, fontSize),
+            Brushes.Black);
+        return formatted.Width;
     }
 
     private bool TryInsertFormulaPointReference(CellAddress address)
@@ -17216,6 +17417,9 @@ public sealed partial class MainWindow : Window
             if (_formulaBox.IsFocused)
                 return;
 
+            if (IsTextEditingEventSource(e))
+                return;
+
             if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.Shift)
             {
                 e.Handled = true;
@@ -17239,6 +17443,9 @@ public sealed partial class MainWindow : Window
 
             if (e.Key == Key.Delete)
             {
+                if (IsTextEditingEventSource(e))
+                    return;
+
                 e.Handled = true;
                 ClearSelectedRangeContents();
                 return;
@@ -17420,6 +17627,12 @@ public sealed partial class MainWindow : Window
             await OpenWorkbookAsync();
         }
     }
+
+    private bool IsTextEditingEventSource(KeyEventArgs args) =>
+        _formulaBox.IsFocused ||
+        _inlineCellEditor?.IsFocused == true ||
+        args.Source is TextBox ||
+        args.Source is TextPresenter;
 
     private bool OpenActiveDataValidationDropdown()
     {
