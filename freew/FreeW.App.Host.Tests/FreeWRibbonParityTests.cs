@@ -220,6 +220,49 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void ReferencesTableOfContents_AddTextExposesBackedHeadingLevelCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var tocGroup = definition.FindTab("references")!.FindGroup("table-of-contents");
+        var addText = tocGroup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.toc-add-text");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        CommandIds(tocGroup)
+            .Should()
+            .ContainInOrder("freew.toc", "freew.toc-add-text", "freew.toc-refresh");
+        addText.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.toc-addtext-none", "Do Not Show in Table of Contents"),
+                ("freew.toc-addtext-level1", "Level 1"),
+                ("freew.toc-addtext-level2", "Level 2"),
+                ("freew.toc-addtext-level3", "Level 3"));
+
+        foreach (var commandId in addText.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Append(addText.CommandId.Value))
+        {
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from References > Table of Contents > Add Text");
+        }
+
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Candidate") { StyleId = "Normal" });
+        registry.TryGet("freew.toc-addtext-level2", out var level2).Should().BeTrue();
+        level2!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)editor.Model.Blocks[0]).StyleId.Should().Be("Heading2");
+
+        registry.TryGet("freew.toc-addtext-none", out var none).Should().BeTrue();
+        none!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)editor.Model.Blocks[0]).StyleId.Should().Be("Normal");
+    }
+
+    [StaFact]
     public void HomeFont_ExposesAndRegistersStrikethrough()
     {
         var definition = FreeWRibbon.Build();

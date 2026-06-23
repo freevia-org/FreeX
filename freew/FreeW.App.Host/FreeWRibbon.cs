@@ -241,6 +241,14 @@ internal static class FreeWRibbon
                 tab.Group("table-of-contents", "Table of Contents", "T", 100, g =>
                 {
                     g.Medium("freew.toc", "Table of Contents", RibbonCommandIconKind.TableOfContents);
+                    g.Medium("freew.toc-add-text", "Add Text", RibbonCommandIconKind.TableOfContents, dropdown: true, menu: m =>
+                    {
+                        m.Item("freew.toc-addtext-none", "Do Not Show in Table of Contents", "N");
+                        m.Separator();
+                        m.Item("freew.toc-addtext-level1", "Level 1", "1");
+                        m.Item("freew.toc-addtext-level2", "Level 2", "2");
+                        m.Item("freew.toc-addtext-level3", "Level 3", "3");
+                    });
                     g.Medium("freew.toc-refresh", "Update Table", RibbonCommandIconKind.Refresh);
                 });
                 tab.Group("footnotes", "Footnotes", "F", 92, g =>

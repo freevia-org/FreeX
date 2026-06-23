@@ -347,6 +347,11 @@ internal static class FreeWRibbonCommands
         // and rebuild it in place (remove the prior TOC region + re-insert). Both route through the bus.
         registry.Register("freew.toc", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfContents(); }));
         registry.Register("freew.toc-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfContents(); }));
+        registry.Register("freew.toc-add-text", new ApplyTocStyleCommand(editor, "Heading1"));
+        registry.Register("freew.toc-addtext-none", new ApplyTocStyleCommand(editor, "Normal"));
+        registry.Register("freew.toc-addtext-level1", new ApplyTocStyleCommand(editor, "Heading1"));
+        registry.Register("freew.toc-addtext-level2", new ApplyTocStyleCommand(editor, "Heading2"));
+        registry.Register("freew.toc-addtext-level3", new ApplyTocStyleCommand(editor, "Heading3"));
         // Insert tab — References: insert an in-text citation (pick an existing source or add a new one),
         // and insert a bibliography built from the document's sources at the caret (reversible).
         registry.Register("freew.citation", new InsertCitationCommand(editor));
@@ -1039,6 +1044,17 @@ internal static class FreeWRibbonCommands
         }
 
         private static string Compact(string value) => value.Replace(" ", string.Empty);
+    }
+
+    // References > Table of Contents > Add Text: Word exposes TOC inclusion as level choices. FreeW's
+    // TOC is built from paragraph styles, so each choice reuses the same reversible StyleId path as Home > Styles.
+    private sealed class ApplyTocStyleCommand(DocumentView editor, string styleId) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.SetParagraphStyle(styleId);
+        }
     }
 
     // Home > Styles: New Style. Opens a dialog capturing a name + a few formatting options + a based-on
