@@ -237,6 +237,7 @@ $routes = @(
     @{
         RouteId = "dialog.CreateTable"; DisplayName = "Create Table"
         Wpf = @("screenshots\table-workflows-tour\freex_table_workflows_create_table_dialog.png", "screenshots\insert-tables-charts-tour\freex_insert_tables_charts_create_table_dialog.png")
+        Shared = @("src\FreeX.App.Services\CreateTableDialogPlanner.cs", "src\FreeX.App.Presentation\TableUI\TableCreationPlanner.cs")
     },
     @{
         RouteId = "dialog.RecommendedPivotTables"; DisplayName = "Recommended PivotTables"

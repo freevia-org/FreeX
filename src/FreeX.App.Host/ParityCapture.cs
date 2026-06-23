@@ -410,6 +410,9 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.GoToSpecial", outDir, () =>
             new GoToSpecialDialog());
 
+        CaptureDialog(results, "dialog.CreateTable", outDir, () =>
+            new CreateTableDialog(sheet.Id, "Sheet1!$A$1:$D$5", "TableStyleMedium2"));
+
         CaptureDialog(results, "dialog.Sort", outDir, () =>
             new SortDialog());
 

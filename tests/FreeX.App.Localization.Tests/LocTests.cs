@@ -141,6 +141,9 @@ public sealed class LocTests
         keys.Should().Contain("AddWatch_Title");
         keys.Should().Contain("AddWatch_AddButton");
         keys.Should().Contain("AddWatch_SelectedRangeLabel");
+        keys.Should().Contain("CreateTable_Title");
+        keys.Should().Contain("CreateTable_RangeLabel");
+        keys.Should().Contain("CreateTable_HeadersCheckBox");
     }
 
     [Fact]
