@@ -53,6 +53,20 @@ public sealed class DialogSharedHelperDedupTests
     }
 
     [Fact]
+    public void AutosaveCoordinator_RoutesRecoveryMessagesThroughDialogMessageHelper()
+    {
+        var source = ReadDialogSource("AutosaveCoordinator.cs");
+
+        source.Should().Contain("DialogMessageHelper.AskYesNo(");
+        source.Should().Contain("DialogMessageHelper.ShowInfo(");
+        source.Should().Contain("DialogMessageHelper.ShowMessage(");
+        source.Should().Contain("UserMessageButtons.OkCancel");
+        source.Should().Contain("UserMessageIcon.Question");
+        source.Should().Contain("DialogMessageHelper.ShowError(");
+        source.Should().NotContain("MessageBox.Show(");
+    }
+
+    [Fact]
     public void ImageSizeDialog_UsesSharedFocusHelper()
     {
         var source = ReadDialogSource("ImageSizeDialog.cs");

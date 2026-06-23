@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
 
@@ -54,11 +55,11 @@ internal sealed class AutosaveCoordinator
 
             var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
             var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
-            var answer = MessageBox.Show(owner,
+            var recover = DialogMessageHelper.AskYesNo(owner,
                 $"FreeW found unsaved changes to {name} from a previous session. Recover them?",
-                "FreeW - Recover", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                "FreeW - Recover");
 
-            if (answer == MessageBoxResult.Yes)
+            if (recover)
                 _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
 
             foreach (var stale in candidates)
@@ -78,17 +79,19 @@ internal sealed class AutosaveCoordinator
             var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates);
             if (candidate is null)
             {
-                MessageBox.Show(owner,
+                DialogMessageHelper.ShowInfo(owner,
                     "No unsaved documents were found.",
-                    "FreeW - Recover", MessageBoxButton.OK, MessageBoxImage.Information);
+                    "FreeW - Recover");
                 return false;
             }
 
             var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
-            var answer = MessageBox.Show(owner,
+            var answer = DialogMessageHelper.ShowMessage(owner,
                 $"Recover unsaved changes to {name}?",
-                "FreeW - Recover", MessageBoxButton.OKCancel, MessageBoxImage.Question);
-            if (answer != MessageBoxResult.OK)
+                "FreeW - Recover",
+                UserMessageButtons.OkCancel,
+                UserMessageIcon.Question);
+            if (answer != UserMessageResult.Ok)
                 return false;
 
             var recovered = _file.RecoverSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
@@ -99,9 +102,9 @@ internal sealed class AutosaveCoordinator
         }
         catch (Exception ex)
         {
-            MessageBox.Show(owner,
+            DialogMessageHelper.ShowError(owner,
                 $"Could not recover the document.\n\n{ex.Message}",
-                "FreeW - Recover", MessageBoxButton.OK, MessageBoxImage.Error);
+                "FreeW - Recover");
             return false;
         }
     }
