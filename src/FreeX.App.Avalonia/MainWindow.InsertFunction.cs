@@ -1,13 +1,16 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Presentation.Dialogs;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -62,6 +65,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "InsertFunctionDialog");
 
         var searchBox = new TextBox { MinWidth = 260 };
+        ApplyFnTextBoxChrome(searchBox);
         AutomationProperties.SetName(searchBox, "Search for a function");
         AutomationProperties.SetAutomationId(searchBox, "InsertFunctionSearchBox");
         AutomationProperties.SetHelpText(searchBox, "Type to filter functions by name or description.");
@@ -72,15 +76,18 @@ public sealed partial class MainWindow
             SelectedItem = InsertFunctionCatalogPlanner.MostRecentlyUsedCategory,
             MinWidth = 220,
         };
+        ApplyFnComboBoxChrome(categoryBox);
         AutomationProperties.SetName(categoryBox, "Or select a category");
         AutomationProperties.SetAutomationId(categoryBox, "InsertFunctionCategoryBox");
 
         var listBox = new ListBox { MinHeight = 160 };
+        ApplyFnListBoxStyle(listBox);
         AutomationProperties.SetName(listBox, "Select a function");
         AutomationProperties.SetAutomationId(listBox, "InsertFunctionListBox");
 
         var syntaxText = new TextBlock
         {
+            FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -89,6 +96,7 @@ public sealed partial class MainWindow
 
         var descriptionText = new TextBlock
         {
+            FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             MinHeight = 40,
             Foreground = Brush(96, 96, 96),
@@ -126,19 +134,19 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            MinWidth = 80,
             IsEnabled = false,
         };
+        ApplyFnButtonChrome(okButton, minWidth: 80, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "InsertFunctionOkButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            MinWidth = 80,
         };
+        ApplyFnButtonChrome(cancelButton, minWidth: 80);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "InsertFunctionCancelButton");
 
@@ -195,7 +203,7 @@ public sealed partial class MainWindow
             {
                 CreateInsertFunctionField("Search for a function", searchBox),
                 CreateInsertFunctionField("Or select a category", categoryBox),
-                new TextBlock { Text = "Select a function:" },
+                new TextBlock { Text = "Select a function:", FontSize = 12 },
             },
         };
         DockPanel.SetDock(header, Dock.Top);
@@ -229,7 +237,7 @@ public sealed partial class MainWindow
         {
             Title = "Function Arguments",
             Width = 520,
-            Height = Math.Max(260, Math.Min(620, 200 + (arguments.Count * 60))),
+            Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))),
             MinWidth = 440,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -238,6 +246,7 @@ public sealed partial class MainWindow
 
         var previewText = new TextBlock
         {
+            FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -254,6 +263,7 @@ public sealed partial class MainWindow
         foreach (var argument in arguments)
         {
             var box = new TextBox();
+            ApplyFnTextBoxChrome(box);
             box.TextChanged += (_, _) => UpdatePreview();
             argumentBoxes.Add(box);
             AutomationProperties.SetName(box, argument.Name);
@@ -264,7 +274,7 @@ public sealed partial class MainWindow
                 Spacing = 2,
                 Children =
                 {
-                    new TextBlock { Text = label, FontWeight = FontWeight.Medium },
+                    new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeight.Medium },
                     box,
                     new TextBlock
                     {
@@ -280,18 +290,18 @@ public sealed partial class MainWindow
         var okButton = new Button
         {
             Content = "OK",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            MinWidth = 76,
         };
+        ApplyFnButtonChrome(okButton, minWidth: 76, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "FunctionArgumentsOkButton");
 
         var cancelButton = new Button
         {
             Content = "Cancel",
-            MinWidth = 84,
-            Padding = new Thickness(10, 4),
+            MinWidth = 76,
         };
+        ApplyFnButtonChrome(cancelButton, minWidth: 76);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "FunctionArgumentsCancelButton");
 
@@ -343,15 +353,16 @@ public sealed partial class MainWindow
                         Spacing = 10,
                         Children =
                         {
-                            new TextBlock { Text = function.Name, FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = function.Name, FontSize = 12, FontWeight = FontWeight.SemiBold },
                             new TextBlock
                             {
                                 Text = function.Description,
+                                FontSize = 12,
                                 TextWrapping = TextWrapping.Wrap,
                                 Foreground = Brush(96, 96, 96),
                             },
                             argumentStack,
-                            new TextBlock { Text = "Formula result:", Margin = new Thickness(0, 8, 0, 0) },
+                            new TextBlock { Text = UiText.Get("FunctionArguments_FormulaResultLabel"), FontSize = 12, Margin = new Thickness(0, 8, 0, 0) },
                             previewText,
                         },
                     },
@@ -393,8 +404,79 @@ public sealed partial class MainWindow
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = label },
+                new TextBlock { Text = label, FontSize = 12 },
                 control,
             },
         };
+
+    // ── Visual chrome helpers (InsertFunction / FunctionArguments dialogs) ────
+
+    /// <summary>
+    /// Applies standard Function-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
+    /// <paramref name="minWidth"/> sets MinWidth; <paramref name="isDefault"/> uses blue border for the OK button.
+    /// </summary>
+    private static void ApplyFnButtonChrome(Button button, double minWidth = 80, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Function-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
+    /// </summary>
+    private static void ApplyFnTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Function-dialog combo-box chrome (Height=24, Padding=(5,0,4,0), FontSize=12, grey border).
+    /// </summary>
+    private static void ApplyFnComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Function-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
+    /// </summary>
+    private static void ApplyFnListBoxStyle(ListBox listBox)
+    {
+        listBox.FontSize = 12;
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
+                new Setter(Layoutable.MinHeightProperty, 24.0),
+                new Setter(TemplatedControl.FontSizeProperty, 12.0),
+            },
+        });
+    }
 }
