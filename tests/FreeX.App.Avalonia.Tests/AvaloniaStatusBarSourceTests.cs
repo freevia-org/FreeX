@@ -34,7 +34,7 @@ public sealed class AvaloniaStatusBarSourceTests
         Assert.True(model.AreStatsVisible);
         Assert.False(model.IsReadyVisible);
 
-        // The model carries the shared builder's readouts in order with the shared English provider's labels.
+        // The model carries the shared builder's readouts in order with the portable resource provider's labels.
         Assert.Equal("Average: 20", model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value);
         Assert.Equal("Count: 4", model.FindReadout(StatusBarReadoutKind.Count)!.Value.Value);
         Assert.Equal("Numerical Count: 3", model.FindReadout(StatusBarReadoutKind.NumericalCount)!.Value.Value);
