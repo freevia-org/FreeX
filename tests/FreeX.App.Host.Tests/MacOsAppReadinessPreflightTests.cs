@@ -21,6 +21,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CFBundleName");
         script.Should().Contain("Name = ApplicationTitle;");
         script.Should().Contain("NativeDock.SetMenu(app, menu);");
+        script.Should().Contain("NativeDock.GetMenu(app)");
         script.Should().Contain("CFBundleIconFile");
         script.Should().Contain("FreeX.icns");
         script.Should().Contain("Test-MacOsIcon");
@@ -865,7 +866,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
-        script.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
+        script.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
         script.Should().Contain("public sealed class RecentFilesStore");
         script.Should().Contain("public static class AtomicFileWriter");
         script.Should().Contain("Portable macOS source contains forbidden token");
@@ -1488,6 +1489,10 @@ public sealed class MacOsAppReadinessPreflightTests
                       grep -q "native_export_pdf_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_share_workbook_menu_item=true" "$artifact_root/launch.txt"
                       grep -q "native_top_level_menu_order=File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help" "$artifact_root/launch.txt"
+                      grep -q "native_dock_top_level_menu_order=File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help" "$artifact_root/launch.txt"
+                      grep -q "native_dock_menu_installed=true" "$artifact_root/launch.txt"
+                      grep -q "native_dock_file_menu=true" "$artifact_root/launch.txt"
+                      grep -q "native_dock_file_menu_item_count=[1-9]" "$artifact_root/launch.txt"
                       grep -q "native_home_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_insert_menu=true" "$artifact_root/launch.txt"
                       grep -q "native_page_layout_menu=true" "$artifact_root/launch.txt"
@@ -1987,6 +1992,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private IWorkbookFileAccessService _fileAccess = WorkbookFileAccessServiceFactory.Create(App.Diagnostics);
                 private void InstallNativeMenu(NativeMenu menu)
                 NativeDock.SetMenu(app, menu);
+                NativeDock.GetMenu(app);
                 NativeMenu.SetMenu(this, menu);
                 InstallNativeMenu(_nativeMenu);
                 private static void RenderCell(CellStyle? style)
@@ -2731,7 +2737,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     var item = new NativeMenuItem { Header = "Help" };
                     TopLevel.GetTopLevel(this)?.Launcher.ToString();
                     AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary);
-                    LegalNoticeProvider.GetDocuments().Select(document => document.Title);
+                    var documents = LegalNoticeProvider.GetDocuments();
+                    documents.Select(document => document.Title);
+                    ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),
+                    AutomationProperties.SetAutomationId(tabControl, "LegalNoticesSectionTabs");
                     HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable);
                     HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true;
                     HasShellFocusCycleTargets: _sheetGridHost.Focusable &&;
@@ -3108,6 +3117,9 @@ public sealed class MacOsAppReadinessPreflightTests
             internal sealed class MacOsLaunchSmokeSnapshot
             {
                 public bool IsPassed =>
+                    HasNativeDockMenu &&
+                    HasNativeDockFileMenu &&
+                    NativeDockFileMenuItemCount > 0 &&
                     HasNativeFileMenu &&
                     HasNativeHomeMenu &&
                     HasNativeInsertMenu &&
@@ -3284,6 +3296,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasSelectionStatsAutomationHelp &&
                     HasSelectionStatsAutomationId;
                 private bool HasNativeFileMenu { get; }
+                private bool HasNativeDockMenu { get; }
+                private bool HasNativeDockFileMenu { get; }
+                private int NativeDockFileMenuItemCount { get; }
                 private bool HasNativeHomeMenu { get; }
                 private bool HasNativeInsertMenu { get; }
                 private bool HasNativePageLayoutMenu { get; }

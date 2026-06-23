@@ -514,6 +514,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     bool HasSheetTabContextSelectAllSheetsMenuItem,
     bool HasSheetTabContextUngroupSheetsMenuItem,
     string NativeTopLevelMenuOrder,
+    string NativeDockTopLevelMenuOrder,
+    bool HasNativeDockMenu,
+    bool HasNativeDockFileMenu,
+    int NativeDockFileMenuItemCount,
     bool HasNativeFileMenu,
     bool HasNativeHomeMenu,
     bool HasNativeInsertMenu,
@@ -728,6 +732,10 @@ internal sealed record MacOsLaunchSmokeSnapshot(
         HasSheetTabContextSelectAllSheetsMenuItem &&
         HasSheetTabContextUngroupSheetsMenuItem &&
         string.Equals(NativeTopLevelMenuOrder, "File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help", StringComparison.Ordinal) &&
+        string.Equals(NativeDockTopLevelMenuOrder, "File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help", StringComparison.Ordinal) &&
+        HasNativeDockMenu &&
+        HasNativeDockFileMenu &&
+        NativeDockFileMenuItemCount > 0 &&
         HasNativeFileMenu &&
         HasNativeHomeMenu &&
         HasNativeInsertMenu &&
@@ -1290,6 +1298,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 $"sheet_tab_context_select_all_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextSelectAllSheetsMenuItem)}",
                 $"sheet_tab_context_ungroup_sheets_menu_item={FormatBool(snapshot.HasSheetTabContextUngroupSheetsMenuItem)}",
                 $"native_top_level_menu_order={snapshot.NativeTopLevelMenuOrder}",
+                $"native_dock_top_level_menu_order={snapshot.NativeDockTopLevelMenuOrder}",
+                $"native_dock_menu_installed={FormatBool(snapshot.HasNativeDockMenu)}",
+                $"native_dock_file_menu={FormatBool(snapshot.HasNativeDockFileMenu)}",
+                $"native_dock_file_menu_item_count={snapshot.NativeDockFileMenuItemCount}",
                 $"native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}",
                 $"native_home_menu={FormatBool(snapshot.HasNativeHomeMenu)}",
                 $"native_insert_menu={FormatBool(snapshot.HasNativeInsertMenu)}",

@@ -1159,8 +1159,14 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasNativeFreezeTopRowMenuItem &&");
         smokeSource.Should().Contain("HasNativeFreezeFirstColumnMenuItem &&");
         smokeSource.Should().Contain("HasNativeUnfreezePanesMenuItem &&");
+        smokeSource.Should().Contain("HasNativeDockMenu &&");
+        smokeSource.Should().Contain("HasNativeDockFileMenu &&");
+        smokeSource.Should().Contain("NativeDockFileMenuItemCount > 0 &&");
         smokeSource.Should().Contain("opened_source_path={snapshot.OpenedSourcePath ?? \"\"}");
         smokeSource.Should().Contain("native_file_menu={FormatBool(snapshot.HasNativeFileMenu)}");
+        smokeSource.Should().Contain("native_dock_menu_installed={FormatBool(snapshot.HasNativeDockMenu)}");
+        smokeSource.Should().Contain("native_dock_file_menu={FormatBool(snapshot.HasNativeDockFileMenu)}");
+        smokeSource.Should().Contain("native_dock_file_menu_item_count={snapshot.NativeDockFileMenuItemCount}");
         smokeSource.Should().Contain("native_new_workbook_menu_item={FormatBool(snapshot.HasNativeNewWorkbookMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_menu_item={FormatBool(snapshot.HasNativeOpenRecentMenuItem)}");
         smokeSource.Should().Contain("native_open_recent_item_count={snapshot.NativeOpenRecentItemCount}");
@@ -1305,6 +1311,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("private NativeMenu? _nativeMenu;");
         windowSource.Should().Contain("InstallNativeMenu(_nativeMenu);");
         windowSource.Should().Contain("NativeDock.SetMenu(app, menu);");
+        windowSource.Should().Contain("NativeDock.GetMenu(app)");
         windowSource.Should().Contain("NativeMenu.SetMenu(this, menu);");
         windowSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()");
         windowSource.Should().Contain("internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()");
@@ -1317,7 +1324,9 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("var externalImageClipboardPictures = _session.ActiveSheet.Pictures");
         windowSource.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         windowSource.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
-        windowSource.Should().Contain("_nativeMenu?.Items.OfType<NativeMenuItem>().Any");
+        windowSource.Should().Contain("GetNativeTopLevelMenuOrder(_nativeMenu)");
+        windowSource.Should().Contain("HasNativeTopLevelMenu(_nativeMenu, expectedHeader)");
+        windowSource.Should().Contain("FindNativeTopLevelSubmenu(menu, expectedHeader)");
         windowSource.Should().Contain("WindowShown: IsVisible");
         windowSource.Should().Contain("OpenedSourcePath: _session.CurrentFilePath");
         windowSource.Should().Contain("HasNativeNewWorkbookMenuItem: HasNativeMenuItem(_newWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_NewWorkbook\"))");
@@ -1338,6 +1347,11 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem(\"Tab Color\", \"No Color\")");
         windowSource.Should().Contain("HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem(\"Select All Sheets\")");
         windowSource.Should().Contain("HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem(\"Ungroup Sheets\")");
+        windowSource.Should().Contain("NativeDockTopLevelMenuOrder: nativeDockTopLevelMenuOrder");
+        windowSource.Should().Contain("HasNativeDockMenu: hasNativeDockMenu");
+        windowSource.Should().Contain("HasNativeDockFileMenu: hasNativeDockFileMenu");
+        windowSource.Should().Contain("NativeDockFileMenuItemCount: nativeDockFileMenuItemCount");
+        windowSource.Should().Contain("CountNativeTopLevelMenuItems(nativeDockMenu, \"File\")");
         windowSource.Should().Contain("HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, \"Select All Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, \"Ungroup Sheets\", requireGesture: false)");
         windowSource.Should().Contain("HasNativeCloseWorkbookMenuItem: HasNativeMenuItem(_closeWorkbookMenuItem, UiText.Get(\"AvaloniaNativeMenu_CloseWorkbook\"))");

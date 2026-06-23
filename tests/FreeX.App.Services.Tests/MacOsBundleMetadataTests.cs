@@ -275,6 +275,10 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("grep -q \"native_share_workbook_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_workbook_statistics_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_close_workbook_menu_item=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_dock_top_level_menu_order=File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_dock_menu_installed=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_dock_file_menu=true\" \"$launch_smoke_report\"");
+        workflow.Should().Contain("grep -q \"native_dock_file_menu_item_count=[1-9]\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_data_menu=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_select_all_menu_item=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("grep -q \"native_go_to_special_menu_item=true\" \"$launch_smoke_report\"");

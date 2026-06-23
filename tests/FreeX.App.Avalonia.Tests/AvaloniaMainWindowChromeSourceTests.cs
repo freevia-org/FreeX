@@ -303,8 +303,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         pageLayoutMenuBlock.Should().Contain("pageLayoutMenu.Items.Add(_pageSetupMenuItem);");
 
         smokeSource.Should().Contain("NativeTopLevelMenuOrder");
+        smokeSource.Should().Contain("NativeDockTopLevelMenuOrder");
         smokeSource.Should().Contain("File|Home|Insert|Page Layout|Formulas|Data|Review|View|Sheet|Window|Help");
         smokeSource.Should().Contain("native_top_level_menu_order={snapshot.NativeTopLevelMenuOrder}");
+        smokeSource.Should().Contain("native_dock_top_level_menu_order={snapshot.NativeDockTopLevelMenuOrder}");
+        smokeSource.Should().Contain("native_dock_file_menu_item_count={snapshot.NativeDockFileMenuItemCount}");
     }
 
     [Fact]
