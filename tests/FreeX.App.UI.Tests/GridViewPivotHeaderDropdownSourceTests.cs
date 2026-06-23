@@ -44,7 +44,7 @@ public sealed class GridViewPivotHeaderDropdownSourceTests
             rowHeaderWidth: 40,
             columnHeaderHeight: 24);
 
-        rect.Should().Be(new Rect(190, 85.5, 17, 17));
+        rect.Should().Be(new Rect(191, 86.5, 15, 15));
     }
 
     [Fact]

@@ -8,8 +8,8 @@ public partial class GridView
 {
     private const double AutoFilterButtonSize = 15;
     private const double AutoFilterButtonMargin = 2;
-    private const double PivotHeaderDropdownButtonSize = 17;
-    private const double PivotHeaderDropdownButtonMargin = 1;
+    private const double PivotHeaderDropdownButtonSize = 15;
+    private const double PivotHeaderDropdownButtonMargin = 2;
     private const double PivotExpandCollapseButtonSize = 8;
     private const double PivotExpandCollapseButtonReserve = 15;
 
@@ -17,8 +17,8 @@ public partial class GridView
     private static readonly Pen AutoFilterButtonBorderPen = MakePen(MakeBrush(142, 153, 166), 1);
     private static readonly Brush AutoFilterGlyphBrush = MakeBrush(45, 55, 65);
     private static readonly Brush ActiveAutoFilterGlyphBrush = MakeBrush(15, 109, 140);
-    private static readonly Brush PivotHeaderDropdownButtonBrush = CreatePivotHeaderDropdownButtonBrush();
-    private static readonly Pen PivotHeaderDropdownButtonBorderPen = MakePen(MakeBrush(154, 164, 174), 1);
+    private static readonly Brush PivotHeaderDropdownButtonBrush = MakeBrush(228, 233, 240);
+    private static readonly Pen PivotHeaderDropdownButtonBorderPen = MakePen(MakeBrush(132, 141, 154), 1);
     private static readonly Brush PivotHeaderDropdownGlyphBrush = MakeBrush(66, 76, 86);
     private static readonly Brush PivotExpandCollapseButtonBrush = MakeBrush(248, 248, 248);
     private static readonly Pen PivotExpandCollapseBorderPen = MakePen(MakeBrush(174, 174, 174), 1);
@@ -232,9 +232,9 @@ public partial class GridView
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(new Point(centerX - 4, centerY - 2), isFilled: true, isClosed: true);
-            ctx.LineTo(new Point(centerX + 4, centerY - 2), isStroked: true, isSmoothJoin: false);
-            ctx.LineTo(new Point(centerX, centerY + 3), isStroked: true, isSmoothJoin: false);
+            ctx.BeginFigure(new Point(centerX - 3, centerY - 2), isFilled: true, isClosed: true);
+            ctx.LineTo(new Point(centerX + 3, centerY - 2), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(new Point(centerX, centerY + 2), isStroked: true, isSmoothJoin: false);
         }
 
         geometry.Freeze();
@@ -287,13 +287,4 @@ public partial class GridView
         return brush;
     }
 
-    private static Brush CreatePivotHeaderDropdownButtonBrush()
-    {
-        var brush = new LinearGradientBrush(
-            Color.FromRgb(249, 251, 253),
-            Color.FromRgb(219, 228, 237),
-            90);
-        brush.Freeze();
-        return brush;
-    }
 }
