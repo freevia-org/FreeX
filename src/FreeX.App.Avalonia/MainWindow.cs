@@ -12195,23 +12195,54 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = "Advanced Filter",
-            Width = 630,
-            Height = 478,
-            MinWidth = 630,
-            MinHeight = 478,
-            MaxWidth = 630,
-            MaxHeight = 478,
+            Width = 420,
+            Height = 340,
+            MinWidth = 420,
+            MinHeight = 340,
+            MaxWidth = 420,
+            MaxHeight = 340,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "AdvancedFilterCompactDialog");
+
+        static void ApplyAdvancedFilterTextBoxChrome(TextBox textBox)
+        {
+            textBox.Height = 24;
+            textBox.MinHeight = 24;
+            textBox.MaxHeight = 24;
+            textBox.Padding = new Thickness(4, 1);
+            textBox.FontSize = 12;
+            textBox.BorderBrush = Brush(130, 130, 130);
+            textBox.BorderThickness = new Thickness(1);
+            textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        }
+
+        static void ApplyAdvancedFilterPickerButtonChrome(Button button)
+        {
+            button.Width = 28;
+            button.MinWidth = 28;
+            button.Height = 20;
+            button.MinHeight = 20;
+            button.MaxHeight = 20;
+            button.Padding = new Thickness(0);
+            button.Margin = new Thickness(0, 0, 6, 0);
+            button.FontSize = 11;
+            button.Background = Brush(226, 226, 226);
+            button.BorderBrush = Brush(160, 160, 160);
+            button.BorderThickness = new Thickness(1);
+            button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+            button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        }
 
         var listRangeBox = new TextBox
         {
             Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
             MinWidth = 0,
         };
+        ApplyAdvancedFilterTextBoxChrome(listRangeBox);
         AutomationProperties.SetName(listRangeBox, "List range");
         AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
         AutomationProperties.SetHelpText(listRangeBox, "Range containing list headers and records.");
@@ -12220,6 +12251,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 0,
         };
+        ApplyAdvancedFilterTextBoxChrome(criteriaRangeBox);
         AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
         AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
         AutomationProperties.SetHelpText(criteriaRangeBox, "Range containing criteria headers and criteria rows.");
@@ -12230,6 +12262,7 @@ public sealed partial class MainWindow : Window
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
+        ApplySortOptionsRadioButtonChrome(inPlaceButton);
         AutomationProperties.SetName(inPlaceButton, "Filter in-place");
         AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
         AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
@@ -12239,6 +12272,7 @@ public sealed partial class MainWindow : Window
             Content = "Copy to another location",
             GroupName = "AdvancedFilterOutputMode",
         };
+        ApplySortOptionsRadioButtonChrome(copyToAnotherLocationButton);
         AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
         AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
@@ -12248,6 +12282,7 @@ public sealed partial class MainWindow : Window
             IsEnabled = false,
             MinWidth = 0,
         };
+        ApplyAdvancedFilterTextBoxChrome(copyToBox);
         AutomationProperties.SetName(copyToBox, "Copy to");
         AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
         AutomationProperties.SetHelpText(copyToBox, "Destination cell or one-row header range on the list sheet.");
@@ -12255,8 +12290,9 @@ public sealed partial class MainWindow : Window
         var uniqueBox = new CheckBox
         {
             Content = "Unique records only",
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
         };
+        ApplySortOptionsCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
         AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
@@ -12267,6 +12303,7 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
             Margin = new Thickness(0, 6, 0, 0),
+            FontSize = 12,
         };
         AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
@@ -12279,6 +12316,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             IsDefault = true,
         };
+        ApplySortDialogButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
         AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
@@ -12290,6 +12328,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             IsCancel = true,
         };
+        ApplySortDialogButtonChrome(cancelButton);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
@@ -12320,15 +12359,13 @@ public sealed partial class MainWindow : Window
                 Text = label,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
+                FontSize = 12,
             };
             var pickerButton = new Button
             {
                 Content = "...",
-                Width = 40,
-                MinWidth = 40,
-                Padding = new Thickness(0),
-                Margin = new Thickness(0, 0, 8, 0),
             };
+            ApplyAdvancedFilterPickerButtonChrome(pickerButton);
             AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);
             pickerButton.Click += (_, _) =>
             {
@@ -12337,7 +12374,7 @@ public sealed partial class MainWindow : Window
             };
 
             var row = new AvaloniaGrid { Margin = new Thickness(0, 8, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(128) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(82) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(labelBlock, 0);
@@ -12357,14 +12394,16 @@ public sealed partial class MainWindow : Window
             Text = "Copy to is available when Copy to another location is selected.",
             Foreground = SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0, 2, 0, 0),
+            FontSize = 12,
         };
         var criteriaHint = new TextBlock
         {
             Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
             Foreground = SecondaryInk,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
+            FontSize = 12,
         };
 
         var showInteractiveValidation = false;
@@ -12444,7 +12483,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
                 okButton,
@@ -12456,7 +12495,7 @@ public sealed partial class MainWindow : Window
         RefreshCopyToState();
         var actionPanel = new StackPanel
         {
-            Margin = new Thickness(8, 6, 8, 8),
+            Margin = new Thickness(14, 17, 8, 0),
             Children =
             {
                 inPlaceButton,
@@ -12464,18 +12503,38 @@ public sealed partial class MainWindow : Window
             },
         };
         inPlaceButton.Margin = new Thickness(0, 0, 0, 4);
+        var actionGroup = new AvaloniaGrid
+        {
+            Height = 60,
+            Margin = new Thickness(0, 0, 0, 10),
+            Children =
+            {
+                new Border
+                {
+                    BorderBrush = Brush(209, 218, 224),
+                    BorderThickness = new Thickness(1),
+                    Margin = new Thickness(0, 7, 0, 0),
+                },
+                new TextBlock
+                {
+                    Text = "Action",
+                    FontSize = 12,
+                    Background = Brushes.White,
+                    Padding = new Thickness(3, 0),
+                    Margin = new Thickness(8, 0, 0, 0),
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Top,
+                },
+                actionPanel,
+            },
+        };
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(12),
             Children =
             {
-                new GroupBox
-                {
-                    Header = "Action",
-                    Margin = new Thickness(0, 0, 0, 10),
-                    Content = actionPanel,
-                },
+                actionGroup,
                 listRangeRow.Row,
                 criteriaRangeRow.Row,
                 copyToRow.Row,
@@ -12488,8 +12547,7 @@ public sealed partial class MainWindow : Window
         };
         dialog.Opened += (_, _) =>
         {
-            criteriaRangeBox.Focus();
-            criteriaRangeBox.SelectAll();
+            inPlaceButton.Focus();
             errorText.IsVisible = false;
             Dispatcher.UIThread.Post(() => showInteractiveValidation = true);
         };
