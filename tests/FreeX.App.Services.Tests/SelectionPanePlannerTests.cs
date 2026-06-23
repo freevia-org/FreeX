@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -213,6 +214,56 @@ public sealed class SelectionPanePlannerTests
             targetId: chart);
 
         moves.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CreateCommand_BuildsCompositeForAllChangeKinds()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var id = Guid.NewGuid();
+
+        var command = SelectionPanePlanner.CreateCommand(
+            sheet.Id,
+            [new SelectionPaneVisibilityChange(SelectionPaneObjectKind.Picture, id, IsVisible: false)],
+            [new SelectionPaneRenameChange(SelectionPaneObjectKind.Picture, id, "New")],
+            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, id, Forward: true)]);
+
+        command.Should().BeOfType<CompositeWorkbookCommand>();
+    }
+
+    [Fact]
+    public void CreateCommand_ReturnsNullWhenNoChanges()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+
+        SelectionPanePlanner.CreateCommand(sheet.Id, [], [], []).Should().BeNull();
+    }
+
+    [Fact]
+    public void HasChanges_ReportsPendingVisibilityRenameOrMove()
+    {
+        SelectionPanePlanner.HasChanges([], [], []).Should().BeFalse();
+
+        SelectionPanePlanner.HasChanges(
+                [new SelectionPaneVisibilityChange(SelectionPaneObjectKind.Picture, Guid.NewGuid(), IsVisible: false)],
+                [],
+                [])
+            .Should()
+            .BeTrue();
+        SelectionPanePlanner.HasChanges(
+                [],
+                [new SelectionPaneRenameChange(SelectionPaneObjectKind.Shape, Guid.NewGuid(), "Renamed")],
+                [])
+            .Should()
+            .BeTrue();
+        SelectionPanePlanner.HasChanges(
+                [],
+                [],
+                [new SelectionPaneMoveChange(SelectionPaneObjectKind.TextBox, Guid.NewGuid(), Forward: true)])
+            .Should()
+            .BeTrue();
     }
 
     private static SelectionPaneItemState State(SelectionPaneObjectKind kind) =>

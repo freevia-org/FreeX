@@ -2310,7 +2310,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("private async Task ShowSelectionPaneParityDialogAsync()");
         parityCaptureSource.Should().Contain("chart.Name = \"Revenue Chart\";");
         parityCaptureSource.Should().Contain("shape.Name = \"Rectangle 1\";");
-        parityCaptureSource.Should().Contain("new SelectionPaneViewPlanner.Item(");
+        parityCaptureSource.Should().Contain("new SelectionPaneItem(");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync(items);");
         parityCaptureSource.Should().Contain("await OpenSelectionPaneDialogAsync();");
         parityCaptureSource.Should().Contain("private async Task ShowWithParityPivotAsync(Func<Task> showDialogAsync)");

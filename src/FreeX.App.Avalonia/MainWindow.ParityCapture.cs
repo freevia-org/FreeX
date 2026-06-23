@@ -13,7 +13,6 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
-using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -378,19 +377,17 @@ public sealed partial class MainWindow
         {
             var items = new[]
             {
-                new SelectionPaneViewPlanner.Item(
+                new SelectionPaneItem(
                     SelectionPaneObjectKind.Chart,
                     chart.Id,
                     chart.Name ?? "Revenue Chart",
-                    UiText.Get("SelectionPane_KindChart"),
                     chart.IsVisible,
                     CanMoveUp: false,
                     CanMoveDown: false),
-                new SelectionPaneViewPlanner.Item(
+                new SelectionPaneItem(
                     SelectionPaneObjectKind.Shape,
                     shape.Id,
                     shape.Name ?? "Rectangle 1",
-                    UiText.Get("SelectionPane_KindShape"),
                     shape.IsVisible,
                     CanMoveUp: false,
                     CanMoveDown: false),

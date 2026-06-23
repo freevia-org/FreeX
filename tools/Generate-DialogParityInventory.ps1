@@ -281,7 +281,7 @@ $routes = @(
     @{
         RouteId = "dialog.SelectionPane"; DisplayName = "Selection Pane"
         Wpf = @("screenshots\page-layout-setup-tour\freex_page_layout_setup_arrange_selection_pane_dialog.png")
-        Shared = @("src\FreeX.App.Presentation\DrawingUI\SelectionPane*.cs")
+        Shared = @("src\FreeX.App.Services\SelectionPane*.cs", "src\FreeX.App.Presentation\DrawingUI\SelectionPane*.cs")
     },
     @{
         RouteId = "dialog.InsertSlicer"; DisplayName = "Insert Slicer"
