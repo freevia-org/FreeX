@@ -60,33 +60,50 @@ public sealed partial class MainWindow
         var rows = planned.Select(item => new SelectionPaneRow(item)).ToList();
         var captureSelectedRow = captureItems is not null ? rows.FirstOrDefault() : null;
 
-        var listBox = new ListBox { MinHeight = 140, SelectionMode = SelectionMode.Single };
+        var listBox = new ListBox
+        {
+            MinHeight = 140,
+            SelectionMode = SelectionMode.Single,
+            Margin = new Thickness(0, 0, 0, 10),
+            Background = Brushes.White,
+            BorderBrush = Brush(190, 190, 190),
+            BorderThickness = new Thickness(1),
+        };
         ApplySelectionPaneListStyle(listBox);
         AutomationProperties.SetAutomationId(listBox, "SelectionPaneObjectList");
         AutomationProperties.SetName(listBox, UiText.Get("SelectionPane_ObjectListLabel"));
 
         var searchBox = new TextBox { MinWidth = 160, Margin = new Thickness(0, 0, 10, 0) };
+        ApplySelectionPaneTextBoxChrome(searchBox);
         AutomationProperties.SetAutomationId(searchBox, "SelectionPaneSearchBox");
         var filterBox = new ComboBox { MinWidth = 130 };
+        ApplySelectionPaneComboBoxChrome(filterBox);
         foreach (var filter in new[] { "All", "Visible", "Hidden", "Charts", "Pictures", "Shapes", "Text Boxes" })
             filterBox.Items.Add(filter);
         filterBox.SelectedIndex = 0;
         AutomationProperties.SetAutomationId(filterBox, "SelectionPaneFilterBox");
 
         var renameBox = new TextBox { MinWidth = 160, Margin = new Thickness(0, 0, 6, 0) };
+        ApplySelectionPaneTextBoxChrome(renameBox);
         AutomationProperties.SetAutomationId(renameBox, "SelectionPaneRenameBox");
         var renameButton = new Button { Content = UiText.Get("SelectionPane_RenameButton"), MinWidth = 78, Margin = new Thickness(0, 0, 6, 0) };
+        ApplySelectionPaneButtonChrome(renameButton, 78);
         AutomationProperties.SetAutomationId(renameButton, "SelectionPaneRenameButton");
         var toggleVisibilityButton = new Button { Content = CreateSelectionPaneEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0) };
+        ApplySelectionPaneButtonChrome(toggleVisibilityButton, 32);
         AutomationProperties.SetAutomationId(toggleVisibilityButton, "SelectionPaneToggleVisibilityButton");
 
         var moveUpButton = new Button { Content = UiText.Get("SelectionPane_BringForward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(moveUpButton, 104);
         AutomationProperties.SetAutomationId(moveUpButton, "SelectionPaneBringForwardButton");
         var moveDownButton = new Button { Content = UiText.Get("SelectionPane_SendBackward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(moveDownButton, 104);
         AutomationProperties.SetAutomationId(moveDownButton, "SelectionPaneSendBackwardButton");
         var showAllButton = new Button { Content = UiText.Get("SelectionPane_ShowAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(showAllButton, 82);
         AutomationProperties.SetAutomationId(showAllButton, "SelectionPaneShowAllButton");
         var hideAllButton = new Button { Content = UiText.Get("SelectionPane_HideAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
 
         bool MatchesFilter(SelectionPaneRow row)
@@ -217,6 +234,7 @@ public sealed partial class MainWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 MinWidth = 24,
             };
+            ApplySortOptionsCheckBoxChrome(visibilityBox);
             AutomationProperties.SetAutomationId(visibilityBox, "SelectionPaneVisibility_" + row.Id.ToString("N"));
             AutomationProperties.SetName(visibilityBox, UiText.Get("SelectionPane_VisibilityToggle"));
             visibilityBox.IsCheckedChanged += (_, _) => row.IsVisible = visibilityBox.IsChecked == true;
@@ -228,6 +246,10 @@ public sealed partial class MainWindow
                 BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Height = 24,
+                Padding = new Thickness(0, 1),
             };
             AutomationProperties.SetAutomationId(nameBox, "SelectionPaneName_" + row.Id.ToString("N"));
             AutomationProperties.SetName(nameBox, UiText.Get("SelectionPane_NameLabel"));
@@ -236,8 +258,10 @@ public sealed partial class MainWindow
             var kindText = new TextBlock
             {
                 Text = SelectionPaneKindLabel(row.Kind),
-                Foreground = HeaderForeground,
+                Foreground = SecondaryInk,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
                 MinWidth = 64,
             };
 
@@ -245,6 +269,7 @@ public sealed partial class MainWindow
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8,
+                MinHeight = 24,
                 Children = { visibilityBox, nameBox, kindText },
             };
         });
@@ -264,8 +289,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "SelectionPaneDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78, Margin = new Thickness(0, 0, 6, 0) };
+        ApplySelectionPaneButtonChrome(ok, 78, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "SelectionPaneOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 78 };
+        ApplySelectionPaneButtonChrome(cancel, 78);
         AutomationProperties.SetAutomationId(cancel, "SelectionPaneCancelButton");
         ok.Click += (_, _) => dialog.Close(true);
         cancel.Click += (_, _) => dialog.Close(false);
@@ -275,9 +302,9 @@ public sealed partial class MainWindow
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_SearchLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
+        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_SearchLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
         AddGridChild(searchRow, searchBox, 1);
-        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_FilterLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 2);
+        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_FilterLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 2);
         AddGridChild(searchRow, filterBox, 3);
 
         var renameRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
@@ -285,7 +312,7 @@ public sealed partial class MainWindow
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        AddGridChild(renameRow, new TextBlock { Text = UiText.Get("SelectionPane_NameLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
+        AddGridChild(renameRow, new TextBlock { Text = UiText.Get("SelectionPane_NameLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
         AddGridChild(renameRow, renameBox, 1);
         AddGridChild(renameRow, renameButton, 2);
         AddGridChild(renameRow, toggleVisibilityButton, 3);
@@ -374,6 +401,49 @@ public sealed partial class MainWindow
                 new Setter(Border.BorderBrushProperty, Brushes.Transparent),
             },
         });
+    }
+
+    private static void ApplySelectionPaneTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplySelectionPaneComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplySelectionPaneButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        button.Width = width;
+        button.MinWidth = width;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
     private static Viewbox CreateSelectionPaneEyeIcon()
