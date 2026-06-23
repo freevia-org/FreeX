@@ -90,4 +90,18 @@ public sealed class GridViewThemeFontResolutionTests
         GridView.ResolveEffectiveCellFontName(style, theme2).Should().Be("Arial",
             "the effective font should reflect the new theme minor font when the theme changes");
     }
+
+    [Fact]
+    public void ResolveEffectiveCellFontName_AptosNarrowAvailable_ReturnsAptosNarrowWithNormalStretch()
+    {
+        var theme = WorkbookTheme.Office.WithFonts("HeadingFont", "BodyFont");
+        var style = new CellStyle { FontName = "Aptos Narrow", FontScheme = CellFontScheme.Minor };
+
+        // When the cloud font IS enumerable (isAvailable returns true for "Aptos Narrow"),
+        // resolution must short-circuit and return ("Aptos Narrow", Normal) — not the Calibri fallback.
+        var resolved = GridView.ResolveEffectiveCellFontName(style, theme, name => name == "Aptos Narrow");
+
+        resolved.Should().Be("Aptos Narrow",
+            "when Aptos Narrow is available (e.g. via cloud font cache), it should be used directly without falling back to Calibri");
+    }
 }

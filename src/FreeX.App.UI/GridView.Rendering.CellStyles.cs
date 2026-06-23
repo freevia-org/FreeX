@@ -9,6 +9,23 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private readonly record struct CellTypefaceKey(string FontName, FontStretch Stretch, bool Italic, bool Bold);
+
+    private static string? GetAptosNarrowCloudFontDir()
+    {
+        if (!OperatingSystem.IsWindows()) return null;
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "FontCache", "4", "CloudFonts", "Aptos Narrow");
+        try
+        {
+            return Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*.ttf").Any() ? dir : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static readonly Lazy<HashSet<string>> AvailableCellFontNames = new(() =>
     {
         var names = Fonts.SystemFontFamilies
@@ -21,7 +38,25 @@ public partial class GridView
             names.Add("Arial Narrow");
         }
 
+        if (GetAptosNarrowCloudFontDir() is not null)
+        {
+            names.Add("Aptos Narrow");
+        }
+
         return names;
+    });
+
+    private static readonly Lazy<IReadOnlyDictionary<string, FontFamily>> CloudFontFamilies = new(() =>
+    {
+        var dict = new Dictionary<string, FontFamily>(StringComparer.OrdinalIgnoreCase);
+        var dir = GetAptosNarrowCloudFontDir();
+        if (dir is not null)
+        {
+            // WPF folder-URI FontFamily: the directory URI must end with a backslash
+            var dirUri = new Uri(dir.TrimEnd('\\', '/') + "\\");
+            dict["Aptos Narrow"] = new FontFamily(dirUri, "./#Aptos Narrow");
+        }
+        return dict;
     });
 
     private static void DrawBorderEdge(
@@ -331,6 +366,10 @@ public partial class GridView
         var fontStyle = key.Italic ? FontStyles.Italic : FontStyles.Normal;
         var fontWeight = key.Bold ? FontWeights.Bold : FontWeights.Normal;
 
-        return new Typeface(new FontFamily(key.FontName), fontStyle, fontWeight, key.Stretch);
+        var fontFamily = CloudFontFamilies.Value.TryGetValue(key.FontName, out var cloudFamily)
+            ? cloudFamily
+            : new FontFamily(key.FontName);
+
+        return new Typeface(fontFamily, fontStyle, fontWeight, key.Stretch);
     }
 }
