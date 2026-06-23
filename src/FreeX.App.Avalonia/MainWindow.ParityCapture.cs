@@ -139,6 +139,7 @@ public sealed partial class MainWindow
         ("dialog.Subtotal", () => ShowSubtotalParityDialogAsync()),
         ("dialog.Sparkline", () => ShowSparklineParityDialogAsync()),
         ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
+        ("dialog.SymbolPicker", () => ShowSymbolPickerAsync()),
         ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
         ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
         ("dialog.AddWatch", () => ShowAddWatchParityDialogAsync()),

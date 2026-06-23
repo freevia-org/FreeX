@@ -256,6 +256,7 @@ $routes = @(
     @{
         RouteId = "dialog.SymbolPicker"; DisplayName = "Symbol Picker"
         Wpf = @("screenshots\insert-objects-links-tour\freex_insert_symbol_picker_opened.png")
+        Shared = @("src\FreeX.App.Services\SymbolPickerSelectionPlanner.cs")
     },
     @{
         RouteId = "dialog.ErrorChecking"; DisplayName = "Error Checking"

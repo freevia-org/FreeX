@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public sealed record SymbolPickerSelection(string Symbol, char SelectedChar, string CodeText);
 

@@ -9,6 +9,5 @@ public sealed partial class SymbolPickerDialogSourceTests
             string.Empty,
             "SymbolPickerDialog.cs",
             "SymbolPickerDialog.Layout.cs",
-            "SymbolPickerDialog.Catalog.cs",
-            "SymbolPickerSelectionPlanner.cs");
+            "SymbolPickerDialog.Catalog.cs");
 }
