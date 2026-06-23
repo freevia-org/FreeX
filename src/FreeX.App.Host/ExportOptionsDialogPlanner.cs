@@ -1,3 +1,6 @@
+using FreeX.App.Services;
+using FreeX.Core.Model;
+
 namespace FreeX.App.Host;
 
 internal enum ExportOptionsFocusTarget
@@ -51,21 +54,7 @@ internal static class ExportOptionsDialogPlanner
             format);
 
     public static ExportOptionsFormatAvailability CreateFormatAvailability(ExportFormat format) =>
-        format == ExportFormat.Xps
-            ? new ExportOptionsFormatAvailability(
-                PdfBookmarksEnabled: false,
-                PdfInitialViewEnabled: false,
-                PdfOpenModeEnabled: false,
-                PdfLanguageEnabled: false,
-                PdfBitmapTextEnabled: false,
-                MinimumSizeEnabled: false)
-            : new ExportOptionsFormatAvailability(
-                PdfBookmarksEnabled: true,
-                PdfInitialViewEnabled: true,
-                PdfOpenModeEnabled: true,
-                PdfLanguageEnabled: true,
-                PdfBitmapTextEnabled: true,
-                MinimumSizeEnabled: true);
+        FromSharedAvailability(ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ToSharedFormat(format)));
 
     public static PdfBookmarkMode BookmarkModeFromIndex(int selectedIndex) =>
         selectedIndex switch
@@ -96,21 +85,25 @@ internal static class ExportOptionsDialogPlanner
         string? error,
         string? fromPageText)
     {
-        if (string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.Ordinal))
-            return ExportOptionsFocusTarget.ToPage;
-
-        if (int.TryParse(
-                fromPageText?.Trim(),
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var fromPage)
-            && fromPage >= 1)
-        {
-            return ExportOptionsFocusTarget.ToPage;
-        }
-
-        return ExportOptionsFocusTarget.FromPage;
+        return ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(
+            error,
+            fromPageText,
+            UiText.Get("Export_PageRangeFromLessThanToError")) == ExportOptionsDialogFocusTarget.ToPage
+            ? ExportOptionsFocusTarget.ToPage
+            : ExportOptionsFocusTarget.FromPage;
     }
+
+    private static ExportFileFormat ToSharedFormat(ExportFormat format) =>
+        format == ExportFormat.Xps ? ExportFileFormat.Xps : ExportFileFormat.Pdf;
+
+    private static ExportOptionsFormatAvailability FromSharedAvailability(ExportOptionsDialogFormatAvailability availability) =>
+        new(
+            availability.PdfBookmarksEnabled,
+            availability.PdfInitialViewEnabled,
+            availability.PdfOpenModeEnabled,
+            availability.PdfLanguageEnabled,
+            availability.PdfBitmapTextEnabled,
+            availability.MinimumSizeEnabled);
 
     private static PdfBookmarkMode NormalizeBookmarkMode(bool createBookmarks, PdfBookmarkMode bookmarkMode)
     {

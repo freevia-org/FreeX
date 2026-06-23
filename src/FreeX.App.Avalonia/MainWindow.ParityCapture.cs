@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -158,6 +159,7 @@ public sealed partial class MainWindow
         ("dialog.Zoom", () => ShowZoomDialogAsync()),
         ("dialog.CustomViews", () => ShowCustomViewsParityDialogAsync()),
         ("dialog.PrintPreview", () => ShowPrintPreviewParityDialogAsync()),
+        ("dialog.ExportOptions", () => ShowExportOptionsParityDialogAsync()),
         ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
         ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
         ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync()),
@@ -177,6 +179,140 @@ public sealed partial class MainWindow
 
     private Task ShowPrintPreviewParityDialogAsync() =>
         ShowPrintPreviewDialogAsync();
+
+    private async Task ShowExportOptionsParityDialogAsync()
+    {
+        var availability = ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ExportFileFormat.Pdf);
+        var dialog = new Window
+        {
+            Title = UiText.Get(ExportOptionsDialogSurfacePlanner.TitleResourceKey),
+            Width = ExportOptionsDialogSurfacePlanner.Width,
+            SizeToContent = SizeToContent.Height,
+            MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, ExportOptionsDialogSurfacePlanner.DialogAutomationId);
+
+        var activeSheetButton = new RadioButton { Content = UiText.Get("ExportOptions_ActiveSheetS"), IsChecked = true };
+        var selectionButton = new RadioButton { Content = UiText.Get("ExportOptions_SelectedRange") };
+        var workbookButton = new RadioButton { Content = UiText.Get("ExportOptions_Workbook") };
+        var allPagesButton = new RadioButton { Content = UiText.Get("ExportOptions_All"), GroupName = "PageRange", IsChecked = true };
+        var pagesButton = new RadioButton { Content = UiText.Get("ExportOptions_Pages"), GroupName = "PageRange" };
+        var fromPageBox = new TextBox { Width = 56, IsEnabled = false };
+        var toPageBox = new TextBox { Width = 56, IsEnabled = false };
+        var documentPropertiesBox = new CheckBox { Content = UiText.Get("ExportOptions_IncludeDocumentProperties") };
+        var ignorePrintAreasBox = new CheckBox { Content = UiText.Get("ExportOptions_IgnorePrintAreas") };
+        var bookmarksBox = new CheckBox { Content = UiText.Get("ExportOptions_CreatePdfBookmarks") };
+        var bookmarkModeBox = new ComboBox { Width = 180, IsEnabled = false };
+        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_SheetNames"));
+        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
+        bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PageNumbers"));
+        bookmarkModeBox.SelectedIndex = 0;
+        var initialViewBox = new ComboBox { Width = 180, IsEnabled = availability.PdfInitialViewEnabled };
+        initialViewBox.Items.Add(UiText.Get("ExportOptions_SinglePage"));
+        initialViewBox.Items.Add(UiText.Get("ExportOptions_OneContinuousColumn"));
+        initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesLeft"));
+        initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesRight"));
+        initialViewBox.SelectedIndex = 0;
+        var openModeBox = new ComboBox { Width = 180, IsEnabled = availability.PdfOpenModeEnabled };
+        openModeBox.Items.Add(UiText.Get("ExportOptions_Normal"));
+        openModeBox.Items.Add(UiText.Get("ExportOptions_BookmarksVisible"));
+        openModeBox.Items.Add(UiText.Get("ExportOptions_FullScreen"));
+        openModeBox.SelectedIndex = 0;
+        var pdfLanguageBox = new TextBox { Width = 88, Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
+        var bitmapTextBox = new CheckBox
+        {
+            Content = UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded"),
+            IsEnabled = availability.PdfBitmapTextEnabled,
+        };
+        var pdfABox = new CheckBox { Content = UiText.Get("ExportOptions_PdfACompliantNotSupported"), IsEnabled = false };
+        var structureTagsBox = new CheckBox { Content = UiText.Get("ExportOptions_DocumentStructureTagsNotSupported"), IsEnabled = false };
+        var standardQualityButton = new RadioButton { Content = UiText.Get("ExportOptions_Standard"), IsChecked = true };
+        var minimumSizeButton = new RadioButton { Content = UiText.Get("ExportOptions_MinimumSize"), IsEnabled = availability.MinimumSizeEnabled };
+        var openAfterPublishBox = new CheckBox { Content = UiText.Get("ExportOptions_OpenAfterPublishing"), Margin = new Thickness(0, 8, 0, 18) };
+
+        bookmarksBox.IsEnabled = availability.PdfBookmarksEnabled;
+        bookmarksBox.IsCheckedChanged += (_, _) => bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
+        pagesButton.IsCheckedChanged += (_, _) =>
+        {
+            var enabled = pagesButton.IsChecked == true;
+            fromPageBox.IsEnabled = enabled;
+            toPageBox.IsEnabled = enabled;
+        };
+
+        var stack = new StackPanel { Margin = new Thickness(16), Spacing = 2 };
+        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PublishWhat"));
+        stack.Children.Add(activeSheetButton);
+        stack.Children.Add(selectionButton);
+        stack.Children.Add(workbookButton);
+        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PageRange", topMargin: 12));
+        stack.Children.Add(allPagesButton);
+
+        var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0), Spacing = 6 };
+        pageRangePanel.Children.Add(pagesButton);
+        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_From"), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(fromPageBox);
+        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_To"), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(toPageBox);
+        stack.Children.Add(pageRangePanel);
+
+        stack.Children.Add(CreateExportOptionsSectionLabel("ExportOptions_PdfXpsOptions", topMargin: 14));
+        stack.Children.Add(documentPropertiesBox);
+        stack.Children.Add(ignorePrintAreasBox);
+        stack.Children.Add(bookmarksBox);
+        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_BookmarkMode", bookmarkModeBox, leftIndent: 22));
+        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_InitialView", initialViewBox));
+        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_OpenMode", openModeBox));
+        stack.Children.Add(CreateExportOptionsLabeledControl("ExportOptions_PdfLanguage", pdfLanguageBox));
+        stack.Children.Add(bitmapTextBox);
+        stack.Children.Add(pdfABox);
+        stack.Children.Add(structureTagsBox);
+        stack.Children.Add(standardQualityButton);
+        stack.Children.Add(minimumSizeButton);
+        stack.Children.Add(openAfterPublishBox);
+
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 80 };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 80 };
+        okButton.Click += (_, _) => dialog.Close();
+        cancelButton.Click += (_, _) => dialog.Close();
+        stack.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = 8,
+            Children = { okButton, cancelButton },
+        });
+
+        dialog.Content = new ScrollViewer
+        {
+            Content = stack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        dialog.Opened += (_, _) => activeSheetButton.Focus();
+        await dialog.ShowDialog(this);
+    }
+
+    private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
+        new()
+        {
+            Text = UiText.Get(resourceKey),
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, topMargin, 0, 4),
+        };
+
+    private static StackPanel CreateExportOptionsLabeledControl(string resourceKey, Control control, double leftIndent = 0) =>
+        new()
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(leftIndent, 2, 0, 0),
+            Spacing = 6,
+            Children =
+            {
+                new Label { Content = UiText.Get(resourceKey), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                control,
+            },
+        };
 
     private Task ShowTextToColumnsParityDialogAsync()
     {
