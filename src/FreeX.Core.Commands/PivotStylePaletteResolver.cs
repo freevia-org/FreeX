@@ -112,6 +112,7 @@ internal static class PivotStylePaletteResolver
             palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5) with
             {
                 GrandTotalFill = null,
+                StripeFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85),
                 BodyFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95),
                 BodyBorder = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5)
             };

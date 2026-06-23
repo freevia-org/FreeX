@@ -992,11 +992,11 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
             .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "C6"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "D6"))!.StyleId)
             .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95));
     }
@@ -1200,8 +1200,11 @@ public sealed partial class PivotTableRefreshServiceTests
             : theme.ResolveColor(expectedSlot);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
             .FillColor.Should().Be(expectedHeaderFill);
+        var expectedStripeFill = styleName.Equals("PivotStyleMedium13", StringComparison.OrdinalIgnoreCase)
+            ? theme.ResolveColor(expectedSlot, 0.85)
+            : theme.ResolveColor(expectedSlot, 0.9);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
+            .FillColor.Should().Be(expectedStripeFill);
         CellColor? expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
                                             styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
                                             styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase) ||
