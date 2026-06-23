@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Reflection;
+using System.Xml.Linq;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using static ExcelSmokeCom;
@@ -22,11 +24,15 @@ internal static class ExcelSmokeFixtures
     private const int XlDescending = -4121;
     private const int XlOverThenDown = 2;
     private const int XlTimeline = 2;
+    private const int XlCompactRow = 0;
     private const int XlTabularRow = 1;
     private const int XlOutlineRow = 2;
     private const int XlRepeatLabels = 2;
+    private const int XlAtBottom = 2;
     private const int XlCaptionBeginsWith = 17;
     private const int XlValueIsGreaterThan = 9;
+    private const int XlPercentOfColumn = 7;
+    private const int XlRunningTotal = 5;
     private const int XlValidateList = 3;
     private const int XlValidAlertStop = 1;
     private const int XlBetween = 1;
@@ -100,6 +106,12 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_pivot_layout_options_002.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_date_grouping_003.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_pivot_calculated_field_item_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_show_items_no_data_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_layout_matrix_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_subtotal_grand_totals_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_named_range_source_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_show_values_as_variants_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_pivot_chrome_style_flags_004.xlsx"),
         ];
     }
 
@@ -235,6 +247,18 @@ internal static class ExcelSmokeFixtures
                 AddNativePivotDateGrouping(workbook, dataSheet);
             else if (fileName.Contains("calculated_field_item", StringComparison.OrdinalIgnoreCase))
                 AddNativePivotCalculatedFieldItem(workbook, dataSheet);
+            else if (fileName.Contains("show_items_no_data", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotShowItemsWithNoData(workbook, dataSheet);
+            else if (fileName.Contains("layout_matrix", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotLayoutMatrix(workbook, dataSheet);
+            else if (fileName.Contains("subtotal_grand_totals", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotSubtotalGrandTotals(workbook, dataSheet);
+            else if (fileName.Contains("named_range_source", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotNamedRangeSource(workbook, dataSheet);
+            else if (fileName.Contains("show_values_as_variants", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotShowValuesAsVariants(workbook, dataSheet);
+            else if (fileName.Contains("chrome_style_flags", StringComparison.OrdinalIgnoreCase))
+                AddNativePivotChromeStyleFlags(workbook, dataSheet);
             else
                 throw new InvalidOperationException($"Unknown Excel native PivotTable fixture: {fileName}");
 
@@ -254,6 +278,11 @@ internal static class ExcelSmokeFixtures
                 true);
 
             ((dynamic)workbook).Close(false);
+            workbook = null;
+
+            if (fileName.Contains("show_items_no_data", StringComparison.OrdinalIgnoreCase))
+                PatchNativePivotShowItemsWithNoDataFlags(outputPath);
+
             Console.WriteLine($"Generated: {outputPath}");
         }
         finally
@@ -1683,6 +1712,329 @@ internal static class ExcelSmokeFixtures
         }
     }
 
+    private static void AddNativePivotShowItemsWithNoData(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot No Data Items");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable show items with no data");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot No Data Items'!R3C1", "NativePivotShowItemsWithNoData");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlRowField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            ((dynamic)categoryField).ShowAllItems = true;
+            ((dynamic)pivot).RowAxisLayout(XlOutlineRow);
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium14";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:D");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotLayoutMatrix(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? compactPivot = null;
+        object? outlinePivot = null;
+        object? tabularPivot = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Layout Matrix");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable compact / outline / tabular layout matrix");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            compactPivot = ((dynamic)cache).CreatePivotTable("'Pivot Layout Matrix'!R3C1", "NativePivotCompactLayout");
+            outlinePivot = ((dynamic)cache).CreatePivotTable("'Pivot Layout Matrix'!R3C5", "NativePivotOutlineLayout");
+            tabularPivot = ((dynamic)cache).CreatePivotTable("'Pivot Layout Matrix'!R3C9", "NativePivotTabularLayout");
+
+            ConfigureLayoutMatrixPivot(compactPivot, XlCompactRow, "Compact Layout", "PivotStyleLight9");
+            ConfigureLayoutMatrixPivot(outlinePivot, XlOutlineRow, "Outline Layout", "PivotStyleMedium3");
+            ConfigureLayoutMatrixPivot(tabularPivot, XlTabularRow, "Tabular Layout", "PivotStyleMedium9");
+
+            RefreshExcelPivotTable(compactPivot);
+            RefreshExcelPivotTable(outlinePivot);
+            RefreshExcelPivotTable(tabularPivot);
+            AutoFitExcelColumns(pivotSheet, "A:L");
+        }
+        finally
+        {
+            ReleaseComObject(tabularPivot);
+            ReleaseComObject(outlinePivot);
+            ReleaseComObject(compactPivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotSubtotalGrandTotals(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? channelField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Totals");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable subtotal and grand-total permutations");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Totals'!R3C1", "NativePivotSubtotalGrandTotals");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            channelField = ((dynamic)pivot).PivotFields("Channel");
+            ((dynamic)channelField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            ((dynamic)pivot).RowAxisLayout(XlOutlineRow);
+            ((dynamic)pivot).RowGrand = false;
+            ((dynamic)pivot).ColumnGrand = true;
+            ((dynamic)regionField).LayoutSubtotalLocation = XlAtBottom;
+            ((dynamic)channelField).Subtotals = CreateExcelBooleanArray(false);
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium12";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:H");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(channelField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotNamedRangeSource(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? channelField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Named Range");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable named-range source");
+            cache = CreateWorksheetRangePivotCache(workbook, "NativeSalesRange");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Named Range'!R3C1", "NativePivotNamedRangeSource");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            channelField = ((dynamic)pivot).PivotFields("Channel");
+            ((dynamic)channelField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium8";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:F");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(channelField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotShowValuesAsVariants(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? percentPivot = null;
+        object? runningPivot = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Value Modes");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable Show Values As variants");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            percentPivot = ((dynamic)cache).CreatePivotTable("'Pivot Value Modes'!R3C1", "NativePivotPercentOfColumn");
+            runningPivot = ((dynamic)cache).CreatePivotTable("'Pivot Value Modes'!R3C7", "NativePivotRunningTotal");
+
+            ConfigurePercentOfColumnPivot(percentPivot);
+            ConfigureRunningTotalPivot(runningPivot);
+
+            RefreshExcelPivotTable(percentPivot);
+            RefreshExcelPivotTable(runningPivot);
+            AutoFitExcelColumns(pivotSheet, "A:L");
+        }
+        finally
+        {
+            ReleaseComObject(runningPivot);
+            ReleaseComObject(percentPivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void AddNativePivotChromeStyleFlags(object workbook, object sourceWorksheet)
+    {
+        object? pivotSheet = null;
+        object? cache = null;
+        object? pivot = null;
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            pivotSheet = AddWorksheetAfter(workbook, sourceWorksheet, "Pivot Chrome Style");
+            SetExcelCellValue(pivotSheet, 1, 1, "Native PivotTable field chrome and style flags");
+            cache = CreateWorksheetRangePivotCache(workbook, "'SalesData'!R1C1:R13C7");
+            pivot = ((dynamic)cache).CreatePivotTable("'Pivot Chrome Style'!R3C1", "NativePivotChromeStyleFlags");
+
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Sum of Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+
+            ((dynamic)pivot).DisplayFieldCaptions = true;
+            ((dynamic)pivot).ShowDrillIndicators = false;
+            ((dynamic)pivot).ShowTableStyleRowHeaders = false;
+            ((dynamic)pivot).ShowTableStyleColumnHeaders = true;
+            ((dynamic)pivot).ShowTableStyleRowStripes = true;
+            ((dynamic)pivot).ShowTableStyleColumnStripes = false;
+            ((dynamic)pivot).TableStyle2 = "PivotStyleLight14";
+            RefreshExcelPivotTable(pivot);
+            AutoFitExcelColumns(pivotSheet, "A:F");
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+            ReleaseComObject(pivot);
+            ReleaseComObject(cache);
+            ReleaseComObject(pivotSheet);
+        }
+    }
+
+    private static void ConfigureLayoutMatrixPivot(object pivot, int rowAxisLayout, string dataFieldCaption, string style)
+    {
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlRowField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, dataFieldCaption, XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            RefreshExcelPivotTable(pivot);
+            ((dynamic)pivot).RowAxisLayout(rowAxisLayout);
+            ((dynamic)pivot).TableStyle2 = style;
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+        }
+    }
+
+    private static void ConfigurePercentOfColumnPivot(object pivot)
+    {
+        object? regionField = null;
+        object? categoryField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            regionField = ((dynamic)pivot).PivotFields("Region");
+            ((dynamic)regionField).Orientation = XlRowField;
+            categoryField = ((dynamic)pivot).PivotFields("Category");
+            ((dynamic)categoryField).Orientation = XlColumnField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "% Column Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "0.0%";
+            ((dynamic)dataField).Calculation = XlPercentOfColumn;
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium6";
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(categoryField);
+            ReleaseComObject(regionField);
+        }
+    }
+
+    private static void ConfigureRunningTotalPivot(object pivot)
+    {
+        object? monthField = null;
+        object? salesField = null;
+        object? dataField = null;
+        try
+        {
+            monthField = ((dynamic)pivot).PivotFields("Month");
+            ((dynamic)monthField).Orientation = XlRowField;
+            salesField = ((dynamic)pivot).PivotFields("Sales");
+            dataField = ((dynamic)pivot).AddDataField(salesField, "Running Total Sales", XlSum);
+            ((dynamic)dataField).NumberFormat = "$#,##0";
+            ((dynamic)dataField).Calculation = XlRunningTotal;
+            ((dynamic)dataField).BaseField = "Month";
+            ((dynamic)pivot).TableStyle2 = "PivotStyleMedium10";
+        }
+        finally
+        {
+            ReleaseComObject(dataField);
+            ReleaseComObject(salesField);
+            ReleaseComObject(monthField);
+        }
+    }
+
     private static object[] CreateExcelBooleanArray(bool value)
     {
         var values = new object[12];
@@ -1718,6 +2070,29 @@ internal static class ExcelSmokeFixtures
 
     private static object CreateWorksheetRangePivotCache(object workbook, string sourceData) =>
         ((dynamic)workbook).PivotCaches().Create(XlDatabase, sourceData);
+
+    private static void PatchNativePivotShowItemsWithNoDataFlags(string workbookPath)
+    {
+        using var archive = ZipFile.Open(workbookPath, ZipArchiveMode.Update);
+        var entry = archive.GetEntry("xl/pivotTables/pivotTable1.xml")
+            ?? throw new InvalidOperationException("Expected native PivotTable definition part was not found.");
+
+        XDocument document;
+        using (var stream = entry.Open())
+        {
+            document = XDocument.Load(stream);
+        }
+
+        if (document.Root is null)
+            throw new InvalidOperationException("Native PivotTable definition part is empty.");
+
+        document.Root.SetAttributeValue("showEmptyRow", "1");
+
+        entry.Delete();
+        var replacement = archive.CreateEntry("xl/pivotTables/pivotTable1.xml");
+        using var output = replacement.Open();
+        document.Save(output);
+    }
 
     private static void RefreshExcelPivotTable(object pivotTable)
     {
