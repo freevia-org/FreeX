@@ -1093,6 +1093,72 @@ public sealed partial class PivotTableRefreshServiceTests
             .FillColor.Should().NotBe(new CellColor(21, 96, 130));
     }
 
+    [Fact]
+    public void ApplyLoadedPivotStyles_UsesMedium12OutlineGroupSubtotalAndGrandTotalSurfaces()
+    {
+        var workbook = new Workbook("LoadedPivotMedium12OutlineStyleTest");
+        var sheet = workbook.AddSheet("Pivot");
+        var pivot = new PivotTableModel
+        {
+            Name = "NativePivotSubtotalGrandTotals",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "G12"),
+            TargetRange = Range(sheet, "A3", "E22"),
+            LastRenderedRange = Range(sheet, "A3", "E22"),
+            ReportLayout = PivotReportLayout.Outline,
+            FirstDataRow = 2,
+            FirstDataColumn = 2,
+            StyleName = "PivotStyleMedium12",
+            ShowRowHeaders = true,
+            ShowColumnHeaders = true,
+            ShowRowStripes = false,
+            ShowColumnStripes = false
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(2));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(6, "Sum of Sales", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        sheet.SetCell(Addr(sheet, "A3"), new TextValue("Sum of Sales"));
+        sheet.SetCell(Addr(sheet, "C3"), new TextValue("Category"));
+        sheet.SetCell(Addr(sheet, "A4"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B4"), new TextValue("Channel"));
+        sheet.SetCell(Addr(sheet, "C4"), new TextValue("Hardware"));
+        sheet.SetCell(Addr(sheet, "A5"), new TextValue("East"));
+        sheet.SetCell(Addr(sheet, "B6"), new TextValue("Direct"));
+        sheet.SetCell(Addr(sheet, "C6"), new NumberValue(2360));
+        sheet.SetCell(Addr(sheet, "B7"), new TextValue("Partner"));
+        sheet.SetCell(Addr(sheet, "D7"), new NumberValue(980));
+        sheet.SetCell(Addr(sheet, "A8"), new TextValue("East Total"));
+        sheet.SetCell(Addr(sheet, "C8"), new NumberValue(2360));
+        sheet.SetCell(Addr(sheet, "A22"), new TextValue("Grand Total"));
+        sheet.SetCell(Addr(sheet, "C22"), new NumberValue(8080));
+
+        PivotTableRefreshService.ApplyLoadedPivotStyles(workbook).Should().BeTrue();
+
+        var headerFill = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent4);
+        var groupFill = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent4, 0.8);
+        var subtotalFill = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent4, 0.7);
+
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A3"))!.StyleId)
+            .FillColor.Should().Be(headerFill);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
+            .FillColor.Should().Be(groupFill, "Excel renders Medium12 outline parent rows lighter than subtotal rows");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
+            .FillColor.Should().Be(groupFill, "the loaded outline parent row surface must span blank row-field cells");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A8"))!.StyleId)
+            .FillColor.Should().Be(subtotalFill);
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B8"))!.StyleId)
+            .FillColor.Should().Be(subtotalFill, "subtotal row surfaces span blank row-field cells");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A22"))!.StyleId)
+            .FillColor.Should().BeNull("Medium12 grand totals keep Excel's white worksheet surface");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "B22"))!.StyleId)
+            .FillColor.Should().BeNull("blank grand-total row-field cells stay visually white, not subtotal blue");
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "A22"))!.StyleId)
+            .Bold.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("PivotStyleMedium3", WorkbookThemeColorSlot.Accent3)]
     [InlineData("PivotStyleMedium11", WorkbookThemeColorSlot.Accent3)]
@@ -1137,7 +1203,8 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
             .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
         CellColor? expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
-                                            styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase)
+                                            styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
+                                            styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase)
             ? null
             : styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
                 ? theme.ResolveColor(expectedSlot, 0.8)

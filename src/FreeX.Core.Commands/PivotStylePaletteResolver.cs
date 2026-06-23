@@ -117,6 +117,17 @@ internal static class PivotStylePaletteResolver
             return true;
         }
 
+        if (string.Equals(styleName, "PivotStyleMedium12", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent4) with
+            {
+                SubtotalFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent4, 0.7),
+                GrandTotalFill = null,
+                CompactGroupHeaderFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent4, 0.8)
+            };
+            return true;
+        }
+
         if (TryResolveMediumThemeSlot(styleName, out var mediumSlot))
         {
             palette = ThemedMediumPalette(theme, mediumSlot);
