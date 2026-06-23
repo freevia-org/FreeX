@@ -163,7 +163,7 @@ public sealed partial class MainWindow
                 break;
 
             case QuickAnalysisShellActionKind.CreateTable:
-                InsertTableFromSelection();
+                _ = InsertTableFromSelectionAsync();
                 break;
 
             case QuickAnalysisShellActionKind.Deferred:

@@ -1,3 +1,4 @@
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -12,34 +13,22 @@ public static class CreateTableInputParser
         out CreateTableDialogResult result,
         out string? error)
     {
-        result = default!;
-        error = null;
-        if (string.IsNullOrWhiteSpace(rangeText))
+        var parsed = CreateTableDialogPlanner.TryParse(
+            sheetId,
+            rangeText,
+            firstRowHasHeaders,
+            tableStyleName,
+            out var plan,
+            out var errorKey);
+        if (parsed)
         {
-            error = UiText.Get("CreateTable_MissingRangeMessage");
-            return false;
-        }
-
-        try
-        {
-            var trimmedRangeText = rangeText.Trim();
-            var range = trimmedRangeText.Contains(':', StringComparison.Ordinal)
-                ? GridRange.Parse(trimmedRangeText, sheetId)
-                : new GridRange(CellAddress.Parse(trimmedRangeText, sheetId), CellAddress.Parse(trimmedRangeText, sheetId));
-
-            if (range.End.Row <= range.Start.Row)
-            {
-                error = UiText.Get("CreateTable_MinimumRowsMessage");
-                return false;
-            }
-
-            result = new CreateTableDialogResult(range, firstRowHasHeaders, tableStyleName.Trim());
+            result = new CreateTableDialogResult(plan.Range, plan.FirstRowHasHeaders, plan.TableStyleName);
+            error = null;
             return true;
         }
-        catch (FormatException)
-        {
-            error = UiText.Get("CreateTable_InvalidRangeMessage");
-            return false;
-        }
+
+        result = default!;
+        error = errorKey is null ? null : UiText.Get(errorKey);
+        return false;
     }
 }

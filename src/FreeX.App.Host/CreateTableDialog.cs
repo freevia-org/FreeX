@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -12,7 +13,7 @@ public sealed class CreateTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _headersBox = new() { Content = UiText.Get("CreateTable_HeadersCheckBox"), IsChecked = true };
+    private readonly CheckBox _headersBox = new() { Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey), IsChecked = true };
     private readonly string _tableStyleName;
     private readonly Action<CreateTableRangeSelectionRequest>? _requestRangeSelection;
 
@@ -28,23 +29,24 @@ public sealed class CreateTableDialog : Window
         _sheetId = sheetId;
         _tableStyleName = tableStyleName;
         _requestRangeSelection = requestRangeSelection;
-        Title = UiText.Get("CreateTable_Title");
-        Width = 360;
-        Height = 190;
+        Title = UiText.Get(CreateTableDialogPlanner.TitleKey);
+        Width = CreateTableDialogPlanner.Width;
+        Height = CreateTableDialogPlanner.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, CreateTableDialogPlanner.DialogAutomationId);
 
         _rangeBox.Text = defaultRangeText;
-        AutomationProperties.SetName(_rangeBox, UiText.Get("CreateTable_RangeAutomationName"));
-        AutomationProperties.SetAutomationId(_rangeBox, "CreateTableRangeBox");
-        AutomationProperties.SetHelpText(_rangeBox, UiText.Get("CreateTable_RangeAutomationHelpText"));
-        AutomationProperties.SetName(_headersBox, UiText.Get("CreateTable_HeadersAutomationName"));
-        AutomationProperties.SetAutomationId(_headersBox, "CreateTableHeadersBox");
-        AutomationProperties.SetHelpText(_headersBox, UiText.Get("CreateTable_HeadersAutomationHelpText"));
+        AutomationProperties.SetName(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));
+        AutomationProperties.SetAutomationId(_rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId);
+        AutomationProperties.SetHelpText(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));
+        AutomationProperties.SetName(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
+        AutomationProperties.SetAutomationId(_headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
+        AutomationProperties.SetHelpText(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
         var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new Label { Content = UiText.Get("CreateTable_RangeLabel"), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get("CreateTable_RangePickerAutomationName"), RequestRangeSelection));
+        root.Children.Add(new Label { Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey), RequestRangeSelection));
         _headersBox.Margin = new Thickness(0, 0, 0, 16);
         root.Children.Add(_headersBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));

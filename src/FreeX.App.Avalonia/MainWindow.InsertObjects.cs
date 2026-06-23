@@ -199,14 +199,21 @@ public sealed partial class MainWindow
     /// on the next refresh. Surfaces the Core guard message (e.g. range must include a header row and a data
     /// row) on failure rather than silently no-opping.
     /// </summary>
-    private void InsertTableFromSelection()
+    private async Task InsertTableFromSelectionAsync()
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
-        var hasHeaderRow = QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow;
-        var command = TableCreationPlanner.BuildInsertCommand(_session.ActiveSheet.Id, range, hasHeaderRow);
+        var sourceRange = TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange);
+        var defaultRangeText = FormatRangeReference(sourceRange);
+        var plan = await ShowCreateTableDialogAsync(defaultRangeText, tableStyleName: string.Empty);
+        if (plan is null)
+            return;
+
+        var command = TableCreationPlanner.BuildInsertCommand(
+            _session.ActiveSheet.Id,
+            plan.Range,
+            plan.FirstRowHasHeaders);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -215,7 +222,121 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
-        RefreshShell(UiText.Format("InsertLoc_CreatedTableFrom", FormatRangeReference(range)));
+        RefreshShell(UiText.Format("InsertLoc_CreatedTableFrom", FormatRangeReference(plan.Range)));
+    }
+
+    private async Task<CreateTableDialogPlan?> ShowCreateTableDialogAsync(string defaultRangeText, string tableStyleName)
+    {
+        CreateTableDialogPlan? result = null;
+        var dialog = new Window
+        {
+            Title = UiText.Get(CreateTableDialogPlanner.TitleKey),
+            Width = CreateTableDialogPlanner.Width,
+            Height = CreateTableDialogPlanner.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId);
+
+        var rangeBox = new TextBox { Text = defaultRangeText, MinWidth = 248 };
+        AutomationProperties.SetName(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));
+        AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId);
+        AutomationProperties.SetHelpText(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));
+
+        var rangePicker = new Button
+        {
+            Content = "...",
+            Width = 28,
+            Margin = new Thickness(4, 0, 0, 0),
+        };
+        AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
+        rangePicker.Click += (_, _) =>
+        {
+            rangeBox.Text = FormatRangeReference(_session.SelectedRange);
+            rangeBox.Focus();
+            rangeBox.SelectAll();
+        };
+
+        var headersBox = new CheckBox
+        {
+            Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey),
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 0, 16),
+        };
+        AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
+        AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
+        AutomationProperties.SetHelpText(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
+
+        var okButton = new Button
+        {
+            Content = UiText.Get("Common_Ok"),
+            Width = CreateTableDialogPlanner.ButtonWidth,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        var cancelButton = new Button
+        {
+            Content = UiText.Get("Common_Cancel"),
+            Width = CreateTableDialogPlanner.ButtonWidth,
+            IsCancel = true,
+        };
+        okButton.Click += (_, _) =>
+        {
+            if (!CreateTableDialogPlanner.TryParse(
+                    _session.ActiveSheet.Id,
+                    rangeBox.Text ?? string.Empty,
+                    headersBox.IsChecked == true,
+                    tableStyleName,
+                    out var parsed,
+                    out var errorKey))
+            {
+                ShowEditIssue(UiText.Get(errorKey ?? CreateTableDialogPlanner.InvalidRangeMessageKey));
+                rangeBox.Focus();
+                rangeBox.SelectAll();
+                return;
+            }
+
+            result = parsed;
+            dialog.Close();
+        };
+        cancelButton.Click += (_, _) => dialog.Close();
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { okButton, cancelButton },
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(16),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get(CreateTableDialogPlanner.RangeLabelKey),
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 0, 0, 12),
+                    Children = { rangeBox, rangePicker },
+                },
+                headersBox,
+                buttonRow,
+            },
+        };
+        dialog.Opened += (_, _) =>
+        {
+            rangeBox.Focus();
+            rangeBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
+        return result;
     }
 
     private static readonly FilePickerFileType AnyFileType = new("All Files")

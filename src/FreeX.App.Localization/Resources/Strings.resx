@@ -1542,6 +1542,17 @@
   <data name="AddWatch_AddHelpText" xml:space="preserve"><value>Add the selected cells to the Watch Window.</value></data>
   <data name="AddWatch_CancelAutomationName" xml:space="preserve"><value>Cancel</value></data>
   <data name="AddWatch_CancelHelpText" xml:space="preserve"><value>Close the Add Watch dialog without adding cells.</value></data>
+  <data name="CreateTable_Title" xml:space="preserve"><value>Create Table</value></data>
+  <data name="CreateTable_RangeLabel" xml:space="preserve"><value>Where is the data for your table?</value></data>
+  <data name="CreateTable_RangeAutomationName" xml:space="preserve"><value>Table range</value></data>
+  <data name="CreateTable_RangeAutomationHelpText" xml:space="preserve"><value>Enter the range of worksheet cells to convert into a table.</value></data>
+  <data name="CreateTable_RangePickerAutomationName" xml:space="preserve"><value>Select table range</value></data>
+  <data name="CreateTable_HeadersCheckBox" xml:space="preserve"><value>My table has headers</value></data>
+  <data name="CreateTable_HeadersAutomationName" xml:space="preserve"><value>My table has headers</value></data>
+  <data name="CreateTable_HeadersAutomationHelpText" xml:space="preserve"><value>Select when the first row of the table range contains column headers.</value></data>
+  <data name="CreateTable_InvalidRangeMessage" xml:space="preserve"><value>Enter a valid table range.</value></data>
+  <data name="CreateTable_MinimumRowsMessage" xml:space="preserve"><value>Table range must include at least two rows.</value></data>
+  <data name="CreateTable_MissingRangeMessage" xml:space="preserve"><value>Enter a table range.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>New Workbook</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Open...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Open Recent</value></data>

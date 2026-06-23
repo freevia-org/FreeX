@@ -1518,6 +1518,17 @@
   <data name="AddWatch_AddHelpText" xml:space="preserve"><value>Ajoute les cellules selectionnees a la fenetre Espion.</value></data>
   <data name="AddWatch_CancelAutomationName" xml:space="preserve"><value>Annuler</value></data>
   <data name="AddWatch_CancelHelpText" xml:space="preserve"><value>Ferme la boite de dialogue Ajouter un espion sans ajouter de cellules.</value></data>
+  <data name="CreateTable_Title" xml:space="preserve"><value>Creer un tableau</value></data>
+  <data name="CreateTable_RangeLabel" xml:space="preserve"><value>Ou se trouvent les donnees de votre tableau ?</value></data>
+  <data name="CreateTable_RangeAutomationName" xml:space="preserve"><value>Plage du tableau</value></data>
+  <data name="CreateTable_RangeAutomationHelpText" xml:space="preserve"><value>Entrez la plage de cellules a convertir en tableau.</value></data>
+  <data name="CreateTable_RangePickerAutomationName" xml:space="preserve"><value>Selectionner la plage du tableau</value></data>
+  <data name="CreateTable_HeadersCheckBox" xml:space="preserve"><value>Mon tableau comporte des en-tetes</value></data>
+  <data name="CreateTable_HeadersAutomationName" xml:space="preserve"><value>Mon tableau comporte des en-tetes</value></data>
+  <data name="CreateTable_HeadersAutomationHelpText" xml:space="preserve"><value>Selectionnez cette option quand la premiere ligne contient les en-tetes de colonne.</value></data>
+  <data name="CreateTable_InvalidRangeMessage" xml:space="preserve"><value>Entrez une plage de tableau valide.</value></data>
+  <data name="CreateTable_MinimumRowsMessage" xml:space="preserve"><value>La plage du tableau doit inclure au moins deux lignes.</value></data>
+  <data name="CreateTable_MissingRangeMessage" xml:space="preserve"><value>Entrez une plage de tableau.</value></data>
   <data name="AvaloniaNativeMenu_NewWorkbook" xml:space="preserve"><value>Nouveau classeur</value></data>
   <data name="AvaloniaNativeMenu_Open" xml:space="preserve"><value>Ouvrir...</value></data>
   <data name="AvaloniaNativeMenu_OpenRecent" xml:space="preserve"><value>Ouvrir recent</value></data>
