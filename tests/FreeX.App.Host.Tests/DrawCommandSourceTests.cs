@@ -10,6 +10,7 @@ public sealed class DrawCommandSourceTests
     {
         var insertSource = DialogSourceTestSupport.ReadHostSources("MainWindow.InsertCommands.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var contextualSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DrawingContextualTabs.cs");
 
         insertSource.Should().Contain("private void PicturesBtn_Click(object sender, RoutedEventArgs e) => InsertPictureBtn_Click(sender, e);");
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
@@ -43,7 +44,10 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);");
         source.Should().Contain("private DrawingObjectTarget? GetTargetTransformDrawingObject(");
         source.Should().Contain("includePictures: true");
-        source.Should().Contain("FreeX.App.UI.ObjectKind.Picture => DrawingObjectTargetKind.Picture");
+        source.Should().Contain("FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture");
+        source.Should().Contain("DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind)");
+        contextualSource.Should().Contain("DrawingTargetResolver.ResolveSelectedPicture(");
+        contextualSource.Should().NotContain("foreach (var picture in sheet.Pictures)");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
         source.Should().Contain("DrawingObjectCommandPlanner.BuildMoveCommand(");

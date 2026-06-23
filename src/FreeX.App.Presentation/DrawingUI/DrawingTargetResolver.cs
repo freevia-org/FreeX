@@ -79,6 +79,59 @@ public static class DrawingTargetResolver
         return null;
     }
 
+    public static DrawingObjectTarget? GetTargetDrawingObject(
+        Sheet? sheet,
+        CellAddress? selectedAnchor,
+        SelectionPaneObjectKind? preferredKind,
+        Guid selectedObjectId = default,
+        bool includePictures = false,
+        bool allowFallback = true)
+    {
+        var targetKind = preferredKind is { } kind
+            ? DrawingObjectKindMapper.ToDrawingObjectTargetKind(kind)
+            : null;
+        if (preferredKind is not null && targetKind is null)
+            return null;
+
+        return GetTargetDrawingObject(
+            sheet,
+            selectedAnchor,
+            targetKind,
+            selectedObjectId,
+            includePictures,
+            allowFallback);
+    }
+
+    public static DrawingObjectSelectionResult<PictureModel> ResolveSelectedPicture(
+        Sheet? sheet,
+        SelectionPaneObjectKind? selectedKind,
+        Guid? selectedObjectId,
+        bool requireVisible = true) =>
+        ResolveSelectedObject(
+            sheet,
+            selectedKind,
+            selectedObjectId,
+            SelectionPaneObjectKind.Picture,
+            s => s.Pictures,
+            picture => picture.Id,
+            picture => picture.IsVisible,
+            requireVisible);
+
+    public static DrawingObjectSelectionResult<DrawingShapeModel> ResolveSelectedDrawingShape(
+        Sheet? sheet,
+        SelectionPaneObjectKind? selectedKind,
+        Guid? selectedObjectId,
+        bool requireVisible = true) =>
+        ResolveSelectedObject(
+            sheet,
+            selectedKind,
+            selectedObjectId,
+            SelectionPaneObjectKind.Shape,
+            s => s.DrawingShapes,
+            shape => shape.Id,
+            shape => shape.IsVisible,
+            requireVisible);
+
     public static DrawingObjectZOrderTarget? GetTargetDrawingZOrderObject(
         Sheet? sheet,
         CellAddress? selectedAnchor,
@@ -174,6 +227,32 @@ public static class DrawingTargetResolver
 
     private static bool IsAnchoredAt(CellAddress anchor, CellAddress selectedAnchor) =>
         anchor.Row == selectedAnchor.Row && anchor.Col == selectedAnchor.Col;
+
+    private static DrawingObjectSelectionResult<T> ResolveSelectedObject<T>(
+        Sheet? sheet,
+        SelectionPaneObjectKind? selectedKind,
+        Guid? selectedObjectId,
+        SelectionPaneObjectKind expectedKind,
+        Func<Sheet, IReadOnlyList<T>> getItems,
+        Func<T, Guid> getId,
+        Func<T, bool> isVisible,
+        bool requireVisible)
+        where T : class
+    {
+        if (selectedKind != expectedKind || selectedObjectId is not { } id || id == Guid.Empty)
+            return DrawingObjectSelectionResult<T>.MissingSelection();
+
+        if (sheet is null)
+            return DrawingObjectSelectionResult<T>.ObjectNoLongerAvailable();
+
+        foreach (var item in getItems(sheet))
+        {
+            if (getId(item) == id && (!requireVisible || isVisible(item)))
+                return DrawingObjectSelectionResult<T>.Found(item);
+        }
+
+        return DrawingObjectSelectionResult<T>.ObjectNoLongerAvailable();
+    }
 
     private static DrawingObjectTarget? GetTargetById(
         Sheet sheet,
@@ -388,3 +467,27 @@ public sealed record DrawingObjectAltTextTarget(
     Guid Id,
     CellAddress Anchor,
     string? AltText);
+
+public sealed record DrawingObjectSelectionResult<T>(
+    T? Target,
+    DrawingObjectSelectionFailure Failure)
+    where T : class
+{
+    public bool HasTarget => Target is not null;
+
+    public static DrawingObjectSelectionResult<T> Found(T target) =>
+        new(target, DrawingObjectSelectionFailure.None);
+
+    public static DrawingObjectSelectionResult<T> MissingSelection() =>
+        new(null, DrawingObjectSelectionFailure.MissingSelection);
+
+    public static DrawingObjectSelectionResult<T> ObjectNoLongerAvailable() =>
+        new(null, DrawingObjectSelectionFailure.ObjectNoLongerAvailable);
+}
+
+public enum DrawingObjectSelectionFailure
+{
+    None,
+    MissingSelection,
+    ObjectNoLongerAvailable
+}

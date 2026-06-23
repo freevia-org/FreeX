@@ -182,6 +182,42 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void GetTargetDrawingObject_AcceptsSelectionPaneDrawingKinds()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 2, 2);
+        var picture = new PictureModel { Anchor = selected, Width = 160, Height = 90 };
+        sheet.Pictures.Add(picture);
+
+        var target = DrawingTargetResolver.GetTargetDrawingObject(
+            sheet,
+            selected,
+            SelectionPaneObjectKind.Picture,
+            picture.Id,
+            includePictures: true);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(DrawingObjectTargetKind.Picture);
+        target.Id.Should().Be(picture.Id);
+    }
+
+    [Fact]
+    public void GetTargetDrawingObject_ReturnsNullForSelectionPaneNonDrawingKinds()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 2) });
+
+        DrawingTargetResolver.GetTargetDrawingObject(
+                sheet,
+                new CellAddress(sheet.Id, 2, 2),
+                SelectionPaneObjectKind.Chart,
+                Guid.NewGuid(),
+                includePictures: true)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void GetTargetDrawingObject_CanRequireExactAnchorMatchForShapeTextContextMenus()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -298,6 +334,104 @@ public sealed class DrawingTargetResolverTests
         target.Should().NotBeNull();
         target!.Kind.Should().Be(DrawingObjectTargetKind.TextBox);
         target.Id.Should().Be(textBox.Id);
+    }
+
+    [Fact]
+    public void ResolveSelectedPicture_ReturnsSelectedVisiblePictureById()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var expected = new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 3) };
+        sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) });
+        sheet.Pictures.Add(expected);
+
+        var result = DrawingTargetResolver.ResolveSelectedPicture(
+            sheet,
+            SelectionPaneObjectKind.Picture,
+            expected.Id);
+
+        result.HasTarget.Should().BeTrue();
+        result.Target.Should().BeSameAs(expected);
+        result.Failure.Should().Be(DrawingObjectSelectionFailure.None);
+    }
+
+    [Fact]
+    public void ResolveSelectedPicture_ReportsMissingSelectionForWrongKindOrEmptyId()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.Pictures.Add(new PictureModel { Anchor = new CellAddress(sheet.Id, 2, 3) });
+
+        DrawingTargetResolver.ResolveSelectedPicture(
+                sheet,
+                SelectionPaneObjectKind.Shape,
+                sheet.Pictures[0].Id)
+            .Failure
+            .Should()
+            .Be(DrawingObjectSelectionFailure.MissingSelection);
+
+        DrawingTargetResolver.ResolveSelectedPicture(
+                sheet,
+                SelectionPaneObjectKind.Picture,
+                Guid.Empty)
+            .Failure
+            .Should()
+            .Be(DrawingObjectSelectionFailure.MissingSelection);
+    }
+
+    [Fact]
+    public void ResolveSelectedPicture_ReportsUnavailableWhenSheetIsMissing()
+    {
+        DrawingTargetResolver.ResolveSelectedPicture(
+                sheet: null,
+                SelectionPaneObjectKind.Picture,
+                Guid.NewGuid())
+            .Failure
+            .Should()
+            .Be(DrawingObjectSelectionFailure.ObjectNoLongerAvailable);
+    }
+
+    [Fact]
+    public void ResolveSelectedDrawingShape_ReportsUnavailableForMissingOrHiddenShape()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var hidden = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 3),
+            IsVisible = false
+        };
+        sheet.DrawingShapes.Add(hidden);
+
+        DrawingTargetResolver.ResolveSelectedDrawingShape(
+                sheet,
+                SelectionPaneObjectKind.Shape,
+                hidden.Id)
+            .Failure
+            .Should()
+            .Be(DrawingObjectSelectionFailure.ObjectNoLongerAvailable);
+
+        DrawingTargetResolver.ResolveSelectedDrawingShape(
+                sheet,
+                SelectionPaneObjectKind.Shape,
+                hidden.Id,
+                requireVisible: false)
+            .Target
+            .Should()
+            .BeSameAs(hidden);
+    }
+
+    [Fact]
+    public void ResolveSelectedDrawingShape_DoesNotResolveTextBoxesAsShapes()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 2, 3) };
+        sheet.TextBoxes.Add(textBox);
+
+        DrawingTargetResolver.ResolveSelectedDrawingShape(
+                sheet,
+                SelectionPaneObjectKind.TextBox,
+                textBox.Id)
+            .Failure
+            .Should()
+            .Be(DrawingObjectSelectionFailure.MissingSelection);
     }
 
     [Fact]
