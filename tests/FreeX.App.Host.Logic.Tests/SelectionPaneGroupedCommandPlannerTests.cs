@@ -1,6 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
@@ -140,6 +142,17 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         method.Should().NotContain("new RenameSelectionPaneObjectCommand(_currentSheetId");
         method.Should().NotContain("new SetSelectionPaneObjectVisibilityCommand(_currentSheetId");
         method.Should().NotContain("new MoveSelectionPaneObjectCommand(_currentSheetId");
+
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "SelectionPaneGroupedCommandPlanner.cs")
+            .Should()
+            .Contain("public static class SelectionPaneGroupedCommandPlanner");
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Host",
+                "SelectionPaneGroupedCommandPlanner.cs"))
+            .Should()
+            .BeFalse("grouped selection-pane command composition is shared app-service logic, not WPF renderer code");
     }
 
     private static PictureModel AddPicture(Sheet sheet, uint row, uint col, string name)
