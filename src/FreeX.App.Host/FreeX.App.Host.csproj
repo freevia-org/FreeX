@@ -85,6 +85,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
     <Using Include="Free.Shared.Opc" />
     <Using Include="Free.Shared.Commands" />
     <Using Include="Free.Shared.AppServices" />

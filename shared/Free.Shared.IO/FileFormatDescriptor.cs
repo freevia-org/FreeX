@@ -1,9 +1,9 @@
-namespace FreeW.Core.IO;
+namespace Free.Shared.IO;
 
 /// <summary>
-/// One openable/savable document format exposed by an <see cref="IDocumentFileAdapter"/>. Pure data, so
-/// adding a format (or a read-only / template variant) is a catalog edit rather than control-flow surgery.
-/// Mirrors the proven descriptor the sibling FreeX spreadsheet app uses for its workbook adapters.
+/// One openable/savable document format exposed by a file adapter. Pure data, so adding a format
+/// (or a read-only / template variant) is a catalog edit rather than control-flow surgery.
+/// Shared between FreeX workbook adapters and FreeW document adapters.
 /// </summary>
 /// <param name="Extension">The file extension, e.g. <c>.docx</c> (leading dot optional; normalized on use).</param>
 /// <param name="FormatName">Human-readable name shown in the open/save dialog filter.</param>

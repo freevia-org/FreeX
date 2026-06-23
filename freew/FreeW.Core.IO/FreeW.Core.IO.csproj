@@ -27,4 +27,7 @@
     <!-- Lets the IO test project exercise the internal ODTTF obfuscation helper (Ooxml.ObfuscateFont). -->
     <InternalsVisibleTo Include="FreeW.Core.IO.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.IO" />
+  </ItemGroup>
 </Project>

@@ -21,6 +21,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+    <Using Include="Free.Shared.IO" />
     <Using Include="FreeW.Core.Model" />
     <Using Include="FreeW.Core.IO" />
   </ItemGroup>
