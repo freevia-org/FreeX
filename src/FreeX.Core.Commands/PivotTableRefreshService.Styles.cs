@@ -139,16 +139,19 @@ public static partial class PivotTableRefreshService
             }
 
             var bodyColIndex = col - firstDataColumn;
-            if (bodyStyle is not null)
-                ApplyPivotVisualStyle(workbook, cell, bodyStyle.Value, preserveExistingVisualStyles);
-            if (pivotTable.ShowRowStripes &&
+            var isRowStripe =
+                pivotTable.ShowRowStripes &&
                 row >= firstDataRow &&
-                GetPivotBodyBandIndex(row, firstDataRow, compactGroupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0)
-            {
+                GetPivotBodyBandIndex(row, firstDataRow, compactGroupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0;
+            var isColumnStripe =
+                pivotTable.ShowColumnStripes &&
+                col >= firstDataColumn &&
+                IsPivotColumnStripeColumn(pivotTable, bodyColIndex);
+
+            if (isRowStripe || isColumnStripe)
                 ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
-            }
-            if (pivotTable.ShowColumnStripes && col >= firstDataColumn && IsPivotColumnStripeColumn(pivotTable, bodyColIndex))
-                ApplyPivotVisualStyle(workbook, cell, stripeStyle, preserveExistingVisualStyles);
+            else if (bodyStyle is not null)
+                ApplyPivotVisualStyle(workbook, cell, bodyStyle.Value, preserveExistingVisualStyles);
         }
 
         ApplyCompactRowLabelIndent(workbook, sheet, pivotTable, materialized, headerEndRow, subtotalRows, grandTotalRows);

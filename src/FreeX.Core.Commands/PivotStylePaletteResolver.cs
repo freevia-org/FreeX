@@ -107,6 +107,15 @@ internal static class PivotStylePaletteResolver
             return true;
         }
 
+        if (string.Equals(styleName, "PivotStyleMedium13", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5) with
+            {
+                BodyFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95)
+            };
+            return true;
+        }
+
         if (TryResolveMediumThemeSlot(styleName, out var mediumSlot))
         {
             palette = ThemedMediumPalette(theme, mediumSlot);
