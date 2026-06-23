@@ -1,8 +1,8 @@
 using System.Linq;
-using FreeW.App.Host.Backstage;
+using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
 
-namespace FreeW.App.Host.Tests;
+namespace FreeW.App.Presentation.Tests;
 
 public sealed class BackstageExportFileTypePlannerTests
 {

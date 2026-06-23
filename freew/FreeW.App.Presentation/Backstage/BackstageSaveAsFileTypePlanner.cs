@@ -1,10 +1,10 @@
 using System.IO;
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 using FreeW.Core.IO;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal static class BackstageSaveAsFileTypePlanner
+public static class BackstageSaveAsFileTypePlanner
 {
     private const string DefaultSaveExtension = ".docx";
 
@@ -153,11 +153,11 @@ internal static class BackstageSaveAsFileTypePlanner
     }
 }
 
-internal sealed record BackstageSaveAsInlinePlan(
+public sealed record BackstageSaveAsInlinePlan(
     string SuggestedFileName,
     string SelectedExtension,
     IReadOnlyList<BackstageSaveAsFileTypeChoice> FileTypes);
 
-internal sealed record BackstageSaveAsFileTypeChoice(
+public sealed record BackstageSaveAsFileTypeChoice(
     string Label,
     string PrimaryExtension);

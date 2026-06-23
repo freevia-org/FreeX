@@ -1,6 +1,7 @@
-using FreeW.App.Host.Backstage;
+using Free.Shared.Shell;
+using FreeW.App.Presentation.Backstage;
 
-namespace FreeW.App.Host.Tests;
+namespace FreeW.App.Presentation.Tests;
 
 public sealed class BackstageAccountPanePlannerTests
 {
@@ -18,13 +19,13 @@ public sealed class BackstageAccountPanePlannerTests
         plan.OptionsText.Should().Be("FreeW Options...");
         plan.Groups.Select(group => group.Heading).Should().Equal("Product Information", "User Information");
         plan.Groups[0].Fields.Should().Equal(
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Product", "FreeW"),
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Version", "1.2.3"),
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Device", "WORD-BOX"));
+            new BackstageFieldRow("Product", "FreeW"),
+            new BackstageFieldRow("Version", "1.2.3"),
+            new BackstageFieldRow("Device", "WORD-BOX"));
         plan.Groups[1].Fields.Should().Equal(
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Windows user", "Ada"),
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Data folder", @"C:\Users\Ada\AppData\Local\FreeW"),
-            new Free.Shared.Shell.Wpf.BackstageFieldRow("Connected services", "Local desktop app"));
+            new BackstageFieldRow("Windows user", "Ada"),
+            new BackstageFieldRow("Data folder", @"C:\Users\Ada\AppData\Local\FreeW"),
+            new BackstageFieldRow("Connected services", "Local desktop app"));
     }
 
     [Fact]

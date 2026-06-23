@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Free.Shared.Shell;
 
 namespace Free.Shared.Shell.Wpf;
 
@@ -235,8 +236,6 @@ public sealed class BackstagePaneComposer
     }
 }
 
-public sealed record BackstageFieldRow(string Label, string Value);
-
 public sealed record BackstageInfoPaneSpec(
     string DocumentKindLabel,
     string DisplayName,
@@ -270,11 +269,3 @@ public sealed record BackstageActionPaneSpec(
     string Description,
     IReadOnlyList<BackstageActionGroup> Groups);
 
-public sealed record BackstageActionGroup(
-    string Heading,
-    IReadOnlyList<BackstageActionRow> Actions);
-
-public sealed record BackstageActionRow(
-    string Label,
-    string Description,
-    Action Invoke);

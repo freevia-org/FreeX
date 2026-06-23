@@ -1,30 +1,30 @@
 using System.Globalization;
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 using FreeW.Core.Model;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal sealed record BackstagePrintPanePlan(
+public sealed record BackstagePrintPanePlan(
     string Description,
     IReadOnlyList<BackstageFieldRow> Fields,
     IReadOnlyList<BackstagePrintActionGroup> Groups);
 
-internal sealed record BackstagePrintActionGroup(
+public sealed record BackstagePrintActionGroup(
     string Heading,
     IReadOnlyList<BackstagePrintActionRow> Actions);
 
-internal sealed record BackstagePrintActionRow(
+public sealed record BackstagePrintActionRow(
     BackstagePrintActionKind Kind,
     string Label,
     string Description);
 
-internal enum BackstagePrintActionKind
+public enum BackstagePrintActionKind
 {
     Print,
     PrintPreview
 }
 
-internal static class BackstagePrintPanePlanner
+public static class BackstagePrintPanePlanner
 {
     public static BackstagePrintPanePlan Build(string displayName, PageSettings page)
     {

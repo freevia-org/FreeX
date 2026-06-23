@@ -1,9 +1,9 @@
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 using FreeW.Core.IO;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal static class BackstageExportFileTypePlanner
+public static class BackstageExportFileTypePlanner
 {
     public static BackstageActionGroup BuildChangeFileTypeGroup(
         IEnumerable<FileFormatDescriptor> formats,

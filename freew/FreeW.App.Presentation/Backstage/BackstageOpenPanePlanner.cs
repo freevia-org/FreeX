@@ -1,10 +1,10 @@
 using System.IO;
 using Free.Shared.AppServices;
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal static class BackstageOpenPanePlanner
+public static class BackstageOpenPanePlanner
 {
     private const int MaxRecentDocuments = 8;
     private const int MaxRecentFolders = 8;
@@ -122,7 +122,7 @@ internal static class BackstageOpenPanePlanner
     }
 }
 
-internal sealed record BackstageOpenPanePlan(
+public sealed record BackstageOpenPanePlan(
     IReadOnlyList<BackstageActionRow> DocumentRows,
     IReadOnlyList<BackstageActionRow> FolderRows,
     IReadOnlyList<BackstageActionRow> PlaceRows,

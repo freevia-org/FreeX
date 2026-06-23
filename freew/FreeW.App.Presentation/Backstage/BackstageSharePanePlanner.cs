@@ -1,9 +1,9 @@
 using Free.Shared.AppServices;
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal static class BackstageSharePanePlanner
+public static class BackstageSharePanePlanner
 {
     private static readonly WorkbookShareActionSurface LocalShareSurface =
         new("Windows Share", CanShowShareSheet: false, CanOpenContainingFolder: true);

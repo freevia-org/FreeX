@@ -1,17 +1,17 @@
-using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
 
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal sealed record BackstageAccountFieldGroup(
+public sealed record BackstageAccountFieldGroup(
     string Heading,
     IReadOnlyList<BackstageFieldRow> Fields);
 
-internal sealed record BackstageAccountPanePlan(
+public sealed record BackstageAccountPanePlan(
     string Description,
     IReadOnlyList<BackstageAccountFieldGroup> Groups,
     string OptionsText);
 
-internal static class BackstageAccountPanePlanner
+public static class BackstageAccountPanePlanner
 {
     public static BackstageAccountPanePlan Build(
         string productName,
