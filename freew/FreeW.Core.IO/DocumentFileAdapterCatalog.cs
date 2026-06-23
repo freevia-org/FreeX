@@ -20,6 +20,8 @@ public static class DocumentFileAdapterCatalog
         new MhtmlFileAdapter(),
         new PdfFileAdapter(),
         new LegacyDocFileAdapter(),
+        OdtFileAdapter.Odt(),
+        OdtFileAdapter.Ott(),
         new PlainTextFileAdapter(),
     ];
 }
