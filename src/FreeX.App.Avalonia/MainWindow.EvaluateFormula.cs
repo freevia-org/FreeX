@@ -8,6 +8,7 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -32,20 +33,29 @@ public sealed partial class MainWindow
         var formulaText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 4),
         };
-        var positionText = new TextBlock { Margin = new Thickness(0, 0, 0, 6) };
+        var positionText = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
         var stepText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
+            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 8),
         };
         var valueText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
+            FontFamily = FormulaBarFontFamily,
         };
 
         var dialog = new Window
@@ -60,7 +70,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "EvaluateFormulaDialog");
 
-        var evaluateButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.EvaluateButtonKey, 80);
+        var evaluateButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.EvaluateButtonKey, 80, isDefault: true);
         evaluateButton.IsDefault = true;
         var stepInButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepInButtonKey, 68);
         var stepOutButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepOutButtonKey, 76);
@@ -117,18 +127,24 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(EvaluateFormulaDialogPlanner.EvaluationLabelKey),
                     FontWeight = FontWeight.SemiBold,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
                 new TextBlock
                 {
                     Text = $"{summary.SheetName}!{summary.Address.ToA1()}",
                     FontWeight = FontWeight.SemiBold,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
                 formulaText,
                 new TextBlock
                 {
                     Text = UiText.Format(EvaluateFormulaDialogPlanner.ResultTextKey, summary.ValueText),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 12),
                 },
                 positionText,
@@ -178,12 +194,30 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static Button CreateEvaluateFormulaButton(string contentKey, double width) =>
-        new()
+    /// <summary>
+    /// Applies standard button chrome to an Evaluate Formula dialog button: Height=24, Padding=(4,1),
+    /// white background, Brush(112,112,112) border (Brush(0,120,215) for default), FontSize=12,
+    /// FontFamily=FormulaBarFontFamily.
+    /// </summary>
+    private static Button CreateEvaluateFormulaButton(string contentKey, double width, bool isDefault = false)
+    {
+        var button = new Button
         {
             Content = UiText.Get(contentKey),
             Width = width,
-            Height = 26,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0),
         };
+        return button;
+    }
 }
