@@ -60,34 +60,43 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_TtcDialogTitle"),
-            Width = 520,
-            Height = 520,
-            MinWidth = 460,
-            MinHeight = 440,
+            Width = 560,
+            Height = 560,
+            MinWidth = 520,
+            MinHeight = 500,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "TextToColumnsDialog");
 
         var delimitedButton = new RadioButton { Content = UiText.Get("TableLoc_TtcDelimited"), IsChecked = true, GroupName = "TtcMode" };
+        ApplyDataOpsRadioButtonChrome(delimitedButton);
         AutomationProperties.SetAutomationId(delimitedButton, "TextToColumnsDelimitedButton");
         var fixedWidthButton = new RadioButton { Content = UiText.Get("TableLoc_TtcFixedWidth"), GroupName = "TtcMode" };
+        ApplyDataOpsRadioButtonChrome(fixedWidthButton);
         AutomationProperties.SetAutomationId(fixedWidthButton, "TextToColumnsFixedWidthButton");
 
         var tabBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimTab") };
+        ApplyDataOpsCheckBoxChrome(tabBox);
         AutomationProperties.SetAutomationId(tabBox, "TextToColumnsTabBox");
         var semicolonBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimSemicolon") };
+        ApplyDataOpsCheckBoxChrome(semicolonBox);
         AutomationProperties.SetAutomationId(semicolonBox, "TextToColumnsSemicolonBox");
         var commaBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimComma"), IsChecked = true };
+        ApplyDataOpsCheckBoxChrome(commaBox);
         AutomationProperties.SetAutomationId(commaBox, "TextToColumnsCommaBox");
         var spaceBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimSpace") };
+        ApplyDataOpsCheckBoxChrome(spaceBox);
         AutomationProperties.SetAutomationId(spaceBox, "TextToColumnsSpaceBox");
         var otherBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimOther") };
+        ApplyDataOpsCheckBoxChrome(otherBox);
         AutomationProperties.SetAutomationId(otherBox, "TextToColumnsOtherBox");
         var otherCharBox = new TextBox { Width = 44, MaxLength = 1 };
+        ApplyDataOpsTextBoxChrome(otherCharBox);
         AutomationProperties.SetAutomationId(otherCharBox, "TextToColumnsOtherCharBox");
 
         var treatConsecutiveBox = new CheckBox { Content = UiText.Get("TableLoc_TtcTreatConsecutive") };
+        ApplyDataOpsCheckBoxChrome(treatConsecutiveBox);
         AutomationProperties.SetAutomationId(treatConsecutiveBox, "TextToColumnsTreatConsecutiveBox");
 
         var qualifierBox = new ComboBox
@@ -96,12 +105,15 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 90,
         };
+        ApplyDataOpsComboBoxChrome(qualifierBox);
         AutomationProperties.SetAutomationId(qualifierBox, "TextToColumnsQualifierBox");
 
         var breaksBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_TtcBreaksPlaceholder"), MinWidth = 160 };
+        ApplyDataOpsTextBoxChrome(breaksBox);
         AutomationProperties.SetAutomationId(breaksBox, "TextToColumnsBreaksBox");
 
         var formatColumnBox = new ComboBox { MinWidth = 110 };
+        ApplyDataOpsComboBoxChrome(formatColumnBox);
         AutomationProperties.SetAutomationId(formatColumnBox, "TextToColumnsFormatColumnBox");
         var formatBox = new ComboBox
         {
@@ -109,6 +121,7 @@ public sealed partial class MainWindow
             SelectedIndex = 0,
             MinWidth = 110,
         };
+        ApplyDataOpsComboBoxChrome(formatBox);
         AutomationProperties.SetAutomationId(formatBox, "TextToColumnsFormatBox");
 
         var previewHost = new Border
@@ -124,12 +137,16 @@ public sealed partial class MainWindow
         {
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         var warningText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "TextToColumnsWarningText");
 
@@ -254,8 +271,10 @@ public sealed partial class MainWindow
         };
 
         var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "TextToColumnsApplyButton");
         var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
         applyButton.Click += (_, _) =>
@@ -309,14 +328,14 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcTextQualifierLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center }, qualifierBox },
+            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcTextQualifierLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily }, qualifierBox },
         };
 
         var breaksRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcBreakPositionsLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center }, breaksBox },
+            Children = { new TextBlock { Text = UiText.Get("TableLoc_TtcBreakPositionsLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily }, breaksBox },
         };
 
         var formatRow = new StackPanel
@@ -325,7 +344,7 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("TableLoc_TtcColumnFormatLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = UiText.Get("TableLoc_TtcColumnFormatLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 formatColumnBox,
                 formatBox,
             },
@@ -359,6 +378,8 @@ public sealed partial class MainWindow
                                 Text = UiText.Format("TableLoc_TtcSourceLabel", FormatRangeReference(range)),
                                 Foreground = HeaderForeground,
                                 TextWrapping = TextWrapping.Wrap,
+                                FontSize = 12,
+                                FontFamily = FormulaBarFontFamily,
                             },
                             new StackPanel
                             {
@@ -370,7 +391,7 @@ public sealed partial class MainWindow
                             treatConsecutiveBox,
                             qualifierRow,
                             breaksRow,
-                            new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             previewHost,
                             formatRow,
                             statusText,
@@ -499,6 +520,7 @@ public sealed partial class MainWindow
                 FontWeight = isHeader ? FontWeight.SemiBold : FontWeight.Normal,
                 Foreground = isSkipped ? HeaderForeground : Brushes.Black,
                 TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = 12,
             },
         };
 

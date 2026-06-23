@@ -46,9 +46,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotLoc_InsertPivotTableTitle"),
-            Width = 420,
+            Width = 500,
             Height = 460,
-            MinWidth = 360,
+            MinWidth = 400,
             MinHeight = 360,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -65,6 +65,7 @@ public sealed partial class MainWindow
                 SelectedIndex = RoleIndex(defaults.TryGetValue(field.Index, out var r) ? r : PivotCreatePlanner.FieldRole.Unused),
                 MinWidth = 130,
             };
+            ApplyDataOpsComboBoxChrome(roleBox);
             AutomationProperties.SetAutomationId(roleBox, $"PivotFieldRole{field.Index}");
             roleBoxes[field.Index] = roleBox;
 
@@ -78,6 +79,8 @@ public sealed partial class MainWindow
                         VerticalAlignment = AvaloniaVerticalAlignment.Center,
                         TextTrimming = TextTrimming.CharacterEllipsis,
                         Width = 200,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
                     },
                     roleBox,
                 },
@@ -85,6 +88,7 @@ public sealed partial class MainWindow
         }
 
         var newSheetBox = new CheckBox { Content = UiText.Get("PivotLoc_PlaceOnNewWorksheet"), IsChecked = true };
+        ApplyDataOpsCheckBoxChrome(newSheetBox);
         AutomationProperties.SetAutomationId(newSheetBox, "PivotNewWorksheetBox");
 
         var errorText = new TextBlock
@@ -92,12 +96,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(errorText, "InsertPivotTableErrorText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "InsertPivotTableOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "InsertPivotTableCancelButton");
 
         okButton.Click += (_, _) =>
@@ -166,6 +174,8 @@ public sealed partial class MainWindow
                             Text = UiText.Format("PivotLoc_SourceAssignPrompt", FormatRangeReference(source)),
                             Foreground = HeaderForeground,
                             TextWrapping = TextWrapping.Wrap,
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
                         },
                         new ScrollViewer { Content = fieldsPanel, MaxHeight = 240 },
                         newSheetBox,
