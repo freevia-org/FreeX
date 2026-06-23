@@ -44,6 +44,7 @@ public sealed partial class MainWindow
             Text = PivotNamePlanner.Capture(pivot),
             MinWidth = 280,
         };
+        ApplyPivotTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("PivotName_NameAutomation"));
 
@@ -58,9 +59,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotNameDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotNameOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotNameCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
 
@@ -80,7 +83,7 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotName_Label"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotName_Label"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(nameBox);
         content.Children.Add(new StackPanel
         {
