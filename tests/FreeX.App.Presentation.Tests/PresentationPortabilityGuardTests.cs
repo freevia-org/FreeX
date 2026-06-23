@@ -91,6 +91,36 @@ public sealed class PresentationPortabilityGuardTests
             .BeFalse("WPF host should use the shared presentation planner instead of carrying a renderer-local copy");
     }
 
+    [Fact]
+    public void ChartInputParser_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "Charts", "ChartInputParser.cs"))
+            .Should()
+            .BeTrue("chart source range parsing is shared by WPF, Avalonia, and sister app chart flows");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ChartInputParser.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared chart range parser instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
+    public void WorkbookRangeTextCodec_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "WorkbookRangeTextCodec.cs"))
+            .Should()
+            .BeTrue("workbook range text parsing is shared by chart, pivot, scenario, and data dialogs");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "WorkbookRangeTextCodec.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared workbook range codec instead of carrying a renderer-local copy");
+    }
+
     private static bool IsPortableSourceFile(string path)
     {
         if (!SourceExtensions.Contains(Path.GetExtension(path)))

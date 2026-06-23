@@ -1,7 +1,6 @@
-using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation;
 
 public static class WorkbookRangeTextCodec
 {
@@ -48,6 +47,15 @@ public static class WorkbookRangeTextCodec
     public static bool TryParseOnCurrentSheet(SheetId sheetId, string input, out GridRange range) =>
         TryParse(sheetId, input, RejectSheetReference, out range);
 
+    public static string Format(GridRange range, SheetId currentSheetId, Func<SheetId, string?> resolveSheetName)
+    {
+        var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
+        var sheetName = resolveSheetName(range.Start.Sheet);
+        return sheetName is null || range.Start.Sheet.Equals(currentSheetId)
+            ? reference
+            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
+    }
+
     private static SheetId? RejectSheetReference(string _) => null;
 
     private static bool TryResolveReferenceSheet(
@@ -64,7 +72,7 @@ public static class WorkbookRangeTextCodec
         if (bangIndex < 0)
             return true;
 
-        var sheetName = PivotUiPlanner.UnquoteSheetName(reference[..bangIndex].Trim());
+        var sheetName = UnquoteSheetName(reference[..bangIndex].Trim());
         if (resolveSheetId(sheetName) is not { } resolvedSheetId)
             return false;
 
@@ -124,12 +132,11 @@ public static class WorkbookRangeTextCodec
             yield return finalSegment;
     }
 
-    public static string Format(GridRange range, SheetId currentSheetId, Func<SheetId, string?> resolveSheetName)
+    private static string UnquoteSheetName(string sheetName)
     {
-        var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        var sheetName = resolveSheetName(range.Start.Sheet);
-        return sheetName is null || range.Start.Sheet.Equals(currentSheetId)
-            ? reference
-            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
+        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
+            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
+
+        return sheetName;
     }
 }

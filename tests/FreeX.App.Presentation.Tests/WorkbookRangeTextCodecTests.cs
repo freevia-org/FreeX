@@ -1,7 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests;
 
 public sealed class WorkbookRangeTextCodecTests
 {
