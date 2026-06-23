@@ -92,6 +92,34 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_session.SelectRange(new GridRange(anchor, target));");
     }
 
+    [Fact]
+    public void DoubleClickCell_OpensInlineEditorWithHitTestedCaret()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("border.DoubleTapped += (_, args) =>");
+        source.Should().Contain("CalculateInlineCellCaretIndex(");
+        source.Should().Contain("BeginInlineCellEdit(address, editText, caretIndex);");
+        source.Should().Contain("private TextBox CreateInlineCellEditor(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(editor, \"WorksheetInlineCellEditor\");");
+        source.Should().Contain("editor.Focus();");
+        source.Should().Contain("editor.CaretIndex = caret;");
+        source.Should().Contain("new FormattedText(");
+    }
+
+    [Fact]
+    public void DeleteKey_InTextEditor_DoesNotClearSelectedCells()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("private bool IsTextEditingEventSource(KeyEventArgs args)");
+        source.Should().Contain("_inlineCellEditor?.IsFocused == true");
+        source.Should().Contain("args.Source is TextBox");
+        source.Should().Contain("args.Source is TextPresenter");
+        source.Should().Contain("if (IsTextEditingEventSource(e))");
+        source.Should().Contain("ClearSelectedRangeContents();");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
