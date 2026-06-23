@@ -1031,7 +1031,7 @@ public sealed partial class MainWindow : Window
                     ["insert.slicer"] = InsertSlicer,
                     ["insert.timeline"] = InsertTimeline,
                     // Formulas ▸ Error Checking.
-                    ["formulas.errorChecking"] = CheckFormulaErrors,
+                    ["formulas.errorChecking"] = () => _ = CheckFormulaErrorsAsync(),
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
                     ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
                     // Formulas ▸ Formula Auditing trace arrows.

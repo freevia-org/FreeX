@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -42,14 +43,15 @@ public sealed class ErrorCheckingDialog : Window
         _showCalculationSteps = showCalculationSteps ?? traceError;
         _openOptions = openOptions;
 
-        Title = UiText.Get("ErrorChecking_Title");
-        Width = 720;
-        Height = 420;
-        MinWidth = 540;
-        MinHeight = 240;
+        Title = UiText.Get(ErrorCheckingDialogPlanner.TitleKey);
+        Width = ErrorCheckingDialogPlanner.Width;
+        Height = ErrorCheckingDialogPlanner.Height;
+        MinWidth = ErrorCheckingDialogPlanner.MinWidth;
+        MinHeight = ErrorCheckingDialogPlanner.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetAutomationId(this, ErrorCheckingDialogPlanner.DialogAutomationId);
 
-        var root = new DockPanel { Margin = new Thickness(10) };
+        var root = new DockPanel { Margin = new Thickness(ErrorCheckingDialogPlanner.RootMargin) };
         Content = root;
 
         _header = new TextBlock
@@ -61,8 +63,8 @@ public sealed class ErrorCheckingDialog : Window
 
         var actionPanel = new GroupBox
         {
-            Header = UiText.Get("ErrorChecking_HelpGroupHeader"),
-            Width = 180,
+            Header = UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey),
+            Width = ErrorCheckingDialogPlanner.ActionPanelWidth,
             Margin = new Thickness(10, 0, 0, 0),
             Padding = new Thickness(8)
         };
@@ -71,20 +73,20 @@ public sealed class ErrorCheckingDialog : Window
         actionPanel.Content = actionStack;
         actionStack.Children.Add(new TextBlock
         {
-            Text = UiText.Get("ErrorChecking_ActionIntroText"),
+            Text = UiText.Get(ErrorCheckingDialogPlanner.ActionIntroTextKey),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        _helpButton = new Button { Content = UiText.Get("ErrorChecking_HelpButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _helpButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.HelpButtonKey), Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(0, 0, 0, 6) };
         _helpButton.Click += (_, _) => ShowSelectedIssueHelp();
         actionStack.Children.Add(_helpButton);
-        _showStepsButton = new Button { Content = UiText.Get("ErrorChecking_ShowCalculationStepsButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _showStepsButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.ShowCalculationStepsButtonKey), Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(0, 0, 0, 6) };
         _showStepsButton.Click += (_, _) => ShowCalculationStepsSelected();
         actionStack.Children.Add(_showStepsButton);
-        _sideIgnoreButton = new Button { Content = UiText.Get("ErrorChecking_IgnoreErrorButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _sideIgnoreButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey), Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(0, 0, 0, 6) };
         _sideIgnoreButton.Click += (_, _) => IgnoreSelected();
         actionStack.Children.Add(_sideIgnoreButton);
-        _editFormulaButton = new Button { Content = UiText.Get("ErrorChecking_EditInFormulaBarButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
+        _editFormulaButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.EditInFormulaBarButtonKey), Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(0, 0, 0, 6) };
         _editFormulaButton.Click += (_, _) => NavigateSelected();
         actionStack.Children.Add(_editFormulaButton);
         root.Children.Add(actionPanel);
@@ -98,38 +100,39 @@ public sealed class ErrorCheckingDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        _goToButton = new Button { Content = UiText.Get("ErrorChecking_GoToButton"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _goToButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.GoToButtonKey), Width = ErrorCheckingDialogPlanner.GoToButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _goToButton.Click += (_, _) => NavigateSelected();
         buttons.Children.Add(_goToButton);
 
-        _previousButton = new Button { Content = UiText.Get("ErrorChecking_PreviousButton"), Width = 84, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _previousButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.PreviousButtonKey), Width = ErrorCheckingDialogPlanner.PreviousButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _previousButton.Click += (_, _) => MoveSelection(-1);
         buttons.Children.Add(_previousButton);
 
-        _nextButton = new Button { Content = UiText.Get("ErrorChecking_NextButton"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _nextButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.NextButtonKey), Width = ErrorCheckingDialogPlanner.NextButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _nextButton.Click += (_, _) => MoveSelection(1);
         buttons.Children.Add(_nextButton);
 
-        _ignoreButton = new Button { Content = UiText.Get("ErrorChecking_IgnoreErrorButton"), Width = 104, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _ignoreButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey), Width = ErrorCheckingDialogPlanner.IgnoreButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _ignoreButton.Click += (_, _) => IgnoreSelected();
         buttons.Children.Add(_ignoreButton);
 
-        _traceButton = new Button { Content = UiText.Get("ErrorChecking_TraceErrorButton"), Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _traceButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.TraceErrorButtonKey), Width = ErrorCheckingDialogPlanner.TraceButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _traceButton.Click += (_, _) => TraceSelected();
         buttons.Children.Add(_traceButton);
 
-        var options = new Button { Content = UiText.Get("ErrorChecking_OptionsButton"), Width = 92, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var options = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.OptionsButtonKey), Width = ErrorCheckingDialogPlanner.OptionsButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         options.Click += (_, _) => _openOptions?.Invoke();
         buttons.Children.Add(options);
 
-        var close = new Button { Content = UiText.Get("ErrorChecking_CloseButton"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
+        var close = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.CloseButtonKey), Width = ErrorCheckingDialogPlanner.CloseButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
         var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _issues };
-        AutomationProperties.SetName(_listView, UiText.Get("ErrorChecking_IssuesAutomationName"));
-        var listLabel = new Label { Content = UiText.Get("ErrorChecking_IssuesLabel"), Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetAutomationId(_listView, ErrorCheckingDialogPlanner.IssuesAutomationId);
+        AutomationProperties.SetName(_listView, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));
+        var listLabel = new Label { Content = UiText.Get(ErrorCheckingDialogPlanner.IssuesLabelKey), Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
         listPanel.Children.Add(listLabel);
         _listView.SelectionChanged += (_, _) => UpdateCommandStates();
@@ -139,11 +142,11 @@ public sealed class ErrorCheckingDialog : Window
         {
             Columns =
             {
-                new GridViewColumn { Header = UiText.Get("ErrorChecking_SheetColumnHeader"), Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.SheetName)) },
-                new GridViewColumn { Header = UiText.Get("ErrorChecking_CellColumnHeader"), Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Cell)) },
-                new GridViewColumn { Header = UiText.Get("ErrorChecking_IssueColumnHeader"), Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.ErrorCode)) },
-                new GridViewColumn { Header = UiText.Get("ErrorChecking_FormulaColumnHeader"), Width = 150, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.FormulaText)) },
-                new GridViewColumn { Header = UiText.Get("ErrorChecking_DescriptionColumnHeader"), Width = 260, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Description)) }
+                new GridViewColumn { Header = UiText.Get(ErrorCheckingDialogPlanner.SheetColumnHeaderKey), Width = ErrorCheckingDialogPlanner.SheetColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.SheetName)) },
+                new GridViewColumn { Header = UiText.Get(ErrorCheckingDialogPlanner.CellColumnHeaderKey), Width = ErrorCheckingDialogPlanner.CellColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Cell)) },
+                new GridViewColumn { Header = UiText.Get(ErrorCheckingDialogPlanner.IssueColumnHeaderKey), Width = ErrorCheckingDialogPlanner.IssueColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.ErrorCode)) },
+                new GridViewColumn { Header = UiText.Get(ErrorCheckingDialogPlanner.FormulaColumnHeaderKey), Width = ErrorCheckingDialogPlanner.FormulaColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.FormulaText)) },
+                new GridViewColumn { Header = UiText.Get(ErrorCheckingDialogPlanner.DescriptionColumnHeaderKey), Width = ErrorCheckingDialogPlanner.DescriptionColumnWidth, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(FormulaErrorIssue.Description)) }
             }
         };
         listPanel.Children.Add(_listView);
@@ -217,28 +220,27 @@ public sealed class ErrorCheckingDialog : Window
 
     private void RefreshHeader()
     {
-        _header.Text = UiText.Format("ErrorChecking_IssueCountHeader", _issues.Count);
+        _header.Text = UiText.Format(ErrorCheckingDialogPlanner.IssueCountHeaderKey, _issues.Count);
     }
 
     private void UpdateCommandStates()
     {
         var selectedIndex = _listView.SelectedIndex;
-        var hasSelection = selectedIndex >= 0 && selectedIndex < _issues.Count;
-        _helpButton.IsEnabled = hasSelection;
-        _showStepsButton.IsEnabled = hasSelection &&
-            _listView.SelectedItem is FormulaErrorIssue selectedIssue &&
-            HasCalculationSteps(selectedIssue);
-        _sideIgnoreButton.IsEnabled = hasSelection;
-        _editFormulaButton.IsEnabled = hasSelection;
-        _goToButton.IsEnabled = hasSelection;
-        _ignoreButton.IsEnabled = hasSelection;
-        _traceButton.IsEnabled = hasSelection;
-        _previousButton.IsEnabled = hasSelection && selectedIndex > 0;
-        _nextButton.IsEnabled = hasSelection && selectedIndex < _issues.Count - 1;
+        var selectedIssue = _listView.SelectedItem as FormulaErrorIssue;
+        var state = ErrorCheckingDialogPlanner.CreateCommandState(selectedIndex, _issues.Count, selectedIssue);
+        _helpButton.IsEnabled = state.HasSelection;
+        _showStepsButton.IsEnabled = state.CanShowCalculationSteps;
+        _sideIgnoreButton.IsEnabled = state.HasSelection;
+        _editFormulaButton.IsEnabled = state.HasSelection;
+        _goToButton.IsEnabled = state.HasSelection;
+        _ignoreButton.IsEnabled = state.HasSelection;
+        _traceButton.IsEnabled = state.HasSelection;
+        _previousButton.IsEnabled = state.CanPrevious;
+        _nextButton.IsEnabled = state.CanNext;
     }
 
     private static bool HasCalculationSteps(FormulaErrorIssue issue) =>
-        !string.IsNullOrWhiteSpace(issue.FormulaText);
+        ErrorCheckingDialogPlanner.HasCalculationSteps(issue);
 
     private void ShowCalculationStepsSelected()
     {
@@ -273,9 +275,9 @@ public sealed class ErrorCheckingDialog : Window
     private void ShowSelectedIssueHelp()
     {
         var message = _listView.SelectedItem is FormulaErrorIssue issue
-            ? UiText.Format("ErrorChecking_SelectedIssueHelpBody", issue.ErrorCode, issue.Description)
-            : UiText.Get("ErrorChecking_NoSelectionHelpBody");
+            ? UiText.Format(ErrorCheckingDialogPlanner.SelectedIssueHelpBodyKey, issue.ErrorCode, issue.Description)
+            : UiText.Get(ErrorCheckingDialogPlanner.NoSelectionHelpBodyKey);
 
-        DialogMessageHelper.ShowInfo(this, message, UiText.Get("ErrorChecking_HelpTitle"));
+        DialogMessageHelper.ShowInfo(this, message, UiText.Get(ErrorCheckingDialogPlanner.HelpTitleKey));
     }
 }

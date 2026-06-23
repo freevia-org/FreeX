@@ -7,7 +7,7 @@ public sealed partial class MainWindow
 {
     // Small parity wires for ribbon buttons that map to existing capabilities.
 
-    /// <summary>Review ▸ Delete Comment — clear comments/notes on the selection.</summary>
+    /// <summary>Review - Delete Comment: clear comments/notes on the selection.</summary>
     private void DeleteActiveCellComment()
     {
         var result = _session.ClearSelectedRangeComments();
@@ -16,18 +16,7 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
     }
 
-    /// <summary>Formulas ▸ Error Checking — select formula cells that evaluate to an error.</summary>
-    private void CheckFormulaErrors()
-    {
-        var result = _session.GoToSpecial(
-            GoToSpecialKind.Formulas,
-            new GoToSpecialOptions(GoToSpecialValueTypes.Errors));
-        RefreshShell(result.Success && result.MatchCount > 0
-            ? UiText.Format("InsertLoc_ErrorCheckingSelected", result.MatchCount)
-            : UiText.Get("InsertLoc_ErrorCheckingNone"));
-    }
-
-    /// <summary>View ▸ Normal — leave Page Break Preview.</summary>
+    /// <summary>View - Normal: leave Page Break Preview.</summary>
     private void SetNormalView()
     {
         var result = _session.SetWorksheetViewMode(WorksheetViewMode.Normal);
@@ -40,7 +29,7 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("InsertLoc_NormalView"));
     }
 
-    /// <summary>View ▸ Split — split the window at the active cell.</summary>
+    /// <summary>View - Split: split the window at the active cell.</summary>
     private void SplitPanesAtActiveCell()
     {
         var cell = _session.ActiveCell;

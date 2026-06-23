@@ -466,6 +466,9 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
             new EvaluateFormulaDialog(CreateFormulaEvaluationSummary(sheet.Id)));
 
+        CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
+            new ErrorCheckingDialog(CreateErrorCheckingIssues(sheet.Id), _ => { }, _ => true, _ => { }));
+
         CaptureDialog(results, "dialog.WatchWindow", outDir, () =>
             new WatchWindowDialog(
                 () => CreateWatchEntries(sheet.Id),
@@ -586,6 +589,26 @@ internal static class ParityCapture
                 new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
             ]);
     }
+
+    private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>
+    [
+        new(
+            sheetId,
+            "Sheet1",
+            new CellAddress(sheetId, 6, 4),
+            "D6",
+            ErrorValue.DivByZero.Code,
+            "=D2/0",
+            "Formula divides by zero."),
+        new(
+            sheetId,
+            "Sheet1",
+            new CellAddress(sheetId, 7, 4),
+            "D7",
+            FormulaAuditingService.FormulaStoredAsTextErrorCode,
+            null,
+            "The formula in this cell is stored as text."),
+    ];
 
     private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
     [

@@ -142,6 +142,7 @@ public sealed partial class MainWindow
         ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
         ("dialog.SymbolPicker", () => ShowSymbolPickerAsync()),
         ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
+        ("dialog.ErrorChecking", () => ShowErrorCheckingParityDialogAsync()),
         ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
         ("dialog.AddWatch", () => ShowAddWatchParityDialogAsync()),
         ("dialog.WorkbookStatistics", () => ShowWorkbookStatisticsDialogAsync()),
