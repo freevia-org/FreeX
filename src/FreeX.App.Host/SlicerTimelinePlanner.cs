@@ -98,10 +98,10 @@ public static class SlicerTimelinePlanner
 
     public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet)
     {
-        if (workbook.Timelines.Count == 0 || activeSheet.PivotTables.Count == 0)
+        if (workbook.Timelines.Count == 0)
             return Array.Empty<TimelineModel>();
 
-        return GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet));
+        return GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet), activeSheet.Name);
     }
 
     public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
@@ -139,12 +139,15 @@ public static class SlicerTimelinePlanner
 
     private static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(
         IReadOnlyList<TimelineModel> timelines,
-        IReadOnlySet<string> activePivotNames)
+        IReadOnlySet<string> activePivotNames,
+        string activeSheetName)
     {
         List<TimelineModel>? visible = null;
         foreach (var timeline in timelines)
         {
-            if (timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activePivotNames))
+            if (timeline.DrawingAnchor is not null &&
+                (IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activePivotNames) ||
+                 IsAnchoredOnSheet(timeline.SourceSheetName, activeSheetName)))
             {
                 visible ??= new List<TimelineModel>(timelines.Count);
                 visible.Add(timeline);
@@ -239,7 +242,7 @@ public static class SlicerTimelinePlanner
                     : GetNativeVisualSlicers(workbook.Slicers, activePivotNames, activeSheetName);
                 var timelines = workbook.Timelines.Count == 0
                     ? Array.Empty<TimelineModel>()
-                    : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
+                    : GetNativeVisualTimelines(workbook.Timelines, activePivotNames, activeSheetName);
 
                 _workbook = workbook;
                 _activePivotNames = activePivotNames;
@@ -285,6 +288,7 @@ public static class SlicerTimelinePlanner
                 var timeline = timelines[index];
                 if (!ReferenceEquals(snapshot.Model, timeline) ||
                     !string.Equals(snapshot.SourcePivotTableName, timeline.SourcePivotTableName, StringComparison.Ordinal) ||
+                    !string.Equals(snapshot.SourceSheetName, timeline.SourceSheetName, StringComparison.Ordinal) ||
                     snapshot.HasDrawingAnchor != (timeline.DrawingAnchor is not null))
                 {
                     return false;
@@ -325,6 +329,7 @@ public static class SlicerTimelinePlanner
                 snapshots[index] = new TimelineSnapshot(
                     timeline,
                     timeline.SourcePivotTableName,
+                    timeline.SourceSheetName,
                     timeline.DrawingAnchor is not null);
             }
 
@@ -340,6 +345,7 @@ public static class SlicerTimelinePlanner
         private readonly record struct TimelineSnapshot(
             TimelineModel Model,
             string? SourcePivotTableName,
+            string? SourceSheetName,
             bool HasDrawingAnchor);
     }
 }

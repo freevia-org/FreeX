@@ -15,4 +15,5 @@ public sealed class TimelineModel
     public string PackagePart { get; init; } = "";
     public DrawingAnchorRange? DrawingAnchor { get; init; }
     public string? DrawingShapeName { get; init; }
+    public string? SourceSheetName { get; init; }
 }

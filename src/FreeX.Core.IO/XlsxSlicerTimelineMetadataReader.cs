@@ -104,7 +104,8 @@ internal static class XlsxSlicerTimelineMetadataReader
                     SelectedEndDate = cache?.SelectedEndDate,
                     PackagePart = packagePart,
                     DrawingAnchor = hasDrawing ? drawingMetadata.Anchor : null,
-                    DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null
+                    DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null,
+                    SourceSheetName = hasDrawing ? drawingMetadata.SheetName : null
                 });
             }
         }
