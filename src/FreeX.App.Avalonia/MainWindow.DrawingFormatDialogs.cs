@@ -468,21 +468,30 @@ public sealed partial class MainWindow
 
         var preview = new Border
         {
-            Height = 40,
+            Height = 42,
             BorderBrush = HeaderForeground,
             BorderThickness = new Thickness(1),
         };
         AutomationProperties.SetAutomationId(preview, "ShapeGradientPreview");
         AutomationProperties.SetName(preview, UiText.Get("ShapeGradient_PreviewLabel"));
 
-        var startSwatch = new Border { Width = 26, Height = 20, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
-        var endSwatch = new Border { Width = 26, Height = 20, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
-        var startBox = new TextBox { Text = FormatRgb(startColor), Width = 198, Height = 24 };
-        var endBox = new TextBox { Text = FormatRgb(endColor), Width = 198, Height = 24 };
+        var startSwatch = new Border { Width = 30, Height = 24, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
+        var endSwatch = new Border { Width = 30, Height = 24, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
+        var startBox = CreateGradientTextBox(FormatRgb(startColor));
+        var endBox = CreateGradientTextBox(FormatRgb(endColor));
         AutomationProperties.SetAutomationId(startBox, "ShapeGradientStartColorBox");
         AutomationProperties.SetAutomationId(endBox, "ShapeGradientEndColorBox");
 
-        var directionBox = new ComboBox { Width = 292, Height = 24 };
+        var directionBox = new ComboBox
+        {
+            Width = 292,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(6, 0, 4, 0),
+            FontSize = 12,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         foreach (var option in directionOptions)
             directionBox.Items.Add(UiText.Get(option.LabelKey));
         directionBox.SelectedIndex = ShapeGradientPlanner.FindDirectionIndex(directionOptions, values.Direction);
@@ -528,15 +537,18 @@ public sealed partial class MainWindow
             MaxWidth = 500,
             MaxHeight = 295,
             Background = Brushes.White,
+            FontFamily = new FontFamily("Segoe UI, Arial"),
+            FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "ShapeGradientDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 76, Width = 76 };
+        var ok = CreateGradientDialogButton(UiText.Get("Common_Ok"), isDefault: true);
         AutomationProperties.SetAutomationId(ok, "ShapeGradientOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 76, Width = 76 };
+        var cancel = CreateGradientDialogButton(UiText.Get("Common_Cancel"), isDefault: false);
+        cancel.IsCancel = true;
         AutomationProperties.SetAutomationId(cancel, "ShapeGradientCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -557,7 +569,7 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions = new ColumnDefinitions("136,40,*,54"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0, 0, 0, 0),
         };
 
         AddGradientStopRow(stopGrid, 0, UiText.Get("ShapeGradient_Stop1ColorLabel"), startSwatch, startBox, "0%");
@@ -565,7 +577,7 @@ public sealed partial class MainWindow
         AddGradientDirectionRow(stopGrid, directionBox);
         Grid.SetRow(preview, 3);
         Grid.SetColumnSpan(preview, 4);
-        preview.Margin = new Thickness(0, 10, 0, 0);
+        preview.Margin = new Thickness(0, 13, 0, 0);
         stopGrid.Children.Add(preview);
 
         startSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);
@@ -575,19 +587,23 @@ public sealed partial class MainWindow
         {
             Header = UiText.Get("ShapeGradient_GradientStopsGroup"),
             Content = stopGrid,
-            Margin = new Thickness(0, 0, 0, 4),
+            Width = 446,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 12),
         };
 
-        var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 8, 18, 8) };
+        var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12 };
+        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, Margin = new Thickness(0, 2, 0, 8) };
+        var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 10, 18, 8) };
         content.Children.Add(gradientGroup);
-        content.Children.Add(new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray });
-        content.Children.Add(new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, Margin = new Thickness(0, 2, 0, 8) });
+        content.Children.Add(startSummary);
+        content.Children.Add(endSummary);
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(286, 16, 0, 0),
             Children = { ok, cancel },
         });
         dialog.Content = content;
@@ -620,22 +636,39 @@ public sealed partial class MainWindow
 
     private static void AddGradientStopRow(Grid grid, int row, string label, Border swatch, TextBox box, string stopText)
     {
-        var labelBlock = new TextBlock { Text = label, Foreground = HeaderForeground, VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
         Grid.SetRow(labelBlock, row);
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
         swatch.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        swatch.Margin = new Thickness(0, 0, 8, 6);
         Grid.SetRow(swatch, row);
         Grid.SetColumn(swatch, 1);
         grid.Children.Add(swatch);
 
         box.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+        box.Margin = new Thickness(0, 0, 8, 6);
         Grid.SetRow(box, row);
         Grid.SetColumn(box, 2);
         grid.Children.Add(box);
 
-        var stopBlock = new TextBlock { Text = stopText, Foreground = HeaderForeground, HorizontalAlignment = AvaloniaHorizontalAlignment.Right, VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var stopBlock = new TextBlock
+        {
+            Text = stopText,
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
         Grid.SetRow(stopBlock, row);
         Grid.SetColumn(stopBlock, 3);
         grid.Children.Add(stopBlock);
@@ -647,18 +680,53 @@ public sealed partial class MainWindow
         {
             Text = UiText.Get("ShapeGradient_DirectionLabel"),
             Foreground = HeaderForeground,
+            FontSize = 12,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 2, 0, 0),
         };
         Grid.SetRow(labelBlock, 2);
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
-        directionBox.Margin = new Thickness(0, 8, 0, 0);
+        directionBox.Margin = new Thickness(0, 2, 0, 0);
         Grid.SetRow(directionBox, 2);
         Grid.SetColumn(directionBox, 1);
         Grid.SetColumnSpan(directionBox, 3);
         grid.Children.Add(directionBox);
+    }
+
+    private static TextBox CreateGradientTextBox(string text) => new()
+    {
+        Text = text,
+        Width = 198,
+        Height = 24,
+        MinHeight = 24,
+        MaxHeight = 24,
+        Padding = new Thickness(4, 1, 4, 1),
+        FontSize = 12,
+        VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+    };
+
+    private static Button CreateGradientDialogButton(string text, bool isDefault)
+    {
+        var button = new Button
+        {
+            Content = text,
+            IsDefault = isDefault,
+            Width = 76,
+            MinWidth = 76,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(8, 1),
+            Background = Brushes.White,
+            BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        return button;
     }
 
     private static string FormatRgb(CellColor color) =>
