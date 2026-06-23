@@ -5,12 +5,15 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Presentation.SheetUI;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -43,9 +46,11 @@ public sealed partial class MainWindow
             SelectedIndex = initialIndex,
             MinHeight = 132,
         };
+        ApplySheetListBoxStyle(beforeSheetList);
         AutomationProperties.SetAutomationId(beforeSheetList, "MoveCopySheetBeforeSheetList");
 
         var createCopyBox = new CheckBox { Content = UiText.Get("MoveCopySheet_CreateACopy") };
+        ApplySheetCheckBoxChrome(createCopyBox);
         AutomationProperties.SetAutomationId(createCopyBox, "MoveCopySheetCreateCopyCheckBox");
 
         var okButton = new Button
@@ -54,6 +59,7 @@ public sealed partial class MainWindow
             IsDefault = true,
             MinWidth = 84,
         };
+        ApplySheetButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "MoveCopySheetOkButton");
         var cancelButton = new Button
         {
@@ -62,6 +68,7 @@ public sealed partial class MainWindow
             MinWidth = 84,
             Margin = new Thickness(8, 0, 0, 0),
         };
+        ApplySheetButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "MoveCopySheetCancelButton");
 
         var dialog = new Window
@@ -97,8 +104,8 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("MoveCopySheet_MoveSelectedSheets") },
-                new TextBlock { Text = UiText.Get("MoveCopySheet_BeforeSheet"), FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = UiText.Get("MoveCopySheet_MoveSelectedSheets"), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock { Text = UiText.Get("MoveCopySheet_BeforeSheet"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 beforeSheetList,
                 createCopyBox,
                 buttonRow,
@@ -168,5 +175,56 @@ public sealed partial class MainWindow
         }
 
         return true;
+    }
+
+    // ── Visual chrome helpers (MoveCopySheet / SheetTabColor dialogs) ─────────
+
+    /// <summary>
+    /// Applies standard Sheet-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
+    /// <paramref name="minWidth"/> sets MinWidth; <paramref name="isDefault"/> uses blue border for the
+    /// default/OK button.
+    /// </summary>
+    private static void ApplySheetButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Sheet-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
+    /// </summary>
+    private static void ApplySheetCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
+    }
+
+    /// <summary>
+    /// Applies standard Sheet-dialog list-box row chrome (MinHeight=24 per row, FontSize=12).
+    /// </summary>
+    private static void ApplySheetListBoxStyle(ListBox listBox)
+    {
+        listBox.FontSize = 12;
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
+                new Setter(Layoutable.MinHeightProperty, 24.0),
+                new Setter(TemplatedControl.FontSizeProperty, 12.0),
+            },
+        });
     }
 }

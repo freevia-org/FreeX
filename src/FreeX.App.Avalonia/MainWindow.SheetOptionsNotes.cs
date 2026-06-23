@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -95,20 +97,23 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var viewCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionView"), IsChecked = getView() };
+        ApplySheetOptionCheckBoxChrome(viewCheck);
         AutomationProperties.SetAutomationId(viewCheck, "SheetOptionViewCheck");
         var printCheck = new CheckBox { Content = UiText.Get("ShellLoc_SheetOptionPrint"), IsChecked = getPrint() };
+        ApplySheetOptionCheckBoxChrome(printCheck);
         AutomationProperties.SetAutomationId(printCheck, "SheetOptionPrintCheck");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84, Padding = new Thickness(10, 4) };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplySheetOptionButtonChrome(ok, 84, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "SheetOptionOkButton");
         var cancel = new Button
         {
             Content = UiText.Get("Common_Cancel"),
             IsCancel = true,
             MinWidth = 84,
-            Padding = new Thickness(10, 4),
             Margin = new Thickness(8, 0, 0, 0),
         };
+        ApplySheetOptionButtonChrome(cancel, 84);
 
         var dialog = new Window
         {
@@ -123,7 +128,7 @@ public sealed partial class MainWindow
                 Margin = new Thickness(16),
                 Children =
                 {
-                    new TextBlock { Text = label, FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) },
+                    new TextBlock { Text = label, FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 8) },
                     viewCheck,
                     printCheck,
                     new StackPanel
@@ -191,6 +196,7 @@ public sealed partial class MainWindow
         var notes = CollectSheetNotes(sheet);
 
         var listBox = new ListBox { MinHeight = 240, MinWidth = 420 };
+        ApplySheetOptionListBoxStyle(listBox);
         AutomationProperties.SetAutomationId(listBox, "ShowNotesList");
         listBox.ItemsSource = notes.Select(FormatNoteRow).ToList();
 
@@ -200,9 +206,12 @@ public sealed partial class MainWindow
             Foreground = Brush(110, 110, 110),
             IsVisible = notes.Count == 0,
             Margin = new Thickness(0, 0, 0, 8),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
 
         var goToButton = new Button { Content = UiText.Get("ShellLoc_GoToButton"), MinWidth = 84, IsEnabled = false };
+        ApplySheetOptionButtonChrome(goToButton, 84);
         AutomationProperties.SetAutomationId(goToButton, "ShowNotesGoToButton");
         var closeButton = new Button
         {
@@ -211,6 +220,7 @@ public sealed partial class MainWindow
             MinWidth = 84,
             Margin = new Thickness(8, 0, 0, 0),
         };
+        ApplySheetOptionButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "ShowNotesCloseButton");
 
         var dialog = new Window
@@ -288,4 +298,53 @@ public sealed partial class MainWindow
     }
 
     private readonly record struct SheetNoteEntry(CellAddress Address, string? Author, string? Text, bool IsThreaded);
+
+    // ── Visual chrome helpers (SheetOptions / ShowNotes dialogs) ─────────────
+
+    /// <summary>
+    /// Applies standard SheetOption-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
+    /// </summary>
+    private static void ApplySheetOptionButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard SheetOption-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
+    /// </summary>
+    private static void ApplySheetOptionCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
+    }
+
+    /// <summary>
+    /// Applies standard ShowNotes list-box row chrome (MinHeight=24 per row, FontSize=12).
+    /// </summary>
+    private static void ApplySheetOptionListBoxStyle(ListBox listBox)
+    {
+        listBox.FontSize = 12;
+        listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(4, 1)),
+                new Setter(Layoutable.MinHeightProperty, 24.0),
+                new Setter(TemplatedControl.FontSizeProperty, 12.0),
+            },
+        });
+    }
 }

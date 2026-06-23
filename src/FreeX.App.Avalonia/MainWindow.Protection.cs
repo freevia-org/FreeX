@@ -1,14 +1,17 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -55,8 +58,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "ProtectSheetDialog");
 
         var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
+        ApplyProtectTextBoxChrome(passwordBox);
         AutomationProperties.SetAutomationId(passwordBox, "ProtectSheetPasswordBox");
         var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
+        ApplyProtectTextBoxChrome(confirmBox);
         AutomationProperties.SetAutomationId(confirmBox, "ProtectSheetConfirmBox");
 
         var warningText = new TextBlock
@@ -64,12 +69,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectSheetWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyProtectButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ProtectSheetOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyProtectButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "ProtectSheetCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -90,6 +99,8 @@ public sealed partial class MainWindow
                     : UiText.Get("ShellLoc_SheetProtectedClickOk"),
                 Foreground = HeaderForeground,
                 TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             });
 
             if (state.HasPassword)
@@ -124,6 +135,7 @@ public sealed partial class MainWindow
                     Content = ProtectionShellGlue.DescribePermission(option.Permission),
                     IsChecked = option.DefaultEnabled,
                 };
+                ApplyProtectCheckBoxChrome(box);
                 AutomationProperties.SetAutomationId(box, $"ProtectSheetPermission{index}Box");
                 permissionBoxes.Add((option.Permission, box));
                 checklist.Children.Add(box);
@@ -137,6 +149,8 @@ public sealed partial class MainWindow
                 Text = UiText.Get("ShellLoc_AllowAllUsersToLabel"),
                 Foreground = HeaderForeground,
                 Margin = new Thickness(0, 6, 0, 0),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             });
             contentChildren.Add(new ScrollViewer { Content = checklist, MaxHeight = 280 });
 
@@ -205,13 +219,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "ProtectWorkbookDialog");
 
         var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
+        ApplyProtectTextBoxChrome(passwordBox);
         AutomationProperties.SetAutomationId(passwordBox, "ProtectWorkbookPasswordBox");
         var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
+        ApplyProtectTextBoxChrome(confirmBox);
         AutomationProperties.SetAutomationId(confirmBox, "ProtectWorkbookConfirmBox");
 
         var structureBox = new CheckBox { Content = UiText.Get("ShellLoc_StructureCheckbox"), IsChecked = true };
+        ApplyProtectCheckBoxChrome(structureBox);
         AutomationProperties.SetAutomationId(structureBox, "ProtectWorkbookStructureBox");
         var windowsBox = new CheckBox { Content = UiText.Get("ShellLoc_WindowsCheckbox") };
+        ApplyProtectCheckBoxChrome(windowsBox);
         AutomationProperties.SetAutomationId(windowsBox, "ProtectWorkbookWindowsBox");
 
         var warningText = new TextBlock
@@ -219,12 +237,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "ProtectWorkbookWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyProtectButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ProtectWorkbookOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyProtectButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(cancelButton, "ProtectWorkbookCancelButton");
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -245,6 +267,8 @@ public sealed partial class MainWindow
                     : UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
                 Foreground = HeaderForeground,
                 TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             });
 
             if (state.HasPassword)
@@ -272,6 +296,8 @@ public sealed partial class MainWindow
             {
                 Text = UiText.Get("ShellLoc_ProtectWorkbookForLabel"),
                 Foreground = HeaderForeground,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             });
             contentChildren.Add(structureBox);
             contentChildren.Add(windowsBox);
@@ -332,7 +358,7 @@ public sealed partial class MainWindow
             Spacing = 2,
             Children =
             {
-                new TextBlock { Text = label, Foreground = HeaderForeground },
+                new TextBlock { Text = label, Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 field,
             },
         };
@@ -359,5 +385,55 @@ public sealed partial class MainWindow
             Margin = new Thickness(16),
             Children = { buttonRow, body },
         };
+    }
+
+    // ── Visual chrome helpers (Protection dialogs) ───────────────────────────
+
+    /// <summary>
+    /// Applies standard Protection-dialog button chrome (Height=24, FontSize=12, white background,
+    /// grey/blue border). <paramref name="minWidth"/> sets MinWidth; <paramref name="isDefault"/> uses
+    /// blue border for the default/OK button.
+    /// </summary>
+    private static void ApplyProtectButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Protection-dialog text-box chrome (Height=24, Padding=(4,1), FontSize=12, grey border).
+    /// </summary>
+    private static void ApplyProtectTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    /// <summary>
+    /// Applies standard Protection-dialog check-box chrome (MinHeight=20, MaxHeight=20, FontSize=12).
+    /// </summary>
+    private static void ApplyProtectCheckBoxChrome(CheckBox checkBox)
+    {
+        checkBox.FontSize = 12;
+        checkBox.FontFamily = FormulaBarFontFamily;
+        checkBox.MinHeight = 20;
+        checkBox.MaxHeight = 20;
     }
 }
