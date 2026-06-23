@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Backstage;
@@ -205,22 +207,37 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildSaveAsPane()
     {
+        var inlinePlan = BackstageSaveAsFileTypePlanner.BuildInlinePlan(
+            _file.SaveFormats,
+            _file.DisplayName,
+            _file.CurrentPath);
         var typeGroups = BackstageSaveAsFileTypePlanner.Build(
             _file.SaveFormats,
             extension => { Hide(); _actions.SaveAsType(extension); });
 
-        return Panes.BuildActionPane(new BackstageActionPaneSpec(
-            Heading: "Save As",
-            Description: "Choose where to save this document and select an editable file type.",
-            Groups:
+        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(Kit.HeadingText("Save As"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Choose where to save this document and select an editable file type.",
+            Foreground = Kit.Muted,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        panel.Children.Add(BuildSaveAsInlineEditor(inlinePlan));
+
+        AddSaveAsActionGroup(panel, new BackstageActionGroup(
+            "Places",
             [
-                new("Places",
-                [
-                    new("This PC", "Save to local folders and connected drives.", () => { Hide(); _actions.SaveAs(); }),
-                    new("Browse", "Open the Windows save dialog.", () => { Hide(); _actions.SaveAs(); }),
-                ]),
-                ..typeGroups,
+                new("This PC", "Save to local folders and connected drives.", () => { Hide(); _actions.SaveAs(); }),
+                new("Browse", "Open the Windows save dialog.", () => { Hide(); _actions.SaveAs(); }),
             ]));
+
+        foreach (var group in typeGroups)
+            AddSaveAsActionGroup(panel, group);
+
+        return Kit.Scroll(panel);
     }
 
     private UIElement BuildRecentPane()
@@ -312,6 +329,91 @@ internal sealed class BackstageView : UserControl
         });
         return stack;
     }
+
+    private UIElement BuildSaveAsInlineEditor(BackstageSaveAsInlinePlan plan)
+    {
+        var fileNameBox = new TextBox
+        {
+            Text = plan.SuggestedFileName,
+            MinWidth = 380,
+            Margin = new Thickness(0, 2, 0, 8)
+        };
+
+        var typeCombo = new ComboBox
+        {
+            ItemsSource = plan.FileTypes,
+            DisplayMemberPath = nameof(BackstageSaveAsFileTypeChoice.Label),
+            SelectedValuePath = nameof(BackstageSaveAsFileTypeChoice.PrimaryExtension),
+            MinWidth = 380,
+            Margin = new Thickness(0, 2, 0, 12)
+        };
+        typeCombo.SelectedItem = plan.FileTypes.FirstOrDefault(choice =>
+            string.Equals(choice.PrimaryExtension, plan.SelectedExtension, StringComparison.OrdinalIgnoreCase));
+
+        typeCombo.SelectionChanged += (_, _) =>
+        {
+            if (typeCombo.SelectedValue is string extension)
+                fileNameBox.Text = ReplaceFileNameExtension(fileNameBox.Text, extension);
+        };
+
+        var saveButton = new Button
+        {
+            Content = "Save",
+            Background = Kit.Link,
+            BorderBrush = Kit.Link,
+            Foreground = Brushes.White,
+            MinWidth = 86,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(14, 5, 14, 5),
+            FontWeight = FontWeights.SemiBold
+        };
+        saveButton.Click += (_, _) =>
+        {
+            var extension = typeCombo.SelectedValue as string ?? plan.SelectedExtension;
+            Hide();
+            _actions.SaveAsSuggested(fileNameBox.Text, extension);
+        };
+
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+        panel.Children.Add(Kit.SubHeading("File name"));
+        panel.Children.Add(fileNameBox);
+        panel.Children.Add(Kit.SubHeading("Save as type"));
+        panel.Children.Add(typeCombo);
+        panel.Children.Add(saveButton);
+        return panel;
+    }
+
+    private void AddSaveAsActionGroup(Panel panel, BackstageActionGroup group)
+    {
+        panel.Children.Add(Kit.SubHeading(group.Heading));
+        foreach (var action in group.Actions)
+            panel.Children.Add(SaveAsActionRow(action));
+    }
+
+    private UIElement SaveAsActionRow(BackstageActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var button = Kit.LinkButton(action.Label, action.Invoke);
+        stack.Children.Add(button);
+        stack.Children.Add(new TextBlock
+        {
+            Text = action.Description,
+            Foreground = Kit.Muted,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 0)
+        });
+        return stack;
+    }
+
+    private static string ReplaceFileNameExtension(string fileName, string extension)
+    {
+        var normalized = DocumentFileFormatResolver.NormalizeExtension(extension);
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(baseName))
+            baseName = "Document";
+        return baseName + normalized;
+    }
 }
 
 internal sealed record BackstageActions(
@@ -321,6 +423,7 @@ internal sealed record BackstageActions(
     Action Save,
     Action SaveAs,
     Action<string> SaveAsType,
+    Action<string?, string?> SaveAsSuggested,
     Action SaveCopy,
     Action RecoverUnsaved,
     Action<string> OpenContainingFolder,

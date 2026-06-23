@@ -186,7 +186,10 @@ internal sealed class FileCommands
     public bool SaveAs() => SaveAs(preferredExtension: null);
 
     public bool SaveAs(string? preferredExtension) =>
-        TryPromptSaveTarget(preferredExtension, out var path, out var adapter) && SaveTo(path, adapter);
+        SaveAsSuggested(suggestedFileName: null, preferredExtension);
+
+    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
+        TryPromptSaveTarget(preferredExtension, suggestedFileName, out var path, out var adapter) && SaveTo(path, adapter);
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
@@ -194,7 +197,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool SaveCopy()
     {
-        if (!TryPromptSaveTarget(preferredExtension: null, out var path, out var adapter))
+        if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var path, out var adapter))
             return false;
         try
         {
@@ -249,7 +252,11 @@ internal sealed class FileCommands
     /// from the CHOSEN filename's extension (not the selected filter row), so a user-typed extension wins.
     /// Returns false on cancel or when the chosen extension is not a writable format.
     /// </summary>
-    private bool TryPromptSaveTarget(string? preferredExtension, out string path, out IDocumentFileAdapter adapter)
+    private bool TryPromptSaveTarget(
+        string? preferredExtension,
+        string? suggestedFileName,
+        out string path,
+        out IDocumentFileAdapter adapter)
     {
         path = "";
         adapter = null!;
@@ -262,7 +269,9 @@ internal sealed class FileCommands
             : DefaultSaveExtension;
         var plan = DocumentFileDialogRequestPlanner.BuildSaveDialogPlanFromSourceName(
             _adapters,
-            _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath),
+            string.IsNullOrWhiteSpace(suggestedFileName)
+                ? _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath)
+                : suggestedFileName,
             "Document",
             currentExtension);
 

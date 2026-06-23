@@ -388,6 +388,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             SaveAsType: extension => _file.SaveAs(extension),
+            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
             SaveCopy: () => _file.SaveCopy(),
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
             OpenContainingFolder: OpenContainingFolder,

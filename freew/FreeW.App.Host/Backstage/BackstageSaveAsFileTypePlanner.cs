@@ -1,3 +1,4 @@
+using System.IO;
 using Free.Shared.Shell.Wpf;
 using FreeW.Core.IO;
 
@@ -5,6 +6,8 @@ namespace FreeW.App.Host.Backstage;
 
 internal static class BackstageSaveAsFileTypePlanner
 {
+    private const string DefaultSaveExtension = ".docx";
+
     public static IReadOnlyList<BackstageActionGroup> Build(
         IEnumerable<FileFormatDescriptor> formats,
         Action<string> saveAsExtension)
@@ -20,6 +23,34 @@ internal static class BackstageSaveAsFileTypePlanner
             new("Web Pages", BuildRows(rows, SaveAsFileTypeCategory.Web, saveAsExtension)),
             new("Other Formats", BuildRows(rows, SaveAsFileTypeCategory.Other, saveAsExtension)),
         ];
+    }
+
+    public static BackstageSaveAsInlinePlan BuildInlinePlan(
+        IEnumerable<FileFormatDescriptor> formats,
+        string displayName,
+        string? currentPath)
+    {
+        ArgumentNullException.ThrowIfNull(formats);
+
+        var rows = Collapse(formats.Where(format => format.CanSave)).ToList();
+        var choices = rows
+            .Select(row => new BackstageSaveAsFileTypeChoice(row.Label, row.PrimaryExtension))
+            .ToArray();
+
+        var currentExtension = DocumentFileFormatResolver.NormalizeExtension(
+            string.IsNullOrWhiteSpace(currentPath) ? string.Empty : Path.GetExtension(currentPath));
+        var selectedExtension = choices.Any(choice => string.Equals(choice.PrimaryExtension, currentExtension, StringComparison.OrdinalIgnoreCase))
+            ? currentExtension
+            : choices.Any(choice => string.Equals(choice.PrimaryExtension, DefaultSaveExtension, StringComparison.OrdinalIgnoreCase))
+                ? DefaultSaveExtension
+                : choices.FirstOrDefault()?.PrimaryExtension ?? DefaultSaveExtension;
+
+        var suggestedFileName = Free.Shared.IO.FileDialogRequestPlanner.BuildSuggestedSaveAsFileName(
+            displayName,
+            "Document",
+            selectedExtension);
+
+        return new BackstageSaveAsInlinePlan(suggestedFileName, selectedExtension, choices);
     }
 
     private static IReadOnlyList<BackstageActionRow> BuildRows(
@@ -121,3 +152,12 @@ internal static class BackstageSaveAsFileTypePlanner
         Other
     }
 }
+
+internal sealed record BackstageSaveAsInlinePlan(
+    string SuggestedFileName,
+    string SelectedExtension,
+    IReadOnlyList<BackstageSaveAsFileTypeChoice> FileTypes);
+
+internal sealed record BackstageSaveAsFileTypeChoice(
+    string Label,
+    string PrimaryExtension);

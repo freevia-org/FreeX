@@ -24,6 +24,11 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("FileCommandMessageBox.ShowError(");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+        if (appFolder == "freew")
+        {
+            source.Should().Contain("SaveAsSuggested(string? suggestedFileName, string? preferredExtension)");
+            source.Should().Contain("TryPromptSaveTarget(preferredExtension, suggestedFileName");
+        }
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain(".ConfirmDiscardOrSave(action");
