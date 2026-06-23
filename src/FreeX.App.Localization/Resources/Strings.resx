@@ -66,6 +66,15 @@
   <data name="Common_Clear" xml:space="preserve"><value>Clear</value></data>
   <data name="Common_None" xml:space="preserve"><value>None</value></data>
   <data name="Common_Auto" xml:space="preserve"><value>Auto</value></data>
+  <!-- Legal Notices dialog -->
+  <data name="LegalNotices_LegalNotices" xml:space="preserve"><value>Legal Notices</value></data>
+  <data name="LegalNotices_TheseNoticesArePackagedWithThisFreeXExecutableForOfflineReview" xml:space="preserve"><value>These notices are packaged with this FreeX executable for offline review.</value></data>
+  <data name="LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable" xml:space="preserve"><value>Shows the legal, privacy, and third-party notices packaged with this FreeX executable.</value></data>
+  <data name="LegalNotices_LegalNoticesSummary" xml:space="preserve"><value>Legal notices summary</value></data>
+  <data name="LegalNotices_LegalNoticeSections" xml:space="preserve"><value>Legal notice sections</value></data>
+  <data name="LegalNotices_ChooseALegalNoticeSectionToReadAndCopy" xml:space="preserve"><value>Choose a legal notice section to read and copy.</value></data>
+  <data name="LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText" xml:space="preserve"><value>Read-only legal notice text. Use Ctrl+C to copy selected text.</value></data>
+  <data name="LegalNotices_CloseButton" xml:space="preserve"><value>Close</value></data>
   <!-- PivotTable Options dialog -->
   <data name="PivotOptions_Title" xml:space="preserve"><value>PivotTable Options ({0})</value></data>
   <data name="PivotOptions_ShowRowGrandTotals" xml:space="preserve"><value>Show grand totals for rows</value></data>
