@@ -351,8 +351,9 @@ internal static class FreeWRibbon
                 // Single-command group → Large.
                 tab.Group("paragraph", "Paragraph", "A", 76, g =>
                 {
-                    // Word also exposes paragraph indentation and spacing from Layout. Reuse the backed
-                    // Home paragraph commands here rather than adding placeholder numeric controls.
+                    // Indent-decrease/increase and line-spacing carry over from Home; the four numeric
+                    // combos below are unique to the Layout tab and mirror Word's Layout > Paragraph group
+                    // (Indent Left/Right in points; Spacing Before/After in points).
                     g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                     g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);
                     g.ComboBox("freew.line-spacing", "Line and Paragraph Spacing", c => c with
@@ -361,9 +362,36 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.LineSpacing),
                         Width = 52
                     });
+                    // Indent Left: exact left-indent value (points); 36 pt = 0.5 in, 72 pt = 1 in.
+                    g.ComboBox("freew.indent-left", "Indent Left", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentIncrease),
+                        Width = 52
+                    });
+                    // Indent Right: exact right-indent value (points).
+                    g.ComboBox("freew.indent-right", "Indent Right", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.IndentDecrease),
+                        Width = 52
+                    });
                     g.RowBreak();
                     g.Icon("freew.space-before-toggle", "Add Space Before Paragraph", RibbonCommandIconKind.SpaceBefore);
                     g.Icon("freew.space-after-toggle", "Add Space After Paragraph", RibbonCommandIconKind.SpaceAfter);
+                    // Spacing Before / After: exact space-before and space-after values in points.
+                    g.ComboBox("freew.space-before", "Spacing Before", c => c with
+                    {
+                        Items = new[] { "0", "6", "12", "18", "24" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceBefore),
+                        Width = 52
+                    });
+                    g.ComboBox("freew.space-after", "Spacing After", c => c with
+                    {
+                        Items = new[] { "0", "6", "8", "12", "18", "24" },
+                        Icon = new RibbonCommandIcon(RibbonCommandIconKind.SpaceAfter),
+                        Width = 52
+                    });
                     g.Icon("freew.paragraph-dialog", "Paragraph Settings", RibbonCommandIconKind.TextFunction);
                     g.Icon("freew.tabs-dialog", "Tabs", RibbonCommandIconKind.Ruler);
                 });

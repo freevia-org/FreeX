@@ -541,6 +541,25 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.space-before-toggle", new ActionCommand(() => editor.ToggleSpaceBefore()));
         registry.Register("freew.space-after-toggle", new ActionCommand(() => editor.ToggleSpaceAfter()));
 
+        // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
+        // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
+        // back into the ribbon combo and the displayed number tracks the current paragraph.
+        var indentLeft = new IndentLeftCommand(editor);
+        registry.Register("freew.indent-left", indentLeft);
+        stateful.Add(("freew.indent-left", indentLeft));
+
+        var indentRight = new IndentRightCommand(editor);
+        registry.Register("freew.indent-right", indentRight);
+        stateful.Add(("freew.indent-right", indentRight));
+
+        var spaceBefore = new SpaceBeforeCommand(editor);
+        registry.Register("freew.space-before", spaceBefore);
+        stateful.Add(("freew.space-before", spaceBefore));
+
+        var spaceAfter = new SpaceAfterCommand(editor);
+        registry.Register("freew.space-after", spaceAfter);
+        stateful.Add(("freew.space-after", spaceAfter));
+
         // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
         // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
         registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
@@ -962,6 +981,95 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 editor.SetLineSpacing(multiplier);
             }
+        }
+    }
+
+    // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
+    // first selected paragraph's left/right indent and apply an exact value while preserving the
+    // existing first-line indent. Both implement IRibbonStatefulCommand so SelectionChanged can push
+    // the live value into the ribbon store and the combo reflects the current paragraph state.
+    private sealed class IndentLeftCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            {
+                editor.Focus();
+                var (_, right, firstLine) = editor.CurrentParagraphIndents();
+                editor.SetParagraphIndents(pt, right, firstLine);
+            }
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var (left, _, _) = editor.CurrentParagraphIndents();
+            return new RibbonCommandState(Value: left.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    private sealed class IndentRightCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            {
+                editor.Focus();
+                var (left, _, firstLine) = editor.CurrentParagraphIndents();
+                editor.SetParagraphIndents(left, pt, firstLine);
+            }
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var (_, right, _) = editor.CurrentParagraphIndents();
+            return new RibbonCommandState(Value: right.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    // Layout > Paragraph > Space Before / Space After: numeric combo boxes (points) that display the
+    // first selected paragraph's space-before/after and apply an exact value reversibly via the bus.
+    // Like the indent combos, both are stateful so the ribbon reflects the current selection's value.
+    private sealed class SpaceBeforeCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            {
+                editor.Focus();
+                editor.FormatSelectedParagraphSpaceBefore(pt);
+            }
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var f = editor.CurrentParagraphFormatting;
+            return new RibbonCommandState(Value: f.SpaceBeforePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    private sealed class SpaceAfterCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+            {
+                editor.Focus();
+                editor.FormatSelectedParagraphSpaceAfter(pt);
+            }
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var f = editor.CurrentParagraphFormatting;
+            return new RibbonCommandState(Value: f.SpaceAfterPt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
         }
     }
 

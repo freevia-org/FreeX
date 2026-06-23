@@ -682,8 +682,12 @@ public sealed class FreeWRibbonParityTests
                 "freew.indent-decrease",
                 "freew.indent-increase",
                 "freew.line-spacing",
+                "freew.indent-left",
+                "freew.indent-right",
                 "freew.space-before-toggle",
                 "freew.space-after-toggle",
+                "freew.space-before",
+                "freew.space-after",
                 "freew.paragraph-dialog",
                 "freew.tabs-dialog");
         Labels(paragraph!)
@@ -692,8 +696,12 @@ public sealed class FreeWRibbonParityTests
                 "Decrease Indent",
                 "Increase Indent",
                 "Line and Paragraph Spacing",
+                "Indent Left",
+                "Indent Right",
                 "Add Space Before Paragraph",
                 "Add Space After Paragraph",
+                "Spacing Before",
+                "Spacing After",
                 "Paragraph Settings",
                 "Tabs");
 
