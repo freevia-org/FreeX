@@ -13,4 +13,8 @@
     <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
+  </ItemGroup>
+
 </Project>

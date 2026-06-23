@@ -38,6 +38,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="Free.Shared.IO" />
     <Using Include="Free.Shared.AppServices" />
   </ItemGroup>
 
