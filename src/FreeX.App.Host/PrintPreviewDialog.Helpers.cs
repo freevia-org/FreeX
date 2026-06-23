@@ -19,31 +19,15 @@ internal enum PrintPreviewPageRangeMode
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
-        UiText.Format("PrintPreview_TitleFormat", workbookName.Trim());
+        UiText.Format(
+            PrintPreviewDialogPlanner.TitleFormatResourceKey,
+            PrintPreviewDialogPlanner.NormalizeWorkbookName(workbookName));
 
-    public static bool TryParseCopyCount(string? text, out int copies)
-    {
-        copies = 0;
-        if (!int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            || parsed is < 1 or > 999)
-            return false;
+    public static bool TryParseCopyCount(string? text, out int copies) =>
+        PrintPreviewDialogPlanner.TryParseCopyCount(text, out copies);
 
-        copies = parsed;
-        return true;
-    }
-
-    public static bool TryParsePageNumber(string? text, int totalPages, out int pageNumber)
-    {
-        pageNumber = 0;
-        if (totalPages < 1
-            || !int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            || parsed < 1
-            || parsed > totalPages)
-            return false;
-
-        pageNumber = parsed;
-        return true;
-    }
+    public static bool TryParsePageNumber(string? text, int totalPages, out int pageNumber) =>
+        PrintPreviewDialogPlanner.TryParsePageNumber(text, totalPages, out pageNumber);
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {

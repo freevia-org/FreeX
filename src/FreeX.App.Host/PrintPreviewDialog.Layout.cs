@@ -131,9 +131,10 @@ public sealed partial class PrintPreviewDialog : Window
     private void ConfigurePrintPreviewWindow(string workbookName)
     {
         Title = CreateTitle(workbookName);
-        Width = 1120;
-        Height = 700;
+        Width = PrintPreviewDialogPlanner.WindowWidth;
+        Height = PrintPreviewDialogPlanner.WindowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetAutomationId(this, PrintPreviewDialogPlanner.DialogAutomationId);
     }
 
     private static Grid CreatePrintPreviewRootGrid()
@@ -232,7 +233,7 @@ public sealed partial class PrintPreviewDialog : Window
             IsCancel = true,
             ToolTip = UiText.Get("PrintPreview_CloseToolTip")
         };
-        SetToolbarAutomation(closeButton, "PrintPreviewCloseButton", UiText.Get("PrintPreview_CloseAutomationName"), UiText.Get("PrintPreview_CloseHelpText"));
+        SetToolbarAutomation(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId, UiText.Get("PrintPreview_CloseAutomationName"), UiText.Get("PrintPreview_CloseHelpText"));
 
         return new PrintControls(printerBox, copiesBox, collatedBox, sidesBox, statusText, printButton, closeButton);
     }

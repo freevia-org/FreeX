@@ -367,6 +367,7 @@ $routes = @(
     @{
         RouteId = "dialog.PrintPreview"; DisplayName = "Print Preview / Print"
         Wpf = @("tools\foreground-captures\freex-native-print-dialog\*.png")
+        Shared = @("src\FreeX.App.Presentation\PageLayout\PrintPreview*.cs", "src\FreeX.App.Services\PrintJobPlanner.cs", "src\FreeX.App.Services\WorkbookExportPrintPlanner.cs")
     },
     @{
         RouteId = "dialog.OpenWorkbook"; DisplayName = "Open Workbook"
