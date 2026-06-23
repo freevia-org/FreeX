@@ -8,15 +8,21 @@ public partial class GridView
 {
     private const double AutoFilterButtonSize = 15;
     private const double AutoFilterButtonMargin = 2;
-    private const double PivotExpandCollapseButtonSize = 9;
-    private const double PivotExpandCollapseButtonReserve = 14;
+    private const double PivotHeaderDropdownButtonSize = 17;
+    private const double PivotHeaderDropdownButtonMargin = 1;
+    private const double PivotExpandCollapseButtonSize = 10;
+    private const double PivotExpandCollapseButtonReserve = 15;
 
     private static readonly Brush AutoFilterButtonBrush = CreateAutoFilterButtonBrush();
     private static readonly Pen AutoFilterButtonBorderPen = MakePen(MakeBrush(142, 153, 166), 1);
     private static readonly Brush AutoFilterGlyphBrush = MakeBrush(45, 55, 65);
     private static readonly Brush ActiveAutoFilterGlyphBrush = MakeBrush(15, 109, 140);
-    private static readonly Pen PivotExpandCollapseBorderPen = MakePen(MakeBrush(128, 128, 128), 1);
-    private static readonly Pen PivotExpandCollapseGlyphPen = MakePen(MakeBrush(64, 64, 64), 1);
+    private static readonly Brush PivotHeaderDropdownButtonBrush = CreatePivotHeaderDropdownButtonBrush();
+    private static readonly Pen PivotHeaderDropdownButtonBorderPen = MakePen(MakeBrush(154, 164, 174), 1);
+    private static readonly Brush PivotHeaderDropdownGlyphBrush = MakeBrush(66, 76, 86);
+    private static readonly Brush PivotExpandCollapseButtonBrush = MakeBrush(248, 248, 248);
+    private static readonly Pen PivotExpandCollapseBorderPen = MakePen(MakeBrush(174, 174, 174), 1);
+    private static readonly Pen PivotExpandCollapseGlyphPen = MakePen(MakeBrush(96, 96, 96), 1);
 
     private void RenderAutoFilterButtons(DrawingContext dc)
     {
@@ -81,8 +87,8 @@ public partial class GridView
                 continue;
             }
 
-            dc.DrawRectangle(AutoFilterButtonBrush, AutoFilterButtonBorderPen, rect);
-            DrawAutoFilterGlyph(dc, rect, button.IsActive);
+            dc.DrawRectangle(PivotHeaderDropdownButtonBrush, PivotHeaderDropdownButtonBorderPen, rect);
+            DrawPivotHeaderDropdownGlyph(dc, rect, button.IsActive);
         }
     }
 
@@ -162,7 +168,26 @@ public partial class GridView
         var column = FindColMetric(Viewport.ColMetrics, cell.Col);
         return row is null || column is null
             ? null
-            : GetAutoFilterButtonRect(row, column);
+            : GetPivotHeaderDropdownButtonRect(row, column, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+    }
+
+    internal static Rect GetPivotHeaderDropdownButtonRect(
+        RowMetric row,
+        ColMetric column,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var size = Math.Min(
+            PivotHeaderDropdownButtonSize,
+            Math.Max(0, Math.Min(row.Height, column.Width) - PivotHeaderDropdownButtonMargin * 2));
+        if (size <= 0)
+            return Rect.Empty;
+
+        return new Rect(
+            rowHeaderWidth + column.LeftOffset + Math.Max(0, column.Width - size - PivotHeaderDropdownButtonMargin),
+            columnHeaderHeight + row.TopOffset + Math.Max(0, (row.Height - size) / 2),
+            size,
+            size);
     }
 
     private Rect GetAutoFilterButtonRect(RowMetric row, ColMetric column)
@@ -180,16 +205,40 @@ public partial class GridView
 
     private static void DrawPivotExpandCollapseButton(DrawingContext dc, Rect rect, bool isExpanded)
     {
-        dc.DrawRectangle(Brushes.White, PivotExpandCollapseBorderPen, rect);
-        var centerY = rect.Top + rect.Height / 2;
-        var left = rect.Left + 2;
-        var right = rect.Right - 2;
+        dc.DrawRectangle(PivotExpandCollapseButtonBrush, PivotExpandCollapseBorderPen, rect);
+        var centerY = Math.Round(rect.Top + rect.Height / 2) + 0.5;
+        var left = Math.Round(rect.Left + 2.5) + 0.5;
+        var right = Math.Round(rect.Right - 2.5) + 0.5;
         dc.DrawLine(PivotExpandCollapseGlyphPen, new Point(left, centerY), new Point(right, centerY));
         if (!isExpanded)
         {
-            var centerX = rect.Left + rect.Width / 2;
-            dc.DrawLine(PivotExpandCollapseGlyphPen, new Point(centerX, rect.Top + 2), new Point(centerX, rect.Bottom - 2));
+            var centerX = Math.Round(rect.Left + rect.Width / 2) + 0.5;
+            var top = Math.Round(rect.Top + 2.5) + 0.5;
+            var bottom = Math.Round(rect.Bottom - 2.5) + 0.5;
+            dc.DrawLine(PivotExpandCollapseGlyphPen, new Point(centerX, top), new Point(centerX, bottom));
         }
+    }
+
+    private static void DrawPivotHeaderDropdownGlyph(DrawingContext dc, Rect rect, bool isActive)
+    {
+        if (isActive)
+        {
+            DrawAutoFilterGlyph(dc, rect, isActive: true);
+            return;
+        }
+
+        var centerX = rect.Left + rect.Width / 2;
+        var centerY = rect.Top + rect.Height / 2 + 1;
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(new Point(centerX - 4, centerY - 2), isFilled: true, isClosed: true);
+            ctx.LineTo(new Point(centerX + 4, centerY - 2), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(new Point(centerX, centerY + 3), isStroked: true, isSmoothJoin: false);
+        }
+
+        geometry.Freeze();
+        dc.DrawGeometry(PivotHeaderDropdownGlyphBrush, null, geometry);
     }
 
     private static void DrawAutoFilterGlyph(DrawingContext dc, Rect rect, bool isActive)
@@ -233,6 +282,16 @@ public partial class GridView
         var brush = new LinearGradientBrush(
             Color.FromRgb(252, 252, 252),
             Color.FromRgb(225, 232, 238),
+            90);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Brush CreatePivotHeaderDropdownButtonBrush()
+    {
+        var brush = new LinearGradientBrush(
+            Color.FromRgb(249, 251, 253),
+            Color.FromRgb(219, 228, 237),
             90);
         brush.Freeze();
         return brush;

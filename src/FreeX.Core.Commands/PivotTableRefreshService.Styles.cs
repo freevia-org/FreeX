@@ -337,41 +337,57 @@ public static partial class PivotTableRefreshService
         // pivots loaded from such files (Issue 123). Apply the full visual style while preserving
         // cell-local content formatting that Excel keeps outside the PivotTable style layer.
         var existingStyle = workbook.GetStyle(cell.StyleId);
-        if (preserveExistingVisualStyles && HasExistingVisualStyle(existingStyle))
-            return;
-
         var visualStyle = workbook.GetStyle(visualStyleId);
         var style = existingStyle.Clone();
-        var existingFontName = existingStyle.FontName;
-        var existingFontSize = existingStyle.FontSize;
-        var existingFontScheme = existingStyle.FontScheme;
 
-        ApplyPivotFontStyle(style, visualStyle);
-        style.FontName = existingFontName;
-        style.FontSize = existingFontSize;
-        style.FontScheme = existingFontScheme;
-        ApplyPivotPatternStyle(style, visualStyle);
-        ApplyPivotBorderStyle(style, visualStyle);
+        var applyFont = !preserveExistingVisualStyles || HasPivotFontVisualStyle(visualStyle);
+        var applyPattern = !preserveExistingVisualStyles || !HasExistingPatternVisualStyle(existingStyle);
+        var applyBorder = !preserveExistingVisualStyles || !HasExistingBorderVisualStyle(existingStyle);
+        if (!applyFont && !applyPattern && !applyBorder)
+            return;
+
+        if (applyFont)
+        {
+            var existingFontName = existingStyle.FontName;
+            var existingFontSize = existingStyle.FontSize;
+            var existingFontScheme = existingStyle.FontScheme;
+
+            ApplyPivotFontStyle(style, visualStyle);
+            style.FontName = existingFontName;
+            style.FontSize = existingFontSize;
+            style.FontScheme = existingFontScheme;
+        }
+
+        if (applyPattern)
+            ApplyPivotPatternStyle(style, visualStyle);
+        if (applyBorder)
+            ApplyPivotBorderStyle(style, visualStyle);
 
         cell.StyleId = workbook.RegisterStyle(style);
     }
 
-    private static bool HasExistingVisualStyle(CellStyle style) =>
+    private static bool HasExistingPatternVisualStyle(CellStyle style) =>
         style.FillColor is not null ||
         style.FillThemeColor is not null ||
         style.FillPatternStyle != CellFillPatternStyle.None ||
         style.FillPatternColor is not null ||
-        style.FillPatternThemeColor is not null ||
+        style.FillPatternThemeColor is not null;
+
+    private static bool HasExistingBorderVisualStyle(CellStyle style) =>
+        style.BorderTop.Style != BorderStyle.None ||
+        style.BorderRight.Style != BorderStyle.None ||
+        style.BorderBottom.Style != BorderStyle.None ||
+        style.BorderLeft.Style != BorderStyle.None;
+
+    private static bool HasPivotFontVisualStyle(CellStyle style) =>
         style.FontColor != CellColor.Black ||
         style.Bold ||
         style.Italic ||
         style.Underline ||
         style.DoubleUnderline ||
         style.Strikethrough ||
-        style.BorderTop.Style != BorderStyle.None ||
-        style.BorderRight.Style != BorderStyle.None ||
-        style.BorderBottom.Style != BorderStyle.None ||
-        style.BorderLeft.Style != BorderStyle.None;
+        style.Superscript ||
+        style.Subscript;
 
     private static void ApplyPivotFontStyle(CellStyle target, CellStyle source)
     {
@@ -384,6 +400,7 @@ public static partial class PivotTableRefreshService
         target.Superscript = source.Superscript;
         target.Subscript = source.Subscript;
         target.FontColor = source.FontColor;
+        target.FontThemeColor = null;
         target.DoubleUnderline = source.DoubleUnderline;
     }
 
