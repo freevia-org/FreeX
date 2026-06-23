@@ -377,11 +377,11 @@ public sealed partial class MainWindowSourceHygieneTests
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
-        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
-        dataCommandsSource.Should().Contain("Filter = filter");
-        dataCommandsSource.Should().Contain("CheckFileExists = true");
-        dataCommandsSource.Should().Contain("Multiselect = false");
-        dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
+        dataCommandsSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        dataCommandsSource.Should().Contain("filter,");
+        dataCommandsSource.Should().Contain("checkFileExists: true");
+        dataCommandsSource.Should().Contain("multiselect: false");
+        dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
         dataCommandsSource.Should().Contain("await Task.Run(() =>");
@@ -397,6 +397,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");
         dataCommandsSource.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage");
         dataCommandsSource.Should().Contain("errorDetail: diagnostic.Detail");
+        dataCommandsSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
     }
 
     [Fact]

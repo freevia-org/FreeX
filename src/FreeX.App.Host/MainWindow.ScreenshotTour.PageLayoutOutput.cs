@@ -481,7 +481,7 @@ public partial class MainWindow
             ],
             Limitations:
             [
-                "Background Choose uses Microsoft.Win32.OpenFileDialog; the tour captures the owned command/menu guard and seeded model status but does not open or drive the native image picker without foreground ownership.",
+                "Background Choose uses the shared WPF file dialog realizer; the tour captures the owned command/menu guard and seeded model status but does not open or drive the native image picker without foreground ownership.",
                 "Print Preview and PDF proof are produced in-process from FreeX rendering services; no native PrintDialog, printer driver, or SaveFileDialog is opened.",
                 "Microsoft Excel counterpart screenshots are not produced by this tool."
             ]);
