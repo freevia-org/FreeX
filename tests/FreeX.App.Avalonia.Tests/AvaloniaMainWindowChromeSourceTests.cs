@@ -49,11 +49,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
 
         var combined = chartTabsSource + Environment.NewLine + chartDialogSources;
         combined.Should().NotContain("ChartCycleBlue");
         combined.Should().NotContain("ResolveFirstSeriesFillColor");
+        combined.Should().NotContain("candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart");
         combined.Should().NotContain("private static ChartDataLabelPosition NextDataLabelPosition");
         combined.Should().NotContain("private static (bool ShowMajor, bool ShowMinor) NextGridlineState");
     }

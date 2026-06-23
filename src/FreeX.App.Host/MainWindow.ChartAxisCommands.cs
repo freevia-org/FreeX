@@ -414,15 +414,5 @@ public partial class MainWindow
     }
 
     private static ChartModel? FindFirstChart(Sheet? sheet)
-    {
-        if (sheet is null)
-            return null;
-
-        var charts = sheet.Charts;
-        var index = 0;
-        while (index < charts.Count)
-            return charts[index];
-
-        return null;
-    }
+        => ChartWorkflowTargetPlanner.FindFirstChart(sheet);
 }

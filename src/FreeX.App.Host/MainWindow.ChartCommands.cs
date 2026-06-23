@@ -284,24 +284,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         chart = null!;
-        if (GetSelectedChartOnCurrentSheet() is { } selectedChart &&
-            IsChartContextualRibbonTarget(selectedChart))
-        {
-            chart = selectedChart;
-            return true;
-        }
-
-        if (sheet is not null)
-        {
-            foreach (var candidate in sheet.Charts)
-            {
-                if (!IsChartContextualRibbonTarget(candidate))
-                    continue;
-
-                chart = candidate;
-                break;
-            }
-        }
+        chart = ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, GetSelectedChartIdOnCurrentSheet())!;
 
         if (chart is not null)
             return true;
@@ -313,27 +296,8 @@ public partial class MainWindow
     private void RefreshChartContextualTabs()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
+        SetChartContextualTabsVisible(ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet()));
     }
-
-    private bool HasChartContextualRibbonTarget(Sheet? sheet)
-    {
-        if (sheet is null ||
-            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
-            SheetGrid.SelectedObjectId == Guid.Empty)
-            return false;
-
-        foreach (var chart in sheet.Charts)
-        {
-            if (chart.Id == SheetGrid.SelectedObjectId && IsChartContextualRibbonTarget(chart))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
-        chart.IsVisible && !chart.IsPivotChart;
 
     private void SetChartContextualTabsVisible(bool visible)
     {

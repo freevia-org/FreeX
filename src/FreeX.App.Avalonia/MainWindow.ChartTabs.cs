@@ -40,25 +40,21 @@ public sealed partial class MainWindow
 {
     /// <summary>
     /// Resolves the chart the contextual tabs target: the selected drawing object on the active sheet,
-    /// when it is a visible, non-PivotChart <see cref="ChartModel"/> (the same predicate the WPF host's
-    /// <c>IsChartContextualRibbonTarget</c> uses). Reports an honest status and returns null otherwise.
+    /// when it is eligible for shared chart workflows. Reports an honest status and returns null otherwise.
     /// </summary>
     private bool TryGetSelectedChart(string commandLabel, out ChartModel chart)
     {
         chart = null!;
-        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart || _selectedDrawingObjectId is not { } id)
+        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart)
         {
             RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
             return false;
         }
 
-        foreach (var candidate in _session.ActiveSheet.Charts)
+        if (ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId) is { } selectedChart)
         {
-            if (candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart)
-            {
-                chart = candidate;
-                return true;
-            }
+            chart = selectedChart;
+            return true;
         }
 
         RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));

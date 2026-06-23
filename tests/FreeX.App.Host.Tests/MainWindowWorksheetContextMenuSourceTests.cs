@@ -85,7 +85,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("target.Anchor.Row != address.Row");
         source.Should().Contain("DrawingObjectTargetKind.Picture => WorksheetContextMenuTargetKind.Picture");
         source.Should().Contain("SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.Chart");
-        source.Should().Contain("IsChartContextualRibbonTarget(selectedChart)");
+        source.Should().Contain("ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet())");
         source.Should().Contain("WorksheetContextMenuTargetKind.Chart");
     }
 

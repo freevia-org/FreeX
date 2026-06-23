@@ -7,6 +7,54 @@ namespace FreeX.App.Presentation.Tests.Charts;
 
 public sealed class ChartEditingPlannerTests
 {
+    // ---- ChartWorkflowTargetPlanner -----------------------------------------------------------------
+
+    [Fact]
+    public void WorkflowTarget_IsContextualTarget_RejectsHiddenAndPivotCharts()
+    {
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel()).Should().BeTrue();
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel { IsVisible = false }).Should().BeFalse();
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel { IsPivotChart = true }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WorkflowTarget_FindSelectedChart_RequiresSelectedVisibleNonPivotChart()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var hidden = new ChartModel { IsVisible = false };
+        var pivot = new ChartModel { IsPivotChart = true };
+        var selected = new ChartModel();
+        sheet.Charts.Add(hidden);
+        sheet.Charts.Add(pivot);
+        sheet.Charts.Add(selected);
+
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, selected.Id).Should().BeSameAs(selected);
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, hidden.Id).Should().BeNull();
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, pivot.Id).Should().BeNull();
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, Guid.Empty).Should().BeNull();
+        ChartWorkflowTargetPlanner.HasSelectedChart(sheet, selected.Id).Should().BeTrue();
+        ChartWorkflowTargetPlanner.HasSelectedChart(sheet, hidden.Id).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WorkflowTarget_FindSelectedOrFirstChart_PrefersSelectedThenFirstEligible()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var hidden = new ChartModel { IsVisible = false };
+        var first = new ChartModel { Name = "First" };
+        var selected = new ChartModel { Name = "Selected" };
+        sheet.Charts.Add(hidden);
+        sheet.Charts.Add(first);
+        sheet.Charts.Add(selected);
+
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, selected.Id).Should().BeSameAs(selected);
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, Guid.NewGuid()).Should().BeSameAs(first);
+        ChartWorkflowTargetPlanner.FindFirstChart(sheet).Should().BeSameAs(first);
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(null, selected.Id).Should().BeNull();
+    }
+
     // ---- ChartTypeChangePlanner ----------------------------------------------------------------------
 
     [Fact]

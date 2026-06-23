@@ -53,11 +53,13 @@ public sealed class ChartCommandSourceTests
         var chartSource = ReadHostSourceFile("MainWindow.ChartCommands.cs");
         var commandExecutionSource = ReadHostSourceFile("MainWindow.CommandExecution.cs");
 
-        chartSource.Should().Contain("GetSelectedChartOnCurrentSheet() is { } selectedChart");
-        chartSource.Should().Contain("IsChartContextualRibbonTarget(selectedChart)");
+        chartSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, GetSelectedChartIdOnCurrentSheet())");
+        chartSource.Should().Contain("ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet())");
         commandExecutionSource.Should().Contain("private ChartModel? GetSelectedChartOnCurrentSheet()");
+        commandExecutionSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet())");
+        commandExecutionSource.Should().Contain("private Guid? GetSelectedChartIdOnCurrentSheet()");
         commandExecutionSource.Should().Contain("SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart");
-        commandExecutionSource.Should().Contain("chart.Id == SheetGrid.SelectedObjectId");
+        commandExecutionSource.Should().NotContain("chart.Id == SheetGrid.SelectedObjectId");
     }
 
     [Fact]
