@@ -58,12 +58,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(viewsList, UiText.Get("CustomViews_ListLabel"));
 
         var showButton = new Button { Content = UiText.Get("CustomViews_Show"), Width = 72, IsDefault = true, IsEnabled = false };
+        ApplyDataOpsButtonChrome(showButton, isDefault: true);
         AutomationProperties.SetAutomationId(showButton, "CustomViewsShowButton");
         var addButton = new Button { Content = UiText.Get("CustomViews_Add"), Width = 72 };
+        ApplyDataOpsButtonChrome(addButton);
         AutomationProperties.SetAutomationId(addButton, "CustomViewsAddButton");
         var deleteButton = new Button { Content = UiText.Get("CustomViews_Delete"), Width = 72, IsEnabled = false };
+        ApplyDataOpsButtonChrome(deleteButton);
         AutomationProperties.SetAutomationId(deleteButton, "CustomViewsDeleteButton");
         var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, Width = 72 };
+        ApplyDataOpsButtonChrome(closeButton);
         AutomationProperties.SetAutomationId(closeButton, "CustomViewsCloseButton");
 
         var warningText = new TextBlock
@@ -71,6 +75,8 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "CustomViewsWarningText");
 
@@ -241,6 +247,8 @@ public sealed partial class MainWindow
                 HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             },
         };
         Grid.SetColumn(border, column);
@@ -255,6 +263,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(4, 2, 4, 2),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         Grid.SetColumn(cell, column);
         grid.Children.Add(cell);
@@ -275,7 +285,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("CustomViews_AddTitle"),
             Width = 380,
-            Height = 220,
+            Height = 240,
+            MinWidth = 320,
+            MinHeight = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -286,12 +298,15 @@ public sealed partial class MainWindow
             Text = CustomViewsPlanner.SuggestDefaultName(_session.Workbook, UiText.Get("CustomViews_DefaultNameFormat")),
             MinWidth = 220,
         };
+        ApplyDataOpsTextBoxChrome(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "CustomViewNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("CustomViews_NameInputLabel"));
 
         var printSettingsBox = new CheckBox { Content = UiText.Get("CustomViews_IncludePrintSettings"), IsChecked = true };
+        ApplyDataOpsCheckBoxChrome(printSettingsBox);
         AutomationProperties.SetAutomationId(printSettingsBox, "CustomViewPrintSettingsCheckBox");
         var hiddenFilterBox = new CheckBox { Content = UiText.Get("CustomViews_IncludeHiddenFilter"), IsChecked = true };
+        ApplyDataOpsCheckBoxChrome(hiddenFilterBox);
         AutomationProperties.SetAutomationId(hiddenFilterBox, "CustomViewHiddenFilterCheckBox");
 
         var warningText = new TextBlock
@@ -299,12 +314,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "CustomViewAddWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "CustomViewAddOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "CustomViewAddCancelButton");
 
         string? savedName = null;
@@ -364,6 +383,8 @@ public sealed partial class MainWindow
             Text = UiText.Get("CustomViews_NameLabel"),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 8),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AvaloniaGrid.SetRow(nameLabel, 0);
         AvaloniaGrid.SetColumn(nameLabel, 0);
@@ -378,6 +399,8 @@ public sealed partial class MainWindow
             Text = UiText.Get("CustomViews_IncludeHeader"),
             Foreground = HeaderForeground,
             Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
 
         var buttonRow = new StackPanel

@@ -66,9 +66,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("PivotLoc_InsertSlicersTitle"),
             Width = 320,
-            Height = 420,
+            Height = 380,
             MinWidth = 280,
-            MinHeight = 320,
+            MinHeight = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -79,6 +79,7 @@ public sealed partial class MainWindow
         foreach (var header in headers)
         {
             var checkBox = new CheckBox { Content = header };
+            ApplyDataOpsCheckBoxChrome(checkBox);
             checkBoxes.Add(checkBox);
             fieldStack.Children.Add(checkBox);
         }
@@ -86,8 +87,8 @@ public sealed partial class MainWindow
         var fieldList = new ScrollViewer
         {
             Content = fieldStack,
-            Height = 260,
-            MaxHeight = 260,
+            Height = 220,
+            MaxHeight = 220,
         };
         AutomationProperties.SetAutomationId(fieldList, "InsertSlicerFieldList");
 
@@ -96,12 +97,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "InsertSlicerWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "InsertSlicerOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "InsertSlicerCancelButton");
 
         okButton.Click += (_, _) =>
@@ -156,6 +161,8 @@ public sealed partial class MainWindow
                             Text = UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(0, 0, 0, 8),
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
                         }),
                         DockBottom(warningText),
                         fieldList,
@@ -190,9 +197,9 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("PivotLoc_InsertTimelinesTitle"),
             Width = 320,
-            Height = 420,
+            Height = 380,
             MinWidth = 280,
-            MinHeight = 320,
+            MinHeight = 300,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -203,6 +210,7 @@ public sealed partial class MainWindow
         foreach (var header in headers)
         {
             var checkBox = new CheckBox { Content = header };
+            ApplyDataOpsCheckBoxChrome(checkBox);
             checkBoxes.Add(checkBox);
             fieldStack.Children.Add(checkBox);
         }
@@ -210,8 +218,8 @@ public sealed partial class MainWindow
         var fieldList = new ScrollViewer
         {
             Content = fieldStack,
-            Height = 260,
-            MaxHeight = 260,
+            Height = 220,
+            MaxHeight = 220,
         };
         AutomationProperties.SetAutomationId(fieldList, "InsertTimelineFieldList");
 
@@ -220,12 +228,16 @@ public sealed partial class MainWindow
             Foreground = Brush(180, 30, 30),
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(warningText, "InsertTimelineWarningText");
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "InsertTimelineOkButton");
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "InsertTimelineCancelButton");
 
         okButton.Click += (_, _) =>
@@ -280,6 +292,8 @@ public sealed partial class MainWindow
                             Text = UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
                             TextWrapping = TextWrapping.Wrap,
                             Margin = new Thickness(0, 0, 0, 8),
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
                         }),
                         DockBottom(warningText),
                         fieldList,
