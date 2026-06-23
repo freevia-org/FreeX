@@ -23,6 +23,30 @@ public sealed class GridViewThemeFontResolutionTests
     }
 
     [Fact]
+    public void ResolveEffectiveCellFontName_MinorSchemePreservesExplicitModernFontName()
+    {
+        var theme = WorkbookTheme.Office.WithFonts("HeadingFont", "BodyFont");
+        var style = new CellStyle { FontName = "Aptos Narrow", FontScheme = CellFontScheme.Minor };
+
+        var resolved = GridView.ResolveEffectiveCellFontName(style, theme, name => name == "Aptos Narrow");
+
+        resolved.Should().Be("Aptos Narrow",
+            "Excel stores the resolved concrete face alongside the theme scheme and displays that face");
+    }
+
+    [Fact]
+    public void ResolveEffectiveCellFontName_AptosNarrowFallsBackToArialNarrowWhenAvailable()
+    {
+        var theme = WorkbookTheme.Office.WithFonts("HeadingFont", "BodyFont");
+        var style = new CellStyle { FontName = "Aptos Narrow", FontScheme = CellFontScheme.Minor };
+
+        var resolved = GridView.ResolveEffectiveCellFontName(style, theme, name => name == "Arial Narrow");
+
+        resolved.Should().Be("Arial Narrow",
+            "Office may report Aptos Narrow even when WPF cannot enumerate it, and Arial Narrow is the closest local width fallback");
+    }
+
+    [Fact]
     public void ResolveEffectiveCellFontName_MajorScheme_ReturnsMajorThemeFont()
     {
         var theme = WorkbookTheme.Office.WithFonts("HeadingFont", "BodyFont");

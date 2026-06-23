@@ -249,14 +249,45 @@ public partial class GridView
     internal static string ResolveEffectiveCellFontName(CellStyle? style, WorkbookTheme theme)
         => ResolveEffectiveCellFontForDisplay(style, theme).FontName;
 
+    internal static string ResolveEffectiveCellFontName(
+        CellStyle? style,
+        WorkbookTheme theme,
+        Func<string, bool> isAvailable)
+        => ResolveEffectiveCellFontForDisplay(style, theme, isAvailable).FontName;
+
     private static (string FontName, FontStretch Stretch) ResolveEffectiveCellFontForDisplay(CellStyle? style, WorkbookTheme theme)
+        => ResolveEffectiveCellFontForDisplay(style, theme, AvailableCellFontNames.Value.Contains);
+
+    private static (string FontName, FontStretch Stretch) ResolveEffectiveCellFontForDisplay(
+        CellStyle? style,
+        WorkbookTheme theme,
+        Func<string, bool> isAvailable)
     {
         if (style is null)
-            return ResolveCellFontForDisplay(null);
+            return ResolveCellFontForDisplay(null, isAvailable);
 
-        var rawName = theme.ResolveSchemeFontName(style.FontScheme) ?? style.FontName;
-        return ResolveCellFontForDisplay(rawName);
+        var rawName = ResolveEffectiveCellRawFontName(style, theme);
+        return ResolveCellFontForDisplay(rawName, isAvailable);
     }
+
+    private static string? ResolveEffectiveCellRawFontName(CellStyle style, WorkbookTheme theme)
+    {
+        var explicitName = string.IsNullOrWhiteSpace(style.FontName) ? null : style.FontName.Trim();
+        var schemeName = theme.ResolveSchemeFontName(style.FontScheme);
+        if (schemeName is null)
+            return explicitName;
+
+        if (explicitName is null)
+            return schemeName;
+
+        // Excel-authored workbooks can persist the resolved concrete face together with a theme
+        // scheme marker. Preserve that explicit face for modern fonts such as Aptos Narrow; legacy
+        // Calibri placeholders still follow the workbook theme so Theme Fonts changes are honored.
+        return IsLegacyThemeFontPlaceholder(explicitName) ? schemeName : explicitName;
+    }
+
+    private static bool IsLegacyThemeFontPlaceholder(string fontName) =>
+        string.Equals(fontName, "Calibri", StringComparison.OrdinalIgnoreCase);
 
     internal static string ResolveCellFontNameForDisplay(string? fontName) =>
         ResolveCellFontNameForDisplay(fontName, AvailableCellFontNames.Value.Contains);
