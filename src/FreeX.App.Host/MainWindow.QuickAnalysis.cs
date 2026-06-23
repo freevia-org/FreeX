@@ -24,7 +24,15 @@ public partial class MainWindow
             return;
         }
 
-        var displayModel = QuickAnalysisPlanner.BuildDisplayModel(range);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+        {
+            ShowQuickAnalysisUnsupportedSelectionStatus();
+            return;
+        }
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
+        var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
         if (displayModel.IsEmpty)
         {
             ShowQuickAnalysisUnsupportedSelectionStatus();

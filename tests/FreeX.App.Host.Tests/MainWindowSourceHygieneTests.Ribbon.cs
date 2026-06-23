@@ -1006,9 +1006,9 @@ public sealed partial class MainWindowSourceHygieneTests
         formattingSource.Should().Contain("(sender as ComboBox)?.SelectedItem is string name");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
         uiStateSource.Should().Contain("SetRibbonComboValue(\"Font\", state.FontName)");
-        renderSource.Should().Contain("ResolveCellFontNameForDisplay(style?.FontName)");
+        renderSource.Should().Contain("ResolveCellFontForDisplay(style?.FontName)");
         renderSource.Should().Contain("AvailableCellFontNames.Value.Contains");
-        renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
+        renderSource.Should().Contain("new CellTypefaceKey(fontName, stretch, style?.Italic == true, style?.Bold == true)");
     }
 
     [Fact]
@@ -1039,7 +1039,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var shellPlanner = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
         source.Should().Contain("ToolTip = item.PreviewText");
-        source.Should().Contain("QuickAnalysisPlanner.BuildDisplayModel(range)");
+        source.Should().Contain("QuickAnalysisSelectionReader.Describe(sheet, range)");
+        source.Should().Contain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
+        source.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(range)");
         source.Should().Contain("QuickAnalysisShellPlanner.GroupTitleFallback(group.Group)");
         source.Should().Contain("foreach (var group in displayModel.Groups)");
         planner.Should().Contain("QuickAnalysisPreviewKind");

@@ -44,64 +44,22 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.IconSet);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
-            harness.FocusMenuItem("Column", "Charts");
+            harness.FocusMenuItem("Clustered Column", "Charts");
 
-            harness.FocusedMenuHeader.Should().Be("Column");
+            harness.FocusedMenuHeader.Should().Be("Clustered Column");
             harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ColumnChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
-            harness.FocusMenuItem("Stacked Column");
-
-            harness.FocusedMenuHeader.Should().Be("Stacked Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.StackedColumnChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("100% Stacked Column");
-
-            harness.FocusedMenuHeader.Should().Be("100% Stacked Column");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.StackedColumnChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Line");
+            harness.FocusMenuItem("Line", "Charts");
 
             harness.FocusedMenuHeader.Should().Be("Line");
             harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.LineChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
 
-            harness.FocusMenuItem("Bar");
+            harness.FocusMenuItem("Clustered Bar", "Charts");
 
-            harness.FocusedMenuHeader.Should().Be("Bar");
+            harness.FocusedMenuHeader.Should().Be("Clustered Bar");
             harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.BarChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Pie");
-
-            harness.FocusedMenuHeader.Should().Be("Pie");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.PieChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Doughnut");
-
-            harness.FocusedMenuHeader.Should().Be("Doughnut");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.PieChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Area");
-
-            harness.FocusedMenuHeader.Should().Be("Area");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.AreaChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Scatter");
-
-            harness.FocusedMenuHeader.Should().Be("Scatter");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ScatterChart);
-            harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
-
-            harness.FocusMenuItem("Bubble");
-
-            harness.FocusedMenuHeader.Should().Be("Bubble");
-            harness.QuickAnalysisPreviewVisual.Should().Be(QuickAnalysisPreviewVisualKind.ScatterChart);
             harness.QuickAnalysisPreviewRange.Should().Be((1u, 1u, 3u, 2u));
         });
     }
@@ -257,7 +215,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             if (_selectedRange is not { } range)
                 return;
 
-            var displayModel = QuickAnalysisPlanner.BuildDisplayModel(range);
+            var displayModel = BuildDisplayModel(range);
             if (displayModel.IsEmpty)
                 return;
 
@@ -310,8 +268,16 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
         private IReadOnlyList<QuickAnalysisDisplayItem> CurrentItems() =>
             _selectedRange is { } range
-                ? QuickAnalysisPlanner.BuildDisplayModel(range).AllItems().ToArray()
+                ? BuildDisplayModel(range).AllItems().ToArray()
                 : [];
+
+        private QuickAnalysisDisplayModel BuildDisplayModel(GridRange range)
+        {
+            var sheet = _workbook.GetSheet(range.Start.Sheet)
+                ?? throw new InvalidOperationException("Selected Quick Analysis sheet was not found.");
+            var description = QuickAnalysisSelectionReader.Describe(sheet, range);
+            return QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
+        }
 
         private static IReadOnlyList<string> BuildOpenMenuHeaders(QuickAnalysisDisplayModel displayModel)
         {
@@ -330,7 +296,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         public static MainWindowHarness Create()
         {
             var workbook = new Workbook("Book1");
-            workbook.AddSheet("Sheet1");
+            var sheet = workbook.AddSheet("Sheet1");
+            SeedQuickAnalysisRange(sheet);
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
@@ -353,6 +320,16 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             window.UpdateLayout();
             PumpDispatcher();
             return new MainWindowHarness(window, workbook);
+        }
+
+        private static void SeedQuickAnalysisRange(Sheet sheet)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Q1"));
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Q2"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(20));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(40));
         }
 
         private SheetGridView SheetGrid =>
