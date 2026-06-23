@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -291,38 +292,23 @@ public partial class MainWindow
 
     private ChartModel? GetFirstChartOnCurrentSheet()
     {
-        if (GetSelectedChartOnCurrentSheet() is { } selectedChart)
-            return selectedChart;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return null;
-
-        foreach (var chart in sheet.Charts)
-            return chart;
-
-        return null;
+        return ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, GetSelectedChartIdOnCurrentSheet());
     }
 
     private ChartModel? GetSelectedChartOnCurrentSheet()
     {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        return ChartWorkflowTargetPlanner.FindSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet());
+    }
+
+    private Guid? GetSelectedChartIdOnCurrentSheet()
+    {
         if (SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
             SheetGrid.SelectedObjectId == Guid.Empty)
-        {
-            return null;
-        }
-
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
             return null;
 
-        foreach (var chart in sheet.Charts)
-        {
-            if (chart.Id == SheetGrid.SelectedObjectId)
-                return chart;
-        }
-
-        return null;
+        return SheetGrid.SelectedObjectId;
     }
 
     private bool TryGetFirstChartForDialog(string caption, string missingMessage, out ChartModel chart)

@@ -284,24 +284,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         chart = null!;
-        if (GetSelectedChartOnCurrentSheet() is { } selectedChart &&
-            IsChartContextualRibbonTarget(selectedChart))
-        {
-            chart = selectedChart;
-            return true;
-        }
-
-        if (sheet is not null)
-        {
-            foreach (var candidate in sheet.Charts)
-            {
-                if (!IsChartContextualRibbonTarget(candidate))
-                    continue;
-
-                chart = candidate;
-                break;
-            }
-        }
+        chart = ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, GetSelectedChartIdOnCurrentSheet())!;
 
         if (chart is not null)
             return true;
@@ -313,27 +296,8 @@ public partial class MainWindow
     private void RefreshChartContextualTabs()
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        SetChartContextualTabsVisible(HasChartContextualRibbonTarget(sheet));
+        SetChartContextualTabsVisible(ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet()));
     }
-
-    private bool HasChartContextualRibbonTarget(Sheet? sheet)
-    {
-        if (sheet is null ||
-            SheetGrid.SelectedObjectKind != FreeX.App.UI.ObjectKind.Chart ||
-            SheetGrid.SelectedObjectId == Guid.Empty)
-            return false;
-
-        foreach (var chart in sheet.Charts)
-        {
-            if (chart.Id == SheetGrid.SelectedObjectId && IsChartContextualRibbonTarget(chart))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsChartContextualRibbonTarget(ChartModel chart) =>
-        chart.IsVisible && !chart.IsPivotChart;
 
     private void SetChartContextualTabsVisible(bool visible)
     {
@@ -675,7 +639,7 @@ public partial class MainWindow
                     {
                         FillColor = ChartQuickFormatCycler.NextSeriesColor(current.FillColor),
                         BorderColor = ChartQuickFormatCycler.NextSeriesColor(current.BorderColor ?? current.FillColor),
-                        BorderThickness = current.BorderThickness is null or >= 3 ? 0.75 : current.BorderThickness.Value + 0.75,
+                        BorderThickness = ChartQuickFormatCycler.NextPointDataLabelBorderThickness(current.BorderThickness),
                         TextColor = ChartQuickFormatCycler.NextSeriesColor(current.TextColor),
                         FontSize = current.FontSize is null or >= 16 ? 9 : current.FontSize.Value + 1
                     };
@@ -765,7 +729,7 @@ public partial class MainWindow
             "Plot Area Border",
             chart => new ChartLayoutOptions(
                 PlotAreaBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.PlotAreaBorderColor),
-                PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3 ? 1 : chart.PlotAreaBorderThickness + 0.75));
+                PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
     }
 
     private void ChartLegendTextBtn_Click(object sender, RoutedEventArgs e)
@@ -788,7 +752,7 @@ public partial class MainWindow
             "Legend Border",
             chart => new ChartLayoutOptions(
                 LegendBorderColor: ChartQuickFormatCycler.NextSeriesColor(chart.LegendBorderColor),
-                LegendBorderThickness: chart.LegendBorderThickness >= 3 ? 0.75 : chart.LegendBorderThickness + 0.75));
+                LegendBorderThickness: ChartQuickFormatCycler.NextLegendBorderThickness(chart.LegendBorderThickness)));
     }
 
     private void ChartLegendSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -938,7 +902,7 @@ public partial class MainWindow
             "Trendline Width",
             chart => new ChartLayoutOptions(
                 ShowLinearTrendline: true,
-                TrendlineThickness: chart.TrendlineThickness >= 3 ? 1.5 : chart.TrendlineThickness + 0.75));
+                TrendlineThickness: ChartQuickFormatCycler.NextTrendlineThickness(chart.TrendlineThickness)));
     }
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)

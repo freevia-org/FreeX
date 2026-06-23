@@ -6,16 +6,6 @@ namespace FreeX.App.Host.Tests;
 public sealed class ChartOptionCyclerTests
 {
     [Theory]
-    [InlineData(ChartDataLabelPosition.BestFit, ChartDataLabelPosition.OutsideEnd)]
-    [InlineData(ChartDataLabelPosition.OutsideEnd, ChartDataLabelPosition.InsideEnd)]
-    [InlineData(ChartDataLabelPosition.InsideEnd, ChartDataLabelPosition.Center)]
-    [InlineData(ChartDataLabelPosition.Center, ChartDataLabelPosition.BestFit)]
-    public void NextDataLabelPosition_CyclesExcelLikePositions(ChartDataLabelPosition current, ChartDataLabelPosition expected)
-    {
-        ChartOptionCycler.NextDataLabelPosition(current).Should().Be(expected);
-    }
-
-    [Theory]
     [InlineData(ChartDataLabelNumberFormat.General, ChartDataLabelNumberFormat.Number)]
     [InlineData(ChartDataLabelNumberFormat.Number, ChartDataLabelNumberFormat.Currency)]
     [InlineData(ChartDataLabelNumberFormat.Currency, ChartDataLabelNumberFormat.Percent)]
@@ -72,14 +62,6 @@ public sealed class ChartOptionCyclerTests
     public void NextAxisLabelAngle_CyclesThroughExcelStyleAngles(double current, double expected)
     {
         ChartOptionCycler.NextAxisLabelAngle(current).Should().Be(expected);
-    }
-
-    [Fact]
-    public void NextGridlineState_CyclesOffMajorMajorMinor()
-    {
-        ChartOptionCycler.NextGridlineState(false, false).Should().Be((true, false));
-        ChartOptionCycler.NextGridlineState(true, false).Should().Be((true, true));
-        ChartOptionCycler.NextGridlineState(true, true).Should().Be((false, false));
     }
 
     [Theory]

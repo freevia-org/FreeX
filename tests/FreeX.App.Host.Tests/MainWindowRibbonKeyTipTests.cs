@@ -1023,6 +1023,16 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 _messages.Add(("Question", title, message));
                 return false;
             }
+
+            public UserMessageResult ShowMessage(
+                string message,
+                string title,
+                UserMessageButtons buttons,
+                UserMessageIcon icon)
+            {
+                _messages.Add(($"Message:{buttons}:{icon}", title, message));
+                return UserMessageResult.Ok;
+            }
         }
 
         private sealed class DisposableAction(Action dispose) : IDisposable

@@ -16,6 +16,8 @@ public sealed class FakeUserMessageService : IUserMessageService
     /// <summary>Controls the value returned by <see cref="AskYesNo"/>.</summary>
     public bool YesNoAnswer { get; set; } = true;
 
+    public UserMessageResult MessageResult { get; set; } = UserMessageResult.Ok;
+
     public void ShowError(string message, string title = "Error") =>
         Calls.Add(new MessageRecord("Error", message, title));
 
@@ -29,5 +31,15 @@ public sealed class FakeUserMessageService : IUserMessageService
     {
         Calls.Add(new MessageRecord("YesNo", message, title));
         return YesNoAnswer;
+    }
+
+    public UserMessageResult ShowMessage(
+        string message,
+        string title,
+        UserMessageButtons buttons,
+        UserMessageIcon icon)
+    {
+        Calls.Add(new MessageRecord($"Message:{buttons}:{icon}", message, title));
+        return MessageResult;
     }
 }

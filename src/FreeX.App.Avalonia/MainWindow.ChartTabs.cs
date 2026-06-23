@@ -32,38 +32,29 @@ namespace FreeX.App.Avalonia;
 /// </list>
 /// Commands without Core support (combo overlays needing series pickers, Move Chart's sheet-target
 /// dialog, and the type-specific Bar/Pie/Bubble/Stock format dialogs) report an honest "not yet
-/// available" status rather than inventing behavior. The WPF reference for the wired behavior is
-/// the WPF host's <c>MainWindow.ChartCommands.cs</c>; the cycling values mirror
-/// <c>ChartOptionCycler</c> (which lives in the WPF host and is not referenced here, so the small
-/// cycling helpers are reproduced locally).
+/// available" status rather than inventing behavior. Shared chart cycling and command-planning policy
+/// lives in <see cref="FreeX.App.Presentation.Charts.Editing"/> so this renderer only resolves selection,
+/// gathers user input, and applies Core commands.
 /// </summary>
 public sealed partial class MainWindow
 {
-    // Cohesive default series/format colors, matching the WPF ChartOptionCycler palette so repeated
-    // clicks step through the same Okabe-Ito-style colors.
-    private static readonly CellColor ChartCycleBlue = new(0, 114, 178);
-
     /// <summary>
     /// Resolves the chart the contextual tabs target: the selected drawing object on the active sheet,
-    /// when it is a visible, non-PivotChart <see cref="ChartModel"/> (the same predicate the WPF host's
-    /// <c>IsChartContextualRibbonTarget</c> uses). Reports an honest status and returns null otherwise.
+    /// when it is eligible for shared chart workflows. Reports an honest status and returns null otherwise.
     /// </summary>
     private bool TryGetSelectedChart(string commandLabel, out ChartModel chart)
     {
         chart = null!;
-        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart || _selectedDrawingObjectId is not { } id)
+        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart)
         {
             RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
             return false;
         }
 
-        foreach (var candidate in _session.ActiveSheet.Charts)
+        if (ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId) is { } selectedChart)
         {
-            if (candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart)
-            {
-                chart = candidate;
-                return true;
-            }
+            chart = selectedChart;
+            return true;
         }
 
         RefreshShell(UiText.Format("ChartLoc_SelectChartBeforeUsing", commandLabel));
@@ -475,7 +466,7 @@ public sealed partial class MainWindow
 
         ApplyChartLayout("Data Label Position", chart, new ChartLayoutOptions(
             ShowDataLabels: true,
-            DataLabelPosition: NextDataLabelPosition(chart.DataLabelPosition)));
+            DataLabelPosition: ChartQuickFormatCycler.NextDataLabelPosition(chart.DataLabelPosition)));
     }
 
     private void CycleChartStyle()
@@ -487,8 +478,7 @@ public sealed partial class MainWindow
 
         // Chart styles are 1..48 (SetChartStyleCommand clamps). Step in fours like Excel's gallery rows;
         // wrap back to 1 after 48.
-        var current = chart.ChartStyleId ?? 0;
-        var next = current >= 45 ? 1 : current + 4;
+        var next = ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId);
         var result = _session.ExecuteReviewCommand(new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, next));
         RefreshShell(result.Success
             ? UiText.Format("ChartLoc_AppliedChartStyle", next)
@@ -524,7 +514,9 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Chart Shape Fill", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_ChartAreaFill"), chart.ChartAreaFillColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(
+            UiText.Get("ChartLoc_ChartAreaFill"),
+            chart.ChartAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
         if (color is { } chosen && TryGetSelectedChart("Chart Area Fill", out chart))
             ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
@@ -536,13 +528,14 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Chart Shape Outline", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_PlotAreaBorder"), chart.PlotAreaBorderColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(
+            UiText.Get("ChartLoc_PlotAreaBorder"),
+            chart.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
         if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
         {
-            var thickness = chart.PlotAreaBorderThickness >= 3 ? 0.75 : chart.PlotAreaBorderThickness + 0.75;
             ApplyChartLayout("Plot Area Border", chart, new ChartLayoutOptions(
                 PlotAreaBorderColor: chosen,
-                PlotAreaBorderThickness: thickness));
+                PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
         }
     }
 
@@ -553,7 +546,9 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Plot Area Fill", out var chart))
             return;
 
-        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_PlotAreaFill"), chart.PlotAreaFillColor ?? ChartCycleBlue);
+        var color = await ShowMoreColorsDialogAsync(
+            UiText.Get("ChartLoc_PlotAreaFill"),
+            chart.PlotAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
         if (color is { } chosen && TryGetSelectedChart("Plot Area Fill", out chart))
             ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
@@ -571,8 +566,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        var existing = ResolveFirstSeriesFillColor(chart);
-        var color = await ShowMoreColorsDialogAsync(UiText.Get("ChartLoc_SeriesColor"), existing ?? ChartCycleBlue);
+        var existing = ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor;
+        var color = await ShowMoreColorsDialogAsync(
+            UiText.Get("ChartLoc_SeriesColor"),
+            existing ?? ChartQuickFormatCycler.DefaultSeriesColor);
         if (color is not { } chosen)
             return;
 
@@ -580,16 +577,8 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Series Color", out chart))
             return;
 
-        var formats = new List<ChartSeriesFormat>(chart.SeriesFormats);
-        var index = formats.FindIndex(f => f.SeriesIndex == 0);
-        var current = index >= 0 ? formats[index] : new ChartSeriesFormat(0);
-        var updated = current with { FillColor = chosen, FillThemeColor = null };
-        if (index >= 0)
-            formats[index] = updated;
-        else
-            formats.Add(updated);
-
-        ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(SeriesFormats: formats));
+        ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(
+            SeriesFormats: ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)));
     }
 
     private void CycleChartXAxisGridlines()
@@ -605,7 +594,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        var (showMajor, showMinor) = NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines);
+        var (showMajor, showMinor) = ChartQuickFormatCycler.NextGridlineState(
+            chart.ShowXAxisMajorGridlines,
+            chart.ShowXAxisMinorGridlines);
         ApplyChartLayout("X Axis Gridlines", chart, new ChartLayoutOptions(
             ShowXAxisMajorGridlines: showMajor,
             ShowXAxisMinorGridlines: showMinor));
@@ -624,7 +615,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        var (showMajor, showMinor) = NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
+        var (showMajor, showMinor) = ChartQuickFormatCycler.NextGridlineState(
+            chart.ShowYAxisMajorGridlines,
+            chart.ShowYAxisMinorGridlines);
         ApplyChartLayout("Y Axis Gridlines", chart, new ChartLayoutOptions(
             ShowYAxisMajorGridlines: showMajor,
             ShowYAxisMinorGridlines: showMinor));
@@ -660,37 +653,6 @@ public sealed partial class MainWindow
         }
 
         ApplyChartLayout("Y Axis Labels", chart, new ChartLayoutOptions(ShowYAxisLabels: !chart.ShowYAxisLabels));
-    }
-
-    // ---- Local helpers (mirroring the WPF ChartOptionCycler values) ----------------------------------
-
-    private static CellColor? ResolveFirstSeriesFillColor(ChartModel chart)
-    {
-        foreach (var format in chart.SeriesFormats)
-        {
-            if (format.SeriesIndex == 0)
-                return format.FillColor;
-        }
-
-        return null;
-    }
-
-    private static ChartDataLabelPosition NextDataLabelPosition(ChartDataLabelPosition current) =>
-        current switch
-        {
-            ChartDataLabelPosition.BestFit => ChartDataLabelPosition.OutsideEnd,
-            ChartDataLabelPosition.OutsideEnd => ChartDataLabelPosition.InsideEnd,
-            ChartDataLabelPosition.InsideEnd => ChartDataLabelPosition.Center,
-            _ => ChartDataLabelPosition.BestFit,
-        };
-
-    private static (bool ShowMajor, bool ShowMinor) NextGridlineState(bool currentMajor, bool currentMinor)
-    {
-        if (!currentMajor)
-            return (true, false);
-        if (!currentMinor)
-            return (true, true);
-        return (false, false);
     }
 
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>

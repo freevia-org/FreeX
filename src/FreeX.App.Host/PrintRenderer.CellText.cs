@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -10,21 +11,7 @@ public static partial class PrintRenderer
     private static readonly Typeface PrintedCellTypeface = new("Segoe UI");
 
     private static string FormatPrintedCellText(string displayText, WorksheetPrintErrorValue printErrorValue)
-    {
-        if (!IsErrorDisplayText(displayText))
-            return displayText;
-
-        return printErrorValue switch
-        {
-            WorksheetPrintErrorValue.Blank => "",
-            WorksheetPrintErrorValue.Dash => "--",
-            WorksheetPrintErrorValue.NotAvailable => "#N/A",
-            _ => displayText
-        };
-    }
-
-    private static bool IsErrorDisplayText(string text) =>
-        text is "#DIV/0!" or "#VALUE!" or "#REF!" or "#NAME?" or "#NULL!" or "#N/A" or "#NUM!";
+        => PagePrintTextPlanner.FormatPrintedCellText(displayText, printErrorValue);
 
     private static string BoundPrintedCellOverlayText(string text, double maxWidth) =>
         BoundPrintedSingleLineOverlayText(text, maxWidth, PrintedCellTypeface);

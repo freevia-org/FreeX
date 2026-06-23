@@ -51,17 +51,19 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var drawingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
 
-        drawingSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
-        drawingSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
-        drawingSource.Should().Contain("CheckFileExists = true");
-        drawingSource.Should().Contain("Multiselect = false");
-        drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
-        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(dialog.FileName)");
-        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        drawingSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
+        drawingSource.Should().Contain("checkFileExists: true");
+        drawingSource.Should().Contain("multiselect: false");
+        drawingSource.Should().Contain("if (!result.Chosen) return;");
+        drawingSource.Should().Contain("System.IO.File.ReadAllBytesAsync(result.FileName!)");
+        drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(result.FileName!)");
         drawingSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
         drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
+        drawingSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
     }
 
     [Fact]
@@ -126,21 +128,23 @@ public sealed partial class MainWindowSourceHygieneTests
 
         pageLayoutSource.Should().Contain("private async void BackgroundChooseMenuItem_Click(");
         pageLayoutSource.Should().Contain("var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();");
-        pageLayoutSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_SheetBackgroundTitle\")");
-        pageLayoutSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
-        pageLayoutSource.Should().Contain("CheckFileExists = openPlan.CheckFileExists");
-        pageLayoutSource.Should().Contain("Multiselect = openPlan.Multiselect");
-        pageLayoutSource.Should().Contain("if (dialog.ShowDialog(this) != true)");
-        pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.IsSupportedImagePath(dialog.FileName)");
+        pageLayoutSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
+        pageLayoutSource.Should().Contain("checkFileExists: openPlan.CheckFileExists");
+        pageLayoutSource.Should().Contain("multiselect: openPlan.Multiselect");
+        pageLayoutSource.Should().Contain("title: UiText.Get(\"MainWindowDialog_SheetBackgroundTitle\")");
+        pageLayoutSource.Should().Contain("if (!result.Chosen)");
+        pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.IsSupportedImagePath(result.FileName!)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundUnsupportedImageType\")");
-        pageLayoutSource.Should().Contain("File.ReadAllBytesAsync(dialog.FileName)");
+        pageLayoutSource.Should().Contain("File.ReadAllBytesAsync(result.FileName!)");
         pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
         pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
-        pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, dialog.FileName, out var background)");
+        pageLayoutSource.Should().Contain("SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)");
         pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Sheet Background\"");
         pageLayoutSource.Should().Contain("new SetWorksheetBackgroundCommand(sheetId, background)");
+        pageLayoutSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         pageLayoutSource.Should().NotContain("private static bool IsSupportedSheetBackgroundFile(string fileName)");
-        pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(dialog.FileName)");
+        pageLayoutSource.Should().NotContain("DrawingInputParser.GetImageContentType(result.FileName!)");
         pageLayoutSource.Should().Contain("private void BackgroundClearMenuItem_Click(");
         pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Clear Sheet Background\"");
         pageLayoutSource.Should().Contain("new ClearWorksheetBackgroundCommand(sheetId)");
@@ -441,6 +445,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         mainSource.Should().Contain("IUserMessageService messageService");
         mainSource.Should().Contain("_messageService = messageService;");
+
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+        var showOwnedMessage = ExtractMethodSource(editingSource, "private MessageBoxResult ShowOwnedMessage(");
+        showOwnedMessage.Should().Contain("_messageService.ShowMessage(");
+        showOwnedMessage.Should().Contain("ToUserMessageButtons(button)");
+        showOwnedMessage.Should().Contain("ToUserMessageIcon(icon)");
+        showOwnedMessage.Should().NotContain("MessageBox.Show(");
 
         // Each migrated partial must not call MessageBox.Show directly.
         foreach (var partial in new[]

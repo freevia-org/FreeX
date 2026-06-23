@@ -1,4 +1,5 @@
 using System.Windows;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -31,12 +32,12 @@ public partial class HeaderFooterDialog
             EvenFooterLeftBox.Text,
             EvenFooterCenterBox.Text,
             EvenFooterRightBox.Text);
-        HeaderPictures = PrunePicturesWithoutTokens(Header, HeaderPictures);
-        FooterPictures = PrunePicturesWithoutTokens(Footer, FooterPictures);
-        FirstPageHeaderPictures = PrunePicturesWithoutTokens(FirstPageHeader, FirstPageHeaderPictures);
-        FirstPageFooterPictures = PrunePicturesWithoutTokens(FirstPageFooter, FirstPageFooterPictures);
-        EvenPageHeaderPictures = PrunePicturesWithoutTokens(EvenPageHeader, EvenPageHeaderPictures);
-        EvenPageFooterPictures = PrunePicturesWithoutTokens(EvenPageFooter, EvenPageFooterPictures);
+        HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Header, HeaderPictures);
+        FooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(Footer, FooterPictures);
+        FirstPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageHeader, FirstPageHeaderPictures);
+        FirstPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(FirstPageFooter, FirstPageFooterPictures);
+        EvenPageHeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageHeader, EvenPageHeaderPictures);
+        EvenPageFooterPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(EvenPageFooter, EvenPageFooterPictures);
         DifferentFirstPage = DifferentFirstPageBox.IsChecked == true;
         DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true;
         ScaleWithDocument = ScaleWithDocumentBox.IsChecked == true;

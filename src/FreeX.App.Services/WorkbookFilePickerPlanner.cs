@@ -5,7 +5,7 @@ using SharedFileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerType
 
 namespace FreeX.App.Services;
 
-public sealed record WorkbookOpenDialogPlan(string Filter);
+public sealed record WorkbookOpenDialogPlan(string Filter, string DefaultExtensionWithDot);
 
 public sealed record WorkbookSaveDialogPlan(
     string Filter,
@@ -28,9 +28,12 @@ public static class WorkbookFilePickerPlanner
 {
     public const string AllSupportedWorkbooksName = "All supported workbooks";
 
-    public static WorkbookOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters) =>
-        new(FileDialogRequestPlanner.BuildOpenDialogPlan(ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)))
-            .Filter);
+    public static WorkbookOpenDialogPlan BuildOpenDialogPlan(IEnumerable<IFileAdapter> adapters)
+    {
+        var plan = FileDialogRequestPlanner.BuildOpenDialogPlan(
+            ToSharedDescriptors(GetFormats(adapters, static format => format.CanOpen)));
+        return new WorkbookOpenDialogPlan(plan.Filter, plan.DefaultExtensionWithDot);
+    }
 
     public static WorkbookSaveDialogPlan BuildSaveDialogPlan(
         IEnumerable<IFileAdapter> adapters,

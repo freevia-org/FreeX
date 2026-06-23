@@ -2590,7 +2590,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
-            : PrintSettingsPlanner.Build(sheet);
+            : PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
         return new PrintPreviewDialog(
             _workbook.Name,
             doc,
@@ -11148,7 +11148,7 @@ public partial class MainWindow
             EntryPaths: ["Ctrl+P", "File > Print > Print Preview"],
             SheetName: sheet.Name,
             TotalPages: totalPages,
-            SettingsSummary: PrintSettingsPlanner.Build(sheet).Summary,
+            SettingsSummary: PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance).Summary,
             CaptureStatus: "complete",
             CaptureMethod: "RenderTargetBitmap-print-preview-dialog-and-main-window",
             FocusGuard: new RibbonScreenshotTourManifestFocusGuard(

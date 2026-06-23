@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.Win32;
 
 namespace FreeW.App.Host;
 
@@ -12,7 +11,7 @@ namespace FreeW.App.Host;
 /// labels that will be stamped onto each reviewer's produced <c>w:ins</c>/<c>w:del</c> revisions.
 ///
 /// <para>
-/// The dialog has three phases: first an <see cref="Microsoft.Win32.OpenFileDialog"/> collects the original
+/// The dialog has three phases: first the shared WPF file dialog service collects the original
 /// base path, then a second picker collects reviewer B's revised copy path, then the main dialog shows a
 /// summary — "Original:", "Reviewer A:" (current document title), "Reviewer B:" path, and editable author
 /// boxes for each reviewer — so the user can confirm and name both authors before running the merge engine.
@@ -217,30 +216,28 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         string reviewerATitle = "")
     {
         // Phase 1: file picker for the original (base) document.
-        var originalPicker = new OpenFileDialog
-        {
-            Filter = DocxFilter,
-            DefaultExt = ".docx",
-            Title = "Combine: pick the ORIGINAL (base) document"
-        };
-        if (originalPicker.ShowDialog(owner) != true)
+        var originalPicker = WpfFileDialogService.ShowOpenDialog(
+            owner,
+            DocxFilter,
+            defaultExtensionWithDot: ".docx",
+            title: "Combine: pick the ORIGINAL (base) document");
+        if (!originalPicker.Chosen)
             return null;
 
         // Phase 2: file picker for reviewer B's revised copy.
-        var reviewerBPicker = new OpenFileDialog
-        {
-            Filter = DocxFilter,
-            DefaultExt = ".docx",
-            Title = "Combine: pick Reviewer B's revised document"
-        };
-        if (reviewerBPicker.ShowDialog(owner) != true)
+        var reviewerBPicker = WpfFileDialogService.ShowOpenDialog(
+            owner,
+            DocxFilter,
+            defaultExtensionWithDot: ".docx",
+            title: "Combine: pick Reviewer B's revised document");
+        if (!reviewerBPicker.Chosen)
             return null;
 
         // Phase 3: confirm/author dialog.
         var dlg = new CombineDocumentsDialog(
             owner,
-            originalPicker.FileName,
-            reviewerBPicker.FileName,
+            originalPicker.FileName!,
+            reviewerBPicker.FileName!,
             defaultAuthorA,
             defaultAuthorB,
             reviewerATitle);

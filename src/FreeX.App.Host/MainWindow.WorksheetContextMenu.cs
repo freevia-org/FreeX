@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.UI;
@@ -466,8 +467,7 @@ public partial class MainWindow
         }
 
         if (SheetGrid.SelectedObjectKind == FreeX.App.UI.ObjectKind.Chart)
-            return GetSelectedChartOnCurrentSheet() is { } selectedChart &&
-                IsChartContextualRibbonTarget(selectedChart)
+            return ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet())
                 ? WorksheetContextMenuTargetKind.Chart
                 : null;
 

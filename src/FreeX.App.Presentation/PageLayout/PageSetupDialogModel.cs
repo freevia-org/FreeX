@@ -221,21 +221,73 @@ public static class PageSetupDialogModel
         new(WorksheetPrintComments.AsDisplayed, "PageSetup_CommentsAsDisplayed"),
     ];
 
-    /// <summary>The header/footer center presets the dialog offers, as (token) values; "" means none.</summary>
-    public static IReadOnlyList<string> HeaderFooterPresets { get; } =
+    /// <summary>The Page Setup header center presets the dialog offers. The value is the persisted token text; "" means none.</summary>
+    public static IReadOnlyList<PageSetupChoice<string>> HeaderPresetChoices { get; } =
     [
-        "",
-        "&[Page]",
-        "Page &[Page] of &[Pages]",
-        "&[Tab]",
-        "&[File]",
-        "&[File], &[Tab]",
-        "&[Date]",
-        "&[Time]",
-        "&[Date], Page &[Page]",
-        "Confidential, Page &[Page]",
-        "&[Path]&[File]",
+        new("", "PageSetup_None"),
+        new("&[Page]", "PageSetup_Page1"),
+        new("Page &[Page] of &[Pages]", "PageSetup_Page1Of"),
+        new("&[Tab]", "PageSetup_Sheet1"),
+        new("&[File]", "PageSetup_Book1"),
+        new("&[File]", "PageSetup_Book1Xlsx"),
+        new("&[File], &[Tab]", "PageSetup_Book1XlsxSheet1"),
+        new("Confidential, Page &[Page]", "PageSetup_ConfidentialPage1"),
+        new("&[Date], Page &[Page]", "PageSetup_DatePage1"),
+        new("&[Tab]", "PageSetup_SheetName"),
+        new("&[File]", "PageSetup_FileName"),
+        new("&[Path]&[File]", "PageSetup_FilePath"),
     ];
+
+    /// <summary>The Page Setup footer center presets the dialog offers. The value is the persisted token text; "" means none.</summary>
+    public static IReadOnlyList<PageSetupChoice<string>> FooterPresetChoices { get; } =
+    [
+        new("", "PageSetup_None"),
+        new("&[Page]", "PageSetup_Page1"),
+        new("Page &[Page] of &[Pages]", "PageSetup_Page1Of"),
+        new("&[Tab]", "PageSetup_Sheet1"),
+        new("&[File]", "PageSetup_Book1"),
+        new("&[File]", "PageSetup_Book1Xlsx"),
+        new("&[File], &[Tab]", "PageSetup_Book1XlsxSheet1"),
+        new("&[Date]", "PageSetup_Date"),
+        new("&[Time]", "PageSetup_Time"),
+        new("&[Date], Page &[Page]", "PageSetup_DatePage1"),
+        new("&[Path]&[File]", "PageSetup_FilePath"),
+        new("&[File]", "PageSetup_FileName"),
+    ];
+
+    /// <summary>The compact cross-platform Page Setup preset catalog used by shells that render one shared header/footer list.</summary>
+    public static IReadOnlyList<PageSetupChoice<string>> HeaderFooterPresetChoices { get; } =
+    [
+        new("", "PageSetup_None"),
+        new("&[Page]", "PageSetup_PresetPage"),
+        new("Page &[Page] of &[Pages]", "PageSetup_PresetPageOf"),
+        new("&[Tab]", "PageSetup_PresetSheetName"),
+        new("&[File]", "PageSetup_PresetFileName"),
+        new("&[File], &[Tab]", "PageSetup_PresetFileSheet"),
+        new("&[Date]", "PageSetup_PresetDate"),
+        new("&[Time]", "PageSetup_PresetTime"),
+        new("&[Date], Page &[Page]", "PageSetup_PresetDatePage"),
+        new("Confidential, Page &[Page]", "PageSetup_PresetConfidential"),
+        new("&[Path]&[File]", "PageSetup_PresetFilePath"),
+    ];
+
+    /// <summary>The compact preset values in display order. Prefer the choice catalogs when labels are needed.</summary>
+    public static IReadOnlyList<string> HeaderFooterPresets { get; } =
+        HeaderFooterPresetChoices.Select(choice => choice.Value).ToArray();
+
+    public static int HeaderFooterPresetIndex(IReadOnlyList<PageSetupChoice<string>> choices, string centerText) =>
+        ChoiceIndex(choices, centerText, "");
+
+    public static string HeaderFooterPresetValue(IReadOnlyList<PageSetupChoice<string>> choices, int selectedIndex) =>
+        ChoiceValue(choices, selectedIndex, "");
+
+    public static string BuildHeaderFooterPreview(WorksheetHeaderFooter value, string noneText)
+    {
+        var parts = new[] { value.Left, value.Center, value.Right }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToArray();
+        return parts.Length == 0 ? noneText : string.Join(" | ", parts);
+    }
 
     /// <summary>Friendly label for a paper size shown in the combo box.</summary>
     public static string DescribePaperSize(WorksheetPaperSize paperSize) =>

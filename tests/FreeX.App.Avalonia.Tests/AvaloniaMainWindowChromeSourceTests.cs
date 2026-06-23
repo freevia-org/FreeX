@@ -17,6 +17,55 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
+    public void QuickAnalysisShell_UsesSharedActionPlanning()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.QuickAnalysis.cs"));
+        var plannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisShellActionPlanner.cs"));
+
+        source.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DirectApplyLimited)");
+        source.Should().Contain("QuickAnalysisShellActionKind.ApplyConditionalFormat");
+        source.Should().Contain("QuickAnalysisShellActionKind.Deferred");
+        source.Should().NotContain("IsQuickAnalysisAutoSumFunction(");
+        source.Should().NotContain("QuickAnalysisCommandKind.PivotTable");
+        plannerSource.Should().Contain("This total is not yet available on {capabilities.DeferredPlatformName}.");
+        plannerSource.Should().Contain("Converting to a PivotTable is not yet available on {capabilities.DeferredPlatformName}.");
+    }
+
+    [Fact]
+    public void ChartContextualTabs_UseSharedQuickFormatCycler()
+    {
+        var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
+        var chartDialogSources = string.Join(
+            Environment.NewLine,
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatDialogs.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTypeFormatDialogs.cs")));
+
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelPosition(");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+        chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)");
+        chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
+
+        var combined = chartTabsSource + Environment.NewLine + chartDialogSources;
+        combined.Should().NotContain("ChartCycleBlue");
+        combined.Should().NotContain("ResolveFirstSeriesFillColor");
+        combined.Should().NotContain("candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart");
+        combined.Should().NotContain("chart.PlotAreaBorderThickness >= 3 ? 0.75");
+        combined.Should().NotContain("current >= 45 ? 1 : current + 4");
+        combined.Should().NotContain("private static ChartDataLabelPosition NextDataLabelPosition");
+        combined.Should().NotContain("private static (bool ShowMajor, bool ShowMinor) NextGridlineState");
+    }
+
+    [Fact]
     public void WorksheetChrome_UsesCompactGridMetricsAndExcelSheetTabOrder()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
@@ -352,9 +401,21 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PageSetupDialogModel.PageOrderChoices");
         source.Should().Contain("PageSetupDialogModel.PrintErrorValueChoices");
         source.Should().Contain("PageSetupDialogModel.PrintCommentChoices");
+        source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
+        source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
+        source.Should().Contain("HeaderFooterEditorPlanner.ApplyCenterPreset(");
         source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
-        source.Should().Contain("PageSetupDialogModel.GetValidationRoute(build.Target)");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetIndex(");
+        source.Should().Contain("PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(");
+        source.Should().Contain("SelectValidationRoute(validation.Route)");
+        source.Should().Contain("ResolvePageSetupValidationIssue(validation)");
+        source.Should().NotContain("PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields)");
+        source.Should().NotContain("headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().NotContain("footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresetValue(");
+        source.Should().NotContain("private static int PageSetupPresetIndex");
+        source.Should().NotContain("var presetLabels = new[]");
         source.Should().NotContain("initial.PageOrder == WorksheetPageOrder.OverThenDown ? 1 : 0");
         source.Should().NotContain("WorksheetPrintErrorValue ReadErrorValue()");
         source.Should().NotContain("WorksheetPrintComments ReadComments()");

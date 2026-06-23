@@ -11,14 +11,14 @@ public partial class ExportPlannerTests
         var optionsSource = DialogSourceTestSupport.ReadHostSources("FreeXOptions.cs");
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
-        printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex)");
+        printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         printExport.Should().Contain("selectedExportFileFormat == ExportFileFormat.Xps");
         printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat)");
         printExport.Should().Contain("if (selectedFormat == ExportFormat.Pdf)");
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
         printExport.Should().Contain("_options.Save();");
-        printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
-        printExport.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(saveDlg.FileName, request, File.Exists)");
+        printExport.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
+        printExport.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists)");
         printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", request.Path)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf)");

@@ -1,6 +1,5 @@
 using System.IO;
 using System.Windows;
-using Microsoft.Win32;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell;
@@ -115,15 +114,8 @@ internal sealed class FileCommands
     public bool SaveAs()
     {
         var plan = BuildSaveAsDialogPlan(_workflow.CurrentPath);
-        var dialog = new SaveFileDialog
-        {
-            Filter = plan.Filter,
-            DefaultExt = plan.DefaultExtensionWithDot,
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = plan.SuggestedFileName
-        };
-        return dialog.ShowDialog(_window) == true && SaveTo(dialog.FileName);
+        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
+        return result.Chosen && SaveTo(result.FileName!);
     }
 
     /// <summary>Save-before-close gate, called from the window's Closing handler.</summary>
@@ -151,12 +143,8 @@ internal sealed class FileCommands
 
     private string? PromptOpenPath()
     {
-        var dialog = new OpenFileDialog
-        {
-            Filter = OpenDialogPlan.Filter,
-            DefaultExt = OpenDialogPlan.DefaultExtensionWithDot
-        };
-        return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
+        var result = WpfFileDialogService.ShowOpenDialog(_window, OpenDialogPlan);
+        return result.Chosen ? result.FileName : null;
     }
 
     private static FileSaveDialogPlan BuildSaveAsDialogPlan(string? currentPath) =>

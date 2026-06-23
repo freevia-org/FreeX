@@ -296,7 +296,9 @@ public sealed partial class MainWindow
 
         chartAreaButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartArea_ChartAreaFill"), state.ChartAreaFillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartArea_ChartAreaFill"),
+                state.ChartAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { ChartAreaFillColor = color };
@@ -305,7 +307,9 @@ public sealed partial class MainWindow
         };
         plotAreaButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartArea_PlotAreaFill"), state.PlotAreaFillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartArea_PlotAreaFill"),
+                state.PlotAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { PlotAreaFillColor = color };
@@ -314,7 +318,9 @@ public sealed partial class MainWindow
         };
         plotBorderButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartArea_PlotAreaBorder"), state.PlotAreaBorderColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartArea_PlotAreaBorder"),
+                state.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { PlotAreaBorderColor = color };

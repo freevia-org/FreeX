@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Xml.Linq;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 using FluentAssertions;
 
@@ -153,10 +154,19 @@ public sealed class HeaderFooterDialogXamlTests
             .Any(element => element.Attributes().Any(a => a.Name.LocalName == "Name" && a.Value == "PictureTargetStatusText"))
             .Should().BeTrue();
 
-        source.Should().Contain("new OpenFileDialog");
+        source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        source.Should().Contain("UiText.Get(\"HeaderFooterPicture_InsertPictureTitle\")");
+        source.Should().Contain("UiText.Get(\"HeaderFooterPicture_OpenFileFilter\")");
+        source.Should().NotContain("new OpenFileDialog");
         source.Should().Contain("HeaderFooterPictureFormatDialog");
         source.Should().Contain("SetPictureForActiveBox");
         source.Should().Contain("UpdatePictureButtonState");
+        source.Should().Contain("HeaderFooterEditorPlanner.ContainsPictureToken(");
+        source.Should().Contain("HeaderFooterEditorPlanner.GetPicture(");
+        source.Should().Contain("HeaderFooterEditorPlanner.SetPicture(");
+        source.Should().Contain("HeaderFooterEditorPlanner.ScopeLabelResourceKey(");
+        source.Should().NotContain("private const string PictureToken");
+        source.Should().NotContain("private static WorksheetHeaderFooterPictureSet PrunePicturesWithoutTokens(");
         source.Should().Contain("UiText.Format(\"HeaderFooterPicture_FormatPictureToolTip\", ActiveBoxLabel(target))");
         source.Should().Contain("UiText.Format(\"HeaderFooterPicture_InsertBeforeFormattingToolTip\"");
     }
@@ -315,7 +325,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("FirstHeaderLeftBox");
         source.Should().Contain("SetControlsEnabled(evenEnabled");
         source.Should().Contain("EvenFooterRightBox");
-        source.Should().Contain("_activeTextBox = GetDefaultTextBoxForSelectedTab()");
+        source.Should().Contain("HeaderFooterEditorPlanner.CoerceToEnabledTarget(");
+        source.Should().Contain("CoerceActiveTextBox(_activeTextBox)");
     }
 
     [Fact]
@@ -427,7 +438,8 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void InsertToken_InsertsAtCaret()
     {
-        HeaderFooterDialog.InsertToken("Page  of", caretIndex: 5, "&[Page]").Should().Be("Page &[Page] of");
+        HeaderFooterEditorPlanner.InsertToken("Page  of", caretIndex: 5, "&[Page]").Should().Be("Page &[Page] of");
+        ReadHeaderFooterDialogSource().Should().Contain("HeaderFooterEditorPlanner.InsertToken(");
     }
 
     [Fact]
@@ -458,6 +470,7 @@ public sealed class HeaderFooterDialogXamlTests
 
                 dialog.HeaderPictures.Center.Should().BeNull();
                 dialog.FooterPictures.Left.Should().NotBeNull();
+                ReadHeaderFooterDialogSource().Should().Contain("HeaderFooterEditorPlanner.PrunePicturesWithoutTokens(");
             }
             finally
             {

@@ -52,6 +52,47 @@ public sealed class RulerInteractionTests
     }
 
     [Fact]
+    public void RemoveTabStop_RemovesRequestedStop()
+    {
+        var stops = Ruler.RemoveTabStop(
+            [
+                new TabStop(72),
+                new TabStop(144, TabStopAlignment.Decimal, TabLeader.Underline),
+                new TabStop(216)
+            ],
+            index: 1);
+
+        stops.Should().Equal(
+            new TabStop(72),
+            new TabStop(216));
+    }
+
+    [Fact]
+    public void RemoveTabStop_IgnoresInvalidIndex()
+    {
+        var start = new[]
+        {
+            new TabStop(72),
+            new TabStop(144, TabStopAlignment.Right, TabLeader.Dashes)
+        };
+
+        Ruler.RemoveTabStop(start, index: -1).Should().Equal(start);
+        Ruler.RemoveTabStop(start, index: 2).Should().Equal(start);
+    }
+
+    [Fact]
+    public void IsTabStopRemovalDrop_RequiresClearVerticalDropOutsideRuler()
+    {
+        var size = new Size(1000, 16);
+
+        Ruler.IsTabStopRemovalDrop(new Point(200, 8), size).Should().BeFalse();
+        Ruler.IsTabStopRemovalDrop(new Point(200, -6), size).Should().BeFalse();
+        Ruler.IsTabStopRemovalDrop(new Point(200, 22), size).Should().BeFalse();
+        Ruler.IsTabStopRemovalDrop(new Point(200, -8), size).Should().BeTrue();
+        Ruler.IsTabStopRemovalDrop(new Point(200, 24), size).Should().BeTrue();
+    }
+
+    [Fact]
     public void IndentsForDrag_UpdatesTheRequestedIndentOnly()
     {
         var start = ParagraphFormatting.Default with

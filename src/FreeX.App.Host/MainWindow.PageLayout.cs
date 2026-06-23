@@ -119,18 +119,17 @@ public partial class MainWindow
     private async void BackgroundChooseMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var openPlan = SheetBackgroundPickerPlanner.BuildOpenDialogPlan();
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = UiText.Get("MainWindowDialog_SheetBackgroundTitle"),
-            Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
-            CheckFileExists = openPlan.CheckFileExists,
-            Multiselect = openPlan.Multiselect
-        };
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            UiText.Get("MainWindowDialog_ImageFilesFilter"),
+            checkFileExists: openPlan.CheckFileExists,
+            multiselect: openPlan.Multiselect,
+            title: UiText.Get("MainWindowDialog_SheetBackgroundTitle"));
 
-        if (dialog.ShowDialog(this) != true)
+        if (!result.Chosen)
             return;
 
-        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(dialog.FileName))
+        if (!SheetBackgroundPickerPlanner.IsSupportedImagePath(result.FileName!))
         {
             ShowOwnedMessage(
                 UiText.Get("MainWindowMessage_SheetBackgroundUnsupportedImageType"),
@@ -143,7 +142,7 @@ public partial class MainWindow
         byte[] bytes;
         try
         {
-            bytes = await File.ReadAllBytesAsync(dialog.FileName);
+            bytes = await File.ReadAllBytesAsync(result.FileName!);
         }
         catch (IOException ex)
         {
@@ -164,7 +163,7 @@ public partial class MainWindow
             return;
         }
 
-        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, dialog.FileName, out var background)
+        if (!SheetBackgroundPickerPlanner.TryBuildBackgroundImage(bytes, result.FileName!, out var background)
             || background is null)
         {
             ShowOwnedMessage(
@@ -585,30 +584,46 @@ public partial class MainWindow
             return;
 
         var fields = dialog.Fields;
-        var validation = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
-        if (!validation.Success)
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction);
+        if (!submission.Success)
         {
+            var validation = submission.Validation!;
             DialogMessageHelper.ShowWarning(
                 this,
-                validation.Error ?? UiText.Get("PageSetup_PageSetup"),
-                UiText.Get("PageSetup_PageSetup"));
+                validation.Message.Resolve(UiText.Get),
+                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
             return;
         }
 
-        if (!TryExecuteGroupedSheetCommand(
-                "Page Setup",
-                sheetId => PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()))
+        var targetCommandBuilds = CurrentGroupedEditSheetIds()
+            .Select(sheetId => submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheetId))
+            .ToList();
+        var invalidTargetCommand = targetCommandBuilds.FirstOrDefault(build => !build.Success);
+        if (invalidTargetCommand is not null)
+        {
+            var validation = invalidTargetCommand.Validation!;
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation.Message.Resolve(UiText.Get),
+                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
+            return;
+        }
+
+        var command = targetCommandBuilds.Count > 1
+            ? new CompositeWorkbookCommand("Page Setup", targetCommandBuilds.Select(build => build.Command!).ToList())
+            : targetCommandBuilds[0].Command!;
+        if (!TryExecuteCommand(command, "Page Setup"))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
-        if (dialog.RequestedAction == PageSetupDialogAction.Options)
+        if (submission.Submission!.RequestedAction == PageSetupDialogAction.Options)
         {
             ShowPageSetupPrinterOptions();
             return;
         }
 
-        if (dialog.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
+        if (submission.Submission.RequestedAction is PageSetupDialogAction.Print or PageSetupDialogAction.PrintPreview)
             PrintButton_Click(this, new RoutedEventArgs());
     }
 

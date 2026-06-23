@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
@@ -592,7 +593,7 @@ public partial class MainWindow
             sheet,
             SheetGrid.SelectedObjectId,
             SheetGrid.SelectedObjectKind,
-            HasChartContextualRibbonTarget(sheet),
+            ChartWorkflowTargetPlanner.HasSelectedChart(sheet, GetSelectedChartIdOnCurrentSheet()),
             _navigationCacheRevision,
             ChartDesignTab?.Visibility ?? Visibility.Collapsed,
             ChartFormatTab?.Visibility ?? Visibility.Collapsed);

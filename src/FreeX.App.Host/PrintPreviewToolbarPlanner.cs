@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Printing;
 using System.Windows.Documents;
 using FreeX.App.Presentation.PageLayout;
@@ -8,7 +7,7 @@ namespace FreeX.App.Host;
 internal static class PrintPreviewToolbarPlanner
 {
     public static PrintPreviewNavigationState CreateNavigationState(int currentPage, int totalPages)
-        => PrintPreviewNavigationState.Create(currentPage, totalPages);
+        => PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages);
 
     public static DocumentPaginator ResolvePrintPaginator(
         FixedDocument document,
@@ -34,27 +33,5 @@ internal static class PrintPreviewToolbarPlanner
             _ => Duplexing.OneSided
         };
 
-    public static PrintPreviewSidesMode ResolveSelectedSidesMode(int selectedIndex) =>
-        selectedIndex switch
-        {
-            1 => PrintPreviewSidesMode.TwoSidedLongEdge,
-            2 => PrintPreviewSidesMode.TwoSidedShortEdge,
-            _ => PrintPreviewSidesMode.OneSided
-        };
-
-    public static string CreateStatusText(string? printerName, int? copies, int totalPages)
-    {
-        var copyText = copies is { } count
-            ? count == 1 ? "1 copy" : $"{count.ToString(CultureInfo.InvariantCulture)} copies"
-            : "invalid copies";
-        var pages = totalPages == 1
-            ? "1 page"
-            : $"{totalPages.ToString(CultureInfo.InvariantCulture)} pages";
-        var name = string.IsNullOrWhiteSpace(printerName)
-            ? "Windows print dialog"
-            : printerName;
-
-        return $"Ready: {name}; {copyText}; {pages}";
-    }
 }
 

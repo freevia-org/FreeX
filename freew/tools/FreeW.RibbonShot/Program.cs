@@ -1,4 +1,6 @@
 using System.IO;
+using System.Globalization;
+using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,11 +21,13 @@ using FreeW.App.Host;
 //             9=Developer 10=Picture Format 11=Table Design 12=Table Layout; "all" captures content/contextual
 //             tabs (skipping File), "backstage" captures File, and "backstage:<entry label>" selects one
 //             Backstage rail entry before capture.
+//   Each run also writes freew_ribbonshot_manifest.json beside the PNGs so shell-parity evidence can be
+//   traced to the requested mode, render size, tab/backstage entry, and generated files.
 
 string outDir = args.Length > 0 ? args[0] : Directory.GetCurrentDirectory();
 string tabArg = args.Length > 1 ? args[1] : "0";
-double w = args.Length > 2 ? double.Parse(args[2]) : 1500;
-double h = args.Length > 3 ? double.Parse(args[3]) : 300;
+double w = args.Length > 2 ? double.Parse(args[2], CultureInfo.InvariantCulture) : 1500;
+double h = args.Length > 3 ? double.Parse(args[3], CultureInfo.InvariantCulture) : 300;
 
 int rc = 0;
 var t = new Thread(() => rc = Run(outDir, tabArg, w, h));
@@ -35,6 +39,7 @@ return rc;
 static int Run(string outDir, string tabArg, double w, double h)
 {
     Directory.CreateDirectory(outDir);
+    var captures = new List<RibbonShotCapture>();
     try
     {
         AppProduct.Current = new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
@@ -44,7 +49,7 @@ static int Run(string outDir, string tabArg, double w, double h)
         // dialog look (flat buttons, accent primary, fields, groupbox) can be verified without standing up
         // a real dialog's dependencies.
         if (tabArg == "dialog")
-            return RenderDialogProbe(outDir, w, h);
+            return RenderDialogProbe(outDir, tabArg, w, h, captures);
 
         // The backstage is a full-window overlay toggled visible AFTER the window is shown. On an OFFSCREEN
         // window the compositor never paints content shown post-Show(), so RenderTargetBitmap captures a
@@ -102,10 +107,14 @@ static int Run(string outDir, string tabArg, double w, double h)
             bmp0.Render(win);
             var suffix = backstageEntry is null ? string.Empty : "-" + SanitizeFileName(backstageEntry);
             var p0 = Path.Combine(outDir, $"backstage{suffix}.png");
-            var enc0 = new PngBitmapEncoder();
-            enc0.Frames.Add(BitmapFrame.Create(bmp0));
-            using (var fs0 = File.Create(p0)) enc0.Save(fs0);
+            SavePng(bmp0, p0);
+            captures.Add(RibbonShotCapture.Backstage(
+                GetRelativeEvidencePath(outDir, p0),
+                (int)w,
+                (int)h,
+                backstageEntry));
             Console.WriteLine($"captured {p0}{(fileTab is null ? " (File tab not found!)" : "")}");
+            WriteManifest(outDir, tabArg, w, h, captures);
             win.Close();
             return 0;
         }
@@ -131,12 +140,16 @@ static int Run(string outDir, string tabArg, double w, double h)
             var bmp = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(win);
             var path = Path.Combine(outDir, $"ribbon-{i}-{name}.png");
-            var enc = new PngBitmapEncoder();
-            enc.Frames.Add(BitmapFrame.Create(bmp));
-            using var fs = File.Create(path);
-            enc.Save(fs);
+            SavePng(bmp, path);
+            captures.Add(RibbonShotCapture.Ribbon(
+                GetRelativeEvidencePath(outDir, path),
+                (int)w,
+                (int)h,
+                i,
+                name));
             Console.WriteLine($"captured {path}");
         }
+        WriteManifest(outDir, tabArg, w, h, captures);
         win.Close();
         return 0;
     }
@@ -162,7 +175,7 @@ static void PumpFrames(System.Windows.Threading.Dispatcher dispatcher, TimeSpan 
 
 // Render a representative dialog form themed by the shared DialogResources (merged into the window's own
 // resource scope, exactly as DialogWindow does), so the dialog look can be eyeballed offscreen.
-static int RenderDialogProbe(string outDir, double w, double h)
+static int RenderDialogProbe(string outDir, string tabArg, double w, double h, List<RibbonShotCapture> captures)
 {
     // Derive from the real shared DialogWindow base so this exercises its ctor (Win-pack-URI theme merge,
     // typography, white surface) exactly as a converted dialog does — not a hand-merged stand-in.
@@ -218,12 +231,44 @@ static int RenderDialogProbe(string outDir, double w, double h)
     var bmp = new RenderTargetBitmap((int)w, (int)h, 96, 96, PixelFormats.Pbgra32);
     bmp.Render(win);
     var path = Path.Combine(outDir, "dialog.png");
-    var enc = new PngBitmapEncoder();
-    enc.Frames.Add(BitmapFrame.Create(bmp));
-    using (var fs = File.Create(path)) enc.Save(fs);
+    SavePng(bmp, path);
+    captures.Add(RibbonShotCapture.Dialog(GetRelativeEvidencePath(outDir, path), (int)w, (int)h));
     Console.WriteLine($"captured {path}");
+    WriteManifest(outDir, tabArg, w, h, captures);
     win.Close();
     return 0;
+}
+
+static void SavePng(RenderTargetBitmap bmp, string path)
+{
+    var enc = new PngBitmapEncoder();
+    enc.Frames.Add(BitmapFrame.Create(bmp));
+    using var fs = File.Create(path);
+    enc.Save(fs);
+}
+
+static void WriteManifest(string outDir, string requestedMode, double width, double height, IReadOnlyList<RibbonShotCapture> captures)
+{
+    var manifest = new RibbonShotManifest(
+        Tool: "FreeW.RibbonShot",
+        ManifestSchemaVersion: 1,
+        GeneratedUtc: DateTimeOffset.UtcNow,
+        RequestedMode: requestedMode,
+        RenderWidth: (int)width,
+        RenderHeight: (int)height,
+        CaptureCount: captures.Count,
+        Captures: captures.ToArray());
+
+    var options = new JsonSerializerOptions { WriteIndented = true };
+    var path = Path.Combine(outDir, "freew_ribbonshot_manifest.json");
+    File.WriteAllText(path, JsonSerializer.Serialize(manifest, options));
+    Console.WriteLine($"manifest {path}");
+}
+
+static string GetRelativeEvidencePath(string outDir, string path)
+{
+    var relative = Path.GetRelativePath(outDir, path);
+    return relative.Replace(Path.DirectorySeparatorChar, '/');
 }
 
 static TabControl? FindTabControl(DependencyObject root)
@@ -315,4 +360,33 @@ static string SanitizeFileName(string value)
 // Concrete DialogWindow used only by the dialog-probe render mode.
 sealed class ProbeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+}
+
+sealed record RibbonShotManifest(
+    string Tool,
+    int ManifestSchemaVersion,
+    DateTimeOffset GeneratedUtc,
+    string RequestedMode,
+    int RenderWidth,
+    int RenderHeight,
+    int CaptureCount,
+    IReadOnlyList<RibbonShotCapture> Captures);
+
+sealed record RibbonShotCapture(
+    string Kind,
+    string Path,
+    int PixelWidth,
+    int PixelHeight,
+    int? TabIndex,
+    string? TabName,
+    string? BackstageEntry)
+{
+    public static RibbonShotCapture Ribbon(string path, int pixelWidth, int pixelHeight, int tabIndex, string tabName) =>
+        new("ribbon-tab", path, pixelWidth, pixelHeight, tabIndex, tabName, null);
+
+    public static RibbonShotCapture Backstage(string path, int pixelWidth, int pixelHeight, string? backstageEntry) =>
+        new("backstage", path, pixelWidth, pixelHeight, null, null, backstageEntry);
+
+    public static RibbonShotCapture Dialog(string path, int pixelWidth, int pixelHeight) =>
+        new("dialog-probe", path, pixelWidth, pixelHeight, null, null, null);
 }

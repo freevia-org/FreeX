@@ -151,6 +151,9 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().Contain("PageSetupDialogModel.ChoiceValue(");
         source.Should().Contain("PageSetupDialogModel.GetValidationRoute(target)");
+        source.Should().Contain("PageSetupDialogModel.HeaderPresetChoices");
+        source.Should().Contain("PageSetupDialogModel.FooterPresetChoices");
+        source.Should().Contain("PageSetupDialogModel.BuildHeaderFooterPreview(");
         source.Should().NotContain("((PageOrderBox.SelectedItem as ComboBoxItem)?.Tag as string)");
         source.Should().NotContain("WorksheetPrintErrorValue SelectedPrintErrorValue() =>\r\n        ((PrintErrorValueBox.SelectedItem as ComboBoxItem)");
     }
@@ -181,6 +184,7 @@ public sealed class PageSetupDialogXamlTests
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
+        var source = ReadPageSetupDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -204,19 +208,19 @@ public sealed class PageSetupDialogXamlTests
                 .Should().BeTrue($"{name} should exist on the Page Setup Header/Footer tab");
         }
 
-        var headerPresets = tab
-            .Descendants(presentation + "ComboBox")
+        tab.Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "HeaderPresetBox")
             .Elements(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("Content")?.Value);
-        var footerPresets = tab
-            .Descendants(presentation + "ComboBox")
+            .Should()
+            .BeEmpty("Page Setup header presets should be populated from the shared presentation catalog");
+        tab.Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "FooterPresetBox")
             .Elements(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("Content")?.Value);
+            .Should()
+            .BeEmpty("Page Setup footer presets should be populated from the shared presentation catalog");
 
-        headerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Confidential, Page 1", "Date, Page 1", "File path"]);
-        footerPresets.Should().Contain(["Book1.xlsx, Sheet1", "Time", "Date, Page 1", "File name"]);
+        source.Should().Contain("PopulatePresetBox(HeaderPresetBox, PageSetupDialogModel.HeaderPresetChoices)");
+        source.Should().Contain("PopulatePresetBox(FooterPresetBox, PageSetupDialogModel.FooterPresetChoices)");
     }
 
     [Fact]
@@ -467,7 +471,8 @@ public sealed class PageSetupDialogXamlTests
             "PageSetupDialog.xaml.cs");
 
         source.Should().Contain("var fields = dialog.Fields");
-        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
         source.Should().Contain("Header = Header");
@@ -487,7 +492,7 @@ public sealed class PageSetupDialogXamlTests
 
         source.Should().Contain("var fields = dialog.Fields");
         source.Should().Contain("PrintAreaText = PrintAreaBox.Text");
-        source.Should().Contain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
+        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheetId)");
     }
 
     [Fact]
@@ -505,9 +510,9 @@ public sealed class PageSetupDialogXamlTests
                 SelectComboItemByTag((ComboBox)dialog.FindName("PageOrderBox"), "OverThenDown");
 
                 InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
-                var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, dialog.Fields);
-                build.Success.Should().BeTrue(build.Error);
-                var outcome = build.Plan!.ToComposite().Apply(new TestCommandContext(workbook));
+                var build = PageSetupSubmissionPlanner.TryBuild(sheet, dialog.Fields);
+                build.Success.Should().BeTrue(build.Validation?.Message.FallbackText);
+                var outcome = build.Submission!.CommandPlan.ToComposite().Apply(new TestCommandContext(workbook));
 
                 outcome.Success.Should().BeTrue(outcome.ErrorMessage);
                 sheet.CenterHorizontallyOnPage.Should().BeTrue();

@@ -113,21 +113,22 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
 
-        backstageSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
-        backstageSource.Should().Contain("Filter = plan.Filter");
-        backstageSource.Should().Contain("CheckFileExists = true");
-        backstageSource.Should().Contain("Multiselect = false");
-        backstageSource.Should().Contain("if (dialog.ShowDialog() == true)");
-        backstageSource.Should().Contain("await OpenFileAsync(dialog.FileName);");
+        backstageSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        backstageSource.Should().Contain("plan.Filter,");
+        backstageSource.Should().Contain("plan.DefaultExtensionWithDot");
+        backstageSource.Should().Contain("checkFileExists: true");
+        backstageSource.Should().Contain("multiselect: false");
+        backstageSource.Should().Contain("if (result.Chosen)");
+        backstageSource.Should().Contain("await OpenFileAsync(result.FileName!);");
 
-        backstageSource.Should().Contain("new Microsoft.Win32.SaveFileDialog");
-        backstageSource.Should().Contain("FileName = plan.SuggestedFileName");
-        backstageSource.Should().Contain("DefaultExt = plan.DefaultExtensionWithDot");
-        backstageSource.Should().Contain("FilterIndex = plan.FilterIndex");
-        backstageSource.Should().Contain("AddExtension = true");
-        backstageSource.Should().Contain("OverwritePrompt = true");
-        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, dialog.FileName, out var target)");
+        backstageSource.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+        backstageSource.Should().Contain("plan.SuggestedFileName");
+        backstageSource.Should().Contain("plan.DefaultExtensionWithDot");
+        backstageSource.Should().Contain("plan.FilterIndex");
+        backstageSource.Should().Contain("WorkbookFilePickerPlanner.TryResolveSaveDialogTarget(_fileAdapters, result.FileName!, out var target)");
         backstageSource.Should().Contain("return await SaveWorkbookToTargetAsync(target);");
+        backstageSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
+        backstageSource.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
     }
 
     [Fact]
@@ -376,11 +377,11 @@ public sealed partial class MainWindowSourceHygieneTests
         var dataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(adapters)");
-        dataCommandsSource.Should().Contain("new Microsoft.Win32.OpenFileDialog");
-        dataCommandsSource.Should().Contain("Filter = filter");
-        dataCommandsSource.Should().Contain("CheckFileExists = true");
-        dataCommandsSource.Should().Contain("Multiselect = false");
-        dataCommandsSource.Should().Contain("if (dialog.ShowDialog() != true) return;");
+        dataCommandsSource.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        dataCommandsSource.Should().Contain("filter,");
+        dataCommandsSource.Should().Contain("checkFileExists: true");
+        dataCommandsSource.Should().Contain("multiselect: false");
+        dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
         dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
         dataCommandsSource.Should().Contain("await Task.Run(() =>");
@@ -396,6 +397,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");
         dataCommandsSource.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage");
         dataCommandsSource.Should().Contain("errorDetail: diagnostic.Detail");
+        dataCommandsSource.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
     }
 
     [Fact]
@@ -539,23 +541,23 @@ public sealed partial class MainWindowSourceHygieneTests
         var exportXpsMethod = ExtractMethodSource(source, "private async Task<bool> ExportAsXps(");
 
         exportMethod.Should().Contain("var savePlan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(_workbook.Name, \"FreeX\");");
-        exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
-        exportMethod.Should().Contain("Title      = UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\")");
-        exportMethod.Should().Contain("Filter     = UiText.Get(\"MainWindowDialog_ExportPdfXpsFilter\")");
-        exportMethod.Should().Contain("DefaultExt = savePlan.DefaultExtensionWithDot");
-        exportMethod.Should().Contain("FileName   = savePlan.SuggestedFileName");
-        exportMethod.Should().Contain("FilterIndex = savePlan.DefaultFilterIndex");
-        exportMethod.Should().Contain("AddExtension = true");
-        exportMethod.Should().Contain("OverwritePrompt = true");
-        exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex)");
+        exportMethod.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
+        exportMethod.Should().Contain("UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\")");
+        exportMethod.Should().Contain("UiText.Get(\"MainWindowDialog_ExportPdfXpsFilter\")");
+        exportMethod.Should().Contain("savePlan.DefaultExtensionWithDot");
+        exportMethod.Should().Contain("savePlan.SuggestedFileName");
+        exportMethod.Should().Contain("savePlan.DefaultFilterIndex");
+        exportMethod.Should().Contain("if (!saveResult.Chosen) return;");
+        exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         exportMethod.Should().Contain("var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps");
-        exportMethod.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
+        exportMethod.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
         exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
         exportMethod.Should().Contain("publishOptionsError ?? UiText.Get(\"MainWindowMessage_ExportUnsupportedOptions\")");
         exportMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportOptionsTitle\")");
         exportMethod.Should().Contain("ShowOwnedMessage(");
         exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
         exportMethod.Should().NotContain("MessageBox.Show(");
+        exportMethod.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
 
         exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
         exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfSavedFormat\", optionSummary, pdfPath)");
@@ -633,7 +635,7 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("SsPrintOptionsHost.Content = PrintPreviewSettingsPanelFactory.Build(");
         backstageSource.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint(");
         printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
-        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance)");
         printSource.Should().Contain("new PrintPreviewDialog(");
         printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
         previewSource.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");

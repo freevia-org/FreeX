@@ -2256,6 +2256,7 @@ public sealed class AvaloniaShellSourceTests
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
         var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
         var evaluateFormulaSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.EvaluateFormula.cs"));
+        var ribbonMenuDialogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
 
         parityCaptureSource.Should().Contain("(\"dialog.TextToColumns\", () => ShowTextToColumnsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.Consolidate\", () => ShowConsolidateDialogAsync()),");
@@ -2263,6 +2264,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.InsertHyperlink\", () => ShowInsertHyperlinkParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.EvaluateFormula\", () => ShowEvaluateFormulaParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.WatchWindow\", () => ShowWatchWindowParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.AddWatch\", () => ShowAddWatchParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.WorkbookStatistics\", () => ShowWorkbookStatisticsDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.RenameSheet\", () => ShowRenameSheetParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.UnhideSheet\", () => ShowUnhideSheetParityDialogAsync()),");
@@ -2303,6 +2305,15 @@ public sealed class AvaloniaShellSourceTests
         evaluateFormulaSource.Should().NotContain("\"Evaluate Formula\"");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
+        parityCaptureSource.Should().Contain("private Task ShowAddWatchParityDialogAsync()");
+        parityCaptureSource.Should().Contain("ShowAddWatchDialogAsync(\"Sheet1!$B$2\")");
+        ribbonMenuDialogSource.Should().Contain("await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange))");
+        ribbonMenuDialogSource.Should().Contain("WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange)");
+        ribbonMenuDialogSource.Should().Contain("Title = UiText.Get(AddWatchDialogPlanner.TitleKey)");
+        ribbonMenuDialogSource.Should().Contain("Width = AddWatchDialogPlanner.Width");
+        ribbonMenuDialogSource.Should().Contain("Height = AddWatchDialogPlanner.Height");
+        ribbonMenuDialogSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, AddWatchDialogPlanner.DialogAutomationId)");
+        ribbonMenuDialogSource.Should().Contain("AutomationProperties.SetAutomationId(rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId)");
         parityCaptureSource.Should().Contain("private async Task ShowRenameSheetParityDialogAsync()");
         parityCaptureSource.Should().Contain("await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);");
         parityCaptureSource.Should().Contain("private async Task ShowUnhideSheetParityDialogAsync()");
@@ -2404,6 +2415,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.InsertHyperlink",
             "dialog.EvaluateFormula",
             "dialog.WatchWindow",
+            "dialog.AddWatch",
             "dialog.WorkbookStatistics",
             "dialog.RenameSheet",
             "dialog.UnhideSheet",

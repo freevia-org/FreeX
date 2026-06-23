@@ -49,6 +49,44 @@ public sealed class PageSetupDialogModelTests
     }
 
     [Fact]
+    public void HeaderFooterPresetChoices_DefineRendererNeutralPresetCatalogs()
+    {
+        PageSetupDialogModel.HeaderPresetChoices.Select(choice => choice.LabelResourceKey)
+            .Should()
+            .ContainInOrder(
+                "PageSetup_None",
+                "PageSetup_Page1",
+                "PageSetup_Page1Of",
+                "PageSetup_Sheet1",
+                "PageSetup_Book1",
+                "PageSetup_Book1Xlsx",
+                "PageSetup_Book1XlsxSheet1",
+                "PageSetup_ConfidentialPage1",
+                "PageSetup_DatePage1",
+                "PageSetup_SheetName",
+                "PageSetup_FileName",
+                "PageSetup_FilePath");
+        PageSetupDialogModel.FooterPresetChoices.Select(choice => choice.LabelResourceKey)
+            .Should()
+            .ContainInOrder(
+                "PageSetup_None",
+                "PageSetup_Page1",
+                "PageSetup_Page1Of",
+                "PageSetup_Sheet1",
+                "PageSetup_Book1",
+                "PageSetup_Book1Xlsx",
+                "PageSetup_Book1XlsxSheet1",
+                "PageSetup_Date",
+                "PageSetup_Time",
+                "PageSetup_DatePage1",
+                "PageSetup_FilePath",
+                "PageSetup_FileName");
+        PageSetupDialogModel.HeaderFooterPresetChoices.Select(choice => choice.Value)
+            .Should()
+            .Equal(PageSetupDialogModel.HeaderFooterPresets);
+    }
+
+    [Fact]
     public void ChoiceHelpers_FallbackUnknownValuesAndIndexes()
     {
         PageSetupDialogModel.ChoiceIndex(
@@ -81,6 +119,33 @@ public sealed class PageSetupDialogModelTests
                 WorksheetPageOrder.DownThenOver)
             .Should()
             .Be(WorksheetPageOrder.DownThenOver);
+    }
+
+    [Fact]
+    public void HeaderFooterPresetHelpers_SelectValuesAndBuildPreviewText()
+    {
+        PageSetupDialogModel.HeaderFooterPresetIndex(
+                PageSetupDialogModel.HeaderPresetChoices,
+                "Confidential, Page &[Page]")
+            .Should()
+            .Be(7);
+        PageSetupDialogModel.HeaderFooterPresetValue(
+                PageSetupDialogModel.FooterPresetChoices,
+                selectedIndex: 8)
+            .Should()
+            .Be("&[Time]");
+        PageSetupDialogModel.HeaderFooterPresetValue(
+                PageSetupDialogModel.FooterPresetChoices,
+                selectedIndex: 99)
+            .Should()
+            .BeEmpty();
+
+        PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("&[File]", "", "&[Date]"), "(none)")
+            .Should()
+            .Be("&[File] | &[Date]");
+        PageSetupDialogModel.BuildHeaderFooterPreview(new WorksheetHeaderFooter("", "", ""), "(none)")
+            .Should()
+            .Be("(none)");
     }
 
     [Theory]
@@ -518,6 +583,82 @@ public sealed class PageSetupDialogModelTests
         plan.PrintAreaCommand.Apply(ctx).Success.Should().BeTrue();
         target.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
         target.PrintArea.Should().Be(plan.PrintArea);
+    }
+
+    [Fact]
+    public void SubmissionPlanner_BuildsRequestedActionAndGroupedTargetCommand()
+    {
+        var workbook = new Workbook("Book");
+        var source = workbook.AddSheet("Sheet1");
+        var target = workbook.AddSheet("Sheet2");
+        var ctx = new PageSetupTestCommandContext(workbook);
+
+        var fields = PageSetupDialogModel.FromSheet(source) with
+        {
+            Orientation = WorksheetPageOrientation.Landscape,
+            PrintAreaText = "B2:D5",
+            Header = new WorksheetHeaderFooter("", "Report", ""),
+        };
+
+        var submission = PageSetupSubmissionPlanner.TryBuild(source, fields, PageSetupDialogAction.PrintPreview);
+
+        submission.Success.Should().BeTrue();
+        submission.Validation.Should().BeNull();
+        submission.Submission!.RequestedAction.Should().Be(PageSetupDialogAction.PrintPreview);
+
+        var targetCommand = submission.Submission.TryBuildCompositeCommandForTarget(source, target.Id);
+        targetCommand.Success.Should().BeTrue();
+        targetCommand.Validation.Should().BeNull();
+
+        var command = targetCommand.Command!;
+        command.Label.Should().Be(PageSetupSubmissionPlanner.DefaultCommandLabel);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        target.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        target.PrintArea.Should().Be(new GridRange(
+            new CellAddress(target.Id, 2, 2),
+            new CellAddress(target.Id, 5, 4)));
+        target.PageHeader.Center.Should().Be("Report");
+    }
+
+    [Fact]
+    public void SubmissionPlanner_InvalidFieldsReturnSharedValidationRouteAndMessageKey()
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with { HeaderMarginText = "-1" };
+
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
+
+        submission.Success.Should().BeFalse();
+        submission.Submission.Should().BeNull();
+        submission.Validation.Should().NotBeNull();
+        submission.Validation!.Target.Should().Be(PageSetupValidationTarget.HeaderMargin);
+        submission.Validation.Route.Should().Be(new PageSetupValidationRoute(
+            PageSetupDialogTab.Margins,
+            PageSetupDialogField.HeaderMargin));
+        submission.Validation.Message.ResourceKey.Should().Be("PageSetup_InvalidHeaderFooterMarginsMessage");
+        submission.Validation.Message.Resolve(key => $"[{key}]")
+            .Should()
+            .Be("[PageSetup_InvalidHeaderFooterMarginsMessage]");
+    }
+
+    [Fact]
+    public void SubmissionPlanner_UnknownValidationMessageFallsBackToModelError()
+    {
+        var sheet = CreateSheet();
+        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        {
+            Orientation = (WorksheetPageOrientation)999,
+        };
+
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
+
+        submission.Success.Should().BeFalse();
+        submission.Validation!.Target.Should().Be(PageSetupValidationTarget.Orientation);
+        submission.Validation.Message.ResourceKey.Should().BeNull();
+        submission.Validation.Message.Resolve(key => $"[{key}]")
+            .Should()
+            .Be("Choose a page orientation.");
     }
 
     [Fact]

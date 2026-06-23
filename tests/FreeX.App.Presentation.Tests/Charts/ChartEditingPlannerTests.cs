@@ -7,6 +7,54 @@ namespace FreeX.App.Presentation.Tests.Charts;
 
 public sealed class ChartEditingPlannerTests
 {
+    // ---- ChartWorkflowTargetPlanner -----------------------------------------------------------------
+
+    [Fact]
+    public void WorkflowTarget_IsContextualTarget_RejectsHiddenAndPivotCharts()
+    {
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel()).Should().BeTrue();
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel { IsVisible = false }).Should().BeFalse();
+        ChartWorkflowTargetPlanner.IsContextualTarget(new ChartModel { IsPivotChart = true }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WorkflowTarget_FindSelectedChart_RequiresSelectedVisibleNonPivotChart()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var hidden = new ChartModel { IsVisible = false };
+        var pivot = new ChartModel { IsPivotChart = true };
+        var selected = new ChartModel();
+        sheet.Charts.Add(hidden);
+        sheet.Charts.Add(pivot);
+        sheet.Charts.Add(selected);
+
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, selected.Id).Should().BeSameAs(selected);
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, hidden.Id).Should().BeNull();
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, pivot.Id).Should().BeNull();
+        ChartWorkflowTargetPlanner.FindSelectedChart(sheet, Guid.Empty).Should().BeNull();
+        ChartWorkflowTargetPlanner.HasSelectedChart(sheet, selected.Id).Should().BeTrue();
+        ChartWorkflowTargetPlanner.HasSelectedChart(sheet, hidden.Id).Should().BeFalse();
+    }
+
+    [Fact]
+    public void WorkflowTarget_FindSelectedOrFirstChart_PrefersSelectedThenFirstEligible()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var hidden = new ChartModel { IsVisible = false };
+        var first = new ChartModel { Name = "First" };
+        var selected = new ChartModel { Name = "Selected" };
+        sheet.Charts.Add(hidden);
+        sheet.Charts.Add(first);
+        sheet.Charts.Add(selected);
+
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, selected.Id).Should().BeSameAs(selected);
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(sheet, Guid.NewGuid()).Should().BeSameAs(first);
+        ChartWorkflowTargetPlanner.FindFirstChart(sheet).Should().BeSameAs(first);
+        ChartWorkflowTargetPlanner.FindSelectedOrFirstChart(null, selected.Id).Should().BeNull();
+    }
+
     // ---- ChartTypeChangePlanner ----------------------------------------------------------------------
 
     [Fact]
@@ -849,9 +897,22 @@ public sealed class ChartEditingPlannerTests
     [Fact]
     public void QuickCycler_SeriesColor_WalksPalette()
     {
+        ChartQuickFormatCycler.DefaultSeriesColor.Should().Be(new CellColor(0, 114, 178));
         var first = ChartQuickFormatCycler.NextSeriesColor(null);
-        first.Should().Be(new CellColor(0, 114, 178));
+        first.Should().Be(ChartQuickFormatCycler.DefaultSeriesColor);
         ChartQuickFormatCycler.NextSeriesColor(first).Should().Be(new CellColor(213, 94, 0));
+    }
+
+    [Theory]
+    [InlineData(ChartDataLabelPosition.BestFit, ChartDataLabelPosition.OutsideEnd)]
+    [InlineData(ChartDataLabelPosition.OutsideEnd, ChartDataLabelPosition.InsideEnd)]
+    [InlineData(ChartDataLabelPosition.InsideEnd, ChartDataLabelPosition.Center)]
+    [InlineData(ChartDataLabelPosition.Center, ChartDataLabelPosition.BestFit)]
+    public void QuickCycler_DataLabelPosition_CyclesExcelLikePositions(
+        ChartDataLabelPosition current,
+        ChartDataLabelPosition expected)
+    {
+        ChartQuickFormatCycler.NextDataLabelPosition(current).Should().Be(expected);
     }
 
     [Fact]
@@ -863,6 +924,22 @@ public sealed class ChartEditingPlannerTests
         ChartQuickFormatCycler.NextLegendFontSize(16).Should().Be(9);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(0.75).Should().Be(1.5);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(3).Should().Be(0.75);
+        ChartQuickFormatCycler.NextPointDataLabelBorderThickness(null).Should().Be(0.75);
+        ChartQuickFormatCycler.NextPointDataLabelBorderThickness(2.25).Should().Be(3);
+        ChartQuickFormatCycler.NextPlotAreaBorderThickness(3).Should().Be(1);
+        ChartQuickFormatCycler.NextLegendBorderThickness(3).Should().Be(0.75);
+        ChartQuickFormatCycler.NextTrendlineThickness(3).Should().Be(1.5);
+        ChartQuickFormatCycler.NextChartStyleId(null).Should().Be(4);
+        ChartQuickFormatCycler.NextChartStyleId(44).Should().Be(48);
+        ChartQuickFormatCycler.NextChartStyleId(45).Should().Be(1);
+    }
+
+    [Fact]
+    public void QuickCycler_GridlineState_CyclesOffMajorMajorMinor()
+    {
+        ChartQuickFormatCycler.NextGridlineState(false, false).Should().Be((true, false));
+        ChartQuickFormatCycler.NextGridlineState(true, false).Should().Be((true, true));
+        ChartQuickFormatCycler.NextGridlineState(true, true).Should().Be((false, false));
     }
 
     [Fact]
@@ -895,6 +972,11 @@ public sealed class ChartEditingPlannerTests
         merged.Should().HaveCount(2);
         merged.Single(f => f.SeriesIndex == 0).DashStyle.Should().Be(ChartLineDashStyle.Dot);
         merged.Single(f => f.SeriesIndex == 1).MarkerSize.Should().Be(3);
+
+        var fill = ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, new CellColor(9, 8, 7));
+        fill.Single(f => f.SeriesIndex == 0).FillColor.Should().Be(new CellColor(9, 8, 7));
+        fill.Single(f => f.SeriesIndex == 0).FillThemeColor.Should().BeNull();
+        fill.Single(f => f.SeriesIndex == 1).MarkerSize.Should().Be(3);
     }
 
     [Fact]

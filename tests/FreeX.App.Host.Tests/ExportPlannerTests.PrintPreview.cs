@@ -1,7 +1,7 @@
 using System.Printing;
 using System.Windows.Documents;
 using FluentAssertions;
-using FreeX.Core.Calc;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -76,7 +76,7 @@ public partial class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("PrintPreviewNavigationState.Create(currentPage, totalPages)");
+        source.Should().Contain("PrintPreviewToolbarStatePlanner.CreateNavigationState(currentPage, totalPages)");
         source.Should().NotContain("Math.Clamp(currentPage");
         source.Should().NotContain("StatusText: $\"Page");
     }
@@ -119,46 +119,6 @@ public partial class ExportPlannerTests
     }
 
     [Fact]
-    public void PrintSettingsPlanner_SummarizesExcelLikeActiveSheetSettings()
-    {
-        var sheet = new Sheet(SheetId.New(), "Sheet1")
-        {
-            PageOrientation = WorksheetPageOrientation.Landscape,
-            PaperSize = WorksheetPaperSize.Letter,
-            PrintGridlines = true,
-            PrintHeadings = true,
-            ScaleToFit = new WorksheetScaleToFit(85, 1, 2)
-        };
-
-        var plan = PrintSettingsPlanner.Build(sheet);
-
-        plan.Lines.Should().Equal(
-            "Print active sheet",
-            "Orientation: Landscape",
-            "Paper size: Letter",
-            "Scaling: 85%; fit 1 page wide by 2 tall",
-            "Gridlines: on",
-            "Headings: on");
-        plan.Summary.Should().Be("Print active sheet; Orientation: Landscape; Paper size: Letter; Scaling: 85%; fit 1 page wide by 2 tall; Gridlines: on; Headings: on");
-    }
-
-    [Fact]
-    public void PrintSettingsPlanner_SummarizesIgnoredPrintAreaForBackstagePreview()
-    {
-        var sheetId = SheetId.New();
-        var sheet = new Sheet(sheetId, "Sheet1")
-        {
-            PrintArea = GridRange.Parse("B2:D10", sheetId)
-        };
-
-        var normal = PrintSettingsPlanner.Build(sheet);
-        var ignored = PrintSettingsPlanner.Build(sheet, ignorePrintArea: true);
-
-        normal.Lines[0].Should().Be("Print selected print area");
-        ignored.Lines[0].Should().Be("Print active sheet (ignore print area)");
-    }
-
-    [Fact]
     public void PrintPreviewDialog_DisplaysPrintSettingsSummary()
     {
         var source = ReadPrintPreviewDialogSources();
@@ -170,12 +130,13 @@ public partial class ExportPlannerTests
         source.Should().Contain("Func<(FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreview = null");
         source.Should().Contain("Func<PrintPreviewSettings, (FixedDocument Document, PrintSettingsPlan Settings)>? refreshPreviewWithSettings = null");
         source.Should().Contain("settings.Summary");
-        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance)");
         printExport.Should().Contain("showMargins: () => PageMarginsBtn_Click");
         printExport.Should().Contain("showPageSetup: () => PageSetupDialogBtn_Click");
         printExport.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
         printExport.Should().Contain("ignorePrintArea: settings.IgnorePrintArea");
-        printExport.Should().Contain("PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea)");
+        printExport.Should().Contain("settings.IgnorePrintArea");
+        printExport.Should().Contain("WpfPrintSettingsTextResolver.Instance");
     }
 
     [Fact]

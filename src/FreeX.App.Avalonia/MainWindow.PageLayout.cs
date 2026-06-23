@@ -60,14 +60,14 @@ public sealed partial class MainWindow
 
     private void ApplyPageSetupFields(Sheet sheet, PageSetupDialogFields fields)
     {
-        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fields);
-        if (!build.Success)
+        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields);
+        if (!submission.Success)
         {
-            ShowEditIssue(build.Error ?? UiText.Get("ShellLoc_PageSetupInvalid"));
+            ShowEditIssue(ResolvePageSetupValidationIssue(submission.Validation!));
             return;
         }
 
-        var plan = build.Plan!;
+        var plan = submission.Submission!.CommandPlan;
         var pageSetupResult = _session.ExecuteReviewCommand(plan.PageSetupCommand);
         if (!pageSetupResult.Success)
         {
@@ -87,6 +87,9 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Get("ShellLoc_PageSetupUpdated"));
     }
+
+    private static string ResolvePageSetupValidationIssue(PageSetupSubmissionValidation validation) =>
+        validation.Message.Resolve(UiText.Get, "ShellLoc_PageSetupInvalid");
 
     private bool ApplyPrintArea(Sheet sheet, GridRange? printArea, IWorkbookCommand command)
     {
@@ -264,18 +267,6 @@ public sealed partial class MainWindow
     private static TextBlock PageSetupLabel(string text) =>
         new() { Text = text, VerticalAlignment = AvaloniaVerticalAlignment.Center };
 
-    private static int PageSetupPresetIndex(string center)
-    {
-        var presets = PageSetupDialogModel.HeaderFooterPresets;
-        for (var i = 0; i < presets.Count; i++)
-        {
-            if (string.Equals(presets[i], center, StringComparison.Ordinal))
-                return i;
-        }
-
-        return 0;
-    }
-
     private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(PageSetupDialogFields initial)
     {
         PageSetupDialogFields? result = null;
@@ -380,31 +371,19 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(centerVerticallyCheck, "PageSetupCenterVerticallyCheck");
 
         // --- Header/Footer tab ---
-        var presetLabels = new[]
-        {
-            UiText.Get("PageSetup_None"),
-            UiText.Get("PageSetup_PresetPage"),
-            UiText.Get("PageSetup_PresetPageOf"),
-            UiText.Get("PageSetup_PresetSheetName"),
-            UiText.Get("PageSetup_PresetFileName"),
-            UiText.Get("PageSetup_PresetFileSheet"),
-            UiText.Get("PageSetup_PresetDate"),
-            UiText.Get("PageSetup_PresetTime"),
-            UiText.Get("PageSetup_PresetDatePage"),
-            UiText.Get("PageSetup_PresetConfidential"),
-            UiText.Get("PageSetup_PresetFilePath"),
-        };
+        var headerPresetChoices = PageSetupDialogModel.HeaderPresetChoices;
+        var footerPresetChoices = PageSetupDialogModel.FooterPresetChoices;
         var headerPresetBox = new ComboBox
         {
-            ItemsSource = presetLabels,
-            SelectedIndex = PageSetupPresetIndex(initial.Header.Center),
+            ItemsSource = ChoiceLabels(headerPresetChoices),
+            SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(headerPresetChoices, initial.Header.Center),
             MinWidth = 260,
         };
         AutomationProperties.SetAutomationId(headerPresetBox, "PageSetupHeaderPresetBox");
         var footerPresetBox = new ComboBox
         {
-            ItemsSource = presetLabels,
-            SelectedIndex = PageSetupPresetIndex(initial.Footer.Center),
+            ItemsSource = ChoiceLabels(footerPresetChoices),
+            SelectedIndex = PageSetupDialogModel.HeaderFooterPresetIndex(footerPresetChoices, initial.Footer.Center),
             MinWidth = 260,
         };
         AutomationProperties.SetAutomationId(footerPresetBox, "PageSetupFooterPresetBox");
@@ -426,14 +405,26 @@ public sealed partial class MainWindow
         headerPresetBox.SelectionChanged += (_, _) =>
         {
             var idx = headerPresetBox.SelectedIndex;
-            if (idx >= 0 && idx < PageSetupDialogModel.HeaderFooterPresets.Count)
-                headerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresets[idx];
+            var preset = PageSetupDialogModel.HeaderFooterPresetValue(headerPresetChoices, idx);
+            var header = HeaderFooterEditorPlanner.ApplyCenterPreset(
+                new WorksheetHeaderFooter(
+                    headerLeftBox.Text ?? "",
+                    headerCenterBox.Text ?? "",
+                    headerRightBox.Text ?? ""),
+                preset);
+            headerCenterBox.Text = header.Center;
         };
         footerPresetBox.SelectionChanged += (_, _) =>
         {
             var idx = footerPresetBox.SelectedIndex;
-            if (idx >= 0 && idx < PageSetupDialogModel.HeaderFooterPresets.Count)
-                footerCenterBox.Text = PageSetupDialogModel.HeaderFooterPresets[idx];
+            var preset = PageSetupDialogModel.HeaderFooterPresetValue(footerPresetChoices, idx);
+            var footer = HeaderFooterEditorPlanner.ApplyCenterPreset(
+                new WorksheetHeaderFooter(
+                    footerLeftBox.Text ?? "",
+                    footerCenterBox.Text ?? "",
+                    footerRightBox.Text ?? ""),
+                preset);
+            footerCenterBox.Text = footer.Center;
         };
 
         var differentFirstPageCheck = new CheckBox
@@ -758,11 +749,12 @@ public sealed partial class MainWindow
         void Accept()
         {
             var fields = ReadFields();
-            var build = PageSetupDialogModel.TryBuildCommand(_session.ActiveSheet, fields);
-            if (!build.Success)
+            var submission = PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields);
+            if (!submission.Success)
             {
-                SelectValidationRoute(PageSetupDialogModel.GetValidationRoute(build.Target));
-                validationText.Text = build.Error;
+                var validation = submission.Validation!;
+                SelectValidationRoute(validation.Route);
+                validationText.Text = ResolvePageSetupValidationIssue(validation);
                 validationText.IsVisible = true;
                 return;
             }

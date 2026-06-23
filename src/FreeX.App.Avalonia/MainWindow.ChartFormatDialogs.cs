@@ -331,7 +331,9 @@ public sealed partial class MainWindow
 
         fillButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartSeries_FillColorDialogTitle"), state.FillColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartSeries_FillColorDialogTitle"),
+                state.FillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { FillColor = color };
@@ -340,7 +342,9 @@ public sealed partial class MainWindow
         };
         strokeButton.Click += async (_, _) =>
         {
-            var chosen = await ShowMoreColorsDialogAsync(UiText.Get("ChartSeries_LineColorDialogTitle"), state.StrokeColor ?? ChartCycleBlue);
+            var chosen = await ShowMoreColorsDialogAsync(
+                UiText.Get("ChartSeries_LineColorDialogTitle"),
+                state.StrokeColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
             if (chosen is { } color)
             {
                 state = state with { StrokeColor = color };

@@ -14,6 +14,12 @@ internal sealed class NullUserMessageService : IUserMessageService
     public void ShowWarning(string message, string title = "Warning") { }
     public void ShowInfo(string message, string title = "Information") { }
     public bool AskYesNo(string message, string title = "Confirm") => false;
+    public UserMessageResult ShowMessage(
+        string message,
+        string title,
+        UserMessageButtons buttons,
+        UserMessageIcon icon) =>
+        UserMessageResult.Ok;
 }
 
 internal static class MainWindowTestCleanup

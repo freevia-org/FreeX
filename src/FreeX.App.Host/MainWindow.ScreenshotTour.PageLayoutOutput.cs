@@ -109,7 +109,7 @@ public partial class MainWindow
                 ["UI-CAT-PAGE-001", "UI-CMD-PAGE-002"]));
 
             var printDocument = PrintRenderer.RenderWorksheet(_workbook, sheet.Id, _viewportService);
-            var printSettings = PrintSettingsPlanner.Build(sheet);
+            var printSettings = PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
             printPreviewDialog = new PrintPreviewDialog(
                 _workbook.Name,
                 printDocument,
@@ -371,7 +371,7 @@ public partial class MainWindow
             ReloadedBackgroundImageFileName: loadedSheet.BackgroundImage?.FileName,
             ReloadedBackgroundImageBytes: loadedSheet.BackgroundImage?.ImageBytes.Length ?? 0,
             PrintPreviewPageCount: printDocument.Pages.Count,
-            PrintSettingsSummary: PrintSettingsPlanner.Build(sheet).Summary,
+            PrintSettingsSummary: PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance).Summary,
             ExportedPdfFileName: PageLayoutOutputTourPdfFileName,
             ExportedPdfBytes: new FileInfo(pdfPath).Length,
             ExportedPdfPageCount: pdf.PageCount,
@@ -481,7 +481,7 @@ public partial class MainWindow
             ],
             Limitations:
             [
-                "Background Choose uses Microsoft.Win32.OpenFileDialog; the tour captures the owned command/menu guard and seeded model status but does not open or drive the native image picker without foreground ownership.",
+                "Background Choose uses the shared WPF file dialog realizer; the tour captures the owned command/menu guard and seeded model status but does not open or drive the native image picker without foreground ownership.",
                 "Print Preview and PDF proof are produced in-process from FreeX rendering services; no native PrintDialog, printer driver, or SaveFileDialog is opened.",
                 "Microsoft Excel counterpart screenshots are not produced by this tool."
             ]);

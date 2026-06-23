@@ -123,8 +123,9 @@ public sealed partial class ChartDialogTests
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
         dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
-        dialogSource.Should().Contain("MessageBox.Show(owner,"); // static handler with dynamic owner â€” kept as raw call
+        dialogSource.Should().Contain("DialogMessageHelper.ShowInfo(owner,");
         dialogSource.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCellsTitle\")");
+        dialogSource.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]

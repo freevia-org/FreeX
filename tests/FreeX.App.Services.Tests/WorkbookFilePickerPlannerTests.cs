@@ -15,6 +15,7 @@ public sealed class WorkbookFilePickerPlannerTests
         plan.Filter.Should().Contain("All supported files");
         plan.Filter.Should().Contain("*.xlsx");
         plan.Filter.Should().Contain("*.fxl");
+        plan.DefaultExtensionWithDot.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]

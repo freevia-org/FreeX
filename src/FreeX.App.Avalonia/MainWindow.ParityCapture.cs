@@ -73,7 +73,7 @@ public sealed partial class MainWindow
     /// outcome list that drives the manifest. Runs on the UI thread (the coordinator awaits it from the
     /// <see cref="Window.Opened"/> handler). Each surface is wrapped so one failure does not stop the others.
     /// </summary>
-    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(string outputDirectory)
+    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(string outputDirectory, int? maxDialogSurfaces = null)
     {
         var results = new List<ParitySurfaceResult>();
 
@@ -104,7 +104,11 @@ public sealed partial class MainWindow
         results.Add(CaptureWindowSurface(outputDirectory, "grid.sheetTabsOverflow", ParitySurfaceKind.Screen));
 
         // ── Dialogs: open each, render the dialog window, close it. ──
-        foreach (var (surfaceId, opener) in ParityDialogOpeners())
+        var dialogOpeners = ParityDialogOpeners();
+        if (maxDialogSurfaces is { } limit)
+            dialogOpeners = dialogOpeners.Take(Math.Max(0, limit)).ToArray();
+
+        foreach (var (surfaceId, opener) in dialogOpeners)
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
 
         foreach (var surfaceId in ParityBackstageSurfaces)
@@ -136,6 +140,7 @@ public sealed partial class MainWindow
         ("dialog.InsertHyperlink", () => ShowInsertHyperlinkParityDialogAsync()),
         ("dialog.EvaluateFormula", () => ShowEvaluateFormulaParityDialogAsync()),
         ("dialog.WatchWindow", () => ShowWatchWindowParityDialogAsync()),
+        ("dialog.AddWatch", () => ShowAddWatchParityDialogAsync()),
         ("dialog.WorkbookStatistics", () => ShowWorkbookStatisticsDialogAsync()),
         ("dialog.RenameSheet", () => ShowRenameSheetParityDialogAsync()),
         ("dialog.UnhideSheet", () => ShowUnhideSheetParityDialogAsync()),
@@ -345,6 +350,9 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 2, 2),
             new CellAddress(_session.ActiveSheet.Id, 3, 3),
             ShowWatchWindowDialogAsync);
+
+    private Task ShowAddWatchParityDialogAsync() =>
+        ShowAddWatchDialogAsync("Sheet1!$B$2");
 
     private async Task ShowRenameSheetParityDialogAsync() =>
         await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);

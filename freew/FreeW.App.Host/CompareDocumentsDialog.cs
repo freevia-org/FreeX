@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.Win32;
 
 namespace FreeW.App.Host;
 
@@ -12,7 +11,7 @@ namespace FreeW.App.Host;
 /// that will be stamped onto every produced <c>w:ins</c>/<c>w:del</c> revision.
 ///
 /// <para>
-/// The dialog has two phases: first an <see cref="Microsoft.Win32.OpenFileDialog"/> collects the original
+/// The dialog has two phases: first the shared WPF file dialog service collects the original
 /// file path, then the main dialog shows a summary — "Original:" path, "Revised:" current document title,
 /// "Label revisions with:" author text box — so the user can confirm before running the blackline engine.
 /// Cancelling either phase returns null from <see cref="Prompt"/>.
@@ -184,17 +183,16 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     public static Result? Prompt(Window? owner, string defaultAuthor, string revisedTitle = "")
     {
         // Phase 1: file picker for the original document.
-        var picker = new OpenFileDialog
-        {
-            Filter = DocxFilter,
-            DefaultExt = ".docx",
-            Title = "Compare: pick the ORIGINAL document"
-        };
-        if (picker.ShowDialog(owner) != true)
+        var picker = WpfFileDialogService.ShowOpenDialog(
+            owner,
+            DocxFilter,
+            defaultExtensionWithDot: ".docx",
+            title: "Compare: pick the ORIGINAL document");
+        if (!picker.Chosen)
             return null;
 
         // Phase 2: review/confirm dialog — shows paths, lets user override author.
-        var dlg = new CompareDocumentsDialog(owner, picker.FileName, defaultAuthor, revisedTitle);
+        var dlg = new CompareDocumentsDialog(owner, picker.FileName!, defaultAuthor, revisedTitle);
         dlg.ShowDialog();
         return dlg._result;
     }

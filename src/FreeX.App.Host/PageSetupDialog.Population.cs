@@ -70,6 +70,7 @@ public partial class PageSetupDialog
             PageSetupDialogModel.PrintCommentChoices,
             fields.PrintComments,
             WorksheetPrintComments.None);
+        PopulateHeaderFooterPresetBoxes();
         SelectPreset(HeaderPresetBox, Header.Center);
         SelectPreset(FooterPresetBox, Footer.Center);
         DifferentFirstPageBox.IsChecked = DifferentFirstPage;

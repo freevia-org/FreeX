@@ -40,15 +40,14 @@ public partial class MainWindow
         }
 
         var filter = FileDialogFilterBuilder.BuildOpenFilter(adapters);
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Filter = filter,
-            CheckFileExists = true,
-            Multiselect = false
-        };
-        if (dialog.ShowDialog() != true) return;
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            filter,
+            checkFileExists: true,
+            multiselect: false);
+        if (!result.Chosen) return;
 
-        var ext = System.IO.Path.GetExtension(dialog.FileName).ToLowerInvariant();
+        var ext = System.IO.Path.GetExtension(result.FileName!).ToLowerInvariant();
         var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
         if (adapter is null)
         {
@@ -58,7 +57,7 @@ public partial class MainWindow
 
         try
         {
-            var importPath = dialog.FileName;
+            var importPath = result.FileName!;
             var imported = await Task.Run(() =>
             {
                 using var stream = System.IO.File.OpenRead(importPath);

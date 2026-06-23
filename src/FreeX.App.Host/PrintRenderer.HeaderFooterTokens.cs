@@ -1,4 +1,4 @@
-using System.Globalization;
+using FreeX.App.Presentation.PageLayout;
 
 namespace FreeX.App.Host;
 
@@ -11,21 +11,11 @@ public static partial class PrintRenderer
         string workbookName,
         string sheetName,
         DateTime now) =>
-        text
-            .Replace("&[Page]", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Pages]", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Date]", now.ToString("d", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Time]", now.ToString("t", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&[File]", workbookName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Path]", workbookName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Tab]", sheetName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&[Picture]", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("&G", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("&P", pageNumber.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&N", totalPages.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&D", now.ToString("d", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&T", now.ToString("t", CultureInfo.CurrentCulture), StringComparison.OrdinalIgnoreCase)
-            .Replace("&F", workbookName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&Z", workbookName, StringComparison.OrdinalIgnoreCase)
-            .Replace("&A", sheetName, StringComparison.OrdinalIgnoreCase);
+        PagePrintTextPlanner.ExpandHeaderFooterText(
+            text,
+            pageNumber,
+            totalPages,
+            workbookName,
+            sheetName,
+            now);
 }

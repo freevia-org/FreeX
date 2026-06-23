@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Windows;
-using Microsoft.Win32;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using FreeW.App.Host.Editing;
@@ -187,7 +186,10 @@ internal sealed class FileCommands
     public bool SaveAs() => SaveAs(preferredExtension: null);
 
     public bool SaveAs(string? preferredExtension) =>
-        TryPromptSaveTarget(preferredExtension, out var path, out var adapter) && SaveTo(path, adapter);
+        SaveAsSuggested(suggestedFileName: null, preferredExtension);
+
+    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
+        TryPromptSaveTarget(preferredExtension, suggestedFileName, out var path, out var adapter) && SaveTo(path, adapter);
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
@@ -195,7 +197,7 @@ internal sealed class FileCommands
     /// </summary>
     public bool SaveCopy()
     {
-        if (!TryPromptSaveTarget(preferredExtension: null, out var path, out var adapter))
+        if (!TryPromptSaveTarget(preferredExtension: null, suggestedFileName: null, out var path, out var adapter))
             return false;
         try
         {
@@ -250,7 +252,11 @@ internal sealed class FileCommands
     /// from the CHOSEN filename's extension (not the selected filter row), so a user-typed extension wins.
     /// Returns false on cancel or when the chosen extension is not a writable format.
     /// </summary>
-    private bool TryPromptSaveTarget(string? preferredExtension, out string path, out IDocumentFileAdapter adapter)
+    private bool TryPromptSaveTarget(
+        string? preferredExtension,
+        string? suggestedFileName,
+        out string path,
+        out IDocumentFileAdapter adapter)
     {
         path = "";
         adapter = null!;
@@ -263,23 +269,17 @@ internal sealed class FileCommands
             : DefaultSaveExtension;
         var plan = DocumentFileDialogRequestPlanner.BuildSaveDialogPlanFromSourceName(
             _adapters,
-            _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath),
+            string.IsNullOrWhiteSpace(suggestedFileName)
+                ? _workflow.CurrentPath is null ? null : Path.GetFileName(_workflow.CurrentPath)
+                : suggestedFileName,
             "Document",
             currentExtension);
 
-        var dialog = new SaveFileDialog
-        {
-            Filter = plan.Filter,
-            FilterIndex = plan.FilterIndex,
-            DefaultExt = plan.DefaultExtensionWithDot,
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = plan.SuggestedFileName,
-        };
-        if (dialog.ShowDialog(_window) != true)
+        var result = WpfFileDialogService.ShowSaveDialog(_window, plan);
+        if (!result.Chosen)
             return false;
 
-        var chosenExtension = Path.GetExtension(dialog.FileName);
+        var chosenExtension = Path.GetExtension(result.FileName!);
         var resolved = DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
         if (resolved is null)
         {
@@ -289,7 +289,7 @@ internal sealed class FileCommands
             return false;
         }
 
-        path = dialog.FileName;
+        path = result.FileName!;
         adapter = resolved;
         return true;
     }
@@ -297,8 +297,8 @@ internal sealed class FileCommands
     private string? PromptOpenPath()
     {
         var plan = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(_adapters);
-        var dialog = new OpenFileDialog { Filter = plan.Filter };
-        return dialog.ShowDialog(_window) == true ? dialog.FileName : null;
+        var result = WpfFileDialogService.ShowOpenDialog(_window, plan);
+        return result.Chosen ? result.FileName : null;
     }
 
     private void SetSaved(string path, bool suppressRecentFiles)

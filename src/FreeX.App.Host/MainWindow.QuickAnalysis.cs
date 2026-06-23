@@ -24,7 +24,15 @@ public partial class MainWindow
             return;
         }
 
-        var displayModel = QuickAnalysisPlanner.BuildDisplayModel(range);
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+        {
+            ShowQuickAnalysisUnsupportedSelectionStatus();
+            return;
+        }
+
+        var description = QuickAnalysisSelectionReader.Describe(sheet, range);
+        var displayModel = QuickAnalysisModelBuilder.Build(description).ToDisplayModel();
         if (displayModel.IsEmpty)
         {
             ShowQuickAnalysisUnsupportedSelectionStatus();
@@ -135,79 +143,51 @@ public partial class MainWindow
         if (sender is not MenuItem { Tag: QuickAnalysisDisplayItem item })
             return;
 
-        var route = QuickAnalysisCommandRouter.Route(item);
-        switch (route.Kind)
+        var action = QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked);
+        switch (action.Kind)
         {
-            case QuickAnalysisCommandKind.ConditionalFormat when route.ConditionalFormat is { } conditionalFormat:
-                ShowCfDialog(QuickAnalysisConditionalFormatDialogTitle(conditionalFormat));
+            case QuickAnalysisShellActionKind.OpenConditionalFormatDialog
+                when action.ConditionalFormatDialogTitle is { } title:
+                ShowCfDialog(title);
                 break;
-            case QuickAnalysisCommandKind.ClearConditionalFormatting:
+            case QuickAnalysisShellActionKind.ClearConditionalFormatting:
                 CfClearRulesMenuItem_Click(sender, e);
                 break;
-            case QuickAnalysisCommandKind.InsertChart when route.ChartType is { } chartType:
+            case QuickAnalysisShellActionKind.InsertChart when action.ChartType is { } chartType:
                 InsertChartOfType(chartType);
                 break;
-            case QuickAnalysisCommandKind.MoreCharts:
+            case QuickAnalysisShellActionKind.OpenChartPicker:
                 InsertChartPickerBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommandKind.InsertTotalFormula
-                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.Aggregate &&
-                     !string.IsNullOrWhiteSpace(route.TotalFunction):
+            case QuickAnalysisShellActionKind.InsertAggregateTotalFormula
+                when !string.IsNullOrWhiteSpace(action.TotalFunction):
                 InsertQuickAnalysisTotalFormulas(
-                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, route.TotalFunction),
+                    range => QuickAnalysisTotalsPlanner.BuildAggregateEdits(range, action.TotalFunction),
                     $"Quick Analysis {item.Label}");
                 break;
-            case QuickAnalysisCommandKind.InsertTotalFormula
-                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.PercentTotal:
+            case QuickAnalysisShellActionKind.InsertPercentTotalFormula:
                 InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildPercentTotalEdits, "Quick Analysis % Total");
                 break;
-            case QuickAnalysisCommandKind.InsertTotalFormula
-                when route.TotalFormulaKind == QuickAnalysisTotalFormulaKind.RunningTotal:
+            case QuickAnalysisShellActionKind.InsertRunningTotalFormula:
                 InsertQuickAnalysisTotalFormulas(QuickAnalysisTotalsPlanner.BuildRunningTotalEdits, "Quick Analysis Running Total");
                 break;
-            case QuickAnalysisCommandKind.Table:
+            case QuickAnalysisShellActionKind.CreateTable:
                 TableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommandKind.PivotTable:
+            case QuickAnalysisShellActionKind.CreatePivotTable:
                 PivotTableBtn_Click(sender, e);
                 break;
-            case QuickAnalysisCommandKind.Sparkline when route.SparklineKind is { } sparklineKind:
-                InsertQuickAnalysisSparkline(sparklineKind);
+            case QuickAnalysisShellActionKind.InsertSparkline when action.SparklineDialogKind is { } sparklineDialogKind:
+                InsertQuickAnalysisSparkline(sparklineDialogKind);
+                break;
+            case QuickAnalysisShellActionKind.Deferred when action.DeferredNote is { } note:
+                StatusReadyText.Text = note;
                 break;
         }
     }
 
-    private static string QuickAnalysisConditionalFormatDialogTitle(QuickAnalysisConditionalFormatCommand command) =>
-        command switch
-        {
-            QuickAnalysisConditionalFormatCommand.DataBar => "Data Bar",
-            QuickAnalysisConditionalFormatCommand.ColorScale => "Color Scale",
-            QuickAnalysisConditionalFormatCommand.IconSet => "Icon Set",
-            QuickAnalysisConditionalFormatCommand.GreaterThan => "Greater Than",
-            QuickAnalysisConditionalFormatCommand.LessThan => "Less Than",
-            QuickAnalysisConditionalFormatCommand.Between => "Between",
-            QuickAnalysisConditionalFormatCommand.EqualTo => "Equal To",
-            QuickAnalysisConditionalFormatCommand.TextContains => "Text Contains",
-            QuickAnalysisConditionalFormatCommand.DateOccurring => "Date Occurring",
-            QuickAnalysisConditionalFormatCommand.DuplicateValues => "Duplicate Values",
-            QuickAnalysisConditionalFormatCommand.Top10Items => "Top 10 Items",
-            QuickAnalysisConditionalFormatCommand.Top10Percent => "Top 10%",
-            QuickAnalysisConditionalFormatCommand.Bottom10Items => "Bottom 10 Items",
-            QuickAnalysisConditionalFormatCommand.Bottom10Percent => "Bottom 10%",
-            QuickAnalysisConditionalFormatCommand.AboveAverage => "Above Average",
-            QuickAnalysisConditionalFormatCommand.BelowAverage => "Below Average",
-            _ => command.ToString()
-        };
-
-    private void InsertQuickAnalysisSparkline(SparklineKind kind)
+    private void InsertQuickAnalysisSparkline(string dialogKind)
     {
-        var dialogKind = kind switch
-        {
-            SparklineKind.Column => "column",
-            SparklineKind.WinLoss => "winloss",
-            _ => "line"
-        };
-
         InsertSparkline(dialogKind);
     }
 

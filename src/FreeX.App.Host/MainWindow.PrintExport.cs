@@ -17,7 +17,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
-            : PrintSettingsPlanner.Build(sheet);
+            : PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
         var dialog = new PrintPreviewDialog(
             _workbook.Name,
             doc,
@@ -82,26 +82,26 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var plan = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
-            : PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea);
+            : PrintSettingsPlanner.Build(
+                sheet,
+                settings.IgnorePrintArea,
+                WpfPrintSettingsTextResolver.Instance);
         return (document, plan);
     }
 
     private async void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
         var savePlan = ExportFilePickerPlanner.BuildPdfXpsDialogPlan(_workbook.Name, "FreeX");
-        var saveDlg = new Microsoft.Win32.SaveFileDialog
-        {
-            Title      = UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
-            Filter     = UiText.Get("MainWindowDialog_ExportPdfXpsFilter"),
-            DefaultExt = savePlan.DefaultExtensionWithDot,
-            FileName   = savePlan.SuggestedFileName,
-            FilterIndex = savePlan.DefaultFilterIndex,
-            AddExtension = true,
-            OverwritePrompt = true
-        };
-        if (saveDlg.ShowDialog() != true) return;
+        var saveResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            UiText.Get("MainWindowDialog_ExportPdfXpsFilter"),
+            savePlan.SuggestedFileName,
+            savePlan.DefaultExtensionWithDot,
+            savePlan.DefaultFilterIndex,
+            UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
+        if (!saveResult.Chosen) return;
 
-        var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveDlg.FilterIndex);
+        var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex);
         var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
@@ -115,8 +115,8 @@ public partial class MainWindow
             _options.Save();
         }
 
-        var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
-        if (ExportPlanner.ShouldPromptForNormalizedOverwrite(saveDlg.FileName, request, File.Exists) &&
+        var request = ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result);
+        if (ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists) &&
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", request.Path),
                 UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),

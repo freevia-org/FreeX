@@ -23,6 +23,7 @@ public sealed class PresentationPortabilityGuardTests
     private static readonly (string Description, Regex Pattern)[] ForbiddenPatterns =
     [
         ("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        ("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         ("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         ("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
         ("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
@@ -35,6 +36,7 @@ public sealed class PresentationPortabilityGuardTests
         ("UseWindowsForms marker", new(@"(?<![\w])UseWindowsForms(?![\w])", Options | RegexOptions.IgnoreCase)),
         ("Windows-targeted framework", new(@"(?<![\w.-])net\d+(?:\.\d+)?-windows(?:\d+(?:\.\d+)*)?(?![\w.-])", Options | RegexOptions.IgnoreCase)),
         ("WPF assembly reference", new(@"(?<![\w.])(?:PresentationCore|PresentationFramework|System\.Xaml|WindowsBase)(?![\w.])", Options)),
+        ("ReachFramework assembly reference", new(@"(?<![\w.])ReachFramework(?![\w.])", Options)),
         ("System.Drawing dependency", new(@"(?<![\w.])System\.Drawing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options))
     ];
 
@@ -72,6 +74,21 @@ public sealed class PresentationPortabilityGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "CellReferenceInputParser.cs"))
             .Should()
             .BeFalse("WPF host should use the shared presentation parser instead of carrying a renderer-local copy");
+    }
+
+    [Fact]
+    public void PrintSettingsPlanner_IsSingleSharedPresentationImplementation()
+    {
+        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
+        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
+            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+
+        File.Exists(Path.Combine(presentationRoot, "PageLayout", "PrintSettingsPlanner.cs"))
+            .Should()
+            .BeTrue("print settings planning is shared by WPF print preview, Avalonia, and sister apps");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "PrintSettingsPlanner.cs"))
+            .Should()
+            .BeFalse("WPF host should use the shared presentation planner instead of carrying a renderer-local copy");
     }
 
     private static bool IsPortableSourceFile(string path)

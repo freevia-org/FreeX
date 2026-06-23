@@ -20,19 +20,18 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
 
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = UiText.Get("MainWindowDialog_InsertPictureTitle"),
-            Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
-            CheckFileExists = true,
-            Multiselect = false
-        };
-        if (dialog.ShowDialog(this) != true) return;
+        var result = WpfFileDialogService.ShowOpenDialog(
+            this,
+            UiText.Get("MainWindowDialog_ImageFilesFilter"),
+            checkFileExists: true,
+            multiselect: false,
+            title: UiText.Get("MainWindowDialog_InsertPictureTitle"));
+        if (!result.Chosen) return;
 
         byte[] bytes;
         try
         {
-            bytes = await System.IO.File.ReadAllBytesAsync(dialog.FileName);
+            bytes = await System.IO.File.ReadAllBytesAsync(result.FileName!);
         }
         catch (Exception ex)
         {
@@ -44,7 +43,7 @@ public partial class MainWindow
             return;
         }
 
-        var contentType = DrawingInputParser.GetImageContentType(dialog.FileName);
+        var contentType = DrawingInputParser.GetImageContentType(result.FileName!);
         InsertPictureCommand? currentSheetCommand = null;
         if (!TryExecuteGroupedSheetCommand(
                 "Insert Picture",

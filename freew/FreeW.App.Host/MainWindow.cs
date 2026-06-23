@@ -388,6 +388,7 @@ public sealed class MainWindow : Window
             Save: () => _file.Save(),
             SaveAs: () => _file.SaveAs(),
             SaveAsType: extension => _file.SaveAs(extension),
+            SaveAsSuggested: (fileName, extension) => _file.SaveAsSuggested(fileName, extension),
             SaveCopy: () => _file.SaveCopy(),
             RecoverUnsaved: () => _autosave.RecoverUnsavedDocuments(this),
             OpenContainingFolder: OpenContainingFolder,
@@ -1606,19 +1607,17 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToPdf()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Export to PDF",
-            Filter = "PDF document (*.pdf)|*.pdf",
-            DefaultExt = ".pdf",
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = _file.DisplayName + ".pdf"
-        };
-        if (dialog.ShowDialog(this) != true)
+        var saveResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            "PDF document (*.pdf)|*.pdf",
+            _file.DisplayName + ".pdf",
+            ".pdf",
+            1,
+            "Export to PDF");
+        if (!saveResult.Chosen)
             return;
 
-        var path = dialog.FileName;
+        var path = saveResult.FileName!;
         try
         {
             // Render on the UI thread (walks the WPF visual tree), then write atomically.
@@ -1626,21 +1625,17 @@ public sealed class MainWindow : Window
             var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
             Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
 
-            MessageBox.Show(
+            DialogMessageHelper.ShowInfo(
                 this,
                 $"Exported to PDF:\n{path}",
-                "Export to PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Export to PDF");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowError(
                 this,
                 "The document could not be exported to PDF.\n\n" + ex.Message,
-                "Export to PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Export to PDF");
         }
     }
 
@@ -1653,19 +1648,17 @@ public sealed class MainWindow : Window
     /// </summary>
     private void ExportToXps()
     {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Export to XPS",
-            Filter = "XPS document (*.xps)|*.xps",
-            DefaultExt = ".xps",
-            AddExtension = true,
-            OverwritePrompt = true,
-            FileName = _file.DisplayName + ".xps"
-        };
-        if (dialog.ShowDialog(this) != true)
+        var saveResult = WpfFileDialogService.ShowSaveDialog(
+            this,
+            "XPS document (*.xps)|*.xps",
+            _file.DisplayName + ".xps",
+            ".xps",
+            1,
+            "Export to XPS");
+        if (!saveResult.Chosen)
             return;
 
-        var path = dialog.FileName;
+        var path = saveResult.FileName!;
         try
         {
             // Render on the UI thread (walks the WPF visual tree), then write atomically.
@@ -1673,21 +1666,17 @@ public sealed class MainWindow : Window
             var bytes = XpsExport.RenderToBytes(paginator);
             Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
 
-            MessageBox.Show(
+            DialogMessageHelper.ShowInfo(
                 this,
                 $"Exported to XPS:\n{path}",
-                "Export to XPS",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "Export to XPS");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowError(
                 this,
                 "The document could not be exported to XPS.\n\n" + ex.Message,
-                "Export to XPS",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Export to XPS");
         }
     }
 

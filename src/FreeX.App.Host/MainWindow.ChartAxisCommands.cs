@@ -252,8 +252,8 @@ public partial class MainWindow
                 chart =>
                 {
                     var (showMajor, showMinor) = useXAxis
-                        ? ChartOptionCycler.NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
-                        : ChartOptionCycler.NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
+                        ? ChartQuickFormatCycler.NextGridlineState(chart.ShowXAxisMajorGridlines, chart.ShowXAxisMinorGridlines)
+                        : ChartQuickFormatCycler.NextGridlineState(chart.ShowYAxisMajorGridlines, chart.ShowYAxisMinorGridlines);
                     return useXAxis
                         ? new ChartLayoutOptions(ShowXAxisMajorGridlines: showMajor, ShowXAxisMinorGridlines: showMinor)
                         : new ChartLayoutOptions(ShowYAxisMajorGridlines: showMajor, ShowYAxisMinorGridlines: showMinor);
@@ -414,15 +414,5 @@ public partial class MainWindow
     }
 
     private static ChartModel? FindFirstChart(Sheet? sheet)
-    {
-        if (sheet is null)
-            return null;
-
-        var charts = sheet.Charts;
-        var index = 0;
-        while (index < charts.Count)
-            return charts[index];
-
-        return null;
-    }
+        => ChartWorkflowTargetPlanner.FindFirstChart(sheet);
 }
