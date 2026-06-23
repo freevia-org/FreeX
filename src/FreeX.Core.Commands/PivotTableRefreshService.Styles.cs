@@ -51,6 +51,14 @@ public static partial class PivotTableRefreshService
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });
+        var grandTotalColumnStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = palette.GrandTotalFill is not null,
+            FillColor = palette.GrandTotalFill,
+            FontColor = palette.GrandTotalFont,
+            BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
+            BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
+        });
         var stripeStyle = workbook.RegisterStyle(new CellStyle
         {
             FillColor = palette.StripeFill,
@@ -153,9 +161,15 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            if (grandTotalRows.Contains(row) || grandTotalColumns.Contains(col))
+            if (grandTotalRows.Contains(row))
             {
                 ApplyPivotVisualStyle(workbook, cell, grandTotalStyle, preserveExistingVisualStyles);
+                continue;
+            }
+
+            if (grandTotalColumns.Contains(col))
+            {
+                ApplyPivotVisualStyle(workbook, cell, grandTotalColumnStyle, preserveExistingVisualStyles);
                 continue;
             }
 
