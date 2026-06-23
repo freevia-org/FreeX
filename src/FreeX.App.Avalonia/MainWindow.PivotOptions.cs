@@ -10,6 +10,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -26,6 +27,53 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    // ── Shared pivot-dialog chrome helpers ───────────────────────────────────
+    // Defined here (in the first pivot partial) so all sibling pivot partials can call them.
+
+    private static void ApplyPivotButtonChrome(Button button, double minWidth, bool isDefault = false)
+    {
+        button.MinWidth = minWidth;
+        button.Height = 24;
+        button.MinHeight = 24;
+        button.MaxHeight = 24;
+        button.Padding = new Thickness(4, 1);
+        button.Background = Brushes.White;
+        button.BorderBrush = isDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        button.BorderThickness = new Thickness(1);
+        button.FontSize = 12;
+        button.FontFamily = FormulaBarFontFamily;
+        button.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
+        button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyPivotTextBoxChrome(TextBox textBox)
+    {
+        textBox.Height = 24;
+        textBox.MinHeight = 24;
+        textBox.MaxHeight = 24;
+        textBox.Padding = new Thickness(4, 1);
+        textBox.FontSize = 12;
+        textBox.FontFamily = FormulaBarFontFamily;
+        textBox.BorderBrush = Brush(130, 130, 130);
+        textBox.BorderThickness = new Thickness(1);
+        textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyPivotComboBoxChrome(ComboBox comboBox)
+    {
+        comboBox.Height = 24;
+        comboBox.MinHeight = 24;
+        comboBox.MaxHeight = 24;
+        comboBox.Padding = new Thickness(5, 0, 4, 0);
+        comboBox.FontSize = 12;
+        comboBox.FontFamily = FormulaBarFontFamily;
+        comboBox.BorderBrush = Brush(130, 130, 130);
+        comboBox.BorderThickness = new Thickness(1);
+        comboBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    // ── PivotTable Options dialog ─────────────────────────────────────────────
+
     /// <summary>
     /// Analyze ▸ Options — opens the PivotTable Options dialog for the active pivot and applies the result
     /// through the shared options command. Reports an honest status when no pivot is active.
@@ -49,12 +97,16 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowRowGrandTotals"),
             IsChecked = values.ShowRowGrandTotals,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(rowGrandTotalsBox, "PivotOptionsRowGrandTotalsBox");
         var columnGrandTotalsBox = new CheckBox
         {
             Content = UiText.Get("PivotOptions_ShowColumnGrandTotals"),
             IsChecked = values.ShowColumnGrandTotals,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(columnGrandTotalsBox, "PivotOptionsColumnGrandTotalsBox");
 
@@ -62,6 +114,7 @@ public sealed partial class MainWindow
         foreach (var (label, _) in PivotOptionsPlanner.ReportLayouts)
             reportLayoutBox.Items.Add(label);
         reportLayoutBox.SelectedIndex = PivotOptionsPlanner.FindReportLayoutIndex(values.ReportLayout);
+        ApplyPivotComboBoxChrome(reportLayoutBox);
         AutomationProperties.SetAutomationId(reportLayoutBox, "PivotOptionsReportLayoutBox");
         AutomationProperties.SetName(reportLayoutBox, "Report layout");
 
@@ -70,6 +123,7 @@ public sealed partial class MainWindow
             MinWidth = 80,
             Text = PivotOptionsPlanner.CompactRowLabelIndentText(values.CompactRowLabelIndent),
         };
+        ApplyPivotTextBoxChrome(compactIndentBox);
         AutomationProperties.SetAutomationId(compactIndentBox, "PivotOptionsCompactIndentBox");
         AutomationProperties.SetName(compactIndentBox, "Compact form row label indent");
 
@@ -77,6 +131,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_ShowSubtotals"),
             IsChecked = values.ShowSubtotals,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(subtotalsBox, "PivotOptionsSubtotalsBox");
 
@@ -85,6 +141,7 @@ public sealed partial class MainWindow
             subtotalPlacementBox.Items.Add(label);
         subtotalPlacementBox.SelectedIndex =
             PivotOptionsPlanner.FindSubtotalPlacementIndex(values.SubtotalPlacement);
+        ApplyPivotComboBoxChrome(subtotalPlacementBox);
         AutomationProperties.SetAutomationId(subtotalPlacementBox, "PivotOptionsSubtotalPlacementBox");
         AutomationProperties.SetName(subtotalPlacementBox, "Subtotal placement");
 
@@ -92,6 +149,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_RepeatItemLabels"),
             IsChecked = values.RepeatItemLabels,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(repeatLabelsBox, "PivotOptionsRepeatLabelsBox");
 
@@ -99,6 +158,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_InsertBlankRow"),
             IsChecked = values.BlankLineAfterItems,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(blankRowBox, "PivotOptionsBlankRowBox");
 
@@ -106,6 +167,8 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("PivotOptions_MergeAndCenterLabels"),
             IsChecked = values.MergeAndCenterLabels,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(mergeLabelsBox, "PivotOptionsMergeLabelsBox");
 
@@ -120,7 +183,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("PivotOptions_Title", pivot.Name),
-            Width = 360,
+            Width = 520,
+            MinHeight = 500,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -128,8 +192,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "PivotTableOptionsDialog");
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotTableOptionsOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotTableOptionsCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -148,9 +214,9 @@ public sealed partial class MainWindow
         content.Children.Add(rowGrandTotalsBox);
         content.Children.Add(columnGrandTotalsBox);
         content.Children.Add(SectionHeader(UiText.Get("PivotOptions_LayoutHeader")));
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(reportLayoutBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), Foreground = HeaderForeground });
+        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         content.Children.Add(compactIndentBox);
         content.Children.Add(repeatLabelsBox);
         content.Children.Add(blankRowBox);
@@ -217,6 +283,8 @@ public sealed partial class MainWindow
     private static TextBlock SectionHeader(string text) => new()
     {
         Text = text,
+        FontSize = 12,
+        FontFamily = FormulaBarFontFamily,
         FontWeight = FontWeight.SemiBold,
         Foreground = HeaderForeground,
         Margin = new Thickness(0, 6, 0, 0),
