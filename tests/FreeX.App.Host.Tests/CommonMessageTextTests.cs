@@ -58,13 +58,13 @@ public sealed class CommonMessageTextTests
     }
 
     [Fact]
-    public void HostUserMessageService_TitlesResolveThroughUiText()
+    public void SharedWpfUserMessageService_TitlesResolveThroughShellStrings()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("WpfUserMessageService.cs");
+        var source = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
 
-        source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, UiText.ErrorTitle)");
-        source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, UiText.WarningTitle)");
-        source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, UiText.InformationTitle)");
-        source.Should().Contain("ResolveDefaultTitle(title, DefaultConfirmTitle, UiText.ConfirmTitle)");
+        source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
+        source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
+        source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle)");
+        source.Should().Contain("ResolveDefaultTitle(title, DefaultConfirmTitle, ShellStrings.Current.ConfirmTitle)");
     }
 }
