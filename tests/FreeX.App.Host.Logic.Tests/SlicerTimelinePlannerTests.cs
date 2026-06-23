@@ -190,6 +190,42 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void NativeVisualTimelines_IncludeAnchoredTimelineOnActiveSheetWhenPivotConnectionIsMissing()
+    {
+        var workbook = new Workbook("TimelineSheetAnchorGate");
+        var activeSheet = workbook.AddSheet("Pivot");
+        var otherSheet = workbook.AddSheet("Other");
+        activeSheet.PivotTables.Add(new PivotTableModel { Name = "NativePivotSlicerTimeline" });
+        otherSheet.PivotTables.Add(new PivotTableModel { Name = "OtherPivot" });
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(6, 0, 0, 0),
+            new DrawingAnchorPoint(9, 0, 4, 0));
+
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "SaleDate",
+            DrawingAnchor = anchor,
+            SourceSheetName = "Pivot"
+        });
+        workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "OtherDate",
+            DrawingAnchor = anchor,
+            SourceSheetName = "Other"
+        });
+
+        SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet)
+            .Select(timeline => timeline.Name)
+            .Should()
+            .Equal("SaleDate");
+
+        SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, otherSheet)
+            .Select(timeline => timeline.Name)
+            .Should()
+            .Equal("OtherDate");
+    }
+
+    [Fact]
     public void NativeVisualSlicers_ExcludeTableSlicerWithoutDrawingAnchor()
     {
         var workbook = new Workbook("TableSlicerNoAnchor");

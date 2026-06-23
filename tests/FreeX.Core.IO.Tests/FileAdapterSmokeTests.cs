@@ -21412,6 +21412,7 @@ public partial class FileAdapterSmokeTests
 
         var timeline = loaded.Timelines.Should().ContainSingle().Subject;
         timeline.DrawingShapeName.Should().Be("Native Timeline Shape");
+        timeline.SourceSheetName.Should().Be("Data");
         timeline.DrawingAnchor.Should().Be(new DrawingAnchorRange(
             new DrawingAnchorPoint(7, 0, 2, 0),
             new DrawingAnchorPoint(10, 0, 10, 0)));
