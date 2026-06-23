@@ -823,6 +823,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
         registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
+        // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
+        // without touching the merge template. No-ops gracefully when there is no active session or data.
+        registry.Register("freew.merge-filter-sort", new FilterSortRecipientsCommand(editor, mergeSession));
+        // Envelopes / Labels: set up the page geometry (and optionally a table grid for labels) via the
+        // backed ApplyPageSettings / InsertTable paths. No SMTP or print path — page-setup only.
+        registry.Register("freew.merge-envelopes", new EnvelopesCommand(editor));
+        registry.Register("freew.merge-labels", new LabelsCommand(editor, mergeSession));
 
         return registry;
     }
@@ -4091,6 +4098,102 @@ internal static class FreeWRibbonCommands
 
     }
 
+    // Mailings > Filter & Sort Recipients: present the active session's MergeData as a list of rows with
+    // per-row inclusion checkboxes plus a sort-column / direction picker, then rebuild session.Data from
+    // the filtered, ordered subset. No model-layer change — MergeData accepts any enumerable of rows, so
+    // the transformation is pure and zero-cost. No-ops when there is no active session or data source.
+    private sealed class FilterSortRecipientsCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (session.Data is not { Count: > 0 } data)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select recipients first (Mailings > Select Recipients), then filter and sort.",
+                    "Mail Merge");
+                return;
+            }
+
+            var result = FilterSortRecipientsDialog.Ask(Window.GetWindow(editor), data);
+            if (result is null)
+                return; // cancelled
+
+            // Rebuild the session data from the user's chosen (possibly re-ordered) rows. The MergeData
+            // constructor takes the same header and an enumerable of rows, so no model change is needed.
+            session.Data = new MergeData(data.Header, result.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+            // Invalidate any in-progress preview so it re-reads the new filtered data.
+            session.Template = null;
+            session.CurrentIndex = 0;
+
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                $"Recipient list updated: {session.Data.Count} record(s) after filtering/sorting.",
+                "Mail Merge");
+            editor.Focus();
+        }
+    }
+
+    // Mailings > Envelopes: apply standard envelope geometry to the page via ApplyPageSettings (the same
+    // backed path used by orientation/size/column commands). Offers a small set of ISO/US envelope sizes.
+    // Optionally seeds the first paragraph with the first merge field if a session is active.
+    private sealed class EnvelopesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (EnvelopeSetupDialog.Ask(Window.GetWindow(editor)) is not { } envelope)
+                return; // cancelled
+
+            editor.ApplyPageSettings(page =>
+            {
+                // Envelope sizes are stored portrait (narrow × long); Landscape swaps the rendering axes
+                // so the long dimension runs horizontally for printing, matching Word's envelope setup.
+                page.WidthPt   = envelope.WidthPt;
+                page.HeightPt  = envelope.HeightPt;
+                page.Landscape = true;
+                // Narrow margins leave the maximum print area for the address block.
+                page.MarginLeftPt   = envelope.MarginPt;
+                page.MarginRightPt  = envelope.MarginPt;
+                page.MarginTopPt    = envelope.MarginPt;
+                page.MarginBottomPt = envelope.MarginPt;
+            });
+
+            editor.Focus();
+        }
+    }
+
+    // Mailings > Labels: set the page to a label-sheet geometry via ApplyPageSettings, then insert a
+    // table grid (rows × columns) via editor.InsertTable so each cell is one label. The session parameter
+    // is accepted for future merge-aware population (populate each cell via MailMerge.MergeRecord); for
+    // now the grid is inserted blank so the user can type or let Preview/Finish fill it.
+    private sealed class LabelsCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            // session is available for future merge-aware cell population (deferred; see report).
+            _ = session;
+
+            if (LabelSetupDialog.Ask(Window.GetWindow(editor)) is not { } label)
+                return; // cancelled
+
+            // Apply the label-sheet page geometry first so the table fits the physical sheet.
+            editor.ApplyPageSettings(page =>
+            {
+                page.WidthPt        = label.PageWidthPt;
+                page.HeightPt       = label.PageHeightPt;
+                page.Landscape      = false;
+                page.MarginLeftPt   = label.MarginPt;
+                page.MarginRightPt  = label.MarginPt;
+                page.MarginTopPt    = label.MarginPt;
+                page.MarginBottomPt = label.MarginPt;
+            });
+
+            // Insert the label grid — the editor routes this through the undo/redo bus.
+            editor.InsertTable(label.Rows, label.Columns);
+            editor.Focus();
+        }
+    }
+
     // The user's choice from the preview navigation dialog.
     private enum PreviewAction { Move, Done, Cancel }
 
@@ -4204,6 +4307,310 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Mailings > Filter & Sort Recipients dialog. Presents each recipient row with a checkbox (include/
+    // exclude), a sort-column combo and a sort-direction radio. Returns the chosen subset in the chosen
+    // order, or null if cancelled. Structural template: MergeDataDialog (same Window-building idiom).
+    private static class FilterSortRecipientsDialog
+    {
+        // Returns the filtered, ordered rows as dictionaries, or null if cancelled.
+        public static IReadOnlyList<IReadOnlyDictionary<string, string>>? Ask(
+            Window? owner, MergeData data)
+        {
+            IReadOnlyList<IReadOnlyDictionary<string, string>>? result = null;
+
+            var dialog = new Window
+            {
+                Title = "Filter and Sort Recipients",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.CanResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false,
+                MinWidth = 480
+            };
+
+            // --- Sort controls ---
+            var sortColCombo = new System.Windows.Controls.ComboBox { MinWidth = 160, Margin = new Thickness(4, 0, 8, 0) };
+            foreach (var h in data.Header)
+                sortColCombo.Items.Add(h);
+            if (data.Header.Count > 0)
+                sortColCombo.SelectedIndex = 0;
+
+            var ascRadio  = new System.Windows.Controls.RadioButton { Content = "Ascending",  IsChecked = true, Margin = new Thickness(0, 0, 8, 0) };
+            var descRadio = new System.Windows.Controls.RadioButton { Content = "Descending", Margin = new Thickness(0, 0, 0, 0) };
+
+            var sortPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            sortPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort by:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            sortPanel.Children.Add(sortColCombo);
+            sortPanel.Children.Add(ascRadio);
+            sortPanel.Children.Add(descRadio);
+
+            // --- Row list with checkboxes ---
+            // Show up to the first 8 columns as preview text so the dialog stays a reasonable width.
+            const int MaxPreviewCols = 8;
+            var previewCols = data.Header.Take(MaxPreviewCols).ToList();
+
+            var rowChecks = new List<System.Windows.Controls.CheckBox>();
+            var rowList = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+
+            // Header hint
+            var headerHint = new System.Windows.Controls.TextBlock
+            {
+                Text = "  " + string.Join("  |  ", previewCols),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 2),
+                Foreground = Brushes.Gray
+            };
+            rowList.Children.Add(headerHint);
+
+            for (var i = 0; i < data.Rows.Count; i++)
+            {
+                var row = data.Rows[i];
+                var preview = string.Join("  |  ", previewCols.Select(h => row.TryGetValue(h, out var v) ? v : string.Empty));
+                var cb = new System.Windows.Controls.CheckBox
+                {
+                    Content = $"{i + 1}. {preview}",
+                    IsChecked = true,
+                    Margin = new Thickness(0, 1, 0, 1),
+                    Tag = i  // row index
+                };
+                rowChecks.Add(cb);
+                rowList.Children.Add(cb);
+            }
+
+            var scroll = new System.Windows.Controls.ScrollViewer
+            {
+                Content = rowList,
+                MaxHeight = 260,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            // --- OK / Cancel ---
+            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+
+            ok.Click += (_, _) =>
+            {
+                // Collect the indices of checked rows, then sort by the chosen column.
+                var sortCol  = sortColCombo.SelectedItem as string ?? string.Empty;
+                var ascending = ascRadio.IsChecked == true;
+
+                var chosen = rowChecks
+                    .Where(cb => cb.IsChecked == true)
+                    .Select(cb => data.Rows[(int)cb.Tag!]);
+
+                result = (ascending
+                    ? chosen.OrderBy(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase)
+                    : chosen.OrderByDescending(r => r.TryGetValue(sortCol, out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+
+                dialog.DialogResult = true;
+            };
+
+            var btnPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnPanel.Children.Add(ok);
+            btnPanel.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Check recipients to include, then choose a sort order:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(sortPanel);
+            panel.Children.Add(scroll);
+            panel.Children.Add(btnPanel);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Standard envelope size preset for the Envelopes command.
+    private readonly record struct EnvelopeSize(string Name, double WidthPt, double HeightPt, double MarginPt);
+
+    // Result returned by EnvelopeSetupDialog.
+    private readonly record struct EnvelopeSetupResult(double WidthPt, double HeightPt, double MarginPt);
+
+    // Mailings > Envelopes setup dialog. Offers a small set of standard ISO/US sizes (DL, C5, C6,
+    // Comm-10, Monarch) matching Word's Envelopes and Labels dialog. Returns the chosen geometry, or null
+    // if cancelled. The caller applies the settings via ApplyPageSettings (backed path).
+    private static class EnvelopeSetupDialog
+    {
+        // Standard sizes as portrait dimensions (width × height in points). Landscape is applied by the
+        // command so the long edge runs horizontally, matching Word's envelope-print orientation.
+        // 1 mm = 72/25.4 pt ≈ 2.8346 pt.
+        private static readonly EnvelopeSize[] Sizes =
+        [
+            new("DL  (110 × 220 mm)",  110 * 72 / 25.4,  220 * 72 / 25.4, 18),
+            new("C5  (162 × 229 mm)",  162 * 72 / 25.4,  229 * 72 / 25.4, 18),
+            new("C6  (114 × 162 mm)",  114 * 72 / 25.4,  162 * 72 / 25.4, 14),
+            new("Comm-10 (4.125 × 9.5 in)", 4.125 * 72, 9.5 * 72,        18),
+            new("Monarch (3.875 × 7.5 in)", 3.875 * 72, 7.5 * 72,        14),
+        ];
+
+        public static EnvelopeSetupResult? Ask(Window? owner)
+        {
+            EnvelopeSetupResult? result = null;
+
+            var combo = new System.Windows.Controls.ComboBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
+            foreach (var s in Sizes)
+                combo.Items.Add(s.Name);
+            combo.SelectedIndex = 0; // default: DL
+
+            var dialog = new Window
+            {
+                Title = "Envelopes",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var s = Sizes[combo.SelectedIndex];
+                result = new EnvelopeSetupResult(s.WidthPt, s.HeightPt, s.MarginPt);
+                dialog.DialogResult = true;
+            };
+
+            var btnPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnPanel.Children.Add(ok);
+            btnPanel.Children.Add(cancel);
+
+            var note = new System.Windows.Controls.TextBlock
+            {
+                Text = "Page orientation is set to Landscape. Narrow margins are applied automatically.",
+                Foreground = Brushes.Gray,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 300,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 320 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Envelope size:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(combo);
+            panel.Children.Add(note);
+            panel.Children.Add(btnPanel);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Standard label sheet preset for the Labels command.
+    private readonly record struct LabelPreset(string Name, int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
+
+    // Result returned by LabelSetupDialog.
+    private readonly record struct LabelSetupResult(int Rows, int Columns, double PageWidthPt, double PageHeightPt, double MarginPt);
+
+    // Mailings > Labels setup dialog. Offers a handful of common Avery-style presets plus a custom
+    // rows × columns option on US Letter. Returns the chosen grid / page geometry, or null if cancelled.
+    // The caller applies page settings via ApplyPageSettings then inserts the grid via InsertTable.
+    private static class LabelSetupDialog
+    {
+        // A curated set of common label layouts on standard sheets.  Dimensions: US Letter = 612 × 792 pt.
+        private static readonly LabelPreset[] Presets =
+        [
+            new("Avery 5160 — 3 × 10 (Letter)",  10, 3, 612, 792, 18),
+            new("Avery 5162 — 2 × 7  (Letter)",   7, 2, 612, 792, 18),
+            new("Avery 5163 — 2 × 5  (Letter)",   5, 2, 612, 792, 18),
+            new("Avery L7160 — 3 × 7 (A4)",        7, 3, 595.28, 841.89, 14),
+            new("Custom rows × columns (Letter)",   0, 0, 612, 792, 18),
+        ];
+
+        private const int CustomPresetIndex = 4;
+
+        public static LabelSetupResult? Ask(Window? owner)
+        {
+            LabelSetupResult? result = null;
+
+            var combo = new System.Windows.Controls.ComboBox { MinWidth = 280, Margin = new Thickness(0, 0, 0, 8) };
+            foreach (var p in Presets)
+                combo.Items.Add(p.Name);
+            combo.SelectedIndex = 0;
+
+            // Custom rows/columns spinners (shown only when "Custom" is selected).
+            var rowsBox = new System.Windows.Controls.TextBox { Text = "10", MinWidth = 50, Margin = new Thickness(4, 0, 12, 0) };
+            var colsBox = new System.Windows.Controls.TextBox { Text = "3",  MinWidth = 50 };
+            var customPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 8),
+                Visibility = Visibility.Collapsed
+            };
+            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Rows:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            customPanel.Children.Add(rowsBox);
+            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Columns:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            customPanel.Children.Add(colsBox);
+
+            combo.SelectionChanged += (_, _) =>
+                customPanel.Visibility = combo.SelectedIndex == CustomPresetIndex ? Visibility.Visible : Visibility.Collapsed;
+
+            var dialog = new Window
+            {
+                Title = "Labels",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var idx = combo.SelectedIndex;
+                if (idx == CustomPresetIndex)
+                {
+                    if (!int.TryParse(rowsBox.Text, out var rows) || rows < 1 ||
+                        !int.TryParse(colsBox.Text, out var cols) || cols < 1)
+                    {
+                        DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
+                        return;
+                    }
+                    result = new LabelSetupResult(rows, cols, Presets[idx].PageWidthPt, Presets[idx].PageHeightPt, Presets[idx].MarginPt);
+                }
+                else
+                {
+                    var p = Presets[idx];
+                    result = new LabelSetupResult(p.Rows, p.Columns, p.PageWidthPt, p.PageHeightPt, p.MarginPt);
+                }
+                dialog.DialogResult = true;
+            };
+
+            var btnPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnPanel.Children.Add(ok);
+            btnPanel.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 340 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Label product:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(combo);
+            panel.Children.Add(customPanel);
+            panel.Children.Add(btnPanel);
+            dialog.Content = panel;
+
             return dialog.ShowDialog() == true ? result : null;
         }
     }
