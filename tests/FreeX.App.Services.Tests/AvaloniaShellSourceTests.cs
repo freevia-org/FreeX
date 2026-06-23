@@ -2788,8 +2788,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)");
         source.Should().Contain("private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)");
         source.Should().Contain("private static void FocusAdvancedFilterErrorField(");
-        source.Should().Contain("new GroupBox");
-        source.Should().Contain("Header = \"Action\"");
+        source.Should().Contain("var actionGroup = new AvaloniaGrid");
+        source.Should().Contain("Text = \"Action\"");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));");
