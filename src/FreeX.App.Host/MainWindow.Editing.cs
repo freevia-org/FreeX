@@ -1033,10 +1033,43 @@ public partial class MainWindow
         MessageBoxImage icon)
     {
         Activate();
-        // Delegate to IUserMessageService where possible; for YesNo/YesNoCancel/OKCancel
-        // the raw call is used because the service's AskYesNo covers only the binary case.
-        return MessageBox.Show(this, messageBoxText, caption, button, icon);
+        return ToMessageBoxResult(_messageService.ShowMessage(
+            messageBoxText,
+            caption,
+            ToUserMessageButtons(button),
+            ToUserMessageIcon(icon)));
     }
+
+    private static UserMessageButtons ToUserMessageButtons(MessageBoxButton button) =>
+        button switch
+        {
+            MessageBoxButton.OK => UserMessageButtons.Ok,
+            MessageBoxButton.OKCancel => UserMessageButtons.OkCancel,
+            MessageBoxButton.YesNo => UserMessageButtons.YesNo,
+            MessageBoxButton.YesNoCancel => UserMessageButtons.YesNoCancel,
+            _ => UserMessageButtons.Ok
+        };
+
+    private static UserMessageIcon ToUserMessageIcon(MessageBoxImage icon) =>
+        icon switch
+        {
+            MessageBoxImage.None => UserMessageIcon.None,
+            MessageBoxImage.Question => UserMessageIcon.Question,
+            MessageBoxImage.Warning => UserMessageIcon.Warning,
+            MessageBoxImage.Error => UserMessageIcon.Error,
+            MessageBoxImage.Information => UserMessageIcon.Information,
+            _ => UserMessageIcon.None
+        };
+
+    private static MessageBoxResult ToMessageBoxResult(UserMessageResult result) =>
+        result switch
+        {
+            UserMessageResult.Ok => MessageBoxResult.OK,
+            UserMessageResult.Cancel => MessageBoxResult.Cancel,
+            UserMessageResult.Yes => MessageBoxResult.Yes,
+            UserMessageResult.No => MessageBoxResult.No,
+            _ => MessageBoxResult.None
+        };
 
     private bool TryHandleTopLevelRibbonKeyTip(string keyTip)
     {

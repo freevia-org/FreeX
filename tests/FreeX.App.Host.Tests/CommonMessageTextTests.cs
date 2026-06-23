@@ -47,10 +47,12 @@ public sealed class CommonMessageTextTests
     [Fact]
     public void SharedDialogMessageHelper_TitlesResolveThroughShellStrings()
     {
-        // DialogMessageHelper was extracted into Free.Shared.Shell and now resolves default
-        // message-box titles through ShellStrings.Current (which delegates to UiText in FreeX).
-        var source = DialogSourceTestSupport.ReadShellSources("DialogMessageHelper.cs");
+        // DialogMessageHelper routes through the shared WPF message realizer, where default
+        // message-box titles resolve through ShellStrings.Current (which delegates to UiText in FreeX).
+        var dialogSource = DialogSourceTestSupport.ReadShellSources("DialogMessageHelper.cs");
+        var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
+        dialogSource.Should().Contain("WpfMessageBoxRealizer.Show(");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle)");
@@ -60,11 +62,32 @@ public sealed class CommonMessageTextTests
     [Fact]
     public void SharedWpfUserMessageService_TitlesResolveThroughShellStrings()
     {
-        var source = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
+        var serviceSource = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
+        var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
+        serviceSource.Should().Contain("WpfMessageBoxRealizer.Show(");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultConfirmTitle, ShellStrings.Current.ConfirmTitle)");
+    }
+
+    [Fact]
+    public void SharedWpfMessageHelpers_CentralizeRawMessageBoxRendering()
+    {
+        var realizerSource = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
+
+        realizerSource.Should().Contain("MessageBox.Show(");
+        foreach (var sourceFile in new[]
+        {
+            "DialogMessageHelper.cs",
+            "FileCommandMessageBox.cs",
+            "WpfUserMessageService.cs"
+        })
+        {
+            var source = DialogSourceTestSupport.ReadShellSources(sourceFile);
+            source.Should().Contain("WpfMessageBoxRealizer.Show(");
+            source.Should().NotContain("MessageBox.Show(");
+        }
     }
 }

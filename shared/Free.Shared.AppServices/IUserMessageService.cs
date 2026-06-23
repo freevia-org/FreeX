@@ -10,4 +10,9 @@ public interface IUserMessageService
     void ShowWarning(string message, string title = "Warning");
     void ShowInfo(string message, string title = "Information");
     bool AskYesNo(string message, string title = "Confirm");
+    UserMessageResult ShowMessage(
+        string message,
+        string title,
+        UserMessageButtons buttons,
+        UserMessageIcon icon);
 }

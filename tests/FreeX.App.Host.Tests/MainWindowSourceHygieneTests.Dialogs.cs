@@ -446,6 +446,13 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().Contain("IUserMessageService messageService");
         mainSource.Should().Contain("_messageService = messageService;");
 
+        var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
+        var showOwnedMessage = ExtractMethodSource(editingSource, "private MessageBoxResult ShowOwnedMessage(");
+        showOwnedMessage.Should().Contain("_messageService.ShowMessage(");
+        showOwnedMessage.Should().Contain("ToUserMessageButtons(button)");
+        showOwnedMessage.Should().Contain("ToUserMessageIcon(icon)");
+        showOwnedMessage.Should().NotContain("MessageBox.Show(");
+
         // Each migrated partial must not call MessageBox.Show directly.
         foreach (var partial in new[]
         {

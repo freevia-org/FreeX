@@ -74,10 +74,8 @@ public sealed partial class SelectDataSourceDialog
         var owner = sender is DependencyObject dependencyObject
             ? Window.GetWindow(dependencyObject)
             : null;
-        MessageBox.Show(owner,
+        DialogMessageHelper.ShowInfo(owner,
             UiText.Get("SelectDataSource_HiddenEmptyCellsMessage"),
-            UiText.Get("SelectDataSource_HiddenEmptyCellsTitle"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Information); // owner is dynamic (static handler); DialogMessageHelper requires a non-null Window
+            UiText.Get("SelectDataSource_HiddenEmptyCellsTitle"));
     }
 }

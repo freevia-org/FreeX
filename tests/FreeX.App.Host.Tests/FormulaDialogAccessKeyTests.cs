@@ -114,11 +114,11 @@ public sealed class FormulaDialogAccessKeyTests
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept");
         source.Should().Contain("if (!TryCreateResult(");
-        source.Should().Contain("MessageBox.Show(");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(");
         source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
         source.Should().Contain("FocusInitialKeyboardTarget();");
         source.Should().Contain("DialogResult = true;");
+        source.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]

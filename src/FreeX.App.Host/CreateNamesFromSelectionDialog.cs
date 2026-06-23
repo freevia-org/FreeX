@@ -114,12 +114,10 @@ public sealed class CreateNamesFromSelectionDialog : Window
             out var result,
             out var error))
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowWarning(
                 this,
                 error ?? UiText.Get("CreateNamesFromSelection_NoSelectionMessage"),
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                Title);
             FocusInitialKeyboardTarget();
             return;
         }

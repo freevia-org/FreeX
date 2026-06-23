@@ -15,17 +15,17 @@ public static class FileCommandMessageBox
         string action,
         string appTitle)
     {
-        var result = MessageBox.Show(
+        var result = WpfMessageBoxRealizer.Show(
             owner,
             $"Do you want to save changes to {displayName} before {action}?",
             appTitle,
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Warning);
+            UserMessageButtons.YesNoCancel,
+            UserMessageIcon.Warning);
 
         return result switch
         {
-            MessageBoxResult.Yes => SaveChangesPrompt.Save,
-            MessageBoxResult.No => SaveChangesPrompt.DontSave,
+            UserMessageResult.Yes => SaveChangesPrompt.Save,
+            UserMessageResult.No => SaveChangesPrompt.DontSave,
             _ => SaveChangesPrompt.Cancel,
         };
     }
@@ -34,11 +34,11 @@ public static class FileCommandMessageBox
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        MessageBox.Show(
+        WpfMessageBoxRealizer.Show(
             owner,
             $"{summary}:\n{exception.Message}",
             appTitle,
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
+            UserMessageButtons.Ok,
+            UserMessageIcon.Error);
     }
 }

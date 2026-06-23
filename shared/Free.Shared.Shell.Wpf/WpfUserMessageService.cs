@@ -14,48 +14,21 @@ public sealed class WpfUserMessageService : IUserMessageService
     private const string DefaultConfirmTitle = "Confirm";
 
     public void ShowError(string message, string title = DefaultErrorTitle)
-    {
-        MessageBox.Show(
-            Application.Current.MainWindow,
-            message,
-            ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle),
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
-    }
+        => ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Error);
 
     public void ShowWarning(string message, string title = DefaultWarningTitle)
-    {
-        MessageBox.Show(
-            Application.Current.MainWindow,
-            message,
-            ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-    }
+        => ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Warning);
 
     public void ShowInfo(string message, string title = DefaultInformationTitle)
-    {
-        MessageBox.Show(
-            Application.Current.MainWindow,
-            message,
-            ResolveDefaultTitle(title, DefaultInformationTitle, ShellStrings.Current.InformationTitle),
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-    }
+        => ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Information);
 
     public bool AskYesNo(string message, string title = DefaultConfirmTitle)
-    {
-        var result = MessageBox.Show(
-            Application.Current.MainWindow,
-            message,
-            ResolveDefaultTitle(title, DefaultConfirmTitle, ShellStrings.Current.ConfirmTitle),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-        return result == MessageBoxResult.Yes;
-    }
+        => ShowMessage(message, title, UserMessageButtons.YesNo, UserMessageIcon.Question) == UserMessageResult.Yes;
 
-    private static string ResolveDefaultTitle(string title, string defaultTitle, string localizedTitle) =>
-        string.Equals(title, defaultTitle, StringComparison.Ordinal)
-            ? localizedTitle
-            : title;
+    public UserMessageResult ShowMessage(
+        string message,
+        string title,
+        UserMessageButtons buttons,
+        UserMessageIcon icon)
+        => WpfMessageBoxRealizer.Show(Application.Current.MainWindow, message, title, buttons, icon);
 }

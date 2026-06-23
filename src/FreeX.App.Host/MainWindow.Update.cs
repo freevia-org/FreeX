@@ -22,7 +22,7 @@ public partial class MainWindow
     /// </summary>
     private void ShowUpToDate()
     {
-        MessageBox.Show("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowOwnedMessage("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void UpdateReadyIndicator_Click(object sender, RoutedEventArgs e)
@@ -31,7 +31,7 @@ public partial class MainWindow
         if (updates is null) return;
 
         var versionText = string.IsNullOrWhiteSpace(_stagedUpdateVersion) ? "" : $" {_stagedUpdateVersion}";
-        var choice = MessageBox.Show(
+        var choice = ShowOwnedMessage(
             $"FreeX{versionText} is ready to install. Restart now to update?",
             "Update FreeX",
             MessageBoxButton.OKCancel,
