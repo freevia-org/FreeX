@@ -160,7 +160,7 @@ public partial class ExportPlannerTests
     [Fact]
     public void ExportOptionsDialogPlanningFacade_ForwardsPureWorkToPlanner()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("ExportOptionsDialog.cs", "ExportOptionsDialogPlanner.cs");
 
         source.Should().Contain("ExportOptionsDialogPlanner.CreateResult(");
         source.Should().Contain("ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex)");
@@ -168,8 +168,20 @@ public partial class ExportPlannerTests
         source.Should().Contain("ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
         source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
         source.Should().Contain("ExportOptionsDialogPlanner.CreateFormatAvailability(format)");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ToSharedFormat(format))");
+        source.Should().Contain("ExportOptionsDialogSurfacePlanner.ResolveInvalidPageRangeFocusTarget(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(this, ExportOptionsDialogSurfacePlanner.DialogAutomationId);");
         source.Should().Contain("ApplyFormatAvailability(ExportOptionsDialogPlanner.CreateFormatAvailability(format));");
         source.Should().Contain("DisableOption(_bookmarksBox, UiText.Get(\"Export_BookmarksPdfOnly\"));");
+    }
+
+    [Fact]
+    public void ExportOptionsDialog_IsCapturedByParityHarness()
+    {
+        var wpfCaptureSource = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        wpfCaptureSource.Should().Contain("CaptureDialog(results, \"dialog.ExportOptions\", outDir");
+        wpfCaptureSource.Should().Contain("new ExportOptionsDialog(hasSelection: true");
     }
 
     [Theory]

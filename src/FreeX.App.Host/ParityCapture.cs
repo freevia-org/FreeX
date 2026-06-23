@@ -525,6 +525,9 @@ internal static class ParityCapture
                 CreatePrintPreviewDocument(),
                 new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")])));
 
+        CaptureDialog(results, "dialog.ExportOptions", outDir, () =>
+            new ExportOptionsDialog(hasSelection: true, initialPdfLanguage: ExportPlanner.DefaultPdfLanguage, ExportFormat.Pdf));
+
         CaptureDialog(results, "dialog.SelectionPane", outDir, () =>
             new SelectionPaneDialog(CreateSelectionPaneItems()));
 

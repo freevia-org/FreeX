@@ -380,6 +380,7 @@ $routes = @(
     @{
         RouteId = "dialog.ExportOptions"; DisplayName = "Export Options"
         Wpf = @("screenshots\file-io-import-smoke-tour\freex_file_io_import_smoke_export_*_options.png", "screenshots\file-backstage-workflows-tour\freex_file_backstage_export_*_options.png")
+        Shared = @("src\FreeX.App.Services\ExportOptionsDialogSurfacePlanner.cs", "src\FreeX.App.Services\ExportFilePickerPlanner.cs", "src\FreeX.Core.Model\ExportPathPlanner.cs")
     },
     @{
         RouteId = "dialog.AccessibilityChecker"; DisplayName = "Accessibility Checker"

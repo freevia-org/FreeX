@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host;
 
@@ -32,12 +33,13 @@ internal sealed class ExportOptionsDialog : Window
 
     public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null, ExportFormat format = ExportFormat.Pdf)
     {
-        Title = UiText.Get("ExportOptions_ExportOptions");
-        Width = 430;
+        Title = UiText.Get(ExportOptionsDialogSurfacePlanner.TitleResourceKey);
+        Width = ExportOptionsDialogSurfacePlanner.Width;
         SizeToContent = SizeToContent.Height;
-        MaxHeight = 560;
+        MaxHeight = ExportOptionsDialogSurfacePlanner.MaxHeight;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        AutomationProperties.SetAutomationId(this, ExportOptionsDialogSurfacePlanner.DialogAutomationId);
 
         _pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);
 

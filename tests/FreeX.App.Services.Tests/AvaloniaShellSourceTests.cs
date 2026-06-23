@@ -2285,6 +2285,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.Zoom\", () => ShowZoomDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.CustomViews\", () => ShowCustomViewsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.PrintPreview\", () => ShowPrintPreviewParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.ExportOptions\", () => ShowExportOptionsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SelectionPane\", () => ShowSelectionPaneParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertSlicer\", () => ShowInsertSlicerParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertTimeline\", () => ShowInsertTimelineParityDialogAsync()),");
@@ -2462,6 +2463,7 @@ public sealed class AvaloniaShellSourceTests
             "dialog.Zoom",
             "dialog.CustomViews",
             "dialog.PrintPreview",
+            "dialog.ExportOptions",
             "dialog.SelectionPane",
             "dialog.PivotTableOptions",
             "dialog.PivotFieldFilter",
