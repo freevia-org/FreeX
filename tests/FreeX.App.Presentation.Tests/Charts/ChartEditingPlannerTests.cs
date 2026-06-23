@@ -924,6 +924,14 @@ public sealed class ChartEditingPlannerTests
         ChartQuickFormatCycler.NextLegendFontSize(16).Should().Be(9);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(0.75).Should().Be(1.5);
         ChartQuickFormatCycler.NextDataLabelBorderThickness(3).Should().Be(0.75);
+        ChartQuickFormatCycler.NextPointDataLabelBorderThickness(null).Should().Be(0.75);
+        ChartQuickFormatCycler.NextPointDataLabelBorderThickness(2.25).Should().Be(3);
+        ChartQuickFormatCycler.NextPlotAreaBorderThickness(3).Should().Be(1);
+        ChartQuickFormatCycler.NextLegendBorderThickness(3).Should().Be(0.75);
+        ChartQuickFormatCycler.NextTrendlineThickness(3).Should().Be(1.5);
+        ChartQuickFormatCycler.NextChartStyleId(null).Should().Be(4);
+        ChartQuickFormatCycler.NextChartStyleId(44).Should().Be(48);
+        ChartQuickFormatCycler.NextChartStyleId(45).Should().Be(1);
     }
 
     [Fact]
@@ -964,6 +972,11 @@ public sealed class ChartEditingPlannerTests
         merged.Should().HaveCount(2);
         merged.Single(f => f.SeriesIndex == 0).DashStyle.Should().Be(ChartLineDashStyle.Dot);
         merged.Single(f => f.SeriesIndex == 1).MarkerSize.Should().Be(3);
+
+        var fill = ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, new CellColor(9, 8, 7));
+        fill.Single(f => f.SeriesIndex == 0).FillColor.Should().Be(new CellColor(9, 8, 7));
+        fill.Single(f => f.SeriesIndex == 0).FillThemeColor.Should().BeNull();
+        fill.Single(f => f.SeriesIndex == 1).MarkerSize.Should().Be(3);
     }
 
     [Fact]

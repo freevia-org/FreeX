@@ -50,12 +50,17 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
+        chartTabsSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
 
         var combined = chartTabsSource + Environment.NewLine + chartDialogSources;
         combined.Should().NotContain("ChartCycleBlue");
         combined.Should().NotContain("ResolveFirstSeriesFillColor");
         combined.Should().NotContain("candidate.Id == id && candidate.IsVisible && !candidate.IsPivotChart");
+        combined.Should().NotContain("chart.PlotAreaBorderThickness >= 3 ? 0.75");
+        combined.Should().NotContain("current >= 45 ? 1 : current + 4");
         combined.Should().NotContain("private static ChartDataLabelPosition NextDataLabelPosition");
         combined.Should().NotContain("private static (bool ShowMajor, bool ShowMinor) NextGridlineState");
     }

@@ -50,6 +50,25 @@ public static class ChartQuickFormatCycler
     /// <summary>Data-label border thickness step: +0.75pt up to 3, then wrap back to 0.75 (matches WPF).</summary>
     public static double NextDataLabelBorderThickness(double current) => current >= 3 ? 0.75 : current + 0.75;
 
+    /// <summary>Point data-label border thickness step. Null starts at the Excel-like 0.75pt default.</summary>
+    public static double NextPointDataLabelBorderThickness(double? current) =>
+        current is null ? 0.75 : NextDataLabelBorderThickness(current.Value);
+
+    /// <summary>Plot-area border thickness step. WPF has historically wrapped plot borders to 1pt.</summary>
+    public static double NextPlotAreaBorderThickness(double current) =>
+        NextBorderThickness(current, reset: 1);
+
+    /// <summary>Legend border thickness step: +0.75pt up to 3, then wrap back to 0.75.</summary>
+    public static double NextLegendBorderThickness(double current) =>
+        NextBorderThickness(current, reset: 0.75);
+
+    /// <summary>Trendline thickness step: +0.75pt up to 3, then wrap back to 1.5.</summary>
+    public static double NextTrendlineThickness(double current) =>
+        NextBorderThickness(current, reset: 1.5);
+
+    private static double NextBorderThickness(double current, double reset) =>
+        current >= 3 ? reset : current + 0.75;
+
     public static (bool ShowMajor, bool ShowMinor) NextGridlineState(bool currentMajor, bool currentMinor)
     {
         if (!currentMajor)
@@ -71,6 +90,13 @@ public static class ChartQuickFormatCycler
 
     /// <summary>Series marker-size step: +2pt up to 12, then wrap back to 5 (matches WPF). Null starts at 5.</summary>
     public static double NextMarkerSize(double? current) => current is null or >= 12 ? 5 : current.Value + 2;
+
+    /// <summary>Chart-style quick step: advance by one gallery row (4), wrapping the 1..48 style range.</summary>
+    public static int NextChartStyleId(int? current)
+    {
+        var style = current ?? 0;
+        return style >= 45 ? 1 : style + 4;
+    }
 
     /// <summary>
     /// Reads the first data series' (index 0) current format, or a fresh empty format if none is stored.
@@ -107,6 +133,13 @@ public static class ChartQuickFormatCycler
 
         formats.Add(updated);
         return formats;
+    }
+
+    /// <summary>Returns series formats after applying an explicit fill to series 0, clearing theme fill.</summary>
+    public static IReadOnlyList<ChartSeriesFormat> MergeFirstSeriesFillColor(ChartModel chart, CellColor color)
+    {
+        var updated = ReadFirstSeriesFormat(chart) with { FillColor = color, FillThemeColor = null };
+        return MergeFirstSeriesFormat(chart, updated);
     }
 
     /// <summary>

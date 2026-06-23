@@ -74,12 +74,19 @@ public sealed class ChartCommandSourceTests
         chartSource.Should().Contain("ChartQuickFormatCycler.NextAxisTitleFontSize(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextLegendFontSize(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextDataLabelBorderThickness(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextPointDataLabelBorderThickness(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextLegendBorderThickness(");
+        chartSource.Should().Contain("ChartQuickFormatCycler.NextTrendlineThickness(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextComboLineSeries(chart)");
         chartSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart)");
         chartSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFormat(chart, updated)");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextSeriesDash(");
         chartSource.Should().Contain("ChartQuickFormatCycler.NextMarkerSize(");
         chartSource.Should().NotContain("IndexOfSeriesFormat");
+        chartSource.Should().NotContain("PlotAreaBorderThickness: chart.PlotAreaBorderThickness >= 3");
+        chartSource.Should().NotContain("LegendBorderThickness: chart.LegendBorderThickness >= 3");
+        chartSource.Should().NotContain("TrendlineThickness: chart.TrendlineThickness >= 3");
 
         axisSource.Should().Contain("ChartQuickFormatCycler.NextSeriesColor(");
         axisSource.Should().Contain("ChartQuickFormatCycler.NextGridlineState(");

@@ -478,8 +478,7 @@ public sealed partial class MainWindow
 
         // Chart styles are 1..48 (SetChartStyleCommand clamps). Step in fours like Excel's gallery rows;
         // wrap back to 1 after 48.
-        var current = chart.ChartStyleId ?? 0;
-        var next = current >= 45 ? 1 : current + 4;
+        var next = ChartQuickFormatCycler.NextChartStyleId(chart.ChartStyleId);
         var result = _session.ExecuteReviewCommand(new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, next));
         RefreshShell(result.Success
             ? UiText.Format("ChartLoc_AppliedChartStyle", next)
@@ -534,10 +533,9 @@ public sealed partial class MainWindow
             chart.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
         if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
         {
-            var thickness = chart.PlotAreaBorderThickness >= 3 ? 0.75 : chart.PlotAreaBorderThickness + 0.75;
             ApplyChartLayout("Plot Area Border", chart, new ChartLayoutOptions(
                 PlotAreaBorderColor: chosen,
-                PlotAreaBorderThickness: thickness));
+                PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
         }
     }
 
@@ -579,16 +577,8 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Series Color", out chart))
             return;
 
-        var formats = new List<ChartSeriesFormat>(chart.SeriesFormats);
-        var index = formats.FindIndex(f => f.SeriesIndex == 0);
-        var current = index >= 0 ? formats[index] : new ChartSeriesFormat(0);
-        var updated = current with { FillColor = chosen, FillThemeColor = null };
-        if (index >= 0)
-            formats[index] = updated;
-        else
-            formats.Add(updated);
-
-        ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(SeriesFormats: formats));
+        ApplyChartLayout("Series Color", chart, new ChartLayoutOptions(
+            SeriesFormats: ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)));
     }
 
     private void CycleChartXAxisGridlines()
