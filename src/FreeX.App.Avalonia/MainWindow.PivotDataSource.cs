@@ -45,6 +45,7 @@ public sealed partial class MainWindow
             Text = PivotDataSourcePlanner.Capture(pivot),
             MinWidth = 320,
         };
+        ApplyPivotTextBoxChrome(sourceBox);
         AutomationProperties.SetAutomationId(sourceBox, "PivotDataSourceRangeBox");
         AutomationProperties.SetName(sourceBox, UiText.Get("PivotDataSource_RangeName"));
 
@@ -59,9 +60,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "PivotDataSourceDialog");
 
-        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 80 };
+        var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        ApplyPivotButtonChrome(ok, 80, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "PivotDataSourceOkButton");
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyPivotButtonChrome(cancel, 80);
         AutomationProperties.SetAutomationId(cancel, "PivotDataSourceCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
@@ -80,6 +83,8 @@ public sealed partial class MainWindow
         content.Children.Add(new TextBlock
         {
             Text = UiText.Get("PivotDataSource_RangeLabel"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
         });
         content.Children.Add(sourceBox);
