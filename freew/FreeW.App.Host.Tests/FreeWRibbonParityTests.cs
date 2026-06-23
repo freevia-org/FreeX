@@ -98,6 +98,13 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .Equal("Pictures", "Shapes", "SmartArt", "Chart", "Screenshot");
 
+        CommandIds(insert.FindGroup("links")!)
+            .Should()
+            .ContainInOrder("freew.hyperlink", "freew.bookmark", "freew.cross-reference");
+        registry.TryGet("freew.cross-reference", out _)
+            .Should()
+            .BeTrue("Word exposes Cross-reference from Insert > Links and FreeW already backs the command");
+
         CommandIds(insert.FindGroup("text")!)
             .Should()
             .Equal(
@@ -146,6 +153,7 @@ public sealed class FreeWRibbonParityTests
             "freew.object",
             "freew.save-quickpart",
             "freew.building-blocks-organizer",
+            "freew.cross-reference",
             "freew.equation",
             "freew.symbol"
         };

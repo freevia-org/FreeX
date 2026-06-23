@@ -184,6 +184,7 @@ internal static class FreeWRibbon
                 {
                     g.Icon("freew.hyperlink", "Link", RibbonCommandIconKind.Link);
                     g.Icon("freew.bookmark", "Bookmark", RibbonCommandIconKind.Bookmark);
+                    g.Icon("freew.cross-reference", "Cross-reference", RibbonCommandIconKind.CrossReference);
                     g.Icon("freew.edit-hyperlink", "Edit Hyperlink", RibbonCommandIconKind.Link);
                     g.RowBreak();
                     g.Icon("freew.remove-hyperlink", "Remove Hyperlink", RibbonCommandIconKind.Link);
