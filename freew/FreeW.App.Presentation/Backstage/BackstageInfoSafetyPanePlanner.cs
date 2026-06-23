@@ -1,15 +1,15 @@
-namespace FreeW.App.Host.Backstage;
+namespace FreeW.App.Presentation.Backstage;
 
-internal sealed record BackstageInfoSafetyGroup(
+public sealed record BackstageInfoSafetyGroup(
     string Heading,
     IReadOnlyList<BackstageInfoSafetyAction> Actions);
 
-internal sealed record BackstageInfoSafetyAction(
+public sealed record BackstageInfoSafetyAction(
     BackstageInfoSafetyActionKind Kind,
     string Label,
     string Description);
 
-internal enum BackstageInfoSafetyActionKind
+public enum BackstageInfoSafetyActionKind
 {
     MarkAsFinal,
     RestrictEditing,
@@ -17,7 +17,7 @@ internal enum BackstageInfoSafetyActionKind
     CheckAccessibility
 }
 
-internal static class BackstageInfoSafetyPanePlanner
+public static class BackstageInfoSafetyPanePlanner
 {
     public static IReadOnlyList<BackstageInfoSafetyGroup> Build() =>
     [

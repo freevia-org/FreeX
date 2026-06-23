@@ -1,6 +1,6 @@
-using FreeW.App.Host;
+using FreeW.App.Presentation.Ribbon;
 
-namespace FreeW.App.Host.Tests;
+namespace FreeW.App.Presentation.Tests;
 
 public sealed class MailMergePreviewNavigationPlannerTests
 {

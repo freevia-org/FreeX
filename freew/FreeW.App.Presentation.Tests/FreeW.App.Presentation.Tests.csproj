@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="FreeW.Core.Model" />
+    <!-- The model and WPF both define Run/Paragraph; alias the model types so these tests stay
+         unambiguous if WPF types are ever in scope via indirect references. -->
+    <Using Include="FreeW.Core.Model.Run" Alias="Run" />
+    <Using Include="FreeW.Core.Model.Paragraph" Alias="Paragraph" />
+    <Using Include="FreeW.Core.Model.Table" Alias="Table" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
+  </ItemGroup>
+
+</Project>

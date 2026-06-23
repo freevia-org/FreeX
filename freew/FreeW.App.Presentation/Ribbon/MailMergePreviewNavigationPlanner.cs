@@ -1,6 +1,6 @@
-namespace FreeW.App.Host;
+namespace FreeW.App.Presentation.Ribbon;
 
-internal enum MailMergePreviewNavigationAction
+public enum MailMergePreviewNavigationAction
 {
     First,
     Previous,
@@ -8,7 +8,7 @@ internal enum MailMergePreviewNavigationAction
     Last
 }
 
-internal static class MailMergePreviewNavigationPlanner
+public static class MailMergePreviewNavigationPlanner
 {
     public static int TargetIndex(MailMergePreviewNavigationAction action, int currentIndex, int recordCount)
     {
