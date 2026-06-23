@@ -183,6 +183,147 @@ public sealed class TrackingDisplayControlTests
         view.Model.PlainText.Should().Be("hello");
     }
 
+    [StaFact]
+    public void DisplayForReview_NoMarkup_DeletedRunSurvivesCommitWithKindAndText()
+    {
+        // Arrange: a document with a deleted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("kept "));
+        para.Runs.Add(new Run("removed") { Revision = RevisionKind.Deleted, RevisionAuthor = "Bob", RevisionDateXml = "2026-06-23T00:00:00Z" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: switch to No Markup (deletions become invisible) and commit.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
+        view.CommitToModel();
+
+        // Assert: the deleted run must still be in the model with kind/author/date/text intact.
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        var deleted = runs.FirstOrDefault(r => r.Revision == RevisionKind.Deleted);
+        deleted.Should().NotBeNull("deleted run must survive No Markup mode");
+        deleted!.Text.Should().Be("removed", "deleted run text must be preserved");
+        deleted.RevisionAuthor.Should().Be("Bob");
+        deleted.RevisionDateXml.Should().Be("2026-06-23T00:00:00Z");
+    }
+
+    [StaFact]
+    public void DisplayForReview_Original_InsertedRunSurvivesCommitWithKindAndText()
+    {
+        // Arrange: a document with an inserted run.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("base "));
+        para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice", RevisionDateXml = "2026-06-23T00:00:00Z" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: switch to Original (insertions become invisible) and commit.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
+        view.CommitToModel();
+
+        // Assert: the inserted run must still be in the model with kind/author/date/text intact.
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        var inserted = runs.FirstOrDefault(r => r.Revision == RevisionKind.Inserted);
+        inserted.Should().NotBeNull("inserted run must survive Original mode");
+        inserted!.Text.Should().Be("added", "inserted run text must be preserved");
+        inserted.RevisionAuthor.Should().Be("Alice");
+        inserted.RevisionDateXml.Should().Be("2026-06-23T00:00:00Z");
+    }
+
+    [StaFact]
+    public void DisplayForReview_TogglingBackToAllMarkup_RestoresNormalRenderingAndLosesNothing()
+    {
+        // Arrange: both an insertion and a deletion.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("ins") { Revision = RevisionKind.Inserted, RevisionAuthor = "A" });
+        para.Runs.Add(new Run("del") { Revision = RevisionKind.Deleted, RevisionAuthor = "B" });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: cycle through modes and return to AllMarkup.
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
+        view.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.AllMarkup);
+        view.CommitToModel();
+
+        // Assert: both revision runs survived every mode transition.
+        var runs = ((Paragraph)view.Model.Blocks[0]).Runs;
+        runs.Any(r => r.Revision == RevisionKind.Inserted).Should().BeTrue();
+        runs.Any(r => r.Revision == RevisionKind.Deleted).Should().BeTrue();
+    }
+
+    // ── Show Markup > Formatting ───────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void ShowMarkupFormatting_DefaultIsTrue()
+    {
+        var view = new DocumentView();
+        view.ShowMarkupFormatting.Should().BeTrue(
+            "default must be ON so tracked formatting changes are visible by default");
+    }
+
+    [StaFact]
+    public void ShowMarkupFormatting_WhenOff_FormatRevisionSurvivesCommit()
+    {
+        // Arrange: a run with a tracked formatting change (w:rPrChange).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        var previousFmt = RunFormatting.Default with { Bold = false };
+        var fmtRevision = new FormatRevision(previousFmt, "Alice", "2026-06-23T00:00:00Z");
+        para.Runs.Add(new Run("bold") { Formatting = RunFormatting.Default with { Bold = true }, FormatRevision = fmtRevision });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Act: toggle OFF the formatting decoration and commit.
+        view.ApplyShowMarkupFormatting(false);
+        view.CommitToModel();
+
+        // Assert: the FormatRevision must still be on the run.
+        var run = ((Paragraph)view.Model.Blocks[0]).Runs[0];
+        run.FormatRevision.Should().NotBeNull(
+            "FormatRevision must survive CommitToModel even with Show Markup Formatting OFF");
+        run.FormatRevision!.Author.Should().Be("Alice");
+        run.FormatRevision.DateXml.Should().Be("2026-06-23T00:00:00Z");
+        run.FormatRevision.PreviousFormatting.Bold.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void ShowMarkupFormatting_CanBeReenabled_AfterCommit()
+    {
+        // Verify toggling OFF then ON leaves the FormatRevision intact.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        var fmtRevision = new FormatRevision(RunFormatting.Default, "X", "2026-06-23T00:00:00Z");
+        para.Runs.Add(new Run("text") { FormatRevision = fmtRevision });
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.ApplyShowMarkupFormatting(false);
+        view.ApplyShowMarkupFormatting(true);
+        view.CommitToModel();
+
+        var run = ((Paragraph)view.Model.Blocks[0]).Runs[0];
+        run.FormatRevision.Should().NotBeNull("FormatRevision must survive toggle-off then toggle-on");
+        run.FormatRevision!.Author.Should().Be("X");
+    }
+
     // ── Combined: all flags default to ON means existing tests still pass ─────────────────────
 
     [StaFact]

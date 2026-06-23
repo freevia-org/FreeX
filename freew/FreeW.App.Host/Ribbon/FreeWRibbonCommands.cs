@@ -459,15 +459,22 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Tracking display controls: Display for Review and Show Markup per-category toggles.
         //
-        // Display for Review exposes a dropdown backed by DocumentView.MarkupDisplayMode. Only All Markup
-        // is implemented today — "No Markup" is intentionally deferred because CommitToModel re-derives
-        // the model from the WPF visual tree, so hiding deleted runs at render time would silently drop
-        // them from the model on the next commit/save. The root button always executes the All Markup
-        // item (the sole implemented mode), so clicking it is a no-op when already in All Markup state.
+        // Display for Review exposes a dropdown backed by DocumentView.MarkupDisplayMode. The root button
+        // always reflects the current mode. No Markup and Original are now implemented — each hides the
+        // opposite set of revision runs using a visually-transparent technique that keeps every run in
+        // the WPF tree so CommitToModel can round-trip text + RevisionMarker safely.
         var displayForReview = new DisplayForReviewCommand(editor);
         registry.Register("freew.display-for-review", displayForReview);
         registry.Register("freew.display-for-review-all-markup", displayForReview);
         stateful.Add(("freew.display-for-review", displayForReview));
+
+        var displayNoMarkup = new DisplayForReviewNoMarkupCommand(editor);
+        registry.Register("freew.display-for-review-no-markup", displayNoMarkup);
+        stateful.Add(("freew.display-for-review-no-markup", displayNoMarkup));
+
+        var displayOriginal = new DisplayForReviewOriginalCommand(editor);
+        registry.Register("freew.display-for-review-original", displayOriginal);
+        stateful.Add(("freew.display-for-review-original", displayOriginal));
 
         // Show Markup > Insertions and Deletions: stateful toggle — OFF suppresses the revision colour
         // and underline/strikethrough chrome but the RevisionMarker tag is still written so revisions
@@ -482,6 +489,13 @@ internal static class FreeWRibbonCommands
         var showComments = new ShowMarkupCommentsCommand(editor);
         registry.Register("freew.show-markup-comments", showComments);
         stateful.Add(("freew.show-markup-comments", showComments));
+
+        // Show Markup > Formatting: stateful toggle — OFF suppresses the dotted underline decoration
+        // that marks tracked formatting changes. The FormatRevisionMarker tag is still written
+        // unconditionally so FormatRevision survives CommitToModel unchanged (round-trip safe).
+        var showFormatting = new ShowMarkupFormattingCommand(editor);
+        registry.Register("freew.show-markup-formatting", showFormatting);
+        stateful.Add(("freew.show-markup-formatting", showFormatting));
 
         // The root "Show Markup" button opens the dropdown; no direct action needed — register it as an
         // ActionCommand that is always a no-op so the "every command is backed" parity assertion passes.
@@ -2900,23 +2914,50 @@ internal static class FreeWRibbonCommands
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
     }
 
-    // Review > Tracking > Display for Review: exposes the MarkupDisplayMode dropdown. Only All Markup
-    // is backed today — No Markup is deferred because CommitToModel rebuilds from the WPF visual tree;
-    // hiding deleted runs at render time would silently drop them on save (data-loss risk). The root
-    // button and the "All Markup" menu item both no-op when already in All Markup (the default and only
-    // mode), ensuring the ribbon always reflects the true current state.
+    // Review > Tracking > Display for Review: exposes the MarkupDisplayMode dropdown. The root button
+    // and the "All Markup" menu item both set AllMarkup mode; No Markup and Original are now implemented
+    // using a transparent-run technique that keeps every revision run in the WPF tree so CommitToModel
+    // can round-trip text + RevisionMarker safely (data-loss risk is closed).
     private sealed class DisplayForReviewCommand(DocumentView editor) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            // Only All Markup is implemented; selecting it (or clicking the root button) is a no-op.
-            editor.DisplayForReview = DocumentView.MarkupDisplayMode.AllMarkup;
+            editor.Focus();
+            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.AllMarkup);
         }
 
-        // The checked state is true when in All Markup (always, since that is the only mode), which
-        // makes the dropdown button appear pressed/active, matching Word's visual convention.
+        // The root button IsChecked is true when in All Markup (the default), matching Word's convention.
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.AllMarkup);
+    }
+
+    // Review > Tracking > Display for Review > No Markup: insertions shown as plain text; deleted runs
+    // rendered invisible (transparent foreground + near-zero font size). RevisionMarker is always written
+    // so text + revision kind/author/date survive CommitToModel unchanged (round-trip safe).
+    private sealed class DisplayForReviewNoMarkupCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.NoMarkup);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.NoMarkup);
+    }
+
+    // Review > Tracking > Display for Review > Original: deleted runs shown as plain text; inserted runs
+    // rendered invisible (same transparent technique as No Markup). Round-trip safe via RevisionMarker.
+    private sealed class DisplayForReviewOriginalCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ApplyDisplayForReview(DocumentView.MarkupDisplayMode.Original);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.DisplayForReview == DocumentView.MarkupDisplayMode.Original);
     }
 
     // Review > Tracking > Show Markup > Insertions and Deletions: a stateful toggle. OFF suppresses
@@ -2947,6 +2988,23 @@ internal static class FreeWRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: true, IsChecked: editor.ShowMarkupComments);
+    }
+
+    // Review > Tracking > Show Markup > Formatting: a stateful toggle. OFF suppresses the dotted
+    // underline decoration that marks tracked formatting changes (w:rPrChange / FormatRevision). The
+    // FormatRevisionMarker tag is still written unconditionally so FormatRevision survives CommitToModel
+    // unchanged (round-trip safe). Default is ON; most documents have no format revisions so this is
+    // visually quiet.
+    private sealed class ShowMarkupFormattingCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ApplyShowMarkupFormatting(!editor.ShowMarkupFormatting);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.ShowMarkupFormatting);
     }
 
     // Review > Protect > Restrict Editing: opens the Restrict Editing pane to choose the allowed editing

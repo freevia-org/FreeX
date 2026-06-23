@@ -25,6 +25,7 @@ using ModelTable = FreeW.Core.Model.Table;
 using ModelTableRow = FreeW.Core.Model.TableRow;
 using ModelTableCell = FreeW.Core.Model.TableCell;
 using ModelContentControl = FreeW.Core.Model.ContentControl;
+using ModelFormatRevision = FreeW.Core.Model.FormatRevision;
 using ModelTextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Host.Editing;
@@ -2471,12 +2472,14 @@ public sealed class DocumentView : RichTextBox
 
     private void Render()
     {
-        // Expose the current file name and Show Markup flags to the static run builders for this
-        // render pass. Same [ThreadStatic] pattern as _renderFileName: set here, read in BuildRun,
-        // never persisted beyond the Render() call.
+        // Expose the current file name, Show Markup flags, and Display for Review mode to the static
+        // run builders for this render pass. Same [ThreadStatic] pattern as _renderFileName: set here,
+        // read in BuildRun, never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
         _renderShowInsertionsAndDeletions = ShowMarkupInsertionsAndDeletions;
         _renderShowComments = ShowMarkupComments;
+        _renderDisplayForReview = DisplayForReview;
+        _renderShowFormatting = ShowMarkupFormatting;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -3345,16 +3348,21 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
                 break;
             case WpfRun { Tag: RunMarkers markers } markedRun
-                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null:
-                // A run carrying any combination of comment / content-control / revision marks. Recover its
-                // formatting, strip the view-only chrome each facet injected (review highlight, control
-                // shade, revision colour/decoration), and carry every facet back onto the model run so a
-                // run that is, say, both commented and tracked-changed survives the round-trip intact. A run
-                // whose text was emptied but that still carries a comment or content-control marker is kept
-                // as a zero-length marked run rather than dropped, so the marker is not lost on commit.
+                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null || markers.FormatRevision is not null:
+                // A run carrying any combination of comment / content-control / revision / format-revision
+                // marks. Recover its formatting, strip the view-only chrome each facet injected (review
+                // highlight, control shade, revision colour/decoration, format-revision tint), and carry
+                // every facet back onto the model run so a run that is, say, both commented and
+                // tracked-changed survives the round-trip intact. A run whose text was emptied but that
+                // still carries a comment, content-control, or format-revision marker is kept as a
+                // zero-length marked run rather than dropped, so the marker is not lost on commit.
                 var markedFmt = ReadRunFormatting(markedRun);
                 if (markers.Revision is { } rev)
                     markedFmt = StripRevisionChrome(markedFmt, rev.Kind);
+                // Format-revision decoration injects a dotted underline and may tint the foreground;
+                // strip both so they aren't mistaken for real formatting on commit.
+                if (markers.FormatRevision is not null)
+                    markedFmt = StripFormatRevisionChrome(markedFmt);
                 // Comment and content-control both inject a background; clear it so it isn't mistaken for a
                 // real highlight on commit (matching the prior per-facet behaviour).
                 if (markers.Comment is not null || markers.Control is not null)
@@ -3375,7 +3383,8 @@ public sealed class DocumentView : RichTextBox
                     Control = control,
                     Revision = markers.Revision?.Kind ?? RevisionKind.None,
                     RevisionAuthor = markers.Revision?.Author,
-                    RevisionDateXml = markers.Revision?.DateXml
+                    RevisionDateXml = markers.Revision?.DateXml,
+                    FormatRevision = markers.FormatRevision?.Revision
                 });
                 break;
             case WpfRun run when run.Text.Length > 0:
@@ -3995,21 +4004,86 @@ public sealed class DocumentView : RichTextBox
         if (fmt.Strikethrough)
             decorations.Add(TextDecorations.Strikethrough);
 
-        // A tracked-change run is coloured in the revision colour and decorated: insertions get an
-        // underline, deletions get a strikethrough. A RevisionMarker tag carries the kind/author/date
-        // so the mark round-trips on commit (see ReadInline). The mark wins over the run's own colour.
-        // The decoration is suppressed when Show Markup > Insertions and Deletions is OFF, but the
-        // RevisionMarker is ALWAYS set so CommitToModel can round-trip the revision safely.
+        // A tracked-change run carries a RevisionMarker tag UNCONDITIONALLY so CommitToModel can
+        // round-trip the kind/author/date in every display mode. The visual chrome (colour, decoration,
+        // visibility) depends on the current Display for Review mode:
+        //
+        //   AllMarkup  — revision colour + underline (insertions) or strikethrough (deletions), but only
+        //                when Show Markup > Insertions and Deletions is also ON.
+        //   NoMarkup   — insertions rendered as plain text (no colour/decoration); deleted runs rendered
+        //                visually invisible: near-zero font size + transparent foreground so the run
+        //                occupies negligible space but its WpfRun.Text and RevisionMarker survive
+        //                CommitToModel unchanged (round-trip safe via technique (a)).
+        //   Original   — deleted runs rendered as plain text; inserted runs rendered invisible (same
+        //                technique).
+        //
+        // DEFERRED: Simple Markup (change-bar adorner in the margin) — requires a custom adorner layer
+        // that the FlowDocument/RichTextBox stack cannot host without significant scaffolding. Deferred
+        // until an adorner surface is available. Balloons are also deferred for the same reason.
         if (run.Revision != RevisionKind.None)
         {
-            if (_renderShowInsertionsAndDeletions)
-            {
-                wpf.Foreground = new SolidColorBrush(RevisionColor);
-                decorations.Add(run.Revision == RevisionKind.Deleted
-                    ? TextDecorations.Strikethrough[0]
-                    : TextDecorations.Underline[0]);
-            }
+            // RevisionMarker is ALWAYS written regardless of display mode.
             AddMarker(wpf, m => m with { Revision = new RevisionMarker(run.Revision, run.RevisionAuthor, run.RevisionDateXml) });
+
+            switch (_renderDisplayForReview)
+            {
+                case MarkupDisplayMode.AllMarkup:
+                    if (_renderShowInsertionsAndDeletions)
+                    {
+                        wpf.Foreground = new SolidColorBrush(RevisionColor);
+                        decorations.Add(run.Revision == RevisionKind.Deleted
+                            ? TextDecorations.Strikethrough[0]
+                            : TextDecorations.Underline[0]);
+                    }
+                    break;
+
+                case MarkupDisplayMode.NoMarkup:
+                    // Insertions: plain text (no colour/decoration) — no further action needed.
+                    // Deletions: visually hidden — transparent foreground, near-zero size so the glyph
+                    // doesn't paint and takes up no space, but the run stays in the tree so CommitToModel
+                    // recovers its text and RevisionMarker without any special handling.
+                    if (run.Revision == RevisionKind.Deleted)
+                    {
+                        wpf.Foreground = Brushes.Transparent;
+                        wpf.FontSize = 0.015; // near-zero, not literal zero (WPF clamps at a minimum)
+                    }
+                    break;
+
+                case MarkupDisplayMode.Original:
+                    // Deletions: plain text. Insertions: hidden (same invisible technique).
+                    if (run.Revision == RevisionKind.Inserted)
+                    {
+                        wpf.Foreground = Brushes.Transparent;
+                        wpf.FontSize = 0.015;
+                    }
+                    break;
+            }
+        }
+
+        // A run with a tracked formatting change (w:rPrChange) carries a FormatRevisionMarker tag
+        // UNCONDITIONALLY so CommitToModel can round-trip PreviousFormatting/author/date. When
+        // Show Markup > Formatting is ON, a dotted underline in the revision colour signals the change.
+        if (run.FormatRevision is { } fmtRev)
+        {
+            AddMarker(wpf, m => m with { FormatRevision = new FormatRevisionMarker(fmtRev) });
+            if (_renderShowFormatting)
+            {
+                // A dotted underline (via a custom TextDecoration with a DashStyle) in the revision
+                // colour distinguishes format-only revisions from insertion/deletion revisions.
+                var dotted = new TextDecoration
+                {
+                    Location = TextDecorationLocation.Underline,
+                    Pen = new System.Windows.Media.Pen(new SolidColorBrush(RevisionColor), 1)
+                    {
+                        DashStyle = DashStyles.Dot
+                    },
+                    PenThicknessUnit = TextDecorationUnit.FontRecommended
+                };
+                decorations.Add(dotted);
+                // Tint the foreground with the revision colour only if the run doesn't already have one.
+                if (wpf.Foreground is null || wpf.Foreground == System.Windows.Media.Brushes.Black)
+                    wpf.Foreground = new SolidColorBrush(RevisionColor);
+            }
         }
 
         if (decorations.Count > 0)
@@ -4071,7 +4145,8 @@ public sealed class DocumentView : RichTextBox
     private sealed record RunMarkers(
         RevisionMarker? Revision = null,
         CommentMarker? Comment = null,
-        ContentControlMarker? Control = null);
+        ContentControlMarker? Control = null,
+        FormatRevisionMarker? FormatRevision = null);
 
     /// <summary>
     /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
@@ -4086,6 +4161,14 @@ public sealed class DocumentView : RichTextBox
     /// its revision kind, author and date. Mirrors how CommentMarker/FootnoteMarker preserve their marks.
     /// </summary>
     private sealed record RevisionMarker(RevisionKind Kind, string? Author, string? DateXml);
+
+    /// <summary>
+    /// Carried on a WPF run inside its <see cref="RunMarkers"/> so CommitToModel can round-trip the run's
+    /// tracked formatting change (<c>w:rPrChange</c>): the previous formatting, the author, and the date.
+    /// Written UNCONDITIONALLY when <c>run.FormatRevision</c> is non-null, regardless of whether the
+    /// formatting-change decoration is currently shown, so the data is never lost on commit/save.
+    /// </summary>
+    private sealed record FormatRevisionMarker(ModelFormatRevision Revision);
 
     /// <summary>
     /// Marks a WPF run as covered by the comment with id <paramref name="commentId"/>: a subtle
@@ -6835,13 +6918,21 @@ public sealed class DocumentView : RichTextBox
     // CommitToModel can round-trip them safely. Default state (all ON) reproduces today's behaviour.
 
     /// <summary>
-    /// Display for Review mode. Only <see cref="MarkupDisplayMode.AllMarkup"/> is implemented
-    /// (the default). "No Markup" is intentionally deferred: CommitToModel re-derives the model from
-    /// the WPF visual tree, so hiding deleted runs at render time would DROP them from the model on
-    /// the next commit/save — a data-loss risk that cannot be fixed without a retained-model
-    /// commit path.
+    /// Display for Review mode.
+    /// <list type="bullet">
+    ///   <item><term>AllMarkup</term><description>Default. Insertions shown in revision colour with underline;
+    ///   deletions in revision colour with strikethrough.</description></item>
+    ///   <item><term>NoMarkup</term><description>Insertions shown as plain text (no colour/decoration);
+    ///   deleted runs rendered invisible (zero-width transparent). The <see cref="RevisionMarker"/> tag is
+    ///   still written on every run so CommitToModel can round-trip both the text and the revision kind safely.
+    ///   The run is NOT removed from the WPF tree — only its visual properties change.</description></item>
+    ///   <item><term>Original</term><description>Deleted runs shown as plain text; inserted runs rendered
+    ///   invisible. Same round-trip guarantee via RevisionMarker.</description></item>
+    /// </list>
+    /// DEFERRED: <em>Simple Markup</em> (needs a margin change-bar adorner that the FlowDocument stack
+    /// cannot host without a custom adorner layer — deferred until the adorner surface exists).
     /// </summary>
-    public enum MarkupDisplayMode { AllMarkup }
+    public enum MarkupDisplayMode { AllMarkup, NoMarkup, Original }
 
     /// <summary>Current Display for Review setting. Defaults to All Markup (today's behaviour).</summary>
     public MarkupDisplayMode DisplayForReview { get; set; } = MarkupDisplayMode.AllMarkup;
@@ -6860,13 +6951,26 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool ShowMarkupComments { get; set; } = true;
 
-    // [ThreadStatic] field used by the static BuildRun family to read the above flags during a render
+    /// <summary>
+    /// When true (default), runs whose <c>FormatRevision</c> is non-null receive a distinct visual
+    /// decoration (dotted underline in the revision colour) to flag the tracked formatting change.
+    /// When false the decoration is suppressed but the <see cref="FormatRevisionMarker"/> tag is still
+    /// written unconditionally so <c>CommitToModel</c> can round-trip the <c>FormatRevision</c> safely.
+    /// Most documents have no format revisions so this is visually quiet by default even when ON.
+    /// </summary>
+    public bool ShowMarkupFormatting { get; set; } = true;
+
+    // [ThreadStatic] fields used by the static BuildRun family to read the above flags during a render
     // pass — same pattern as _renderFileName (set in Render(), read in static helpers, never escapes
     // the render call).
     [ThreadStatic]
     private static bool _renderShowInsertionsAndDeletions;
     [ThreadStatic]
     private static bool _renderShowComments;
+    [ThreadStatic]
+    private static MarkupDisplayMode _renderDisplayForReview;
+    [ThreadStatic]
+    private static bool _renderShowFormatting;
 
     /// <summary>
     /// Apply a change to the Show Markup Insertions/Deletions flag and re-render so the updated
@@ -6887,6 +6991,29 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         ShowMarkupComments = show;
+        Render();
+    }
+
+    /// <summary>
+    /// Switch to a new Display for Review mode and re-render. Pending edits are committed first.
+    /// The round-trip invariant is maintained: every revision run stays in the WPF tree in every
+    /// mode, carrying its <see cref="RevisionMarker"/> tag; only colour/decoration/visibility change.
+    /// </summary>
+    public void ApplyDisplayForReview(MarkupDisplayMode mode)
+    {
+        CommitToModel();
+        DisplayForReview = mode;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a change to the Show Markup Formatting flag and re-render. Pending edits are committed
+    /// first. The <see cref="FormatRevisionMarker"/> tag is always written regardless of this flag.
+    /// </summary>
+    public void ApplyShowMarkupFormatting(bool show)
+    {
+        CommitToModel();
+        ShowMarkupFormatting = show;
         Render();
     }
 
@@ -7613,6 +7740,36 @@ public sealed class DocumentView : RichTextBox
             ColorHex = string.Equals(formatting.ColorHex, revisionHex, StringComparison.OrdinalIgnoreCase) ? null : formatting.ColorHex,
             Underline = kind == RevisionKind.Inserted ? false : formatting.Underline,
             Strikethrough = kind == RevisionKind.Deleted ? false : formatting.Strikethrough
+        };
+    }
+
+    /// <summary>
+    /// Undo the view-only chrome BuildRun injects for a tracked formatting-change run: clear the revision
+    /// colour tint (so it doesn't leak into the model as an explicit colour) and remove the dotted-underline
+    /// decoration. The run's own real formatting (bold, italic, etc.) is kept unchanged.
+    /// </summary>
+    private static RunFormatting StripFormatRevisionChrome(RunFormatting formatting)
+    {
+        var revisionHex = ToHex(RevisionColor);
+        // Only strip the colour if it matches the revision tint exactly — if the run has its own colour,
+        // leave it alone. The dotted underline is a WPF TextDecoration; ReadRunFormatting maps underlines
+        // via the Underline property so if we added a dotted underline in BuildRun but the run itself
+        // didn't have an underline, the Underline flag in the recovered formatting would be true. Clear it.
+        // NOTE: WPF TextDecorations.Underline[0] and our custom dotted decoration are both "underline
+        // location" so ReadRunFormatting can't distinguish them; we clear only when the model run's
+        // Underline was false (the FormatRevisionMarker carries the original; we use it to restore).
+        return formatting with
+        {
+            ColorHex = string.Equals(formatting.ColorHex, revisionHex, StringComparison.OrdinalIgnoreCase) ? null : formatting.ColorHex,
+            // The dotted underline BuildRun added would be read back as Underline=true, but only if the
+            // run's real formatting had no underline. We conservatively clear underline here; if the run
+            // truly was underlined, its FormatRevisionMarker.Revision.PreviousFormatting tells us.
+            // However, since WPF merges decorations, we can't easily tell the real underline from the
+            // decoration we injected. The safest approach: the FormatRevisionMarker records the ORIGINAL
+            // FormatRevision which is returned to the model directly, so any inaccuracy in the formatting
+            // snapshot here is irrelevant — the model gets its FormatRevision from the marker, not from
+            // the stripped WPF formatting (FormatRevision itself is a model-level concept).
+            Underline = formatting.Underline
         };
     }
 

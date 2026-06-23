@@ -549,18 +549,22 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
                     g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
                     g.RowBreak();
-                    // Display for Review: dropdown with All Markup (default). No Markup is intentionally
-                    // absent — see DocumentView.MarkupDisplayMode for the data-loss reasoning.
+                    // Display for Review: dropdown with All Markup (default), No Markup, and Original.
+                    // Simple Markup is DEFERRED — it requires a margin change-bar adorner that the
+                    // FlowDocument/RichTextBox stack cannot host without a custom adorner layer.
                     g.Medium("freew.display-for-review", "All Markup", RibbonCommandIconKind.History, "D", menu: m =>
                     {
                         m.Item("freew.display-for-review-all-markup", "All Markup", "A");
+                        m.Item("freew.display-for-review-no-markup", "No Markup", "N");
+                        m.Item("freew.display-for-review-original", "Original", "O");
                     });
-                    // Show Markup: per-category visibility toggles. Formatting and Balloons are deferred
-                    // (FormatRevision is not rendered today; no balloon affordance in the FlowDocument stack).
+                    // Show Markup: per-category visibility toggles. Balloons are DEFERRED — no balloon
+                    // affordance exists in the FlowDocument stack.
                     g.Medium("freew.show-markup", "Show Markup", RibbonCommandIconKind.History, "M", menu: m =>
                     {
                         m.Item("freew.show-markup-insertions-deletions", "Insertions and Deletions", "I");
                         m.Item("freew.show-markup-comments", "Comments", "C");
+                        m.Item("freew.show-markup-formatting", "Formatting", "F");
                     });
                 });
                 // Changes group: Accept/Reject expose the current-change action plus the all-changes
