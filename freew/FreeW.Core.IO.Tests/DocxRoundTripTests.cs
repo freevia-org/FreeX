@@ -25,6 +25,19 @@ public class DocxRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static XDocument? WriteSettingsXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = zip.GetEntry("word/settings.xml");
+        if (entry is null)
+            return null;
+        using var reader = entry.Open();
+        return XDocument.Load(reader);
+    }
+
     private static TextDocument ReadHandAuthoredDocx(string bodyXml, string? documentRelsXml = null, string? settingsXml = null)
     {
         using var stream = new MemoryStream();
@@ -363,6 +376,51 @@ public class DocxRoundTripTests
             new TabStop(108, TabStopAlignment.Center, TabLeader.Dashes),
             new TabStop(216, TabStopAlignment.Right, TabLeader.Underline),
             new TabStop(324, TabStopAlignment.Decimal, TabLeader.None));
+    }
+
+    [Fact]
+    public void DefaultTabStop_RoundTripsThroughSettings()
+    {
+        var doc = new TextDocument();
+        doc.Page.DefaultTabStopPt = 42;
+        doc.Blocks.Add(new Paragraph("tab defaults"));
+
+        var roundTripped = RoundTrip(doc);
+
+        roundTripped.Page.DefaultTabStopPt.Should().Be(42);
+    }
+
+    [Fact]
+    public void DefaultTabStop_EmitsSettingsOnlyWhenChanged()
+    {
+        var unchanged = new TextDocument();
+        unchanged.Blocks.Add(new Paragraph("plain"));
+
+        WriteSettingsXml(unchanged).Should().BeNull();
+
+        var changed = new TextDocument();
+        changed.Page.DefaultTabStopPt = 42;
+        changed.Blocks.Add(new Paragraph("custom"));
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var settings = WriteSettingsXml(changed)!.Root!;
+
+        settings.Element(ns + "defaultTabStop")!.Attribute(ns + "val")!.Value.Should().Be("840");
+    }
+
+    [Fact]
+    public void DefaultTabStop_ReadsWordAuthoredSettings()
+    {
+        var result = ReadHandAuthoredDocx(
+            "<w:p><w:r><w:t>tab defaults</w:t></w:r></w:p>",
+            settingsXml:
+            """
+            <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:defaultTabStop w:val="708"/>
+            </w:settings>
+            """);
+
+        result.Page.DefaultTabStopPt.Should().Be(35.4);
     }
 
     [Fact]

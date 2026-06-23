@@ -150,6 +150,7 @@ public static class DocxWriter
             || document.Page.AutoHyphenation
             || document.Page.DifferentOddEvenPages
             || document.Page.MirrorMargins
+            || HasCustomDefaultTabStop(document.Page)
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings
@@ -4264,6 +4265,9 @@ public static class DocxWriter
         var autoHyphenation = page.AutoHyphenation;
         var differentOddEvenPages = page.DifferentOddEvenPages;
         var mirrorMargins = page.MirrorMargins;
+        var defaultTabStop = HasCustomDefaultTabStop(page)
+            ? new XElement(W + "defaultTabStop", new XAttribute(W + "val", PointsToDxa(page.DefaultTabStopPt)))
+            : null;
         // Fresh documents keep the historical minimal-settings behavior: dormant hyphenation sub-options do
         // not create a settings part by themselves. Preserved settings are different: Word-authored documents
         // can keep these values while auto hyphenation is off, and the reader captures them so they survive.
@@ -4293,6 +4297,8 @@ public static class DocxWriter
             // in CT_Settings schema order.
             if (mirrorMargins)
                 fresh.Add(new XElement(W + "mirrorMargins"));
+            if (defaultTabStop is not null)
+                fresh.Add(defaultTabStop);
             if (autoHyphenation)
                 fresh.Add(new XElement(W + "autoHyphenation"));
             // Hyphenation sub-options follow autoHyphenation in CT_Settings schema order.
@@ -4325,6 +4331,7 @@ public static class DocxWriter
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
+        OverlaySetting(settings, "defaultTabStop", defaultTabStop);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
         OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);
         OverlaySetting(settings, "hyphenationZone", hyphenationZone);
@@ -4342,6 +4349,9 @@ public static class DocxWriter
         OverlaySetting(settings, "endnotePr", BuildNotePr(endnoteNumbering, "endnotePr"));
         return new XDocument(settings);
     }
+
+    private static bool HasCustomDefaultTabStop(PageSettings page) =>
+        Math.Abs(page.DefaultTabStopPt - PageSettings.WordDefaultTabStopPt) > 0.01;
 
     /// <summary>
     /// Builds a w:footnotePr or w:endnotePr child element for word/settings.xml from the given

@@ -1510,6 +1510,8 @@ public enum PageVerticalAlignment
 /// <summary>Page geometry for a section (points; US Letter with 1in margins by default).</summary>
 public sealed class PageSettings
 {
+    public const double WordDefaultTabStopPt = 36;
+
     public double WidthPt { get; set; } = 612;
     public double HeightPt { get; set; } = 792;
     public double MarginLeftPt { get; set; } = 72;
@@ -1646,6 +1648,13 @@ public sealed class PageSettings
     public bool DoNotHyphenateCaps { get; set; }
 
     /// <summary>
+    /// The default interval between implicit tab stops (word/settings.xml's w:defaultTabStop), in points.
+    /// Defaults to Word's classic 0.5" spacing. Fresh documents omit the setting while this remains at the
+    /// default; changed values emit w:defaultTabStop so Word and FreeW share the same baseline tab spacing.
+    /// </summary>
+    public double DefaultTabStopPt { get; set; } = WordDefaultTabStopPt;
+
+    /// <summary>
     /// How page content is aligned vertically within the text area (w:sectPr/w:vAlign). Defaults to
     /// <see cref="PageVerticalAlignment.Top"/> so existing documents round-trip unchanged — no
     /// w:vAlign is emitted. When not Top the writer emits w:vAlign with the matching value
@@ -1715,6 +1724,7 @@ public sealed class PageSettings
         HyphenationZonePt = HyphenationZonePt,
         ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,
         DoNotHyphenateCaps = DoNotHyphenateCaps,
+        DefaultTabStopPt = DefaultTabStopPt,
         VerticalAlignment = VerticalAlignment,
         DifferentFirstPage = DifferentFirstPage,
         DifferentOddEvenPages = DifferentOddEvenPages,

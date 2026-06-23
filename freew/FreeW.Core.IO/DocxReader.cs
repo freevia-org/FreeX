@@ -171,6 +171,9 @@ public static class DocxReader
                 System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var hyphenZone) && hyphenZone > 0)
             document.Page.HyphenationZonePt = hyphenZone / 20.0;
         document.Page.DoNotHyphenateCaps = ReadToggle(root, "doNotHyphenateCaps");
+        if (int.TryParse(root.Element(W + "defaultTabStop")?.Attribute(W + "val")?.Value,
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var defaultTabStop) && defaultTabStop > 0)
+            document.Page.DefaultTabStopPt = defaultTabStop / 20.0;
 
         // Different odd/even page headers/footers (w:evenAndOddHeaders): an on/off toggle. When set, the
         // even header/footer references in w:sectPr are honoured (see ReadHeaderFooter).

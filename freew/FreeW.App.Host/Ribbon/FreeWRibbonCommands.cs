@@ -947,18 +947,15 @@ internal static class FreeWRibbonCommands
     // via the bus). The stops round-trip to docx via the existing w:tabs writer.
     private sealed class TabsCommand(DocumentView editor) : IRibbonCommand
     {
-        // Word's classic default tab-stop spacing (0.5in). The real value lives in word/settings.xml
-        // (w:defaultTabStop), which FreeW preserves verbatim but does not model; shown read-only for reference.
-        private const double DefaultTabStopPt = 36;
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
             var current = editor.CurrentParagraphFormatting.TabStops;
-            if (TabsDialog.Prompt(Window.GetWindow(editor), current, DefaultTabStopPt) is { } chosen)
+            if (TabsDialog.Prompt(Window.GetWindow(editor), current, editor.Model.Page.DefaultTabStopPt) is { } chosen)
             {
                 editor.Focus();
-                editor.SetParagraphTabStops(chosen);
+                editor.SetParagraphTabStops(chosen.TabStops);
+                editor.ApplyPageSettings(page => page.DefaultTabStopPt = chosen.DefaultTabStopPt);
             }
         }
     }

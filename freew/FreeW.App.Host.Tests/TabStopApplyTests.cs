@@ -76,4 +76,28 @@ public sealed class TabStopApplyTests
 
         view.Model.Blocks.OfType<Paragraph>().Single().Formatting.TabStops.Should().BeEmpty();
     }
+
+    [StaFact]
+    public void ApplyPageSettings_UpdatesDefaultTabStopInterval()
+    {
+        var view = ViewWith("para");
+
+        view.ApplyPageSettings(page => page.DefaultTabStopPt = 42);
+
+        view.Model.Page.DefaultTabStopPt.Should().Be(42);
+    }
+
+    [StaFact]
+    public void TabsDialogApplyPath_PreservesCustomStops_WhenUpdatingDefaultInterval()
+    {
+        var view = ViewWith("para");
+        SelectAllParagraphs(view);
+
+        var stops = new[] { new TabStop(108, TabStopAlignment.Center, TabLeader.Dots) };
+        view.SetParagraphTabStops(stops);
+        view.ApplyPageSettings(page => page.DefaultTabStopPt = 42);
+
+        view.Model.Page.DefaultTabStopPt.Should().Be(42);
+        view.Model.Blocks.OfType<Paragraph>().Single().Formatting.TabStops.Should().Equal(stops);
+    }
 }

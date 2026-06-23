@@ -11,15 +11,15 @@ namespace FreeW.App.Host;
 /// Word's "Tabs" dialog (Home / Paragraph &gt; Tabs…): manage a paragraph's custom tab stops. Lists the
 /// existing stops, lets the user type a position (points) and pick an alignment (Left / Center / Right /
 /// Decimal) and a leader (none / dots / dashes / underline), then Set a new (or update an existing) stop,
-/// Clear the selected one, or Clear All. Returns the edited list of <see cref="TabStop"/>s to apply to the
-/// selected paragraph(s), or null if cancelled.
+/// Clear the selected one, or Clear All. Returns the edited list of <see cref="TabStop"/>s and default tab
+/// interval to apply, or null if cancelled.
 ///
 /// <para>
 /// The model's <see cref="TabStop"/> already round-trips to docx (pPr/w:tabs) — position in points,
 /// alignment in w:val, optional leader in w:leader — so this dialog only edits that list; the apply path
 /// (<see cref="FreeW.App.Host.Editing.DocumentView.SetParagraphTabStops"/>) routes through the undo/redo
-/// bus. The default tab-stop spacing is shown for reference (it lives in word/settings.xml,
-/// w:defaultTabStop, which FreeW preserves verbatim) and is not editable here.
+/// bus. The default tab-stop spacing lives in word/settings.xml's w:defaultTabStop and is edited as a
+/// document-wide setting through the same page-settings path as other Layout-backed document settings.
 /// </para>
 /// </summary>
 internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
@@ -30,10 +30,13 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private readonly ListBox _stopList;
     private readonly TextBox _positionBox;
+    private readonly TextBox _defaultTabStopBox;
     private readonly ComboBox _alignmentBox;
     private readonly ComboBox _leaderBox;
     private readonly List<TabStop> _stops;
-    private IReadOnlyList<TabStop>? _result;
+    private Result? _result;
+
+    internal sealed record Result(IReadOnlyList<TabStop> TabStops, double DefaultTabStopPt);
 
     private TabsDialog(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
@@ -53,6 +56,11 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         RefreshList();
 
         _positionBox = new TextBox { MinWidth = 120 };
+        _defaultTabStopBox = new TextBox
+        {
+            MinWidth = 120,
+            Text = defaultTabStopPt.ToString("0.##", CultureInfo.CurrentCulture)
+        };
 
         _alignmentBox = new ComboBox { MinWidth = 120 };
         foreach (var alignment in Alignments)
@@ -75,15 +83,7 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AddRow(grid, 2, "Alignment:", _alignmentBox);
         AddRow(grid, 3, "Leader:", _leaderBox);
 
-        // Default tab-stop spacing is shown read-only (it lives in settings.xml, preserved verbatim).
-        var defaultBlock = new TextBlock
-        {
-            Text = $"Default tab stops: {defaultTabStopPt.ToString("0.##", CultureInfo.CurrentCulture)} pt",
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        Grid.SetRow(defaultBlock, 4);
-        Grid.SetColumn(defaultBlock, 1);
-        grid.Children.Add(defaultBlock);
+        AddRow(grid, 4, "Default tab stops (pt):", _defaultTabStopBox);
 
         // Set / Clear / Clear All row, mirroring Word's Tabs dialog action buttons.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
@@ -200,7 +200,13 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        _result = _stops.OrderBy(s => s.PositionPt).ToList();
+        if (!TryParse(_defaultTabStopBox.Text, out var defaultTabStop) || defaultTabStop <= 0)
+        {
+            DialogMessageHelper.ShowWarning(this, "Enter a positive default tab-stop interval in points.");
+            return;
+        }
+
+        _result = new Result(_stops.OrderBy(s => s.PositionPt).ToList(), defaultTabStop);
         Close();
     }
 
@@ -209,9 +215,9 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     /// <summary>
     /// Show the dialog seeded with the paragraph's current tab stops and the document's default tab-stop
-    /// spacing (for display only); returns the edited stop list to apply, or null if cancelled.
+    /// spacing; returns the edited stop list and interval to apply, or null if cancelled.
     /// </summary>
-    public static IReadOnlyList<TabStop>? Prompt(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
+    public static Result? Prompt(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
         var dialog = new TabsDialog(owner, tabStops, defaultTabStopPt);
         dialog.ShowDialog();
