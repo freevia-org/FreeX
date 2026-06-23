@@ -1,6 +1,8 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -81,40 +83,57 @@ public sealed partial class MainWindow
         var pageHost = new Border
         {
             Background = PrintPreviewSurfaceBackground,
-            Padding = new Thickness(16),
+            Padding = new Thickness(0),
             ClipToBounds = true,
         };
         AutomationProperties.SetAutomationId(pageHost, PrintPreviewDialogPlanner.PageHostAutomationId);
 
-        var pageLabel = new TextBlock
+        var pageNumberBox = new TextBox
         {
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold,
-            MinWidth = 120,
-            TextAlignment = TextAlignment.Center,
+            Text = "1",
+            Width = 44,
+            Margin = new Thickness(4, 0),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
-        AutomationProperties.SetAutomationId(pageLabel, PrintPreviewDialogPlanner.PageLabelAutomationId);
 
-        var prevButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewPrev"), MinWidth = 84, Padding = new Thickness(10, 4) };
-        var nextButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewNext"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var pageStatusText = new TextBlock
+        {
+            Text = PrintPreviewNavigationState.Create(1, context.PageCount).StatusText,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        AutomationProperties.SetAutomationId(pageStatusText, PrintPreviewDialogPlanner.PageLabelAutomationId);
+
+        var firstButton = CreatePreviewToolbarButton("|<");
+        var prevButton = CreatePreviewToolbarButton("<");
+        var nextButton = CreatePreviewToolbarButton(">");
+        var lastButton = CreatePreviewToolbarButton(">|");
         AutomationProperties.SetAutomationId(prevButton, PrintPreviewDialogPlanner.PreviousButtonAutomationId);
         AutomationProperties.SetAutomationId(nextButton, PrintPreviewDialogPlanner.NextButtonAutomationId);
 
-        var exportButton = new Button { Content = UiText.Get("ShellLoc_PrintPreviewExportPdf"), MinWidth = 120, Padding = new Thickness(10, 4) };
+        var exportButton = new Button { Content = PrintPreviewText("PrintPreview_PrintButton", "Print..."), MinWidth = 68, Padding = new Thickness(10, 4) };
         AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
         exportButton.IsEnabled = StorageProvider.CanSave;
 
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        var closeButton = new Button { Content = PrintPreviewText("PrintPreview_CloseButton", "Close"), MinWidth = 68, Padding = new Thickness(10, 4), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId);
 
         void Render()
         {
-            pageHost.Child = BuildPreviewPageView(context, navigator.CurrentIndex);
-            pageLabel.Text = navigator.Caption;
+            pageHost.Child = BuildPreviewDocumentViewerSurface(context, navigator.CurrentIndex);
+            pageNumberBox.Text = (navigator.CurrentIndex + 1).ToString(CultureInfo.InvariantCulture);
+            pageStatusText.Text = PrintPreviewNavigationState.Create(navigator.CurrentIndex + 1, context.PageCount).StatusText;
+            firstButton.IsEnabled = navigator.CanGoPrevious;
             prevButton.IsEnabled = navigator.CanGoPrevious;
             nextButton.IsEnabled = navigator.CanGoNext;
+            lastButton.IsEnabled = navigator.CanGoNext;
         }
 
+        firstButton.Click += (_, _) =>
+        {
+            navigator = navigator.JumpTo(0);
+            Render();
+        };
         prevButton.Click += (_, _) =>
         {
             navigator = navigator.Previous();
@@ -124,6 +143,24 @@ public sealed partial class MainWindow
         {
             navigator = navigator.Next();
             Render();
+        };
+        lastButton.Click += (_, _) =>
+        {
+            navigator = navigator.JumpTo(context.PageCount - 1);
+            Render();
+        };
+        pageNumberBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+                return;
+
+            if (PrintPreviewDialogPlanner.TryParsePageNumber(pageNumberBox.Text, context.PageCount, out var pageNumber))
+            {
+                navigator = navigator.JumpTo(pageNumber - 1);
+                Render();
+            }
+
+            e.Handled = true;
         };
         exportButton.Click += async (_, _) =>
         {
@@ -153,44 +190,275 @@ public sealed partial class MainWindow
             }
         };
 
-        var navBar = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { prevButton, pageLabel, nextButton },
-        };
+        var documentToolbar = CreatePreviewDocumentToolbar(
+            firstButton,
+            prevButton,
+            nextButton,
+            lastButton,
+            pageNumberBox,
+            pageStatusText);
+        var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost);
+        var settingsRail = CreatePrintPreviewSettingsRail(context.PageCount);
+        var topToolbar = CreatePrintPreviewTopToolbar(context.PageCount, exportButton, closeButton);
 
-        var actionBar = new StackPanel
+        var layout = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { exportButton, closeButton },
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("220,*"),
         };
-
-        var toolbar = new Grid
-        {
-            Margin = new Thickness(12, 8),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-        };
-        Grid.SetColumn(navBar, 0);
-        Grid.SetColumn(actionBar, 2);
-        toolbar.Children.Add(navBar);
-        toolbar.Children.Add(actionBar);
-
-        var layout = new DockPanel();
-        DockPanel.SetDock(toolbar, Dock.Bottom);
-        layout.Children.Add(toolbar);
-        layout.Children.Add(pageHost);
+        Grid.SetRow(topToolbar, 0);
+        Grid.SetColumnSpan(topToolbar, 2);
+        Grid.SetRow(settingsRail, 1);
+        Grid.SetColumn(settingsRail, 0);
+        Grid.SetRow(previewPane, 1);
+        Grid.SetColumn(previewPane, 1);
+        layout.Children.Add(topToolbar);
+        layout.Children.Add(settingsRail);
+        layout.Children.Add(previewPane);
 
         dialog.Content = layout;
         dialog.Opened += (_, _) =>
         {
             Render();
-            nextButton.Focus();
+            exportButton.Focus();
         };
 
         await dialog.ShowDialog(this);
+    }
+
+    private static Border CreatePrintPreviewTopToolbar(int totalPages, Button printButton, Button closeButton)
+    {
+        var toolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(4),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Children =
+            {
+                printButton,
+                new TextBlock { Text = PrintPreviewText("PrintPreview_PrinterLabel", "Printer:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewComboBox(190, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
+                new TextBlock { Text = PrintPreviewText("PrintPreview_CopiesLabel", "Copies:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBox { Text = "1", Width = 44, VerticalContentAlignment = AvaloniaVerticalAlignment.Center },
+                new CheckBox { Content = PrintPreviewText("PrintPreview_CollatedLabel", "Collated"), IsChecked = true, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_SidesLabel", "Sides:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewComboBox(178, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
+                new TextBlock
+                {
+                    Text = PrintPreviewToolbarStatePlanner.CreateStatusText(
+                        "HP30138B4D655D(HP Color Laser MFP 178 179)",
+                        1,
+                        totalPages),
+                    MaxWidth = 280,
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+                CreatePreviewComboBox(96, PrintPreviewText("PrintPreview_AllPagesLabel", "All pages")),
+                closeButton,
+            },
+        };
+
+        return new Border
+        {
+            Background = Brush(235, 244, 253),
+            BorderBrush = Brush(190, 204, 220),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = toolbar,
+        };
+    }
+
+    private static ScrollViewer CreatePrintPreviewSettingsRail(int totalPages)
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(10),
+            Children =
+            {
+                CreateSettingsSection(PrintPreviewText("PrintPreview_CopiesSectionLabel", "Copies:")),
+                new TextBox { Text = "1", Width = 60, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                CreateSettingsSection(PrintPreviewText("PrintPreview_PrinterSectionLabel", "Printer:")),
+                CreatePreviewComboBox(183, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
+                new Button { Content = PrintPreviewText("PrintPreview_PrinterPropertiesButton", "Printer Properties"), Padding = new Thickness(6, 3), HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                CreateSettingsSection(PrintPreviewText("PrintPreview_PrintWhatLabel", "Print What:")),
+                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_PrintWhatActiveSheets", "Print Active Sheets")),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_PagesLabel", "Pages:")),
+                CreatePageRangeRow(totalPages),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_SidesSectionLabel", "Print Sides:")),
+                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_CollatedSectionLabel", "Collation:")),
+                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_CollatedOption", "Collated")),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_OrientationLabel", "Orientation:")),
+                CreatePreviewComboBox(183, "Portrait"),
+                CreateSettingsSection(PrintPreviewText("PageSetup_PaperSize", "Paper size:")),
+                CreatePreviewComboBox(183, "A4"),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
+                CreatePreviewComboBox(183, "Narrow"),
+                CreateSettingsSection(PrintPreviewText("PrintPreview_ScalingLabel", "Scaling:")),
+                CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_ScaleNoScaling", "No Scaling")),
+                new CheckBox { Content = PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area"), IsChecked = false },
+                CreateSettingsSection(PrintPreviewText("PrintPreview_PrintOptionsSection", "Print Options")),
+                new CheckBox { Content = PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines"), IsChecked = false },
+            },
+        };
+
+        return new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Background = Brush(245, 245, 245),
+            Content = panel,
+        };
+    }
+
+    private static Grid CreatePageRangeRow(int totalPages)
+    {
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto"),
+        };
+        var fromBox = new TextBox { Text = "1", Width = 44 };
+        var toLabel = new TextBlock { Text = PrintPreviewText("PrintPreview_PageRangeToText", "To:"), Margin = new Thickness(6, 0), VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var toBox = new TextBox { Text = totalPages.ToString(CultureInfo.InvariantCulture), Width = 44 };
+        Grid.SetColumn(fromBox, 0);
+        Grid.SetColumn(toLabel, 1);
+        Grid.SetColumn(toBox, 2);
+        row.Children.Add(fromBox);
+        row.Children.Add(toLabel);
+        row.Children.Add(toBox);
+        return row;
+    }
+
+    private static TextBlock CreateSettingsSection(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 4, 0, -4),
+        };
+
+    private static Border CreatePrintPreviewPane(Control documentToolbar, Border pageHost)
+    {
+        var findBar = new Grid
+        {
+            Background = Brush(235, 244, 253),
+            ColumnDefinitions = new ColumnDefinitions("240,Auto,Auto,*"),
+            MinHeight = 26,
+        };
+        var findBox = new TextBox
+        {
+            PlaceholderText = "Type text to find...",
+            Margin = new Thickness(4, 2),
+            Height = 22,
+            FontStyle = FontStyle.Italic,
+        };
+        var previous = CreatePreviewToolbarButton("<");
+        var next = CreatePreviewToolbarButton(">");
+        Grid.SetColumn(findBox, 0);
+        Grid.SetColumn(previous, 1);
+        Grid.SetColumn(next, 2);
+        findBar.Children.Add(findBox);
+        findBar.Children.Add(previous);
+        findBar.Children.Add(next);
+
+        var pane = new DockPanel();
+        DockPanel.SetDock(documentToolbar, Dock.Top);
+        DockPanel.SetDock(findBar, Dock.Bottom);
+        pane.Children.Add(documentToolbar);
+        pane.Children.Add(findBar);
+        pane.Children.Add(pageHost);
+
+        return new Border
+        {
+            Background = Brushes.White,
+            Child = pane,
+        };
+    }
+
+    private static Border CreatePreviewDocumentToolbar(
+        Button firstButton,
+        Button prevButton,
+        Button nextButton,
+        Button lastButton,
+        TextBox pageNumberBox,
+        TextBlock pageStatusText)
+    {
+        var toolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(6, 4),
+            Children =
+            {
+                firstButton,
+                prevButton,
+                nextButton,
+                lastButton,
+                CreatePreviewToolbarSeparator(),
+                new TextBlock { Text = PrintPreviewText("PrintPreview_PageLabel", "Page:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                pageNumberBox,
+                pageStatusText,
+                CreatePreviewToolbarSeparator(),
+                new TextBlock { Text = PrintPreviewText("PrintPreview_ZoomLabel", "Zoom:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                CreatePreviewComboBox(82, "100%"),
+                CreatePreviewToolbarSeparator(),
+                CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
+                CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_PageSetupButton", "Page Setup")),
+            },
+        };
+
+        return new Border
+        {
+            Background = Brush(235, 244, 253),
+            BorderBrush = Brush(190, 204, 220),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = toolbar,
+        };
+    }
+
+    private static TextBlock CreatePreviewToolbarSeparator() =>
+        new()
+        {
+            Text = "|",
+            Foreground = Brush(170, 180, 190),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+
+    private static Button CreatePreviewToolbarButton(string text) =>
+        new()
+        {
+            Content = text,
+            MinWidth = 26,
+            Padding = new Thickness(6, 3),
+        };
+
+    private static ComboBox CreatePreviewComboBox(double width, string selectedText) =>
+        new()
+        {
+            Width = width,
+            ItemsSource = new[] { selectedText },
+            SelectedIndex = 0,
+        };
+
+    private static string PrintPreviewText(string key, string fallback)
+    {
+        var text = UiText.Get(key);
+        return text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal)
+            ? fallback
+            : text;
+    }
+
+    private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)
+    {
+        var surface = new Border
+        {
+            Background = PrintPreviewSurfaceBackground,
+            Padding = new Thickness(84, 8, 84, 8),
+            Child = BuildPreviewPageView(context, pageIndex),
+        };
+
+        return surface;
     }
 
     /// <summary>
@@ -237,17 +505,12 @@ public sealed partial class MainWindow
                 Blur = 8,
                 Color = Color.FromArgb(64, 0, 0, 0),
             }),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Child = canvas,
         };
 
-        return new Viewbox
-        {
-            Stretch = Stretch.Uniform,
-            StretchDirection = StretchDirection.Both,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Child = pageBorder,
-        };
+        return pageBorder;
     }
 
     private static void RenderPreviewInstructions(
