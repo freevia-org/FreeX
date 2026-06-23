@@ -113,6 +113,13 @@ public sealed class ExcelOpenSmokeReportSchemaTests
         source.Should().Contain("Strict pixel gate");
         source.Should().Contain("PixelDiffMetrics");
         source.Should().Contain("ComparisonFailed");
+        source.Should().Contain("WriteMetricsJson");
+        source.Should().Contain("\"metrics.json\"");
+        source.Should().Contain("\"effectiveStatus\"");
+        source.Should().Contain("\"exactPixelMetrics\"");
+        source.Should().Contain("\"changedPixelPercent\"");
+        source.Should().Contain("\"pivotDropdowns\"");
+        source.Should().Contain("Metrics JSON:");
     }
 
     [Fact]
