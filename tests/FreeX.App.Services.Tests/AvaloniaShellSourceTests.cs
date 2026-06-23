@@ -2285,6 +2285,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.Zoom\", () => ShowZoomDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.CustomViews\", () => ShowCustomViewsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.PrintPreview\", () => ShowPrintPreviewParityDialogAsync()),");
+        parityCaptureSource.Should().Contain("(\"dialog.OpenWorkbook\", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateOpenWorkbookDialogSurfacePlan())),");
+        parityCaptureSource.Should().Contain("(\"dialog.SaveAsWorkbook\", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateSaveAsWorkbookDialogSurfacePlan())),");
         parityCaptureSource.Should().Contain("(\"dialog.ExportOptions\", () => ShowExportOptionsParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.SelectionPane\", () => ShowSelectionPaneParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.InsertSlicer\", () => ShowInsertSlicerParityDialogAsync()),");
@@ -2463,6 +2465,8 @@ public sealed class AvaloniaShellSourceTests
             "dialog.Zoom",
             "dialog.CustomViews",
             "dialog.PrintPreview",
+            "dialog.OpenWorkbook",
+            "dialog.SaveAsWorkbook",
             "dialog.ExportOptions",
             "dialog.SelectionPane",
             "dialog.PivotTableOptions",

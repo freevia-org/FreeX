@@ -372,10 +372,12 @@ $routes = @(
     @{
         RouteId = "dialog.OpenWorkbook"; DisplayName = "Open Workbook"
         Wpf = @("screenshots\open-workbook-dialog-tour\freex_open_workbook_dialog_opened.png", "tools\foreground-captures\freex-open-dialog\*.png")
+        Shared = @("src\FreeX.App.Services\WorkbookFileDialogSurfacePlanner.cs", "src\FreeX.App.Services\WorkbookFilePickerPlanner.cs", "src\FreeX.App.Services\WorkbookOpenIngressPlanner.cs")
     },
     @{
         RouteId = "dialog.SaveAsWorkbook"; DisplayName = "Save As Workbook"
         Wpf = @("screenshots\save-as-workbook-dialog-tour\freex_save_as_workbook_dialog_opened.png", "tools\foreground-captures\freex-save-as-dialog\*.png")
+        Shared = @("src\FreeX.App.Services\WorkbookFileDialogSurfacePlanner.cs", "src\FreeX.App.Services\WorkbookFilePickerPlanner.cs", "src\FreeX.App.Services\WorkbookSaveService.cs")
     },
     @{
         RouteId = "dialog.ExportOptions"; DisplayName = "Export Options"
