@@ -35,7 +35,7 @@ public sealed class ParityCaptureTests
                 window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
                 window.UpdateLayout();
 
-                var results = await window.CaptureParitySurfacesAsync(outputDirectory);
+                var results = await window.CaptureParitySurfacesAsync(outputDirectory, maxDialogSurfaces: 8);
 
                 // The grid surface always renders the live shell window — it must be captured.
                 var grid = results.Single(r => r.Id == "grid.demo");

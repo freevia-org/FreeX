@@ -73,7 +73,7 @@ public sealed partial class MainWindow
     /// outcome list that drives the manifest. Runs on the UI thread (the coordinator awaits it from the
     /// <see cref="Window.Opened"/> handler). Each surface is wrapped so one failure does not stop the others.
     /// </summary>
-    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(string outputDirectory)
+    internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(string outputDirectory, int? maxDialogSurfaces = null)
     {
         var results = new List<ParitySurfaceResult>();
 
@@ -104,7 +104,11 @@ public sealed partial class MainWindow
         results.Add(CaptureWindowSurface(outputDirectory, "grid.sheetTabsOverflow", ParitySurfaceKind.Screen));
 
         // ── Dialogs: open each, render the dialog window, close it. ──
-        foreach (var (surfaceId, opener) in ParityDialogOpeners())
+        var dialogOpeners = ParityDialogOpeners();
+        if (maxDialogSurfaces is { } limit)
+            dialogOpeners = dialogOpeners.Take(Math.Max(0, limit)).ToArray();
+
+        foreach (var (surfaceId, opener) in dialogOpeners)
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
 
         foreach (var surfaceId in ParityBackstageSurfaces)
