@@ -312,14 +312,16 @@ public partial class GridView
         if (!string.Equals(requested, "Aptos Narrow", StringComparison.OrdinalIgnoreCase))
             return (requested, FontStretches.Normal);
 
+        // Excel's Aptos Narrow face is not always visible to WPF even when Office can render it.
+        // Calibri with condensed stretch better matches Excel's weight than the lighter Arial Narrow face.
+        if (isAvailable("Calibri"))
+            return ("Calibri", FontStretches.Condensed);
+
         foreach (var fallback in new[] { "Arial Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow" })
         {
             if (isAvailable(fallback))
                 return (fallback, FontStretches.Normal);
         }
-
-        if (isAvailable("Calibri"))
-            return ("Calibri", FontStretches.Condensed);
 
         return (requested, FontStretches.Normal);
     }

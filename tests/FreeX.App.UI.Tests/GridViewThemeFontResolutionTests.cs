@@ -35,15 +35,15 @@ public sealed class GridViewThemeFontResolutionTests
     }
 
     [Fact]
-    public void ResolveEffectiveCellFontName_AptosNarrowFallsBackToArialNarrowWhenAvailable()
+    public void ResolveEffectiveCellFontName_AptosNarrowFallsBackToCalibriCondensedWhenAvailable()
     {
         var theme = WorkbookTheme.Office.WithFonts("HeadingFont", "BodyFont");
         var style = new CellStyle { FontName = "Aptos Narrow", FontScheme = CellFontScheme.Minor };
 
-        var resolved = GridView.ResolveEffectiveCellFontName(style, theme, name => name == "Arial Narrow");
+        var resolved = GridView.ResolveEffectiveCellFontName(style, theme, name => name == "Arial Narrow" || name == "Calibri");
 
-        resolved.Should().Be("Arial Narrow",
-            "Office may report Aptos Narrow even when WPF cannot enumerate it, and Arial Narrow is the closest local width fallback");
+        resolved.Should().Be("Calibri",
+            "Office may report Aptos Narrow even when WPF cannot enumerate it, and Calibri with condensed stretch more closely matches Excel's text weight");
     }
 
     [Fact]
