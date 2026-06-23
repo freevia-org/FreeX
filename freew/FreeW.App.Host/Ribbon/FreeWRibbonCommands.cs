@@ -595,8 +595,13 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.page-setup", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
         registry.Register("freew.custom-margins", new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
         registry.Register("freew.more-paper-sizes", new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
-        // Line Numbers: cycle None -> Continuous -> RestartEachPage -> None (shown in print preview).
+        // Line Numbers: Word-style menu items set the backed mode explicitly, while the top-level command keeps
+        // the existing cycle behavior for quick access (shown in print preview and the live page adorner).
         registry.Register("freew.line-numbers", new LineNumberCommand(editor));
+        registry.Register("freew.line-numbers-none", new LineNumberModeCommand(editor, LineNumberMode.None));
+        registry.Register("freew.line-numbers-continuous", new LineNumberModeCommand(editor, LineNumberMode.Continuous));
+        registry.Register("freew.line-numbers-restart-page", new LineNumberModeCommand(editor, LineNumberMode.RestartEachPage));
+        registry.Register("freew.line-numbers-options", new PageSetupCommand(editor, PageSetupDialog.Tab.Layout));
 
         // Page setup polish — all mutate PageSettings via ApplyPageSettings (commit + re-render) and
         // round-trip through docx save.
@@ -1645,6 +1650,14 @@ internal static class FreeWRibbonCommands
                 LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
                 _ => LineNumberMode.None
             });
+    }
+
+    // Word's Layout > Line Numbers dropdown exposes discrete mode choices. These commands set the exact backed
+    // PageSettings mode instead of forcing users through the top-level cycle.
+    private sealed class LineNumberModeCommand(DocumentView editor, LineNumberMode mode) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.LineNumberMode = mode);
     }
 
     // Toggles automatic hyphenation (settings.xml w:autoHyphenation). Routes through ApplyPageSettings so

@@ -300,7 +300,13 @@ internal static class FreeWRibbon
                     g.RowBreak();
                     // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
                     g.Icon("freew.page-setup", "Page Setup", RibbonCommandIconKind.Margins, "G");
-                    g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number);
+                    g.Icon("freew.line-numbers", "Line Numbers", RibbonCommandIconKind.Number, menu: m =>
+                    {
+                        m.Item("freew.line-numbers-none", "None", "N");
+                        m.Item("freew.line-numbers-continuous", "Continuous", "C");
+                        m.Item("freew.line-numbers-restart-page", "Restart Each Page", "P");
+                        m.Item("freew.line-numbers-options", "Line Numbering Options...", "O");
+                    });
                     // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /
                     // Manual, plus the Hyphenation Options… dialog. The mode items set the document flag; the
                     // options item opens the dialog (zone, consecutive-hyphen limit, hyphenate-caps).

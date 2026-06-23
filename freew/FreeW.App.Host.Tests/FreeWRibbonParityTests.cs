@@ -1,6 +1,7 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
 
@@ -438,6 +439,41 @@ public sealed class FreeWRibbonParityTests
             "freew.page-color",
             "freew.page-border"
         });
+    }
+
+    [StaFact]
+    public void LayoutPageSetup_LineNumbersDropdownExposesBackedWordModeCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
+        var lineNumbers = pageSetup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.line-numbers");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        lineNumbers.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => (item.CommandId!.Value, item.Header))
+            .Should()
+            .Equal(
+                ("freew.line-numbers-none", "None"),
+                ("freew.line-numbers-continuous", "Continuous"),
+                ("freew.line-numbers-restart-page", "Restart Each Page"),
+                ("freew.line-numbers-options", "Line Numbering Options..."));
+
+        registry.TryGet("freew.line-numbers", out _).Should().BeTrue("the top-level Line Numbers command keeps quick cycle behavior");
+        registry.TryGet("freew.line-numbers-none", out var none).Should().BeTrue();
+        registry.TryGet("freew.line-numbers-continuous", out var continuous).Should().BeTrue();
+        registry.TryGet("freew.line-numbers-restart-page", out var restartPage).Should().BeTrue();
+        registry.TryGet("freew.line-numbers-options", out _).Should().BeTrue("Word exposes Line Numbering Options from the same dropdown");
+
+        continuous!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.Continuous);
+        restartPage!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
+        none!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.None);
     }
 
     [StaFact]
