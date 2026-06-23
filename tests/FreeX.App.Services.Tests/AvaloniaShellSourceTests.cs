@@ -993,7 +993,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("IsCancel = true,");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AboutFreeXOkButton\");");
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
-        source.Should().Contain("LegalNoticeProvider.GetDocuments().Select(document =>");
+        source.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
+        source.Should().Contain("ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),");
+        source.Should().Contain("AutomationProperties.SetAutomationId(tabControl, \"LegalNoticesSectionTabs\");");
+        source.Should().Contain("private static TabItem CreateLegalNoticeTabItem(LegalNoticeDocument document)");
         source.Should().Contain("await dialog.ShowDialog(this);");
     }
 
