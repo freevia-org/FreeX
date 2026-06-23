@@ -75,7 +75,7 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void PrintSettings_IncludesIgnorePrintAreaOption()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("PrintSettingsPlanner.cs");
+        var source = DialogSourceTestSupport.ReadPresentationSources("PageLayout", "PrintSettingsPlanner.cs");
 
         source.Should().Contain("IgnorePrintArea");
     }

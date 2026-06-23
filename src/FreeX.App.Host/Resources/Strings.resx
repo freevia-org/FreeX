@@ -13782,6 +13782,15 @@ Changing cell value: {2}</value>
   <data name="Protection_ProtectSheetTitle" xml:space="preserve">
     <value>Protect Sheet</value>
   </data>
+  <data name="Protection_ProtectWorkbookTitle" xml:space="preserve">
+    <value>Protect Workbook</value>
+  </data>
+  <data name="Protection_PasswordToUnprotectSheet" xml:space="preserve">
+    <value>Password to unprotect sheet</value>
+  </data>
+  <data name="Protection_PasswordToUnprotectWorkbook" xml:space="preserve">
+    <value>Password to unprotect workbook</value>
+  </data>
   <data name="Protection_ProtectTitlePrefix" xml:space="preserve">
     <value>Protect </value>
   </data>
@@ -14276,6 +14285,15 @@ Changing cell value: {2}</value>
   </data>
   <data name="MainWindowMessage_CheckForUpdatesTitle" xml:space="preserve">
     <value>Check for Updates</value>
+  </data>
+  <data name="MainWindowMessage_UpdateFreeXTitle" xml:space="preserve">
+    <value>Update FreeX</value>
+  </data>
+  <data name="MainWindowMessage_UpdateReadyToInstallFormat" xml:space="preserve">
+    <value>FreeX{0} is ready to install. Restart now to update?</value>
+  </data>
+  <data name="MainWindowMessage_UpToDate" xml:space="preserve">
+    <value>You're up to date.</value>
   </data>
   <data name="MainWindowMessage_CommandCouldNotBeCompleted" xml:space="preserve">
     <value>The command could not be completed.</value>

@@ -17,7 +17,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
-            : PrintSettingsPlanner.Build(sheet);
+            : PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
         var dialog = new PrintPreviewDialog(
             _workbook.Name,
             doc,
@@ -82,7 +82,10 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var plan = sheet is null
             ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
-            : PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea);
+            : PrintSettingsPlanner.Build(
+                sheet,
+                settings.IgnorePrintArea,
+                WpfPrintSettingsTextResolver.Instance);
         return (document, plan);
     }
 

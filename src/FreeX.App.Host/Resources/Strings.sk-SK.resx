@@ -16182,4 +16182,22 @@ and {0} more.</value>
   <data name="MainWindow_ToolTip_UpdateReady" xml:space="preserve">
     <value>A new version of FreeX has been downloaded. Click to restart and update.</value>
   </data>
+  <data name="Protection_ProtectWorkbookTitle" xml:space="preserve">
+    <value>Protect Workbook</value>
+  </data>
+  <data name="Protection_PasswordToUnprotectSheet" xml:space="preserve">
+    <value>Password to unprotect sheet</value>
+  </data>
+  <data name="Protection_PasswordToUnprotectWorkbook" xml:space="preserve">
+    <value>Password to unprotect workbook</value>
+  </data>
+  <data name="MainWindowMessage_UpdateFreeXTitle" xml:space="preserve">
+    <value>Update FreeX</value>
+  </data>
+  <data name="MainWindowMessage_UpdateReadyToInstallFormat" xml:space="preserve">
+    <value>FreeX{0} is ready to install. Restart now to update?</value>
+  </data>
+  <data name="MainWindowMessage_UpToDate" xml:space="preserve">
+    <value>You&apos;re up to date.</value>
+  </data>
 </root>

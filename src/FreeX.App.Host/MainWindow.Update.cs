@@ -22,7 +22,11 @@ public partial class MainWindow
     /// </summary>
     private void ShowUpToDate()
     {
-        ShowOwnedMessage("You're up to date.", "FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowOwnedMessage(
+            UiText.Get("MainWindowMessage_UpToDate"),
+            UiText.Get("MainWindowMessage_CheckForUpdatesTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private void UpdateReadyIndicator_Click(object sender, RoutedEventArgs e)
@@ -32,8 +36,8 @@ public partial class MainWindow
 
         var versionText = string.IsNullOrWhiteSpace(_stagedUpdateVersion) ? "" : $" {_stagedUpdateVersion}";
         var choice = ShowOwnedMessage(
-            $"FreeX{versionText} is ready to install. Restart now to update?",
-            "Update FreeX",
+            UiText.Format("MainWindowMessage_UpdateReadyToInstallFormat", versionText),
+            UiText.Get("MainWindowMessage_UpdateFreeXTitle"),
             MessageBoxButton.OKCancel,
             MessageBoxImage.Information);
         if (choice == MessageBoxResult.OK)

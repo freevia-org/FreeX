@@ -137,7 +137,7 @@ public partial class MainWindow
             var sheet = GetCurrentOrFirstScreenshotTourSheet()
                 ?? throw new InvalidOperationException("File/backstage workflows tour requires an active worksheet for Print Preview.");
             var printDocument = PrintRenderer.RenderWorksheet(_workbook, sheet.Id, _viewportService);
-            var printSettings = PrintSettingsPlanner.Build(sheet);
+            var printSettings = PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
             printPreviewDialog = new PrintPreviewDialog(
                 _workbook.Name,
                 printDocument,

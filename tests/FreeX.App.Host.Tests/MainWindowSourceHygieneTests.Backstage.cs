@@ -635,7 +635,7 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("SsPrintOptionsHost.Content = PrintPreviewSettingsPanelFactory.Build(");
         backstageSource.Should().Contain("NativePrintDialogService.ShowPrintDialogAndPrint(");
         printSource.Should().Contain("var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);");
-        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
+        printSource.Should().Contain("PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance)");
         printSource.Should().Contain("new PrintPreviewDialog(");
         printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
         previewSource.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");

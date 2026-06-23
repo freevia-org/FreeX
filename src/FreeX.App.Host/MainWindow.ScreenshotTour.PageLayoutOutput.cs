@@ -109,7 +109,7 @@ public partial class MainWindow
                 ["UI-CAT-PAGE-001", "UI-CMD-PAGE-002"]));
 
             var printDocument = PrintRenderer.RenderWorksheet(_workbook, sheet.Id, _viewportService);
-            var printSettings = PrintSettingsPlanner.Build(sheet);
+            var printSettings = PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance);
             printPreviewDialog = new PrintPreviewDialog(
                 _workbook.Name,
                 printDocument,
@@ -371,7 +371,7 @@ public partial class MainWindow
             ReloadedBackgroundImageFileName: loadedSheet.BackgroundImage?.FileName,
             ReloadedBackgroundImageBytes: loadedSheet.BackgroundImage?.ImageBytes.Length ?? 0,
             PrintPreviewPageCount: printDocument.Pages.Count,
-            PrintSettingsSummary: PrintSettingsPlanner.Build(sheet).Summary,
+            PrintSettingsSummary: PrintSettingsPlanner.Build(sheet, textResolver: WpfPrintSettingsTextResolver.Instance).Summary,
             ExportedPdfFileName: PageLayoutOutputTourPdfFileName,
             ExportedPdfBytes: new FileInfo(pdfPath).Length,
             ExportedPdfPageCount: pdf.PageCount,
