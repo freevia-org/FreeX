@@ -49,11 +49,12 @@ public partial class MainWindow
                 "Insert Picture",
                 sheetId =>
                 {
-                    var command = InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+                    var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
                         sheetId,
                         new CellAddress(sheetId, range.Start.Row, range.Start.Col),
                         bytes,
-                        contentType);
+                        contentType,
+                        DecodePictureInsertionSize(bytes));
                     if (sheetId == _currentSheetId)
                         currentSheetCommand = command;
                     return command;
@@ -68,6 +69,11 @@ public partial class MainWindow
             UpdateViewport();
         }
     }
+
+    private static PictureInsertionSize? DecodePictureInsertionSize(byte[] imageBytes) =>
+        ImageDimensionDecoder.TryDecode(imageBytes, out var decoded)
+            ? new PictureInsertionSize(decoded.Width, decoded.Height)
+            : null;
 
     private void PictureSizeBtn_Click(object sender, RoutedEventArgs e)
     {

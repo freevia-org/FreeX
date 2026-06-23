@@ -8674,7 +8674,7 @@ public partial class MainWindow
             DrawingInsertionPlanner.BuildTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), "Text Box evidence"),
             "Insert Text Box");
         ExecuteInsertObjectsLinksTourCommand(
-            InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+            PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
                 sheetId,
                 new CellAddress(sheetId, 8, 2),
                 [1, 2, 3, 4],

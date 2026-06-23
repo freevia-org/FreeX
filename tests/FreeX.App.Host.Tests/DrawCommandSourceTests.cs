@@ -15,7 +15,7 @@ public sealed class DrawCommandSourceTests
         insertSource.Should().Contain("private void PicturesBtn_Click(object sender, RoutedEventArgs e) => InsertPictureBtn_Click(sender, e);");
         insertSource.Should().Contain("private void ShapesBtn_Click(object sender, RoutedEventArgs e) => DrawRectBtn_Click(sender, e);");
         source.Should().Contain("private async void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
         source.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");

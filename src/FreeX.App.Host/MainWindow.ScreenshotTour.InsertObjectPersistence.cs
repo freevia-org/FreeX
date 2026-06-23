@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -169,7 +170,7 @@ public partial class MainWindow
             DrawingInsertionPlanner.BuildTextBoxCommand(sheet.Id, textBoxAnchor, "Persisted text box", width: 214, height: 82),
             "Insert Text Box");
         ExecuteInsertObjectPersistenceCommand(
-            InsertObjectPlacementPlanner.CreateInsertPictureCommand(
+            PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
                 sheet.Id,
                 pictureAnchor,
                 [1, 2, 3, 4],
@@ -490,7 +491,7 @@ public partial class MainWindow
                 "SetCommentCommand inserts the note at D2.",
                 "AddDrawingShapeCommand inserts the rectangle at B5.",
                 "AddTextBoxCommand inserts the text box at D5.",
-                "InsertObjectPlacementPlanner.CreateInsertPictureCommand creates the InsertPictureCommand placeholder at B9.",
+                "PictureInsertionPlacementPlanner.CreateInsertPictureCommand creates the InsertPictureCommand placeholder at B9.",
                 "GridView SelectedObjectId/SelectedObjectKind selects shape/text-box/picture objects so the rendered selection border and handles are captured.",
                 "SaveWorkbookToTargetAsync writes the native .fxl workbook and OpenFileAsync reloads it through the host open path."
             ],

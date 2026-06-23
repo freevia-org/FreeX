@@ -606,7 +606,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ApplyInsertObjectsLinksTourModelEvidenceAsync");
         source.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle)");
         source.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(sheetId, new CellAddress(sheetId, 4, 5), \"Text Box evidence\")");
-        source.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
+        source.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
         source.Should().Contain("new SetThreadedCommentCommand(sheetId, new CellAddress(sheetId, 6, 4), \"Threaded comment evidence\")");
         source.Should().Contain("new SetCommentCommand(sheetId, new CellAddress(sheetId, 6, 5), \"Note evidence\")");
         source.Should().Contain("freex_insert_objects_grid_visuals");

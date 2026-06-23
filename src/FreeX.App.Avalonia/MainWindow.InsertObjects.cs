@@ -113,10 +113,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        var (width, height) = DecodePictureSize(imageBytes);
+        var size = DecodePictureSize(imageBytes);
         var anchor = _session.ActiveCell;
-        var command = InsertPictureCommandFactory.Build(
-            _session.ActiveSheet.Id, anchor, imageBytes, contentType, width, height);
+        var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
+            _session.ActiveSheet.Id, anchor, imageBytes, contentType, size);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -176,18 +176,18 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Format("InsertLoc_InsertedTextBoxAt", FormatCellReference(anchor)));
     }
 
-    /// <summary>Decodes the image's native pixel size via Avalonia, or (0,0) when decoding fails.</summary>
-    private static (double Width, double Height) DecodePictureSize(byte[] imageBytes)
+    /// <summary>Decodes the image's native pixel size via Avalonia, or null when decoding fails.</summary>
+    private static PictureInsertionSize? DecodePictureSize(byte[] imageBytes)
     {
         try
         {
             using var stream = new MemoryStream(imageBytes);
             using var bitmap = new Bitmap(stream);
-            return (bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+            return PictureInsertionPlacementPlanner.NormalizeSize(bitmap.PixelSize.Width, bitmap.PixelSize.Height);
         }
         catch (Exception)
         {
-            return (0, 0);
+            return null;
         }
     }
 
@@ -471,8 +471,7 @@ public sealed partial class MainWindow
 
         byte[] imageBytes;
         string contentType;
-        double width;
-        double height;
+        PictureInsertionSize? size;
 
         if (plan.Rendering == InsertObjectRendering.EmbedImageAsPicture && plan.ImageContentType is not null)
         {
@@ -496,25 +495,19 @@ public sealed partial class MainWindow
             }
 
             contentType = plan.ImageContentType;
-            (width, height) = DecodePictureSize(imageBytes);
-            if (width <= 0 || height <= 0)
-            {
-                width = InsertPictureCommandFactory.DefaultWidth;
-                height = InsertPictureCommandFactory.DefaultHeight;
-            }
+            size = DecodePictureSize(imageBytes);
         }
         else
         {
             // Non-image file: render an icon/label placeholder PNG standing in for the object.
             imageBytes = RenderObjectIconPlaceholder(plan.DisplayName, plan.LinkToFile);
             contentType = "image/png";
-            width = ObjectIconWidth;
-            height = ObjectIconHeight;
+            size = new PictureInsertionSize(ObjectIconWidth, ObjectIconHeight);
         }
 
         var anchor = _session.ActiveCell;
-        var command = InsertPictureCommandFactory.Build(
-            _session.ActiveSheet.Id, anchor, imageBytes, contentType, width, height);
+        var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
+            _session.ActiveSheet.Id, anchor, imageBytes, contentType, size);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

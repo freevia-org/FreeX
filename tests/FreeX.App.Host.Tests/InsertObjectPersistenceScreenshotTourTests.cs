@@ -22,7 +22,7 @@ public sealed class InsertObjectPersistenceScreenshotTourTests
         tourSource.Should().Contain("new SetCommentCommand(");
         tourSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
         tourSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
-        tourSource.Should().Contain("InsertObjectPlacementPlanner.CreateInsertPictureCommand(");
+        tourSource.Should().Contain("PictureInsertionPlacementPlanner.CreateInsertPictureCommand(");
         tourSource.Should().Contain("SheetGrid.SelectedObjectId = objectId;");
         tourSource.Should().Contain("SheetGrid.SelectedObjectKind = kind;");
         tourSource.Should().Contain("freex_insert_object_persistence_selected_shape_handles");
