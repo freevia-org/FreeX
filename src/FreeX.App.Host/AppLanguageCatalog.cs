@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using Free.Shared.Localization;
 using FreeX.App.Localization;
 
 namespace FreeX.App.Host;
