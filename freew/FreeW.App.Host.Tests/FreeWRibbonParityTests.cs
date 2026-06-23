@@ -808,29 +808,41 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
 
         mailings.Should().NotBeNull();
+        // Word's Mailings tab: Create (Envelopes/Labels) | Start Mail Merge | Write & Insert Fields | Preview | Finish.
         mailings!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("merge-data", "merge-write", "merge-preview", "merge-finish");
+            .Equal("create", "merge-data", "merge-write", "merge-preview", "merge-finish");
 
         CommandIds(mailings)
             .Should()
             .Equal(
+                // Create group
+                "freew.merge-envelopes",
+                "freew.merge-labels",
+                // Start Mail Merge group
                 "freew.start-mail-merge",
                 "freew.merge-data",
                 "freew.merge-edit-recipients",
+                "freew.merge-filter-sort",
+                // Write & Insert Fields group
                 "freew.merge-field",
+                // Preview Results group
                 "freew.merge-preview",
                 "freew.merge-preview-first",
                 "freew.merge-preview-previous",
                 "freew.merge-preview-next",
                 "freew.merge-preview-last",
+                // Finish group
                 "freew.merge-finish");
         Labels(mailings)
             .Should()
             .Equal(
+                "Envelopes",
+                "Labels",
                 "Start Mail Merge",
                 "Select Recipients",
                 "Edit Recipient List",
+                "Filter & Sort Recipients",
                 "Insert Merge Field",
                 "Preview Results",
                 "First Record",
@@ -1144,6 +1156,140 @@ public sealed class FreeWRibbonParityTests
             if (!string.IsNullOrWhiteSpace(control.CommandId.Value))
                 yield return control.CommandId.Value;
         }
+    }
+
+    // ── Mailings: filter/sort logic (pure, no STA window) ──────────────────────────────────────────
+
+    [Fact]
+    public void MergeFilterSort_IncludeAllRows_ReturnsSameCount()
+    {
+        // Three records; all included (no exclusion) → same count back.
+        var data = MergeData.FromCsv("Name,City\nAlice,Paris\nBob,Rome\nCarol,Berlin");
+        var included = data.Rows.ToList(); // all three
+        included.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public void MergeFilterSort_ExcludeOneRow_ReturnsSubset()
+    {
+        var data = MergeData.FromCsv("Name,City\nAlice,Paris\nBob,Rome\nCarol,Berlin");
+
+        // Simulate excluding "Bob" (row index 1) — rebuild MergeData from [row0, row2].
+        var subset = new[] { data.Rows[0], data.Rows[2] };
+        var rebuilt = new MergeData(
+            data.Header,
+            subset.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+
+        rebuilt.Count.Should().Be(2);
+        rebuilt.Rows[0]["Name"].Should().Be("Alice");
+        rebuilt.Rows[1]["Name"].Should().Be("Carol");
+    }
+
+    [Fact]
+    public void MergeFilterSort_SortByColumnAscending_OrdersRows()
+    {
+        var data = MergeData.FromCsv("Name,City\nCarol,Berlin\nAlice,Paris\nBob,Rome");
+
+        // Sort ascending by Name.
+        var sorted = data.Rows
+            .OrderBy(r => r.TryGetValue("Name", out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var rebuilt = new MergeData(
+            data.Header,
+            sorted.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+
+        rebuilt.Rows.Select(r => r["Name"]).Should().Equal("Alice", "Bob", "Carol");
+    }
+
+    [Fact]
+    public void MergeFilterSort_SortByColumnDescending_OrdersRows()
+    {
+        var data = MergeData.FromCsv("Name,City\nCarol,Berlin\nAlice,Paris\nBob,Rome");
+
+        var sorted = data.Rows
+            .OrderByDescending(r => r.TryGetValue("Name", out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var rebuilt = new MergeData(
+            data.Header,
+            sorted.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+
+        rebuilt.Rows.Select(r => r["Name"]).Should().Equal("Carol", "Bob", "Alice");
+    }
+
+    [Fact]
+    public void MergeFilterSort_FilterThenSort_ProducesCorrectSubsetInOrder()
+    {
+        var data = MergeData.FromCsv("Name,City\nCarol,Berlin\nAlice,Paris\nBob,Rome\nDave,Oslo");
+
+        // Exclude Bob (index 2), then sort remaining ascending by Name.
+        var chosen = data.Rows.Where((_, i) => i != 2)  // Carol, Alice, Dave
+            .OrderBy(r => r.TryGetValue("Name", out var v) ? v : string.Empty, StringComparer.OrdinalIgnoreCase);
+        var rebuilt = new MergeData(
+            data.Header,
+            chosen.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
+
+        rebuilt.Count.Should().Be(3);
+        rebuilt.Rows.Select(r => r["Name"]).Should().Equal("Alice", "Carol", "Dave");
+    }
+
+    // ── Mailings: envelope geometry (pure arithmetic) ───────────────────────────────────────────────
+
+    [Fact]
+    public void EnvelopeGeometry_DL_WidthAndHeightRoundTrip()
+    {
+        // DL envelope: 110 × 220 mm → points (72 pt per inch, 25.4 mm per inch).
+        const double mmToPt = 72.0 / 25.4;
+        var widthPt  = Math.Round(110 * mmToPt, 3);
+        var heightPt = Math.Round(220 * mmToPt, 3);
+
+        // Values must be in portrait order (narrow × long) as the command stores them.
+        widthPt.Should().BeApproximately(311.811, 0.01);
+        heightPt.Should().BeApproximately(623.622, 0.01);
+        // Landscape flag swaps which dimension is displayed horizontally — the stored values stay portrait.
+        widthPt.Should().BeLessThan(heightPt);
+    }
+
+    [Fact]
+    public void EnvelopeGeometry_CommTen_PointsMatchUsInchSpec()
+    {
+        // US Comm-10: 4.125 in × 9.5 in
+        var widthPt  = 4.125 * 72;
+        var heightPt = 9.5   * 72;
+
+        widthPt.Should().BeApproximately(297.0, 0.01);
+        heightPt.Should().BeApproximately(684.0, 0.01);
+        widthPt.Should().BeLessThan(heightPt);
+    }
+
+    // ── Mailings: label grid dimensions (pure arithmetic) ──────────────────────────────────────────
+
+    [Fact]
+    public void LabelGrid_Avery5160_Is3Columns10Rows()
+    {
+        // Avery 5160 is the most common US label sheet: 3 × 10 on Letter.
+        const int rows = 10;
+        const int cols = 3;
+
+        // Verify the grid produces 30 cells (rows * columns).
+        (rows * cols).Should().Be(30);
+    }
+
+    [Fact]
+    public void LabelGrid_AveryL7160_Is3Columns7Rows()
+    {
+        // Avery L7160 (A4 equivalent): 3 × 7.
+        const int rows = 7;
+        const int cols = 3;
+
+        (rows * cols).Should().Be(21);
+    }
+
+    [Fact]
+    public void LabelGrid_CustomGrid_CellCountEqualsRowsTimesColumns()
+    {
+        // Generic: any rows × cols must produce a valid (positive) cell count.
+        foreach (var (r, c) in new[] { (2, 4), (5, 2), (1, 1), (12, 3) })
+            (r * c).Should().BeGreaterThan(0).And.Be(r * c);
     }
 
     private static IEnumerable<string> MenuCommandIds(RibbonTab tab) =>

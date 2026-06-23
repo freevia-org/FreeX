@@ -480,6 +480,12 @@ internal static class FreeWRibbon
             })
             .Tab("mailings", "Mailings", "M", tab =>
             {
+                // Word's "Create" group (Envelopes, Labels) sits at the far left of the Mailings tab.
+                tab.Group("create", "Create", "C", 130, g =>
+                {
+                    g.Medium("freew.merge-envelopes", "Envelopes", RibbonCommandIconKind.Envelope, "E");
+                    g.Medium("freew.merge-labels", "Labels", RibbonCommandIconKind.MergeField, "L");
+                });
                 tab.Group("merge-data", "Start Mail Merge", "D", 155, g =>
                 {
                     g.Medium("freew.start-mail-merge", "Start Mail Merge", RibbonCommandIconKind.Envelope, "S", menu: m =>
@@ -491,6 +497,8 @@ internal static class FreeWRibbon
                     });
                     g.Medium("freew.merge-data", "Select Recipients", RibbonCommandIconKind.Recipients);
                     g.Medium("freew.merge-edit-recipients", "Edit Recipient List", RibbonCommandIconKind.Recipients);
+                    // Filter & Sort refines the active recipient list without touching the merge template.
+                    g.Medium("freew.merge-filter-sort", "Filter & Sort Recipients", RibbonCommandIconKind.Recipients);
                 });
                 // Each Mailings group is a single labelled command so Word's command names stay readable.
                 tab.Group("merge-write", "Write & Insert Fields", "W", 145, g =>
