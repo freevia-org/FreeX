@@ -430,6 +430,9 @@
   <data name="PageSetup_CommentsNone" xml:space="preserve"><value>(None)</value></data>
   <data name="PageSetup_CommentsAtEnd" xml:space="preserve"><value>At end of sheet</value></data>
   <data name="PageSetup_CommentsAsDisplayed" xml:space="preserve"><value>As displayed on sheet</value></data>
+  <data name="PageSetup_PrintButton" xml:space="preserve"><value>Print...</value></data>
+  <data name="PageSetup_PrintPreviewButton" xml:space="preserve"><value>Print Preview</value></data>
+  <data name="PageSetup_OptionsButton" xml:space="preserve"><value>Options...</value></data>
   <data name="PasteNames_Title" xml:space="preserve"><value>Paste Name</value></data>
   <data name="PasteNames_NamesLabel" xml:space="preserve"><value>Paste name</value></data>
   <data name="PasteNames_PasteList" xml:space="preserve"><value>Paste List</value></data>
@@ -448,6 +451,7 @@
   <data name="AllowEditRange_NewButton" xml:space="preserve"><value>New...</value></data>
   <data name="AllowEditRange_ModifyButton" xml:space="preserve"><value>Modify...</value></data>
   <data name="AllowEditRange_DeleteButton" xml:space="preserve"><value>Delete</value></data>
+  <data name="AllowEditRange_PermissionsButton" xml:space="preserve"><value>Permissions...</value></data>
   <data name="AllowEditRange_InvalidRange" xml:space="preserve"><value>Enter a valid cell range (for example, A1:B5).</value></data>
   <data name="AllowEditRange_Added" xml:space="preserve"><value>Added edit range {0}</value></data>
   <data name="AllowEditRange_Modified" xml:space="preserve"><value>Modified edit range {0}</value></data>
@@ -1436,6 +1440,12 @@
   <data name="TableLoc_TtcSelectSingleColumn" xml:space="preserve"><value>Select a single column of cells to convert with Text to Columns.</value></data>
   <data name="TableLoc_TtcNoTextToSplit" xml:space="preserve"><value>No text to split in {0}.</value></data>
   <data name="TableLoc_TtcDialogTitle" xml:space="preserve"><value>Text to Columns</value></data>
+  <data name="TableLoc_TtcWizardTitle" xml:space="preserve"><value>Text Wizard - Step {0} of {1}</value></data>
+  <data name="TableLoc_TtcStep1Description" xml:space="preserve"><value>Choose the file type that best describes your data.</value></data>
+  <data name="TableLoc_TtcOriginalDataType" xml:space="preserve"><value>Original data type</value></data>
+  <data name="TableLoc_TtcBack" xml:space="preserve"><value>&lt; Back</value></data>
+  <data name="TableLoc_TtcNext" xml:space="preserve"><value>Next &gt;</value></data>
+  <data name="TableLoc_TtcFinish" xml:space="preserve"><value>Finish</value></data>
   <data name="TableLoc_TtcDelimited" xml:space="preserve"><value>Delimited</value></data>
   <data name="TableLoc_TtcFixedWidth" xml:space="preserve"><value>Fixed width</value></data>
   <data name="TableLoc_TtcDelimTab" xml:space="preserve"><value>Tab</value></data>
@@ -1479,6 +1489,7 @@
   <data name="TableLoc_ConsolidateReferenceLabel" xml:space="preserve"><value>Reference</value></data>
   <data name="TableLoc_ConsolidateAllReferencesLabel" xml:space="preserve"><value>All references</value></data>
   <data name="TableLoc_ConsolidateDestinationLabel" xml:space="preserve"><value>Destination cell</value></data>
+  <data name="TableLoc_ConsolidateCreateLinks" xml:space="preserve"><value>Create links to source data</value></data>
   <data name="TableLoc_ConsolidateFailed" xml:space="preserve"><value>Consolidate failed.</value></data>
   <data name="TableLoc_ConsolidatedInto" xml:space="preserve"><value>Consolidated into {0}</value></data>
   <data name="TableLoc_NoPrecedentsToTrace" xml:space="preserve"><value>No precedents to trace for the active cell</value></data>

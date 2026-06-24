@@ -474,13 +474,14 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
+        // WPF button order: [OK][Cancel] — primary on left
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -746,13 +747,14 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
+        // WPF button order: [OK][Cancel] — primary on left
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 

@@ -82,6 +82,10 @@ public sealed partial class MainWindow
         var leftColumnBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateLeftColumn") };
         ApplyDataOpsCheckBoxChrome(leftColumnBox);
         AutomationProperties.SetAutomationId(leftColumnBox, "ConsolidateLeftColumnLabelsBox");
+        // WPF has a "Create links to source data" checkbox below the Use labels row
+        var createLinksBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateCreateLinks") };
+        ApplyDataOpsCheckBoxChrome(createLinksBox);
+        AutomationProperties.SetAutomationId(createLinksBox, "ConsolidateCreateLinksBox");
 
         var warningText = new TextBlock
         {
@@ -242,13 +246,14 @@ public sealed partial class MainWindow
             },
         };
 
+        // WPF button order: [OK][Cancel] — primary on left; the Apply button maps to WPF OK
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, applyButton },
+            Children = { applyButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -274,6 +279,7 @@ public sealed partial class MainWindow
                             new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             destinationBox,
                             labelRow,
+                            createLinksBox,
                             warningText,
                         },
                     },
