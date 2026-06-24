@@ -1687,8 +1687,14 @@ public static class DocxWriter
     private static XElement BuildTableProperties(Table table)
     {
         // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
-        // tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
+        // tblStyle, tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
         var tblPr = new XElement(W + "tblPr");
+
+        // Named table style (w:tblStyle), placed first in CT_TblPr. Emitted when TableStyleId is set so
+        // the applied catalog style round-trips through Word. The corresponding w:style definition is
+        // written into styles.xml by BuildStyles (see BuildTableStyleElement).
+        if (table.TableStyleId is { Length: > 0 } styleId)
+            tblPr.Add(new XElement(W + "tblStyle", new XAttribute(W + "val", styleId)));
 
         // Floating-table position (w:tblpPr): a minimal anchor so Word treats the table as floating
         // ("Text wrapping: Around"). Emitted only when text wrapping is on.
@@ -5022,7 +5028,108 @@ public static class DocxWriter
             styles.Add(element);
         }
 
+        // Emit a minimal w:style type="table" for every DocumentTableStyle catalog entry referenced by any
+        // table in the document. The style definition carries the catalog's border + fill intent so the docx
+        // round-trips losslessly within FreeW and renders correctly in Word. The w:tblStylePr conditional-
+        // format approach is used: a tblStylePr per active band (whole-table, firstRow, band1H, band2H, …).
+        var usedTableStyleIds = CollectTableStyleIds(document.Blocks);
+        foreach (var styleId in usedTableStyleIds)
+        {
+            var catalogEntry = DocumentTableStyle.FindById(styleId);
+            if (catalogEntry is not null)
+                styles.Add(BuildTableStyleElement(catalogEntry));
+        }
+
         return new XDocument(styles);
+    }
+
+    /// <summary>
+    /// Collects all distinct <see cref="Table.TableStyleId"/> values referenced by any table in
+    /// <paramref name="blocks"/> (including nested tables inside table cells), in encounter order.
+    /// </summary>
+    private static IEnumerable<string> CollectTableStyleIds(IEnumerable<Block> blocks)
+    {
+        var seen = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var block in blocks)
+        {
+            if (block is Table table)
+            {
+                if (table.TableStyleId is { Length: > 0 } sid && seen.Add(sid))
+                    yield return sid;
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var nestedId in CollectTableStyleIds(cell.Paragraphs.SelectMany<Paragraph, Block>(_ => [])))
+                        {
+                            // Nested tables in cells are Paragraphs, not Blocks, in the model; skip for now.
+                        }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a minimal <c>w:style w:type="table"</c> element for a catalog <see cref="DocumentTableStyle"/>.
+    /// Uses <c>w:tblStylePr</c> conditional-format bands to carry the header / banded fills so Word's own
+    /// table-style machinery renders the look correctly. FreeW's reader recognises the catalog id and maps the
+    /// catalog's visual intent back directly (no parsing of tblStylePr needed for FreeW-authored docx).
+    /// </summary>
+    private static XElement BuildTableStyleElement(DocumentTableStyle style)
+    {
+        var element = new XElement(W + "style",
+            new XAttribute(W + "type", "table"),
+            new XAttribute(W + "styleId", style.WordStyleId),
+            new XElement(W + "name", new XAttribute(W + "val", style.Name)));
+
+        // Whole-table tblPr: outer borders when the style has them.
+        if (style.Borders)
+        {
+            var borderColor = style.BorderColorHex ?? "auto";
+            XElement Border(string name) => new(W + name,
+                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "sz", 4),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", borderColor));
+            element.Add(new XElement(W + "tblPr",
+                new XElement(W + "tblBorders",
+                    Border("top"), Border("left"), Border("bottom"), Border("right"),
+                    Border("insideH"), Border("insideV"))));
+        }
+
+        // tblStylePr bands: emit one per non-null region.
+        if (style.HeaderBand is { } header)
+            element.Add(BuildTblStylePr("firstRow", header));
+        if (style.LastRowBand is { } lastRow)
+            element.Add(BuildTblStylePr("lastRow", lastRow));
+        if (style.FirstColumnBand is { } firstCol)
+            element.Add(BuildTblStylePr("firstCol", firstCol));
+        if (style.LastColumnBand is { } lastCol)
+            element.Add(BuildTblStylePr("lastCol", lastCol));
+        if (style.BandedRowOdd is { } band1)
+            element.Add(BuildTblStylePr("band1H", band1));
+        if (style.BandedRowEven is { } band2)
+            element.Add(BuildTblStylePr("band2H", band2));
+
+        return element;
+    }
+
+    /// <summary>Builds a single <c>w:tblStylePr</c> conditional-format band carrying a fill and/or bold run.</summary>
+    private static XElement BuildTblStylePr(string condType, TableStyleBand band)
+    {
+        var pr = new XElement(W + "tblStylePr", new XAttribute(W + "type", condType));
+        if (band.FillHex is { Length: > 0 } fill)
+        {
+            pr.Add(new XElement(W + "tcPr",
+                new XElement(W + "shd",
+                    new XAttribute(W + "val", "clear"),
+                    new XAttribute(W + "color", "auto"),
+                    new XAttribute(W + "fill", fill))));
+        }
+        if (band.Bold)
+        {
+            pr.Add(new XElement(W + "rPr",
+                new XElement(W + "b"),
+                new XElement(W + "bCs")));
+        }
+        return pr;
     }
 
     /// <summary>

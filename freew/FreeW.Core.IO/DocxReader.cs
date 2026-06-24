@@ -2139,6 +2139,17 @@ public static class DocxReader
             && preservedDrawingTarget.Styles.TryGetValue(tblStyleId, out var tblStyleDef)
             && tblStyleDef.TableBorders;
 
+        // Capture the catalog table-style id so the model can drive rendering + re-emit it on write.
+        // Only catalog ids (from DocumentTableStyle.FindById) are stored; unknown ids (from foreign Word
+        // docs using styles FreeW doesn't model) are left as null so the table falls back to its flags.
+        var catalogStyle = tblStyleId is not null ? DocumentTableStyle.FindById(tblStyleId) : null;
+        if (catalogStyle is not null)
+            table.TableStyleId = catalogStyle.WordStyleId;
+
+        // A catalog-styled table inherits borders from the catalog definition unless explicit tblBorders
+        // override them. Merge into styleBorders so the Borders flag is set correctly.
+        var catalogBorders = catalogStyle?.Borders ?? false;
+
         // The table-style toggles round-trip via w:tblLook (HeaderRow=firstRow, BandedRows=noHBand="0")
         // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
         var tblLook = tblPr?.Element(W + "tblLook");
@@ -2153,7 +2164,7 @@ public static class DocxReader
 
         table.Formatting = TableFormatting.Default with
         {
-            Borders = ReadBorders(borders) || styleBorders,
+            Borders = ReadBorders(borders) || styleBorders || catalogBorders,
             HeaderRow = headerRow,
             LastRow = lastRow,
             FirstColumn = firstColumn,

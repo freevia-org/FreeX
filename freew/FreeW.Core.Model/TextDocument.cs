@@ -1469,6 +1469,15 @@ public sealed class Table : Block
     public TableFormatting Formatting { get; set; } = TableFormatting.Default;
 
     /// <summary>
+    /// The OOXML table-style id (e.g. <c>"TableGrid"</c>, <c>"GridTable1Light"</c>) referencing a
+    /// <see cref="DocumentTableStyle"/> from the built-in catalog. When set, the table's visual appearance
+    /// (borders, header fill, banded-row shading, emphasis) is driven by the catalog entry; the style id is
+    /// round-tripped via <c>w:tblPr/w:tblStyle w:val</c> in the docx. Null means no named style (the table
+    /// uses its explicit <see cref="Formatting"/> flags directly, which is the historical behaviour).
+    /// </summary>
+    public string? TableStyleId { get; set; }
+
+    /// <summary>
     /// Per-column widths in points, one entry per column, matching the docx table grid
     /// (<c>w:tbl/w:tblGrid/w:gridCol</c>). Empty when no explicit grid is known (the default), so
     /// existing tables are unaffected.

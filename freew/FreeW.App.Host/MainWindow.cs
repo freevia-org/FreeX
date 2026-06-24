@@ -2840,6 +2840,10 @@ public sealed class MainWindow : Window
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
                 InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+            if (tab.Id == "table-design")
+                // Table Styles gallery: inject a live-preview style picker into the Table Style group,
+                // replacing the Shading button placeholder so the gallery owns that lane.
+                InjectGallery(content, "table-style", TableStylesGallery.Build(_editor), removeKind: RemoveKind.All);
 
             }
         });

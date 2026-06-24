@@ -1,0 +1,185 @@
+using System.Linq;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
+using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
+using WpfTable = System.Windows.Documents.Table;
+using WpfTableCell = System.Windows.Documents.TableCell;
+
+namespace FreeW.App.Host.Tests;
+
+/// <summary>
+/// App.Host tests for the Table Styles gallery:
+/// <list type="bullet">
+///   <item>The gallery builds and is labelled correctly (automation name).</item>
+///   <item>Applying a catalog style sets <see cref="Table.TableStyleId"/> and the render reflects it.</item>
+///   <item>Live-preview / revert cycle leaves the model unchanged.</item>
+///   <item>The gallery command id <c>freew.table-styles-gallery</c> is defined in the ribbon group.</item>
+/// </list>
+/// </summary>
+public sealed class TableStyleGalleryTests
+{
+    // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
+
+    private static TextDocument TableModel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(3, 2);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedRows = true };
+        doc.Blocks.Add(table);
+        return doc;
+    }
+
+    private static void PlaceCaretInFirstCell(DocumentView view)
+    {
+        var table = view.Document.Blocks.OfType<WpfTable>().First();
+        var cell = table.RowGroups[0].Rows[0].Cells[0];
+        view.CaretPosition = cell.ContentStart;
+    }
+
+    // ── Gallery widget tests ─────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void Build_ReturnsButtonLabelledTableStyles()
+    {
+        var editor = new DocumentView();
+        var gallery = TableStylesGallery.Build(editor);
+
+        AutomationProperties.GetName(gallery).Should().Be("Table Styles");
+    }
+
+    [StaFact]
+    public void Build_MenuContainsAllCatalogStyles()
+    {
+        var editor = new DocumentView();
+        var gallery = TableStylesGallery.Build(editor) as Button;
+
+        gallery.Should().NotBeNull();
+        var menu = gallery!.ContextMenu;
+        menu.Should().NotBeNull();
+        menu!.Items.Count.Should().Be(DocumentTableStyle.Catalog.Count,
+            "every catalog table style must appear as a menu item");
+    }
+
+    [StaFact]
+    public void Build_MenuItems_AreAutomationLabelled()
+    {
+        var editor = new DocumentView();
+        var gallery = TableStylesGallery.Build(editor) as Button;
+        var menu = gallery!.ContextMenu;
+
+        foreach (MenuItem item in menu!.Items)
+        {
+            var name = AutomationProperties.GetName(item);
+            name.Should().EndWith("table style", $"all menu items must be automation-labelled");
+        }
+    }
+
+    // ── Apply path tests ─────────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void ApplyTableStyle_SetsTableStyleId_OnCaretTable()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+        PlaceCaretInFirstCell(editor);
+
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        editor.ApplyTableStyle(style);
+
+        editor.CommitToModel();
+        var table = editor.Model.Blocks.OfType<Table>().First();
+        table.TableStyleId.Should().Be("GridTable1Light");
+    }
+
+    [StaFact]
+    public void ApplyTableStyle_UpdatesBorderColor_InRenderedTable()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+        PlaceCaretInFirstCell(editor);
+
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        editor.ApplyTableStyle(style);
+
+        // After applying GridTable1Light the WPF table's border brush should reflect the style's blue color.
+        var wpfTable = editor.Document.Blocks.OfType<WpfTable>().First();
+        // The style has borders; the table must have a non-null border brush.
+        wpfTable.BorderBrush.Should().NotBeNull("styled table must render border brush from the catalog style");
+    }
+
+    [StaFact]
+    public void ApplyTableStyle_WithHeaderBand_RendersHeaderCellBold()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+        PlaceCaretInFirstCell(editor);
+
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        editor.ApplyTableStyle(style);
+
+        var wpfTable = editor.Document.Blocks.OfType<WpfTable>().First();
+        var headerCell = wpfTable.RowGroups[0].Rows[0].Cells[0];
+        headerCell.FontWeight.Should().Be(FontWeights.Bold,
+            "GridTable1Light header band is bold — first row cell must render bold");
+    }
+
+    [StaFact]
+    public void ApplyTableStyle_WithHeaderFill_RendersHeaderCellBackground()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+        PlaceCaretInFirstCell(editor);
+
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        editor.ApplyTableStyle(style);
+
+        var wpfTable = editor.Document.Blocks.OfType<WpfTable>().First();
+        var headerCell = wpfTable.RowGroups[0].Rows[0].Cells[0];
+        headerCell.Background.Should().NotBe(Brushes.White,
+            "header band fill must render a non-white background");
+    }
+
+    // ── Preview / revert cycle ───────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void PreviewTableStyle_ThenEnd_ModelIsRestored()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+        PlaceCaretInFirstCell(editor);
+
+        // Record the prior TableStyleId (null for a fresh table).
+        editor.CommitToModel();
+        var before = editor.Model.Blocks.OfType<Table>().First().TableStyleId;
+
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        editor.PreviewTableStyle(style);
+
+        // Mid-preview: model has the style applied.
+        editor.CommitToModel();
+        editor.Model.Blocks.OfType<Table>().First().TableStyleId.Should().Be("GridTable1Light");
+
+        editor.EndTableStylePreview();
+
+        // After end: model restored to pre-preview state.
+        editor.CommitToModel();
+        editor.Model.Blocks.OfType<Table>().First().TableStyleId.Should().Be(before);
+    }
+
+    // ── Ribbon parity ────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void RibbonDefinition_TableDesign_HasTableStyleGroup()
+    {
+        var ribbon = FreeWRibbon.Build();
+        var tableDesign = ribbon.FindTab("table-design");
+
+        tableDesign.Should().NotBeNull("the table-design contextual tab must exist");
+        tableDesign!.Groups.Select(g => g.Id).Should().Contain("table-style",
+            "the Table Style group must be declared in the Table Design contextual tab");
+    }
+}

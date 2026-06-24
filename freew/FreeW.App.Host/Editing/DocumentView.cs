@@ -5239,13 +5239,16 @@ public sealed class DocumentView : RichTextBox
     {
         var table = new ModelTable();
 
-        // Recover the table-style toggles stashed by BuildTable (WPF FlowDocument tables can't express
-        // header/banded/repeat as table-level state, so they ride along on the Tag). Borders are still
-        // reconstructed from the view below so a user toggling borders is honoured.
-        var stashed = wpfTable.Tag as TableFormatting;
+        // Recover the table-style toggles and catalog style id stashed by BuildTable (WPF FlowDocument
+        // tables can't express header/banded/repeat or a named style as table-level state, so they ride
+        // along on the WpfTableTag). Borders are still reconstructed from the view below so a user
+        // toggling borders is honoured.
+        var stashedTag = wpfTable.Tag as WpfTableTag;
+        var stashed = stashedTag?.Formatting;
         var headerRow = stashed?.HeaderRow ?? false;
         var bandedRows = stashed?.BandedRows ?? false;
         var repeatHeader = stashed?.RepeatHeaderRow ?? false;
+        var tableStyleId = stashedTag?.TableStyleId;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -5358,6 +5361,9 @@ public sealed class DocumentView : RichTextBox
             BandedRows = bandedRows,
             RepeatHeaderRow = repeatHeader
         };
+        // Recover the catalog style id (null if no named style was applied). This is stashed on the
+        // WpfTableTag by BuildTable and must be written back so CommitToModel preserves the style.
+        table.TableStyleId = tableStyleId;
         return table;
     }
 
@@ -5387,7 +5393,8 @@ public sealed class DocumentView : RichTextBox
         _ => BuildParagraph(new ModelParagraph(), document)
     };
 
-    // The light fills used to render the table-style toggles (mirroring DocxWriter's header/banded fills).
+    // The legacy light fills used to render the table-style toggles when no named TableStyleId is set.
+    // These match DocxWriter's header/banded fill constants and round-trip via DocxReader's strip logic.
     private static readonly Color HeaderRowFill = Color.FromRgb(0xD9, 0xE2, 0xF3);
     private static readonly Color BandedRowFill = Color.FromRgb(0xF2, 0xF2, 0xF2);
 
@@ -5399,12 +5406,20 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private sealed record TableCellTag(string? ShadingColorHex);
 
+    /// <summary>
+    /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
+    /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles and the
+    /// <see cref="TableStyleId"/> (the named catalog style). Both are stashed on <see cref="BuildTable"/>
+    /// and recovered on commit so they survive the view→model round-trip unmodified.
+    /// </summary>
+    private sealed record WpfTableTag(TableFormatting Formatting, string? TableStyleId);
+
     private static WpfTable BuildTable(ModelTable table, TextDocument document)
     {
-        // Stash the model's table formatting on the WPF table so the flags survive the view->model
-        // round-trip (CommitToModel's ReadTable reconstructs Borders from the view but recovers the
-        // header/banded/repeat toggles from this Tag, which WPF FlowDocument tables can't express).
-        var wpf = new WpfTable { Tag = table.Formatting };
+        // Stash the model's table formatting AND the catalog style id on the WPF table Tag so both survive
+        // the view→model round-trip (CommitToModel's ReadTable reconstructs Borders from the view but
+        // recovers the toggles and style id from this tag, which WPF FlowDocument tables can't express).
+        var wpf = new WpfTable { Tag = new WpfTableTag(table.Formatting, table.TableStyleId) };
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -5417,7 +5432,18 @@ public sealed class DocumentView : RichTextBox
             wpf.Columns.Add(column);
         }
 
-        var borderBrush = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+        // Resolve the catalog style (if a TableStyleId is set) so the renderer can use its fills and
+        // border color. When no named style is set the legacy HeaderRowFill/BandedRowFill constants apply.
+        var catalogStyle = table.TableStyleId is { Length: > 0 } sid
+            ? DocumentTableStyle.FindById(sid)
+            : null;
+
+        // Border color: from the catalog style's BorderColorHex, else the default grey.
+        var borderColor = catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
+            ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+            : Color.FromRgb(0x9A, 0x9A, 0x9A);
+        var borderBrush = new SolidColorBrush(borderColor);
+
         if (table.Formatting.Borders)
         {
             wpf.BorderBrush = borderBrush;
@@ -5425,8 +5451,9 @@ public sealed class DocumentView : RichTextBox
         }
 
         var fmt = table.Formatting;
+        var totalRows = table.Rows.Count;
         var group = new TableRowGroup();
-        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < totalRows; rowIndex++)
         {
             var modelRow = table.Rows[rowIndex];
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
@@ -5435,6 +5462,8 @@ public sealed class DocumentView : RichTextBox
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
+            var cellIndex = 0;
+            var lastCellIndex = modelRow.Cells.Count - 1;
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
@@ -5443,6 +5472,7 @@ public sealed class DocumentView : RichTextBox
                 if (modelCell.VerticalMerge == VerticalMergeState.Continue)
                 {
                     gridColumn += span;
+                    cellIndex++;
                     continue;
                 }
 
@@ -5468,14 +5498,27 @@ public sealed class DocumentView : RichTextBox
                 // and would strip real shading that happens to match the style fill (see ReadTable).
                 wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex);
 
-                // The cell's explicit shading wins; otherwise apply the header/banded style fill.
+                // Resolve cell appearance: explicit shading always wins; then catalog style; then legacy flags.
+                bool cellBold = isHeaderRow;
                 if (modelCell.ShadingColorHex is { Length: > 0 } cellShading)
+                {
                     wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(cellShading));
+                }
+                else if (catalogStyle is not null)
+                {
+                    // Catalog style: resolve fill + bold for this cell's position.
+                    var isFirst = cellIndex == 0;
+                    var isLast = cellIndex == lastCellIndex;
+                    var (fillHex, bold) = catalogStyle.ResolveCellStyle(rowIndex, totalRows, isFirst, isLast, fmt);
+                    cellBold = bold;
+                    if (fillHex is { Length: > 0 })
+                        wpfCell.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + fillHex));
+                }
                 else if (isHeaderRow)
                     wpfCell.Background = new SolidColorBrush(HeaderRowFill);
                 else if (isBandedRow)
                     wpfCell.Background = new SolidColorBrush(BandedRowFill);
-                if (isHeaderRow)
+                if (cellBold)
                     wpfCell.FontWeight = FontWeights.Bold;
                 if (modelCell.Paragraphs.Count == 0)
                 {
@@ -5488,6 +5531,7 @@ public sealed class DocumentView : RichTextBox
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;
+                cellIndex++;
             }
             group.Rows.Add(wpfRow);
         }
@@ -6720,6 +6764,76 @@ public sealed class DocumentView : RichTextBox
         }
 
         Render();
+    }
+
+    // Snapshot of the caret table's previous style id for table-style live-preview.
+    private (int BlockIndex, string? PriorStyleId, string? PriorBorderColorHex, bool PriorBorders)? _tableStyleSnapshot;
+
+    /// <summary>
+    /// Apply a catalog table style to the table at the caret: sets <see cref="Table.TableStyleId"/> and
+    /// adjusts <see cref="TableFormatting.Borders"/> to match the style definition, then re-renders. The
+    /// change is direct (no undo bus) like <see cref="ApplyTableProperties"/>; the gallery calls it on
+    /// click after reverting any live preview.
+    /// </summary>
+    public void ApplyTableStyle(DocumentTableStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        table.TableStyleId = style.WordStyleId;
+        // Apply the style's border intent; the tblLook toggles (HeaderRow/BandedRows/etc.) are left
+        // unchanged so the user's Table Style Options selections continue to drive the active regions.
+        table.Formatting = table.Formatting with { Borders = style.Borders };
+        Render();
+    }
+
+    /// <summary>
+    /// Live-preview a catalog table style on the table at the caret without committing. A snapshot of
+    /// the table's prior style id and border state is saved; <see cref="EndTableStylePreview"/> restores
+    /// it. Used by the Table Styles gallery's hover preview. No-op outside a table.
+    /// </summary>
+    public void PreviewTableStyle(DocumentTableStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        if (_tableStyleSnapshot is null)
+            CommitToModel();
+        else
+            RestoreTableStylePreview();
+
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        _tableStyleSnapshot = (blockIndex, table.TableStyleId, null, table.Formatting.Borders);
+        table.TableStyleId = style.WordStyleId;
+        table.Formatting = table.Formatting with { Borders = style.Borders };
+        Render();
+    }
+
+    /// <summary>Revert a live preview started by <see cref="PreviewTableStyle"/>. No-op if none is active.</summary>
+    public void EndTableStylePreview()
+    {
+        if (_tableStyleSnapshot is null)
+            return;
+        RestoreTableStylePreview();
+        Render();
+    }
+
+    private void RestoreTableStylePreview()
+    {
+        if (_tableStyleSnapshot is not { } snap)
+            return;
+        if (snap.BlockIndex >= 0 && snap.BlockIndex < _model.Blocks.Count
+            && _model.Blocks[snap.BlockIndex] is ModelTable table)
+        {
+            table.TableStyleId = snap.PriorStyleId;
+            table.Formatting = table.Formatting with { Borders = snap.PriorBorders };
+        }
+        _tableStyleSnapshot = null;
     }
 
     public void InsertField(RunFieldKind kind)
