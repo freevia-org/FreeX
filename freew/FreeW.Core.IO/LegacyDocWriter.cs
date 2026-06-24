@@ -1,6 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using FreeW.Core.Model;
 
@@ -8,31 +7,33 @@ namespace FreeW.Core.IO;
 
 /// <summary>
 /// Writes a <see cref="TextDocument"/> to the Word 97-2003 binary <c>.doc</c> format
-/// (OLE2 Compound File Binary container + minimal FIB + Unicode text stream + CLX piece table),
-/// producing a file parseable by real binary-Word readers including DocSharp (the round-trip
-/// verification used in <see cref="LegacyDocFileAdapter"/>).
+/// (OLE2 Compound File Binary container + FIB + STSH + STTBF/FFN + CLX + FKP/BTE + SED).
+/// The output is verified to round-trip through DocSharp.Binary.Doc 0.20.0.
 ///
 /// <para>
 /// Format references:
 /// <list type="bullet">
 /// <item>[MS-CFB] -- Compound File Binary File Format (OLE2 container)</item>
-/// <item>[MS-DOC] 2.2 -- File Information Block (FIB)</item>
-/// <item>[MS-DOC] 2.3 -- CLX / Piece Table (text storage)</item>
-/// <item>[MS-DOC] 2.9 -- StyleSheet (STSH)</item>
-/// <item>[MS-DOC] 2.5.4 -- Font Table (STTBF of FFN)</item>
+/// <item>[MS-DOC] -- Word (.doc) Binary File Format</item>
 /// </list>
 /// </para>
 ///
 /// <para>
-/// Verified against DocSharp.Binary.Doc 0.20.0 (manfromarce/DocSharp). The FIB FcLcb pair
-/// indices used here match what DocSharp reads sequentially from FibRgFcLcb97:
-///   Pair 0  = fcStshfOrig / lcbStshfOrig  (the "orig" copy -- NOT the real stylesheet)
-///   Pair 1  = fcStshf     / lcbStshf      (the actual StyleSheet)
-///   Pair 15 = fcSttbfFfn  / lcbSttbfFfn   (Font table)
-///   Pair 33 = fcClx       / lcbClx        (CLX piece table)
-/// DocSharp.StyleSheetMapping.Apply() accesses sheet.Styles[11] unconditionally, so cstd must
-/// be >= 12. It also calls writeRunDefaults() which accesses FontTable.Data[rgftcStandardChpStsh[i]]
-/// for i in 0..3; all four are set to 0 so FontTable.Data[0] must exist.
+/// Layout of the WordDocument stream we generate:
+///   [0 .. FibSize-1]         FIB (File Information Block)
+///   [FibSize .. fcMac-1]     Unicode text (UTF-16LE, 2 bytes/char)
+///   [SepxOffset .. SepxOffset+1] SEPX (2 bytes: cbSepx=2, no sprms)
+///   [FkpBase .. FkpBase+511] PAPX FKP page (512 bytes)
+///   [FkpBase+512 .. FkpBase+1023] CHPX FKP page (512 bytes)
+/// Total >= 4096 bytes so stream lives in the regular FAT (no mini-stream).
+///
+/// Layout of the 1Table stream:
+///   [0 .. stshEnd)           STSH (stylesheet)
+///   [stshEnd .. ffnEnd)      STTBF/FFN (font table, one entry)
+///   [ffnEnd .. clxEnd)       CLX (piece table)
+///   [clxEnd .. papBteEnd)    PlcBtePapx (BTE paragraph FKP table)
+///   [papBteEnd .. chpBteEnd) PlcBteChpx (BTE character FKP table)
+///   [chpBteEnd .. sedEnd)    PlcfSed (section plex)
 /// </para>
 /// </summary>
 internal static class LegacyDocWriter
@@ -48,23 +49,24 @@ internal static class LegacyDocWriter
 
         string text = CollectText(document);
 
+        // Build all stream content
         byte[] wordDocBytes = BuildWordDocumentStream(text);
-        byte[] tableBytes   = BuildTableStream(text);
+        byte[] tableBytes   = BuildTableStream(text, wordDocBytes.Length);
 
+        // Pad to >= 4096 so they live in regular FAT sectors
         byte[] wordDocStream = PadTo(wordDocBytes, MiniStreamCutoff);
         byte[] tableStream   = PadTo(tableBytes,   MiniStreamCutoff);
 
-        // Patch FIB FibRgFcLcb97 entries (DocSharp pair indices):
-        //   Pair 1  = fcStshf/lcbStshf
-        //   Pair 15 = fcSttbfFfn/lcbSttbfFfn
-        //   Pair 33 = fcClx/lcbClx
-        PatchFibFcLcb(wordDocStream, StshfFcLcbIdx,    fc: (uint)s_lastStshOffset, lcb: (uint)s_lastStshSize);
-        PatchFibFcLcb(wordDocStream, SttbfFfnFcLcbIdx, fc: (uint)s_lastFfnOffset,  lcb: (uint)s_lastFfnSize);
-        PatchFibFcLcb(wordDocStream, FcLcbClxIdx,      fc: (uint)s_lastClxOffset,  lcb: (uint)s_lastClxSize);
+        // Patch FIB FibRgFcLcb97 with the table-stream offsets computed during Build:
+        PatchFibFcLcb(wordDocStream, StshfFcLcbIdx,      s_stshOffset,    s_stshSize);
+        PatchFibFcLcb(wordDocStream, SttbfFfnFcLcbIdx,   s_ffnOffset,     s_ffnSize);
+        PatchFibFcLcb(wordDocStream, ClxFcLcbIdx,        s_clxOffset,     s_clxSize);
+        PatchFibFcLcb(wordDocStream, PlcfBtePapxFcLcbIdx,s_papBteOffset,  s_papBteSize);
+        PatchFibFcLcb(wordDocStream, PlcfBteChpxFcLcbIdx,s_chpBteOffset,  s_chpBteSize);
+        PatchFibFcLcb(wordDocStream, PlcfSedFcLcbIdx,    s_sedOffset,     s_sedSize);
 
         WriteCfb(destination, wordDocStream, tableStream,
-            wdLogicalSize:  (uint)MiniStreamCutoff,
-            tblLogicalSize: (uint)MiniStreamCutoff);
+            (uint)MiniStreamCutoff, (uint)MiniStreamCutoff);
     }
 
     // -----------------------------------------------------------------------
@@ -82,13 +84,38 @@ internal static class LegacyDocWriter
     private const byte StgStream = 2;
     private const byte StgUnused = 0;
 
-    // FIB size: 32 + (2+28) + (2+88) + (2+1488) + 2 = 1644
+    // FIB size [MS-DOC 2.2]:
+    //   FibBase(32) + csw(2)+rgW(28) + clw(2)+rgLw(88) + cfclcb(2)+FibRgFcLcb97(186*8) + cswNew(2)
+    //   = 32 + 30 + 90 + 1490 + 2 = 1644
     private const int FibSize      = 32 + 2 + 28 + 2 + 88 + 2 + 1488 + 2; // 1644
     private const int FibFcLcbBase = 32 + 2 + 28 + 2 + 88 + 2;            // 154
 
-    private const int StshfFcLcbIdx    = 1;   // fcStshf / lcbStshf
-    private const int SttbfFfnFcLcbIdx = 15;  // fcSttbfFfn / lcbSttbfFfn
-    private const int FcLcbClxIdx      = 33;  // fcClx / lcbClx
+    // DocSharp-verified FibRgFcLcb97 pair indices (0-based):
+    private const int StshfFcLcbIdx       = 1;   // fcStshf / lcbStshf
+    private const int PlcfSedFcLcbIdx     = 6;   // fcPlcfSed / lcbPlcfSed
+    private const int PlcfBteChpxFcLcbIdx = 12;  // fcPlcfBteChpx / lcbPlcfBteChpx
+    private const int PlcfBtePapxFcLcbIdx = 13;  // fcPlcfBtePapx / lcbPlcfBtePapx
+    private const int SttbfFfnFcLcbIdx    = 15;  // fcSttbfFfn / lcbSttbfFfn
+    private const int ClxFcLcbIdx         = 33;  // fcClx / lcbClx
+
+    // -----------------------------------------------------------------------
+    // State for inter-method coordination (single-threaded)
+    // -----------------------------------------------------------------------
+
+    // Table stream offsets (set by BuildTableStream, used by Write to patch FIB)
+    private static uint s_stshOffset,   s_stshSize;
+    private static uint s_ffnOffset,    s_ffnSize;
+    private static uint s_clxOffset,    s_clxSize;
+    private static uint s_papBteOffset, s_papBteSize;
+    private static uint s_chpBteOffset, s_chpBteSize;
+    private static uint s_sedOffset,    s_sedSize;
+
+    // WordDocument stream positions (set by BuildWordDocumentStream, read by BuildTableStream)
+    private static int s_fcMin;     // byte offset of text start
+    private static int s_fcMac;     // byte offset past last text char
+    private static int s_sepxFc;    // byte offset of SEPX in WordDocument stream
+    private static int s_papFkpPn;  // FKP page number for PAPX (page * 512 = byte offset)
+    private static int s_chpFkpPn;  // FKP page number for CHPX
 
     // -----------------------------------------------------------------------
     // Text collection
@@ -101,7 +128,7 @@ internal static class LegacyDocWriter
         {
             foreach (var run in para.Runs)
                 sb.Append(run.Text);
-            sb.Append('\r');
+            sb.Append('\r'); // CR = paragraph mark in Word binary
         }
         if (sb.Length == 0)
             sb.Append('\r');
@@ -111,175 +138,269 @@ internal static class LegacyDocWriter
     // -----------------------------------------------------------------------
     // WordDocument stream
     // -----------------------------------------------------------------------
+    // Layout:
+    //   [0..FibSize)           FIB (File Information Block)
+    //   [FibSize..fcMac)       Unicode text (UTF-16LE)
+    //   [SepxPage*512..+1]     SEPX (2 bytes in same page as text or next page)
+    //   [PapFkpPage*512..+511] PAPX FKP (512 bytes)
+    //   [ChpFkpPage*512..+511] CHPX FKP (512 bytes)
 
     private static byte[] BuildWordDocumentStream(string text)
     {
         byte[] textBytes = Encoding.Unicode.GetBytes(text);
         int fcMin = FibSize;
-        int fcMax = fcMin + textBytes.Length;
+        int fcMac = fcMin + textBytes.Length;
 
-        using var ms = new MemoryStream(FibSize + textBytes.Length);
-        using var w  = new BinaryWriter(ms, Encoding.Unicode, leaveOpen: true);
+        // Place SEPX and FKP pages after the text, aligned to 512-byte page boundaries.
+        // SepxOffset: next 2-byte aligned position after text (keep it simple: same page)
+        int sepxOffset = fcMac;
+        if (sepxOffset % 2 != 0) sepxOffset++;
 
+        // PAPX FKP page: next 512-byte boundary after sepx
+        int papFkpOffset = ((sepxOffset + 2 + 511) / 512) * 512;
+        int chpFkpOffset = papFkpOffset + 512;
+        int totalSize    = chpFkpOffset + 512;
+
+        // Store for table-stream builder
+        s_fcMin   = fcMin;
+        s_fcMac   = fcMac;
+        s_sepxFc  = sepxOffset;
+        s_papFkpPn = papFkpOffset / 512;
+        s_chpFkpPn = chpFkpOffset / 512;
+
+        byte[] stream = new byte[totalSize];
+
+        // Write FIB (all zeros, patched later)
         // FibBase (32 bytes)
-        w.Write((ushort)0xA5EC);
-        w.Write((ushort)0x00C1);   // nFib = 193 (Word97)
-        w.Write((ushort)0x0000);
-        w.Write((ushort)0x0409);   // lid en-US
-        w.Write((ushort)0x0000);
-        w.Write((ushort)((1 << 9) | (1 << 12))); // fWhichTblStm=1 ("1Table"), fExtChar=1
-        w.Write((ushort)0x00BF);
-        w.Write((uint)0);
-        w.Write((byte)0);
-        w.Write((byte)0x08);
-        w.Write((ushort)0);
-        w.Write((ushort)0);
-        w.Write((uint)fcMin);
-        w.Write((uint)fcMax);
+        BinaryWriter16LE(stream, 0x0000, 0xA5EC);  // wIdent
+        BinaryWriter16LE(stream, 0x0002, 0x00C1);  // nFib = 193 (Word97)
+        BinaryWriter16LE(stream, 0x0004, 0x0000);  // unused
+        BinaryWriter16LE(stream, 0x0006, 0x0409);  // lid en-US
+        BinaryWriter16LE(stream, 0x0008, 0x0000);  // pnNext
+        BinaryWriter16LE(stream, 0x000A, (ushort)((1 << 9) | (1 << 12))); // fWhichTblStm=1, fExtChar=1
+        BinaryWriter16LE(stream, 0x000C, 0x00BF);  // nFibBack
+        // lKey (4 bytes) = 0 at 0x000E
+        // envr = 0 at 0x0012
+        stream[0x0013] = 0x08;                     // fWord97Saved
+        // chs, chsTables (4 bytes) = 0 at 0x0014
+        BinaryWriter32LE(stream, 0x0018, (uint)fcMin);  // fcMin
+        BinaryWriter32LE(stream, 0x001C, (uint)fcMac);  // fcMac
 
-        // csw + rgW97 (2 + 28 = 30 bytes)
-        w.Write((ushort)14);
-        for (int i = 0; i < 14; i++) w.Write((ushort)0);
+        // csw + rgW97 at byte 32
+        BinaryWriter16LE(stream, 32, 14); // csw
 
-        // clw + rgLw97 (2 + 88 = 90 bytes): rgLw97[0] = cbMac
-        w.Write((ushort)22);
-        w.Write((uint)(FibSize + textBytes.Length)); // cbMac
-        for (int i = 1; i < 22; i++) w.Write((uint)0);
+        // clw + rgLw97 at byte 62
+        BinaryWriter16LE(stream, 62, 22); // clw
+        BinaryWriter32LE(stream, 64, (uint)totalSize);  // cbMac = rgLw97[0]
+        BinaryWriter32LE(stream, 76, (uint)text.Length); // ccpText = rgLw97[3]
 
-        // cfclcb + FibRgFcLcb97 (2 + 1488 = 1490 bytes) -- patched later
-        w.Write((ushort)186);
-        for (int i = 0; i < 186; i++) { w.Write((uint)0); w.Write((uint)0); }
+        // cfclcb at byte 152
+        BinaryWriter16LE(stream, 152, 186); // cfclcb
 
-        w.Write((ushort)0); // cswNew
+        // cswNew at byte 154 + 186*8 = 154 + 1488 = 1642
+        BinaryWriter16LE(stream, 1642, 0); // cswNew
 
-        w.Write(textBytes);
-        return ms.ToArray();
+        // Copy text
+        Buffer.BlockCopy(textBytes, 0, stream, fcMin, textBytes.Length);
+
+        // SEPX at sepxOffset: cbSepx=2 (no sprms)
+        BinaryWriter16LE(stream, sepxOffset, 2); // cbSepx = 2
+
+        // PAPX FKP at papFkpOffset (512 bytes)
+        // crun at byte 511: 1 run
+        stream[papFkpOffset + 511] = 1;
+        // rgfc[0] = fcMin, rgfc[1] = fcMac
+        BinaryWriter32LE(stream, papFkpOffset + 0, (uint)fcMin);
+        BinaryWriter32LE(stream, papFkpOffset + 4, (uint)fcMac);
+        // rgbx[0]: wordOffset=0 (=> default PAPX, no sprms), PHE=zeros
+        // byte 8 = wordOffset = 0, bytes 9-20 = PHE zeros (already zero)
+
+        // CHPX FKP at chpFkpOffset (512 bytes)
+        stream[chpFkpOffset + 511] = 1;
+        BinaryWriter32LE(stream, chpFkpOffset + 0, (uint)fcMin);
+        BinaryWriter32LE(stream, chpFkpOffset + 4, (uint)fcMac);
+        // rgbx[0]: wordOffset=0 (default CHPX)
+
+        return stream;
     }
 
     // -----------------------------------------------------------------------
-    // 1Table stream: STSH + STTBF/FFN + CLX
+    // 1Table stream: STSH + STTBF/FFN + CLX + PlcBtePapx + PlcBteChpx + PlcfSed
     // -----------------------------------------------------------------------
 
-    private static byte[] BuildTableStream(string text)
+    private static byte[] BuildTableStream(string text, int wdStreamLength)
     {
         using var ms = new MemoryStream();
         using var w  = new BinaryWriter(ms, Encoding.Unicode, leaveOpen: true);
 
-        // (a) STSH
-        // cstd=12 because DocSharp accesses Styles[11] unconditionally.
-        // cbStshiBytes=22 so bytes.Length > 18 and rgftcStandardChpStsh[3] is populated.
-        // All four font indices = 0 (all point to font entry 0 in the font table).
-        const int numStyles    = 12;
-        const int cbStshiBytes = 22; // 11 ushorts
+        // (a) STSH (StyleSheet)
+        // cbStshi = 20 bytes (10 ushorts):
+        //   bytes.Length=20 > 18 -> rgftcStandardChpStsh[3] is read ✓
+        //   bytes.Length=20 is NOT > 20 -> cbLSD loop NOT entered ✓
+        s_stshOffset = 0;
 
-        w.Write((ushort)cbStshiBytes);
-        w.Write((ushort)numStyles);
+        const int numStyles    = 12;  // DocSharp.StyleSheetMapping accesses Styles[11] unconditionally
+        const int cbStshiBytes = 20;  // 10 x ushort
+
+        w.Write((ushort)cbStshiBytes); // cbStshi
+        w.Write((ushort)numStyles);    // cstd = 12
         w.Write((ushort)10);           // cbSTDBaseInFile
-        w.Write((ushort)1);            // fStdStylenamesWritten
+        w.Write((ushort)1);            // fStdStylenamesWritten (byte[4]=1, byte[5]=0)
         w.Write((ushort)105);          // stiMaxWhenSaved
         w.Write((ushort)15);           // istdMaxFixedWhenSaved
         w.Write((ushort)0);            // nVerBuiltInNamesWhenSaved
-        w.Write((ushort)0);            // rgftcStandardChpStsh[0]
-        w.Write((ushort)0);            // rgftcStandardChpStsh[1]
-        w.Write((ushort)0);            // rgftcStandardChpStsh[2]
-        w.Write((ushort)0);            // rgftcStandardChpStsh[3]
+        w.Write((ushort)0);            // rgftcStandardChpStsh[0] -> font 0
+        w.Write((ushort)0);            // rgftcStandardChpStsh[1] -> font 0
+        w.Write((ushort)0);            // rgftcStandardChpStsh[2] -> font 0
+        // No [3] byte in this struct because cbStshi=20 means bytes.Length=20 -> conditional [3] is read at bytes[18..19]
+        // But we only wrote 10 ushorts = 20 bytes above EXCLUDING the cbStshi field.
+        // Wait: cbStshi (2 bytes) + 10 ushorts (20 bytes) = 22 bytes written so far.
+        // DocSharp reads cbStshi=20, then reads 20 bytes as the STSHI body.
+        // Our 10 ushorts ARE the body: cstd(2)+cbSTDBase(2)+fStd(2)+stiMax(2)+istdMax(2)+nVer(2)+rg[0](2)+rg[1](2)+rg[2](2)
+        // That's 9 ushorts = 18 bytes. But we wrote 10 = 20. Let me add rg[3]:
+        // Actually the above writes are: cbStshi(1 ushort) + 9 ushorts body = 10 ushorts total.
+        // Wait I'm confusing myself. Let me count line by line:
+        // w.Write cbStshiBytes -> 2 bytes (this is the HEADER, not counted in body)
+        // w.Write numStyles    -> 2 bytes (body byte 0-1 = cstd)
+        // w.Write 10           -> 2 bytes (body byte 2-3 = cbSTDBaseInFile)
+        // w.Write 1            -> 2 bytes (body byte 4-5 = fStdStylenamesWritten+spare)
+        // w.Write 105          -> 2 bytes (body byte 6-7 = stiMaxWhenSaved)
+        // w.Write 15           -> 2 bytes (body byte 8-9 = istdMaxFixedWhenSaved)
+        // w.Write 0            -> 2 bytes (body byte 10-11 = nVerBuiltInNamesWhenSaved)
+        // w.Write 0            -> 2 bytes (body byte 12-13 = rgftcStandardChpStsh[0])
+        // w.Write 0            -> 2 bytes (body byte 14-15 = rgftcStandardChpStsh[1])
+        // w.Write 0            -> 2 bytes (body byte 16-17 = rgftcStandardChpStsh[2])
+        // total body = 18 bytes, but cbStshi = 20! We need 2 more bytes for rg[3]:
+        w.Write((ushort)0);            // rgftcStandardChpStsh[3] (body byte 18-19)
 
-        // STD slot 0 = "Normal"
-        const string normalName  = "Normal";
-        const int    cbNormalStd = 10 + 2 + 6 * 2 + 2 + 2 + 2; // 30 (Normal = 6 chars)
+        // STD slot 0 = "Normal" style
+        // Body layout (cbSTDBaseInFile=10 declared):
+        //   [0..9]   STDFixed (10 bytes)
+        //   [10]     xstzName.cch = 6 (1 byte)
+        //   [11]     xstzName.pad = 0 (1 byte)
+        //   [12..23] "Normal" UTF-16LE (12 bytes)
+        //   [24..25] xstz null-terminator (2 bytes, consumed by +2 in DocSharp upxOffset formula)
+        //   upxOffset = 10 + 1 + 12 + 2 = 25 (odd) -> aligned to 26
+        //   [26..27] UPX[0] cbUPX = 0
+        //   [28..29] UPX[1] cbUPX = 0
+        //   cbStd = 30 bytes
+        const string normalName = "Normal";
+        const int    cbNormalStd = 30;
 
         w.Write((ushort)cbNormalStd);
-        // STDFixed (10 bytes)
-        w.Write((ushort)0x0000);  // sti=0
-        w.Write((ushort)0xFFF1);  // stk=1 para, istdBase=0xFFF
+        w.Write((ushort)0x0000);  // STDFixed: sti=0
+        w.Write((ushort)0xFFF1);  // stk=1 (para), istdBase=0xFFF
         w.Write((ushort)0x0002);  // cupx=2, istdNext=0
-        w.Write((ushort)0x0000);
-        w.Write((ushort)0x0000);
-        // xstzName "Normal"
-        w.Write((ushort)normalName.Length);
+        w.Write((ushort)0x0000);  // bchUpe
+        w.Write((ushort)0x0000);  // grLpUpxSw
+        w.Write((byte)normalName.Length); // cch = 6
+        w.Write((byte)0);                  // pad
         foreach (char c in normalName) w.Write((ushort)c);
-        w.Write((ushort)0);
-        // UPX[0] + UPX[1] empty
-        w.Write((ushort)0);
-        w.Write((ushort)0);
+        w.Write((ushort)0); // xstz null-terminator
+        w.Write((ushort)0); // UPX[0] cbUPX = 0 (at aligned position 26)
+        w.Write((ushort)0); // UPX[1] cbUPX = 0 (at position 28)
 
-        // Slots 1..11 empty
+        // Slots 1..11: empty (cbStd = 0)
         for (int i = 1; i < numStyles; i++) w.Write((ushort)0);
 
-        int stshSize = (int)ms.Length;
+        s_stshSize = (uint)ms.Length;
 
-        // (b) STTBF/FFN -- one font entry
-        int ffnStart = stshSize;
+        // (b) STTBF/FFN -- Font table, one entry "Times New Roman"
+        // DocSharp.FontFamilyName: after reading xszFtn it may try to read xszAlt.
+        // We add 2 extra zero bytes after the name+null so xszAlt scan immediately finds null.
+        s_ffnOffset = s_stshSize;
 
-        const string fontName     = "Times New Roman";
-        byte[]       fontNameUtf16 = Encoding.Unicode.GetBytes(fontName + "\0"); // 32 bytes
+        byte[] fontNameBytes = Encoding.Unicode.GetBytes("Times New Roman\0"); // 32 bytes
+        var    fontWithExtra = new byte[fontNameBytes.Length + 2]; // 34 bytes
+        fontNameBytes.CopyTo(fontWithExtra, 0);
 
-        // FFN fixed = 39 bytes; name = 32 bytes; total = 71; pad to even = 72
-        int payloadSize   = 1 + 2 + 1 + 1 + 10 + 24 + fontNameUtf16.Length;
-        int paddedPayload = (payloadSize + 1) & ~1;
-        int cchData       = paddedPayload / 2;
+        int payloadSize   = 1 + 2 + 1 + 1 + 10 + 24 + fontWithExtra.Length; // 39+34=73
+        int paddedPayload = (payloadSize + 1) & ~1;                           // 74
+        int cchData       = paddedPayload / 2;                                // 37
 
         w.Write((ushort)0xFFFF); // fExtend
-        w.Write((ushort)1);      // cData
-        w.Write((ushort)0);      // cbExtra
-
-        w.Write((ushort)cchData);          // entry 0 length
-        w.Write((byte)0x22);               // ffid
-        w.Write((ushort)400);              // wWeight
-        w.Write((byte)0);                  // chs
-        w.Write((byte)0);                  // iBound
+        w.Write((ushort)1);      // cData = 1
+        w.Write((ushort)0);      // cbExtra = 0
+        w.Write((ushort)cchData);
+        w.Write((byte)0x22);                        // ffid
+        w.Write((ushort)400);                       // wWeight
+        w.Write((byte)0);                           // chs
+        w.Write((byte)0);                           // iBound
         for (int i = 0; i < 10; i++) w.Write((byte)0); // panose
         for (int i = 0; i < 24; i++) w.Write((byte)0); // FontSig
-        w.Write(fontNameUtf16);
+        w.Write(fontWithExtra);
         for (int i = payloadSize; i < paddedPayload; i++) w.Write((byte)0);
 
-        int ffnSize = (int)ms.Length - ffnStart;
+        s_ffnSize = (uint)ms.Length - s_ffnOffset;
 
-        // (c) CLX
-        int clxStart = (int)ms.Length;
-        const int plcPcdSize = 2 * 4 + 1 * 8; // 16
+        // (c) CLX (piece table)
+        s_clxOffset = (uint)ms.Length;
+        const int plcPcdSize = 2 * 4 + 1 * 8; // 16 bytes
 
         w.Write((byte)0x02);
         w.Write((uint)plcPcdSize);
-        w.Write((uint)0);
-        w.Write((uint)text.Length);
-        w.Write((ushort)0);
-        w.Write((uint)FibSize);  // Pcd.fc -- byte offset of text in WordDocument stream
-        w.Write((ushort)0);
+        w.Write((uint)0);              // aCP[0] = 0
+        w.Write((uint)text.Length);    // aCP[1] = cpCount
+        w.Write((ushort)0);            // Pcd.flags
+        w.Write((uint)s_fcMin);        // Pcd.fc (byte offset of text in WordDocument)
+        w.Write((ushort)0);            // Pcd.prm
 
-        int clxSize = (int)ms.Length - clxStart;
+        s_clxSize = (uint)ms.Length - s_clxOffset;
 
-        var result = ms.ToArray();
+        // (d) PlcBtePapx -- paragraph FKP BTE table [MS-DOC 2.8.25]
+        // Structure: (n+1) FC values + n FKP page numbers where n = number of FKP pages
+        // For 1 FKP: [fcMin(4)][fcMac(4)][fkpPageNo(4)] = 12 bytes
+        s_papBteOffset = (uint)ms.Length;
 
-        s_lastStshOffset = 0;
-        s_lastStshSize   = stshSize;
-        s_lastFfnOffset  = ffnStart;
-        s_lastFfnSize    = ffnSize;
-        s_lastClxOffset  = clxStart;
-        s_lastClxSize    = clxSize;
+        w.Write((uint)s_fcMin);      // first CP byte offset
+        w.Write((uint)s_fcMac);      // limit CP byte offset (exclusive)
+        w.Write((uint)s_papFkpPn);   // FKP page number
 
-        return result;
+        s_papBteSize = (uint)ms.Length - s_papBteOffset;
+
+        // (e) PlcBteChpx -- character FKP BTE table
+        s_chpBteOffset = (uint)ms.Length;
+
+        w.Write((uint)s_fcMin);
+        w.Write((uint)s_fcMac);
+        w.Write((uint)s_chpFkpPn);
+
+        s_chpBteSize = (uint)ms.Length - s_chpBteOffset;
+
+        // (f) PlcfSed -- Section plex [MS-DOC 2.8.26]
+        // Structure: (n+1) CP values + n SED records (12 bytes each)
+        // For 1 section covering whole document:
+        //   CP[0] = 0 (section start)
+        //   CP[1] = text.Length (section limit)
+        //   SED[0]: fn(2) + fcSepx(4) + fnMpr(2) + fcMpr(4) = 12 bytes
+        //     fn = 0xFFFF (section props in WordDocument stream at fcSepx)
+        //     fcSepx = s_sepxFc
+        s_sedOffset = (uint)ms.Length;
+
+        w.Write((uint)0);              // CP[0] = section start
+        w.Write((uint)text.Length);    // CP[1] = section end (exclusive)
+        w.Write((ushort)0xFFFF);       // SED.fn = 0xFFFF (SEPX location is fcSepx)
+        w.Write((uint)s_sepxFc);       // SED.fcSepx = byte offset of SEPX in WordDocument
+        w.Write((ushort)0);            // SED.fnMpr
+        w.Write((uint)0xFFFFFFFF);     // SED.fcMpr (no master page reference)
+
+        s_sedSize = (uint)ms.Length - s_sedOffset;
+
+        return ms.ToArray();
     }
-
-    private static int s_lastStshOffset;
-    private static int s_lastStshSize;
-    private static int s_lastFfnOffset;
-    private static int s_lastFfnSize;
-    private static int s_lastClxOffset;
-    private static int s_lastClxSize;
 
     // -----------------------------------------------------------------------
     // FIB patching
     // -----------------------------------------------------------------------
 
-    private static void PatchFibFcLcb(byte[] buf, int idx, uint fc, uint lcb)
+    private static void PatchFibFcLcb(byte[] stream, int pairIdx, uint fc, uint lcb)
     {
-        int off = FibFcLcbBase + idx * 8;
-        WriteUInt32LE(buf, off,     fc);
-        WriteUInt32LE(buf, off + 4, lcb);
+        int off = FibFcLcbBase + pairIdx * 8;
+        BinaryWriter32LE(stream, off,     fc);
+        BinaryWriter32LE(stream, off + 4, lcb);
     }
 
-    private static void WriteUInt32LE(byte[] buf, int off, uint v)
+    private static void BinaryWriter32LE(byte[] buf, int off, uint v)
     {
         buf[off]     = (byte)( v        & 0xFF);
         buf[off + 1] = (byte)((v >>  8) & 0xFF);
@@ -287,11 +408,21 @@ internal static class LegacyDocWriter
         buf[off + 3] = (byte)((v >> 24) & 0xFF);
     }
 
+    private static void BinaryWriter16LE(byte[] buf, int off, ushort v)
+    {
+        buf[off]     = (byte)(v & 0xFF);
+        buf[off + 1] = (byte)(v >> 8);
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
     private static byte[] PadTo(byte[] src, int minSize)
     {
         if (src.Length >= minSize) return src;
         var r = new byte[minSize];
-        src.CopyTo(r, 0);
+        Buffer.BlockCopy(src, 0, r, 0, src.Length);
         return r;
     }
 
@@ -420,4 +551,3 @@ internal static class LegacyDocWriter
             for (int i = 0; i < SectorSize - rem; i++) bw.Write((byte)0);
     }
 }
-
