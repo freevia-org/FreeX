@@ -209,27 +209,36 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_GrandTotalsHeader")));
-        content.Children.Add(rowGrandTotalsBox);
-        content.Children.Add(columnGrandTotalsBox);
-        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_LayoutHeader")));
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(reportLayoutBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(compactIndentBox);
-        content.Children.Add(repeatLabelsBox);
-        content.Children.Add(blankRowBox);
-        content.Children.Add(mergeLabelsBox);
-        content.Children.Add(SectionHeader(UiText.Get("PivotOptions_SubtotalsHeader")));
-        content.Children.Add(subtotalsBox);
-        content.Children.Add(subtotalPlacementBox);
+        // Grand Totals section (WPF-style groupbox framing)
+        var grandTotalsGroup = new StackPanel { Spacing = 4 };
+        grandTotalsGroup.Children.Add(rowGrandTotalsBox);
+        grandTotalsGroup.Children.Add(columnGrandTotalsBox);
+
+        // Layout section (WPF-style groupbox framing)
+        var layoutGroup = new StackPanel { Spacing = 6 };
+        layoutGroup.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        layoutGroup.Children.Add(reportLayoutBox);
+        layoutGroup.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        layoutGroup.Children.Add(compactIndentBox);
+        layoutGroup.Children.Add(repeatLabelsBox);
+        layoutGroup.Children.Add(blankRowBox);
+        layoutGroup.Children.Add(mergeLabelsBox);
+
+        // Subtotals section (WPF-style groupbox framing)
+        var subtotalsGroup = new StackPanel { Spacing = 6 };
+        subtotalsGroup.Children.Add(subtotalsBox);
+        subtotalsGroup.Children.Add(subtotalPlacementBox);
+
+        var content = new StackPanel { Spacing = 10, Margin = new Thickness(12) };
+        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_GrandTotalsHeader"), grandTotalsGroup));
+        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_LayoutHeader"), layoutGroup));
+        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_SubtotalsHeader"), subtotalsGroup));
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 4, 0, 0),
             Children = { ok, cancel },
         });
         dialog.Content = new ScrollViewer
@@ -289,4 +298,29 @@ public sealed partial class MainWindow
         Foreground = HeaderForeground,
         Margin = new Thickness(0, 6, 0, 0),
     };
+
+    /// <summary>
+    /// Creates a WPF-style GroupBox equivalent: a bold section label above a bordered panel that
+    /// frames the given content, matching the visual grouping of WPF's PivotTableOptions dialog.
+    /// </summary>
+    private static StackPanel MakeSectionGroupBox(string label, Control content)
+    {
+        var wrapper = new StackPanel { Spacing = 4 };
+        wrapper.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = HeaderForeground,
+        });
+        wrapper.Children.Add(new Border
+        {
+            BorderBrush = Brush(180, 180, 180),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8),
+            Child = content,
+        });
+        return wrapper;
+    }
 }

@@ -262,14 +262,29 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children = { colorSwatch, colorButton, clearColorButton },
         });
-        content.Children.Add(new StackPanel
+        // WPF-style button row: "Clear" at left; [OK][Cancel] at right.
+        var sparklineEditButtonGrid = new Grid
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        Grid.SetColumn(clear, 0);
+        clear.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        sparklineEditButtonGrid.Children.Add(clear);
+        var sparklineEditOkCancelRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0),
-            Children = { clear, ok, cancel },
-        });
+            Children = { ok, cancel },
+        };
+        Grid.SetColumn(sparklineEditOkCancelRow, 1);
+        sparklineEditButtonGrid.Children.Add(sparklineEditOkCancelRow);
+        content.Children.Add(sparklineEditButtonGrid);
         dialog.Content = content;
 
         var outcome = await dialog.ShowDialog<string?>(this);
