@@ -47,6 +47,13 @@ internal static class PaginatedCommitCoordinator
     internal static void Commit(PaginatedEditorPanel panel, DocumentView targetEditor)
     {
         var model = targetEditor.Model;
+
+        // ── Phase 4: commit in-page header/footer sub-editors to their model slots first ─────────
+        // This mirrors CloseHeaderFooterPane in MainWindow: sub-editors → wrapper model → slot.
+        // Must happen before the body-block reassembly so a subsequent Render/LoadModel picks up
+        // the updated header/footer paragraphs.
+        panel.CommitHeaderFooterSlots(targetEditor);
+
         var collected = new List<ModelBlock>();
 
         foreach (var box in panel.PageBoxes)

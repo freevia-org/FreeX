@@ -15,9 +15,19 @@ internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingFor
 
 
 /// <summary>
-/// One physical page slot in the <see cref="PaginatedEditorPanel"/>.  Hosts a read-only header strip
-/// at the top, a body <see cref="RichTextBox"/> that the user edits, and a read-only footer strip at
-/// the bottom.  The body is fixed to the page content area so each box represents exactly one page.
+/// One physical page slot in the <see cref="PaginatedEditorPanel"/>.  Hosts an editable header
+/// region at the top (Phase 4), a body <see cref="RichTextBox"/> that the user edits, and an
+/// editable footer region at the bottom (Phase 4).  The body is fixed to the page content area so
+/// each box represents exactly one page.
+///
+/// <para>
+/// <strong>Phase 4 — In-page WYSIWYG header/footer:</strong>  The header and footer strips are
+/// replaced by compact <see cref="DocumentView"/> sub-editors loaded via the same wrapper-document
+/// pattern used by the Wave 11 docked pane (<see cref="MainWindow.OpenHeaderFooterPane"/>).  Each
+/// sub-editor is seeded with the appropriate <see cref="HeaderFooter"/> slot for this page (default,
+/// even, or first-page) and dimmed until the user clicks it (Word-style activation).  On
+/// <see cref="CommitHfSlots"/> the sub-editors' blocks are read back into the model slots they own.
+/// </para>
 ///
 /// <para>
 /// The body RichTextBox wraps a freshly created <see cref="FlowDocument"/> whose blocks have been
@@ -34,22 +44,47 @@ internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingFor
 /// Down/Right at the last caret position in this box and routes focus to the next box's start;
 /// Up/Left at the first position routes to the previous box's end.  Home/End/PageUp/PageDown fall
 /// through to the native RichTextBox behaviour.
-/// Cross-page selection, clipboard, and shared undo are deferred to Phase 3b-2.
 /// </para>
 /// </summary>
 internal sealed class PageBox : Border
 {
     // ── geometry constants ────────────────────────────────────────────────────────────────────────
     private const double PageGapDip = 20;        // vertical gap rendered above each page box
-    private const double HeaderHeightDip = 24;   // placeholder header strip height
-    private const double FooterHeightDip = 24;   // placeholder footer strip height
+    private const double HeaderHeightDip = 36;   // in-page header region height (Phase 4; was 24)
+    private const double FooterHeightDip = 36;   // in-page footer region height (Phase 4; was 24)
 
     // ── public surface ────────────────────────────────────────────────────────────────────────────
     /// <summary>The editable body RichTextBox for this page.</summary>
     internal RichTextBox Body { get; }
 
-    /// <summary>1-based page number (informational; shown in header strip).</summary>
+    /// <summary>1-based page number (informational; shown in header strip label).</summary>
     internal int PageNumber { get; }
+
+    // ── Phase 4: in-page editable header/footer sub-editors ───────────────────────────────────────
+
+    /// <summary>
+    /// The in-page header sub-editor (a <see cref="DocumentView"/> loaded with the wrapper document
+    /// for this page's header slot).  Null when the slot was null and no content exists.
+    /// Caller (<see cref="PaginatedCommitCoordinator"/>) commits this back to the model slot via
+    /// <see cref="CommitHfSlots"/>.
+    /// </summary>
+    internal DocumentView? HeaderSubEditor { get; }
+
+    /// <summary>
+    /// The in-page footer sub-editor.  Null when the slot was null and no content exists.
+    /// </summary>
+    internal DocumentView? FooterSubEditor { get; }
+
+    /// <summary>
+    /// The model slot name that <see cref="HeaderSubEditor"/> belongs to (e.g. "header",
+    /// "first-header", "even-header"), so the commit coordinator can write back to the right slot.
+    /// </summary>
+    internal string? HeaderSlotName { get; }
+
+    /// <summary>
+    /// The model slot name that <see cref="FooterSubEditor"/> belongs to.
+    /// </summary>
+    internal string? FooterSlotName { get; }
 
     // ── neighbour references (set by PaginatedEditorPanel after all boxes are created) ────────────
     internal PageBox? PreviousBox { get; set; }
@@ -70,10 +105,28 @@ internal sealed class PageBox : Border
     /// <paramref name="pageBlocks"/> are the WPF Block elements (already detached from their previous
     /// parent) that belong on this page; they are added directly to the body FlowDocument so Tags are
     /// preserved.
+    ///
+    /// <para>
+    /// <strong>Phase 4:</strong> <paramref name="headerSlot"/>, <paramref name="footerSlot"/>,
+    /// <paramref name="headerSlotName"/>, <paramref name="footerSlotName"/>, and
+    /// <paramref name="sourceModel"/> drive the in-page editable sub-editors via the wrapper-document
+    /// pattern.  Pass null slots to suppress the sub-editor for that region (the old placeholder strip
+    /// is shown instead).
+    /// </para>
     /// </summary>
-    internal PageBox(int pageNumber, PageSettings page, IReadOnlyList<System.Windows.Documents.Block> pageBlocks)
+    internal PageBox(
+        int pageNumber,
+        PageSettings page,
+        IReadOnlyList<System.Windows.Documents.Block> pageBlocks,
+        TextDocument? sourceModel = null,
+        HeaderFooter? headerSlot = null,
+        string? headerSlotName = null,
+        HeaderFooter? footerSlot = null,
+        string? footerSlotName = null)
     {
         PageNumber = pageNumber;
+        HeaderSlotName = headerSlotName;
+        FooterSlotName = footerSlotName;
 
         var (pageWidth, _) = PageLayout.PageSizeDip(page);
         var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -86,18 +139,29 @@ internal sealed class PageBox : Border
         Margin = new Thickness(0, PageGapDip, 0, 0);
         Width = pageWidth;
 
-        // ── outer stack: header + body + footer ───────────────────────────────────────────────────
+        // ── outer stack: header region | body | footer region ────────────────────────────────────
         var stack = new Grid();
         stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeightDip) });
         stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });
 
-        // header strip (read-only, page number label)
-        var headerStrip = BuildStrip($"— Page {pageNumber} —", marginLeft, marginRight);
-        Grid.SetRow(headerStrip, 0);
-        stack.Children.Add(headerStrip);
+        // ── Phase 4: header region ────────────────────────────────────────────────────────────────
+        if (sourceModel is not null && headerSlotName is not null)
+        {
+            HeaderSubEditor = BuildHfSubEditor(
+                sourceModel, headerSlot, marginLeft, marginRight, isActivated: false);
+            Grid.SetRow(HeaderSubEditor, 0);
+            stack.Children.Add(HeaderSubEditor);
+        }
+        else
+        {
+            // Fallback: read-only label (no slot or no source model provided).
+            var headerStrip = BuildStrip($"— Page {pageNumber} —", marginLeft, marginRight);
+            Grid.SetRow(headerStrip, 0);
+            stack.Children.Add(headerStrip);
+        }
 
-        // body RichTextBox
+        // ── body RichTextBox ──────────────────────────────────────────────────────────────────────
         var bodyFlow = new FlowDocument { PagePadding = new Thickness(0) };
         if (contentWidth > 0)
             bodyFlow.PageWidth = contentWidth;
@@ -127,12 +191,128 @@ internal sealed class PageBox : Border
         Grid.SetRow(Body, 1);
         stack.Children.Add(Body);
 
-        // footer strip
-        var footerStrip = BuildStrip(string.Empty, marginLeft, marginRight);
-        Grid.SetRow(footerStrip, 2);
-        stack.Children.Add(footerStrip);
+        // ── Phase 4: footer region ────────────────────────────────────────────────────────────────
+        if (sourceModel is not null && footerSlotName is not null)
+        {
+            FooterSubEditor = BuildHfSubEditor(
+                sourceModel, footerSlot, marginLeft, marginRight, isActivated: false);
+            Grid.SetRow(FooterSubEditor, 2);
+            stack.Children.Add(FooterSubEditor);
+        }
+        else
+        {
+            var footerStrip = BuildStrip(string.Empty, marginLeft, marginRight);
+            Grid.SetRow(footerStrip, 2);
+            stack.Children.Add(footerStrip);
+        }
 
         Child = stack;
+    }
+
+    // ── Phase 4: wrapper-document sub-editor builder ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a <see cref="DocumentView"/> sub-editor for a header or footer slot, using the same
+    /// wrapper-document pattern as the Wave 11 docked pane.  The wrapper is seeded with the main
+    /// document's <c>DefaultRun</c> / <c>DefaultParagraph</c> so fonts match; the slot's
+    /// <see cref="HeaderFooter.Paragraphs"/> are transferred directly (preserving run formatting).
+    ///
+    /// <para>
+    /// The sub-editor starts dimmed (Opacity 0.45) to signal it is inactive (Word-style).  A
+    /// <c>GotFocus</c> handler removes the dim and a <c>LostFocus</c> handler restores it, so only
+    /// the active region is fully opaque.
+    /// </para>
+    /// </summary>
+    private static DocumentView BuildHfSubEditor(
+        TextDocument sourceModel,
+        HeaderFooter? slot,
+        double marginLeft,
+        double marginRight,
+        bool isActivated)
+    {
+        // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
+        var wrapper = TextDocument.CreateEmpty();
+        wrapper.DefaultRun       = sourceModel.DefaultRun;
+        wrapper.DefaultParagraph = sourceModel.DefaultParagraph;
+        wrapper.Blocks.Clear();
+
+        if (slot is not null)
+        {
+            foreach (var para in slot.Paragraphs)
+                wrapper.Blocks.Add(para);
+        }
+        if (wrapper.Blocks.Count == 0)
+            wrapper.Blocks.Add(new FreeW.Core.Model.Paragraph());
+
+        var sub = new DocumentView
+        {
+            MinHeight = HeaderHeightDip - 4,
+            MaxHeight = HeaderHeightDip - 4,
+            Margin    = new Thickness(marginLeft, 2, marginRight, 2),
+            // Transparent background so the page-white shows through.
+            Background      = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            // Suppress the built-in scrollbars — the strip has a fixed height.
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Disabled,
+            // Start dimmed (Word-style: header is inactive until clicked).
+            Opacity = isActivated ? 1.0 : 0.45,
+        };
+
+        sub.LoadModel(wrapper);
+
+        // Dim/undim on focus changes (Word-style activation).
+        sub.GotFocus  += (_, _) => sub.Opacity = 1.0;
+        sub.LostFocus += (_, _) => sub.Opacity = 0.45;
+
+        return sub;
+    }
+
+    // ── Phase 4: commit header/footer sub-editors back to model slots ─────────────────────────────
+
+    /// <summary>
+    /// Commits the header and footer sub-editors back to the appropriate
+    /// <see cref="SectionHeadersFooters"/> slots on <paramref name="hf"/>.  Mirrors the
+    /// <c>CloseHeaderFooterPane</c> commit pattern.  Called by
+    /// <see cref="PaginatedCommitCoordinator"/> during panel exit.
+    ///
+    /// <para>Only the <em>first</em> page box that owns a given slot should call this; the panel
+    /// coordinator ensures that only one page box per slot name triggers the commit.</para>
+    /// </summary>
+    internal void CommitHfSlots(DocumentView helper, SectionHeadersFooters hf)
+    {
+        CommitOneSlot(HeaderSubEditor, HeaderSlotName, helper, hf);
+        CommitOneSlot(FooterSubEditor, FooterSlotName, helper, hf);
+    }
+
+    private static void CommitOneSlot(
+        DocumentView? subEditor,
+        string? slotName,
+        DocumentView helper,
+        SectionHeadersFooters hf)
+    {
+        if (subEditor is null || slotName is null)
+            return;
+
+        // Flush sub-editor edits into its wrapper model.
+        subEditor.CommitToModel();
+
+        // Build a new HeaderFooter from the wrapper's blocks (same pattern as
+        // MainWindow.CloseHeaderFooterPane).
+        var hfOut = new HeaderFooter();
+        foreach (var block in subEditor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
+            hfOut.Paragraphs.Add(block);
+
+        // Write back to the correct slot.
+        switch (slotName)
+        {
+            case "header":       hf.Header      = hfOut; break;
+            case "footer":       hf.Footer      = hfOut; break;
+            case "even-header":  hf.EvenHeader  = hfOut; break;
+            case "even-footer":  hf.EvenFooter  = hfOut; break;
+            case "first-header": hf.FirstHeader = hfOut; break;
+            case "first-footer": hf.FirstFooter = hfOut; break;
+        }
     }
 
     // ── cross-page caret routing ──────────────────────────────────────────────────────────────────
