@@ -16,6 +16,9 @@
     <PackageReference Include="ExcelDataReader" />
     <PackageReference Include="NPOI" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
+    <!-- PDF text import (read-only) — mirrors the same packages used in FreeW.Core.IO for PDF text extraction -->
+    <PackageReference Include="UglyToad.PdfPig" />
+    <PackageReference Include="UglyToad.PdfPig.DocumentLayoutAnalysis" />
   </ItemGroup>
 
   <PropertyGroup>

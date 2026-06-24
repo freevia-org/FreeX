@@ -1,0 +1,710 @@
+using System.Globalization;
+using FreeX.Core.Model;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Content;
+
+namespace FreeX.Core.IO;
+
+/// <summary>
+/// Best-effort, read-only PDF table extraction (PDF import §1). PDF has no table model — it is a bag of
+/// positioned glyphs — so this reader applies spatial heuristics to recover a 2-D cell grid per page.
+///
+/// <para><strong>Algorithm summary:</strong></para>
+/// <list type="number">
+///   <item>Letters are grouped into visual <em>rows</em> by baseline Y (tolerance = half the modal font
+///   size, min 3 pt). Rows are sorted top-to-bottom (descending Y in PdfPig coordinates).</item>
+///   <item>Each row is split into <em>tokens</em> (word/cell fragments) using the same word-gap heuristic
+///   as FreeW's PdfTextReader: a space is inserted — and a new token started — when the horizontal gap
+///   between consecutive letters exceeds 0.25× the reference font size.</item>
+///   <item><em>Column boundaries</em> are inferred from vertical whitespace "gutters": the X axis is
+///   discretised into <see cref="XHistogramBuckets"/> equal-width buckets and a coverage histogram is
+///   built across all token X-intervals on the page. A gutter is any span of buckets whose coverage count
+///   falls below <see cref="GutterCoverageThreshold"/> of the total row count. The regions between
+///   gutters define the column bands. A gutter is at least <see cref="MinGutterBuckets"/> wide, which at
+///   typical font sizes prevents intra-word or intra-number spaces from splitting columns.</item>
+///   <item>Each token is assigned to the column whose band contains the token's centre X. Tokens sharing
+///   the same (row, column) are joined with a space.</item>
+///   <item>Each cell string is coerced to the appropriate <see cref="ScalarValue"/> subtype (number, date,
+///   bool, text) using the same rules as <see cref="DelimitedTextWorkbookReader"/>.</item>
+/// </list>
+///
+/// <para><strong>Known weak cases</strong> (inherent to positioned-glyph PDFs with no table model):</para>
+/// <list type="bullet">
+///   <item>Merged/spanned cells are not detectable — each glyph-cluster becomes its own cell.</item>
+///   <item>Very narrow tables where column gutters are thinner than the minimum gutter threshold may
+///   collapse adjacent columns.</item>
+///   <item>Pages with mixed prose and table content may produce noisy extra columns from prose words.</item>
+///   <item>Rotated or vertically-written text is ignored by the row-grouping heuristic.</item>
+///   <item>Scanned/image-only pages (no text layer) always yield an empty sheet — no OCR is performed.</item>
+/// </list>
+/// </summary>
+internal static class PdfTableReader
+{
+    // ── Tuning constants ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of equal-width histogram buckets used to discretise the page's X axis for gutter detection.
+    /// 200 buckets over a typical A4 page (~595 pt wide) gives ~3 pt resolution, which is finer than a
+    /// typical character width (~6–10 pt) and coarser than floating-point glyph coordinate noise.
+    /// </summary>
+    private const int XHistogramBuckets = 200;
+
+    /// <summary>
+    /// A histogram bucket (or run of consecutive buckets) is considered a "gutter" (column separator)
+    /// when its coverage count — the number of rows that have a token overlapping that bucket — is at
+    /// most this fraction of the total row count. 0.15 means: if 15% or fewer rows have any text over
+    /// that X position, treat it as empty space between columns.
+    /// </summary>
+    private const double GutterCoverageThreshold = 0.15;
+
+    /// <summary>
+    /// Minimum width of a gutter in histogram buckets. A gutter shorter than this is ignored, so that
+    /// intra-word spaces (which are typically 1–3 pt, i.e. ≤ 1 bucket at the standard resolution) do
+    /// not falsely split a column. With XHistogramBuckets=200 over 595 pt, 1 bucket ≈ 3 pt; setting
+    /// MinGutterBuckets=2 means gutters must be at least ~6 pt wide, which is narrower than even a
+    /// 5-pt space character but wider than typical floating-point kerning noise.
+    /// </summary>
+    private const int MinGutterBuckets = 2;
+
+    // ── Public entry point ───────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the PDF in <paramref name="stream"/> and returns a <see cref="Workbook"/> with one worksheet
+    /// per PDF page, named "Page 1", "Page 2", …. Each sheet receives a best-effort table grid extracted
+    /// from the page's text layer. Pages with no text layer produce an empty (but present) sheet so the
+    /// result always has at least one sheet.
+    ///
+    /// The stream is copied into memory (PdfPig requires random access) but is <em>not</em> disposed,
+    /// matching the FreeX adapter stream-ownership contract.
+    /// </summary>
+    /// <exception cref="InvalidDataException">
+    /// Thrown when the stream cannot be parsed as a PDF (malformed header, encrypted without user
+    /// password, etc.). The inner exception carries the original library exception for diagnostics.
+    /// </exception>
+    public static Workbook Read(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        // PdfPig needs a fully-materialised, seekable buffer; copy without taking ownership of the caller's stream.
+        byte[] bytes;
+        using (var buffer = new MemoryStream())
+        {
+            stream.CopyTo(buffer);
+            bytes = buffer.ToArray();
+        }
+
+        PdfDocument pdf;
+        try
+        {
+            pdf = PdfDocument.Open(bytes);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidDataException(
+                "The file could not be opened as a PDF. It may be malformed, encrypted, or not a PDF.", ex);
+        }
+
+        var workbook = new Workbook("Untitled");
+
+        using (pdf)
+        {
+            var pageIndex = 0;
+            foreach (var page in pdf.GetPages())
+            {
+                pageIndex++;
+                var sheetName = $"Page {pageIndex}";
+                var sheet = workbook.AddSheet(sheetName);
+                ExtractPageGrid(page, sheet);
+            }
+        }
+
+        // Always yield at least one sheet (even for a totally blank PDF).
+        if (workbook.Sheets.Count == 0)
+            workbook.AddSheet("Page 1");
+
+        return workbook;
+    }
+
+    // ── Page extraction ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Extracts a 2-D table grid from <paramref name="page"/> and writes it into <paramref name="sheet"/>.
+    /// Pages with no text layer are silently skipped (sheet remains empty).
+    /// </summary>
+    private static void ExtractPageGrid(Page page, Sheet sheet)
+    {
+        var letters = page.Letters;
+        if (letters == null || letters.Count == 0)
+            return; // image-only page — empty sheet, no crash
+
+        // 1. Compute dominant font size for row-grouping tolerance.
+        var dominantSize = ModalSize(letters) ?? 12.0;
+        var yTolerance = Math.Max(dominantSize * 0.5, 3.0);
+
+        // 2. Group letters into visual rows by baseline Y.
+        var rows = GroupLettersIntoRows(letters, yTolerance);
+        if (rows.Count == 0)
+            return;
+
+        // Sort rows top-to-bottom (higher Y = higher on page in PdfPig coords).
+        rows.Sort((a, b) => b.BaselineY.CompareTo(a.BaselineY));
+
+        // 3. Split each row into tokens using the word-gap heuristic (reused from FreeW's PdfTextReader).
+        //    Word-gap threshold: 0.25× font size — same constant as FreeW.
+        const double wordGapFactor = 0.25;
+        foreach (var row in rows)
+            row.BuildTokens(wordGapFactor);
+
+        // 4. Detect column boundaries from the X coverage histogram.
+        var (pageMinX, pageMaxX) = PageXBounds(rows);
+        if (pageMaxX <= pageMinX)
+        {
+            // Degenerate page — treat everything as a single column.
+            WriteRowsAsSingleColumn(rows, sheet);
+            return;
+        }
+
+        var columnBands = DetectColumnBands(rows, pageMinX, pageMaxX);
+
+        // 5. Assign tokens to (rowIndex, columnIndex) cells and write to sheet.
+        uint sheetRow = 1;
+        foreach (var row in rows)
+        {
+            if (sheetRow > CellAddress.MaxRow)
+                break;
+
+            // Build per-column text buckets.
+            var columnTexts = new Dictionary<int, List<string>>();
+
+            foreach (var token in row.Tokens)
+            {
+                var centerX = (token.Left + token.Right) / 2.0;
+                var colIndex = FindColumn(columnBands, centerX);
+                if (!columnTexts.TryGetValue(colIndex, out var bucket))
+                {
+                    bucket = [];
+                    columnTexts[colIndex] = bucket;
+                }
+                bucket.Add(token.Text);
+            }
+
+            // Write non-empty columns.
+            foreach (var (colIndex, texts) in columnTexts)
+            {
+                var sheetCol = (uint)(colIndex + 1); // 1-based
+                if (sheetCol > CellAddress.MaxCol)
+                    continue;
+
+                var cellText = string.Join(" ", texts).Trim();
+                if (cellText.Length == 0)
+                    continue;
+
+                var value = CoerceValue(cellText);
+                if (value is not BlankValue)
+                    sheet.SetCell(new CellAddress(sheet.Id, sheetRow, sheetCol), Cell.FromValue(value));
+            }
+
+            sheetRow++;
+        }
+    }
+
+    /// <summary>
+    /// Fallback: writes each row's full text into a single column (column A) when column detection cannot
+    /// produce a meaningful split (e.g. a page with only one glyph cluster).
+    /// </summary>
+    private static void WriteRowsAsSingleColumn(List<TextRow> rows, Sheet sheet)
+    {
+        uint sheetRow = 1;
+        foreach (var row in rows)
+        {
+            if (sheetRow > CellAddress.MaxRow)
+                break;
+
+            var text = string.Join(" ", row.Tokens.Select(t => t.Text)).Trim();
+            if (text.Length > 0)
+            {
+                var value = CoerceValue(text);
+                if (value is not BlankValue)
+                    sheet.SetCell(new CellAddress(sheet.Id, sheetRow, 1), Cell.FromValue(value));
+            }
+            sheetRow++;
+        }
+    }
+
+    // ── Column detection ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Infers column bands (closed X intervals [left, right]) from the X-axis coverage histogram.
+    ///
+    /// <para>Algorithm:</para>
+    /// <list type="number">
+    ///   <item>Divide [<paramref name="minX"/>, <paramref name="maxX"/>] into <see cref="XHistogramBuckets"/>
+    ///   equal-width buckets.</item>
+    ///   <item>For each row and each token in that row, mark every bucket overlapping the token's
+    ///   [left, right] interval as covered by that row. Count = number of distinct rows covering each
+    ///   bucket.</item>
+    ///   <item>Identify "gutter" buckets: coverage ≤ <see cref="GutterCoverageThreshold"/> × rowCount.
+    ///   Only runs of at least <see cref="MinGutterBuckets"/> consecutive gutter buckets qualify.</item>
+    ///   <item>Column bands are the connected non-gutter regions.</item>
+    /// </list>
+    ///
+    /// If no gutters are found (single dense block of text), a single band covering the whole page is
+    /// returned so all tokens go into column 0.
+    /// </summary>
+    private static List<(double Left, double Right)> DetectColumnBands(
+        List<TextRow> rows, double minX, double maxX)
+    {
+        var rowCount = rows.Count;
+        var bucketWidth = (maxX - minX) / XHistogramBuckets;
+        if (bucketWidth <= 0)
+            return [(minX, maxX)];
+
+        // Coverage[b] = number of rows that have at least one token overlapping bucket b.
+        var coverage = new int[XHistogramBuckets];
+
+        foreach (var row in rows)
+        {
+            // Track which buckets this row covers (use a bool[] to avoid double-counting per row).
+            var rowCovered = new bool[XHistogramBuckets];
+            foreach (var token in row.Tokens)
+            {
+                var left = Math.Max(token.Left, minX);
+                var right = Math.Min(token.Right, maxX);
+                if (left >= right)
+                    continue;
+
+                var bLeft = (int)((left - minX) / bucketWidth);
+                var bRight = (int)((right - minX) / bucketWidth);
+                bLeft = Math.Clamp(bLeft, 0, XHistogramBuckets - 1);
+                bRight = Math.Clamp(bRight, 0, XHistogramBuckets - 1);
+
+                for (var b = bLeft; b <= bRight; b++)
+                    rowCovered[b] = true;
+            }
+            for (var b = 0; b < XHistogramBuckets; b++)
+                if (rowCovered[b])
+                    coverage[b]++;
+        }
+
+        // Identify gutter buckets: coverage ≤ threshold × rowCount.
+        var gutterThreshold = (int)Math.Ceiling(GutterCoverageThreshold * rowCount);
+        var isGutter = new bool[XHistogramBuckets];
+        for (var b = 0; b < XHistogramBuckets; b++)
+            isGutter[b] = coverage[b] <= gutterThreshold;
+
+        // Suppress gutters that are too narrow (< MinGutterBuckets consecutive gutter buckets).
+        // Do a two-pass: first mark all gutter runs, then clear runs that are too short.
+        var gutterRunStart = -1;
+        for (var b = 0; b <= XHistogramBuckets; b++)
+        {
+            var inGutter = b < XHistogramBuckets && isGutter[b];
+            if (inGutter && gutterRunStart < 0)
+            {
+                gutterRunStart = b;
+            }
+            else if (!inGutter && gutterRunStart >= 0)
+            {
+                var runLen = b - gutterRunStart;
+                if (runLen < MinGutterBuckets)
+                {
+                    // Too narrow — not a real gutter; clear it.
+                    for (var k = gutterRunStart; k < b; k++)
+                        isGutter[k] = false;
+                }
+                gutterRunStart = -1;
+            }
+        }
+
+        // Build column bands: connected non-gutter regions.
+        var bands = new List<(double Left, double Right)>();
+        var inBand = false;
+        var bandStart = 0;
+
+        for (var b = 0; b <= XHistogramBuckets; b++)
+        {
+            var gutter = b == XHistogramBuckets || isGutter[b];
+            if (!gutter && !inBand)
+            {
+                bandStart = b;
+                inBand = true;
+            }
+            else if (gutter && inBand)
+            {
+                var left = minX + bandStart * bucketWidth;
+                var right = minX + b * bucketWidth;
+                bands.Add((left, right));
+                inBand = false;
+            }
+        }
+
+        // Degenerate: no gutters found → one column spanning the page.
+        if (bands.Count == 0)
+            bands.Add((minX, maxX));
+
+        return bands;
+    }
+
+    /// <summary>
+    /// Returns the index of the column band whose interval contains <paramref name="centerX"/>.
+    /// If no band contains it exactly (floating-point edge case), returns the index of the closest band.
+    /// </summary>
+    private static int FindColumn(List<(double Left, double Right)> bands, double centerX)
+    {
+        // Linear scan is fine — typical table has ≤ 20 columns.
+        for (var i = 0; i < bands.Count; i++)
+        {
+            if (centerX >= bands[i].Left && centerX <= bands[i].Right)
+                return i;
+        }
+
+        // Fallback: find closest band by centre distance.
+        var best = 0;
+        var bestDist = double.MaxValue;
+        for (var i = 0; i < bands.Count; i++)
+        {
+            var mid = (bands[i].Left + bands[i].Right) / 2.0;
+            var dist = Math.Abs(centerX - mid);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    // ── Row grouping ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Groups <paramref name="letters"/> into <see cref="TextRow"/> buckets by baseline Y, merging letters
+    /// whose baseline Y is within <paramref name="yTolerance"/> of each other. Mirrors FreeW PdfTextReader.
+    /// </summary>
+    private static List<TextRow> GroupLettersIntoRows(IReadOnlyList<Letter> letters, double yTolerance)
+    {
+        var sorted = letters
+            .Where(l => !string.IsNullOrEmpty(l.Value))
+            .OrderByDescending(l => l.GlyphRectangle.BottomLeft.Y)
+            .ThenBy(l => l.GlyphRectangle.BottomLeft.X)
+            .ToList();
+
+        var rows = new List<TextRow>();
+
+        foreach (var letter in sorted)
+        {
+            var y = letter.GlyphRectangle.BottomLeft.Y;
+            var matched = rows.FirstOrDefault(r => Math.Abs(r.BaselineY - y) <= yTolerance);
+            if (matched != null)
+            {
+                matched.Letters.Add(letter);
+            }
+            else
+            {
+                var row = new TextRow(y);
+                row.Letters.Add(letter);
+                rows.Add(row);
+            }
+        }
+
+        // Sort each row's letters left-to-right.
+        foreach (var row in rows)
+            row.Letters.Sort((a, b) => a.GlyphRectangle.BottomLeft.X.CompareTo(b.GlyphRectangle.BottomLeft.X));
+
+        return rows;
+    }
+
+    // ── Geometry helpers ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Returns the modal (most frequent, rounded to nearest 0.5 pt) point size, or null.</summary>
+    private static double? ModalSize(IReadOnlyList<Letter> letters)
+    {
+        if (letters == null || letters.Count == 0)
+            return null;
+
+        var group = letters
+            .Where(l => l.PointSize > 0)
+            .GroupBy(l => Math.Round(l.PointSize * 2) / 2)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+
+        return group?.Key;
+    }
+
+    private static (double MinX, double MaxX) PageXBounds(List<TextRow> rows)
+    {
+        var minX = double.MaxValue;
+        var maxX = double.MinValue;
+        foreach (var row in rows)
+        {
+            foreach (var l in row.Letters)
+            {
+                var lx = l.GlyphRectangle.BottomLeft.X;
+                var rx = l.GlyphRectangle.TopRight.X;
+                if (lx < minX) minX = lx;
+                if (rx > maxX) maxX = rx;
+            }
+        }
+        return minX > maxX ? (0, 0) : (minX, maxX);
+    }
+
+    // ── Value coercion ───────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Coerces a trimmed cell string to the appropriate <see cref="ScalarValue"/> subtype using the same
+    /// precedence rules as <see cref="DelimitedTextWorkbookReader"/>:
+    /// bool → error → integer → percentage → currency → finite-number → datetime → time → text.
+    ///
+    /// This replicates (not delegates to) the private helper chain in DelimitedTextWorkbookReader because
+    /// those helpers are private/internal and the coercion rules are stable. If the rules diverge in
+    /// future, the two sites should be unified into a shared helper in FreeX.Core.IO.
+    /// </summary>
+    internal static ScalarValue CoerceValue(string raw)
+    {
+        var trimmed = raw.AsSpan().Trim();
+
+        if (trimmed.Equals("TRUE".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return new BoolValue(true);
+        if (trimmed.Equals("FALSE".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return new BoolValue(false);
+
+        // Error literals (#DIV/0!, #VALUE!, etc.)
+        if (trimmed.Length > 0 && trimmed[0] == '#')
+        {
+            if (TryParseErrorValue(trimmed, out var err))
+                return err;
+        }
+
+        // Integer (digits only, optional leading sign, ≤ 15 digits)
+        if (TryParseSimpleInteger(trimmed, out var intVal))
+            return new NumberValue(intVal);
+
+        // Percentage (trailing %)
+        if (trimmed.Length >= 2 && trimmed[^1] == '%')
+        {
+            if (TryParseFiniteNumber(trimmed[..^1], out var pct))
+                return new NumberValue(pct / 100.0);
+        }
+
+        // Currency (contains $)
+        if (trimmed.IndexOf('$') >= 0 &&
+            double.TryParse(trimmed, NumberStyles.Currency,
+                CultureInfo.GetCultureInfo("en-US"), out var cur) &&
+            double.IsFinite(cur))
+        {
+            return new NumberValue(cur);
+        }
+
+        // Generic finite number
+        if (TryParseFiniteNumber(trimmed, out var num))
+            return new NumberValue(num);
+
+        // DateTime (ISO-8601 first, then current culture, then explicit formats)
+        if (TryParseDateTime(trimmed, out var dt))
+            return DateTimeValue.FromDateTime(dt);
+
+        // Time-of-day
+        if (TryParseTime(trimmed, out var ts))
+            return new DateTimeValue(ts.TotalDays);
+
+        return trimmed.Length == 0 ? BlankValue.Instance : new TextValue(raw.Trim());
+    }
+
+    private static readonly Dictionary<string, ErrorValue> ErrorValues =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["#DIV/0!"] = ErrorValue.DivByZero,
+            ["#VALUE!"] = ErrorValue.Value,
+            ["#REF!"] = ErrorValue.Ref,
+            ["#NAME?"] = ErrorValue.Name,
+            ["#NULL!"] = ErrorValue.Null,
+            ["#N/A"] = ErrorValue.NA,
+            ["#NUM!"] = ErrorValue.Num,
+            ["#CIRCULAR!"] = ErrorValue.Circular,
+            ["#SPILL!"] = ErrorValue.Spill,
+            ["#CALC!"] = ErrorValue.Calc,
+        };
+
+    private static bool TryParseErrorValue(ReadOnlySpan<char> field, out ErrorValue error)
+    {
+        foreach (var kv in ErrorValues)
+        {
+            if (field.Equals(kv.Key.AsSpan(), StringComparison.OrdinalIgnoreCase))
+            {
+                error = kv.Value;
+                return true;
+            }
+        }
+        error = default!;
+        return false;
+    }
+
+    private static bool TryParseSimpleInteger(ReadOnlySpan<char> field, out double value)
+    {
+        value = default;
+        if (field.Length == 0) return false;
+
+        var i = 0;
+        var negative = false;
+        if (field[i] is '+' or '-')
+        {
+            negative = field[i] == '-';
+            i++;
+            if (i == field.Length) return false;
+        }
+
+        if (field.Length - i > 15) return false;
+
+        long acc = 0;
+        for (; i < field.Length; i++)
+        {
+            var d = field[i] - '0';
+            if ((uint)d > 9) return false;
+            acc = acc * 10 + d;
+        }
+
+        value = negative ? -acc : acc;
+        return true;
+    }
+
+    private static bool TryParseFiniteNumber(ReadOnlySpan<char> field, out double value)
+    {
+        if (double.TryParse(field, NumberStyles.Any, CultureInfo.CurrentCulture, out value) &&
+            double.IsFinite(value))
+            return true;
+
+        if (double.TryParse(field, NumberStyles.Any, CultureInfo.InvariantCulture, out value) &&
+            double.IsFinite(value))
+            return true;
+
+        value = default;
+        return false;
+    }
+
+    // ISO-8601 formats tried before falling back to culture-specific parsing.
+    private static readonly string[] IsoDateFormats =
+    [
+        "yyyy-MM-ddTHH:mm:sszzz", "yyyy-MM-ddTHH:mm:sszz", "yyyy-MM-ddTHH:mm:ssZ",
+        "yyyy-MM-ddTHH:mm:zzz",   "yyyy-MM-ddTHH:mmzzz",   "yyyy-MM-ddTHH:mm:ss",
+        "yyyy-MM-ddTHH:mm",       "yyyy-MM-dd",
+    ];
+
+    private static readonly string[] ExtraDateFormats =
+    [
+        "M/d/yyyy", "d/M/yyyy", "M-d-yyyy", "d-M-yyyy",
+        "MM/dd/yyyy", "dd/MM/yyyy", "yyyy/MM/dd",
+        "MMMM d, yyyy", "MMM d, yyyy", "d MMMM yyyy", "d MMM yyyy",
+    ];
+
+    private static bool TryParseDateTime(ReadOnlySpan<char> field, out DateTime dt)
+    {
+        // ISO-8601 (with optional timezone offset)
+        if (DateTimeOffset.TryParseExact(field, IsoDateFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+        {
+            dt = dto.UtcDateTime;
+            return true;
+        }
+
+        // Current culture
+        if (DateTime.TryParse(field, CultureInfo.CurrentCulture,
+                DateTimeStyles.NoCurrentDateDefault, out dt) &&
+            dt.Date != DateTime.MinValue.Date)
+            return true;
+
+        // Extra explicit formats
+        if (DateTime.TryParseExact(field, ExtraDateFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+            return true;
+
+        dt = default;
+        return false;
+    }
+
+    private static readonly string[] TimeSpanFormats =
+    [
+        @"h\:mm\:ss", @"hh\:mm\:ss", @"h\:mm", @"hh\:mm",
+        @"d\.hh\:mm\:ss", @"d\.hh\:mm",
+    ];
+
+    private static readonly string[] TimeOfDayFormats =
+    [
+        "h:mm tt", "hh:mm tt", "H:mm:ss", "HH:mm:ss", "H:mm", "HH:mm",
+    ];
+
+    private static bool TryParseTime(ReadOnlySpan<char> field, out TimeSpan ts)
+    {
+        if (TimeSpan.TryParseExact(field, TimeSpanFormats, CultureInfo.InvariantCulture, out ts))
+            return true;
+
+        if (DateTime.TryParseExact(field, TimeOfDayFormats, CultureInfo.InvariantCulture,
+                DateTimeStyles.NoCurrentDateDefault, out var tod))
+        {
+            ts = tod.TimeOfDay;
+            return true;
+        }
+
+        ts = default;
+        return false;
+    }
+
+    // ── Internal model ───────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Working representation of a single visual row of glyphs during extraction.</summary>
+    private sealed class TextRow(double baselineY)
+    {
+        public double BaselineY { get; } = baselineY;
+        public List<Letter> Letters { get; } = [];
+        public List<Token> Tokens { get; } = [];
+
+        /// <summary>
+        /// Splits <see cref="Letters"/> (already sorted left-to-right) into <see cref="Token"/> objects.
+        /// A new token is started when the X gap between consecutive letters exceeds
+        /// <paramref name="wordGapFactor"/> × the reference font size (same heuristic as FreeW PdfTextReader).
+        /// </summary>
+        public void BuildTokens(double wordGapFactor)
+        {
+            if (Letters.Count == 0)
+                return;
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append(Letters[0].Value);
+
+            var refSize = Letters[0].PointSize > 0 ? Letters[0].PointSize : 12.0;
+            var wordGap = refSize * wordGapFactor;
+
+            var tokenLeft = Letters[0].GlyphRectangle.BottomLeft.X;
+            var tokenRight = Letters[0].GlyphRectangle.TopRight.X;
+
+            for (var i = 1; i < Letters.Count; i++)
+            {
+                var prev = Letters[i - 1];
+                var curr = Letters[i];
+                var gap = curr.GlyphRectangle.BottomLeft.X - prev.GlyphRectangle.TopRight.X;
+
+                if (gap > wordGap)
+                {
+                    // Close current token.
+                    Tokens.Add(new Token(sb.ToString(), tokenLeft, tokenRight));
+                    sb.Clear();
+                    tokenLeft = curr.GlyphRectangle.BottomLeft.X;
+                }
+
+                sb.Append(curr.Value);
+                tokenRight = curr.GlyphRectangle.TopRight.X;
+
+                // Update reference size to current letter's size (tracks size changes within a line).
+                if (curr.PointSize > 0)
+                {
+                    refSize = curr.PointSize;
+                    wordGap = refSize * wordGapFactor;
+                }
+            }
+
+            // Close last token.
+            if (sb.Length > 0)
+                Tokens.Add(new Token(sb.ToString(), tokenLeft, tokenRight));
+        }
+    }
+
+    /// <summary>A single word/number token extracted from a row, with its bounding X interval.</summary>
+    private sealed record Token(string Text, double Left, double Right);
+}

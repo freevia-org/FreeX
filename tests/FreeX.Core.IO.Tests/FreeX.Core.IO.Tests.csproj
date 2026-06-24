@@ -14,6 +14,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- PdfPig used to synthesize PDFs in-test (no binary fixtures); mirrors FreeW.Core.IO.Tests pattern -->
+    <PackageReference Include="UglyToad.PdfPig" />
   </ItemGroup>
 
   <ItemGroup>

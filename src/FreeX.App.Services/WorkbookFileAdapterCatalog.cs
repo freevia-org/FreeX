@@ -23,6 +23,7 @@ public static class WorkbookFileAdapterCatalog
         new SlkFileAdapter(),
         new DifFileAdapter(),
         new DbfFileAdapter(),
+        new PdfFileAdapter(),
         new HtmlFileAdapter(),
         new MhtFileAdapter(),
         new NativeJsonAdapter(),
