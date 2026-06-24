@@ -49,6 +49,8 @@ internal static class FreeWRibbon
                     g.Medium("freew.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "FP");
                     g.Icon("freew.paste-plain", "Paste Text Only", RibbonCommandIconKind.Paste);
                     g.Icon("freew.paste-merge", "Merge Formatting", RibbonCommandIconKind.Paste);
+                    // Paste Special: dialog offering Keep Source Formatting / Merge Formatting / Keep Text Only.
+                    g.Icon("freew.paste-special", "Paste Special…", RibbonCommandIconKind.Paste);
                 });
                 tab.Group("font", "Font", "F", 90, g =>
                 {
@@ -82,6 +84,9 @@ internal static class FreeWRibbon
                     g.Icon("freew.char-border", "Character Border", RibbonCommandIconKind.Border);
                     g.Icon("freew.char-shading", "Character Shading", RibbonCommandIconKind.Fill);
                     g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
+                    // Font dialog-launcher: opens the two-tab Font dialog (Font + Advanced tab with
+                    // character spacing, kerning, position, ligatures, stylistic sets, number form/spacing).
+                    g.Icon("freew.font-dialog", "Font…", RibbonCommandIconKind.Font);
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
                 {
@@ -92,6 +97,11 @@ internal static class FreeWRibbon
                     {
                         m.Item("freew.multilevel-promote", "Decrease List Level", "P");
                         m.Item("freew.multilevel-demote", "Increase List Level", "D");
+                        // Predefined multilevel list presets (mirrors Word's gallery of 3 presets).
+                        foreach (var (preset, idx) in MultilevelListDialog.Presets.Select((p, i) => (p, i)))
+                            m.Item($"freew.multilevel-preset-{idx}", preset.Name, (idx + 1).ToString());
+                        // Define New Multilevel List: opens a dialog to configure levels and start-at.
+                        m.Item("freew.multilevel-define", "Define New Multilevel List…", "N");
                     });
                     g.Icon("freew.indent-decrease", "Decrease Indent", RibbonCommandIconKind.IndentDecrease);
                     g.Icon("freew.indent-increase", "Increase Indent", RibbonCommandIconKind.IndentIncrease);

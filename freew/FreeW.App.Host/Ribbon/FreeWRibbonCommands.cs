@@ -193,9 +193,25 @@ internal static class FreeWRibbonCommands
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
+        // The top-level "freew.multilevel-list" id applies the first (standard decimal) preset directly
+        // (clicking the button face vs. the dropdown arrow follows the same pattern as Word's gallery).
         registry.Register("freew.multilevel-list", new ActionCommand(() => editor.ApplyMultiLevelList()));
         registry.Register("freew.multilevel-demote", new ActionCommand(() => editor.ChangeListLevel(+1)));
         registry.Register("freew.multilevel-promote", new ActionCommand(() => editor.ChangeListLevel(-1)));
+        // Predefined multilevel list preset commands — three Word-parity presets shown in the gallery.
+        for (var pi = 0; pi < MultilevelListDialog.Presets.Length; pi++)
+        {
+            var preset = MultilevelListDialog.Presets[pi];
+            var capturedPreset = preset; // capture for lambda
+            registry.Register($"freew.multilevel-preset-{pi}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                capturedPreset.Apply(editor);
+            }));
+        }
+        // "Define New Multilevel List" dialog: captures backed options (number of levels, start-at) and
+        // applies the backed subset (ListKind.MultiLevel + optional ListStartOverride on level 0/1).
+        registry.Register("freew.multilevel-define", new DefineMultilevelListCommand(editor));
         Routed("freew.cut", ApplicationCommands.Cut);
         Routed("freew.copy", ApplicationCommands.Copy);
         Routed("freew.paste", ApplicationCommands.Paste);
@@ -1109,12 +1125,27 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.space-after", spaceAfter);
         stateful.Add(("freew.space-after", spaceAfter));
 
+        // Home > Font > Font dialog-launcher (freew.font-dialog): opens a two-tab dialog (Font tab +
+        // Advanced tab) covering family/size/style/colour/effects on the Font tab and the full OpenType
+        // advanced typography fields (CharacterSpacingPt, KerningMinSizePt, PositionPt, Ligatures,
+        // StylisticSet, NumberForm, NumberSpacing) on the Advanced tab. Applies via ApplyFontFormatting
+        // which pushes both WPF property values and model-only fields through the undo/redo bus.
+        registry.Register("freew.font-dialog", new FontDialogCommand(editor));
+
         // Home > Paragraph: increase/decrease the left indent by one 0.5in step over the selection, and
         // open the Paragraph dialog to set left/right/first-line (incl. hanging) indents. All reversible.
         registry.Register("freew.indent-increase", new ActionCommand(() => { editor.Focus(); editor.IncreaseIndent(); }));
         registry.Register("freew.indent-decrease", new ActionCommand(() => { editor.Focus(); editor.DecreaseIndent(); }));
-        registry.Register("freew.paragraph-dialog", new ParagraphIndentCommand(editor));
+        // freew.paragraph-dialog now opens the full two-tab Paragraph dialog (Indents and Spacing +
+        // Line and Page Breaks), replacing the previous single-tab ParagraphIndentCommand. All fields
+        // that ParagraphIndentCommand previously handled are present on the Indents and Spacing tab.
+        registry.Register("freew.paragraph-dialog", new ParagraphDialogCommand(editor));
         registry.Register("freew.tabs-dialog", new TabsCommand(editor));
+
+        // Home > Clipboard: Paste Special opens a dialog listing the backed paste formats (Keep Source
+        // Formatting, Merge Formatting, Keep Text Only). Formats not feasible to parse (RTF, HTML) are
+        // omitted rather than faked. Wires to real System.Windows.Clipboard format checks.
+        registry.Register("freew.paste-special", new PasteSpecialCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
         registry.Register("freew.para-border", new ActionCommand(() => editor.ToggleParagraphBorder()));
@@ -1694,6 +1725,93 @@ internal static class FreeWRibbonCommands
             {
                 editor.Focus();
                 editor.SetParagraphIndents(chosen.Left, chosen.Right, chosen.FirstLine);
+            }
+        }
+    }
+
+    // Home > Font dialog-launcher (freew.font-dialog): opens the two-tab Font dialog (Font + Advanced)
+    // covering the standard run formatting fields plus the OpenType advanced typography fields that the
+    // model already backs: CharacterSpacingPt, KerningMinSizePt, PositionPt, Ligatures, StylisticSet,
+    // NumberForm, NumberSpacing. Applies via DocumentView.ApplyFontFormatting (both WPF surface +
+    // model-only fields through the undo/redo bus).
+    private sealed class FontDialogCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var current = editor.CurrentRunFormatting;
+            var result = FontDialog.Prompt(Window.GetWindow(editor), current);
+            if (result is null)
+                return;
+            editor.Focus();
+            editor.ApplyFontFormatting(result);
+        }
+    }
+
+    // Home > Paragraph dialog-launcher (freew.paragraph-dialog): replaces the previous single-tab
+    // ParagraphIndentCommand with the full two-tab dialog (Indents and Spacing + Line and Page Breaks).
+    // All fields map to backed ParagraphFormatting properties and route through the undo/redo bus.
+    private sealed class ParagraphDialogCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var current = editor.CurrentParagraphFormatting;
+            var result = ParagraphBreaksDialog.Prompt(Window.GetWindow(editor), current);
+            if (result is null)
+                return;
+            editor.Focus();
+            editor.ApplyParagraphDialogFormatting(
+                result.LeftPt, result.RightPt, result.FirstLinePt,
+                result.SpaceBeforePt, result.SpaceAfterPt, result.LineSpacing,
+                result.KeepWithNext, result.KeepLinesTogether, result.WidowControl,
+                result.PageBreakBefore, result.SuppressAutoHyphens);
+        }
+    }
+
+    // Home > Clipboard > Paste Special: shows a list of backed paste formats and dispatches to the
+    // matching DocumentView method. "Keep Source Formatting" and "Merge Formatting" both map to
+    // PasteMergeFormatting in the current model (both yield match-destination); "Keep Text Only" maps to
+    // PastePlainText. Formats not feasible to parse (RTF, HTML) are omitted.
+    private sealed class PasteSpecialCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var option = PasteSpecialDialog.Prompt(Window.GetWindow(editor));
+            if (option is null)
+                return;
+            editor.Focus();
+            switch (option.Value)
+            {
+                case PasteSpecialOption.KeepTextOnly:
+                    editor.PastePlainText();
+                    break;
+                default: // KeepSourceFormatting and MergeFormatting both use merge-destination path
+                    editor.PasteMergeFormatting();
+                    break;
+            }
+        }
+    }
+
+    // Home > Paragraph > Multilevel List > Define New Multilevel List: opens the definition dialog and
+    // applies the backed subset (ListKind.MultiLevel with optional ListStartOverride on level 0/1).
+    private sealed class DefineMultilevelListCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var def = MultilevelListDialog.Prompt(Window.GetWindow(editor));
+            if (def is null)
+                return;
+            editor.Focus();
+            // Apply multilevel to selection (this sets ListKind.MultiLevel on selected paragraphs).
+            editor.ApplyMultiLevelList();
+            // Apply start-at overrides if requested: Level0StartAt applies to level-0 paragraphs,
+            // Level1StartAt to level-1 paragraphs. Uses per-paragraph conditional transform.
+            if (def.Level0StartAt.HasValue || def.Level1StartAt.HasValue)
+            {
+                editor.ApplyListStartOverrides(def.Level0StartAt, def.Level1StartAt);
             }
         }
     }

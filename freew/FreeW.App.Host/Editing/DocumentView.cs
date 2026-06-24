@@ -2654,6 +2654,20 @@ public sealed class DocumentView : RichTextBox
             : f with { ListLevel = Math.Clamp(f.ListLevel + delta, 0, 8) });
 
     /// <summary>
+    /// Apply start-at overrides to multilevel-list paragraphs spanned by the selection, based on their
+    /// list level. <paramref name="level0StartAt"/> applies to paragraphs at ListLevel 0;
+    /// <paramref name="level1StartAt"/> applies to paragraphs at ListLevel 1. Null means "no override
+    /// (continue)". Called by the Define New Multilevel List command after <see cref="ApplyMultiLevelList"/>
+    /// sets the list kind. Reversible via the bus.
+    /// </summary>
+    public void ApplyListStartOverrides(int? level0StartAt, int? level1StartAt) =>
+        FormatSelectedModelParagraphs(f =>
+            f.ListKind != ListKind.MultiLevel ? f :
+            f.ListLevel == 0 && level0StartAt.HasValue ? f with { ListStartOverride = level0StartAt } :
+            f.ListLevel == 1 && level1StartAt.HasValue ? f with { ListStartOverride = level1StartAt } :
+            f);
+
+    /// <summary>
     /// Set the line spacing (a multiplier on the default font size, e.g. 1.0 single / 1.5 / 2.0 double)
     /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
     /// </summary>
@@ -3458,6 +3472,59 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetProofingLanguage(string? languageTag) =>
         FormatSelectedModelRuns(f => f with { LanguageTag = string.IsNullOrEmpty(languageTag) ? null : languageTag });
+
+    /// <summary>
+    /// Apply all fields of <paramref name="fmt"/> to the current selection, covering both WPF-backed
+    /// properties (bold, italic, underline, strikethrough, font family, size, colour, super/subscript,
+    /// small/all caps) and model-only advanced typography fields (character spacing, kerning, position,
+    /// ligatures, stylistic set, number form, number spacing). Used by the Font dialog-launcher
+    /// (freew.font-dialog). Both layers are applied atomically from the caller's perspective: the WPF
+    /// properties change the live surface immediately; the model-only fields are pushed through the
+    /// undo/redo bus via <see cref="FormatSelectedModelRuns"/>. A subsequent <see cref="CommitToModel"/>
+    /// call merges the WPF surface back into the model, so both sets of changes survive the round-trip.
+    /// </summary>
+    public void ApplyFontFormatting(RunFormatting fmt)
+    {
+        Focus();
+        // Apply the WPF-visible fields via the selection property bag (the normal path for bold/size/…).
+        ApplyRunFormattingToSelection(fmt);
+        // Apply model-only advanced fields via the bus so they are undoable and round-trip through docx.
+        FormatSelectedModelRuns(f => f with
+        {
+            CharacterSpacingPt = fmt.CharacterSpacingPt,
+            KerningMinSizePt   = fmt.KerningMinSizePt,
+            PositionPt         = fmt.PositionPt,
+            Ligatures          = fmt.Ligatures,
+            StylisticSet       = fmt.StylisticSet,
+            NumberForm         = fmt.NumberForm,
+            NumberSpacing      = fmt.NumberSpacing,
+        });
+    }
+
+    /// <summary>
+    /// Apply the full paragraph formatting block captured by the Paragraph dialog (indents + spacing from
+    /// the Indents and Spacing tab + line-and-page-break toggles from the Line and Page Breaks tab) to
+    /// every paragraph spanned by the selection. All changes route through the undo/redo bus.
+    /// </summary>
+    public void ApplyParagraphDialogFormatting(
+        double leftPt, double rightPt, double firstLinePt,
+        double spaceBeforePt, double spaceAfterPt, double lineSpacing,
+        bool keepWithNext, bool keepLinesTogether, bool widowControl,
+        bool pageBreakBefore, bool suppressAutoHyphens) =>
+        FormatSelectedModelParagraphs(f => f with
+        {
+            IndentLeftPt       = leftPt,
+            IndentRightPt      = rightPt,
+            FirstLineIndentPt  = firstLinePt,
+            SpaceBeforePt      = spaceBeforePt,
+            SpaceAfterPt       = spaceAfterPt,
+            LineSpacing        = lineSpacing,
+            KeepWithNext       = keepWithNext,
+            KeepLinesTogether  = keepLinesTogether,
+            WidowControl       = widowControl,
+            PageBreakBefore    = pageBreakBefore,
+            SuppressAutoHyphens= suppressAutoHyphens,
+        });
 
     // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built
     // by flattening lists into their item paragraphs in document order (see CommitToModel), so a WPF
