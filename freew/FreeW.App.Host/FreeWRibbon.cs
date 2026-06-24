@@ -895,6 +895,74 @@ internal static class FreeWRibbon
                     g.Medium("freew.table-to-text", "Convert to Text", RibbonCommandIconKind.TextFunction);
                 });
             })
+            // ── Header & Footer Design contextual tab — Header & Footer Tools ────────────────────────
+            // Activation model: dialog approach (not an in-document edit region). FreeW's FlowDocument
+            // is a single continuous stream; there is no WYSIWYG header region. Every command writes
+            // directly into FinalSectionHeadersFooters / PageSettings via ApplyPageSettings and
+            // round-trips through DocxWriter. The contextual key "header-footer" can be activated from
+            // Insert > Header / Footer commands via the ribbon controller.
+            .ContextualTab("header-footer-design", "Design",
+                new RibbonTabContext("header-footer", "Header & Footer Tools", RibbonContextColor.Purple), tab =>
+            {
+                // Header & Footer group — edit the six per-slot content areas.
+                tab.Group("hf-header-footer", "Header & Footer", "H", 120, g =>
+                {
+                    g.Medium("freew.hf-edit-header",       "Edit Header",       RibbonCommandIconKind.Header, menu: m =>
+                    {
+                        m.Item("freew.hf-edit-header",       "Default Header",     "H");
+                        m.Item("freew.hf-edit-first-header", "First-Page Header",  "F");
+                        m.Item("freew.hf-edit-even-header",  "Even-Page Header",   "E");
+                    });
+                    g.Medium("freew.hf-edit-footer",       "Edit Footer",       RibbonCommandIconKind.Footer, menu: m =>
+                    {
+                        m.Item("freew.hf-edit-footer",       "Default Footer",     "O");
+                        m.Item("freew.hf-edit-first-footer", "First-Page Footer",  "I");
+                        m.Item("freew.hf-edit-even-footer",  "Even-Page Footer",   "V");
+                    });
+                });
+                // Insert group — add page number, date/time, or document-info field into the default header.
+                tab.Group("hf-insert", "Insert", "I", 110, g =>
+                {
+                    g.Medium("freew.hf-insert-page-number", "Page Number", RibbonCommandIconKind.PageNumber, menu: m =>
+                    {
+                        m.Item("freew.hf-insert-page-number",        "In Header", "H");
+                        m.Item("freew.hf-insert-page-number-footer", "In Footer", "F");
+                    });
+                    g.Medium("freew.hf-insert-datetime", "Date && Time", RibbonCommandIconKind.Date);
+                    g.Medium("freew.hf-insert-field",    "Document Info", RibbonCommandIconKind.Field);
+                });
+                // Navigation group — go to header/footer slot and close edit mode.
+                tab.Group("hf-navigation", "Navigation", "N", 100, g =>
+                {
+                    g.Medium("freew.hf-go-to-header", "Go to Header", RibbonCommandIconKind.Header);
+                    g.Medium("freew.hf-go-to-footer", "Go to Footer", RibbonCommandIconKind.Footer);
+                });
+                // Options group — layout toggles backed by PageSettings booleans.
+                tab.Group("hf-options", "Options", "O", 90, g =>
+                {
+                    g.Medium("freew.hf-different-first-page", "Different First Page", RibbonCommandIconKind.CoverPage);
+                    g.Medium("freew.hf-different-odd-even",   "Different Odd && Even Pages", RibbonCommandIconKind.OnePage);
+                });
+                // Position group — numeric header/footer distance spinboxes backed by PageSettings.
+                tab.Group("hf-position", "Position", "P", 80, g =>
+                {
+                    g.ComboBox("freew.hf-header-from-top", "Header from Top", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Width = 80
+                    });
+                    g.ComboBox("freew.hf-footer-from-bottom", "Footer from Bottom", c => c with
+                    {
+                        Items = new[] { "0", "18", "36", "54", "72" },
+                        Width = 80
+                    });
+                });
+                // Close group — exit header/footer edit mode.
+                tab.Group("hf-close", "Close", "C", 70, g =>
+                {
+                    g.Medium("freew.hf-close", "Close Header and Footer", RibbonCommandIconKind.WindowClose);
+                });
+            })
             .Build();
 
         return definition with { Tabs = OrderVisibleTabs(definition.Tabs) };
