@@ -46,10 +46,19 @@ public static class SparklineLayoutPlanner
         IReadOnlyList<double> values,
         Rect rect,
         ref TConsumer consumer)
+        where TConsumer : struct, ISparklineLineLayoutConsumer =>
+        VisitLineLayout(values, rect, ref consumer, overrideMin: null, overrideMax: null);
+
+    internal static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        Rect rect,
+        ref TConsumer consumer,
+        double? overrideMin,
+        double? overrideMax)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
         var bridge = new LineConsumerBridge<TConsumer>(consumer);
-        SparklineLayoutEngine.VisitLineLayout(values, ToLayoutRect(rect), ref bridge);
+        SparklineLayoutEngine.VisitLineLayout(values, ToLayoutRect(rect), ref bridge, overrideMin, overrideMax);
         consumer = bridge.Inner;
     }
 
@@ -65,11 +74,36 @@ public static class SparklineLayoutPlanner
         Rect rect,
         bool winLoss,
         ref TConsumer consumer)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer =>
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs: null);
+
+    internal static void VisitColumnLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        Rect rect,
+        bool winLoss,
+        ref TConsumer consumer,
+        double? overrideMaxAbs)
         where TConsumer : struct, ISparklineColumnLayoutConsumer
     {
         var bridge = new ColumnConsumerBridge<TConsumer>(consumer);
-        SparklineLayoutEngine.VisitColumnLayout(values, ToLayoutRect(rect), winLoss, ref bridge);
+        SparklineLayoutEngine.VisitColumnLayout(values, ToLayoutRect(rect), winLoss, ref bridge, overrideMaxAbs);
         consumer = bridge.Inner;
+    }
+
+    internal static IReadOnlyList<(int Index, Point Point)> GetLinePoints(
+        IReadOnlyList<double> values,
+        Rect rect,
+        double? overrideMin,
+        double? overrideMax)
+    {
+        var enginePoints = SparklineLayoutEngine.GetLinePoints(values, ToLayoutRect(rect), overrideMin, overrideMax);
+        if (enginePoints.Count == 0)
+            return [];
+
+        var result = new (int, Point)[enginePoints.Count];
+        for (var i = 0; i < enginePoints.Count; i++)
+            result[i] = (enginePoints[i].Index, ToPoint(enginePoints[i].Point));
+        return result;
     }
 
     private static LayoutRect ToLayoutRect(Rect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);

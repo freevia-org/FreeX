@@ -376,6 +376,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelSparklineCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelSparklineCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-sparklines")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored sparkline corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))

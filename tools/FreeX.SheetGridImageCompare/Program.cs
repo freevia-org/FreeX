@@ -151,6 +151,30 @@ internal static class Program
             ? "\n[3/4] Rendering sheets via GridView..."
             : "\n[2/3] Rendering sheets via GridView...");
 
+        // --capture-range: when supplied, override the viewport for every rendered sheet with
+        // the specified cell range (no row/col headers), mirroring Excel's CopyPicture-of-range.
+        // The range is re-parsed for each sheet using that sheet's SheetId.
+        GridRange? globalCaptureRange = null;
+        if (!string.IsNullOrWhiteSpace(options.CaptureRangeRaw))
+        {
+            // Best-effort parse: use the first visible sheet's id for the initial parse.
+            var firstSheet = workbook.Sheets.FirstOrDefault(s => !s.IsHidden && !s.IsVeryHidden);
+            if (firstSheet is not null)
+            {
+                try
+                {
+                    globalCaptureRange = GridRange.ParseCellOrRange(
+                        options.CaptureRangeRaw.Replace("$", "", StringComparison.Ordinal).Trim(),
+                        firstSheet.Id);
+                    Console.WriteLine($"  Capture range : {options.CaptureRangeRaw} → {globalCaptureRange}");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  WARNING: could not parse --capture-range '{options.CaptureRangeRaw}': {ex.Message}");
+                }
+            }
+        }
+
         var sheetResults = new List<SheetResult>();
         int sheetIndex = 1;
 
@@ -298,7 +322,24 @@ internal static class Program
                 var targetDimensions = excelReferenceDimensions.TryGetValue(sheetIndex, out var dimensions)
                     ? dimensions
                     : (PngDimensions?)null;
-                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRange: null, targetDimensions);
+
+                // Re-anchor the capture range to this sheet's id if --capture-range was supplied.
+                GridRange? captureRangeForSheet = null;
+                if (globalCaptureRange.HasValue && !string.IsNullOrWhiteSpace(options.CaptureRangeRaw))
+                {
+                    try
+                    {
+                        captureRangeForSheet = GridRange.ParseCellOrRange(
+                            options.CaptureRangeRaw.Replace("$", "", StringComparison.Ordinal).Trim(),
+                            sheet.Id);
+                    }
+                    catch
+                    {
+                        captureRangeForSheet = null;
+                    }
+                }
+
+                RenderSheetToGridViewPng(workbook, sheet, viewportService, outPath, captureRangeForSheet, targetDimensions);
                 result.Rendered = true;
                 Console.WriteLine($"-> {outFileName}");
             }
@@ -447,6 +488,9 @@ internal static class Program
             NativeSlicers   = nativeVisualFilters.Slicers,
             NativeTimelines = nativeVisualFilters.Timelines,
             Sparklines      = sheet.Sparklines,
+            SparklineValues = sheet.Sparklines.Count > 0
+                ? FreeX.App.Host.SparklineValuePlanner.BuildValues(sheet)
+                : null,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,
             ObjectDisplayMode = GridObjectDisplayMode.All,
@@ -1021,7 +1065,21 @@ internal static class Program
 
             foreach (var sheet in workbook.Sheets.Where(sheet => !sheet.IsHidden && !sheet.IsVeryHidden))
             {
-                var range = sheet.GetUsedRange();
+                // Honor --capture-range when exporting Excel reference PNGs so the crop matches
+                // the FreeX render exactly. Re-parse per sheet to anchor to the right SheetId.
+                GridRange? captureRangeForExcel = null;
+                if (!string.IsNullOrWhiteSpace(options.CaptureRangeRaw))
+                {
+                    try
+                    {
+                        captureRangeForExcel = GridRange.ParseCellOrRange(
+                            options.CaptureRangeRaw.Replace("$", "", StringComparison.Ordinal).Trim(),
+                            sheet.Id);
+                    }
+                    catch { }
+                }
+
+                var range = captureRangeForExcel ?? sheet.GetUsedRange();
                 if (range is null)
                     continue;
 
@@ -1971,7 +2029,8 @@ internal sealed record GridImageCompareOptions(
     bool FailOnDimensionMismatch,
     int PixelTolerance,
     double? StrictPixelThresholdPercent,
-    bool ShowAllComments)
+    bool ShowAllComments,
+    string? CaptureRangeRaw)
 {
     public static GridImageCompareOptions Parse(string[] args)
     {
@@ -1986,6 +2045,7 @@ internal sealed record GridImageCompareOptions(
         var pixelTolerance = 8;
         double? strictPixelThresholdPercent = null;
         var showAllComments = false;
+        string? captureRangeRaw = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -2027,6 +2087,9 @@ internal sealed record GridImageCompareOptions(
                 case "--show-all-comments":
                     showAllComments = true;
                     break;
+                case "--capture-range":
+                    captureRangeRaw = index + 1 < args.Length ? args[++index] : null;
+                    break;
                 default:
                     if (!args[index].StartsWith("-", StringComparison.Ordinal))
                         workbookPath ??= args[index];
@@ -2042,7 +2105,7 @@ internal sealed record GridImageCompareOptions(
             pivotSheetRanges = false;
         }
 
-        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, tableSheetRanges, thresholdPercent, failOnDimensionMismatch, pixelTolerance, strictPixelThresholdPercent, showAllComments);
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, tableSheetRanges, thresholdPercent, failOnDimensionMismatch, pixelTolerance, strictPixelThresholdPercent, showAllComments, captureRangeRaw);
     }
 }
 
