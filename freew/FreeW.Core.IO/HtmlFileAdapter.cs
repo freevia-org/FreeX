@@ -7,8 +7,43 @@ using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
 
+/// <summary>
+/// Selects which HTML save flavour <see cref="HtmlFileAdapter"/> produces.
+/// <para><see cref="Filtered"/> (the default) emits clean, minimal HTML5 — semantic elements, a small
+/// inline style block, no Office-specific cruft. Suitable for general web use.</para>
+/// <para><see cref="Full"/> adds Office round-trip scaffolding: namespace declarations on
+/// <c>&lt;html&gt;</c>, a <c>Generator=FreeW</c> meta tag, and a richer CSS block that maps each
+/// paragraph's <c>StyleId</c> to a class name carrying an <c>mso-style-name</c> annotation so that
+/// re-opening the file can recover the heading/style identity.</para>
+/// </summary>
+public enum HtmlSaveMode
+{
+    /// <summary>Clean, minimal HTML5 — no Office-specific markup. This is the default.</summary>
+    Filtered,
+
+    /// <summary>HTML with Office round-trip scaffolding (namespace attrs, Generator meta, mso-style classes).</summary>
+    Full,
+}
+
 public sealed class HtmlFileAdapter : IDocumentFileAdapter
 {
+    private readonly HtmlSaveMode _saveMode;
+
+    /// <summary>Creates an adapter with <see cref="HtmlSaveMode.Filtered"/> (clean HTML5). This is the default.</summary>
+    public HtmlFileAdapter() : this(HtmlSaveMode.Filtered) { }
+
+    private HtmlFileAdapter(HtmlSaveMode saveMode) => _saveMode = saveMode;
+
+    /// <summary>Returns an adapter that saves the "Web Page, Filtered" variant — clean, minimal HTML5.</summary>
+    public static HtmlFileAdapter Filtered() => new(HtmlSaveMode.Filtered);
+
+    /// <summary>
+    /// Returns an adapter that saves the "Web Page" (full) variant — HTML with Office round-trip scaffolding:
+    /// namespace declarations on <c>&lt;html&gt;</c>, a <c>Generator=FreeW</c> meta, and CSS classes for
+    /// paragraph StyleIds carrying <c>mso-style-name</c> so that re-opening recovers the style identity.
+    /// </summary>
+    public static HtmlFileAdapter WebPage() => new(HtmlSaveMode.Full);
+
     public string Extension => ".html";
     public string FormatName => "HTML document";
 
@@ -26,7 +61,7 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
 
     public void Save(TextDocument document, Stream stream)
     {
-        var result = WriteHtml(document, HtmlImageMode.DataUri);
+        var result = WriteHtml(document, HtmlImageMode.DataUri, _saveMode);
         using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 4096, leaveOpen: true);
         writer.Write(result.Html);
     }
@@ -38,11 +73,14 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
         var document = new TextDocument();
         document.Blocks.Clear();
 
+        // Build a map from CSS class name → StyleId for Full (Office) round-trip recovery.
+        var msoStyleMap = BuildMsoStyleMap(htmlDocument);
+
         var body = htmlDocument.Body;
         if (body is null)
             return document;
 
-        foreach (var block in ReadBlocks(body.ChildNodes, imageResolver))
+        foreach (var block in ReadBlocks(body.ChildNodes, imageResolver, msoStyleMap))
             document.Blocks.Add(block);
 
         if (document.Blocks.Count == 0 && !string.IsNullOrWhiteSpace(body.TextContent))
@@ -51,13 +89,87 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
         return document;
     }
 
-    internal static HtmlWriteResult WriteHtml(TextDocument document, HtmlImageMode imageMode)
+    /// <summary>
+    /// Parses the document's embedded &lt;style&gt; block(s) and builds a map from CSS class name to
+    /// the StyleId value recovered from the <c>mso-style-name</c> annotation.  Returns an empty dictionary
+    /// when no such annotations are present (Filtered output, external HTML, etc.).
+    /// </summary>
+    private static Dictionary<string, string> BuildMsoStyleMap(AngleSharp.Html.Dom.IHtmlDocument htmlDocument)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var styleEl in htmlDocument.QuerySelectorAll("style"))
+        {
+            var text = styleEl.TextContent;
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            // Find every CSS rule block: .ClassName { ... mso-style-name: value; ... }
+            var pos = 0;
+            while (pos < text.Length)
+            {
+                var dot = text.IndexOf('.', pos);
+                if (dot < 0)
+                    break;
+
+                var brace = text.IndexOf('{', dot);
+                if (brace < 0)
+                    break;
+
+                var closeBrace = text.IndexOf('}', brace);
+                if (closeBrace < 0)
+                    break;
+
+                var selector = text[dot..brace].Trim();
+                var declarations = text[(brace + 1)..closeBrace];
+
+                // Only handle simple single-class selectors (.ClassName)
+                if (selector.StartsWith('.') && !selector.Contains(' ') && !selector.Contains(','))
+                {
+                    var className = selector[1..];
+                    var decl = HtmlCssFormatting.ParseDeclarations(declarations);
+                    if (decl.TryGetValue("mso-style-name", out var styleName) && styleName.Length > 0)
+                        map[className] = styleName;
+                }
+
+                pos = closeBrace + 1;
+            }
+        }
+
+        return map;
+    }
+
+    internal static HtmlWriteResult WriteHtml(TextDocument document, HtmlImageMode imageMode, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         var images = new List<HtmlEmbeddedImage>();
         var body = new StringBuilder();
-        WriteBlocks(body, document.Blocks, imageMode, images);
+        WriteBlocks(body, document.Blocks, imageMode, images, saveMode);
 
-        var html = """
+        string html;
+        if (saveMode == HtmlSaveMode.Full)
+        {
+            // Collect the distinct StyleIds that need CSS class definitions.
+            var styleIds = CollectStyleIds(document.Blocks);
+            var styleBlock = BuildFullStyleBlock(styleIds);
+            html = "<!doctype html>\n"
+                + "<html xmlns=\"http://www.w3.org/TR/REC-html40\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\">\n"
+                + "<head>\n"
+                + "<meta charset=\"utf-8\">\n"
+                + "<meta name=\"Generator\" content=\"FreeW\">\n"
+                + "<style>\n"
+                + styleBlock
+                + "body { font-family: Calibri, sans-serif; font-size: 11pt; }\n"
+                + "table { border-collapse: collapse; }\n"
+                + "td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }\n"
+                + "</style>\n"
+                + "</head>\n"
+                + "<body>\n"
+                + body
+                + "</body>\n"
+                + "</html>\n";
+        }
+        else
+        {
+            html = """
 <!doctype html>
 <html>
 <head>
@@ -73,10 +185,60 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
 </body>
 </html>
 """;
+        }
+
         return new HtmlWriteResult(html, images);
     }
 
-    private static IEnumerable<Block> ReadBlocks(IEnumerable<INode> nodes, Func<string, InlineImage?> imageResolver)
+    /// <summary>Collects distinct StyleIds from all paragraphs in the block list (recursively).</summary>
+    private static IReadOnlyList<string> CollectStyleIds(IEnumerable<Block> blocks)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        CollectStyleIdsInto(blocks, seen);
+        return [.. seen];
+    }
+
+    private static void CollectStyleIdsInto(IEnumerable<Block> blocks, HashSet<string> seen)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph p && p.StyleId is { Length: > 0 } styleId)
+                seen.Add(styleId);
+            else if (block is Table t)
+                foreach (var row in t.Rows)
+                    foreach (var cell in row.Cells)
+                        CollectStyleIdsInto(cell.Paragraphs, seen);
+        }
+    }
+
+    /// <summary>
+    /// Builds the CSS class definitions for each StyleId, including an <c>mso-style-name</c> annotation
+    /// that the reader uses to recover the StyleId on re-open.
+    /// </summary>
+    private static string BuildFullStyleBlock(IReadOnlyList<string> styleIds)
+    {
+        if (styleIds.Count == 0)
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        foreach (var styleId in styleIds)
+        {
+            var className = StyleIdToClassName(styleId);
+            sb.Append('.').Append(className).AppendLine(" {");
+            sb.Append("  mso-style-name: ").Append(styleId).AppendLine(";");
+            // Emit font-weight for known heading styles.
+            if (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase))
+                sb.AppendLine("  font-weight: bold;");
+            sb.AppendLine("}");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Converts a StyleId string to a safe CSS class name (e.g. "Heading1" → "FreeW-Heading1").</summary>
+    private static string StyleIdToClassName(string styleId) => "FreeW-" + styleId;
+
+    private static IEnumerable<Block> ReadBlocks(IEnumerable<INode> nodes, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         foreach (var node in nodes)
         {
@@ -90,7 +252,8 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             switch (element.LocalName.ToLowerInvariant())
             {
                 case "p":
-                    yield return ReadParagraph(element, ParagraphFormatting.Default, null, imageResolver);
+                    // For Full (Office) output a <p> may carry a FreeW-* class that encodes a StyleId.
+                    yield return ReadParagraphWithClassStyle(element, ParagraphFormatting.Default, imageResolver, msoStyleMap);
                     break;
                 case "h1":
                 case "h2":
@@ -98,21 +261,21 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 case "h4":
                 case "h5":
                 case "h6":
-                    yield return ReadHeading(element, imageResolver);
+                    yield return ReadHeading(element, imageResolver, msoStyleMap);
                     break;
                 case "ul":
                 case "ol":
-                    foreach (var item in ReadList(element, imageResolver))
+                    foreach (var item in ReadList(element, imageResolver, msoStyleMap))
                         yield return item;
                     break;
                 case "table":
-                    yield return ReadTable(element, imageResolver);
+                    yield return ReadTable(element, imageResolver, msoStyleMap);
                     break;
                 case "div":
                 case "section":
                 case "article":
                 case "main":
-                    foreach (var nested in ReadBlocks(element.ChildNodes, imageResolver))
+                    foreach (var nested in ReadBlocks(element.ChildNodes, imageResolver, msoStyleMap))
                         yield return nested;
                     break;
                 case "br":
@@ -120,18 +283,63 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     break;
                 default:
                     if (!string.IsNullOrWhiteSpace(element.TextContent))
-                        yield return ReadParagraph(element, ParagraphFormatting.Default, null, imageResolver);
+                        yield return ReadParagraphWithClassStyle(element, ParagraphFormatting.Default, imageResolver, msoStyleMap);
                     break;
             }
         }
     }
 
-    private static Paragraph ReadHeading(IElement element, Func<string, InlineImage?> imageResolver)
+    /// <summary>
+    /// Reads a paragraph element, checking whether its CSS class carries an <c>mso-style-name</c>
+    /// annotation (Full round-trip) and recovering the StyleId from it when present.
+    /// </summary>
+    private static Paragraph ReadParagraphWithClassStyle(
+        IElement element,
+        ParagraphFormatting baseFormatting,
+        Func<string, InlineImage?> imageResolver,
+        IReadOnlyDictionary<string, string> msoStyleMap)
+    {
+        // Recover StyleId from FreeW-* CSS class (Full output round-trip).
+        string? recoveredStyleId = null;
+        var classAttr = element.GetAttribute("class");
+        if (!string.IsNullOrEmpty(classAttr))
+        {
+            foreach (var cls in classAttr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (msoStyleMap.TryGetValue(cls, out var styleId))
+                {
+                    recoveredStyleId = styleId;
+                    break;
+                }
+            }
+        }
+
+        return ReadParagraph(element, baseFormatting, recoveredStyleId, imageResolver);
+    }
+
+    private static Paragraph ReadHeading(IElement element, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         var level = int.TryParse(element.LocalName[1..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? Math.Clamp(parsed, 1, 6)
             : 1;
-        var paragraph = ReadParagraph(element, ParagraphFormatting.Default, $"Heading{Math.Min(level, 3)}", imageResolver);
+
+        // Prefer a recovered StyleId from an mso-style-name class over the inferred heading id.
+        string? recoveredStyleId = null;
+        var classAttr = element.GetAttribute("class");
+        if (!string.IsNullOrEmpty(classAttr))
+        {
+            foreach (var cls in classAttr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (msoStyleMap.TryGetValue(cls, out var sid))
+                {
+                    recoveredStyleId = sid;
+                    break;
+                }
+            }
+        }
+
+        var styleId = recoveredStyleId ?? $"Heading{Math.Min(level, 3)}";
+        var paragraph = ReadParagraph(element, ParagraphFormatting.Default, styleId, imageResolver);
         paragraph.Runs.ReplaceAll(run => run.Formatting.Bold ? run : new Run(run.Text, run.Formatting with { Bold = true })
         {
             Image = run.Image,
@@ -142,7 +350,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         return paragraph;
     }
 
-    private static IEnumerable<Paragraph> ReadList(IElement list, Func<string, InlineImage?> imageResolver)
+    private static IEnumerable<Paragraph> ReadList(IElement list, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         var kind = list.LocalName.Equals("ol", StringComparison.OrdinalIgnoreCase) ? ListKind.Number : ListKind.Bullet;
         foreach (var item in list.Children.Where(child => child.LocalName.Equals("li", StringComparison.OrdinalIgnoreCase)))
@@ -171,7 +379,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         return paragraph;
     }
 
-    private static Table ReadTable(IElement element, Func<string, InlineImage?> imageResolver)
+    private static Table ReadTable(IElement element, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         var table = new Table();
         var rowElements = GetDirectTableRows(element);
@@ -205,7 +413,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     pendingRowspans[column] = new PendingRowspan(rowspan - 1, Math.Max(1, cell.GridSpan));
                 }
 
-                var paragraphs = ReadCellParagraphs(cellElement.ChildNodes, imageResolver);
+                var paragraphs = ReadCellParagraphs(cellElement.ChildNodes, imageResolver, msoStyleMap);
                 if (paragraphs.Count == 0)
                     paragraphs.Add(new Paragraph(NormalizeText(cellElement.TextContent)));
                 cell.Paragraphs.AddRange(paragraphs);
@@ -237,7 +445,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         return table;
     }
 
-    private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver)
+    private static List<Paragraph> ReadCellParagraphs(IEnumerable<INode> childNodes, Func<string, InlineImage?> imageResolver, IReadOnlyDictionary<string, string> msoStyleMap)
     {
         var paragraphs = new List<Paragraph>();
         var inlineNodes = new List<INode>();
@@ -266,7 +474,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             switch (element.LocalName.ToLowerInvariant())
             {
                 case "table":
-                    var nestedTable = ReadTable(element, imageResolver);
+                    var nestedTable = ReadTable(element, imageResolver, msoStyleMap);
                     if (TablePlainText(nestedTable) is { Length: > 0 } nestedText)
                         paragraphs.Add(new Paragraph(nestedText));
                     break;
@@ -274,10 +482,10 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 case "section":
                 case "article":
                 case "main":
-                    paragraphs.AddRange(ReadCellParagraphs(element.ChildNodes, imageResolver));
+                    paragraphs.AddRange(ReadCellParagraphs(element.ChildNodes, imageResolver, msoStyleMap));
                     break;
                 default:
-                    foreach (var block in ReadBlocks(new[] { element }, imageResolver))
+                    foreach (var block in ReadBlocks(new[] { element }, imageResolver, msoStyleMap))
                     {
                         switch (block)
                         {
@@ -486,7 +694,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static bool TryReadLengthPt(string? value, out double pt) =>
         HtmlCssFormatting.TryParseLengthPt(value, out pt);
 
-    private static void WriteBlocks(StringBuilder sb, IReadOnlyList<Block> blocks, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    private static void WriteBlocks(StringBuilder sb, IReadOnlyList<Block> blocks, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -509,20 +717,28 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             switch (blocks[i])
             {
                 case Paragraph p:
-                    WriteParagraph(sb, p, imageMode, images);
+                    WriteParagraph(sb, p, imageMode, images, saveMode);
                     break;
                 case Table table:
-                    WriteTable(sb, table, imageMode, images);
+                    WriteTable(sb, table, imageMode, images, saveMode);
                     break;
             }
         }
     }
 
-    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         var tag = HeadingTag(paragraph.StyleId) ?? "p";
         var style = HtmlCssFormatting.ParagraphStyle(paragraph.Formatting);
         sb.Append('<').Append(tag);
+
+        // In Full (Office) mode: emit a CSS class for non-heading StyleIds so the reader can recover them.
+        if (saveMode == HtmlSaveMode.Full && paragraph.StyleId is { Length: > 0 } styleId && HeadingTag(styleId) is null)
+        {
+            var className = StyleIdToClassName(styleId);
+            sb.Append(" class=\"").Append(WebUtility.HtmlEncode(className)).Append('"');
+        }
+
         if (style.Length > 0)
             sb.Append(" style=\"").Append(WebUtility.HtmlEncode(style)).Append('"');
         sb.Append('>');
@@ -539,7 +755,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             _ => null
         };
 
-    private static void WriteTable(StringBuilder sb, Table table, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    private static void WriteTable(StringBuilder sb, Table table, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         sb.AppendLine("<table>");
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
@@ -566,7 +782,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     WriteRuns(sb, cell.Paragraphs[0].Runs, imageMode, images);
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        WriteParagraph(sb, paragraph, imageMode, images);
+                        WriteParagraph(sb, paragraph, imageMode, images, saveMode);
 
                 sb.AppendLine("</td>");
             }
