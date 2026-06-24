@@ -618,6 +618,21 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(okButton, "PageSetupOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "PageSetupCancelButton");
 
+        // WPF has [Print...][Print Preview][Options...] on the bottom left
+        var printButton = new Button { Content = UiText.Get("PageSetup_PrintButton"), MinWidth = 84 };
+        ApplyPageLayoutButtonChrome(printButton, 84);
+        AutomationProperties.SetAutomationId(printButton, "PageSetupPrintButton");
+        var printPreviewButton = new Button { Content = UiText.Get("PageSetup_PrintPreviewButton"), MinWidth = 100 };
+        ApplyPageLayoutButtonChrome(printPreviewButton, 100);
+        AutomationProperties.SetAutomationId(printPreviewButton, "PageSetupPrintPreviewButton");
+        var optionsButton = new Button { Content = UiText.Get("PageSetup_OptionsButton"), MinWidth = 84 };
+        ApplyPageLayoutButtonChrome(optionsButton, 84);
+        AutomationProperties.SetAutomationId(optionsButton, "PageSetupOptionsButton");
+        // These are stub buttons (print/preview not yet wired in Avalonia shell)
+        printButton.IsEnabled = false;
+        printPreviewButton.IsEnabled = false;
+        optionsButton.IsEnabled = false;
+
         PageSetupDialogFields ReadFields() => initial with
         {
             Orientation = PageSetupDialogModel.ChoiceValue(
@@ -668,14 +683,28 @@ public sealed partial class MainWindow
             AlignHeaderFooterWithMargins = alignWithMarginsCheck.IsChecked == true,
         };
 
-        var buttonRow = new StackPanel
+        // WPF layout: [Print...][Print Preview][Options...]  ··fill··  [OK][Cancel]
+        var leftButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { printButton, printPreviewButton, optionsButton },
         };
+        var rightButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Children = { okButton, cancelButton },
+        };
+        var buttonRow = new Grid
+        {
+            Margin = new Thickness(0, 12, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+        };
+        Grid.SetColumn(leftButtons, 0);
+        Grid.SetColumn(rightButtons, 2);
+        buttonRow.Children.Add(leftButtons);
+        buttonRow.Children.Add(rightButtons);
 
         var adjustRow = new StackPanel
         {

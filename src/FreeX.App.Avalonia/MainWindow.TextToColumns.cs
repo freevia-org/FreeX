@@ -59,7 +59,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Get("TableLoc_TtcDialogTitle"),
+            Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
             Width = 560,
             Height = 560,
             MinWidth = 520,
@@ -132,6 +132,15 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
         };
         AutomationProperties.SetAutomationId(previewHost, "TextToColumnsPreviewGrid");
+        // Step-1 preview is a separate host (Avalonia controls can only have one parent)
+        var previewHost1 = new Border
+        {
+            BorderBrush = HeaderForeground,
+            BorderThickness = new Thickness(1),
+            MinHeight = 120,
+            Padding = new Thickness(0),
+        };
+        AutomationProperties.SetAutomationId(previewHost1, "TextToColumnsPreviewGrid1");
 
         var statusText = new TextBlock
         {
@@ -195,6 +204,7 @@ public sealed partial class MainWindow
             catch (ArgumentException ex)
             {
                 previewHost.Child = null;
+                previewHost1.Child = null;
                 statusText.Text = ex.Message;
                 return;
             }
@@ -204,6 +214,8 @@ public sealed partial class MainWindow
             statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
 
             previewHost.Child = BuildTextToColumnsPreviewGrid(preview, previewColumnCount, columnFormats);
+            // Step-1 preview mirrors the main preview (separate control instance required)
+            previewHost1.Child = BuildTextToColumnsPreviewGrid(preview, previewColumnCount, columnFormats);
             RefreshFormatColumnChoices();
         }
 
@@ -270,15 +282,32 @@ public sealed partial class MainWindow
             RefreshPreview();
         };
 
-        var applyButton = new Button { Content = UiText.Get("TableLoc_Apply"), IsDefault = true, MinWidth = 84 };
+        // WPF wizard navigation: [< Back][Next >][Finish][Cancel]
+        var backButton = new Button { Content = UiText.Get("TableLoc_TtcBack"), MinWidth = 84, IsEnabled = false };
+        ApplyDataOpsButtonChrome(backButton);
+        AutomationProperties.SetAutomationId(backButton, "TextToColumnsBackButton");
+        var nextButton = new Button { Content = UiText.Get("TableLoc_TtcNext"), MinWidth = 84 };
+        ApplyDataOpsButtonChrome(nextButton);
+        AutomationProperties.SetAutomationId(nextButton, "TextToColumnsNextButton");
+        var applyButton = new Button { Content = UiText.Get("TableLoc_TtcFinish"), IsDefault = true, MinWidth = 84 };
         ApplyDataOpsButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "TextToColumnsApplyButton");
         var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
-        applyButton.Click += (_, _) =>
+        // Wizard step tracking — declare forward refs for SyncWizardNavigation closure
+        var currentStep = 1;
+        const int totalSteps = 3;
+        StackPanel? step1Content = null;
+        StackPanel? step2Content = null;
+        StackPanel? step3Content = null;
+
+        void ApplyWizardStep()
         {
+            warningText.IsVisible = false;
+            overwriteConfirmed = false;
+
             TextToColumnsOptions options;
             try
             {
@@ -313,8 +342,37 @@ public sealed partial class MainWindow
                 return;
 
             dialog.Close();
-        };
+        }
+
+        void SyncWizardNavigation()
+        {
+            dialog.Title = UiText.Format("TableLoc_TtcWizardTitle", currentStep, totalSteps);
+            backButton.IsEnabled = currentStep > 1;
+            nextButton.IsEnabled = currentStep < totalSteps;
+            // Step visibility (step*Content assigned after this function definition)
+            if (step1Content is not null) step1Content.IsVisible = currentStep == 1;
+            if (step2Content is not null) step2Content.IsVisible = currentStep == 2;
+            if (step3Content is not null) step3Content.IsVisible = currentStep == 3;
+        }
+
+        applyButton.Click += (_, _) => ApplyWizardStep();
         cancelButton.Click += (_, _) => dialog.Close();
+        backButton.Click += (_, _) =>
+        {
+            if (currentStep > 1)
+            {
+                currentStep--;
+                SyncWizardNavigation();
+            }
+        };
+        nextButton.Click += (_, _) =>
+        {
+            if (currentStep < totalSteps)
+            {
+                currentStep++;
+                SyncWizardNavigation();
+            }
+        };
 
         var delimiterRow = new WrapPanel
         {
@@ -350,13 +408,91 @@ public sealed partial class MainWindow
             },
         };
 
+        // Step 1: Choose the file type / original data type + preview (assigns forward-declared var)
+        step1Content = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("TableLoc_TtcStep1Description"),
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
+                new Border
+                {
+                    BorderBrush = Brush(171, 173, 179),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(8),
+                    Child = new StackPanel
+                    {
+                        Spacing = 6,
+                        Children =
+                        {
+                            new TextBlock
+                            {
+                                Text = UiText.Get("TableLoc_TtcOriginalDataType"),
+                                FontWeight = FontWeight.SemiBold,
+                                FontSize = 12,
+                                FontFamily = FormulaBarFontFamily,
+                            },
+                            delimitedButton,
+                            fixedWidthButton,
+                        },
+                    },
+                },
+                new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                previewHost1,
+            },
+        };
+
+        // Step 2: Delimiters / Fixed-width break positions + preview
+        step2Content = new StackPanel
+        {
+            Spacing = 8,
+            IsVisible = false,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Format("TableLoc_TtcSourceLabel", FormatRangeReference(range)),
+                    Foreground = HeaderForeground,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
+                delimiterRow,
+                treatConsecutiveBox,
+                qualifierRow,
+                breaksRow,
+                new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                previewHost,
+            },
+        };
+
+        // Step 3: Column format options
+        step3Content = new StackPanel
+        {
+            Spacing = 8,
+            IsVisible = false,
+            Children =
+            {
+                formatRow,
+                statusText,
+                warningText,
+            },
+        };
+
+        // WPF wizard nav button order: [< Back][Next >][Finish][Cancel]
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, applyButton },
+            Children = { backButton, nextButton, applyButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
@@ -373,35 +509,16 @@ public sealed partial class MainWindow
                         Spacing = 8,
                         Children =
                         {
-                            new TextBlock
-                            {
-                                Text = UiText.Format("TableLoc_TtcSourceLabel", FormatRangeReference(range)),
-                                Foreground = HeaderForeground,
-                                TextWrapping = TextWrapping.Wrap,
-                                FontSize = 12,
-                                FontFamily = FormulaBarFontFamily,
-                            },
-                            new StackPanel
-                            {
-                                Orientation = Orientation.Horizontal,
-                                Spacing = 16,
-                                Children = { delimitedButton, fixedWidthButton },
-                            },
-                            delimiterRow,
-                            treatConsecutiveBox,
-                            qualifierRow,
-                            breaksRow,
-                            new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                            previewHost,
-                            formatRow,
-                            statusText,
-                            warningText,
+                            step1Content,
+                            step2Content,
+                            step3Content,
                         },
                     },
                 },
             },
         };
 
+        SyncWizardNavigation();
         UpdateModeVisibility();
         await dialog.ShowDialog(this);
     }

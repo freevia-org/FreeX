@@ -64,6 +64,10 @@ public sealed partial class MainWindow
         var deleteButton = new Button { Content = UiText.Get("AllowEditRange_DeleteButton"), MinWidth = 82, IsEnabled = false };
         ApplyDataOpsButtonChrome(deleteButton);
         AutomationProperties.SetAutomationId(deleteButton, "AllowEditRangeDeleteButton");
+        // WPF has a Permissions button (always disabled in this implementation)
+        var permissionsButton = new Button { Content = UiText.Get("AllowEditRange_PermissionsButton"), MinWidth = 100, IsEnabled = false };
+        ApplyDataOpsButtonChrome(permissionsButton);
+        AutomationProperties.SetAutomationId(permissionsButton, "AllowEditRangePermissionsButton");
 
         var warningText = new TextBlock
         {
@@ -190,27 +194,34 @@ public sealed partial class MainWindow
             rangeBeingModified = null;
         };
 
-        var closeButton = new Button { Content = UiText.Get("Common_Close"), IsCancel = true, MinWidth = 84 };
+        // WPF has [OK][Cancel] at bottom; OK is an alias for Close (ranges are applied in real-time)
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
+        ApplyDataOpsButtonChrome(okButton, isDefault: true);
+        AutomationProperties.SetAutomationId(okButton, "AllowEditRangeOkButton");
+        okButton.Click += (_, _) => dialog.Close();
+        var closeButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         ApplyDataOpsButtonChrome(closeButton);
         AutomationProperties.SetAutomationId(closeButton, "AllowEditRangeCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
         RefreshRanges();
 
+        // WPF button order: [New...][Modify...][Delete][Permissions...] in a row
         var rangeButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Children = { newButton, modifyButton, deleteButton },
+            Children = { newButton, modifyButton, deleteButton, permissionsButton },
         };
 
+        // WPF bottom button order: [OK][Cancel]
         var bottomRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { closeButton },
+            Children = { okButton, closeButton },
         };
         DockPanel.SetDock(bottomRow, Dock.Bottom);
 
