@@ -34,8 +34,8 @@ public readonly record struct SlicerStyleColors(
     /// <summary>
     /// Resolves the colors for a built-in slicer style name against <paramref name="theme"/>. Recognizes
     /// the <c>SlicerStyleLight1…6</c> family (default = Light1 when the name is null/empty/unrecognized).
-    /// Light1 is the neutral gray default; Light2–6 tint from theme accents 1–5 respectively, matching
-    /// Excel's built-in palette ordering.
+    /// Light1 is the neutral gray default; Light2–6 tint from theme accents 2–6 respectively, matching
+    /// Excel's built-in palette ordering (Light2→Accent2, …, Light6→Accent6).
     /// </summary>
     public static SlicerStyleColors Resolve(string? styleName, WorkbookTheme theme)
     {
@@ -45,17 +45,17 @@ public readonly record struct SlicerStyleColors(
         if (slot is null)
             return ResolveLight1(theme);
 
-        // The selected-item tile is the accent at a light tint; the header band is the accent itself; the
-        // border is the accent darkened. Unselected tiles and body stay near-white so unselected items read
-        // as "available". Matches Excel's SlicerStyleLight2–6 appearance.
+        // Excel Light2–6: white header background with dark bold caption and an accent-colored outer border.
+        // The selected-item tile is the accent at a light tint. Unselected tiles and body stay near-white
+        // so unselected items read as "available". Matches Excel's SlicerStyleLight2–6 appearance.
         var accent = theme.GetColor(slot.Value);
         return new SlicerStyleColors(
-            Header: accent,
-            Border: Darken(accent, 0.25),
+            Header: CellColor.White,
+            Border: accent,
             Body: CellColor.White,
             Tile: CellColor.White,
             SelectedTile: theme.ResolveColor(slot.Value, 0.6),
-            HeaderText: CellColor.White,
+            HeaderText: new CellColor(64, 64, 64),
             ItemText: new CellColor(64, 64, 64));
     }
 
@@ -73,8 +73,9 @@ public readonly record struct SlicerStyleColors(
             ItemText: new CellColor(64, 64, 64));
     }
 
-    // SlicerStyleLight2 -> Accent1, Light3 -> Accent2, … Light6 -> Accent5. Light1 (and unknown) => null
+    // SlicerStyleLight2 -> Accent2, Light3 -> Accent3, … Light6 -> Accent6. Light1 (and unknown) => null
     // (neutral default). Custom/other styles fall through to null as well.
+    // Excel's actual mapping is a uniform +1 shift from the style number to the accent slot.
     private static WorkbookThemeColorSlot? ResolveAccentSlot(string? styleName)
     {
         if (string.IsNullOrWhiteSpace(styleName))
@@ -82,11 +83,11 @@ public readonly record struct SlicerStyleColors(
 
         return styleName.Trim() switch
         {
-            "SlicerStyleLight2" => WorkbookThemeColorSlot.Accent1,
-            "SlicerStyleLight3" => WorkbookThemeColorSlot.Accent2,
-            "SlicerStyleLight4" => WorkbookThemeColorSlot.Accent3,
-            "SlicerStyleLight5" => WorkbookThemeColorSlot.Accent4,
-            "SlicerStyleLight6" => WorkbookThemeColorSlot.Accent5,
+            "SlicerStyleLight2" => WorkbookThemeColorSlot.Accent2,
+            "SlicerStyleLight3" => WorkbookThemeColorSlot.Accent3,
+            "SlicerStyleLight4" => WorkbookThemeColorSlot.Accent4,
+            "SlicerStyleLight5" => WorkbookThemeColorSlot.Accent5,
+            "SlicerStyleLight6" => WorkbookThemeColorSlot.Accent6,
             _ => null,
         };
     }

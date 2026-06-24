@@ -615,6 +615,13 @@ public partial class GridView
         var selectedTileBrush = GetDrawingObjectBrush(255, style.SelectedTile);
         var itemTextBrush = GetDrawingObjectBrush(255, style.ItemText);
 
+        // Light2–6 use a white header with a bold dark caption; Light1 uses the gray-filled header.
+        // Detect Light2–6 by checking if the header is white (neutral gray header = Light1/default).
+        var isAccentStyle = style.Header == CellColor.White;
+        // Unselected tiles in Light2–6 get a thin light-gray border (~RGB 191,191,191) matching Excel.
+        // Light1 tiles are also bordered the same way for consistency with Excel's default look.
+        var tileBorderPen = GetDrawingObjectPen(255, new CellColor(191, 191, 191), 0.75);
+
         // showCaption="0" => omit the caption header band and start the tiles at the top of the box.
         var hasHeader = slicer.ShowCaption;
         DrawNativeControlFrame(
@@ -626,7 +633,8 @@ public partial class GridView
             borderPen,
             GetDrawingObjectBrush(255, style.Header),
             GetDrawingObjectBrush(255, style.HeaderText),
-            hasHeader);
+            hasHeader,
+            boldHeader: isAccentStyle);
 
         // Lay out the slicer's item buttons: prefer the resolved available items (table-column distinct
         // values / pivot cache shared items); fall back to the slicer's selected items, then a single
@@ -668,9 +676,11 @@ public partial class GridView
             var caption = items[index];
             // Empty selection means "all selected" (no active filter) in Excel.
             var isSelected = fallbackAllTile || selected.Count == 0 || selected.Contains(caption);
+            // Unselected tiles get a thin light-gray border matching Excel's slicer tile chrome.
+            // Selected tiles use no border — the filled accent tint is sufficient visual distinction.
             dc.DrawRoundedRectangle(
                 isSelected ? selectedTileBrush : tileBrush,
-                null,
+                isSelected ? null : tileBorderPen,
                 tileRect,
                 2,
                 2);
@@ -739,7 +749,8 @@ public partial class GridView
         Pen borderPen,
         Brush headerBrush,
         Brush headerTextBrush,
-        bool hasHeader)
+        bool hasHeader,
+        bool boldHeader = false)
     {
         dc.DrawRectangle(bodyBrush, borderPen, rect);
         if (!hasHeader)
@@ -747,10 +758,10 @@ public partial class GridView
 
         var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
         dc.DrawRectangle(headerBrush, null, headerRect);
-        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), headerTextBrush, 11, verticalPadding: 0, pixelsPerDip);
+        DrawClippedText(dc, caption, new Rect(headerRect.Left + 5, headerRect.Top + 2, Math.Max(1, headerRect.Width - 10), Math.Max(1, headerRect.Height - 4)), headerTextBrush, 11, verticalPadding: 0, pixelsPerDip, isBold: boldHeader);
     }
 
-    private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding, double pixelsPerDip)
+    private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding, double pixelsPerDip, bool isBold = false)
     {
         var text = GetDrawingObjectText(
             string.IsNullOrWhiteSpace(textValue) ? " " : textValue,
@@ -759,7 +770,8 @@ public partial class GridView
             Math.Max(1, rect.Width),
             Math.Max(1, rect.Height),
             pixelsPerDip,
-            TextTrimming.CharacterEllipsis);
+            TextTrimming.CharacterEllipsis,
+            isBold);
 
         dc.PushClip(GetDrawingObjectClipGeometry(rect));
         dc.DrawText(text, new Point(rect.Left, rect.Top + verticalPadding));
@@ -1509,7 +1521,8 @@ public partial class GridView
         double maxTextWidth,
         double maxTextHeight,
         double pixelsPerDip,
-        TextTrimming trimming = TextTrimming.None)
+        TextTrimming trimming = TextTrimming.None,
+        bool isBold = false)
     {
         var key = new DrawingObjectTextLayoutKey(
             textValue,
@@ -1519,7 +1532,8 @@ public partial class GridView
             maxTextWidth,
             maxTextHeight,
             pixelsPerDip,
-            trimming);
+            trimming,
+            isBold);
         if (_drawingObjectTextLayoutCache.TryGetValue(key, out var cached))
             return cached;
 
@@ -1539,6 +1553,8 @@ public partial class GridView
             MaxTextHeight = maxTextHeight,
             Trimming = trimming
         };
+        if (isBold)
+            formatted.SetFontWeight(FontWeights.Bold);
         _drawingObjectTextLayoutCache.Add(key, formatted);
         return formatted;
     }
@@ -1560,7 +1576,8 @@ public partial class GridView
         double MaxTextWidth,
         double MaxTextHeight,
         double PixelsPerDip,
-        TextTrimming Trimming);
+        TextTrimming Trimming,
+        bool IsBold);
 
 }
 
