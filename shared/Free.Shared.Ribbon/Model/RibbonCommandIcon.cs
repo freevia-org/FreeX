@@ -229,7 +229,10 @@ public enum RibbonCommandIconKind
     Marker,
     ComboChart,
     MoveChart,
-    AxisBounds
+    AxisBounds,
+
+    // Insert > Illustrations > Icons (W20).
+    Icons
 }
 
 public enum RibbonCommandIconAccent

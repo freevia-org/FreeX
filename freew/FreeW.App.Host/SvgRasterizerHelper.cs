@@ -20,6 +20,28 @@ internal static class SvgRasterizerHelper
     private const int DefaultPx = 400;
 
     /// <summary>
+    /// Rasterize SVG content from <paramref name="stream"/> into a PNG-encoded <see cref="InlineImage"/>.
+    /// The stream is read from its current position. Same sizing rules as the file-path overload.
+    /// Throws <see cref="InvalidOperationException"/> if SharpVectors cannot parse the content.
+    /// </summary>
+    public static InlineImage RasterizeToInlineImage(Stream stream)
+    {
+        // SharpVectors 1.8.5 has no stream reader — write to a temp file and use FileSvgReader.
+        var tmp = Path.Combine(Path.GetTempPath(), $"freew_icon_{Guid.NewGuid():N}.svg");
+        try
+        {
+            using (var fs = File.Create(tmp))
+                stream.CopyTo(fs);
+            return RasterizeToInlineImage(tmp);
+        }
+        finally
+        {
+            if (File.Exists(tmp))
+                File.Delete(tmp);
+        }
+    }
+
+    /// <summary>
     /// Rasterize the SVG file at <paramref name="path"/> into a PNG-encoded <see cref="InlineImage"/>.
     /// Aspect ratio is preserved; width is capped at <c>MaxWidthPt</c> (400 pt = ~5.6 in).
     /// Throws <see cref="InvalidOperationException"/> if SharpVectors cannot parse the file.
@@ -35,7 +57,12 @@ internal static class SvgRasterizerHelper
         using var reader = new SharpVectors.Converters.FileSvgReader(settings);
         var drawing = reader.Read(path)
             ?? throw new InvalidOperationException("Could not parse the SVG file.");
+        return RasterizeDrawing(drawing);
+    }
 
+    // ── Shared rasterization kernel ──────────────────────────────────────────────────────────────
+    private static InlineImage RasterizeDrawing(System.Windows.Media.Drawing drawing)
+    {
         // Determine natural SVG size from the drawing bounds or fall back to DefaultPx × DefaultPx.
         var bounds = drawing.Bounds;
         double srcW = bounds.IsEmpty || bounds.Width <= 0 ? DefaultPx : bounds.Width;

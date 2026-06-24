@@ -182,6 +182,9 @@ internal static class FreeWRibbon
                     {
                         m.Item("freew.screen-clipping", "Screen Clipping", "C");
                     });
+                    // Icons picker: opens a searchable icon library and inserts the chosen icon as a
+                    // rasterised InlineImage (same PNG path as Insert Picture / Screen Clipping).
+                    g.Medium("freew.insert-icon", "Icons", RibbonCommandIconKind.Icons);
                 });
                 // Links stay compact so the backed Insert surfaces fit without hiding commands at normal
                 // desktop widths.

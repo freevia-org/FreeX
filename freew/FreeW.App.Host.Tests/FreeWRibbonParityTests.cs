@@ -94,10 +94,10 @@ public sealed class FreeWRibbonParityTests
 
         CommandIds(insert.FindGroup("illustrations")!)
             .Should()
-            .Equal("freew.picture", "freew.shapes", "freew.smartart", "freew.chart", "freew.screenshot");
+            .Equal("freew.picture", "freew.shapes", "freew.smartart", "freew.chart", "freew.screenshot", "freew.insert-icon");
         Labels(insert.FindGroup("illustrations")!)
             .Should()
-            .Equal("Pictures", "Shapes", "SmartArt", "Chart", "Screenshot");
+            .Equal("Pictures", "Shapes", "SmartArt", "Chart", "Screenshot", "Icons");
 
         CommandIds(insert.FindGroup("links")!)
             .Should()
@@ -144,6 +144,7 @@ public sealed class FreeWRibbonParityTests
         var backedParityCommandIds = new[]
         {
             "freew.picture",
+            "freew.insert-icon",
             "freew.smartart",
             "freew.chart",
             "freew.shape-textbox",
