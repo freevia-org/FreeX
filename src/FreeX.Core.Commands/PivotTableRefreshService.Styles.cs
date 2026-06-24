@@ -51,6 +51,14 @@ public static partial class PivotTableRefreshService
             BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
             BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
         });
+        var grandTotalColumnStyle = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = palette.GrandTotalFill is not null,
+            FillColor = palette.GrandTotalFill,
+            FontColor = palette.GrandTotalFont,
+            BorderTop = palette.GrandTotalFill is not null ? new CellBorder(BorderStyle.Thin, palette.Border) : default,
+            BorderBottom = palette.GrandTotalFill is not null ? new CellBorder(BorderStyle.Thin, palette.Border) : default
+        });
         var stripeStyle = workbook.RegisterStyle(new CellStyle
         {
             FillColor = palette.StripeFill,
@@ -153,9 +161,15 @@ public static partial class PivotTableRefreshService
                 continue;
             }
 
-            if (grandTotalRows.Contains(row) || grandTotalColumns.Contains(col))
+            if (grandTotalRows.Contains(row))
             {
                 ApplyPivotVisualStyle(workbook, cell, grandTotalStyle, preserveExistingVisualStyles);
+                continue;
+            }
+
+            if (grandTotalColumns.Contains(col))
+            {
+                ApplyPivotVisualStyle(workbook, cell, grandTotalColumnStyle, preserveExistingVisualStyles);
                 continue;
             }
 
@@ -186,6 +200,7 @@ public static partial class PivotTableRefreshService
             var bodyColIndex = col - firstDataColumn;
             var isRowStripe =
                 pivotTable.ShowRowStripes &&
+                (palette.BodyFill is not null || col >= firstDataColumn) &&
                 row >= firstDataRow &&
                 GetPivotBodyBandIndex(row, firstDataRow, groupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0;
             var isColumnStripe =
