@@ -131,5 +131,64 @@ public sealed class PaginatedCommitCoordinatorTests
             "table must survive coordinator commit");
         editor.Model.Blocks.OfType<Table>().First().Rows.Should().HaveCount(2);
     }
+
+    // ── SectionBreak survives coordinator (PagedEdit enter→exit round-trip) ──────────────────────
+
+    [StaFact]
+    public void Coordinator_PreservesSectionBreak()
+    {
+        // A NextPage section break must survive the PagedEdit enter→exit cycle (BuildParagraph stamps
+        // it on the WPF paragraph's ParagraphTag; ReadParagraph recovers it via ReadBlocksInto).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var sec1Para = new Paragraph("Section 1 end");
+        sec1Para.SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage);
+        doc.Blocks.Add(sec1Para);
+        doc.Blocks.Add(new Paragraph("Section 2 content"));
+
+        var editor = NewEditor(doc);
+        var panel = PaginatedEditorPanel.Build(editor);
+        PaginatedCommitCoordinator.Commit(panel, editor);
+
+        var paras = editor.Model.Blocks.OfType<Paragraph>().ToList();
+        paras[0].SectionBreak.Should().NotBeNull(
+            "ParagraphTag.SectionBreak must survive a coordinator (PagedEdit) commit");
+        paras[0].SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+        editor.Model.Sections.Should().HaveCount(2,
+            "section count must be preserved after a coordinator commit");
+    }
+
+    [StaFact]
+    public void Coordinator_PreservesAllSectionBreakKinds()
+    {
+        // Continuous / EvenPage / OddPage must also survive the coordinator path.
+        var kinds = new[]
+        {
+            SectionBreakKind.NextPage,
+            SectionBreakKind.Continuous,
+            SectionBreakKind.EvenPage,
+            SectionBreakKind.OddPage
+        };
+
+        foreach (var kind in kinds)
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var sectionPara = new Paragraph("Break para");
+            sectionPara.SectionBreak = new Section(new PageSettings(), kind);
+            doc.Blocks.Add(sectionPara);
+            doc.Blocks.Add(new Paragraph("Body"));
+
+            var editor = NewEditor(doc);
+            var panel = PaginatedEditorPanel.Build(editor);
+            PaginatedCommitCoordinator.Commit(panel, editor);
+
+            var recovered = editor.Model.Blocks.OfType<Paragraph>().First();
+            recovered.SectionBreak.Should().NotBeNull(
+                $"SectionBreak ({kind}) must survive coordinator commit");
+            recovered.SectionBreak!.BreakKind.Should().Be(kind,
+                $"BreakKind {kind} must be preserved by the coordinator");
+        }
+    }
 }
 #endif

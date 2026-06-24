@@ -427,6 +427,81 @@ public sealed class DocumentViewRoundTripTests
         run.EmbeddedObject.Payload.Should().Equal(payload);
     }
 
+    // ── SectionBreak round-trip ───────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void SectionBreak_NextPage_RoundTrips()
+    {
+        // A SectionBreak on a paragraph has no FlowDocument slot; it must be preserved via the
+        // ParagraphTag so CommitToModel restores it losslessly.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var sec1Para = new Paragraph("Section 1 end");
+        sec1Para.SectionBreak = new FreeW.Core.Model.Section(new PageSettings(), SectionBreakKind.NextPage);
+        doc.Blocks.Add(sec1Para);
+        doc.Blocks.Add(new Paragraph("Section 2 content"));
+
+        var result = RoundTrip(doc);
+
+        result.Blocks.Should().HaveCount(2);
+        var recovered = (Paragraph)result.Blocks[0];
+        recovered.SectionBreak.Should().NotBeNull("SectionBreak must survive render→CommitToModel");
+        recovered.SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+    }
+
+    [StaFact]
+    public void SectionBreak_AllKinds_RoundTrip()
+    {
+        // Every SectionBreakKind must survive the render→CommitToModel cycle intact.
+        var kinds = new[]
+        {
+            SectionBreakKind.NextPage,
+            SectionBreakKind.Continuous,
+            SectionBreakKind.EvenPage,
+            SectionBreakKind.OddPage
+        };
+
+        foreach (var kind in kinds)
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var sectionPara = new Paragraph("Break para");
+            sectionPara.SectionBreak = new FreeW.Core.Model.Section(new PageSettings(), kind);
+            doc.Blocks.Add(sectionPara);
+            doc.Blocks.Add(new Paragraph("Body"));
+
+            var result = RoundTrip(doc);
+
+            var recovered = (Paragraph)result.Blocks[0];
+            recovered.SectionBreak.Should().NotBeNull($"SectionBreak ({kind}) must survive commit");
+            recovered.SectionBreak!.BreakKind.Should().Be(kind,
+                $"BreakKind {kind} must round-trip unchanged");
+        }
+    }
+
+    [StaFact]
+    public void SectionBreak_SectionCount_PreservedAcrossCommit()
+    {
+        // A three-paragraph doc with two section breaks must still have three sections
+        // (section count = sectionBreak paragraphs + 1) after render→CommitToModel.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p1 = new Paragraph("End of section 1");
+        p1.SectionBreak = new FreeW.Core.Model.Section(new PageSettings(), SectionBreakKind.NextPage);
+        var p2 = new Paragraph("End of section 2");
+        p2.SectionBreak = new FreeW.Core.Model.Section(new PageSettings(), SectionBreakKind.Continuous);
+        doc.Blocks.Add(p1);
+        doc.Blocks.Add(p2);
+        doc.Blocks.Add(new Paragraph("Section 3 body"));
+
+        var result = RoundTrip(doc);
+
+        result.Sections.Should().HaveCount(3,
+            "section count must be preserved after render→CommitToModel");
+        result.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
+        result.Sections[1].BreakKind.Should().Be(SectionBreakKind.Continuous);
+    }
+
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
     private static byte[] OnePixelPng() => System.Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
