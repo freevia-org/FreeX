@@ -215,7 +215,16 @@ internal static class XlsxSlicerTimelineWriter
                         new XAttribute("name", timeline.Name),
                         OptionalAttribute("caption", timeline.Caption),
                         OptionalAttribute("style", timeline.StyleName),
-                        new XAttribute("cache", cacheName)))));
+                        new XAttribute("cache", cacheName),
+                        timeline.Level is { } lvl
+                            ? new XAttribute("level", lvl.ToString(CultureInfo.InvariantCulture))
+                            : null,
+                        timeline.Level is { } selLvl
+                            ? new XAttribute("selectionLevel", selLvl.ToString(CultureInfo.InvariantCulture))
+                            : null,
+                        timeline.ScrollPosition is { Length: > 0 } scrollPos
+                            ? new XAttribute("scrollPosition", scrollPos + "T00:00:00")
+                            : null))));
             XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, new XDocument(
                 new XElement(TimelineNs + "timelineCacheDefinition",
                     new XAttribute("name", cacheName),

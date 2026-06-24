@@ -31,6 +31,68 @@ public sealed class XlsxSlicerTimelineMetadataReaderTimelineTests
         timeline.DrawingAnchor.From.Row.Should().Be(2);
         timeline.DrawingAnchor.To.Column.Should().Be(15);
         timeline.DrawingAnchor.To.Row.Should().Be(11);
+        // No level/scrollPosition in this fixture → both null (older-file fallback path).
+        timeline.Level.Should().BeNull();
+        timeline.ScrollPosition.Should().BeNull();
+    }
+
+    [Fact]
+    public void Load_ParsesLevelAndScrollPositionFromTimelineDefinitionPart()
+    {
+        // Fixture mirrors the real Excel slicer_timeline_001.xlsx: level=2 (months), scrollPosition set.
+        using var package = BuildTimelinePackageWithLevelAndScroll(level: 2, scrollPosition: "2026-01-01T00:00:00");
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var metadata = XlsxSlicerTimelineMetadataReader.Load(archive);
+
+        var timeline = metadata.Timelines.Should().ContainSingle().Subject;
+        timeline.Level.Should().Be(2);
+        timeline.ScrollPosition.Should().Be("2026-01-01");
+    }
+
+    private static MemoryStream BuildTimelinePackageWithLevelAndScroll(int level, string scrollPosition)
+    {
+        var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteEntry(archive, "xl/workbook.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <sheets>
+                    <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+                  </sheets>
+                </workbook>
+                """);
+            WriteEntry(archive, "xl/_rels/workbook.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """);
+            WriteEntry(archive, "xl/timelines/timeline1.xml",
+                $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <timelines xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main">
+                  <timeline name="T1" cache="T1Cache" caption="SaleDate" level="{level}" selectionLevel="{level}" scrollPosition="{scrollPosition}" style="TimeSlicerStyleLight2"/>
+                </timelines>
+                """);
+            WriteEntry(archive, "xl/timelineCaches/timelineCache1.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <timelineCacheDefinition xmlns="http://schemas.microsoft.com/office/spreadsheetml/2010/11/main"
+                                         name="T1Cache" sourceName="SaleDate">
+                  <pivotTables><pivotTable tabId="1" name="Pivot1"/></pivotTables>
+                  <state filterType="dateBetween">
+                    <selection startDate="2026-02-01T00:00:00" endDate="2026-04-30T00:00:00"/>
+                    <bounds startDate="2026-01-01T00:00:00" endDate="2027-01-01T00:00:00"/>
+                  </state>
+                </timelineCacheDefinition>
+                """);
+        }
+
+        stream.Position = 0;
+        return stream;
     }
 
     private static MemoryStream BuildTimelinePackage()

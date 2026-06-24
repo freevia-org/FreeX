@@ -16,4 +16,15 @@ public sealed class TimelineModel
     public DrawingAnchorRange? DrawingAnchor { get; init; }
     public string? DrawingShapeName { get; init; }
     public string? SourceSheetName { get; init; }
+    /// <summary>
+    /// The OOXML <c>level</c> attribute from the timeline definition part (xl/timelines/*.xml).
+    /// Maps to the Excel date hierarchy: 0=years, 1=quarters, 2=months, 3=days.
+    /// Null when the attribute is absent (older files without explicit granularity).
+    /// </summary>
+    public int? Level { get; init; }
+    /// <summary>
+    /// The OOXML <c>scrollPosition</c> attribute from the timeline definition part — the date/time
+    /// of the first visible period in the timeline's scroll window. Null when absent.
+    /// </summary>
+    public string? ScrollPosition { get; init; }
 }

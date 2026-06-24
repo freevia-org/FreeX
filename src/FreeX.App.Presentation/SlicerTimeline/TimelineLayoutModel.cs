@@ -49,6 +49,12 @@ public readonly record struct TimelineHitResult(TimelineHitKind Kind, DateOnly? 
 /// the scrollbar rectangle, the selection ratios, and the granularity. The geometry is faithful to
 /// Excel: a header capped at 22px, a date label band at +22px, a year banner at +34px, period tick
 /// labels at +48px, the track at +62px, and a scrollbar at the bottom of the widget.
+/// <para>
+/// <see cref="RangeStart"/>/<see cref="RangeEnd"/> hold the full data range (used for scrollbar
+/// thumb positioning). <see cref="WindowStart"/>/<see cref="WindowEnd"/> hold the visible period
+/// window (the subset of the range that the track renders — used for tick and selection mapping).
+/// When no scroll window is active, Window == Range.
+/// </para>
 /// </summary>
 public sealed record TimelineLayoutModel(
     string Name,
@@ -72,7 +78,11 @@ public sealed record TimelineLayoutModel(
     DateOnly? RangeStart,
     DateOnly? RangeEnd,
     DateOnly? SelectedStart,
-    DateOnly? SelectedEnd);
+    DateOnly? SelectedEnd,
+    DateOnly? WindowStart,
+    DateOnly? WindowEnd,
+    double ScrollThumbLeftRatio,
+    double ScrollThumbWidthRatio);
 
 /// <summary>
 /// Builds <see cref="TimelineLayoutModel"/> layouts, formats date labels per granularity, and
@@ -107,14 +117,29 @@ public static class TimelineLayoutBuilder
     private const double PreviewSelectionWidthRatio = 0.56;
     private const double HandleWidth = 6;
 
+    // OOXML timeline level → granularity mapping (date hierarchy: 0=years, 1=quarters, 2=months, 3=days).
+    // Confirmed: fixture has level="2" and Excel shows MONTHS.
+    private static readonly TimelineGranularity[] LevelToGranularity =
+        [TimelineGranularity.Year, TimelineGranularity.Quarter, TimelineGranularity.Month, TimelineGranularity.Day];
+
+    // Fixed per-period pixel width (at 96 DPI) that Excel uses internally for the timeline track.
+    // Derived from the reference image: timeline cx=3302000 EMU ≈ 346px total, track ≈ 330px, 8 months
+    // visible → 330/8 ≈ 41px/month. Using 36px gives floor(330/36)=9 periods; 41px gives 8. Use 41px
+    // to match the observed 8-month window.
+    private const double MonthWidthPx = 41.0;
+    private const double QuarterWidthPx = 50.0;
+    private const double YearWidthPx = 60.0;
+    private const double DayWidthPx = 4.0;
+
     private const string DateFormat = "yyyy-MM-dd";
 
     /// <summary>
     /// Builds a layout for <paramref name="timeline"/> within <paramref name="bounds"/>.
-    /// <paramref name="granularity"/> controls the date-label text. When no sub-range is selected the
-    /// overlay falls back to the source renderer's fixed preview ratios (18% inset, 56% width); when a
-    /// range is selected within a known full range, the overlay is derived proportionally from the
-    /// selected dates.
+    /// <paramref name="granularity"/> is the fallback granularity when the timeline's <c>Level</c>
+    /// attribute is absent; when <c>Level</c> is present the OOXML date-hierarchy mapping is used.
+    /// When no sub-range is selected the overlay falls back to the source renderer's fixed preview
+    /// ratios (18% inset, 56% width); when a range is selected within a known full range, the overlay
+    /// is derived proportionally from the selected dates.
     /// </summary>
     public static TimelineLayoutModel Build(
         TimelineModel timeline,
@@ -122,6 +147,10 @@ public static class TimelineLayoutBuilder
         TimelineGranularity granularity = TimelineGranularity.Month)
     {
         ArgumentNullException.ThrowIfNull(timeline);
+
+        // Override granularity from OOXML level attribute when present (0=years,1=quarters,2=months,3=days).
+        if (timeline.Level is { } level && (uint)level < (uint)LevelToGranularity.Length)
+            granularity = LevelToGranularity[level];
 
         var rangeStart = ParseDate(timeline.StartDate);
         var rangeEnd = ParseDate(timeline.EndDate);
@@ -167,7 +196,19 @@ public static class TimelineLayoutBuilder
                 Math.Max(1, bounds.Width - (TrackHorizontalInset * 2)), ScrollbarHeight)
             : new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Bottom, 1, 0);
 
-        var (leftRatio, widthRatio) = ComputeSelectionRatios(rangeStart, rangeEnd, selectedStart, selectedEnd);
+        // Compute the visible scroll window from scrollPosition + granularity.
+        // When scrollPosition is present, the track renders only the visible window rather than the
+        // full data range. The number of visible periods is derived from the track width divided by
+        // the fixed per-period pixel width Excel uses for each granularity.
+        var (windowStart, windowEnd) = ComputeScrollWindow(
+            timeline.ScrollPosition, granularity, rangeStart, rangeEnd, trackRect.Width);
+
+        // Scrollbar thumb ratios: position/size of the visible window within the full range.
+        var (thumbLeft, thumbWidth) = ComputeScrollThumbRatios(rangeStart, rangeEnd, windowStart, windowEnd);
+
+        // Selection ratios are computed within the visible window (not the full range) so the
+        // selection band stays aligned with the visible tick marks.
+        var (leftRatio, widthRatio) = ComputeSelectionRatios(windowStart, windowEnd, selectedStart, selectedEnd);
         var selectionRect = new LayoutRect(
             trackRect.Left + (trackRect.Width * leftRatio),
             trackRect.Top,
@@ -203,7 +244,85 @@ public static class TimelineLayoutBuilder
             RangeStart: rangeStart,
             RangeEnd: rangeEnd,
             SelectedStart: selectedStart,
-            SelectedEnd: selectedEnd);
+            SelectedEnd: selectedEnd,
+            WindowStart: windowStart,
+            WindowEnd: windowEnd,
+            ScrollThumbLeftRatio: thumbLeft,
+            ScrollThumbWidthRatio: thumbWidth);
+    }
+
+    // Computes the visible window [windowStart, windowEnd) from the OOXML scrollPosition and
+    // granularity. When scrollPosition is absent (or unparseable), returns the full data range.
+    // The number of visible periods = floor(trackWidth / perPeriodPx); window end is snapped to
+    // the nearest period boundary at or after the last visible period.
+    private static (DateOnly? WindowStart, DateOnly? WindowEnd) ComputeScrollWindow(
+        string? scrollPositionDate,
+        TimelineGranularity granularity,
+        DateOnly? rangeStart,
+        DateOnly? rangeEnd,
+        double trackWidth)
+    {
+        // No scroll data → full range is the window.
+        if (string.IsNullOrWhiteSpace(scrollPositionDate) || rangeStart is null || rangeEnd is null)
+            return (rangeStart, rangeEnd);
+
+        var viewStart = ParseDate(scrollPositionDate);
+        if (viewStart is null)
+            return (rangeStart, rangeEnd);
+
+        // Clamp viewStart to [rangeStart, rangeEnd).
+        if (viewStart < rangeStart)
+            viewStart = rangeStart;
+        if (viewStart >= rangeEnd)
+            return (rangeStart, rangeEnd);
+
+        // Per-period pixel width for this granularity (at 96 DPI logical pixels).
+        var periodPx = granularity switch
+        {
+            TimelineGranularity.Year => YearWidthPx,
+            TimelineGranularity.Quarter => QuarterWidthPx,
+            TimelineGranularity.Day => DayWidthPx,
+            _ => MonthWidthPx
+        };
+
+        // Number of full periods that fit in the track width.
+        var visibleCount = Math.Max(1, (int)Math.Floor(trackWidth / periodPx));
+
+        // Compute windowEnd: viewStart + visibleCount periods.
+        var viewEnd = granularity switch
+        {
+            TimelineGranularity.Year => viewStart.Value.AddYears(visibleCount),
+            TimelineGranularity.Quarter => viewStart.Value.AddMonths(visibleCount * 3),
+            TimelineGranularity.Day => viewStart.Value.AddDays(visibleCount),
+            _ => viewStart.Value.AddMonths(visibleCount) // Month
+        };
+
+        // Clamp to rangeEnd.
+        if (viewEnd > rangeEnd.Value)
+            viewEnd = rangeEnd.Value;
+
+        return (viewStart, viewEnd);
+    }
+
+    // Computes the scrollbar thumb position/size as ratios within the full data range.
+    private static (double Left, double Width) ComputeScrollThumbRatios(
+        DateOnly? rangeStart,
+        DateOnly? rangeEnd,
+        DateOnly? windowStart,
+        DateOnly? windowEnd)
+    {
+        if (rangeStart is null || rangeEnd is null || windowStart is null || windowEnd is null)
+            return (0, 1);
+
+        var totalDays = rangeEnd.Value.DayNumber - rangeStart.Value.DayNumber;
+        if (totalDays <= 0)
+            return (0, 1);
+
+        var thumbLeft = Math.Clamp(
+            (windowStart.Value.DayNumber - rangeStart.Value.DayNumber) / (double)totalDays, 0, 1);
+        var thumbRight = Math.Clamp(
+            (windowEnd.Value.DayNumber - rangeStart.Value.DayNumber) / (double)totalDays, 0, 1);
+        return (thumbLeft, Math.Max(0, thumbRight - thumbLeft));
     }
 
     /// <summary>
@@ -228,23 +347,27 @@ public static class TimelineLayoutBuilder
     }
 
     /// <summary>
-    /// Maps a horizontal pixel position to a date within the timeline's full range, or <c>null</c>
-    /// when the full range is unknown or empty. Positions are clamped to the track extent.
+    /// Maps a horizontal pixel position to a date within the timeline's visible window (or full range
+    /// when no window is set), or <c>null</c> when the range is unknown or empty. Positions are
+    /// clamped to the track extent.
     /// </summary>
     public static DateOnly? DateAt(TimelineLayoutModel layout, double x)
     {
         ArgumentNullException.ThrowIfNull(layout);
-        if (layout.RangeStart is not { } start || layout.RangeEnd is not { } end)
+        // Map within the visible window when present, otherwise the full range.
+        var start = layout.WindowStart ?? layout.RangeStart;
+        var end = layout.WindowEnd ?? layout.RangeEnd;
+        if (start is null || end is null)
             return null;
 
-        var totalDays = end.DayNumber - start.DayNumber;
+        var totalDays = end.Value.DayNumber - start.Value.DayNumber;
         if (totalDays <= 0 || layout.TrackRect.Width <= 0)
             return start;
 
         var ratio = (x - layout.TrackRect.Left) / layout.TrackRect.Width;
         ratio = Math.Clamp(ratio, 0, 1);
         var dayOffset = (int)Math.Round(ratio * totalDays);
-        return start.AddDays(dayOffset);
+        return start.Value.AddDays(dayOffset);
     }
 
     /// <summary>
@@ -341,7 +464,9 @@ public static class TimelineLayoutBuilder
     {
         ArgumentNullException.ThrowIfNull(layout);
 
-        if (layout.RangeStart is not { } rangeStart || layout.RangeEnd is not { } rangeEnd)
+        // Use the visible window for tick generation; fall back to full range when no window is set.
+        if ((layout.WindowStart ?? layout.RangeStart) is not { } rangeStart ||
+            (layout.WindowEnd ?? layout.RangeEnd) is not { } rangeEnd)
             return [];
 
         var totalDays = rangeEnd.DayNumber - rangeStart.DayNumber;
@@ -424,7 +549,9 @@ public static class TimelineLayoutBuilder
     {
         ArgumentNullException.ThrowIfNull(layout);
 
-        if (layout.RangeStart is not { } rangeStart || layout.RangeEnd is not { } rangeEnd)
+        // Use the visible window for year banner spans; fall back to full range when no window is set.
+        if ((layout.WindowStart ?? layout.RangeStart) is not { } rangeStart ||
+            (layout.WindowEnd ?? layout.RangeEnd) is not { } rangeEnd)
             return [];
 
         var totalDays = rangeEnd.DayNumber - rangeStart.DayNumber;

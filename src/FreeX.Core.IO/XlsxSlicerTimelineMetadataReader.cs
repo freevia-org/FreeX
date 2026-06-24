@@ -90,6 +90,9 @@ internal static class XlsxSlicerTimelineMetadataReader
                 var packagePart = XlsxPackagePath.NormalizeEntryPath(timelineEntry);
                 var timelineName = timelineElement?.Attribute("name")?.Value ?? "";
                 var hasDrawing = drawingMetadataByName.TryGetValue(timelineName, out var drawingMetadata);
+                var levelAttr = timelineElement?.Attribute("level")?.Value;
+                int? level = TryReadInt(levelAttr, out var levelVal) ? levelVal : null;
+                var scrollPositionRaw = timelineElement?.Attribute("scrollPosition")?.Value;
                 timelines.Add(new TimelineModel
                 {
                     Name = timelineName,
@@ -105,7 +108,9 @@ internal static class XlsxSlicerTimelineMetadataReader
                     PackagePart = packagePart,
                     DrawingAnchor = hasDrawing ? drawingMetadata.Anchor : null,
                     DrawingShapeName = hasDrawing ? drawingMetadata.ShapeName : null,
-                    SourceSheetName = hasDrawing ? drawingMetadata.SheetName : null
+                    SourceSheetName = hasDrawing ? drawingMetadata.SheetName : null,
+                    Level = level,
+                    ScrollPosition = NormalizeTimelineDate(scrollPositionRaw)
                 });
             }
         }

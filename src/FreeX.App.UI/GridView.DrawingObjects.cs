@@ -855,7 +855,8 @@ public partial class GridView
         }
     }
 
-    // Renders a static horizontal scrollbar strip at the bottom of the timeline widget.
+    // Renders the horizontal scrollbar at the bottom of the timeline widget, with a thumb that
+    // reflects the current scroll position (ScrollThumbLeftRatio/ScrollThumbWidthRatio).
     private static void DrawTimelineScrollbar(
         DrawingContext dc,
         TimelineLayoutModel layout,
@@ -866,8 +867,8 @@ public partial class GridView
         // Full strip background
         dc.DrawRectangle(fillBrush, null, sbRect);
 
-        // Left ◄ arrow box
         const double arrowBoxWidth = 14;
+
         if (sbRect.Width > arrowBoxWidth * 2 + 4)
         {
             var leftArrowRect = new Rect(sbRect.Left, sbRect.Top, arrowBoxWidth, sbRect.Height);
@@ -940,6 +941,9 @@ public partial class GridView
 
     private static TimelineGranularity ResolveTimelineGranularity(TimelineModel timeline)
     {
+        // The OOXML level attribute takes priority (0=years,1=quarters,2=months,3=days).
+        // TimelineLayoutBuilder.Build() applies this mapping, so we only need the heuristic
+        // here as the initial-pass value — the builder will override it when level is set.
         if (!TryParseTimelineDate(timeline.StartDate, out var start) ||
             !TryParseTimelineDate(timeline.EndDate, out var end))
         {

@@ -302,4 +302,102 @@ public sealed class TimelineLayoutBuilderTests
         // The two spans should together span the full track width.
         (spans[0].SpanWidth + spans[1].SpanWidth).Should().BeApproximately(layout.TrackRect.Width, 1.0);
     }
+
+    // --- Scroll-window (wave1d) tests ---
+
+    private static TimelineModel TimelineWithScrollWindow(
+        string? level = "2",
+        string? scrollPosition = "2026-01-01",
+        string start = "2026-01-01",
+        string end = "2027-01-01",
+        string? selStart = "2026-02-01",
+        string? selEnd = "2026-04-30") =>
+        new()
+        {
+            Name = "T",
+            Caption = "SaleDate",
+            StartDate = start,
+            EndDate = end,
+            SelectedStartDate = selStart,
+            SelectedEndDate = selEnd,
+            Level = level is null ? null : int.Parse(level, System.Globalization.CultureInfo.InvariantCulture),
+            ScrollPosition = scrollPosition
+        };
+
+    [Fact]
+    public void Build_WithLevel2_UsesMonthGranularity()
+    {
+        // OOXML level=2 → months (0=years,1=quarters,2=months,3=days)
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(level: "2"), TallBounds);
+        layout.Granularity.Should().Be(TimelineGranularity.Month);
+    }
+
+    [Fact]
+    public void Build_WithLevel0_UsesYearGranularity()
+    {
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(level: "0"), TallBounds);
+        layout.Granularity.Should().Be(TimelineGranularity.Year);
+    }
+
+    [Fact]
+    public void Build_WithScrollPosition_WindowStartMatchesScrollPosition()
+    {
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(scrollPosition: "2026-01-01"), TallBounds);
+        layout.WindowStart.Should().Be(new DateOnly(2026, 1, 1));
+    }
+
+    [Fact]
+    public void Build_WithScrollPositionAndMonth_WindowEndLimitedByPeriodCount()
+    {
+        // TallBounds track width = 200-16 = 184px. MonthWidthPx=41. floor(184/41)=4 months visible.
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(scrollPosition: "2026-01-01"), TallBounds);
+        layout.WindowStart.Should().NotBeNull();
+        layout.WindowEnd.Should().NotBeNull();
+        var monthsVisible = (layout.WindowEnd!.Value.Year - layout.WindowStart!.Value.Year) * 12
+                            + layout.WindowEnd.Value.Month - layout.WindowStart.Value.Month;
+        monthsVisible.Should().BeGreaterThan(0).And.BeLessThanOrEqualTo(12);
+        // Window must not exceed the full range end.
+        layout.WindowEnd!.Value.Should().BeOnOrBefore(new DateOnly(2027, 1, 1));
+    }
+
+    [Fact]
+    public void Build_WithScrollPosition_NoScrollPosition_WindowEqualsRange()
+    {
+        // Without ScrollPosition the window should equal the full range.
+        var layout = TimelineLayoutBuilder.Build(
+            TimelineWithScrollWindow(scrollPosition: null), TallBounds);
+        layout.WindowStart.Should().Be(layout.RangeStart);
+        layout.WindowEnd.Should().Be(layout.RangeEnd);
+    }
+
+    [Fact]
+    public void Build_WithScrollWindow_TickLabels_OnlyCoverWindow()
+    {
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(scrollPosition: "2026-01-01"), TallBounds);
+        var ticks = TimelineLayoutBuilder.GetTickLabels(layout);
+        // Window is smaller than 12 months, so fewer tick labels than the full range.
+        ticks.Should().NotBeEmpty();
+        ticks.Count.Should().BeLessThanOrEqualTo(12);
+        ticks[0].Label.Should().Be("JAN"); // window starts at Jan
+    }
+
+    [Fact]
+    public void Build_WithScrollWindow_SelectionBand_AlignedWithWindow()
+    {
+        // Selection FEB–APR within a JAN–SEP window should NOT reach 0 left ratio.
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(
+            scrollPosition: "2026-01-01", selStart: "2026-02-01", selEnd: "2026-04-30"), TallBounds);
+        layout.SelectionLeftRatio.Should().BeGreaterThan(0); // Feb not at left edge of window
+        layout.SelectionLeftRatio.Should().BeLessThan(0.5);
+    }
+
+    [Fact]
+    public void Build_WithScrollWindow_ScrollThumbRatios_ReflectPosition()
+    {
+        // scrollPosition=Jan (first month of 12-month range) → thumb starts at 0.
+        var layout = TimelineLayoutBuilder.Build(TimelineWithScrollWindow(scrollPosition: "2026-01-01"), TallBounds);
+        layout.ScrollThumbLeftRatio.Should().BeApproximately(0, 0.01);
+        // Thumb width < 1 (window smaller than full range).
+        layout.ScrollThumbWidthRatio.Should().BeGreaterThan(0).And.BeLessThan(1);
+    }
 }
