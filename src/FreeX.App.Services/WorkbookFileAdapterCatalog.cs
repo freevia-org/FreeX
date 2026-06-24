@@ -8,6 +8,8 @@ public static class WorkbookFileAdapterCatalog
     [
         new XlsxFileAdapter(),
         new XltxFileAdapter(),
+        new XlsmFileAdapter(),
+        new XltmFileAdapter(),
         new LegacyXlsFileAdapter(),
         new CsvFileAdapter(),
         new CsvUtf8FileAdapter(),

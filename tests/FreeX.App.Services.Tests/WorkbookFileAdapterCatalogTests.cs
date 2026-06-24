@@ -15,8 +15,10 @@ public sealed class WorkbookFileAdapterCatalogTests
 
         formats.Should().Contain(format => format.Extension == ".xlsx" && format.CanOpen && format.CanSave);
         formats.Should().Contain(format => format.Extension == ".xlsm" && format.CanOpen && !format.CanSave);
+        formats.Should().Contain(format => format.Extension == ".xlsm" && format.CanOpen && format.CanSave);
         formats.Should().Contain(format => format.Extension == ".xltx" && format.CanOpen && !format.CanSave && format.OpensAsTemplate);
         formats.Should().Contain(format => format.Extension == ".xltm" && format.CanOpen && !format.CanSave && format.OpensAsTemplate);
+        formats.Should().Contain(format => format.Extension == ".xltm" && format.CanOpen && format.CanSave && format.OpensAsTemplate);
         formats.Should().Contain(format => format.Extension == ".xls" && format.CanOpen && !format.CanSave);
         formats.Should().Contain(format => format.Extension == ".xlsb" && format.CanOpen && !format.CanSave);
         formats.Should().Contain(format => format.Extension == ".xlt" && format.CanOpen && !format.CanSave && format.OpensAsTemplate);
@@ -46,6 +48,20 @@ public sealed class WorkbookFileAdapterCatalogTests
         var saveAdapter = FileFormatResolver.FindSaveAdapter(adapters, ".xltx", out var saveFormat);
         saveAdapter.Should().BeOfType<XltxFileAdapter>();
         saveFormat!.CanSave.Should().BeTrue();
+
+        // .xlsm and .xltm are also save-capable now via their dedicated adapters.
+        formats.Should().Contain(format =>
+            format.Extension == ".xlsm" && format.CanSave);
+        formats.Should().Contain(format =>
+            format.Extension == ".xltm" && format.CanSave && format.OpensAsTemplate);
+
+        var xlsmSaveAdapter = FileFormatResolver.FindSaveAdapter(adapters, ".xlsm", out var xlsmSaveFormat);
+        xlsmSaveAdapter.Should().BeOfType<XlsmFileAdapter>();
+        xlsmSaveFormat!.CanSave.Should().BeTrue();
+
+        var xltmSaveAdapter = FileFormatResolver.FindSaveAdapter(adapters, ".xltm", out var xltmSaveFormat);
+        xltmSaveAdapter.Should().BeOfType<XltmFileAdapter>();
+        xltmSaveFormat!.CanSave.Should().BeTrue();
     }
 
     [Fact]
