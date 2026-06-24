@@ -13,6 +13,8 @@ public enum RibbonCommandIconKind
     Border,
     Bold,
     BringForward,
+    BringToFront,
+    SendToBack,
     ChartArea,
     PivotTable,
     Table,

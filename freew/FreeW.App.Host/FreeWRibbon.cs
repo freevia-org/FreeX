@@ -744,6 +744,11 @@ internal static class FreeWRibbon
                     g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    // Z-order commands for floating images (Phase 2).
+                    g.Medium("freew.image-bring-to-front",  "Bring to Front",  RibbonCommandIconKind.BringToFront);
+                    g.Medium("freew.image-send-to-back",    "Send to Back",    RibbonCommandIconKind.SendToBack);
+                    g.Medium("freew.image-bring-forward",   "Bring Forward",   RibbonCommandIconKind.BringForward);
+                    g.Medium("freew.image-send-backward",   "Send Backward",   RibbonCommandIconKind.SendBackward);
                 });
                 tab.Group("picture-adjust", "Adjust", "J", 95, g =>
                 {

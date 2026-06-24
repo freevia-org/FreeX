@@ -769,6 +769,129 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
 }
 
 /// <summary>
+/// Reorder the z-index of a floating image (<see cref="InlineImage.ZOrderIndex"/>) across all floating
+/// images in the document. Supports four Word-style arrange operations: BringToFront (max+1),
+/// SendToBack (min-1), BringForward (swap with the next-higher neighbour), SendBackward (swap with the
+/// next-lower neighbour). The operation is undoable: <see cref="Revert"/> restores all ZOrderIndex
+/// values exactly as they were before <see cref="Apply"/>. The command is a no-op when no floating
+/// images exist in the document.
+/// </summary>
+public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrderOperation operation) : IDocumentCommand
+{
+    private (int BlockIndex, int RunIndex, int OldZ)[]? _snapshot;
+
+    public string Label => operation switch
+    {
+        ZOrderOperation.BringToFront => "Bring to Front",
+        ZOrderOperation.SendToBack => "Send to Back",
+        ZOrderOperation.BringForward => "Bring Forward",
+        ZOrderOperation.SendBackward => "Send Backward",
+        _ => "Z-Order"
+    };
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        // Collect all floating images: (block index, run index, image) tuples.
+        var all = CollectFloating(context.Document);
+        if (all.Count == 0) return;
+
+        // Snapshot current z-order for undo.
+        _snapshot = all.Select(t => (t.bi, t.ri, t.img.ZOrderIndex)).ToArray();
+
+        // Find the target image.
+        var target = all.FirstOrDefault(t => t.bi == paragraphIndex && t.ri == runIndex);
+        if (target.img is null) return;
+
+        switch (operation)
+        {
+            case ZOrderOperation.BringToFront:
+            {
+                var max = all.Max(t => t.img.ZOrderIndex);
+                target.img.ZOrderIndex = max + 1;
+                break;
+            }
+            case ZOrderOperation.SendToBack:
+            {
+                var min = all.Min(t => t.img.ZOrderIndex);
+                target.img.ZOrderIndex = min - 1;
+                break;
+            }
+            case ZOrderOperation.BringForward:
+            {
+                // Find the next-higher image (the one with the smallest ZOrderIndex > target's).
+                var targetZ = target.img.ZOrderIndex;
+                var neighbor = all
+                    .Where(t => t.img.ZOrderIndex > targetZ)
+                    .OrderBy(t => t.img.ZOrderIndex)
+                    .FirstOrDefault();
+                if (neighbor.img is not null)
+                {
+                    target.img.ZOrderIndex = neighbor.img.ZOrderIndex;
+                    neighbor.img.ZOrderIndex = targetZ;
+                }
+                else
+                {
+                    // Already at the top; no-op (but snapshot taken; revert is harmless).
+                }
+                break;
+            }
+            case ZOrderOperation.SendBackward:
+            {
+                // Find the next-lower image (the one with the largest ZOrderIndex < target's).
+                var targetZ = target.img.ZOrderIndex;
+                var neighbor = all
+                    .Where(t => t.img.ZOrderIndex < targetZ)
+                    .OrderByDescending(t => t.img.ZOrderIndex)
+                    .FirstOrDefault();
+                if (neighbor.img is not null)
+                {
+                    target.img.ZOrderIndex = neighbor.img.ZOrderIndex;
+                    neighbor.img.ZOrderIndex = targetZ;
+                }
+                break;
+            }
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_snapshot is null) return;
+        foreach (var (bi, ri, oldZ) in _snapshot)
+        {
+            if (context.Document.Blocks[bi] is Paragraph p
+                && ri >= 0 && ri < p.Runs.Count
+                && p.Runs[ri].Image is { } img)
+                img.ZOrderIndex = oldZ;
+        }
+        _snapshot = null;
+    }
+
+    private static List<(int bi, int ri, InlineImage img)> CollectFloating(TextDocument doc)
+    {
+        var result = new List<(int, int, InlineImage)>();
+        for (var b = 0; b < doc.Blocks.Count; b++)
+        {
+            if (doc.Blocks[b] is not Paragraph para) continue;
+            for (var r = 0; r < para.Runs.Count; r++)
+            {
+                if (para.Runs[r].Image is { IsFloating: true } img)
+                    result.Add((b, r, img));
+            }
+        }
+        return result;
+    }
+}
+
+/// <summary>The four Word-style z-order arrange operations.</summary>
+public enum ZOrderOperation
+{
+    BringToFront,
+    SendToBack,
+    BringForward,
+    SendBackward
+}
+
+/// <summary>
 /// Apply a formatting transform to every run in a paragraph (e.g. toggle bold), snapshotting
 /// each run's prior formatting. The building block the ribbon will call for selection-wide format.
 /// </summary>

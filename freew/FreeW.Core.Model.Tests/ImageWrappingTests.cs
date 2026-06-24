@@ -69,4 +69,28 @@ public class ImageWrappingTests
         run.Image.Should().BeSameAs(image);
         run.Image!.Wrapping.Should().Be(ImageWrapping.Behind);
     }
+
+    // ── ZOrderIndex tests (Phase 1) ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ZOrderIndex_DefaultsToZero()
+    {
+        var image = new InlineImage(Png(), 60, 60);
+        image.ZOrderIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ZOrderIndex_IsSettable()
+    {
+        var image = new InlineImage(Png(), 60, 60) { ZOrderIndex = 5 };
+        image.ZOrderIndex.Should().Be(5);
+    }
+
+    [Fact]
+    public void ZOrderIndex_NotAffectedByInlineMode()
+    {
+        // Inline images also default to 0 (field is ignored for inline).
+        var image = new InlineImage(Png(), 60, 60) { Wrapping = ImageWrapping.Inline };
+        image.ZOrderIndex.Should().Be(0);
+    }
 }

@@ -1255,7 +1255,12 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-rotate",
                 "freew.image-align-left",
                 "freew.image-align-center",
-                "freew.image-align-right");
+                "freew.image-align-right",
+                // Phase 2: z-order commands for floating images.
+                "freew.image-bring-to-front",
+                "freew.image-send-to-back",
+                "freew.image-bring-forward",
+                "freew.image-send-backward");
 
         CommandIds(picture.FindGroup("picture-adjust")!)
             .Should()

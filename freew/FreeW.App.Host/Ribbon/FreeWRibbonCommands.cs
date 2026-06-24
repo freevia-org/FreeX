@@ -314,6 +314,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-crop",   new ImageCropCommand(editor));
         registry.Register("freew.image-reset",  new ImageResetCommand(editor));
         registry.Register("freew.image-border", new ImageBorderCommand(editor));
+        // Picture Format tab — Arrange > Z-order (floating images only).
+        registry.Register("freew.image-bring-to-front",  new ImageZOrderCommand(editor, ZOrderOperation.BringToFront));
+        registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
+        registry.Register("freew.image-bring-forward",   new ImageZOrderCommand(editor, ZOrderOperation.BringForward));
+        registry.Register("freew.image-send-backward",   new ImageZOrderCommand(editor, ZOrderOperation.SendBackward));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -2767,6 +2772,23 @@ internal static class FreeWRibbonCommands
                 image.BorderColorHex, image.BorderWidthPt, image.BorderDash);
             if (result is { } r)
                 editor.SetSelectedImageBorder(r.Color, r.Width, r.Dash);
+        }
+    }
+
+    // Picture Format > Arrange > Z-order: bring/send a floating image forward or to front/back.
+    private sealed class ImageZOrderCommand(DocumentView editor, ZOrderOperation operation) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null || !image.IsFloating)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Select a floating picture first.", "Z-Order");
+                return;
+            }
+            editor.ChangeSelectedImageZOrder(operation);
         }
     }
 

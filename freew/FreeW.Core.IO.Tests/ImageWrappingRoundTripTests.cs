@@ -187,6 +187,63 @@ public class ImageWrappingRoundTripTests
         ReadBackImage(DocumentWith(image)).AltText.Should().Be("Floating logo");
     }
 
+    // ── ZOrderIndex round-trip (Phase 1) ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ZOrderIndex_WrittenAsRelativeHeight()
+    {
+        var image = new InlineImage(MinimalPng(), 60, 60)
+        {
+            Wrapping = ImageWrapping.Square,
+            ZOrderIndex = 7,
+        };
+        var xml = WriteDocumentXml(DocumentWith(image));
+
+        var relH = xml.Descendants(Wp + "anchor")
+            .Single()
+            .Attribute("relativeHeight")?.Value;
+        relH.Should().Be("7");
+    }
+
+    [Fact]
+    public void ZOrderIndex_RoundTrips()
+    {
+        var image = new InlineImage(MinimalPng(), 60, 60)
+        {
+            Wrapping = ImageWrapping.InFront,
+            ZOrderIndex = 12,
+        };
+
+        ReadBackImage(DocumentWith(image)).ZOrderIndex.Should().Be(12);
+    }
+
+    [Fact]
+    public void ZOrderIndex_DefaultZero_RoundTrips()
+    {
+        var image = new InlineImage(MinimalPng(), 60, 60)
+        {
+            Wrapping = ImageWrapping.Square,
+            ZOrderIndex = 0,
+        };
+
+        ReadBackImage(DocumentWith(image)).ZOrderIndex.Should().Be(0);
+    }
+
+    [Fact]
+    public void ZOrderIndex_InlineImage_WritesInlineElement_NotAnchor()
+    {
+        // Inline images must still serialize as wp:inline — ZOrderIndex is irrelevant there.
+        var image = new InlineImage(MinimalPng(), 60, 60)
+        {
+            Wrapping = ImageWrapping.Inline,
+            ZOrderIndex = 5, // set but must be ignored for inline
+        };
+        var xml = WriteDocumentXml(DocumentWith(image));
+
+        xml.Descendants(Wp + "inline").Should().HaveCount(1, "inline image serialises as wp:inline");
+        xml.Descendants(Wp + "anchor").Should().BeEmpty("inline image must not produce a wp:anchor");
+    }
+
     private static byte[] MinimalPng() =>
     [
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,

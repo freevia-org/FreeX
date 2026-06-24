@@ -942,6 +942,20 @@ public static class RibbonIconDefinitions
             Rectangle(5, 5, 9, 9, radius: 1),
             Path("M20,5 L20,12 M17.6,9.6 L20,12 L22.4,9.6", 1.5));
 
+        // Bring to Front: two stacked tiles with the top one filled, and a double-up arrow.
+        Add(RibbonCommandIconKind.BringToFront,
+            Rectangle(10, 10, 9, 9, radius: 1),
+            FilledRectangle(5, 5, 10, 10),
+            Path("M20,11 L20,4 M17.6,6.4 L20,4 L22.4,6.4", 1.5),
+            Path("M20,15 L20,12", 1.5));
+
+        // Send to Back: two stacked tiles with the bottom one filled, and a double-down arrow.
+        Add(RibbonCommandIconKind.SendToBack,
+            FilledRectangle(10, 10, 9, 9),
+            Rectangle(5, 5, 10, 10, radius: 1),
+            Path("M20,4 L20,11 M17.6,8.6 L20,11 L22.4,8.6", 1.5),
+            Path("M20,13 L20,16", 1.5));
+
         // ---- Chart contextual-tab glyphs ----
 
         // Chart Title: a column chart carrying a filled title bar across the top.
