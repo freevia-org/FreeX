@@ -1140,6 +1140,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.formatting-marks", formattingMarks);
         stateful.Add(("freew.formatting-marks", formattingMarks));
 
+        // View > Show > Gridlines: a stateful toggle that adds/removes the page-gridlines adorner.
+        // Render-only; no model change. Distinct from freew.table-view-gridlines (table borders).
+        var gridlines = new ToggleActionCommand(() => editor.TogglePageGridlines(), () => editor.ShowPageGridlines);
+        registry.Register("freew.gridlines", gridlines);
+        stateful.Add(("freew.gridlines", gridlines));
+
         if (onHelpOnline is not null)
             registry.Register("freew.help-online", new ActionCommand(onHelpOnline));
         if (onFeedback is not null)

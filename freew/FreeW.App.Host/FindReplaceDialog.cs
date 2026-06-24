@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -13,8 +14,8 @@ namespace FreeW.App.Host;
 /// <summary>
 /// A modeless Find &amp; Replace tool over the FreeW editing surface. Searches the live document via
 /// TextPointer navigation (within a text run), selects matches, and replaces the selection. Match
-/// decisions (case sensitivity, whole-word boundaries) are delegated to the pure
-/// <see cref="TextSearch"/> helper. Includes a Go To section that jumps to a heading (via
+/// decisions (case sensitivity, whole-word boundaries, Word-style wildcards) are delegated to the
+/// pure <see cref="TextSearch"/> helper. Includes a Go To section that jumps to a heading (via
 /// <see cref="DocumentOutline"/>) or to the document start/end. Opened with Ctrl+F / Ctrl+H.
 /// </summary>
 internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
@@ -24,15 +25,30 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _replaceBox = new() { MinWidth = 220 };
     private readonly CheckBox _matchCase = new() { Content = "Match case", Margin = new Thickness(0, 6, 0, 0) };
     private readonly CheckBox _wholeWord = new() { Content = "Whole word", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _useWildcards = new() { Content = "Use wildcards  (* ? [ ] < >)", Margin = new Thickness(0, 4, 0, 0) };
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
+
+    // Special-character items shown in the "Special ▾" dropdown for quick insertion.
+    private static readonly (string Label, string Insert)[] SpecialChars =
+    [
+        ("Paragraph Mark  (^p / \\n)", "\n"),
+        ("Tab Character  (^t / \\t)", "\t"),
+        ("Any Character  (?)", "?"),
+        ("Any Digit  ([0-9])", "[0-9]"),
+        ("Any Letter  ([A-Za-z])", "[A-Za-z]"),
+        ("Beginning of Word  (<)", "<"),
+        ("End of Word  (>)", ">"),
+        ("Em Dash  (—)", "—"),
+        ("En Dash  (–)", "–"),
+    ];
 
     public FindReplaceDialog(Window owner, DocumentView editor)
     {
         _editor = editor;
         Owner = owner;
         Title = "Find & Replace";
-        Width = 380;
+        Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -41,7 +57,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 7; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddRow(grid, 0, "Find:", _findBox);
@@ -55,12 +71,26 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_wholeWord, 1);
         grid.Children.Add(_wholeWord);
 
+        Grid.SetRow(_useWildcards, 4);
+        Grid.SetColumn(_useWildcards, 1);
+        grid.Children.Add(_useWildcards);
+
+        // "Use Wildcards" disables "Whole word" (incompatible, mirrors Word).
+        _useWildcards.Checked += (_, _) => _wholeWord.IsEnabled = false;
+        _useWildcards.Unchecked += (_, _) => _wholeWord.IsEnabled = true;
+
+        // Special ▾ button — inserts a special character into whichever box last had focus.
+        var specialButton = BuildSpecialButton();
+        Grid.SetRow(specialButton, 5);
+        Grid.SetColumn(specialButton, 1);
+        grid.Children.Add(specialButton);
+
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
         buttons.Children.Add(MakeButton("Find Next", (_, _) => FindNext()));
         buttons.Children.Add(MakeButton("Replace", (_, _) => Replace()));
         buttons.Children.Add(MakeButton("Replace All", (_, _) => ReplaceAll()));
         buttons.Children.Add(MakeButton("Close", (_, _) => Close()));
-        Grid.SetRow(buttons, 4);
+        Grid.SetRow(buttons, 6);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
 
@@ -70,6 +100,49 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var statusHost = new Border { Margin = new Thickness(14, 0, 14, 12), Child = _status };
         outer.Children.Add(statusHost);
         Content = outer;
+    }
+
+    // Track which text field was focused last so Special inserts into the right box.
+    private TextBox _lastFocusedBox = null!;
+
+    private UIElement BuildSpecialButton()
+    {
+        _lastFocusedBox = _findBox;
+        _findBox.GotFocus += (_, _) => _lastFocusedBox = _findBox;
+        _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
+
+        var menu = new ContextMenu();
+        foreach (var (label, insert) in SpecialChars)
+        {
+            var item = new MenuItem { Header = label };
+            var insertValue = insert; // capture
+            item.Click += (_, _) => InsertSpecial(insertValue);
+            menu.Items.Add(item);
+        }
+
+        var btn = new Button
+        {
+            Content = "Special ▾",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        btn.Click += (_, _) =>
+        {
+            menu.PlacementTarget = btn;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        };
+        return btn;
+    }
+
+    private void InsertSpecial(string text)
+    {
+        var box = _lastFocusedBox ?? _findBox;
+        var caret = box.CaretIndex;
+        box.Text = box.Text.Insert(caret, text);
+        box.CaretIndex = caret + text.Length;
+        box.Focus();
     }
 
     // The Go To section: a labelled combo of jump targets (document start/end + each heading) and a
@@ -177,6 +250,8 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private bool WholeWord => _wholeWord.IsChecked == true;
 
+    private bool UseWildcards => _useWildcards.IsChecked == true;
+
     private void FindNext()
     {
         var term = _findBox.Text;
@@ -204,6 +279,12 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private bool IsTermSelected(string term)
     {
         var selected = _editor.Selection.Text;
+        if (UseWildcards)
+        {
+            // In wildcard mode we check whether the selected text matches the pattern.
+            return TextSearch.FindAll(selected, term, MatchCase, wholeWord: false, useWildcards: true)
+                             .Any(m => m.Start == 0 && m.Length == selected.Length);
+        }
         if (selected.Length != term.Length)
             return false;
         var comparison = MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
@@ -260,7 +341,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 continue;
 
             var runText = pointer.GetTextInRun(LogicalDirection.Forward);
-            foreach (var (index, length) in TextSearch.FindAll(runText, term, MatchCase, WholeWord))
+            foreach (var (index, length) in TextSearch.FindAll(runText, term, MatchCase, WholeWord, UseWildcards))
             {
                 var start = pointer.GetPositionAtOffset(index);
                 var end = start?.GetPositionAtOffset(length);

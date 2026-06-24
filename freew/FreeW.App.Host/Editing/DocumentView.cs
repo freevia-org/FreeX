@@ -3521,6 +3521,7 @@ public sealed class DocumentView : RichTextBox
         SyncPageBreakAdorner();
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
+        SyncPageGridlinesAdorner();
     }
 
     /// <summary>
@@ -3879,6 +3880,66 @@ public sealed class DocumentView : RichTextBox
     {
         Loaded -= OnLoadedSyncChangeBar;
         SyncChangeBarAdorner();
+    }
+
+    // ── Page Gridlines toggle ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When true, a faint page-layout grid is drawn behind the document content via
+    /// <see cref="PageGridlinesAdorner"/>. This is the View ▸ Show ▸ Gridlines toggle (the page
+    /// grid, distinct from the table View Gridlines). Render-only; the model is never touched.
+    /// </summary>
+    public bool ShowPageGridlines { get; private set; }
+
+    /// <summary>
+    /// Turn the page gridlines overlay on or off and return the new state. Used by the View ribbon's
+    /// Gridlines toggle. Re-syncs the overlay adorner so the change shows immediately.
+    /// </summary>
+    public bool TogglePageGridlines()
+    {
+        ShowPageGridlines = !ShowPageGridlines;
+        SyncPageGridlinesAdorner();
+        return ShowPageGridlines;
+    }
+
+    // The live page-gridlines adorner, or null while gridlines are off.
+    private PageGridlinesAdorner? _pageGridlinesAdorner;
+
+    // Add, remove, or refresh the page gridlines overlay to match ShowPageGridlines. Mirrors the
+    // SyncFormattingMarksAdorner pattern: defers if the adorner layer is not yet available.
+    private void SyncPageGridlinesAdorner()
+    {
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (ShowPageGridlines)
+            {
+                Loaded -= OnLoadedSyncPageGridlines;
+                Loaded += OnLoadedSyncPageGridlines;
+            }
+            return;
+        }
+
+        if (ShowPageGridlines)
+        {
+            if (_pageGridlinesAdorner is null)
+            {
+                _pageGridlinesAdorner = new PageGridlinesAdorner(this);
+                layer.Add(_pageGridlinesAdorner);
+            }
+            _pageGridlinesAdorner.InvalidateVisual();
+        }
+        else if (_pageGridlinesAdorner is not null)
+        {
+            layer.Remove(_pageGridlinesAdorner);
+            _pageGridlinesAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncPageGridlines(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncPageGridlines;
+        SyncPageGridlinesAdorner();
     }
 
     /// <summary>
@@ -9699,5 +9760,65 @@ public sealed class DocumentView : RichTextBox
                 System.Windows.Documents.Span span => span.Inlines.Any(InlineHasRevision),
                 _ => false
             };
+    }
+
+    /// <summary>
+    /// A non-editable overlay that draws a faint rectangular grid behind the document content,
+    /// mirroring Word's View ▸ Show ▸ Gridlines feature. The grid uses a fixed cell size (default
+    /// ~14.4 pt ≈ 0.2 inch) that aligns with Word's default gridline spacing. It is purely
+    /// decorative: hit-test transparent, never printed, and repaints on every layout update so it
+    /// stays aligned while the user scrolls. Mirrors the pattern of
+    /// <see cref="FormattingMarksAdorner"/> and <see cref="ChangeBarAdorner"/>.
+    /// </summary>
+    private sealed class PageGridlinesAdorner : Adorner
+    {
+        // Faint blue-grey — close to Word's gridline colour (roughly #C8D8E8).
+        private static readonly Pen GridPen = CreateGridPen();
+
+        // Grid cell size in device-independent pixels. Word defaults to ~0.2 inch ≈ 19.2 px at 96 dpi.
+        // Using a slightly tighter 18 px so the grid is visually distinct from the content baseline.
+        private const double CellSize = 18.0;
+
+        private readonly DocumentView _view;
+
+        public PageGridlinesAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        private static Pen CreateGridPen()
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromArgb(0x55, 0x80, 0xA8, 0xC8)), 0.5);
+            pen.Freeze();
+            return pen;
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            base.OnRender(dc);
+
+            var size = _view.RenderSize;
+            if (size.Width <= 0 || size.Height <= 0)
+                return;
+
+            var bounds = new Rect(size);
+            dc.PushClip(new RectangleGeometry(bounds));
+            try
+            {
+                // Horizontal lines
+                for (var y = CellSize; y < size.Height; y += CellSize)
+                    dc.DrawLine(GridPen, new Point(0, y), new Point(size.Width, y));
+
+                // Vertical lines
+                for (var x = CellSize; x < size.Width; x += CellSize)
+                    dc.DrawLine(GridPen, new Point(x, 0), new Point(x, size.Height));
+            }
+            finally
+            {
+                dc.Pop();
+            }
+        }
     }
 }
