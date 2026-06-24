@@ -278,8 +278,9 @@ public class HtmlMhtmlRoundTripTests
     public void Catalog_RegistersHtmlAndMhtmlFormats()
     {
         var formats = DocumentFileAdapterCatalog.CreateDefaultAdapters().SelectMany(adapter => adapter.Formats).ToList();
-        formats.Should().ContainSingle(f => f.Extension == ".html" && f.CanOpen && f.CanSave);
-        formats.Should().ContainSingle(f => f.Extension == ".htm" && f.CanOpen && f.CanSave);
+        // Two HTML save variants now share each extension: "Web Page" (full) and "Web Page, Filtered".
+        formats.Where(f => f.Extension == ".html" && f.CanOpen && f.CanSave).Should().HaveCount(2);
+        formats.Where(f => f.Extension == ".htm" && f.CanOpen && f.CanSave).Should().HaveCount(2);
         formats.Should().ContainSingle(f => f.Extension == ".mhtml" && f.CanOpen && f.CanSave);
         formats.Should().ContainSingle(f => f.Extension == ".mht" && f.CanOpen && f.CanSave);
     }

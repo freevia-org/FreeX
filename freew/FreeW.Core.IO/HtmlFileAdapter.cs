@@ -45,12 +45,12 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
     public static HtmlFileAdapter WebPage() => new(HtmlSaveMode.Full);
 
     public string Extension => ".html";
-    public string FormatName => "HTML document";
+    public string FormatName => _saveMode == HtmlSaveMode.Full ? "Web Page" : "Web Page, Filtered";
 
-    public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
+    public IReadOnlyList<FileFormatDescriptor> Formats =>
     [
-        new(".html", "HTML document"),
-        new(".htm", "HTML document"),
+        new(".html", FormatName),
+        new(".htm", FormatName),
     ];
 
     public TextDocument Load(Stream stream)

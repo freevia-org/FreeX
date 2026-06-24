@@ -286,7 +286,7 @@ internal sealed class FileCommands
             return false;
 
         var chosenExtension = Path.GetExtension(result.FileName!);
-        var resolved = DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
+        var resolved = ResolveSaveAdapter(chosenExtension, result.FilterIndex);
         if (resolved is null)
         {
             ShowError(
@@ -298,6 +298,30 @@ internal sealed class FileCommands
         path = result.FileName!;
         adapter = resolved;
         return true;
+    }
+
+    /// <summary>
+    /// Resolves the writer for a Save target. When several writable formats share an extension (e.g. <c>.docx</c>
+    /// Word vs Strict Open XML; <c>.xml</c> Word XML vs Word 2003 XML; <c>.htm</c> Web Page vs Web Page, Filtered),
+    /// honour the format the user picked in the Save dialog's filter dropdown — <paramref name="filterIndex"/> is
+    /// 1-based over the save formats in catalog order (the same order the filter is built from). Falls back to
+    /// extension resolution when the selected row's extension doesn't match the chosen filename (user typed a
+    /// different extension than the selected filter).
+    /// </summary>
+    private IDocumentFileAdapter? ResolveSaveAdapter(string chosenExtension, int filterIndex)
+    {
+        var savePairs = _adapters
+            .SelectMany(a => a.Formats.Where(f => f.CanSave).Select(f => (Adapter: a, Format: f)))
+            .ToList();
+        var index = filterIndex - 1;
+        if (index >= 0 && index < savePairs.Count
+            && DocumentFileFormatResolver.NormalizeExtension(savePairs[index].Format.Extension)
+               == DocumentFileFormatResolver.NormalizeExtension(chosenExtension))
+        {
+            return savePairs[index].Adapter;
+        }
+
+        return DocumentFileFormatResolver.FindSaveAdapter(_adapters, chosenExtension, out _);
     }
 
     private string? PromptOpenPath(string? initialDirectory = null)
