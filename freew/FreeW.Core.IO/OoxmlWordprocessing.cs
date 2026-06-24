@@ -144,6 +144,18 @@ internal static class Ooxml
     /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
     public const string WatermarkPropertyName = "FreeWWatermark";
 
+    /// <summary>Custom-property name for watermark font family (part of WatermarkOptions round-trip).</summary>
+    public const string WatermarkFontFamilyPropertyName = "FreeWWatermarkFont";
+
+    /// <summary>Custom-property name for watermark font colour hex (part of WatermarkOptions round-trip).</summary>
+    public const string WatermarkColorPropertyName = "FreeWWatermarkColor";
+
+    /// <summary>Custom-property name for watermark layout ("Diagonal" or "Horizontal") (part of WatermarkOptions round-trip).</summary>
+    public const string WatermarkLayoutPropertyName = "FreeWWatermarkLayout";
+
+    /// <summary>Custom-property name for watermark opacity fraction in [0,1] (part of WatermarkOptions round-trip).</summary>
+    public const string WatermarkOpacityPropertyName = "FreeWWatermarkOpacity";
+
     /// <summary>
     /// The custom-property name under which Word's "Mark as Final" flag is persisted (a boolean
     /// <c>vt:bool</c> custom document property). This is the Word convention.

@@ -1539,6 +1539,10 @@ public enum ProtectionMode
 /// (<see cref="ProtectionMode.None"/>, see <see cref="Unprotected"/>) leaves existing documents
 /// unaffected — no settings part is emitted and the reader maps a missing/absent protection to None.
 /// When <see cref="Mode"/> is not None the writer emits w:documentProtection with w:enforcement="1".
+/// When a password is set the writer additionally emits the OOXML legacy password hash attributes
+/// (w:cryptProviderType="rsaAES", w:cryptAlgorithmClass="hash", w:cryptAlgorithmType="typeAny",
+/// w:cryptAlgorithmSid="4" [SHA-1], w:cryptSpinCount, w:hash, w:salt) so the protection is
+/// password-enforced in Microsoft Word and round-trips as-is.
 /// </summary>
 public sealed record ProtectionSettings(ProtectionMode Mode = ProtectionMode.None)
 {
@@ -1547,6 +1551,28 @@ public sealed record ProtectionSettings(ProtectionMode Mode = ProtectionMode.Non
 
     /// <summary>True when the document is protected in some mode (i.e. not <see cref="ProtectionMode.None"/>).</summary>
     public bool IsProtected => Mode != ProtectionMode.None;
+
+    /// <summary>
+    /// Base64-encoded SHA-1 password hash, or null when no password was set. Computed by the
+    /// OOXML legacy algorithm (ECMA-376 §14.7.2): SHA1(salt + password-UTF16LE) iterated
+    /// <see cref="SpinCount"/> times then base64-encoded. Emitted as w:documentProtection/@w:hash.
+    /// </summary>
+    public string? PasswordHash { get; init; }
+
+    /// <summary>
+    /// Base64-encoded 16-byte random salt used in the password hash, or null when no password was set.
+    /// Emitted as w:documentProtection/@w:salt.
+    /// </summary>
+    public string? PasswordSalt { get; init; }
+
+    /// <summary>
+    /// Spin (iteration) count for the OOXML legacy hash algorithm. Word uses 50000. Defaults to 50000
+    /// when a hash is present. Emitted as w:documentProtection/@w:cryptSpinCount.
+    /// </summary>
+    public int SpinCount { get; init; } = 50000;
+
+    /// <summary>True when a password hash is stored (protection is password-enforced).</summary>
+    public bool HasPassword => PasswordHash is not null && PasswordSalt is not null;
 }
 
 /// <summary>
@@ -1566,6 +1592,54 @@ public sealed class HeaderFooter
     public bool IsEmpty => Paragraphs.Count == 0 || Paragraphs.All(p => p.Runs.Count == 0);
 
     public string PlainText => string.Join("\n", Paragraphs.Select(p => p.PlainText));
+}
+
+/// <summary>
+/// Layout orientation for a watermark: diagonal (45°) or horizontal.
+/// </summary>
+public enum WatermarkLayout
+{
+    Diagonal,
+    Horizontal
+}
+
+/// <summary>
+/// Options for a page watermark — the full set of choices exposed by Word's "Custom Watermark" dialog
+/// (Design &gt; Page Background &gt; Watermark &gt; Custom Watermark). Null on
+/// <see cref="PageSettings.WatermarkOptions"/> means no watermark. Persisted as custom document
+/// properties (docProps/custom.xml) so all fields round-trip losslessly across a save/load cycle.
+/// When <see cref="PageSettings.Watermark"/> carries a legacy plain-text value and
+/// <see cref="PageSettings.WatermarkOptions"/> is null, the render path migrates the legacy value to a
+/// default <see cref="WatermarkOptions"/> on-the-fly so the visual is identical.
+/// </summary>
+public sealed record WatermarkOptions(string Text)
+{
+    /// <summary>Font family for the watermark text. Defaults to "Calibri" (Word's own default).</summary>
+    public string FontFamily { get; init; } = "Calibri";
+
+    /// <summary>
+    /// Watermark text colour as an "#RRGGBB" hex string. Defaults to "#808080" (medium grey, the same
+    /// implicit colour the legacy rendering used).
+    /// </summary>
+    public string FontColorHex { get; init; } = "#808080";
+
+    /// <summary>
+    /// Layout orientation: <see cref="WatermarkLayout.Diagonal"/> (45° — Word's default) or
+    /// <see cref="WatermarkLayout.Horizontal"/>.
+    /// </summary>
+    public WatermarkLayout Layout { get; init; } = WatermarkLayout.Diagonal;
+
+    /// <summary>
+    /// Opacity fraction in [0, 1]. Defaults to 0.3 (semitransparent), matching Word's "Semitransparent"
+    /// checkbox (on by default). Set to 1.0 for an opaque watermark (checkbox off).
+    /// </summary>
+    public double Opacity { get; init; } = 0.3;
+
+    /// <summary>
+    /// Migrate a bare legacy watermark text string to a <see cref="WatermarkOptions"/> with sensible
+    /// defaults — the same visual the legacy rendering produced.
+    /// </summary>
+    public static WatermarkOptions FromLegacyText(string text) => new(text);
 }
 
 /// <summary>
@@ -1696,10 +1770,27 @@ public sealed class PageSettings
 
     /// <summary>
     /// Optional diagonal text watermark shown faintly behind the page content, or null for none.
-    /// Persisted best-effort as a custom document property (docProps/custom.xml) so it round-trips,
-    /// and rendered as an editor/preview visual. Nullable so existing documents are unaffected.
+    /// Legacy plain-text form: used as a fallback when <see cref="WatermarkOptions"/> is null and the
+    /// loaded document carried only the old single-string custom property. New code should prefer
+    /// <see cref="WatermarkOptions"/>; the render and IO paths migrate this value automatically.
     /// </summary>
     public string? Watermark { get; set; }
+
+    /// <summary>
+    /// Full watermark options (text, font, colour, layout, opacity). When non-null this takes precedence
+    /// over the legacy <see cref="Watermark"/> string. Null when no watermark is set. Persisted as a
+    /// set of custom document properties (docProps/custom.xml) so all fields round-trip losslessly.
+    /// </summary>
+    public WatermarkOptions? WatermarkOptions { get; set; }
+
+    /// <summary>
+    /// Returns the effective <see cref="WatermarkOptions"/> to render: <see cref="WatermarkOptions"/>
+    /// when set, a migration of the legacy <see cref="Watermark"/> string when only that is set, or
+    /// null when there is no watermark at all.
+    /// </summary>
+    public WatermarkOptions? EffectiveWatermark =>
+        WatermarkOptions
+        ?? (Watermark is { Length: > 0 } t ? FreeW.Core.Model.WatermarkOptions.FromLegacyText(t) : null);
 
     /// <summary>
     /// Line-numbering mode shown in the left page margin (w:sectPr/w:lnNumType). Defaults to

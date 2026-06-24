@@ -1839,9 +1839,9 @@ public sealed class MainWindow : Window
     private void OpenRestrictEditing()
     {
         _editor.Focus();
-        var chosen = RestrictEditingDialog.Prompt(this, _editor.ProtectionMode);
-        if (chosen is { } mode)
-            _editor.SetProtection(mode);
+        var chosen = RestrictEditingDialog.Prompt(this, _editor.Model.Protection);
+        if (chosen is { } settings)
+            _editor.SetProtection(settings);
     }
 
     private void InspectDocument()
