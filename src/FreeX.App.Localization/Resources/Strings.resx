@@ -1379,6 +1379,18 @@
   <data name="ShellLoc_SpellingCorrectionPlural" xml:space="preserve"><value>corrections</value></data>
   <data name="ShellLoc_SpellingComplete" xml:space="preserve"><value>Spelling check complete. {0} {1}.</value></data>
   <data name="ShellLoc_SpellingStopped" xml:space="preserve"><value>Spelling check stopped. {0} {1}.</value></data>
+  <data name="ShellLoc_AccessibilityCheckerTitle" xml:space="preserve"><value>Accessibility Checker</value></data>
+  <data name="ShellLoc_AccessibilityCheckerNoIssues" xml:space="preserve"><value>No accessibility issues found.</value></data>
+  <data name="ShellLoc_AccessibilityCheckerIssuesLabel" xml:space="preserve"><value>Issues:</value></data>
+  <data name="ShellLoc_AccessibilityCheckerGoToButton" xml:space="preserve"><value>Go To</value></data>
+  <data name="ShellLoc_AccessibilityCheckerGoToAutomationName" xml:space="preserve"><value>Go to selected accessibility issue</value></data>
+  <data name="ShellLoc_AccessibilityCheckerGoToHelpText" xml:space="preserve"><value>Navigate to the selected accessibility issue.</value></data>
+  <data name="ShellLoc_AccessibilityCheckerCloseAutomationName" xml:space="preserve"><value>Close Accessibility Checker</value></data>
+  <data name="ShellLoc_AccessibilityCheckerCloseHelpText" xml:space="preserve"><value>Close the Accessibility Checker without navigating to an issue.</value></data>
+  <data name="ShellLoc_AccessibilityCheckerIssueListAutomationName" xml:space="preserve"><value>Accessibility issues</value></data>
+  <data name="ShellLoc_AccessibilityCheckerIssueListHelpText" xml:space="preserve"><value>Select an accessibility issue and choose Go To to navigate to its workbook location.</value></data>
+  <data name="ShellLoc_AccessibilityCheckerResultAutomationName" xml:space="preserve"><value>Accessibility checker result</value></data>
+  <data name="ShellLoc_AccessibilityCheckerResultHelpText" xml:space="preserve"><value>Summarizes the workbook accessibility check when no issues are found.</value></data>
   <data name="ShellLoc_CalculationAlreadySet" xml:space="preserve"><value>Calculation already set to {0}.</value></data>
   <data name="ShellLoc_CouldNotChangeCalcMode" xml:space="preserve"><value>Could not change calculation mode.</value></data>
   <data name="ShellLoc_CalculationSet" xml:space="preserve"><value>Calculation set to {0}.</value></data>
