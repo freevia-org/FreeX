@@ -56,8 +56,8 @@ public static partial class PivotTableRefreshService
             Bold = palette.GrandTotalFill is not null,
             FillColor = palette.GrandTotalFill,
             FontColor = palette.GrandTotalFont,
-            BorderTop = new CellBorder(BorderStyle.Thin, palette.Border),
-            BorderBottom = new CellBorder(BorderStyle.Thin, palette.Border)
+            BorderTop = palette.GrandTotalFill is not null ? new CellBorder(BorderStyle.Thin, palette.Border) : default,
+            BorderBottom = palette.GrandTotalFill is not null ? new CellBorder(BorderStyle.Thin, palette.Border) : default
         });
         var stripeStyle = workbook.RegisterStyle(new CellStyle
         {
