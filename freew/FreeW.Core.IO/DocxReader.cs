@@ -3258,6 +3258,7 @@ public static class DocxReader
                 topLevel.Add(nodeById[id]);
 
         var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
+        ReadSmartArtGalleryIds(relIds, relationships, archive, smartArt);
         smartArt.Nodes.AddRange(topLevel);
 
         // Size: the inline or anchor extent (EMU) maps back to points.
@@ -3289,6 +3290,80 @@ public static class DocxReader
         if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase))
             return SmartArtKind.Hierarchy;
         return SmartArtKind.List;
+    }
+
+    /// <summary>
+    /// Recovers the FreeW gallery preset ids (LayoutId / ColorSchemeId / StyleId) from the three diagram
+    /// parts (layout / colors / quickStyle). When a FreeW extension attribute (<c>freewLayoutId</c> /
+    /// <c>freewColorId</c> / <c>freewStyleId</c>) is present it is used directly for lossless round-trip;
+    /// otherwise the uniqueId suffix is used as a best-effort fallback.
+    /// </summary>
+    private static void ReadSmartArtGalleryIds(
+        XElement? relIds,
+        IReadOnlyDictionary<string, string> relationships,
+        ZipArchive archive,
+        SmartArt target)
+    {
+        // Layout id ─────────────────────────────────────────────────────────────────────────────────
+        var layoutRelId = relIds?.Attribute(R + "lo")?.Value;
+        if (layoutRelId is not null && relationships.TryGetValue(layoutRelId, out var layoutPath))
+        {
+            var layoutRoot = LoadPart(archive, layoutPath)?.Root;
+            if (layoutRoot is not null)
+            {
+                // Prefer the FreeW extension attribute; fall back to the uniqueId suffix.
+                var freewId = layoutRoot.Attribute("freewLayoutId")?.Value;
+                if (freewId is not null)
+                    target.LayoutId = freewId;
+                else
+                {
+                    var uniqueId = layoutRoot.Attribute("uniqueId")?.Value ?? string.Empty;
+                    var lastSlash = uniqueId.LastIndexOf('/');
+                    if (lastSlash >= 0 && lastSlash < uniqueId.Length - 1)
+                        target.LayoutId = uniqueId[(lastSlash + 1)..];
+                }
+            }
+        }
+
+        // QuickStyle id ─────────────────────────────────────────────────────────────────────────────
+        var qsRelId = relIds?.Attribute(R + "qs")?.Value;
+        if (qsRelId is not null && relationships.TryGetValue(qsRelId, out var qsPath))
+        {
+            var qsRoot = LoadPart(archive, qsPath)?.Root;
+            if (qsRoot is not null)
+            {
+                var freewId = qsRoot.Attribute("freewStyleId")?.Value;
+                if (freewId is not null)
+                    target.StyleId = freewId;
+                else
+                {
+                    var uniqueId = qsRoot.Attribute("uniqueId")?.Value ?? string.Empty;
+                    var lastSlash = uniqueId.LastIndexOf('/');
+                    if (lastSlash >= 0 && lastSlash < uniqueId.Length - 1)
+                        target.StyleId = uniqueId[(lastSlash + 1)..];
+                }
+            }
+        }
+
+        // Colors id ─────────────────────────────────────────────────────────────────────────────────
+        var csRelId = relIds?.Attribute(R + "cs")?.Value;
+        if (csRelId is not null && relationships.TryGetValue(csRelId, out var csPath))
+        {
+            var csRoot = LoadPart(archive, csPath)?.Root;
+            if (csRoot is not null)
+            {
+                var freewId = csRoot.Attribute("freewColorId")?.Value;
+                if (freewId is not null)
+                    target.ColorSchemeId = freewId;
+                else
+                {
+                    var uniqueId = csRoot.Attribute("uniqueId")?.Value ?? string.Empty;
+                    var lastSlash = uniqueId.LastIndexOf('/');
+                    if (lastSlash >= 0 && lastSlash < uniqueId.Length - 1)
+                        target.ColorSchemeId = uniqueId[(lastSlash + 1)..];
+                }
+            }
+        }
     }
 
     /// <summary>

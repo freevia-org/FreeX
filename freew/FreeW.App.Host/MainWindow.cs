@@ -2840,6 +2840,12 @@ public sealed class MainWindow : Window
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
                 InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+            if (tab.Id == "smartart-design")
+            {
+                // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
+                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(_editor), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(_editor));
+            }
 
             }
         });

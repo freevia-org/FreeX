@@ -260,9 +260,9 @@ public static class DocxWriter
             // rendered-geometry drawing part, whose relationship is declared in the data part's own .rels.
             WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt, smartArt.DrawingRelationshipId));
             WritePart(archive, "word/diagrams/_rels/" + smartArt.DataFileName + ".rels", BuildDiagramDataRels(smartArt));
-            WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt.Kind));
-            WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle());
-            WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors());
+            WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt));
+            WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle(smartArt.SmartArt));
+            WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors(smartArt.SmartArt));
             WritePart(archive, "word/diagrams/" + smartArt.DrawingFileName, BuildDiagramDrawing(smartArt.SmartArt));
         }
         // Unmodelled-but-preserved parts (customXml/*, word/webSettings.xml): re-emitted byte-for-byte. Their
@@ -3545,55 +3545,75 @@ public static class DocxWriter
     /// is intentionally near-empty (Word substitutes the built-in layout for the known uniqueId). The node
     /// text never lives here, so an empty layout does not lose data.
     /// </summary>
-    private static XDocument BuildDiagramLayout(SmartArtKind kind)
+    private static XDocument BuildDiagramLayout(SmartArt smartArt)
     {
-        var uniqueId = kind switch
+        // LayoutId override takes precedence; otherwise derive the stock id from Kind.
+        // We also persist the FreeW layout id in a freew:layoutId extension attribute so the reader
+        // can recover the exact catalog id even when the stock URN suffix maps to the same Kind.
+        var stockSuffix = smartArt.LayoutId ?? smartArt.Kind switch
         {
-            SmartArtKind.Process => "urn:microsoft.com/office/officeart/2005/8/layout/process1",
-            SmartArtKind.Hierarchy => "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
-            _ => "urn:microsoft.com/office/officeart/2005/8/layout/list1"
+            SmartArtKind.Process => "process1",
+            SmartArtKind.Hierarchy => "hierarchy1",
+            _ => "list1"
         };
-        return new XDocument(
-            new XElement(Dgm + "layoutDef",
-                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XAttribute("uniqueId", uniqueId),
-                new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
-                new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-                new XElement(Dgm + "catLst"),
-                new XElement(Dgm + "sampData"),
-                new XElement(Dgm + "styleData"),
-                new XElement(Dgm + "clrData"),
-                new XElement(Dgm + "layoutNode",
-                    new XAttribute("name", "diagram"))));
+        const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/layout/";
+        var uniqueId = BaseUrn + stockSuffix;
+        var elem = new XElement(Dgm + "layoutDef",
+            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XAttribute("uniqueId", uniqueId),
+            new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "sampData"),
+            new XElement(Dgm + "styleData"),
+            new XElement(Dgm + "clrData"),
+            new XElement(Dgm + "layoutNode",
+                new XAttribute("name", "diagram")));
+        // FreeW extension: persist LayoutId for lossless round-trip when the catalog id differs from the stock suffix.
+        if (smartArt.LayoutId is not null)
+            elem.SetAttributeValue("freewLayoutId", smartArt.LayoutId);
+        return new XDocument(elem);
     }
 
     /// <summary>
     /// Builds a minimal-but-valid SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
-    /// Stock/near-empty: carries no node data, so an empty style does not lose round-trip content.
+    /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
+    /// the reader can recover the exact catalog entry on round-trip.
     /// </summary>
-    private static XDocument BuildDiagramQuickStyle() => new(
-        new XElement(Dgm + "styleDef",
+    private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
+    {
+        const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
+        var uniqueId = BaseUrn + (smartArt.StyleId ?? "simple1");
+        var elem = new XElement(Dgm + "styleDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"),
+            new XAttribute("uniqueId", uniqueId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "catLst"),
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
-            new XElement(Dgm + "style")));
+            new XElement(Dgm + "style"));
+        if (smartArt.StyleId is not null)
+            elem.SetAttributeValue("freewStyleId", smartArt.StyleId);
+        return new XDocument(elem);
+    }
 
     /// <summary>
     /// Builds a minimal-but-valid SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
-    /// Stock/near-empty: carries no node data, so an empty colour set does not lose round-trip content.
+    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> as a <c>freewColorId</c> extension attribute
+    /// so the reader can recover the exact catalog entry on round-trip.
     /// </summary>
-    private static XDocument BuildDiagramColors() => new(
-        new XElement(Dgm + "colorsDef",
+    private static XDocument BuildDiagramColors(SmartArt smartArt)
+    {
+        const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
+        var uniqueId = BaseUrn + (smartArt.ColorSchemeId ?? "accent0_1");
+        var elem = new XElement(Dgm + "colorsDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XAttribute("uniqueId", "urn:microsoft.com/office/officeart/2005/8/colors/accent0_1"),
+            new XAttribute("uniqueId", uniqueId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "catLst"),
@@ -3605,7 +3625,11 @@ public static class DocxWriter
                 new XElement(Dgm + "txFillClrLst", new XAttribute("meth", "repeat"),
                     new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
                 new XElement(Dgm + "txLinClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))))));
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1")))));
+        if (smartArt.ColorSchemeId is not null)
+            elem.SetAttributeValue("freewColorId", smartArt.ColorSchemeId);
+        return new XDocument(elem);
+    }
 
     /// <summary>
     /// Builds a DrawingML chart part (c:chartSpace) for <paramref name="part"/>. Emits one plot area holding a
