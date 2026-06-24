@@ -67,6 +67,8 @@ public sealed class MainWindow : Window
     private bool _reviewPaneVisibleBeforeReadMode;
     // The revisions currently shown in the pane (the live snapshot the list items index into).
     private System.Collections.Generic.IReadOnlyList<RevisionEntry> _reviewEntries = System.Array.Empty<RevisionEntry>();
+    // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
+    private RevisionSortOrder _reviewSortOrder = RevisionSortOrder.Sequence;
 
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
@@ -1077,11 +1079,12 @@ public sealed class MainWindow : Window
         }
     }
 
-    // The Reviewing Pane: a header, an Accept/Reject/Prev/Next toolbar, a status line ("N changes"), and a
-    // scrollable list of every tracked change (author • type, plus the affected text). Collapsed by default;
-    // ToggleReviewPane shows/hides it. Selecting an entry jumps the editor to that change (click-to-navigate)
-    // and the toolbar acts on the SELECTED single revision. Content is rebuilt from the pure RevisionList
-    // (see RefreshReviewPane), so the pane never owns revision logic. Mirrors BuildRevealPane's dock/chrome.
+    // The Reviewing Pane: a header, an Accept/Reject/Prev/Next toolbar, a sort control, a status line
+    // ("N changes"), and a scrollable list of every tracked change (author • type, plus the affected
+    // text). Collapsed by default; ToggleReviewPane shows/hides it. Selecting an entry jumps the editor
+    // to that change (click-to-navigate) and the toolbar acts on the SELECTED single revision. Content
+    // is rebuilt from the pure RevisionList (see RefreshReviewPane), so the pane never owns revision
+    // logic. Mirrors BuildRevealPane's dock/chrome.
     private UIElement BuildReviewPane()
     {
         var header = new TextBlock
@@ -1111,6 +1114,34 @@ public sealed class MainWindow : Window
         toolbar.Children.Add(MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1)));
         toolbar.Children.Add(MakeButton("▼", "Next change (jump down)", () => StepRevision(+1)));
 
+        // Sort control: reorders the Reviewing Pane without touching the document model.
+        var sortRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(10, 0, 10, 4)
+        };
+        sortRow.Children.Add(new TextBlock
+        {
+            Text = "Sort:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        });
+        var sortCombo = new ComboBox { MinWidth = 130 };
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = RevisionSortOrder.Sequence });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = RevisionSortOrder.Author });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = RevisionSortOrder.Kind });
+        sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = RevisionSortOrder.Date });
+        sortCombo.SelectedIndex = 0;
+        sortCombo.SelectionChanged += (_, _) =>
+        {
+            if (sortCombo.SelectedItem is ComboBoxItem { Tag: RevisionSortOrder order })
+            {
+                _reviewSortOrder = order;
+                RefreshReviewPane();
+            }
+        };
+        sortRow.Children.Add(sortCombo);
+
         _reviewStatus = new TextBlock
         {
             Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
@@ -1131,12 +1162,14 @@ public sealed class MainWindow : Window
                 _editor.NavigateToRevision(_reviewEntries[index]);
         };
 
-        var layout = new DockPanel { Width = 260 };
+        var layout = new DockPanel { Width = 270 };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(toolbar, Dock.Top);
+        DockPanel.SetDock(sortRow, Dock.Top);
         DockPanel.SetDock(_reviewStatus, Dock.Top);
         layout.Children.Add(header);
         layout.Children.Add(toolbar);
+        layout.Children.Add(sortRow);
         layout.Children.Add(_reviewStatus);
         layout.Children.Add(_reviewList);
 
@@ -1163,15 +1196,16 @@ public sealed class MainWindow : Window
     }
 
     // Rebuild the Reviewing Pane's list from the document's tracked changes (the pure RevisionList via
-    // DocumentView.ListRevisions). No-op when the pane is hidden, so editing churn while it is closed costs
-    // nothing. Tries to preserve the selected position so Accept/Reject keeps focus on the next change.
+    // DocumentView.ListRevisions). Applies the active sort order before building list items. No-op when
+    // the pane is hidden, so editing churn while it is closed costs nothing. Tries to preserve the
+    // selected position so Accept/Reject keeps focus on the next change.
     private void RefreshReviewPane()
     {
         if (_reviewList is null || !_reviewPaneVisible)
             return;
 
         var previousIndex = _reviewList.SelectedIndex;
-        _reviewEntries = _editor.ListRevisions();
+        _reviewEntries = RevisionSortComparer.Sort(_editor.ListRevisions(), _reviewSortOrder);
 
         _reviewList.Items.Clear();
         foreach (var entry in _reviewEntries)

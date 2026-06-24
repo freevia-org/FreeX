@@ -918,13 +918,16 @@ public sealed class FreeWRibbonParityTests
         show.Should().NotBeNull();
         CommandIds(show!)
             .Should()
-            .Equal("freew.ruler", "freew.nav-pane");
+            .Equal("freew.ruler", "freew.nav-pane", "freew.gridlines");
         Labels(show!)
             .Should()
-            .Equal("Ruler", "Navigation Pane");
+            .Equal("Ruler", "Navigation Pane", "Gridlines");
 
         registry.TryGet("freew.ruler", out var command).Should().BeTrue("Word exposes View > Show > Ruler");
         command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+
+        registry.TryGet("freew.gridlines", out var gridCommand).Should().BeTrue("Word exposes View > Show > Gridlines");
+        gridCommand.Should().BeAssignableTo<IRibbonStatefulCommand>();
     }
 
     [StaFact]
