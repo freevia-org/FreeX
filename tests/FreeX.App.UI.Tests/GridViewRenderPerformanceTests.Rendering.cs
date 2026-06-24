@@ -588,7 +588,7 @@ public sealed partial class GridViewRenderPerformanceTests
 
         gridViewSource.Should().Contain("private readonly Dictionary<Rect, Geometry> _commentIndicatorGeometryCache = new();");
         rendering.Should().Contain("private const int CommentIndicatorGeometryCacheLimit = 16384;");
-        drawCommentIndicator.Should().Contain("dc.DrawGeometry(Brushes.Red, null, GetCommentIndicatorGeometry(rect));");
+        drawCommentIndicator.Should().Contain("dc.DrawGeometry(CommentIndicatorBrush(kind), null, GetCommentIndicatorGeometry(rect));");
         drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.TryGetValue(rect, out var cached)");
         drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.Count >= CommentIndicatorGeometryCacheLimit");
         drawCommentIndicator.Should().Contain("_commentIndicatorGeometryCache.Clear();");

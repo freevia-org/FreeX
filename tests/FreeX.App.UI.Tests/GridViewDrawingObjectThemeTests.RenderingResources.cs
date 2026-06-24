@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 using FluentAssertions;
 using FreeX.App.UI;
+using FreeX.Core.Model;
 
 namespace FreeX.App.UI.Tests;
 
@@ -95,7 +96,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
                 var drawCommentIndicator = typeof(GridView).GetMethod(
                     "DrawCommentIndicator",
                     BindingFlags.Instance | BindingFlags.NonPublic);
-                drawCommentIndicator!.Invoke(grid, [drawingContext, new Rect(30, 18, 60, 24)]);
+                drawCommentIndicator!.Invoke(grid, [drawingContext, new Rect(30, 18, 60, 24), CellCommentDisplayKind.Note]);
             }
 
             var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(

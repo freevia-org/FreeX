@@ -244,8 +244,8 @@ public sealed partial class GridViewSplitPaneLayoutTests
             source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
 
         renderSplitPaneCells.Should().Contain("if (cell.HasComment)");
-        renderSplitPaneCells.Should().Contain("DrawCommentIndicator(dc, rect);");
-        renderSplitPaneCells.IndexOf("DrawCommentIndicator(dc, rect);", StringComparison.Ordinal)
+        renderSplitPaneCells.Should().Contain("DrawCommentIndicator(dc, rect,");
+        renderSplitPaneCells.IndexOf("DrawCommentIndicator(dc, rect,", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderSplitPaneCells.IndexOf("ShouldDrawCellContent(cell, EditingCell)", StringComparison.Ordinal));
     }
