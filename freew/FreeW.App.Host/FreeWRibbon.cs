@@ -480,12 +480,21 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.gridlines", "Gridlines", RibbonCommandIconKind.Grid);
                 });
                 // Zoom group → Word's View > Zoom hero, opening the Zoom dialog (presets / page fits / custom %).
+                // Multiple Pages and Side to Side are paginated read-only overlays reusing the print paginator.
                 tab.Group("zoom", "Zoom", "Z", 80, g =>
                 {
                     g.Large("freew.zoom-dialog", "Zoom", RibbonCommandIconKind.Zoom);
                     g.Medium("freew.zoom-100", "100%", RibbonCommandIconKind.Zoom);
                     g.Medium("freew.zoom-one-page", "One Page", RibbonCommandIconKind.OnePage);
                     g.Medium("freew.zoom-page-width", "Page Width", RibbonCommandIconKind.Scale);
+                    g.MediumToggle("freew.zoom-multiple-pages", "Multiple Pages", RibbonCommandIconKind.PreviewResults);
+                    g.MediumToggle("freew.zoom-side-to-side", "Side to Side", RibbonCommandIconKind.OnePage);
+                });
+                // Window group → Word's View > Window group. Split splits the workspace into a live top pane
+                // (the editable surface) and a read-only snapshot bottom pane (built from the print paginator).
+                tab.Group("window", "Window", "N", 70, g =>
+                {
+                    g.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
                 });
             })
             .Tab("help", "Help", "Y", tab =>
