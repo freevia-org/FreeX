@@ -154,6 +154,26 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void BackstageNavRailKeys_ResolveToEnglish()
+    {
+        // Regression guard: these keys were missing from the shared localization store and
+        // returned [[key]] placeholders in the Avalonia/Linux backstage nav rail.
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Info")).Should().Be("Info");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Home")).Should().Be("Home");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_New")).Should().Be("New");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Open")).Should().Be("Open");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Share")).Should().Be("Share");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Print")).Should().Be("Print");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Export")).Should().Be("Export");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Account")).Should().Be("Account");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Options")).Should().Be("Options");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_WorkbookActions")).Should().Be("Workbook actions");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Properties")).Should().Be("Properties");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_TooltipTitle_Info")).Should().Be("Info");
+        WithUiCulture("en-US", () => Loc.Get("MainWindow_TooltipTitle_Home")).Should().Be("Home");
+    }
+
+    [Fact]
     public void FrenchCatalog_HasNoOrphanKeysMissingFromNeutral()
     {
         // Every key translated in fr-FR must exist in the neutral catalog, otherwise the

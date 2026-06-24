@@ -910,6 +910,45 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
         registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
 
+        // Header & Footer Design contextual tab — per-slot editors.
+        // Slot naming: "header"/"footer" = default; "even-header"/"even-footer" = even pages;
+        // "first-header"/"first-footer" = first page. Each writes FinalSectionHeadersFooters directly.
+        registry.Register("freew.hf-edit-header",       new EditHeaderSlotCommand(editor, "header"));
+        registry.Register("freew.hf-edit-footer",       new EditHeaderSlotCommand(editor, "footer"));
+        registry.Register("freew.hf-edit-even-header",  new EditHeaderSlotCommand(editor, "even-header"));
+        registry.Register("freew.hf-edit-even-footer",  new EditHeaderSlotCommand(editor, "even-footer"));
+        registry.Register("freew.hf-edit-first-header", new EditHeaderSlotCommand(editor, "first-header"));
+        registry.Register("freew.hf-edit-first-footer", new EditHeaderSlotCommand(editor, "first-footer"));
+
+        // Header & Footer Design contextual tab — options toggles (stateful so IsChecked reflects model).
+        var diffFirstPage = new DifferentFirstPageToggleCommand(editor);
+        registry.Register("freew.hf-different-first-page", diffFirstPage);
+        stateful.Add(("freew.hf-different-first-page", diffFirstPage));
+
+        var diffOddEven = new DifferentOddEvenPagesCommand(editor);
+        registry.Register("freew.hf-different-odd-even", diffOddEven);
+        stateful.Add(("freew.hf-different-odd-even", diffOddEven));
+
+        // Header & Footer Design contextual tab — position numerics (stateful so the value tracks model).
+        var headerFromTop = new HeaderFromTopCommand(editor);
+        registry.Register("freew.hf-header-from-top", headerFromTop);
+        stateful.Add(("freew.hf-header-from-top", headerFromTop));
+
+        var footerFromBottom = new FooterFromBottomCommand(editor);
+        registry.Register("freew.hf-footer-from-bottom", footerFromBottom);
+        stateful.Add(("freew.hf-footer-from-bottom", footerFromBottom));
+
+        // Header & Footer Design contextual tab — navigation + close.
+        registry.Register("freew.hf-go-to-header", new GoToHeaderCommand(editor));
+        registry.Register("freew.hf-go-to-footer", new GoToFooterCommand(editor));
+        registry.Register("freew.hf-close",         new CloseHeaderFooterCommand(editor));
+
+        // Header & Footer Design contextual tab — insert into default header/footer slot.
+        registry.Register("freew.hf-insert-page-number",  new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber));
+        registry.Register("freew.hf-insert-page-number-footer", new InsertIntoHeaderSlotCommand(editor, isFooter: true,  InsertSlotKind.PageNumber));
+        registry.Register("freew.hf-insert-datetime",     new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DateTime));
+        registry.Register("freew.hf-insert-field",        new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.DocumentInfo));
+
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Register("freew.symbol", new InsertSymbolCommand(editor));
@@ -5404,6 +5443,397 @@ internal static class FreeWRibbonCommands
                 model.Header = value;
 
             editor.Focus();
+        }
+    }
+
+    // ── Header & Footer Design contextual tab commands ───────────────────────────────────────────────
+    // Activation model: DIALOG approach (approach b). FreeW's FlowDocument is a single continuous
+    // stream — there is no genuine in-document editable header region. Every command below routes
+    // through the backed SectionHeadersFooters / PageSettings model and round-trips through DocxWriter.
+    // The "edit mode" concept is surfaced via Go to Header / Go to Footer which open the per-slot
+    // dialog directly; Close Header and Footer is a contextual-tab-exit helper.
+
+    // Header & Footer Design > Header/Footer: open the per-slot editor for each named slot.
+    // The slot name controls which of the 6 SectionHeadersFooters properties is read/written.
+    private sealed class EditHeaderSlotCommand(DocumentView editor, string slotName) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var hf = editor.Model.FinalSectionHeadersFooters;
+            var page = editor.Model.Page;
+
+            // Resolve the current slot value by name.
+            var current = slotName switch
+            {
+                "header"       => hf.Header,
+                "footer"       => hf.Footer,
+                "even-header"  => hf.EvenHeader,
+                "even-footer"  => hf.EvenFooter,
+                "first-header" => hf.FirstHeader,
+                "first-footer" => hf.FirstFooter,
+                _              => null
+            };
+
+            var label = slotName switch
+            {
+                "header"       => "Default Header",
+                "footer"       => "Default Footer",
+                "even-header"  => "Even-Page Header",
+                "even-footer"  => "Even-Page Footer",
+                "first-header" => "First-Page Header",
+                "first-footer" => "First-Page Footer",
+                _              => slotName
+            };
+
+            // Warn if the slot requires a toggle that is currently off.
+            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
+                    "Enable that option in Header & Footer Design, then try again.",
+                    "Edit Header / Footer");
+                return;
+            }
+            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
+                    "Enable that option in Header & Footer Design, then try again.",
+                    "Edit Header / Footer");
+                return;
+            }
+
+            var result = HeaderFooterSlotDialog.Prompt(Window.GetWindow(editor), label, current);
+            if (result is null)
+                return; // cancelled
+
+            // Write back to the correct slot.
+            switch (slotName)
+            {
+                case "header":       hf.Header      = result; break;
+                case "footer":       hf.Footer      = result; break;
+                case "even-header":  hf.EvenHeader  = result; break;
+                case "even-footer":  hf.EvenFooter  = result; break;
+                case "first-header": hf.FirstHeader = result; break;
+                case "first-footer": hf.FirstFooter = result; break;
+            }
+
+            editor.Focus();
+        }
+    }
+
+    // Header & Footer Design > Navigation > Go to Header / Go to Footer: open the per-slot editor for
+    // the default header or footer, giving a natural "enter edit mode" affordance.
+    private sealed class GoToHeaderCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            new EditHeaderSlotCommand(editor, "header").Execute(context);
+    }
+
+    private sealed class GoToFooterCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            new EditHeaderSlotCommand(editor, "footer").Execute(context);
+    }
+
+    // Header & Footer Design > Close Header and Footer: a no-op command (the contextual tab controller
+    // dismisses the header-footer context when the button is pressed). The command is backed so the
+    // parity test can verify it is registered.
+    private sealed class CloseHeaderFooterCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            // The contextual tab controller dismisses the header-footer context; we just
+            // return focus to the body.
+            editor.Focus();
+        }
+    }
+
+    // Header & Footer Design > Options > Different First Page: toggle PageSettings.DifferentFirstPage.
+    // The stateful variant exposes IsChecked so the ribbon toggle reflects the current model state.
+    private sealed class DifferentFirstPageToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentFirstPage);
+    }
+
+    // Header & Footer Design > Options > Different Odd & Even Pages: toggle DifferentOddEvenPages.
+    private sealed class DifferentOddEvenPagesCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            editor.ApplyPageSettings(page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages);
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: editor.Model.Page.DifferentOddEvenPages);
+    }
+
+    // Header & Footer Design > Position > Header from Top / Footer from Bottom: numeric spinbox-style
+    // commands that accept a points value from the combo and write HeaderDistancePt / FooterDistancePt
+    // via ApplyPageSettings (same path as the Page Setup dialog).
+    private sealed class HeaderFromTopCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+                editor.ApplyPageSettings(page => page.HeaderDistancePt = pt);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.Model.Page.HeaderDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private sealed class FooterFromBottomCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!context.Parameters.TryGetValue("value", out var raw) || raw is not string value)
+                return;
+            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
+                editor.ApplyPageSettings(page => page.FooterDistancePt = pt);
+        }
+
+        public RibbonCommandState GetState() =>
+            new(Value: editor.Model.Page.FooterDistancePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    // Insert into header/footer: insert page number, date/time, or a document-info field into the
+    // active (default) header or footer slot. These commands reuse the existing field-insertion path
+    // and write the result directly into FinalSectionHeadersFooters.Header / .Footer.
+    private sealed class InsertIntoHeaderSlotCommand(DocumentView editor, bool isFooter, InsertSlotKind kind) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var model = editor.Model;
+            var hf = isFooter ? model.Footer : model.Header;
+            var slot = hf ?? new HeaderFooter();
+
+            switch (kind)
+            {
+                case InsertSlotKind.PageNumber:
+                {
+                    var alreadyPresent = slot.Paragraphs.SelectMany(p => p.Runs)
+                        .Any(r => r.FieldKind == RunFieldKind.PageNumber);
+                    if (!alreadyPresent)
+                    {
+                        var para = new FreeW.Core.Model.Paragraph
+                        {
+                            Formatting = ParagraphFormatting.Default with
+                            {
+                                Alignment = FreeW.Core.Model.TextAlignment.Center
+                            }
+                        };
+                        para.Runs.Add(new FreeW.Core.Model.Run("Page "));
+                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                        slot.Paragraphs.Add(para);
+                    }
+                    break;
+                }
+                case InsertSlotKind.DateTime:
+                {
+                    var text = DateTimeDialog.Prompt(Window.GetWindow(editor));
+                    if (string.IsNullOrEmpty(text))
+                        return;
+                    var para = EnsureDefaultParagraph(slot);
+                    para.Runs.Add(new FreeW.Core.Model.Run(text));
+                    break;
+                }
+                case InsertSlotKind.DocumentInfo:
+                {
+                    var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
+                    if (instruction is null)
+                        return;
+                    var para = EnsureDefaultParagraph(slot);
+                    para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instruction));
+                    break;
+                }
+            }
+
+            if (isFooter)
+                model.Footer = slot;
+            else
+                model.Header = slot;
+
+            editor.Focus();
+        }
+
+        private static FreeW.Core.Model.Paragraph EnsureDefaultParagraph(HeaderFooter hf)
+        {
+            if (hf.Paragraphs.Count == 0)
+                hf.Paragraphs.Add(new FreeW.Core.Model.Paragraph());
+            return hf.Paragraphs[^1];
+        }
+    }
+
+    private enum InsertSlotKind { PageNumber, DateTime, DocumentInfo }
+
+    // A focused per-slot header/footer editor dialog. Shows the slot's current plain text, lets the
+    // user edit it freely, and provides "Insert Page Number", "Insert Date & Time", and "Insert Field"
+    // buttons that append to the in-dialog text. On OK the dialog returns a new HeaderFooter built from
+    // the edited text, or the original if page-number/field content was appended. Returning null means
+    // Cancel (no change).
+    private static class HeaderFooterSlotDialog
+    {
+        /// <summary>
+        /// Prompts to edit a single header/footer slot. Returns the new <see cref="HeaderFooter"/>
+        /// (possibly null to clear the slot), or returns <paramref name="current"/> unchanged when the
+        /// user cancels.
+        /// </summary>
+        public static HeaderFooter? Prompt(Window? owner, string slotLabel, HeaderFooter? current)
+        {
+            // Seed the text box with the slot's plain text (if any).
+            var seed = current?.PlainText ?? string.Empty;
+            var hadPageNumber = current?.Paragraphs.SelectMany(p => p.Runs)
+                .Any(r => r.FieldKind == RunFieldKind.PageNumber) ?? false;
+            var hadComplexField = current?.Paragraphs.SelectMany(p => p.Runs)
+                .Any(r => r.ComplexField is not null) ?? false;
+
+            // Track whether the user wants to append a page-number or date/time.
+            bool appendPageNumber = hadPageNumber;
+            string? appendDateTime = null;
+            string? appendFieldInstruction = null;
+
+            var box = new System.Windows.Controls.TextBox
+            {
+                Text = seed,
+                MinWidth = 400,
+                MaxHeight = 100,
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                AcceptsReturn = true,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            box.SelectAll();
+
+            HeaderFooter? result = null;
+
+            var dialog = new Window
+            {
+                Title = $"Edit {slotLabel}",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            // Insert buttons
+            var btnPageNumber = new System.Windows.Controls.Button
+            {
+                Content = "Insert Page Number",
+                MinWidth = 140,
+                Margin = new Thickness(0, 0, 8, 8),
+                IsEnabled = !appendPageNumber
+            };
+            var btnDateTime = new System.Windows.Controls.Button
+            {
+                Content = "Insert Date && Time",
+                MinWidth = 120,
+                Margin = new Thickness(0, 0, 8, 8)
+            };
+            var btnField = new System.Windows.Controls.Button
+            {
+                Content = "Insert Field",
+                MinWidth = 90,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            btnPageNumber.Click += (_, _) =>
+            {
+                appendPageNumber = true;
+                btnPageNumber.IsEnabled = false;
+            };
+
+            btnDateTime.Click += (_, _) =>
+            {
+                var text = DateTimeDialog.Prompt(owner);
+                if (!string.IsNullOrEmpty(text))
+                    appendDateTime = text;
+            };
+
+            btnField.Click += (_, _) =>
+            {
+                var instr = FieldPickerDialog.Ask(owner);
+                if (instr is not null)
+                    appendFieldInstruction = instr;
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var text = box.Text;
+                HeaderFooter? hf;
+                if (text.Length == 0 && !appendPageNumber && appendDateTime is null && appendFieldInstruction is null)
+                {
+                    hf = null; // clear slot
+                }
+                else
+                {
+                    hf = new HeaderFooter();
+                    var para = new FreeW.Core.Model.Paragraph();
+                    if (text.Length > 0)
+                        para.Runs.Add(new FreeW.Core.Model.Run(text));
+                    if (appendDateTime is { } dt)
+                    {
+                        if (para.Runs.Count > 0)
+                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
+                        para.Runs.Add(new FreeW.Core.Model.Run(dt));
+                    }
+                    if (appendFieldInstruction is { } instr)
+                    {
+                        if (para.Runs.Count > 0)
+                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
+                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(instr));
+                    }
+                    if (appendPageNumber)
+                    {
+                        if (para.Runs.Count > 0)
+                            para.Runs.Add(new FreeW.Core.Model.Run("  "));
+                        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                    }
+                    hf.Paragraphs.Add(para);
+                }
+                result = hf;
+                dialog.DialogResult = true;
+            };
+
+            var insertRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            insertRow.Children.Add(btnPageNumber);
+            insertRow.Children.Add(btnDateTime);
+            insertRow.Children.Add(btnField);
+
+            var btnRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnRow.Children.Add(ok);
+            btnRow.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 400 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = $"{slotLabel} text:",
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            panel.Children.Add(box);
+            panel.Children.Add(insertRow);
+            panel.Children.Add(btnRow);
+            dialog.Content = panel;
+
+            box.Focus();
+            return dialog.ShowDialog() == true ? result : current; // Cancel = unchanged
         }
     }
 

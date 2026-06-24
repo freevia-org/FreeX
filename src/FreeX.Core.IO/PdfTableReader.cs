@@ -66,6 +66,24 @@ internal static class PdfTableReader
     /// </summary>
     private const int MinGutterBuckets = 2;
 
+    /// <summary>
+    /// Primary column-boundary detector threshold: an X position is treated as a column boundary when it
+    /// falls in a token gap (no token covers it) for at least this fraction of the page's rows. Keyed on
+    /// the boundary <em>position</em> recurring across rows rather than on the width of empty space, so it
+    /// catches tight boundaries — e.g. a right-aligned number column abutting a left-aligned text column,
+    /// where the gap is only cell-padding wide but its X is identical in every row. (The whitespace-gutter
+    /// histogram above misses those because the empty span is narrower than <see cref="MinGutterBuckets"/>.)
+    /// </summary>
+    private const double BoundaryRowFraction = 0.6;
+
+    /// <summary>Minimum rows required before whitespace-vote boundary detection is meaningful; below this the
+    /// gutter-histogram fallback (or a single column) is used.</summary>
+    private const int MinRowsForBoundaryVote = 3;
+
+    /// <summary>Candidate boundary gaps narrower than this (pt) are intra-ink/kerning noise, not real
+    /// inter-token gaps, and are skipped — this also bounds the candidate set for performance.</summary>
+    private const double MinBoundaryGapPt = 1.0;
+
     // ── Public entry point ───────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -252,6 +270,103 @@ internal static class PdfTableReader
     /// returned so all tokens go into column 0.
     /// </summary>
     private static List<(double Left, double Right)> DetectColumnBands(
+        List<TextRow> rows, double minX, double maxX)
+    {
+        // Primary: vote on column boundaries by recurring inter-token whitespace position. Robust to tight
+        // boundaries (right-aligned number abutting left-aligned text) that the gutter histogram misses.
+        var boundaries = DetectBoundariesByWhitespaceVote(rows, minX, maxX);
+        if (boundaries.Count > 0)
+            return BandsFromBoundaries(boundaries, minX, maxX);
+
+        // Fallback: coarse whitespace-gutter histogram (handles sparse pages and wide gutters).
+        return DetectColumnBandsByGutters(rows, minX, maxX);
+    }
+
+    /// <summary>
+    /// Detects column boundaries by voting: a candidate X (the midpoint of a gap between two adjacent token
+    /// edges) is a boundary when it lies in a token gap for at least <see cref="BoundaryRowFraction"/> of
+    /// the rows. Because a real column boundary sits at the same X in (almost) every row — even when the
+    /// physical gap is only a few points wide — this separates columns that the empty-span gutter histogram
+    /// merges, while an intra-cell word gap (e.g. "New York") wanders across rows and never accumulates
+    /// enough white votes to qualify. Returns the sorted boundary X positions (empty when undecidable).
+    /// </summary>
+    private static List<double> DetectBoundariesByWhitespaceVote(List<TextRow> rows, double minX, double maxX)
+    {
+        var rowCount = rows.Count;
+        if (rowCount < MinRowsForBoundaryVote)
+            return [];
+
+        // All token edges across the page become candidate split points.
+        var edges = new SortedSet<double>();
+        foreach (var row in rows)
+            foreach (var token in row.Tokens)
+            {
+                edges.Add(token.Left);
+                edges.Add(token.Right);
+            }
+        if (edges.Count < 2)
+            return [];
+
+        var edgeList = edges.ToList();
+        var required = Math.Max(MinRowsForBoundaryVote, (int)Math.Ceiling(BoundaryRowFraction * rowCount));
+
+        // For each real gap between consecutive edges, count rows where the gap's midpoint is white
+        // (covered by no token). Consecutive qualifying candidates are merged into one boundary.
+        var boundaries = new List<double>();
+        double bestX = 0;
+        var bestWhite = -1;
+        for (var i = 0; i + 1 < edgeList.Count; i++)
+        {
+            if (edgeList[i + 1] - edgeList[i] < MinBoundaryGapPt)
+                continue; // intra-ink/kerning noise
+
+            var x = (edgeList[i] + edgeList[i + 1]) / 2.0;
+            if (x <= minX || x >= maxX)
+                continue;
+
+            var white = 0;
+            foreach (var row in rows)
+            {
+                var covered = false;
+                foreach (var token in row.Tokens)
+                    if (token.Left <= x && x <= token.Right) { covered = true; break; }
+                if (!covered)
+                    white++;
+            }
+
+            if (white >= required)
+            {
+                if (white > bestWhite) { bestWhite = white; bestX = x; }
+            }
+            else if (bestWhite >= 0)
+            {
+                boundaries.Add(bestX);
+                bestWhite = -1;
+            }
+        }
+        if (bestWhite >= 0)
+            boundaries.Add(bestX);
+
+        return boundaries;
+    }
+
+    /// <summary>Builds column bands (closed X intervals) from sorted boundary X positions.</summary>
+    private static List<(double Left, double Right)> BandsFromBoundaries(
+        List<double> boundaries, double minX, double maxX)
+    {
+        boundaries.Sort();
+        var bands = new List<(double Left, double Right)>(boundaries.Count + 1);
+        var left = minX;
+        foreach (var b in boundaries)
+        {
+            bands.Add((left, b));
+            left = b;
+        }
+        bands.Add((left, maxX));
+        return bands;
+    }
+
+    private static List<(double Left, double Right)> DetectColumnBandsByGutters(
         List<TextRow> rows, double minX, double maxX)
     {
         var rowCount = rows.Count;
@@ -580,11 +695,20 @@ internal static class PdfTableReader
     }
 
     // ISO-8601 formats tried before falling back to culture-specific parsing.
-    private static readonly string[] IsoDateFormats =
+    // ISO formats that carry an explicit timezone offset — converted to UTC (matches the delimited-text
+    // reader's TryParseIsoDateTimeOffset precedent).
+    private static readonly string[] IsoDateOffsetFormats =
     [
         "yyyy-MM-ddTHH:mm:sszzz", "yyyy-MM-ddTHH:mm:sszz", "yyyy-MM-ddTHH:mm:ssZ",
-        "yyyy-MM-ddTHH:mm:zzz",   "yyyy-MM-ddTHH:mmzzz",   "yyyy-MM-ddTHH:mm:ss",
-        "yyyy-MM-ddTHH:mm",       "yyyy-MM-dd",
+        "yyyy-MM-ddTHH:mm:zzz",   "yyyy-MM-ddTHH:mmzzz",
+    ];
+
+    // ISO formats with NO timezone — parsed as wall-clock with no offset applied. Parsing these through
+    // DateTimeOffset would inject the machine's local offset then shift to UTC, corrupting a plain date
+    // (e.g. "2026-01-01" → "2025-12-31 22:00" on a UTC+2 host). A spreadsheet date is wall-clock.
+    private static readonly string[] IsoDateLocalFormats =
+    [
+        "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm", "yyyy-MM-dd",
     ];
 
     private static readonly string[] ExtraDateFormats =
@@ -596,13 +720,18 @@ internal static class PdfTableReader
 
     private static bool TryParseDateTime(ReadOnlySpan<char> field, out DateTime dt)
     {
-        // ISO-8601 (with optional timezone offset)
-        if (DateTimeOffset.TryParseExact(field, IsoDateFormats,
+        // ISO-8601 with an explicit timezone offset → UTC.
+        if (DateTimeOffset.TryParseExact(field, IsoDateOffsetFormats,
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
         {
             dt = dto.UtcDateTime;
             return true;
         }
+
+        // ISO-8601 with no timezone → wall-clock (no offset shift).
+        if (DateTime.TryParseExact(field, IsoDateLocalFormats,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+            return true;
 
         // Current culture
         if (DateTime.TryParse(field, CultureInfo.CurrentCulture,
