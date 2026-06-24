@@ -25,7 +25,10 @@ public static class WpfThemeApplier
     /// <summary>
     /// Builds a <see cref="ResourceDictionary"/> containing a frozen
     /// <see cref="SolidColorBrush"/> for each of the 21 color roles, double values for
-    /// the 4 metrics, and <see cref="FontFamily"/> resources for the 4 typography roles.
+    /// the 6 metrics, and <see cref="FontFamily"/> resources for the 5 typography roles,
+    /// plus 5 prefix-free neutral keys (<c>ThemeNeutral*Brush</c>, WS-G round 8) and
+    /// 5 prefix-free accent keys (<c>ThemeAccent*Brush</c> / <c>ThemeRibbonButtonHoverBrush</c>,
+    /// WS-G round 9).
     /// Keys follow the pattern <c>{keyPrefix}{Role}Brush</c> / <c>{keyPrefix}{MetricName}</c>
     /// / <c>{keyPrefix}{TypoRole}FontFamily</c> — matching FreeX's existing XAML keys when
     /// <paramref name="keyPrefix"/> is <c>"FreeX"</c>.
@@ -114,6 +117,18 @@ public static class WpfThemeApplier
         AddNeutralBrush(dict, "Danger",       c.Danger);
         AddNeutralBrush(dict, "SheetSurface", c.SheetSurface);
 
+        // ── Accent keys (WS-G round 9) ──────────────────────────────────────────
+        // Unlike the neutral keys above (byte-identical across all apps), accent keys are
+        // PER-APP — FreeX/FreeW emit teal, FreeP emits brick.  The shared ribbon renderer
+        // binds to these via {DynamicResource ThemeAccent*Brush} so each app's shared chrome
+        // adopts its brand accent automatically.  The fallback literal in code paths keeps
+        // FreeX/FreeW byte-identical since their accent values haven't changed.
+        AddAccentBrush(dict, "Accent",            c.Accent);
+        AddAccentBrush(dict, "AccentDark",        c.AccentDark);
+        AddAccentBrush(dict, "AccentSoft",        c.AccentSoft);
+        AddAccentBrush(dict, "AccentPressed",     c.AccentPressed);
+        AddAccentBrush(dict, "RibbonButtonHover", c.RibbonButtonHover);
+
         return dict;
     }
 
@@ -127,6 +142,38 @@ public static class WpfThemeApplier
         var brush = new SolidColorBrush(ToColor(color));
         brush.Freeze();
         dict[$"ThemeNeutral{role}Brush"] = brush;
+    }
+
+    /// <summary>
+    /// Emits a prefix-free accent key into <paramref name="dict"/> mapping each accent role to its
+    /// canonical key name.  Unlike neutral keys, these are theme-specific — FreeX/FreeW emit teal
+    /// values; FreeP emits brick-derived values.  Used by <see cref="BuildResources"/> to register
+    /// keys that the shared ribbon renderer can consume via <c>{DynamicResource}</c>.
+    ///
+    /// Key mapping (role → key):
+    ///   Accent            → ThemeAccentBrush
+    ///   AccentDark        → ThemeAccentDarkBrush
+    ///   AccentSoft        → ThemeAccentSoftBrush
+    ///   AccentPressed     → ThemeAccentPressedBrush
+    ///   RibbonButtonHover → ThemeRibbonButtonHoverBrush
+    /// </summary>
+    private static void AddAccentBrush(ResourceDictionary dict, string role, ThemeColor color)
+    {
+        var brush = new SolidColorBrush(ToColor(color));
+        brush.Freeze();
+        // The role names (Accent, AccentDark, AccentSoft, AccentPressed) already contain "Accent",
+        // so we use explicit key names rather than $"ThemeAccent{role}Brush" which would double
+        // the "Accent" segment (e.g. "ThemeAccentAccentBrush").
+        var key = role switch
+        {
+            "Accent"            => "ThemeAccentBrush",
+            "AccentDark"        => "ThemeAccentDarkBrush",
+            "AccentSoft"        => "ThemeAccentSoftBrush",
+            "AccentPressed"     => "ThemeAccentPressedBrush",
+            "RibbonButtonHover" => "ThemeRibbonButtonHoverBrush",
+            _                   => $"ThemeAccent{role}Brush",   // future-proof catch-all
+        };
+        dict[key] = brush;
     }
 
     /// <summary>
