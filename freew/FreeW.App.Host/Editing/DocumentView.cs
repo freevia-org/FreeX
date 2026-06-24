@@ -3861,6 +3861,12 @@ public sealed class DocumentView : RichTextBox
         SyncPageBreakAdorner();
     }
 
+    // Test seam (FreeW.App.Host.Tests has InternalsVisibleTo). Returns the cached pagination result
+    // from the live page-break adorner, or null when the adorner is not active (non-Print-Layout mode)
+    // or has not yet computed a result. Tests can force a computation by calling PaginationEngine.Compute
+    // directly; this seam is for verifying that the adorner's cache matches the engine's output.
+    internal DocumentPagination? GetPageBreakAdornerPagination() => _pageBreakAdorner?._pagination;
+
     // Add, remove, or refresh the line-number overlay to match the model's LineNumberMode. Mirrors
     // SyncPageBreakAdorner: the overlay shows when the document enables line numbering and is removed when
     // it does not. The adorner layer only exists once the control is loaded, so when it is not yet
@@ -10044,11 +10050,14 @@ public sealed class DocumentView : RichTextBox
         private static readonly Pen BreakPen = CreateBreakPen();
         private static readonly Brush LabelBrush = CreateLabelBrush();
 
-        // Never draw more than this many markers, so a tiny page height (degenerate geometry) or an
-        // enormous document can't make the overlay expensive to paint.
-        private const int MaxMarkers = 2_000;
-
         private readonly DocumentView _view;
+
+        // Cached result from PaginationEngine. Null means "needs recompute" (content has changed since
+        // the last successful computation). Invalidated on TextChanged so we don't re-paginate every
+        // OnRender (ComputePageCount is a full layout pass — expensive on large docs).
+        // Internal so DocumentView.GetPageBreakAdornerPagination() can expose it as a test seam
+        // (outer class cannot access a nested class's private fields in C#).
+        internal DocumentPagination? _pagination;
 
         public PageBreakAdorner(DocumentView view) : base(view)
         {
@@ -10056,6 +10065,9 @@ public sealed class DocumentView : RichTextBox
             IsHitTestVisible = false;
             // Repaint when the surface scrolls or relayouts so the markers track the content.
             _view.LayoutUpdated += (_, _) => InvalidateVisual();
+            // Invalidate the pagination cache whenever the document content changes, so the next
+            // OnRender gets fresh break positions. TextChanged fires for every edit operation.
+            _view.TextChanged += (_, _) => _pagination = null;
         }
 
         private static Pen CreateBreakPen()
@@ -10082,38 +10094,76 @@ public sealed class DocumentView : RichTextBox
             if (_view.Document is not { } doc)
                 return;
 
-            // The page's printable content height in DIP — the same geometry the print path paginates by.
-            var (_, contentHeight) = PageLayout.ContentAreaDip(_view._model.Page);
-            if (contentHeight <= 0)
-                return;
-
             // Anchor at the top of the first laid-out content line. Without a first rectangle (empty/just
             // re-rendered document) there is nothing to anchor to, so skip painting this pass.
             var origin = FirstContentTop(doc);
             if (origin is not { } topY)
                 return;
 
+            // Ensure the pagination cache is populated. PaginationEngine.Compute is a full layout pass;
+            // the cache is only discarded on TextChanged, so during normal scrolling/zoom this is a
+            // cheap cache hit.
+            _pagination ??= TryComputePagination();
+            if (_pagination is null)
+                return; // layout momentarily unavailable — skip this pass
+
+            var breakYs = _pagination.PageBreakYsDip;
+            if (breakYs.Count == 0)
+                return; // single page, nothing to draw
+
             var bounds = new Rect(_view.RenderSize);
             drawingContext.PushClip(new RectangleGeometry(bounds));
             try
             {
                 var pixelsPerDip = VisualTreeHelper.GetDpi(_view).PixelsPerDip;
-                for (var pageIndex = 1; pageIndex <= MaxMarkers; pageIndex++)
+                for (var i = 0; i < breakYs.Count; i++)
                 {
-                    var y = topY + pageIndex * contentHeight; // bottom of page `pageIndex`
+                    // breakYs[i] is the cumulative content height at break i, measured from the first
+                    // content line. Translate to adorner coordinates by adding topY.
+                    var y = topY + breakYs[i];
                     if (y > bounds.Bottom)
-                        break; // first boundary past the bottom of the viewport: nothing more is visible
+                        break; // scrolled past bottom — no more visible breaks
                     if (y < bounds.Top)
-                        continue; // boundary scrolled above the viewport — skip but keep counting pages
+                        continue; // scrolled above viewport — skip but keep iterating
 
-                    // The rule sits at the foot of page `pageIndex`; the page beginning below it is the next.
-                    DrawMarker(drawingContext, y, pageIndex + 1, bounds, pixelsPerDip);
+                    // Page number shown on the label is the number of the page that begins AFTER this break.
+                    DrawMarker(drawingContext, y, i + 2, bounds, pixelsPerDip);
                 }
             }
             finally
             {
                 drawingContext.Pop();
             }
+        }
+
+        /// <summary>
+        /// Computes page-break Y positions via the authoritative pagination engine. Returns null when
+        /// the layout is momentarily unavailable (e.g. during a re-layout triggered by a TextChanged).
+        /// </summary>
+        private DocumentPagination? TryComputePagination()
+        {
+            try
+            {
+                return PaginationEngine.Compute(_view);
+            }
+            catch (InvalidOperationException)
+            {
+                // WPF layout not yet settled — skip; will retry on next LayoutUpdated.
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Returns the page-break Y positions (in the adorner's coordinate space, i.e. relative to
+        /// <paramref name="topY"/>) for the current pagination. Used by tests to verify accuracy without
+        /// triggering a full render. Returns null when the layout is unavailable.
+        /// </summary>
+        internal IReadOnlyList<double>? GetBreakYsForTest(double topY)
+        {
+            _pagination ??= TryComputePagination();
+            if (_pagination is null)
+                return null;
+            return _pagination.PageBreakYsDip.Select(y => topY + y).ToArray();
         }
 
         // The top Y (in the editor's content coordinates) of the first laid-out content line, or null when
