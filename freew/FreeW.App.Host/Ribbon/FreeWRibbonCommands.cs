@@ -490,6 +490,37 @@ internal static class FreeWRibbonCommands
             if (result is not null)
                 editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
         }));
+        // ── Chart Design galleries — Quick Layout, Chart Styles, Change Colors ──────────────────────
+        // Each gallery command applies one catalog entry to the selected chart and re-renders.
+        // The MainWindow replaces the rendered ribbon buttons with live-preview swatches (ChartDesignGallery),
+        // but the command registrations still back the buttons so the parity tests pass.
+        foreach (var layout in ChartQuickLayout.Catalog)
+        {
+            var l = layout;
+            registry.Register($"freew.chart-quick-layout-{l.Id}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                editor.ApplySelectedChartQuickLayout(l);
+            }));
+        }
+        foreach (var style in ChartStyle.Catalog)
+        {
+            var s = style;
+            registry.Register($"freew.chart-style-{s.Id}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                editor.ApplySelectedChartStyle(s);
+            }));
+        }
+        foreach (var scheme in ChartColorScheme.Catalog)
+        {
+            var sc = scheme;
+            registry.Register($"freew.chart-color-{sc.Id}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                editor.ApplySelectedChartColorScheme(sc);
+            }));
+        }
         // ── Drawing Format contextual tab — Shape/Drawing/TextBox/WordArt commands ─────────────────
         // Change Shape: picker over ShapeKind; no model work — ShapeKind already exists.
         registry.Register("freew.shape-change-rectangle", new ActionCommand(() =>

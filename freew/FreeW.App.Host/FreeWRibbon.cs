@@ -843,7 +843,26 @@ internal static class FreeWRibbon
                     }));
                 tab.Group("chart-data", "Data", "D", 90, g =>
                     g.Medium("freew.chart-edit-data", "Edit Data", RibbonCommandIconKind.Table));
-                tab.Group("chart-elements", "Chart Layouts", "E", 80, g =>
+                // ── Gallery groups — replaced by ChartDesignGallery live-preview controls at render time ──
+                // The gallery injection (MainWindow.InjectGallery) keys on the group id: "chart-quick-layout",
+                // "chart-style", "chart-colors". The placeholder Medium buttons below let the ribbon model and
+                // command bus wire up backed commands; the MainWindow swaps them for gallery swatches.
+                tab.Group("chart-quick-layout", "Quick Layout", "L", 85, g =>
+                {
+                    foreach (var layout in ChartQuickLayout.Catalog)
+                        g.Medium($"freew.chart-quick-layout-{layout.Id}", layout.Name, RibbonCommandIconKind.Grid);
+                });
+                tab.Group("chart-style", "Chart Styles", "S", 80, g =>
+                {
+                    foreach (var style in ChartStyle.Catalog)
+                        g.Medium($"freew.chart-style-{style.Id}", style.Name, RibbonCommandIconKind.ChartColumn);
+                });
+                tab.Group("chart-colors", "Change Colors", "C", 75, g =>
+                {
+                    foreach (var scheme in ChartColorScheme.Catalog)
+                        g.Medium($"freew.chart-color-{scheme.Id}", scheme.Name, RibbonCommandIconKind.Fill);
+                });
+                tab.Group("chart-elements", "Chart Layouts", "E", 70, g =>
                 {
                     g.Medium("freew.chart-title", "Chart Title", RibbonCommandIconKind.Header);
                     g.Medium("freew.chart-axis-titles", "Axis Titles", RibbonCommandIconKind.Ruler);

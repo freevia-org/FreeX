@@ -1,0 +1,11 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Chart Style 2">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="7" y="7" width="19" height="18" fill="#EBF2FA" rx="1"/>
+  
+  <path d="M7 25h19M7.5 25V7" fill="none" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="9" y="18" width="3" height="7" fill="#ED7D31"/>
+  <rect x="14" y="14" width="3" height="11" fill="#ED7D31"/>
+  <rect x="19" y="11" width="3" height="14" fill="#ED7D31"/>
+  
+  
+</svg>

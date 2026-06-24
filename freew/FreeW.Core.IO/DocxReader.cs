@@ -2915,6 +2915,25 @@ public static class DocxReader
             ApplyFloatingPlacement(anchor, chart.Placement);
         }
 
+        // c:style — chart style id (persisted by BuildChartSpace; default 0 = unset).
+        // chartXml is non-null here because chartElement (derived from chartXml.Root) passed the null guard above.
+        var chartSpace = chartXml!.Root!;
+        if (int.TryParse(chartSpace.Element(C + "style")?.Attribute(C + "val")?.Value, out var styleId) && styleId > 0)
+            chart.StyleId = styleId;
+
+        // freew:ext — FreeW extension: color scheme id and quick layout id (written as c:extLst / c:ext).
+        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        var freewExt = chartSpace.Descendants(C + "ext")
+            .FirstOrDefault(e => e.Attribute("uri")?.Value == "{FW-ChartDesign-2026}");
+        if (freewExt is not null)
+        {
+            var colorSchemeId = freewExt.Element(freew + "colorScheme")?.Attribute("id")?.Value;
+            if (!string.IsNullOrEmpty(colorSchemeId))
+                chart.ColorSchemeId = colorSchemeId;
+            if (int.TryParse(freewExt.Element(freew + "quickLayout")?.Attribute("id")?.Value, out var qlId) && qlId > 0)
+                chart.QuickLayoutId = qlId;
+        }
+
         return chart;
     }
 

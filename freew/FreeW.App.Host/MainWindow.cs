@@ -2840,6 +2840,15 @@ public sealed class MainWindow : Window
                 // Replace the rendered Document Formatting controls with the live-preview Word-style
                 // gallery/menu strip so backed commands do not appear twice beside their custom previews.
                 InjectGallery(content, "themes", ThemeGallery.BuildDocumentFormatting(_editor), removeKind: RemoveKind.All);
+            if (tab.Id == "chart-design")
+            {
+                // Inject the three Chart Design galleries (Quick Layout, Chart Styles, Change Colors)
+                // into the corresponding groups on the chart contextual tab. Each gallery replaces the
+                // group's placeholder ribbon commands with live-preview swatches.
+                InjectGallery(content, "chart-quick-layout", ChartDesignGallery.BuildQuickLayouts(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-style", ChartDesignGallery.BuildChartStyles(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(_editor), removeKind: RemoveKind.All);
+            }
 
             }
         });

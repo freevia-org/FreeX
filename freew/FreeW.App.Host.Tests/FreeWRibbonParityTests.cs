@@ -1102,7 +1102,7 @@ public sealed class FreeWRibbonParityTests
         chartDesign.Should().NotBeNull();
         chartDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("chart-type", "chart-data", "chart-elements");
+            .Equal("chart-type", "chart-data", "chart-quick-layout", "chart-style", "chart-colors", "chart-elements");
 
         CommandIds(chartDesign)
             .Should()
@@ -1114,6 +1114,17 @@ public sealed class FreeWRibbonParityTests
                 "freew.chart-axis-titles",
                 "freew.chart-toggle-legend"
             });
+
+        // Gallery commands: one per catalog entry for each gallery.
+        foreach (var layout in ChartQuickLayout.Catalog)
+            registry.TryGet($"freew.chart-quick-layout-{layout.Id}", out _)
+                .Should().BeTrue($"freew.chart-quick-layout-{layout.Id} must be backed");
+        foreach (var style in ChartStyle.Catalog)
+            registry.TryGet($"freew.chart-style-{style.Id}", out _)
+                .Should().BeTrue($"freew.chart-style-{style.Id} must be backed");
+        foreach (var scheme in ChartColorScheme.Catalog)
+            registry.TryGet($"freew.chart-color-{scheme.Id}", out _)
+                .Should().BeTrue($"freew.chart-color-{scheme.Id} must be backed");
 
         foreach (var commandId in new[]
         {
