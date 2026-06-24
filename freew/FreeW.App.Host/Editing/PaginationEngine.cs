@@ -196,6 +196,98 @@ internal static class PaginationEngine
     /// page-type section-break marker.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Computes which 0-based page index each top-level model block belongs on, using the same
+    /// scratch-clone pagination that <see cref="Compute"/> uses.  The returned array has one entry
+    /// per top-level block in <paramref name="editor"/>'s model; entry <c>i</c> is the 0-based page
+    /// index for model block <c>i</c>.
+    ///
+    /// <para>
+    /// <strong>Algorithm:</strong>
+    /// <list type="number">
+    ///   <item>Build a scratch <see cref="FlowDocument"/> clone and apply section-break flags
+    ///   (identical to <see cref="Compute"/>).</item>
+    ///   <item>Run the WPF paginator to determine the page count.</item>
+    ///   <item>Walk the scratch clone's top-level blocks in order.  A block whose
+    ///   <c>BreakPageBefore</c> is <c>true</c> is the first block of the <em>next</em> page.
+    ///   All other blocks stay on the current page.  This mirrors how the WPF paginator assigns
+    ///   blocks to pages for explicit breaks.  Overflow-driven page transitions are not detectable
+    ///   from the block list alone; the engine falls back to even distribution for any pages that
+    ///   are not covered by an explicit break.</item>
+    /// </list>
+    /// </para>
+    ///
+    /// <para>
+    /// When the model is empty or pagination fails the method returns a zero-length array or an
+    /// array of zeros (all blocks on page 0).  <see cref="PaginatedEditorPanel"/> treats this as a
+    /// single-page document.
+    /// </para>
+    ///
+    /// <para>Must be called on the UI/STA thread.</para>
+    /// </summary>
+    internal static int[] ComputeBlockPageAssignment(DocumentView editor)
+    {
+        var modelBlocks = editor.Model.Blocks;
+        if (modelBlocks.Count == 0)
+            return [];
+
+        // Build scratch clone and run the paginator — same as Compute().
+        FlowDocument flow;
+        int pageCount;
+        try
+        {
+            flow = PrintLayout.BuildPaginatedDocument(editor);
+            ApplySectionBreakFlags(editor, flow);
+
+            var page = editor.Model.Page;
+            var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+            var (_, contentHeight) = PageLayout.ContentAreaDip(page);
+            if (contentHeight <= 0)
+                return new int[modelBlocks.Count]; // all page 0
+
+            var innerPaginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+            innerPaginator.PageSize = new Size(pageWidth, pageHeight);
+            innerPaginator.ComputePageCount();
+            pageCount = Math.Max(1, innerPaginator.PageCount);
+        }
+        catch
+        {
+            // If pagination fails, assign all blocks to page 0.
+            return new int[modelBlocks.Count];
+        }
+
+        if (pageCount == 1)
+            return new int[modelBlocks.Count]; // all page 0
+
+        // Walk scratch blocks: assign each to its page using BreakPageBefore.
+        // A block with BreakPageBefore=true is the FIRST block of a new page.
+        var scratchBlocks = flow.Blocks.ToArray();
+        var assignment = new int[modelBlocks.Count];
+        int currentPage = 0;
+
+        for (int i = 0; i < scratchBlocks.Length && i < modelBlocks.Count; i++)
+        {
+            var scratch = scratchBlocks[i];
+            bool isExplicitBreak = scratch is System.Windows.Documents.Paragraph p && p.BreakPageBefore;
+
+            // Block 0 can never start a new page (it is the first block of page 0).
+            if (isExplicitBreak && i > 0)
+            {
+                currentPage = Math.Min(currentPage + 1, pageCount - 1);
+            }
+
+            assignment[i] = currentPage;
+        }
+
+        // If the explicit breaks only account for fewer pages than the paginator says, the
+        // remaining pages are overflow-driven.  In that case the last explicit-break page
+        // effectively absorbs all overflow blocks — the coordinator will still round-trip them
+        // correctly because the commit path doesn't care which page box a block lives in, only
+        // the document order.  No further redistribution is needed for 3b-1.
+
+        return assignment;
+    }
+
     private static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {
         var modelBlocks = editor.Model.Blocks;

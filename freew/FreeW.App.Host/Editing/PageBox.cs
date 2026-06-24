@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeW.Core.Model;
 
@@ -22,6 +23,14 @@ namespace FreeW.App.Host.Editing;
 /// <see cref="PaginatedCommitCoordinator"/> can read them back with the same logic that
 /// <see cref="DocumentView.CommitToModel"/> uses for the continuous editor.
 /// </para>
+///
+/// <para>
+/// <strong>Cross-page caret routing (Phase 3b-1):</strong> <c>PreviewKeyDown</c> intercepts
+/// Down/Right at the last caret position in this box and routes focus to the next box's start;
+/// Up/Left at the first position routes to the previous box's end.  Home/End/PageUp/PageDown fall
+/// through to the native RichTextBox behaviour.
+/// Cross-page selection, clipboard, and shared undo are deferred to Phase 3b-2.
+/// </para>
 /// </summary>
 internal sealed class PageBox : Border
 {
@@ -36,6 +45,10 @@ internal sealed class PageBox : Border
 
     /// <summary>1-based page number (informational; shown in header strip).</summary>
     internal int PageNumber { get; }
+
+    // ── neighbour references (set by PaginatedEditorPanel after all boxes are created) ────────────
+    internal PageBox? PreviousBox { get; set; }
+    internal PageBox? NextBox { get; set; }
 
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
@@ -95,6 +108,9 @@ internal sealed class PageBox : Border
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
 
+        // ── Cross-page caret routing ──────────────────────────────────────────────────────────────
+        Body.PreviewKeyDown += OnBodyPreviewKeyDown;
+
         Grid.SetRow(Body, 1);
         stack.Children.Add(Body);
 
@@ -104,6 +120,121 @@ internal sealed class PageBox : Border
         stack.Children.Add(footerStrip);
 
         Child = stack;
+    }
+
+    // ── cross-page caret routing ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Intercepts arrow-key presses at the edges of the page box and routes the caret to the
+    /// adjacent page box.
+    ///
+    /// <list type="bullet">
+    ///   <item><c>Down</c> or <c>Right</c> at the document end → next box start.</item>
+    ///   <item><c>Up</c> or <c>Left</c> at the document start → previous box end.</item>
+    /// </list>
+    ///
+    /// All other keys, and arrow keys that are not at an edge, fall through to the native
+    /// <see cref="RichTextBox"/> handler.  Cross-page SELECTION (Shift+arrow) is deferred to
+    /// Phase 3b-2.
+    /// </summary>
+    private void OnBodyPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // Never intercept while Shift is held — cross-page selection is 3b-2.
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Down:
+            case Key.Right:
+                if (NextBox is not null && IsCaretAtDocumentEnd())
+                {
+                    MoveCaretToBoxStart(NextBox);
+                    e.Handled = true;
+                }
+                break;
+
+            case Key.Up:
+            case Key.Left:
+                if (PreviousBox is not null && IsCaretAtDocumentStart())
+                {
+                    MoveCaretToBoxEnd(PreviousBox);
+                    e.Handled = true;
+                }
+                break;
+        }
+    }
+
+    /// <summary>Returns whether the caret is positioned at or past the last insertion point of the document.</summary>
+    private bool IsCaretAtDocumentEnd()
+    {
+        try
+        {
+            var end = Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+            if (end is null)
+                return false;
+            var caret = Body.CaretPosition.GetInsertionPosition(LogicalDirection.Forward);
+            if (caret is null)
+                return false;
+            return caret.CompareTo(end) >= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Returns whether the caret is positioned at or before the first insertion point of the document.</summary>
+    private bool IsCaretAtDocumentStart()
+    {
+        try
+        {
+            var start = Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+            if (start is null)
+                return false;
+            var caret = Body.CaretPosition.GetInsertionPosition(LogicalDirection.Forward);
+            if (caret is null)
+                return false;
+            return caret.CompareTo(start) <= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Routes the caret to the first insertion position in <paramref name="target"/> and focuses it.
+    /// Called when Down/Right is pressed at the end of this box.
+    /// </summary>
+    private static void MoveCaretToBoxStart(PageBox target)
+    {
+        target.Body.Focus();
+        try
+        {
+            var start = target.Body.Document.ContentStart
+                .GetInsertionPosition(LogicalDirection.Forward);
+            if (start is not null)
+                target.Body.CaretPosition = start;
+        }
+        catch { /* caret at default location */ }
+    }
+
+    /// <summary>
+    /// Routes the caret to the last insertion position in <paramref name="target"/> and focuses it.
+    /// Called when Up/Left is pressed at the start of this box.
+    /// </summary>
+    private static void MoveCaretToBoxEnd(PageBox target)
+    {
+        target.Body.Focus();
+        try
+        {
+            var end = target.Body.Document.ContentEnd
+                .GetInsertionPosition(LogicalDirection.Backward);
+            if (end is not null)
+                target.Body.CaretPosition = end;
+        }
+        catch { /* caret at default location */ }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────────
