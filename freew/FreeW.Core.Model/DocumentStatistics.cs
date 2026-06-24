@@ -39,6 +39,13 @@ public readonly record struct DocumentStatistics(
     double AverageWordsPerSentence,
     double FleschReadingEase)
 {
+    /// <summary>
+    /// The number of lines in the document (newline-delimited lines in the plain text; at least 1 when
+    /// any text is present). Set via <c>with { Lines = … }</c> on the returned value; defaults to 0 for
+    /// an empty document (<see cref="Empty"/>).
+    /// </summary>
+    public int Lines { get; init; }
+
     /// <summary>An all-zero summary (an empty document). Flesch ease defaults to 0.</summary>
     public static readonly DocumentStatistics Empty = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
 
@@ -46,14 +53,44 @@ public readonly record struct DocumentStatistics(
     public const int WordsPerMinute = 200;
 
     /// <summary>Computes the full statistics summary for a whole document.</summary>
-    public static DocumentStatistics Compute(TextDocument document)
+    public static DocumentStatistics Compute(TextDocument document) => Compute(document, includeNotes: false);
+
+    /// <summary>
+    /// Computes the full statistics summary for a whole document, optionally including footnote and
+    /// endnote text in the word and character counts (Word's "Include textboxes, footnotes and endnotes"
+    /// checkbox behaviour). When <paramref name="includeNotes"/> is false the result matches
+    /// <see cref="Compute(TextDocument)"/>.
+    /// </summary>
+    public static DocumentStatistics Compute(TextDocument document, bool includeNotes)
     {
         ArgumentNullException.ThrowIfNull(document);
 
         // Reuse the audited basic counts (words/chars/paragraphs, including table-cell paragraphs),
         // and flatten the document (paragraphs joined by newlines) for sentence/syllable scanning.
-        var basic = WordCount.Of(document);
-        return Build(basic, document.PlainText);
+        var text = document.PlainText;
+
+        if (!includeNotes || (document.Footnotes.Count == 0 && document.Endnotes.Count == 0))
+        {
+            var basic = WordCount.Of(document);
+            var lines = CountLines(text);
+            return Build(basic, text) with { Lines = lines };
+        }
+
+        // Append footnote and endnote plain text so their words/characters are included.
+        var sb = new System.Text.StringBuilder(text);
+        foreach (var footnote in document.Footnotes.Values)
+            sb.Append('\n').Append(footnote.PlainText);
+        foreach (var endnote in document.Endnotes.Values)
+            sb.Append('\n').Append(endnote.PlainText);
+        var combined = sb.ToString();
+
+        var combinedBasic = new DocumentStats(
+            Words: WordCount.Words(combined),
+            CharactersWithSpaces: WordCount.Characters(combined, includeSpaces: true),
+            CharactersWithoutSpaces: WordCount.Characters(combined, includeSpaces: false),
+            Paragraphs: CountTextParagraphs(combined));
+        var combinedLines = CountLines(combined);
+        return Build(combinedBasic, combined) with { Lines = combinedLines };
     }
 
     /// <summary>
@@ -71,7 +108,21 @@ public readonly record struct DocumentStatistics(
             CharactersWithSpaces: WordCount.Characters(text, includeSpaces: true),
             CharactersWithoutSpaces: WordCount.Characters(text, includeSpaces: false),
             Paragraphs: CountTextParagraphs(text));
-        return Build(basic, text);
+        var lines = CountLines(text);
+        return Build(basic, text) with { Lines = lines };
+    }
+
+    /// <summary>
+    /// Counts lines in <paramref name="text"/> as newline-delimited segments (same as most text editors:
+    /// "line one\nline two" → 2). Returns 0 for null/empty text.
+    /// </summary>
+    private static int CountLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return 0;
+        var count = 1;
+        foreach (var ch in text)
+            if (ch == '\n') count++;
+        return count;
     }
 
     private static DocumentStatistics Build(DocumentStats basic, string text)

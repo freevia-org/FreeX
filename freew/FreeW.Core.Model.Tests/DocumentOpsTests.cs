@@ -74,4 +74,66 @@ public class DocumentOpsTests
 
         border.BottomOnly.Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData(SectionBreakKind.NextPage)]
+    [InlineData(SectionBreakKind.Continuous)]
+    [InlineData(SectionBreakKind.EvenPage)]
+    [InlineData(SectionBreakKind.OddPage)]
+    public void CreateSectionBreak_SetsCorrectBreakKind(SectionBreakKind kind)
+    {
+        var paragraph = DocumentOps.CreateSectionBreak(kind);
+
+        paragraph.SectionBreak.Should().NotBeNull();
+        paragraph.SectionBreak!.BreakKind.Should().Be(kind);
+        paragraph.PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CreateSectionBreak_InheritsPageSettings_WhenProvided()
+    {
+        var page = new PageSettings { MarginLeftPt = 99 };
+
+        var paragraph = DocumentOps.CreateSectionBreak(SectionBreakKind.NextPage, page);
+
+        paragraph.SectionBreak!.Page.MarginLeftPt.Should().Be(99);
+        paragraph.SectionBreak!.Page.Should().NotBeSameAs(page); // cloned, not the same reference
+    }
+
+    [Fact]
+    public void CreateSectionBreak_UsesDefaultPageSettings_WhenNoneProvided()
+    {
+        var paragraph = DocumentOps.CreateSectionBreak(SectionBreakKind.Continuous);
+
+        paragraph.SectionBreak.Should().NotBeNull();
+        paragraph.SectionBreak!.Page.Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData(CoverPagePreset.Default)]
+    [InlineData(CoverPagePreset.Banded)]
+    [InlineData(CoverPagePreset.Motion)]
+    public void BuildCoverPage_AllPresets_ProduceTitleParagraphWithDocTitle(CoverPagePreset preset)
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "Test Title";
+
+        var blocks = DocumentOps.BuildCoverPage(doc, preset).OfType<Paragraph>().ToList();
+
+        blocks.Should().NotBeEmpty();
+        blocks[0].PlainText.Should().Be("Test Title");
+    }
+
+    [Theory]
+    [InlineData(CoverPagePreset.Default)]
+    [InlineData(CoverPagePreset.Banded)]
+    [InlineData(CoverPagePreset.Motion)]
+    public void BuildCoverPage_AllPresets_UseDefaultTitleWhenPropertiesUnset(CoverPagePreset preset)
+    {
+        var doc = new TextDocument();
+
+        var blocks = DocumentOps.BuildCoverPage(doc, preset).OfType<Paragraph>().ToList();
+
+        blocks[0].PlainText.Should().Be(DocumentOps.DefaultCoverTitle);
+    }
 }
