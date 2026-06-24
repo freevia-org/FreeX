@@ -8,6 +8,8 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Backstage;
 using FreeW.Core.IO;
@@ -17,11 +19,21 @@ namespace FreeW.App.Host.Backstage;
 
 /// <summary>
 /// FreeW's Word-style Backstage, built on the shared Backstage frame, theme, entry builder, and pane specs.
+/// The backstage rail colours (sidebar/hover/selected/separator) come from <see cref="SisterBackstageTheme.FreeW"/>.
+/// The in-content link accent is sourced from the design-token (<see cref="BrandThemes.FreeW"/> Accent role)
+/// so that changing the theme value propagates to the backstage — byte-identical today since
+/// <c>BrandThemes.FreeW.Colors.Accent == #0F6D8C</c> matches the previous hard-coded <c>LinkColor</c>.
 /// </summary>
 internal sealed class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeW;
-    private static readonly BackstageVisualKit Kit = new(Theme.LinkColor, Theme.TileWidth, Theme.TileHeight);
+
+    // Link accent sourced from the design token (BrandThemes.FreeW.Colors.Accent = #0F6D8C).
+    // Byte-identical to the previous hard-coded SisterBackstageTheme.FreeW.LinkColor (#0F6D8C).
+    private static readonly BackstageVisualKit Kit = new(
+        WpfThemeApplier.ToColor(BrandThemes.FreeW.Colors.Accent),
+        Theme.TileWidth,
+        Theme.TileHeight);
     private static readonly BackstagePaneComposer Panes = new(Kit);
     private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(SisterBackstagePaneTextSpec.FreeW);
 
