@@ -2439,6 +2439,11 @@ public static class DocxReader
     {
         image.Wrapping = ReadWrapping(anchor);
 
+        // Z-order: relativeHeight is an integer on wp:anchor; default 0 when absent or unparseable.
+        if (anchor.Attribute("relativeHeight")?.Value is { } relH
+            && int.TryParse(relH, out var zOrder))
+            image.ZOrderIndex = zOrder;
+
         var positionH = anchor.Element(Wp + "positionH");
         image.HorizontalAnchor = ReadHorizontalAnchor(positionH?.Attribute("relativeFrom")?.Value);
         image.HorizontalOffsetPt = EmuToPoints(positionH?.Element(Wp + "posOffset")?.Value);

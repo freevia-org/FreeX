@@ -111,6 +111,12 @@ internal static class FreeWRibbonCommands
         Action? onFindReplace = null,
         Action? onToggleRuler = null,
         Func<bool>? isRulerVisible = null,
+        Action? onToggleMultiplePages = null,
+        Func<bool>? isMultiplePagesActive = null,
+        Action? onToggleSideToSide = null,
+        Func<bool>? isSideToSideActive = null,
+        Action? onToggleSplitWindow = null,
+        Func<bool>? isSplitWindowActive = null,
         Action? onHelpOnline = null,
         Action? onFeedback = null,
         Action? onCopyDiagnostics = null,
@@ -314,6 +320,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-crop",   new ImageCropCommand(editor));
         registry.Register("freew.image-reset",  new ImageResetCommand(editor));
         registry.Register("freew.image-border", new ImageBorderCommand(editor));
+        // Picture Format tab — Arrange > Z-order (floating images only).
+        registry.Register("freew.image-bring-to-front",  new ImageZOrderCommand(editor, ZOrderOperation.BringToFront));
+        registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
+        registry.Register("freew.image-bring-forward",   new ImageZOrderCommand(editor, ZOrderOperation.BringForward));
+        registry.Register("freew.image-send-backward",   new ImageZOrderCommand(editor, ZOrderOperation.SendBackward));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -1126,6 +1137,21 @@ internal static class FreeWRibbonCommands
         // the geometry; the host owns visibility so the ribbon checkmark mirrors the live chrome state.
         if (onToggleRuler is not null && isRulerVisible is not null)
             registry.Register("freew.ruler", new ToggleActionCommand(onToggleRuler, isRulerVisible));
+
+        // View > Zoom — Multiple Pages: swap the workspace child from the live editor to a read-only
+        // DocumentViewer fed by PrintLayout.BuildPaginatedSource (multi-page layout). Stateful toggle so
+        // the ribbon reflects whether the paginated overlay is currently active.
+        if (onToggleMultiplePages is not null && isMultiplePagesActive is not null)
+            registry.Register("freew.zoom-multiple-pages", new ToggleActionCommand(onToggleMultiplePages, isMultiplePagesActive));
+
+        // View > Zoom — Side to Side: same paginated overlay as Multiple Pages but forced to 2 pages across.
+        if (onToggleSideToSide is not null && isSideToSideActive is not null)
+            registry.Register("freew.zoom-side-to-side", new ToggleActionCommand(onToggleSideToSide, isSideToSideActive));
+
+        // View > Window — Split: split the workspace with a GridSplitter, live editor on top and a
+        // read-only FlowDocumentScrollViewer snapshot on the bottom, refreshed on TextChanged (~300 ms debounce).
+        if (onToggleSplitWindow is not null && isSplitWindowActive is not null)
+            registry.Register("freew.split-window", new ToggleActionCommand(onToggleSplitWindow, isSplitWindowActive));
 
         // View tab — toggle read mode (distraction-free view). Stateful so the ribbon's toggle button
         // reflects whether the chrome-light reading column is currently active.
@@ -2767,6 +2793,23 @@ internal static class FreeWRibbonCommands
                 image.BorderColorHex, image.BorderWidthPt, image.BorderDash);
             if (result is { } r)
                 editor.SetSelectedImageBorder(r.Color, r.Width, r.Dash);
+        }
+    }
+
+    // Picture Format > Arrange > Z-order: bring/send a floating image forward or to front/back.
+    private sealed class ImageZOrderCommand(DocumentView editor, ZOrderOperation operation) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null || !image.IsFloating)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Select a floating picture first.", "Z-Order");
+                return;
+            }
+            editor.ChangeSelectedImageZOrder(operation);
         }
     }
 

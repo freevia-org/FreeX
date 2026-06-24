@@ -2714,7 +2714,7 @@ public static class DocxWriter
                 new XAttribute("distT", 0), new XAttribute("distB", 0),
                 new XAttribute("distL", 0), new XAttribute("distR", 0),
                 new XAttribute("simplePos", 0),
-                new XAttribute("relativeHeight", 0),
+                new XAttribute("relativeHeight", image.ZOrderIndex),
                 new XAttribute("behindDoc", behindDoc),
                 new XAttribute("locked", 0),
                 new XAttribute("layoutInCell", 1),

@@ -957,13 +957,24 @@ public sealed class FreeWRibbonParityTests
         zoom.Should().NotBeNull();
         CommandIds(zoom!)
             .Should()
-            .Equal("freew.zoom-dialog", "freew.zoom-100", "freew.zoom-one-page", "freew.zoom-page-width");
+            .Equal("freew.zoom-dialog", "freew.zoom-100", "freew.zoom-one-page", "freew.zoom-page-width",
+                   "freew.zoom-multiple-pages", "freew.zoom-side-to-side");
         Labels(zoom!)
             .Should()
-            .Equal("Zoom", "100%", "One Page", "Page Width");
+            .Equal("Zoom", "100%", "One Page", "Page Width", "Multiple Pages", "Side to Side");
 
-        foreach (var commandId in CommandIds(zoom!))
+        // The four existing zoom commands are backed by the registry built above.
+        foreach (var commandId in new[]
+                 {
+                     "freew.zoom-dialog", "freew.zoom-100", "freew.zoom-one-page", "freew.zoom-page-width"
+                 })
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from View > Zoom");
+        // Multiple Pages and Side to Side are backed only when the host supplies callbacks;
+        // the registry built above has no callbacks for them — they are absent here by design.
+        registry.TryGet("freew.zoom-multiple-pages", out _).Should().BeFalse(
+            "Multiple Pages is absent when the host supplies no callback");
+        registry.TryGet("freew.zoom-side-to-side", out _).Should().BeFalse(
+            "Side to Side is absent when the host supplies no callback");
     }
 
     [StaFact]
@@ -1255,7 +1266,12 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-rotate",
                 "freew.image-align-left",
                 "freew.image-align-center",
-                "freew.image-align-right");
+                "freew.image-align-right",
+                // Phase 2: z-order commands for floating images.
+                "freew.image-bring-to-front",
+                "freew.image-send-to-back",
+                "freew.image-bring-forward",
+                "freew.image-send-backward");
 
         CommandIds(picture.FindGroup("picture-adjust")!)
             .Should()

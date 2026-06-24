@@ -97,6 +97,16 @@ public sealed class DocumentView : RichTextBox
     // AdornerLayer overlay, never part of the FlowDocument content, and recomputed on relayout.
     private LineNumberAdorner? _lineNumberAdorner;
 
+    // Transparent Canvas placed as a sibling in the same Grid cell as this editor by the host
+    // (MainWindow). Floats above the editor so floating images render and hit-test on top of the text.
+    // Null until the host calls SyncFloatingObjectsCanvas for the first time.
+    private Canvas? _floatingCanvas;
+
+    // The floating InlineImage currently "selected" via a click on the overlay canvas.
+    // Null when no floating image is selected. Used by SelectedImage()/SelectedImageLocation() as
+    // a fallback when no inline-image selection exists in the RichTextBox.
+    private InlineImage? _selectedFloatingImage;
+
     private static DropShadowEffect CreatePageShadow()
     {
         var shadow = new DropShadowEffect
@@ -159,6 +169,10 @@ public sealed class DocumentView : RichTextBox
 
         _commands = new DocumentCommandBus(new ViewContext(this));
         _commands.Changed += Render;
+
+        // Clear the floating-image selection when the user clicks within the text body so the inline
+        // selection takes priority and the floating selection does not persist unexpectedly.
+        PreviewMouseLeftButtonDown += (_, _) => { _selectedFloatingImage = null; };
     }
 
     public TextDocument Model => _model;
@@ -1661,7 +1675,10 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, finalHeight));
     }
 
-    /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
+    /// <summary>
+    /// The image targeted by the current selection/caret (inline) or by a floating-image click
+    /// (overlay canvas). Returns null when neither an inline nor a floating image is selected.
+    /// </summary>
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
 
     // ── Chart selection (mirrors SelectedImage / SelectedImageLocation) ──────────────────────────
@@ -3335,7 +3352,8 @@ public sealed class DocumentView : RichTextBox
         return (blockIndex, rowIndex, columnIndex);
     }
 
-    // Locate the model paragraph/run index of the inline image under the selection, plus the image itself.
+    // Locate the model paragraph/run index of the inline image under the selection (or a floating
+    // image clicked on the overlay canvas), plus the image itself.
     private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocation()
     {
         // An InlineUIContainer hosting our tagged Image is the selected picture; find it around the caret.
@@ -3345,10 +3363,19 @@ public sealed class DocumentView : RichTextBox
             ?? ImageInElement(CaretPosition?.Parent as TextElement)
             ?? ImageInElement(Selection.Start.Parent as TextElement)
             ?? ImageInElement(Selection.End.Parent as TextElement);
+
+        // Fall back to the floating image selected by a click on the overlay canvas.
+        // This allows all existing SetSelectedImage* commands (size/position/wrap/rotate/crop/border)
+        // to operate on a floating image without modification.
+        if (image is null)
+            image = _selectedFloatingImage;
+
         if (image is null)
             return (-1, -1, null);
 
-        // Match it back to a top-level model paragraph + run by identity (images embedded in tables are skipped).
+        // Match it back to a top-level model paragraph + run by identity. For a floating image the
+        // run holds only an AnchorMarker (zero-width placeholder), but the Image reference is the same
+        // object, so identity comparison finds it correctly. Images embedded in tables are skipped.
         for (var b = 0; b < _model.Blocks.Count; b++)
         {
             if (_model.Blocks[b] is not ModelParagraph paragraph)
@@ -3535,6 +3562,7 @@ public sealed class DocumentView : RichTextBox
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
         SyncPageGridlinesAdorner();
+        SyncFloatingObjectsCanvas();
     }
 
     /// <summary>
@@ -3967,6 +3995,216 @@ public sealed class DocumentView : RichTextBox
     {
         Loaded -= OnLoadedSyncPageGridlines;
         SyncPageGridlinesAdorner();
+    }
+
+    // ── Floating-image overlay canvas ─────────────────────────────────────────────────────────────
+    // Phase 1: floating images (IsFloating==true) are NOT added to the FlowDocument; instead each
+    // one's run emits a zero-width AnchorMarker run so CommitToModel can round-trip the image object.
+    // The visual is placed on _floatingCanvas, a transparent sibling stacked over the editor in the
+    // same Grid cell (wired by MainWindow). SyncFloatingObjectsCanvas() rebuilds the canvas children
+    // from the model on every Render() and on layout changes. Inline images are UNAFFECTED.
+
+    /// <summary>
+    /// The transparent overlay <see cref="System.Windows.Controls.Canvas"/> that hosts floating-image
+    /// visuals above the editor. The host (MainWindow) places this as a Grid sibling in the same cell
+    /// as this <see cref="DocumentView"/> so it is sized and positioned identically. Returns null
+    /// until the host calls <see cref="SetFloatingCanvas"/> for the first time.
+    /// </summary>
+    public Canvas? FloatingObjectsCanvas => _floatingCanvas;
+
+    /// <summary>
+    /// Called by the host once to supply the overlay canvas that will host floating-image visuals.
+    /// After this call every <see cref="Render"/> and every layout change will keep the canvas in sync
+    /// with the model's floating images (see <see cref="SyncFloatingObjectsCanvas"/>).
+    /// </summary>
+    public void SetFloatingCanvas(Canvas canvas)
+    {
+        _floatingCanvas = canvas;
+        SyncFloatingObjectsCanvas();
+    }
+
+    /// <summary>
+    /// Rebuild the floating-image overlay canvas to match the current model state. Called at the end
+    /// of <see cref="Render"/> and when layout changes. Clears and repopulates the canvas children
+    /// from every floating <see cref="InlineImage"/> in the model, sorted by <see cref="InlineImage.ZOrderIndex"/>.
+    /// Each child element's position is computed from the image's anchor and offset in points (converted
+    /// to DIP via <see cref="PageLayout.DipPerPoint"/>). Inline images are never placed here.
+    /// </summary>
+    internal void SyncFloatingObjectsCanvas()
+    {
+        var canvas = _floatingCanvas;
+        if (canvas is null) return;
+
+        canvas.Children.Clear();
+
+        // Gather all floating images from the model, sorted by z-order.
+        var floating = new List<InlineImage>();
+        foreach (var block in _model.Blocks)
+        {
+            if (block is not ModelParagraph para) continue;
+            foreach (var run in para.Runs)
+            {
+                if (run.Image is { IsFloating: true } img)
+                    floating.Add(img);
+            }
+        }
+        floating.Sort((a, b) => a.ZOrderIndex.CompareTo(b.ZOrderIndex));
+
+        // Page geometry for anchor-relative positioning.
+        var page = _model.Page;
+        var (marginLeft, marginTop, _, _) = PageLayout.MarginsDip(page);
+        var (pageW, _) = PageLayout.PageSizeDip(page);
+        var (contentW, _) = PageLayout.ContentAreaDip(page);
+
+        // In Print Layout the editor padding equals the page margins (set by ApplyPageChrome).
+        // In plain/continuous mode the editor uses a uniform padding (PlainPadding = 48 dip).
+        // We use the same margin values for both modes as a reasonable approximation; exact
+        // positioning in continuous mode is less critical (floating images are rare there).
+        var padLeft = PrintLayoutEnabled ? marginLeft : 48;
+        var padTop = PrintLayoutEnabled ? marginTop : 48;
+
+        foreach (var img in floating)
+        {
+            var visual = BuildFloatingImageVisual(img);
+            // Compute Canvas.Left / Canvas.Top from anchor + offset.
+            var hOffDip = img.HorizontalOffsetPt * PageLayout.DipPerPoint;
+            var vOffDip = img.VerticalOffsetPt * PageLayout.DipPerPoint;
+            double left, top;
+            switch (img.HorizontalAnchor)
+            {
+                case HorizontalAnchor.Page:
+                    left = hOffDip; // relative to page left edge
+                    break;
+                case HorizontalAnchor.Margin:
+                    left = padLeft + hOffDip;
+                    break;
+                default: // Column — same as margin for a single-column document
+                    left = padLeft + hOffDip;
+                    break;
+            }
+            switch (img.VerticalAnchor)
+            {
+                case VerticalAnchor.Page:
+                    top = vOffDip;
+                    break;
+                case VerticalAnchor.Margin:
+                    top = padTop + vOffDip;
+                    break;
+                default: // Paragraph — use margin top as fallback (exact paragraph position would require full layout)
+                    top = padTop + vOffDip;
+                    break;
+            }
+            Canvas.SetLeft(visual, left);
+            Canvas.SetTop(visual, top);
+            canvas.Children.Add(visual);
+        }
+    }
+
+    /// <summary>
+    /// Build the WPF visual for a floating image on the overlay canvas. Re-uses the same crop/
+    /// rotation/flip/border logic as <see cref="BuildImageRun"/> so floating images look identical
+    /// to inline images rendered in the FlowDocument. The root element is tagged with the model image
+    /// so click-selection can recover it.
+    /// </summary>
+    private FrameworkElement BuildFloatingImageVisual(InlineImage image)
+    {
+        var widthPx = image.WidthPt * PxPerPoint;
+        var heightPx = image.HeightPt * PxPerPoint;
+        var source = DecodeImage(image) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+
+        var element = new Image
+        {
+            Source = source,
+            Width = widthPx,
+            Height = heightPx,
+            Stretch = Stretch.Fill,
+            Tag = image
+        };
+        if (!string.IsNullOrEmpty(image.AltText))
+        {
+            element.ToolTip = image.AltText;
+            System.Windows.Automation.AutomationProperties.SetName(element, image.AltText);
+        }
+        if (image.HasCrop)
+        {
+            var clipX = image.CropLeft * widthPx;
+            var clipY = image.CropTop * heightPx;
+            var clipW = (1 - image.CropLeft - image.CropRight) * widthPx;
+            var clipH = (1 - image.CropTop - image.CropBottom) * heightPx;
+            if (clipW > 0 && clipH > 0)
+                element.Clip = new System.Windows.Media.RectangleGeometry(new Rect(clipX, clipY, clipW, clipH));
+        }
+        if (image.RotationAngle != 0 || image.FlipH || image.FlipV)
+        {
+            var group = new System.Windows.Media.TransformGroup();
+            if (image.FlipH || image.FlipV)
+                group.Children.Add(new System.Windows.Media.ScaleTransform(
+                    image.FlipH ? -1 : 1, image.FlipV ? -1 : 1,
+                    widthPx / 2, heightPx / 2));
+            if (image.RotationAngle != 0)
+                group.Children.Add(new System.Windows.Media.RotateTransform(
+                    image.RotationAngle, widthPx / 2, heightPx / 2));
+            element.RenderTransform = group;
+        }
+
+        FrameworkElement root;
+        if (image.HasBorder)
+        {
+            var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
+            var colorHex = image.BorderColorHex!.TrimStart('#');
+            System.Windows.Media.Color borderColor;
+            try { borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex); }
+            catch { borderColor = System.Windows.Media.Colors.Black; }
+            root = new System.Windows.Controls.Border
+            {
+                BorderBrush = new System.Windows.Media.SolidColorBrush(borderColor),
+                BorderThickness = new Thickness(borderWidthPx),
+                Child = element,
+                Width = widthPx + borderWidthPx * 2,
+                Height = heightPx + borderWidthPx * 2,
+                Tag = image
+            };
+        }
+        else
+        {
+            root = element;
+        }
+
+        // Wire click to select this floating image.
+        root.Cursor = Cursors.SizeAll;
+        root.MouseLeftButtonDown += (_, e) =>
+        {
+            SelectFloatingImage(image);
+            e.Handled = true;
+        };
+        return root;
+    }
+
+    /// <summary>
+    /// Select a floating image: set <see cref="_selectedFloatingImage"/> and fire the selection-changed
+    /// path so the Picture Format contextual tab activates. Clears the RichTextBox selection so the
+    /// picture-format commands see no competing inline selection.
+    /// </summary>
+    private void SelectFloatingImage(InlineImage image)
+    {
+        _selectedFloatingImage = image;
+        // Refresh the overlay so the selection highlight can be drawn next cycle.
+        SyncFloatingObjectsCanvas();
+        // Raise SelectionChanged so the host's contextual-tab controller sees the new selection.
+        Focus();
+        RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
+    }
+
+    /// <summary>
+    /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.
+    /// </summary>
+    public void ChangeSelectedImageZOrder(ZOrderOperation operation)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null || !image.IsFloating) return;
+        _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
+        SyncFloatingObjectsCanvas();
     }
 
     /// <summary>
@@ -4403,6 +4641,12 @@ public sealed class DocumentView : RichTextBox
                 break;
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
+                break;
+            case WpfRun { Tag: AnchorMarker anchorMarker }:
+                // A floating image's placeholder run: emit the model image back into the run so the
+                // image object survives CommitToModel → Render cycles without any visible FlowDocument
+                // element. The image is rendered separately on the overlay canvas (SyncFloatingObjectsCanvas).
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = anchorMarker.Image });
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
@@ -4993,7 +5237,14 @@ public sealed class DocumentView : RichTextBox
         var effectSet = DocumentEffectSet.FromTheme(document.Theme);
 
         if (run.Image is { } image)
+        {
+            // Floating images render on the overlay canvas (see SyncFloatingObjectsCanvas), NOT in the
+            // FlowDocument. Emit a zero-width placeholder run tagged with AnchorMarker so CommitToModel
+            // can recover the image object verbatim. Inline images continue to render as InlineUIContainers.
+            if (image.IsFloating)
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(image) };
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
+        }
 
         if (run.Shape is { } shape)
             return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape, effectSet));
@@ -5599,6 +5850,15 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;
+
+    /// <summary>
+    /// Carried on a zero-width WPF run's Tag for a floating image so <see cref="ReadInline"/> can
+    /// round-trip the image object back to the model on <see cref="CommitToModel"/>. The visual is
+    /// NOT added to the FlowDocument — it lives on the overlay <see cref="FloatingObjectsCanvas"/>.
+    /// This mirrors the <see cref="PageBreakMarker"/> placeholder pattern: the run carries model state
+    /// but contributes no visible glyph to the text flow.
+    /// </summary>
+    private sealed record AnchorMarker(InlineImage Image);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged

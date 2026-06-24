@@ -132,6 +132,21 @@ public sealed class MainWindow : Window
     private ToggleButton _webLayoutSwitch = null!;
     private ToggleButton _draftSwitch = null!;
 
+    // Multiple Pages / Side to Side: read-only paginated overlay modes. When active the workspace child
+    // is swapped from the live editor (_workspace.Child = _workspaceGrid) to an embedded DocumentViewer
+    // fed by PrintLayout.BuildPaginatedSource. Re-entering Print Layout / Web Layout / Draft restores the
+    // editor. The two modes are mutually exclusive; Side to Side forces 2 pages across.
+    private bool _multiplePagesMode;
+    private bool _sideToSideMode;
+    private DocumentViewer? _paginatedViewer;     // the overlay DocumentViewer (non-null while active)
+    private UIElement? _workspaceGridChild;        // saved workspace child so restore is reversible
+
+    // Split Window: a GridSplitter divides the workspace into a top live-editor pane and a bottom
+    // read-only FlowDocumentScrollViewer snapshot. Toggling off restores the single editor.
+    private bool _splitWindowMode;
+    private Grid? _splitGrid;                      // the split host grid (non-null while active)
+    private System.Windows.Threading.DispatcherTimer? _splitDebounceTimer; // ~300 ms refresh gate
+
     // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
     // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
@@ -213,6 +228,12 @@ public sealed class MainWindow : Window
             onFindReplace: OpenFindReplace,
             onToggleRuler: ToggleRulers,
             isRulerVisible: () => _rulersVisible,
+            onToggleMultiplePages: ToggleMultiplePages,
+            isMultiplePagesActive: () => _multiplePagesMode,
+            onToggleSideToSide: ToggleSideToSide,
+            isSideToSideActive: () => _sideToSideMode,
+            onToggleSplitWindow: ToggleSplitWindow,
+            isSplitWindowActive: () => _splitWindowMode,
             onHelpOnline: () => OpenExternalHelpLink(FreeWAppInfo.HelpUrl, "Help Online"),
             onFeedback: () => OpenExternalHelpLink(FreeWAppInfo.FeedbackUrl, "Feedback"),
             onCopyDiagnostics: CopyDiagnostics,
@@ -220,7 +241,17 @@ public sealed class MainWindow : Window
             onAbout: ShowAboutDialog,
             onLegalNotices: ShowLegalNoticesDialog);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
-        editor.TextChanged += (_, _) => { _file.MarkDirty(); UpdateCounts(); RefreshOutline(); RefreshContextualTabs(); RefreshReviewPane(); };
+        editor.TextChanged += (_, _) =>
+        {
+            _file.MarkDirty();
+            UpdateCounts();
+            RefreshOutline();
+            RefreshContextualTabs();
+            RefreshReviewPane();
+            // Debounced refresh of the split-window snapshot pane (~300 ms), so rapid keystrokes
+            // don't re-paginate on every character. No-op when the split pane is not open.
+            ScheduleSplitPaneRefresh();
+        };
         // Live selection stats: when the caret/selection moves, refresh the status-bar counts so a
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
@@ -305,9 +336,24 @@ public sealed class MainWindow : Window
         workspaceGrid.Children.Add(_vRuler);
         ApplyRulerVisibility();
 
-        Grid.SetRow(editor, 1);
-        Grid.SetColumn(editor, 1);
-        workspaceGrid.Children.Add(editor);
+        // Phase 1: floating-image overlay canvas. Host the editor and a transparent sibling Canvas in
+        // the same Grid cell (row 1, col 1) so the canvas sits on top of the editor at the same size
+        // and position. The canvas is transparent and IsHitTestVisible=true only on its image children.
+        // This is the MINIMAL layout change: we wrap both into a single Grid that lives in the cell,
+        // leaving the surrounding workspaceGrid / workspace Border structure completely untouched.
+        var editorOverlayHost = new Grid();
+        var floatingCanvas = new Canvas
+        {
+            IsHitTestVisible = true,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+        editorOverlayHost.Children.Add(editor);
+        editorOverlayHost.Children.Add(floatingCanvas);
+        editor.SetFloatingCanvas(floatingCanvas);
+
+        Grid.SetRow(editorOverlayHost, 1);
+        Grid.SetColumn(editorOverlayHost, 1);
+        workspaceGrid.Children.Add(editorOverlayHost);
 
         _workspace = new Border
         {
@@ -1392,6 +1438,11 @@ public sealed class MainWindow : Window
         if (_outlineMode)
             ToggleOutlineView();
 
+        // Multiple Pages / Side to Side overlay the workspace child with a read-only DocumentViewer;
+        // switching back to any live editor mode must restore the workspaceGrid first.
+        if (_multiplePagesMode || _sideToSideMode)
+            ExitPaginatedView();
+
         _editor.SetViewMode(mode);
         RefreshViewModeChecks();
     }
@@ -1446,6 +1497,259 @@ public sealed class MainWindow : Window
         // Outline and the print-family views are mutually exclusive: entering Outline clears the Print
         // Layout / Web Layout / Draft checks, and leaving it re-checks whichever the editor is still in.
         RefreshViewModeChecks();
+    }
+
+    // ── Multiple Pages / Side to Side ────────────────────────────────────────────────────────────
+    // Both modes build a read-only DocumentViewer fed by PrintLayout.BuildPaginatedSource and swap
+    // the workspace child from the live workspaceGrid to that viewer. Re-entering any print-family
+    // view mode (Print Layout / Web Layout / Draft) restores the live editor via ExitPaginatedView.
+    // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
+
+    /// <summary>
+    /// Enters (or exits) the Multiple Pages paginated overlay. Commits the editor to the model first so
+    /// the viewer reflects the latest content, then swaps the workspace child from the workspaceGrid to
+    /// a full-window <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>.
+    /// </summary>
+    private void ToggleMultiplePages()
+    {
+        if (_multiplePagesMode)
+        {
+            ExitPaginatedView();
+            return;
+        }
+
+        // Side to Side and Multiple Pages are mutually exclusive.
+        if (_sideToSideMode)
+            ExitPaginatedView();
+
+        _multiplePagesMode = true;
+        EnterPaginatedView(pagesAcross: 0); // 0 = DocumentViewer default layout
+        _stateStore.SetChecked("freew.zoom-multiple-pages", true);
+        _stateStore.SetChecked("freew.zoom-side-to-side", false);
+    }
+
+    /// <summary>
+    /// Enters (or exits) the Side to Side paginated overlay — same as Multiple Pages but the viewer
+    /// is zoomed to show 2 pages across, emulating Word's side-by-side page movement.
+    /// </summary>
+    private void ToggleSideToSide()
+    {
+        if (_sideToSideMode)
+        {
+            ExitPaginatedView();
+            return;
+        }
+
+        // Multiple Pages and Side to Side are mutually exclusive.
+        if (_multiplePagesMode)
+            ExitPaginatedView();
+
+        _sideToSideMode = true;
+        EnterPaginatedView(pagesAcross: 2);
+        _stateStore.SetChecked("freew.zoom-multiple-pages", false);
+        _stateStore.SetChecked("freew.zoom-side-to-side", true);
+    }
+
+    /// <summary>
+    /// Builds a <see cref="DocumentViewer"/> backed by <see cref="PrintLayout.BuildPaginatedSource"/>
+    /// and swaps it in as the workspace child, hiding the live workspaceGrid. The editor is committed to
+    /// the model first so the view reflects the latest content. <paramref name="pagesAcross"/> = 2 gives
+    /// Side-to-Side layout; 0 leaves the DocumentViewer at its default (all pages in one column).
+    /// </summary>
+    private void EnterPaginatedView(int pagesAcross)
+    {
+        // Commit so the paginated view reflects the latest edits.
+        _editor.CommitToModel();
+
+        var source = PrintLayout.BuildPaginatedSource(_editor);
+
+        var viewer = new DocumentViewer
+        {
+            Document = source
+        };
+
+        // For Side to Side: apply a zoom factor that fits 2 pages side-by-side in the current viewport.
+        // DocumentViewer exposes no explicit "pages across" property — we approximate it by halving the
+        // page-width zoom factor so both pages are simultaneously visible in the viewport.
+        if (pagesAcross == 2)
+        {
+            var (pageWidthFactor, _, _) = ComputeZoomFitFactors();
+            viewer.Zoom = Math.Max(10, pageWidthFactor * 50); // half of page-width so 2 pages fit
+        }
+
+        // Save the current workspace child so ExitPaginatedView can restore it.
+        _workspaceGridChild = _workspace.Child;
+        _workspace.Child = viewer;
+        _paginatedViewer = viewer;
+    }
+
+    /// <summary>
+    /// Restores the live workspaceGrid as the workspace child, dismissing the paginated overlay and
+    /// clearing both the Multiple Pages and Side to Side flags.
+    /// </summary>
+    private void ExitPaginatedView()
+    {
+        if (_workspaceGridChild is not null)
+            _workspace.Child = _workspaceGridChild;
+
+        _paginatedViewer = null;
+        _workspaceGridChild = null;
+        _multiplePagesMode = false;
+        _sideToSideMode = false;
+        _stateStore.SetChecked("freew.zoom-multiple-pages", false);
+        _stateStore.SetChecked("freew.zoom-side-to-side", false);
+    }
+
+    // ── Split Window ─────────────────────────────────────────────────────────────────────────────
+    // Split divides the workspace border into a top pane (the live workspaceGrid + editor) and a
+    // bottom read-only FlowDocumentScrollViewer snapshot built from PrintLayout.BuildPaginatedDocument.
+    // The snapshot is refreshed on TextChanged with a ~300 ms debounce so rapid keystrokes don't
+    // re-paginate on every character. Toggling off removes the splitter and restores the single editor.
+
+    /// <summary>
+    /// Toggles the split-window view. When entering, replaces the workspace child with a Grid that
+    /// contains the original workspaceGrid (top), a <see cref="GridSplitter"/> (middle), and a read-only
+    /// <see cref="FlowDocumentScrollViewer"/> snapshot (bottom). When exiting, restores the original child.
+    /// </summary>
+    private void ToggleSplitWindow()
+    {
+        if (_splitWindowMode)
+        {
+            ExitSplitView();
+            return;
+        }
+
+        _splitWindowMode = true;
+
+        // Commit so the initial snapshot reflects the latest edits.
+        _editor.CommitToModel();
+
+        // Save the original child (the workspaceGrid) so ExitSplitView can restore it.
+        var originalChild = _workspace.Child;
+
+        var splitGrid = new Grid();
+        splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(4) });           // splitter
+        splitGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        // Top pane: the live workspaceGrid (editor + rulers), detached from _workspace first.
+        _workspace.Child = null;
+        Grid.SetRow(originalChild, 0);
+        splitGrid.Children.Add(originalChild);
+
+        // Splitter: horizontal, resizes top and bottom rows.
+        var splitter = new GridSplitter
+        {
+            Height = 4,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+            Background = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
+            ResizeDirection = GridResizeDirection.Rows,
+            ShowsPreview = false
+        };
+        Grid.SetRow(splitter, 1);
+        splitGrid.Children.Add(splitter);
+
+        // Bottom pane: a read-only snapshot built from the paginator.
+        var snapshotViewer = BuildSplitSnapshot();
+        Grid.SetRow(snapshotViewer, 2);
+        splitGrid.Children.Add(snapshotViewer);
+
+        _splitGrid = splitGrid;
+        _workspace.Child = splitGrid;
+
+        _stateStore.SetChecked("freew.split-window", true);
+    }
+
+    /// <summary>
+    /// Builds the initial read-only snapshot <see cref="FlowDocumentScrollViewer"/> for the split-window
+    /// bottom pane, fed by <see cref="PrintLayout.BuildPaginatedDocument"/>.
+    /// </summary>
+    private FlowDocumentScrollViewer BuildSplitSnapshot()
+    {
+        var doc = PrintLayout.BuildPaginatedDocument(_editor);
+        var viewer = new FlowDocumentScrollViewer
+        {
+            Document = doc,
+            IsSelectionEnabled = false,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        return viewer;
+    }
+
+    /// <summary>
+    /// Exits the split-window view, restoring the original workspace child (the workspaceGrid + editor).
+    /// </summary>
+    private void ExitSplitView()
+    {
+        if (_splitGrid is null)
+        {
+            _splitWindowMode = false;
+            _stateStore.SetChecked("freew.split-window", false);
+            return;
+        }
+
+        // The original workspaceGrid is the first child (row 0) of _splitGrid.
+        var originalChild = _splitGrid.Children[0] as UIElement;
+        _splitGrid.Children.Clear();
+        _workspace.Child = originalChild;
+
+        _splitGrid = null;
+        _splitWindowMode = false;
+
+        // Stop the debounce timer if it is still running.
+        _splitDebounceTimer?.Stop();
+        _splitDebounceTimer = null;
+
+        _stateStore.SetChecked("freew.split-window", false);
+    }
+
+    /// <summary>
+    /// Arms a one-shot ~300 ms timer to refresh the split-window snapshot. Resets the timer on every
+    /// call so rapid keystrokes collapse into a single rebuild at the end of the burst. No-op when the
+    /// split pane is not active.
+    /// </summary>
+    private void ScheduleSplitPaneRefresh()
+    {
+        if (!_splitWindowMode || _splitGrid is null)
+            return;
+
+        // Restart the debounce timer on every TextChanged.
+        if (_splitDebounceTimer is null)
+        {
+            _splitDebounceTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = System.TimeSpan.FromMilliseconds(300)
+            };
+            _splitDebounceTimer.Tick += (_, _) =>
+            {
+                _splitDebounceTimer.Stop();
+                RefreshSplitSnapshot();
+            };
+        }
+        else
+        {
+            _splitDebounceTimer.Stop();
+        }
+
+        _splitDebounceTimer.Start();
+    }
+
+    /// <summary>
+    /// Rebuilds the split-window snapshot pane from the latest committed content. Called after the
+    /// debounce delay so the snapshot reflects the most recent edits without lagging the editor.
+    /// </summary>
+    private void RefreshSplitSnapshot()
+    {
+        if (!_splitWindowMode || _splitGrid is null || _splitGrid.Children.Count < 3)
+            return;
+
+        _editor.CommitToModel();
+        var newDoc = PrintLayout.BuildPaginatedDocument(_editor);
+
+        if (_splitGrid.Children[2] is FlowDocumentScrollViewer viewer)
+            viewer.Document = newDoc;
     }
 
     // Recompute the heading outline from the editor's committed model and repopulate the nav list.

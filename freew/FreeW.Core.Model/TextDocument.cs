@@ -212,6 +212,13 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// <summary>The frame the vertical offset is measured from (<c>wp:positionV/@relativeFrom</c>).</summary>
     public VerticalAnchor VerticalAnchor { get; set; } = VerticalAnchor.Paragraph;
 
+    /// <summary>
+    /// Z-order index for a floating image (<c>wp:anchor/@relativeHeight</c>). Higher values place the
+    /// image in front of lower-indexed images. Defaults to 0. Ignored for inline images. Maps directly
+    /// to the OOXML <c>relativeHeight</c> attribute; the overlay canvas sorts children by this value.
+    /// </summary>
+    public int ZOrderIndex { get; set; }
+
     // ── Rotate / Flip ─────────────────────────────────────────────────────────────────────────────────
     // Round-trips through a:xfrm @rot (EMU angles: degrees × 60000) and @flipH/@flipV.
 
