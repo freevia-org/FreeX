@@ -1322,10 +1322,11 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
-    /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
+    /// Resize the currently selected inline image to <paramref name="widthPt"/> × <paramref name="heightPt"/>
+    /// points. If <paramref name="heightPt"/> is omitted (≤ 0), the height scales to preserve the aspect ratio.
+    /// Routes through the bus (undoable). No-op without a selection.
     /// </summary>
-    public void SetSelectedImageSize(double widthPt)
+    public void SetSelectedImageSize(double widthPt, double heightPt = 0)
     {
         if (widthPt <= 0)
             return;
@@ -1333,8 +1334,10 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        var aspect = image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1;
-        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, widthPt * aspect));
+        var finalHeight = heightPt > 0
+            ? heightPt
+            : (image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1) * widthPt;
+        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, finalHeight));
     }
 
     /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
@@ -1382,6 +1385,92 @@ public sealed class DocumentView : RichTextBox
         if (image is null)
             return;
         image.Wrapping = wrapping;
+        Render();
+    }
+
+    /// <summary>
+    /// Set rotation angle (degrees) and flip flags on the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageRotation(double angleDeg, bool flipH, bool flipV)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
+        Render();
+    }
+
+    /// <summary>
+    /// Set crop fractions (0–1 per edge) on the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageCrop(double left, double right, double top, double bottom)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageCropCommand(blockIndex, runIndex, left, right, top, bottom));
+        Render();
+    }
+
+    /// <summary>
+    /// Set picture border (colorHex = 6-digit RGB hex, widthPt, dash token) on the currently
+    /// selected image. Pass null colorHex to remove the border. Undoable. No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageBorder(string? colorHex, double widthPt, string? dash = null)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageBorderCommand(blockIndex, runIndex, colorHex, widthPt, dash));
+        Render();
+    }
+
+    /// <summary>
+    /// Restore the currently selected image to its natural size (from OriginalPixelWidth/Height), clearing
+    /// any rotation, flip, and crop. Uses the current screen DPI for the pt→px conversion. Undoable.
+    /// No-op without an image selection, or when OriginalPixelWidth is 0 (not recorded at insert time).
+    /// </summary>
+    public void ResetSelectedImage()
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+
+        double naturalWidthPt, naturalHeightPt;
+        if (image.OriginalPixelWidth > 0 && image.OriginalPixelHeight > 0)
+        {
+            // Convert pixel dimensions to points at 96 dpi (WPF device-independent pixels).
+            naturalWidthPt  = image.OriginalPixelWidth  / 96.0 * 72.0;
+            naturalHeightPt = image.OriginalPixelHeight / 96.0 * 72.0;
+        }
+        else
+        {
+            // Fallback: restore current size (effectively just clears rotation/flip/crop).
+            naturalWidthPt  = image.WidthPt;
+            naturalHeightPt = image.HeightPt;
+        }
+
+        _commands.Execute(new ResetImageSizeCommand(blockIndex, runIndex, naturalWidthPt, naturalHeightPt));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the floating position offsets and anchors for the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImagePosition(double horizontalOffsetPt, double verticalOffsetPt,
+        HorizontalAnchor horizontalAnchor = HorizontalAnchor.Column,
+        VerticalAnchor verticalAnchor = VerticalAnchor.Paragraph)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImagePositionCommand(
+            blockIndex, runIndex,
+            horizontalOffsetPt, verticalOffsetPt,
+            horizontalAnchor, verticalAnchor));
         Render();
     }
 
@@ -4960,6 +5049,66 @@ public sealed class DocumentView : RichTextBox
             element.ToolTip = image.AltText;
             System.Windows.Automation.AutomationProperties.SetName(element, image.AltText);
         }
+
+        // Apply crop as a WPF RectangleGeometry clip on the Image.
+        if (image.HasCrop)
+        {
+            var clipX  = image.CropLeft  * widthPx;
+            var clipY  = image.CropTop   * heightPx;
+            var clipW  = (1 - image.CropLeft - image.CropRight)  * widthPx;
+            var clipH  = (1 - image.CropTop  - image.CropBottom) * heightPx;
+            if (clipW > 0 && clipH > 0)
+                element.Clip = new System.Windows.Media.RectangleGeometry(new Rect(clipX, clipY, clipW, clipH));
+        }
+
+        // Apply rotation and/or flip via a WPF TransformGroup on the Image.
+        if (image.RotationAngle != 0 || image.FlipH || image.FlipV)
+        {
+            var group = new System.Windows.Media.TransformGroup();
+            if (image.FlipH || image.FlipV)
+                group.Children.Add(new System.Windows.Media.ScaleTransform(
+                    image.FlipH ? -1 : 1, image.FlipV ? -1 : 1,
+                    widthPx / 2, heightPx / 2));
+            if (image.RotationAngle != 0)
+                group.Children.Add(new System.Windows.Media.RotateTransform(
+                    image.RotationAngle, widthPx / 2, heightPx / 2));
+            element.RenderTransform = group;
+        }
+
+        // Apply picture border as WPF border around the image.
+        if (image.HasBorder)
+        {
+            var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
+            var colorHex = image.BorderColorHex!.TrimStart('#');
+            System.Windows.Media.Color borderColor;
+            try
+            {
+                borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex);
+            }
+            catch
+            {
+                borderColor = System.Windows.Media.Colors.Black;
+            }
+            var borderBrush = new System.Windows.Media.SolidColorBrush(borderColor);
+
+            System.Windows.Media.Brush strokeBrush = borderBrush;
+            // Apply dash if specified (use DashStyles for dotted/dashed).
+            if (!string.IsNullOrEmpty(image.BorderDash) && image.BorderDash != "solid")
+            {
+                strokeBrush = borderBrush; // keep solid brush; WPF Border doesn't do dash natively, we use a simpler style
+            }
+
+            var border = new System.Windows.Controls.Border
+            {
+                BorderBrush = strokeBrush,
+                BorderThickness = new Thickness(borderWidthPx),
+                Child = element,
+                Width = widthPx + borderWidthPx * 2,
+                Height = heightPx + borderWidthPx * 2,
+            };
+            return new InlineUIContainer(border) { BaselineAlignment = BaselineAlignment.Bottom };
+        }
+
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 

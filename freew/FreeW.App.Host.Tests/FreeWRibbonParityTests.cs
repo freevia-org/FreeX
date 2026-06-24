@@ -1074,11 +1074,24 @@ public sealed class FreeWRibbonParityTests
         picture.Context.Color.Should().Be(RibbonContextColor.Orange);
         picture.Groups.Select(group => group.Id)
             .Should()
-            .Equal("picture-arrange", "picture-size");
+            .Equal("picture-arrange", "picture-adjust", "picture-size");
 
         CommandIds(picture.FindGroup("picture-arrange")!)
             .Should()
-            .Equal("freew.image-wrap", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right");
+            .Equal(
+                "freew.image-wrap",
+                "freew.image-position",
+                "freew.image-rotate",
+                "freew.image-align-left",
+                "freew.image-align-center",
+                "freew.image-align-right");
+
+        CommandIds(picture.FindGroup("picture-adjust")!)
+            .Should()
+            .Equal(
+                "freew.image-crop",
+                "freew.image-reset",
+                "freew.image-border");
 
         var wrap = picture.FindGroup("picture-arrange")!.Controls
             .OfType<RibbonDropdown>()
@@ -1095,9 +1108,22 @@ public sealed class FreeWRibbonParityTests
                 ("freew.image-wrap-behind", "Behind Text"),
                 ("freew.image-wrap-front", "In Front of Text"));
 
-        foreach (var commandId in MenuCommandIds(wrap).Concat(CommandIds(picture)))
+        var rotate = picture.FindGroup("picture-arrange")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.image-rotate");
+        rotate.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal(
+                "freew.image-rotate-right90",
+                "freew.image-rotate-left90",
+                "freew.image-flip-vertical",
+                "freew.image-flip-horizontal");
+
+        foreach (var commandId in MenuCommandIds(wrap).Concat(MenuCommandIds(rotate)).Concat(CommandIds(picture)))
         {
-            if (commandId == "freew.image-wrap")
+            if (commandId is "freew.image-wrap" or "freew.image-rotate")
                 continue;
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Picture Format");
         }

@@ -597,6 +597,178 @@ public sealed class SetImageSizeCommand(int paragraphIndex, int runIndex, double
 }
 
 /// <summary>
+/// Set the rotation angle and flip flags on the inline image at the given paragraph/run indices,
+/// snapshotting prior values for undo.
+/// </summary>
+public sealed class SetImageRotationCommand(int paragraphIndex, int runIndex, double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+{
+    private double _prevAngle;
+    private bool _prevFlipH, _prevFlipV;
+    private bool _applied;
+
+    public string Label => "Rotate/Flip Image";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevAngle = image.RotationAngle; _prevFlipH = image.FlipH; _prevFlipV = image.FlipV;
+        image.RotationAngle = angleDeg; image.FlipH = flipH; image.FlipV = flipV;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.RotationAngle = _prevAngle; image.FlipH = _prevFlipH; image.FlipV = _prevFlipV;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set crop fractions (0–1 per edge) on the inline image at the given paragraph/run indices,
+/// snapshotting prior values for undo.
+/// </summary>
+public sealed class SetImageCropCommand(int paragraphIndex, int runIndex, double left, double right, double top, double bottom) : IDocumentCommand
+{
+    private double _pl, _pr, _pt, _pb;
+    private bool _applied;
+
+    public string Label => "Crop Image";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _pl = image.CropLeft; _pr = image.CropRight; _pt = image.CropTop; _pb = image.CropBottom;
+        image.CropLeft = left; image.CropRight = right; image.CropTop = top; image.CropBottom = bottom;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.CropLeft = _pl; image.CropRight = _pr; image.CropTop = _pt; image.CropBottom = _pb;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set picture border (color hex, width in points, dash token) on the inline image at the given
+/// paragraph/run indices, snapshotting prior values for undo. Pass null colorHex to remove the border.
+/// </summary>
+public sealed class SetImageBorderCommand(int paragraphIndex, int runIndex, string? colorHex, double widthPt, string? dash) : IDocumentCommand
+{
+    private string? _prevColor;
+    private double _prevWidth;
+    private string? _prevDash;
+    private bool _applied;
+
+    public string Label => "Picture Border";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevColor = image.BorderColorHex; _prevWidth = image.BorderWidthPt; _prevDash = image.BorderDash;
+        image.BorderColorHex = colorHex; image.BorderWidthPt = widthPt; image.BorderDash = dash;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.BorderColorHex = _prevColor; image.BorderWidthPt = _prevWidth; image.BorderDash = _prevDash;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Restore an inline image to its natural size (computed from OriginalPixelWidth/Height at the given
+/// screen DPI) and clear any rotation, flip, and crop. Snaps all prior values for undo.
+/// </summary>
+public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, double naturalWidthPt, double naturalHeightPt) : IDocumentCommand
+{
+    private double _pw, _ph, _prevAngle;
+    private bool _prevFlipH, _prevFlipV;
+    private double _pl, _pr, _pt, _pb;
+    private bool _applied;
+
+    public string Label => "Reset Picture";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _pw = image.WidthPt; _ph = image.HeightPt;
+        _prevAngle = image.RotationAngle; _prevFlipH = image.FlipH; _prevFlipV = image.FlipV;
+        _pl = image.CropLeft; _pr = image.CropRight; _pt = image.CropTop; _pb = image.CropBottom;
+        image.WidthPt = naturalWidthPt; image.HeightPt = naturalHeightPt;
+        image.RotationAngle = 0; image.FlipH = false; image.FlipV = false;
+        image.CropLeft = image.CropRight = image.CropTop = image.CropBottom = 0;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.WidthPt = _pw; image.HeightPt = _ph;
+        image.RotationAngle = _prevAngle; image.FlipH = _prevFlipH; image.FlipV = _prevFlipV;
+        image.CropLeft = _pl; image.CropRight = _pr; image.CropTop = _pt; image.CropBottom = _pb;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set the floating position offsets and anchors for an inline image, snapshotting prior values for undo.
+/// </summary>
+public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
+    double horizontalOffsetPt, double verticalOffsetPt,
+    HorizontalAnchor horizontalAnchor, VerticalAnchor verticalAnchor) : IDocumentCommand
+{
+    private double _ph, _pv;
+    private HorizontalAnchor _pha;
+    private VerticalAnchor _pva;
+    private bool _applied;
+
+    public string Label => "Set Image Position";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _ph = image.HorizontalOffsetPt; _pv = image.VerticalOffsetPt;
+        _pha = image.HorizontalAnchor; _pva = image.VerticalAnchor;
+        image.HorizontalOffsetPt = horizontalOffsetPt; image.VerticalOffsetPt = verticalOffsetPt;
+        image.HorizontalAnchor = horizontalAnchor; image.VerticalAnchor = verticalAnchor;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.HorizontalOffsetPt = _ph; image.VerticalOffsetPt = _pv;
+        image.HorizontalAnchor = _pha; image.VerticalAnchor = _pva;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
 /// Apply a formatting transform to every run in a paragraph (e.g. toggle bold), snapshotting
 /// each run's prior formatting. The building block the ribbon will call for selection-wide format.
 /// </summary>

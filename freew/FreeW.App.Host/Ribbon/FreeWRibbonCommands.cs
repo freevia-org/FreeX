@@ -247,6 +247,17 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-wrap-top-bottom", new ImageWrapCommand(editor, ImageWrapping.TopAndBottom));
         registry.Register("freew.image-wrap-behind", new ImageWrapCommand(editor, ImageWrapping.Behind));
         registry.Register("freew.image-wrap-front", new ImageWrapCommand(editor, ImageWrapping.InFront));
+        // Picture Format tab — Arrange > Rotate / Flip.
+        registry.Register("freew.image-rotate-right90", new ImageRotateStepCommand(editor, +90));
+        registry.Register("freew.image-rotate-left90",  new ImageRotateStepCommand(editor, -90));
+        registry.Register("freew.image-flip-vertical",  new ImageFlipCommand(editor, vertical: true));
+        registry.Register("freew.image-flip-horizontal",new ImageFlipCommand(editor, vertical: false));
+        // Picture Format tab — Arrange > Position.
+        registry.Register("freew.image-position", new ImagePositionCommand(editor));
+        // Picture Format tab — Adjust > Crop / Reset / Border.
+        registry.Register("freew.image-crop",   new ImageCropCommand(editor));
+        registry.Register("freew.image-reset",  new ImageResetCommand(editor));
+        registry.Register("freew.image-border", new ImageBorderCommand(editor));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -2109,14 +2120,21 @@ internal static class FreeWRibbonCommands
             encoder.Save(buffer);
 
             // Convert device-independent pixels to points, capping the width so large photos fit.
-            var widthPt = source.PixelWidth / PxPerPoint;
-            var heightPt = source.PixelHeight / PxPerPoint;
+            var origPxW = source.PixelWidth;
+            var origPxH = source.PixelHeight;
+            var widthPt = origPxW / PxPerPoint;
+            var heightPt = origPxH / PxPerPoint;
             if (widthPt > MaxWidthPt && widthPt > 0)
             {
                 heightPt *= MaxWidthPt / widthPt;
                 widthPt = MaxWidthPt;
             }
-            return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+            // Store original pixel dimensions so Reset Size can restore the 100% natural size.
+            return new InlineImage(buffer.ToArray(), widthPt, heightPt)
+            {
+                OriginalPixelWidth  = origPxW,
+                OriginalPixelHeight = origPxH,
+            };
         }
     }
 
@@ -2185,8 +2203,8 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt) is { } widthPt)
-                editor.SetSelectedImageSize(widthPt);
+            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt, image.HeightPt) is { } size)
+                editor.SetSelectedImageSize(size.Width, size.Height);
         }
     }
 
@@ -2247,6 +2265,118 @@ internal static class FreeWRibbonCommands
             }
 
             editor.SetSelectedImageWrapping(wrapping);
+        }
+    }
+
+    // Picture Format > Arrange > Rotate: rotate the selected image by a fixed step (relative to current).
+    private sealed class ImageRotateStepCommand(DocumentView editor, double stepDeg) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Rotate");
+                return;
+            }
+            var newAngle = (image.RotationAngle + stepDeg + 360) % 360;
+            editor.SetSelectedImageRotation(newAngle, image.FlipH, image.FlipV);
+        }
+    }
+
+    // Picture Format > Arrange > Flip Vertical / Flip Horizontal.
+    private sealed class ImageFlipCommand(DocumentView editor, bool vertical) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Flip");
+                return;
+            }
+            if (vertical)
+                editor.SetSelectedImageRotation(image.RotationAngle, image.FlipH, !image.FlipV);
+            else
+                editor.SetSelectedImageRotation(image.RotationAngle, !image.FlipH, image.FlipV);
+        }
+    }
+
+    // Picture Format > Arrange > Position: open the position dialog for floating offset + anchors.
+    private sealed class ImagePositionCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Position");
+                return;
+            }
+            var result = ImagePositionDialog.Prompt(
+                Window.GetWindow(editor),
+                image.HorizontalOffsetPt, image.VerticalOffsetPt,
+                image.HorizontalAnchor, image.VerticalAnchor);
+            if (result is { } r)
+                editor.SetSelectedImagePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
+        }
+    }
+
+    // Picture Format > Adjust > Crop: open the numeric crop dialog.
+    private sealed class ImageCropCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Crop");
+                return;
+            }
+            var result = ImageCropDialog.Prompt(
+                Window.GetWindow(editor),
+                image.CropLeft, image.CropRight, image.CropTop, image.CropBottom);
+            if (result is { } r)
+                editor.SetSelectedImageCrop(r.Left, r.Right, r.Top, r.Bottom);
+        }
+    }
+
+    // Picture Format > Adjust > Reset Picture: restore natural size, clear rotation/flip/crop.
+    private sealed class ImageResetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Reset Picture");
+                return;
+            }
+            editor.ResetSelectedImage();
+        }
+    }
+
+    // Picture Format > Adjust > Picture Border: open the border color/width/dash dialog.
+    private sealed class ImageBorderCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Border");
+                return;
+            }
+            var result = ImageBorderDialog.Prompt(
+                Window.GetWindow(editor),
+                image.BorderColorHex, image.BorderWidthPt, image.BorderDash);
+            if (result is { } r)
+                editor.SetSelectedImageBorder(r.Color, r.Width, r.Dash);
         }
     }
 

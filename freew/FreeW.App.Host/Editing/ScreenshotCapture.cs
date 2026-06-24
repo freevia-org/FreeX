@@ -56,7 +56,11 @@ internal static class ScreenshotCapture
             widthPt = MaxWidthPt;
         }
 
-        return new InlineImage(pngBytes, widthPt, heightPt, FreeW.Core.Model.ImageFormat.Png);
+        return new InlineImage(pngBytes, widthPt, heightPt, FreeW.Core.Model.ImageFormat.Png)
+        {
+            OriginalPixelWidth  = pixelWidth,
+            OriginalPixelHeight = pixelHeight,
+        };
     }
 
     /// <summary>

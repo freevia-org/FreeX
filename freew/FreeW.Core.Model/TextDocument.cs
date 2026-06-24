@@ -211,6 +211,78 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
 
     /// <summary>The frame the vertical offset is measured from (<c>wp:positionV/@relativeFrom</c>).</summary>
     public VerticalAnchor VerticalAnchor { get; set; } = VerticalAnchor.Paragraph;
+
+    // ── Rotate / Flip ─────────────────────────────────────────────────────────────────────────────────
+    // Round-trips through a:xfrm @rot (EMU angles: degrees × 60000) and @flipH/@flipV.
+
+    /// <summary>
+    /// Clockwise rotation in degrees (0–359). Stored as-authored; writer emits as the DrawingML
+    /// <c>a:xfrm/@rot</c> attribute (degrees × 60 000 = EMU angle). Defaults to 0 (no rotation).
+    /// </summary>
+    public double RotationAngle { get; set; }
+
+    /// <summary>Mirror the image horizontally (<c>a:xfrm/@flipH="1"</c>). Defaults to false.</summary>
+    public bool FlipH { get; set; }
+
+    /// <summary>Mirror the image vertically (<c>a:xfrm/@flipV="1"</c>). Defaults to false.</summary>
+    public bool FlipV { get; set; }
+
+    // ── Crop ──────────────────────────────────────────────────────────────────────────────────────────
+    // Fractions (0–1) of the original image width/height to remove from each edge.
+    // Writer emits as a:srcRect percentages (×100000 integer = percentage × 1000).
+
+    /// <summary>Fraction of image width to crop from the left edge (0 = no crop). Round-trips as <c>a:srcRect/@l</c>.</summary>
+    public double CropLeft { get; set; }
+    /// <summary>Fraction of image width to crop from the right edge (0 = no crop). Round-trips as <c>a:srcRect/@r</c>.</summary>
+    public double CropRight { get; set; }
+    /// <summary>Fraction of image height to crop from the top edge (0 = no crop). Round-trips as <c>a:srcRect/@t</c>.</summary>
+    public double CropTop { get; set; }
+    /// <summary>Fraction of image height to crop from the bottom edge (0 = no crop). Round-trips as <c>a:srcRect/@b</c>.</summary>
+    public double CropBottom { get; set; }
+
+    /// <summary>True when any crop fraction is non-zero.</summary>
+    public bool HasCrop => CropLeft != 0 || CropRight != 0 || CropTop != 0 || CropBottom != 0;
+
+    // ── Picture Border ────────────────────────────────────────────────────────────────────────────────
+    // Round-trips through pic:spPr/a:ln: line width (@w in EMU) + solid fill (a:solidFill/a:srgbClr)
+    // + dash preset (a:prstDash/@val). Null color = no border.
+
+    /// <summary>
+    /// Border line color in 6-digit hex RGB (e.g. "FF0000" for red), or null/empty for no border.
+    /// Round-trips as <c>a:solidFill/a:srgbClr/@val</c> inside <c>a:ln</c>.
+    /// </summary>
+    public string? BorderColorHex { get; set; }
+
+    /// <summary>
+    /// Border line width in points (e.g. 0.75 = ¾ pt = 9525 EMU). Round-trips as <c>a:ln/@w</c>.
+    /// Defaults to 0.75 pt when a border color is set and this is 0.
+    /// </summary>
+    public double BorderWidthPt { get; set; }
+
+    /// <summary>
+    /// Border dash style token matching DrawingML <c>a:prstDash/@val</c> (e.g. "solid", "dash", "dot").
+    /// Null or empty means "solid". Only meaningful when <see cref="BorderColorHex"/> is set.
+    /// </summary>
+    public string? BorderDash { get; set; }
+
+    /// <summary>True when a border is active (color is non-null/non-empty).</summary>
+    public bool HasBorder => !string.IsNullOrEmpty(BorderColorHex);
+
+    // ── Original pixel dimensions ─────────────────────────────────────────────────────────────────────
+    // Stored at insert time so Reset Size can restore to 100 % natural size. Not round-tripped
+    // through DOCX (it's metadata for the editor only); 0 means "unknown / not set".
+
+    /// <summary>
+    /// Original pixel width read from the image header at insert time, used by Reset Size. Not
+    /// persisted to DOCX (editor-only state). Defaults to 0 when unknown.
+    /// </summary>
+    public int OriginalPixelWidth { get; set; }
+
+    /// <summary>
+    /// Original pixel height read from the image header at insert time, used by Reset Size. Not
+    /// persisted to DOCX (editor-only state). Defaults to 0 when unknown.
+    /// </summary>
+    public int OriginalPixelHeight { get; set; }
 }
 
 /// <summary>
