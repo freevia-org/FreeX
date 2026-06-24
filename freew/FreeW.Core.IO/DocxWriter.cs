@@ -2749,10 +2749,56 @@ public static class DocxWriter
     /// <summary>
     /// Builds the shared a:graphic/a:graphicData(uri=pic)/pic:pic payload referencing the blip, used by
     /// both the inline (<see cref="BuildInlineDrawing"/>) and floating (<see cref="BuildAnchorDrawing"/>)
-    /// drawing paths so the picture markup is not duplicated.
+    /// drawing paths so the picture markup is not duplicated. Emits rotation/flip (<c>a:xfrm</c>
+    /// attributes), crop (<c>a:srcRect</c>), and picture border (<c>a:ln</c>) when those fields are set.
     /// </summary>
-    private static XElement BuildPicGraphic(ImagePart part, long cx, long cy) =>
-        new(A + "graphic",
+    private static XElement BuildPicGraphic(ImagePart part, long cx, long cy)
+    {
+        var image = part.Image;
+
+        // a:xfrm: always present; carry @rot/@flipH/@flipV only when non-default.
+        var xfrm = new XElement(A + "xfrm");
+        if (image.RotationAngle != 0)
+            xfrm.Add(new XAttribute("rot", (long)Math.Round(image.RotationAngle * 60000)));
+        if (image.FlipH)
+            xfrm.Add(new XAttribute("flipH", 1));
+        if (image.FlipV)
+            xfrm.Add(new XAttribute("flipV", 1));
+        xfrm.Add(new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)));
+        xfrm.Add(new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
+
+        // a:blipFill: blip + stretch/fillRect; crop appended as a:srcRect when any fraction is non-zero.
+        var blipFill = new XElement(Pic + "blipFill",
+            new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
+            new XElement(A + "stretch", new XElement(A + "fillRect")));
+        if (image.HasCrop)
+        {
+            // DrawingML srcRect uses per-mille (×100000) integer percentages for each edge.
+            static long ToPerMille(double fraction) => (long)Math.Round(fraction * 100000);
+            blipFill.Add(new XElement(A + "srcRect",
+                new XAttribute("l", ToPerMille(image.CropLeft)),
+                new XAttribute("r", ToPerMille(image.CropRight)),
+                new XAttribute("t", ToPerMille(image.CropTop)),
+                new XAttribute("b", ToPerMille(image.CropBottom))));
+        }
+
+        // pic:spPr: xfrm + preset geometry + optional a:ln border.
+        var spPr = new XElement(Pic + "spPr",
+            xfrm,
+            new XElement(A + "prstGeom", new XAttribute("prst", "rect"), new XElement(A + "avLst")));
+        if (image.HasBorder)
+        {
+            var widthEmu = (long)Math.Round(Math.Max(image.BorderWidthPt, 0.75) * 12700); // 1 pt = 12700 EMU
+            var ln = new XElement(A + "ln", new XAttribute("w", widthEmu),
+                new XElement(A + "solidFill",
+                    new XElement(A + "srgbClr",
+                        new XAttribute("val", image.BorderColorHex!.TrimStart('#').ToUpperInvariant()))));
+            var dash = string.IsNullOrEmpty(image.BorderDash) ? "solid" : image.BorderDash;
+            ln.Add(new XElement(A + "prstDash", new XAttribute("val", dash)));
+            spPr.Add(ln);
+        }
+
+        return new XElement(A + "graphic",
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XElement(A + "graphicData",
                 new XAttribute("uri", Pic.NamespaceName),
@@ -2761,15 +2807,9 @@ public static class DocxWriter
                     new XElement(Pic + "nvPicPr",
                         new XElement(Pic + "cNvPr", new XAttribute("id", (uint)part.DrawingId), new XAttribute("name", part.FileName)),
                         new XElement(Pic + "cNvPicPr")),
-                    new XElement(Pic + "blipFill",
-                        new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
-                        new XElement(A + "stretch", new XElement(A + "fillRect"))),
-                    new XElement(Pic + "spPr",
-                        new XElement(A + "xfrm",
-                            new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                            new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
-                        new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
-                            new XElement(A + "avLst"))))));
+                    blipFill,
+                    spPr)));
+    }
 
     /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
     private static string PresetGeometry(ShapeKind kind) => kind switch

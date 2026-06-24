@@ -652,9 +652,23 @@ internal static class FreeWRibbon
                         m.Item("freew.image-wrap-behind", "Behind Text", "H");
                         m.Item("freew.image-wrap-front", "In Front of Text", "F");
                     });
+                    g.Medium("freew.image-position", "Position", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.image-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: m =>
+                    {
+                        m.Item("freew.image-rotate-right90", "Rotate Right 90°", "R");
+                        m.Item("freew.image-rotate-left90",  "Rotate Left 90°",  "L");
+                        m.Item("freew.image-flip-vertical",  "Flip Vertical",    "V");
+                        m.Item("freew.image-flip-horizontal","Flip Horizontal",  "H");
+                    });
                     g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                });
+                tab.Group("picture-adjust", "Adjust", "J", 95, g =>
+                {
+                    g.Medium("freew.image-crop", "Crop", RibbonCommandIconKind.Scale);
+                    g.Medium("freew.image-reset", "Reset Picture", RibbonCommandIconKind.Refresh);
+                    g.Medium("freew.image-border", "Picture Border", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
                 tab.Group("picture-size", "Size", "S", 90, g =>
                 {

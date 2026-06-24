@@ -2374,6 +2374,11 @@ public static class DocxReader
         if (container.Name == Wp + "anchor")
             ApplyFloatingPosition(container, image);
 
+        // Recover rotation/flip, crop, and picture border from the pic:pic payload.
+        var picPic = container.Descendants(Pic + "pic").FirstOrDefault();
+        if (picPic is not null)
+            ApplyPictureFormat(picPic, image);
+
         return image;
     }
 
@@ -2427,6 +2432,54 @@ public static class DocxReader
         var positionV = anchor.Element(Wp + "positionV");
         image.VerticalAnchor = ReadVerticalAnchor(positionV?.Attribute("relativeFrom")?.Value);
         image.VerticalOffsetPt = EmuToPoints(positionV?.Element(Wp + "posOffset")?.Value);
+    }
+
+    /// <summary>
+    /// Recovers rotation/flip, crop and picture border from a <c>pic:pic</c> element inside a drawing
+    /// container. All fields are optional — absent attributes leave the model defaults (0 / false / null).
+    /// </summary>
+    private static void ApplyPictureFormat(XElement picPic, InlineImage image)
+    {
+        // a:xfrm: rotation (degrees, stored as integer × 60000), flipH, flipV.
+        var xfrm = picPic.Descendants(A + "xfrm").FirstOrDefault();
+        if (xfrm is not null)
+        {
+            if (xfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+                image.RotationAngle = rotEmu / 60000.0;
+            image.FlipH = xfrm.Attribute("flipH")?.Value is "1" or "true";
+            image.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
+        }
+
+        // a:srcRect: crop fractions encoded as per-mille integers (×100000).
+        var srcRect = picPic.Descendants(A + "srcRect").FirstOrDefault();
+        if (srcRect is not null)
+        {
+            static double PerMille(string? val) =>
+                long.TryParse(val, out var v) ? v / 100000.0 : 0;
+            image.CropLeft   = PerMille(srcRect.Attribute("l")?.Value);
+            image.CropRight  = PerMille(srcRect.Attribute("r")?.Value);
+            image.CropTop    = PerMille(srcRect.Attribute("t")?.Value);
+            image.CropBottom = PerMille(srcRect.Attribute("b")?.Value);
+        }
+
+        // a:ln (inside pic:spPr): border width, solid-fill color, dash.
+        var ln = picPic.Descendants(A + "ln").FirstOrDefault();
+        if (ln is not null)
+        {
+            // Width: @w in EMU (1 pt = 12700 EMU).
+            if (ln.Attribute("w")?.Value is { } wStr && long.TryParse(wStr, out var wEmu))
+                image.BorderWidthPt = wEmu / 12700.0;
+
+            // Color: a:solidFill/a:srgbClr/@val.
+            var hex = ln.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(hex))
+                image.BorderColorHex = hex.ToUpperInvariant();
+
+            // Dash: a:prstDash/@val.
+            var dash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(dash) && dash != "solid")
+                image.BorderDash = dash;
+        }
     }
 
     /// <summary>Maps a wp:anchor's wrap element back to an <see cref="ImageWrapping"/> mode.</summary>
