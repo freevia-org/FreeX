@@ -90,6 +90,61 @@ public sealed class PdfFileAdapterTests
         allNumbers.Should().Contain(v => Math.Abs(v - 87) < 0.001, "Score=87 should coerce to NumberValue");
     }
 
+    // ── Regression: tight mixed-alignment boundary must not merge columns ──────────────────────────────
+
+    /// <summary>
+    /// Regression for the column-merge defect found by Excel→PDF round-trip validation: a right-aligned
+    /// number column abutting a left-aligned text column produces only a cell-padding-wide gap, which the
+    /// old whitespace-gutter histogram (≥6 pt empty span) merged into one column. The whitespace-vote
+    /// detector keys on the gap's recurring X position instead, so the columns stay separate. Here the
+    /// number tokens end near x≈107 and the text tokens start at x=112 — a ~5 pt gap, narrower than the old
+    /// minimum gutter — repeated across every row. The number and the text must land in DIFFERENT cells.
+    /// </summary>
+    [Fact]
+    public void Load_TightBoundary_RightNumberThenLeftText_DoesNotMergeColumns()
+    {
+        var pdfBytes = BuildGridPdf(
+        [
+            new CellSpec("1", 100, 700), new CellSpec("Item", 112, 700),
+            new CellSpec("2", 100, 680), new CellSpec("Item", 112, 680),
+            new CellSpec("3", 100, 660), new CellSpec("Item", 112, 660),
+            new CellSpec("4", 100, 640), new CellSpec("Item", 112, 640),
+        ]);
+
+        var adapter = new PdfFileAdapter();
+        using var stream = new MemoryStream(pdfBytes);
+        var sheet = adapter.Load(stream).Sheets[0];
+
+        // The number must coerce to a NumberValue in its own cell, and "Item" must be a standalone
+        // TextValue — never a merged "1 Item" text cell.
+        var values = AllCellValues(sheet).ToList();
+        values.OfType<NumberValue>().Should().Contain(v => Math.Abs(v.Value - 1) < 0.001);
+        values.OfType<TextValue>().Should().Contain(t => t.Value == "Item");
+        values.OfType<TextValue>().Should().NotContain(t => t.Value.Contains(" "),
+            "the right-aligned number and left-aligned text must not be merged into one cell");
+    }
+
+    // ── Regression: ISO date must not be timezone-shifted ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Regression for the date-coercion timezone defect found by round-trip validation: a plain ISO date
+    /// "2026-01-01" was parsed through <c>DateTimeOffset…UtcDateTime</c>, which injected the host's local
+    /// offset and shifted the value (e.g. to 2025-12-31 22:00 on a UTC+2 machine). Offset-less ISO dates
+    /// must round-trip as wall-clock with no shift and no spurious time component.
+    /// </summary>
+    [Fact]
+    public void Load_IsoDate_NoTimezoneShift()
+    {
+        var pdfBytes = BuildGridPdf([new CellSpec("2026-01-01", 50, 700)]);
+
+        var adapter = new PdfFileAdapter();
+        using var stream = new MemoryStream(pdfBytes);
+        var sheet = adapter.Load(stream).Sheets[0];
+
+        var dates = AllCellValues(sheet).OfType<DateTimeValue>().Select(d => d.ToDateTime()).ToList();
+        dates.Should().ContainSingle().Which.Should().Be(new DateTime(2026, 1, 1, 0, 0, 0));
+    }
+
     // ── Multi-page PDF ───────────────────────────────────────────────────────────────────────────────
 
     [Fact]
