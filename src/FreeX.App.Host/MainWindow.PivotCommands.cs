@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -1692,15 +1693,11 @@ public partial class MainWindow
     private IReadOnlyList<string> ReadPivotFieldItems(Sheet sheet, PivotTableModel pivotTable, int sourceFieldIndex)
     {
         var sourceSheet = GetPivotSourceSheet(sheet, pivotTable);
-        var sourceColumn = pivotTable.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        var values = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
-        {
-            var text = SpreadsheetDisplayFormatter.FormatCellValue(sourceSheet.GetValue(row, sourceColumn)).Trim();
-            values.Add(string.IsNullOrWhiteSpace(text) ? "(blank)" : text);
-        }
-
-        return values.OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase).ToList();
+        return PivotFieldItemsReader.ReadItems(
+            sourceSheet,
+            pivotTable,
+            sourceFieldIndex,
+            value => SpreadsheetDisplayFormatter.FormatCellValue(value).Trim());
     }
 
     private bool TryParseWorkbookRange(SheetId defaultSheetId, string input, out GridRange range)

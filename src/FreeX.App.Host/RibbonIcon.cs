@@ -58,13 +58,19 @@ public sealed class RibbonIcon : Viewbox
         set => SetValue(ForegroundProperty, value);
     }
 
+    // The vector child is built once (lazily on first load) and rebuilt only when a visual property
+    // actually changes — NOT on every Loaded. A WPF TabControl re-raises Loaded each time a tab is
+    // re-selected, so rebuilding on Loaded re-tessellated every ribbon glyph on every tab switch, which
+    // made tab changes visibly laggy. Building once keeps switching instant.
+    private bool _built;
+
     public RibbonIcon()
     {
         Stretch = Stretch.Uniform;
         Width = IconSize;
         Height = IconSize;
         SnapsToDevicePixels = true;
-        Loaded += (_, _) => Rebuild();
+        Loaded += (_, _) => { if (!_built) Rebuild(); };
     }
 
     private static void OnVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -75,6 +81,7 @@ public sealed class RibbonIcon : Viewbox
 
     private void Rebuild()
     {
+        _built = true;
         Width = IconSize;
         Height = IconSize;
         var brush = Foreground ?? Brushes.Black;

@@ -14,8 +14,6 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public static class SlicerTimelineSourceReader
 {
-    private const string BlankItem = "(blank)";
-
     /// <summary>
     /// Returns the distinct, ordered field items for <paramref name="sourceFieldName"/> within
     /// <paramref name="pivotTable"/>'s source range (header row excluded), or an empty list when the
@@ -34,14 +32,7 @@ public static class SlicerTimelineSourceReader
         if (sourceColumn > pivotTable.SourceRange.End.Col)
             return [];
 
-        var values = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        for (var row = pivotTable.SourceRange.Start.Row + 1; row <= pivotTable.SourceRange.End.Row; row++)
-        {
-            var text = FormatValue(sheet.GetValue(row, sourceColumn));
-            values.Add(string.IsNullOrWhiteSpace(text) ? BlankItem : text);
-        }
-
-        return values.OrderBy(static value => value, StringComparer.CurrentCultureIgnoreCase).ToList();
+        return PivotFieldItemsReader.ReadItems(sheet, pivotTable, fieldIndex, FormatValue);
     }
 
     /// <summary>
