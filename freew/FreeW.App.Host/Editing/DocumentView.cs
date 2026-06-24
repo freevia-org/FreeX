@@ -3053,6 +3053,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Remove a drop cap from the caret's paragraph: every run's formatting is reset to the paragraph
+    /// default (see <see cref="DropCap.ClearFormatting"/>). This is the "None" position in the Drop
+    /// Cap Options dialog. Routes through the undo/redo bus and re-renders immediately.
+    /// </summary>
+    public void ClearDropCap()
+    {
+        Focus();
+        CommitToModel();
+        var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
+        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
+            return;
+        _commands.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+    }
+
+    /// <summary>
     /// Clear all character formatting in every model paragraph spanned by the selection (or the caret's
     /// paragraph): each run's formatting is reset to <see cref="RunFormatting.Default"/> while its text is
     /// kept (see <see cref="DropCap.ClearFormatting"/>). One reversible <see cref="FormatParagraphRunsCommand"/>
@@ -6723,6 +6738,10 @@ public sealed class DocumentView : RichTextBox
             RunFieldKind.Time => DateTime.Now.ToString("t", culture),
             RunFieldKind.Author => document.Properties.Author is { Length: > 0 } author ? author : cached,
             RunFieldKind.FileName => fileName is { Length: > 0 } name ? name : cached,
+            RunFieldKind.Title => document.Properties.Title is { Length: > 0 } title ? title : cached,
+            RunFieldKind.Subject => document.Properties.Subject is { Length: > 0 } subject ? subject : cached,
+            RunFieldKind.Keywords => document.Properties.Keywords is { Length: > 0 } keywords ? keywords : cached,
+            RunFieldKind.DocComments => document.Properties.Comments is { Length: > 0 } comments ? comments : cached,
             _ => cached
         };
     }
@@ -6799,6 +6818,10 @@ public sealed class DocumentView : RichTextBox
         "FILENAME" => RunFieldKind.FileName,
         "AUTHOR" => RunFieldKind.Author,
         "NUMPAGES" => RunFieldKind.NumPages,
+        "TITLE" => RunFieldKind.Title,
+        "SUBJECT" => RunFieldKind.Subject,
+        "KEYWORDS" => RunFieldKind.Keywords,
+        "COMMENTS" => RunFieldKind.DocComments,
         _ => RunFieldKind.None
     };
 

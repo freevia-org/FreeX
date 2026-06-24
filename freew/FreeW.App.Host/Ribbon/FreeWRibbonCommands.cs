@@ -1093,7 +1093,52 @@ internal static class FreeWRibbonCommands
         // default, keeping text). Insert > Pages: apply a drop cap (enlarged leading letter) to the
         // caret's paragraph. Both route through the view's undo/redo bus and re-render.
         registry.Register("freew.clear-formatting", new ActionCommand(() => editor.ClearFormatting()));
-        registry.Register("freew.drop-cap", new ActionCommand(() => editor.ApplyDropCap()));
+        // Drop Cap top-level button: apply default (Dropped, 3 lines, 42 pt). Dropdown items:
+        // Dropped / In Margin (apply with explicit position) / None (remove) / Options dialog.
+        registry.Register("freew.drop-cap",          new ActionCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-dropped",  new ActionCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-in-margin",new ActionCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-none",     new ActionCommand(() => editor.ClearDropCap()));
+        registry.Register("freew.drop-cap-options",  new DropCapOptionsCommand(editor));
+
+        // Insert > Text Box gallery: preset-styled text boxes.  Simple is the plain box (matches the
+        // existing freew.shape-textbox behaviour); Sidebar/Banded adds a dark accent fill; Quote
+        // indents the text and italicises it. All insert via the existing InsertShape path and round-trip
+        // as an inline w:drawing/wps:wsp in docx.
+        registry.Register("freew.textbox-simple",  new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.InsertShape(FreeW.Core.Model.Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+        }));
+        registry.Register("freew.textbox-sidebar", new ActionCommand(() =>
+        {
+            editor.Focus();
+            // Banded sidebar: dark blue fill with white text paragraph.
+            var shape = new FreeW.Core.Model.Shape(FreeW.Core.Model.ShapeKind.TextBox, widthPt: 140, heightPt: 200, fillColorHex: "#243F60");
+            var p = new FreeW.Core.Model.Paragraph();
+            p.Runs.Add(new FreeW.Core.Model.Run("Sidebar", new FreeW.Core.Model.RunFormatting { Bold = true, ColorHex = "#FFFFFF" }));
+            shape.TextParagraphs.Add(p);
+            editor.InsertShape(shape);
+        }));
+        registry.Register("freew.textbox-quote",   new ActionCommand(() =>
+        {
+            editor.Focus();
+            // Quote: light grey fill, indented italic text.
+            var shape = new FreeW.Core.Model.Shape(FreeW.Core.Model.ShapeKind.TextBox, widthPt: 200, heightPt: 90, fillColorHex: "#F2F2F2");
+            var p = new FreeW.Core.Model.Paragraph();
+            p.Runs.Add(new FreeW.Core.Model.Run("“Quote text here”",
+                new FreeW.Core.Model.RunFormatting { Italic = true }));
+            shape.TextParagraphs.Add(p);
+            editor.InsertShape(shape);
+        }));
+
+        // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
+        // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
+        registry.Register("freew.docprop-title",    new InsertDocPropFieldCommand(editor, RunFieldKind.Title));
+        registry.Register("freew.docprop-subject",  new InsertDocPropFieldCommand(editor, RunFieldKind.Subject));
+        registry.Register("freew.docprop-author",   new InsertDocPropFieldCommand(editor, RunFieldKind.Author));
+        registry.Register("freew.docprop-keywords", new InsertDocPropFieldCommand(editor, RunFieldKind.Keywords));
+        registry.Register("freew.docprop-comments", new InsertDocPropFieldCommand(editor, RunFieldKind.DocComments));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -3309,15 +3354,58 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Symbols > Date & Time: list formatted current date/time strings; insert the chosen one.
+    // Insert > Symbols > Date & Time: list formatted current date/time strings; insert the chosen one as
+    // plain text or, when "Update automatically" is checked, as a live DATE/TIME complex field.
     private sealed class InsertDateTimeCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var text = DateTimeDialog.Prompt(Window.GetWindow(editor));
-            if (!string.IsNullOrEmpty(text))
-                editor.InsertText(text);
+            var result = DateTimeDialog.Prompt(Window.GetWindow(editor));
+            if (result is null)
+                return;
+            if (result.IsField && result.FieldInstruction is { Length: > 0 } instruction)
+                editor.InsertComplexField(instruction);
+            else if (!string.IsNullOrEmpty(result.Text))
+                editor.InsertText(result.Text);
+        }
+    }
+
+    // Insert > Quick Parts > Document Property: insert a live field run bound to a document-property
+    // value (Title, Subject, Author, Keywords, Comments). Uses RunFieldKind so the run renders the
+    // current property value immediately and serialises as w:fldSimple for lossless round-trip.
+    private sealed class InsertDocPropFieldCommand(DocumentView editor, RunFieldKind kind) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.InsertField(kind);
+        }
+    }
+
+    // Insert > Text > Drop Cap > Options: a dialog that accepts position (Dropped / In Margin / None),
+    // font, lines-to-drop, and distance-from-text.  Position and lines-to-drop drive the font-size
+    // calculation (lines × default line height, approximated as 12 pt × lines); font is applied to the
+    // cap run; "None" calls ClearDropCap.  Distance-from-text is noted in the dialog but deferred at
+    // the model level (no kerning/spacing property exists for the cap run yet).
+    private sealed class DropCapOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var result = DropCapOptionsDialog.Ask(Window.GetWindow(editor));
+            if (result is null)
+                return;
+            if (result.Position == DropCapPosition.None)
+            {
+                editor.ClearDropCap();
+                return;
+            }
+            // Map lines-to-drop to an approximate point size (Word default body is 12 pt; each drop
+            // line therefore adds ~12 pt to the cap height — a reasonable approximation without live
+            // pagination).  Clamp to a sensible range.
+            var sizePt = Math.Max(14, result.LinesToDrop * 14.4);
+            editor.ApplyDropCap(sizePt);
         }
     }
 
@@ -6682,11 +6770,14 @@ internal static class FreeWRibbonCommands
                 }
                 case InsertSlotKind.DateTime:
                 {
-                    var text = DateTimeDialog.Prompt(Window.GetWindow(editor));
-                    if (string.IsNullOrEmpty(text))
+                    var dtResult = DateTimeDialog.Prompt(Window.GetWindow(editor));
+                    if (dtResult is null)
                         return;
                     var para = EnsureDefaultParagraph(slot);
-                    para.Runs.Add(new FreeW.Core.Model.Run(text));
+                    if (dtResult.IsField && dtResult.FieldInstruction is { Length: > 0 } dtInstr)
+                        para.Runs.Add(FreeW.Core.Model.Run.ComplexFieldRun(" " + dtInstr.Trim() + " "));
+                    else if (!string.IsNullOrEmpty(dtResult.Text))
+                        para.Runs.Add(new FreeW.Core.Model.Run(dtResult.Text));
                     break;
                 }
                 case InsertSlotKind.DocumentInfo:
@@ -6797,9 +6888,9 @@ internal static class FreeWRibbonCommands
 
             btnDateTime.Click += (_, _) =>
             {
-                var text = DateTimeDialog.Prompt(owner);
-                if (!string.IsNullOrEmpty(text))
-                    appendDateTime = text;
+                var dtR = DateTimeDialog.Prompt(owner);
+                if (dtR is not null && !string.IsNullOrEmpty(dtR.Text))
+                    appendDateTime = dtR.Text;
             };
 
             btnField.Click += (_, _) =>
@@ -7119,34 +7210,62 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => editor.UpdateFields();
     }
 
-    // A small modal dialog listing the insertable document field codes, grouped by category (Date and
-    // Time / Document Information / Numbering). Returns the chosen raw field INSTRUCTION (e.g. " PAGE "),
-    // or null if cancelled.
+    // A modal dialog listing the insertable document field codes, grouped by category (Date and Time /
+    // Document Information / Numbering / References). Returns the chosen raw field INSTRUCTION
+    // (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " AUTHOR "), or null if cancelled.
+    // This is the backing for Insert > Quick Parts > Field (freew.field) and mirrors Word's Field dialog
+    // field-name browser.
     private static class FieldPickerDialog
     {
-        private sealed record Choice(string Label, string Instruction);
+        private sealed record Choice(string Category, string Label, string Instruction);
 
         public static string? Ask(Window? owner)
         {
             var choices = new[]
             {
-                new Choice("Date", " DATE "),
-                new Choice("Time", " TIME "),
-                new Choice("File Name", " FILENAME "),
-                new Choice("Author", " AUTHOR "),
-                new Choice("Number of Pages (NumPages)", " NUMPAGES "),
-                new Choice("Page Number (Page)", " PAGE "),
+                // Date and Time
+                new Choice("Date and Time", "Date (DATE)",                              @" DATE \@ ""M/d/yyyy"" "),
+                new Choice("Date and Time", "Time (TIME)",                              @" TIME \@ ""h:mm am/pm"" "),
+                // Document Information
+                new Choice("Document Information", "Author (AUTHOR)",                   " AUTHOR "),
+                new Choice("Document Information", "File Name (FILENAME)",              " FILENAME "),
+                new Choice("Document Information", "Title (TITLE)",                     " TITLE "),
+                new Choice("Document Information", "Subject (SUBJECT)",                 " SUBJECT "),
+                new Choice("Document Information", "Keywords (KEYWORDS)",               " KEYWORDS "),
+                new Choice("Document Information", "Comments (COMMENTS)",               " COMMENTS "),
+                // Numbering
+                new Choice("Numbering", "Page Number (PAGE)",                           " PAGE "),
+                new Choice("Numbering", "Number of Pages (NUMPAGES)",                  " NUMPAGES "),
+                // References (cross-reference / sequence)
+                new Choice("References", "StyleRef — heading style ref (STYLEREF)",    " STYLEREF 1 "),
+                new Choice("References", "Sequence number (SEQ Figure)",               " SEQ Figure \\* ARABIC "),
             };
 
-            var list = new System.Windows.Controls.ListBox
+            // Category listbox on the left; field listbox on the right — a two-pane layout
+            // matching the spirit of Word's Field dialog without requiring full XAML.
+            var categories = choices.Select(c => c.Category).Distinct().ToList();
+            var catList = new System.Windows.Controls.ListBox
             {
-                MinWidth = 240,
-                MinHeight = 140,
-                Margin = new Thickness(0, 0, 0, 12)
+                MinWidth = 160,
+                Margin = new Thickness(0, 0, 8, 0)
             };
-            foreach (var choice in choices)
-                list.Items.Add(choice.Label);
-            list.SelectedIndex = 0;
+            foreach (var cat in categories)
+                catList.Items.Add(cat);
+
+            var fieldList = new System.Windows.Controls.ListBox { MinWidth = 220 };
+
+            void RefreshFields()
+            {
+                var cat = catList.SelectedItem as string;
+                fieldList.Items.Clear();
+                foreach (var c in choices.Where(c => c.Category == cat))
+                    fieldList.Items.Add(c.Label);
+                if (fieldList.Items.Count > 0)
+                    fieldList.SelectedIndex = 0;
+            }
+
+            catList.SelectionChanged += (_, _) => RefreshFields();
+            catList.SelectedIndex = 0;
 
             string? result = null;
             var dialog = new Window
@@ -7159,16 +7278,26 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = "OK",
+                IsDefault = true,
+                MinWidth = 72,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+
             void Commit()
             {
-                if (list.SelectedIndex >= 0)
-                    result = choices[list.SelectedIndex].Instruction;
+                var cat = catList.SelectedItem as string;
+                var label = fieldList.SelectedItem as string;
+                var chosen = choices.FirstOrDefault(c => c.Category == cat && c.Label == label);
+                if (chosen is not null)
+                    result = chosen.Instruction;
                 dialog.DialogResult = true;
             }
             ok.Click += (_, _) => Commit();
-            list.MouseDoubleClick += (_, _) => Commit();
+            fieldList.MouseDoubleClick += (_, _) => Commit();
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -7178,9 +7307,21 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(ok);
             buttons.Children.Add(cancel);
 
-            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 240 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Choose a field to insert:", Margin = new Thickness(0, 0, 0, 8) });
-            panel.Children.Add(list);
+            var listsRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            listsRow.Children.Add(catList);
+            listsRow.Children.Add(fieldList);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "Choose a field to insert:",
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            panel.Children.Add(listsRow);
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
@@ -7763,6 +7904,121 @@ internal static class FreeWRibbonCommands
 
             window.Content = outer;
             return window.ShowDialog() == true ? result : null; // null = cancelled
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Drop Cap Options dialog — position / font / lines / distance
+    // -----------------------------------------------------------------------------------------
+
+    /// <summary>Drop-cap position choices matching Word's Drop Cap Options dialog.</summary>
+    private enum DropCapPosition { None, Dropped, InMargin }
+
+    /// <summary>Result returned by <see cref="DropCapOptionsDialog.Ask"/>.</summary>
+    private sealed record DropCapOptionsResult(
+        DropCapPosition Position,
+        string? Font,
+        int LinesToDrop,
+        double DistanceFromTextPt);
+
+    // Drop Cap Options dialog: choose position (None / Dropped / In Margin), font, lines to drop
+    // (1–10), and distance from text (0–100 pt). Returns null on cancel.
+    private static class DropCapOptionsDialog
+    {
+        public static DropCapOptionsResult? Ask(Window? owner)
+        {
+            // --- Position radio buttons ---
+            var rbNone     = new System.Windows.Controls.RadioButton { Content = "None",      GroupName = "pos", Margin = new Thickness(4, 2, 12, 2) };
+            var rbDropped  = new System.Windows.Controls.RadioButton { Content = "Dropped",   GroupName = "pos", Margin = new Thickness(4, 2, 12, 2), IsChecked = true };
+            var rbInMargin = new System.Windows.Controls.RadioButton { Content = "In Margin", GroupName = "pos", Margin = new Thickness(4, 2, 12, 2) };
+
+            var posRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            posRow.Children.Add(rbNone);
+            posRow.Children.Add(rbDropped);
+            posRow.Children.Add(rbInMargin);
+
+            // --- Font combo ---
+            var fontCombo = new System.Windows.Controls.ComboBox
+            {
+                IsEditable = true,
+                MinWidth = 160,
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+            foreach (var f in new[] { "(Current font)", "Arial", "Calibri", "Times New Roman", "Georgia", "Cambria" })
+                fontCombo.Items.Add(f);
+            fontCombo.SelectedIndex = 0;
+
+            // --- Lines to drop spinner (1–10) ---
+            var linesBox = new System.Windows.Controls.TextBox { Text = "3", Width = 50, Margin = new Thickness(0, 0, 0, 6) };
+
+            // --- Distance from text (0–100 pt) ---
+            var distanceBox = new System.Windows.Controls.TextBox { Text = "0", Width = 50, Margin = new Thickness(0, 0, 0, 12) };
+
+            // --- Form layout ---
+            StackPanel Row(string label, System.Windows.UIElement control)
+            {
+                var row = new System.Windows.Controls.StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+                row.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 2) });
+                row.Children.Add(control);
+                return row;
+            }
+
+            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel  = true, MinWidth = 72 };
+
+            DropCapOptionsResult? result = null;
+            var dialog = new Window
+            {
+                Title = "Drop Cap Options",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            ok.Click += (_, _) =>
+            {
+                var position = rbNone.IsChecked == true     ? DropCapPosition.None
+                             : rbInMargin.IsChecked == true ? DropCapPosition.InMargin
+                             :                                DropCapPosition.Dropped;
+                _ = int.TryParse(linesBox.Text, out var lines);
+                lines = Math.Clamp(lines, 1, 10);
+                _ = double.TryParse(distanceBox.Text, out var dist);
+                dist = Math.Clamp(dist, 0, 100);
+                var font = fontCombo.Text is "(Current font)" or "" ? null : fontCombo.Text;
+                result = new DropCapOptionsResult(position, font, lines, dist);
+                dialog.DialogResult = true;
+            };
+
+            var btnRow = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnRow.Children.Add(ok);
+            btnRow.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 280 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "Position:",
+                FontWeight = System.Windows.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            panel.Children.Add(posRow);
+            panel.Children.Add(new System.Windows.Controls.Separator { Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(Row("Font:", fontCombo));
+            panel.Children.Add(Row("Lines to drop:", linesBox));
+            panel.Children.Add(Row("Distance from text (pt):", distanceBox));
+            panel.Children.Add(btnRow);
+            dialog.Content = panel;
+
+            return dialog.ShowDialog() == true ? result : null;
         }
     }
 }

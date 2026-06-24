@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Drop Cap Options">
+  <rect width="32" height="32" fill="none"/>
+  <text x="12" y="16" font-size="15" fill="#0F6D8C" font-family="Georgia,Times New Roman,serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text>
+  <!-- gear / options indicator -->
+  <circle cx="23" cy="23" r="5" fill="none" stroke="#242424" stroke-width="1.3"/>
+  <circle cx="23" cy="23" r="2" fill="#242424"/>
+  <path d="M23 17v2M23 27v2M17 23h2M27 23h2M19 19l1.4 1.4M25.6 25.6l1.4 1.4M19 27l1.4-1.4M25.6 20.4l1.4-1.4" fill="none" stroke="#242424" stroke-width="1.1" stroke-linecap="round"/>
+</svg>
