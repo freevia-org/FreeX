@@ -204,13 +204,13 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart("Select Data", out var chart))
             return;
 
-        var result = await ShowSelectDataDialogAsync(
+        var result = await ShowSelectDataSourceDialogAsync(
             FormatRangeReference(chart.DataRange),
             chart.FirstColIsCategories);
         if (result is not { } choice)
             return;
 
-        if (!TryParseDefinedNameRange(choice.RangeText, out var dataRange))
+        if (!TryParseDefinedNameRange(choice.SourceRangeText, out var dataRange))
         {
             RefreshShell(UiText.Get("ChartLoc_EnterValidChartDataRange"));
             return;
@@ -231,36 +231,179 @@ public sealed partial class MainWindow
             : commandResult.ErrorMessage ?? UiText.Get("ChartLoc_SelectDataFailed"));
     }
 
-    private async Task<(string RangeText, bool FirstColumnIsCategories)?> ShowSelectDataDialogAsync(
+    /// <summary>
+    /// Full "Select Data Source" dialog with Legend Entries (Series) list, Horizontal (Category)
+    /// Axis Labels list, Add/Edit/Remove series buttons, Switch Row/Column checkbox, and a range
+    /// text-box.  Matches the WPF <c>SelectDataSourceDialog</c> layout and feature set.
+    /// </summary>
+    private async Task<SelectDataSourceResult?> ShowSelectDataSourceDialogAsync(
         string initialRange,
         bool firstColumnIsCategories)
     {
+        // ---- Range text box -------------------------------------------------------------------
         var rangeBox = new TextBox
         {
             Text = initialRange,
-            Width = 260,
+            Width = 380,
             PlaceholderText = UiText.Get("ChartLoc_RangePlaceholder"),
         };
         AutomationProperties.SetName(rangeBox, "Chart data range");
         AutomationProperties.SetAutomationId(rangeBox, "SelectChartDataRangeBox");
         ApplyChartTextBoxChrome(rangeBox);
 
+        // ---- Switch Row/Column checkbox -------------------------------------------------------
+        var switchRowColumnCheck = new CheckBox
+        {
+            Content = UiText.Get("ChartLoc_SwitchRowColumn"),
+            IsChecked = false,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        AutomationProperties.SetAutomationId(switchRowColumnCheck, "SelectChartDataSwitchRowColumnCheck");
+
+        // ---- Series ListBox + buttons ---------------------------------------------------------
+        var seriesList = new ListBox
+        {
+            Height = 80,
+            Width = 320,
+            SelectionMode = SelectionMode.Single,
+        };
+        AutomationProperties.SetName(seriesList, "Series list");
+        AutomationProperties.SetAutomationId(seriesList, "SelectChartDataSeriesList");
+
+        var addSeriesButton = new Button { Content = UiText.Get("ChartLoc_AddSeriesButton"), Width = 100 };
+        AutomationProperties.SetAutomationId(addSeriesButton, "SelectChartDataAddSeriesButton");
+        ApplyChartButtonChrome(addSeriesButton, 100);
+
+        var editSeriesButton = new Button { Content = UiText.Get("ChartLoc_EditSeriesButton"), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(editSeriesButton, "SelectChartDataEditSeriesButton");
+        ApplyChartButtonChrome(editSeriesButton, 100);
+
+        var removeSeriesButton = new Button { Content = UiText.Get("ChartLoc_RemoveSeriesButton"), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(removeSeriesButton, "SelectChartDataRemoveSeriesButton");
+        ApplyChartButtonChrome(removeSeriesButton, 100);
+
+        // ---- Axis Labels ListBox + button -----------------------------------------------------
+        var axisLabelsList = new ListBox
+        {
+            Height = 80,
+            Width = 320,
+            SelectionMode = SelectionMode.Single,
+        };
+        AutomationProperties.SetName(axisLabelsList, "Axis label list");
+        AutomationProperties.SetAutomationId(axisLabelsList, "SelectChartDataAxisLabelsList");
+
+        var editAxisLabelsButton = new Button { Content = UiText.Get("ChartLoc_EditAxisLabelsButton"), Width = 100, IsEnabled = false };
+        AutomationProperties.SetAutomationId(editAxisLabelsButton, "SelectChartDataEditAxisLabelsButton");
+        ApplyChartButtonChrome(editAxisLabelsButton, 100);
+
+        // ---- First column contains category labels checkbox -----------------------------------
         var categoriesCheck = new CheckBox
         {
             Content = UiText.Get("ChartLoc_FirstColumnContainsCategories"),
             IsChecked = firstColumnIsCategories,
+            Margin = new Thickness(0, 4, 0, 0),
         };
         AutomationProperties.SetAutomationId(categoriesCheck, "SelectChartDataCategoriesCheck");
 
+        // ---- State management helpers --------------------------------------------------------
+        // The series ListBox items: stored as a mutable list so Add/Remove work independently of
+        // the planner inference.  Refreshed from the planner when the range text or categories
+        // checkbox changes; after user-driven Add/Remove the list is in "manual" mode until the
+        // range box is edited again.
+        var seriesItems = new List<string>();
+        var inManualSeriesMode = false;
+
+        void RefreshButtonState()
+        {
+            editSeriesButton.IsEnabled = seriesList.SelectedIndex >= 0;
+            removeSeriesButton.IsEnabled = seriesList.SelectedIndex >= 0;
+            editAxisLabelsButton.IsEnabled = axisLabelsList.SelectedIndex >= 0;
+        }
+
+        void RefreshLists()
+        {
+            if (inManualSeriesMode)
+                return;
+
+            var preview = SelectDataSourcePlanner.InferPreviewEntries(
+                rangeBox.Text ?? string.Empty,
+                categoriesCheck.IsChecked == true);
+
+            seriesItems.Clear();
+            foreach (var s in preview.Series)
+                seriesItems.Add(SelectDataSourcePlanner.FormatSeriesListItem(s.Name, s.ValuesRangeText));
+
+            seriesList.ItemsSource = null;
+            seriesList.ItemsSource = seriesItems;
+            seriesList.SelectedIndex = seriesItems.Count > 0 ? 0 : -1;
+
+            var axisItems = preview.Categories.Select(c => c.Label).ToList();
+            axisLabelsList.ItemsSource = null;
+            axisLabelsList.ItemsSource = axisItems;
+            axisLabelsList.SelectedIndex = axisItems.Count > 0 ? 0 : -1;
+
+            RefreshButtonState();
+        }
+
+        // ---- Event handlers ------------------------------------------------------------------
+        rangeBox.TextChanged += (_, _) =>
+        {
+            inManualSeriesMode = false;
+            RefreshLists();
+        };
+        categoriesCheck.IsCheckedChanged += (_, _) =>
+        {
+            inManualSeriesMode = false;
+            RefreshLists();
+        };
+        seriesList.SelectionChanged += (_, _) => RefreshButtonState();
+        axisLabelsList.SelectionChanged += (_, _) => RefreshButtonState();
+
+        addSeriesButton.Click += (_, _) =>
+        {
+            inManualSeriesMode = true;
+            var newItem = SelectDataSourcePlanner.FormatNewSeriesItem(seriesItems.Count + 1);
+            seriesItems.Add(newItem);
+            seriesList.ItemsSource = null;
+            seriesList.ItemsSource = seriesItems;
+            seriesList.SelectedIndex = seriesItems.Count - 1;
+            RefreshButtonState();
+        };
+
+        editSeriesButton.Click += (_, _) =>
+        {
+            if (seriesList.Items.Count > 0 && seriesList.SelectedIndex < 0)
+                seriesList.SelectedIndex = 0;
+        };
+
+        removeSeriesButton.Click += (_, _) =>
+        {
+            var idx = seriesList.SelectedIndex;
+            if (idx < 0)
+                return;
+            inManualSeriesMode = true;
+            seriesItems.RemoveAt(idx);
+            seriesList.ItemsSource = null;
+            seriesList.ItemsSource = seriesItems;
+            seriesList.SelectedIndex = seriesItems.Count == 0 ? -1 : Math.Min(idx, seriesItems.Count - 1);
+            RefreshButtonState();
+        };
+
+        editAxisLabelsButton.Click += (_, _) =>
+        {
+            if (axisLabelsList.Items.Count > 0)
+                axisLabelsList.SelectedIndex = 0;
+        };
+
+        // ---- Initial population of the preview lists -----------------------------------------
+        RefreshLists();
+
+        // ---- Dialog layout -------------------------------------------------------------------
         var dialog = new Window
         {
             Title = UiText.Get("ChartLoc_SelectDataSourceTitle"),
-            Width = 360,
-            Height = 190,
-            MinWidth = 360,
-            MinHeight = 190,
-            MaxWidth = 360,
-            MaxHeight = 190,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            MinWidth = 460,
             Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -271,35 +414,153 @@ public sealed partial class MainWindow
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "SelectChartDataOkButton");
         ApplyChartButtonChrome(okButton, 80, isDefault: true);
-        okButton.Click += (_, _) => dialog.Close(((string, bool)?)(rangeBox.Text ?? string.Empty, categoriesCheck.IsChecked == true));
+        okButton.Click += (_, _) =>
+        {
+            var rangeText = rangeBox.Text ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(rangeText))
+            {
+                // Keep dialog open; let the shell report the invalid range after close.
+                dialog.Close((SelectDataSourceResult?)null);
+                return;
+            }
+
+            dialog.Close((SelectDataSourceResult?)SelectDataSourcePlanner.CreateResult(
+                rangeText,
+                categoriesCheck.IsChecked == true,
+                switchRowColumnCheck.IsChecked == true));
+        };
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "SelectChartDataCancelButton");
         ApplyChartButtonChrome(cancelButton, 80);
-        cancelButton.Click += (_, _) => dialog.Close(((string, bool)?)null);
+        cancelButton.Click += (_, _) => dialog.Close((SelectDataSourceResult?)null);
+
+        // Helper to build a panel with a list on the left and buttons stacked on the right.
+        Grid MakeListPanel(string title, string helpText, ListBox list, IEnumerable<Button> buttons)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var header = new StackPanel { Spacing = 2 };
+            header.Children.Add(new TextBlock { Text = title, FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
+            header.Children.Add(new TextBlock { Text = helpText, FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            grid.Children.Add(header);
+
+            Grid.SetRow(list, 1);
+            grid.Children.Add(list);
+
+            var buttonStack = new StackPanel { Margin = new Thickness(8, 20, 0, 0), Spacing = 4 };
+            foreach (var b in buttons)
+                buttonStack.Children.Add(b);
+            Grid.SetColumn(buttonStack, 1);
+            Grid.SetRowSpan(buttonStack, 2);
+            grid.Children.Add(buttonStack);
+
+            return grid;
+        }
+
+        // ---- Hidden and Empty Cells info button -----------------------------------------------
+        var hiddenEmptyButton = new Button
+        {
+            Content = UiText.Get("ChartLoc_HiddenEmptyCellsButton"),
+            Width = 180,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        AutomationProperties.SetAutomationId(hiddenEmptyButton, "SelectChartDataHiddenEmptyButton");
+        ApplyChartButtonChrome(hiddenEmptyButton, 180);
+        hiddenEmptyButton.Click += async (_, _) =>
+        {
+            var infoDialog = new Window
+            {
+                Title = UiText.Get("ChartLoc_HiddenEmptyCellsTitle"),
+                SizeToContent = SizeToContent.WidthAndHeight,
+                Background = Brushes.White,
+                CanResize = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                ShowInTaskbar = false,
+            };
+            var closeBtn = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
+            ApplyChartButtonChrome(closeBtn, 80, isDefault: true);
+            closeBtn.Click += (_, _) => infoDialog.Close();
+            infoDialog.Content = new StackPanel
+            {
+                Margin = new Thickness(16),
+                Spacing = 12,
+                MinWidth = 300,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = UiText.Get("ChartLoc_HiddenEmptyCellsMessage"),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 340,
+                    },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                        Children = { closeBtn },
+                    },
+                },
+            };
+            await infoDialog.ShowDialog(dialog);
+        };
 
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
-            MinWidth = 292,
+            Spacing = 8,
+            MinWidth = 420,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel"), FontSize = 12 },
+                // Range label + text box
+                new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 rangeBox,
+                switchRowColumnCheck,
+                // Legend Entries (Series) panel
+                MakeListPanel(
+                    UiText.Get("ChartLoc_SeriesPanelTitle"),
+                    UiText.Get("ChartLoc_SeriesListHelpText"),
+                    seriesList,
+                    new[] { addSeriesButton, editSeriesButton, removeSeriesButton }),
+                // Horizontal (Category) Axis Labels panel
+                MakeListPanel(
+                    UiText.Get("ChartLoc_AxisLabelsPanelTitle"),
+                    UiText.Get("ChartLoc_AxisLabelsListHelpText"),
+                    axisLabelsList,
+                    new[] { editAxisLabelsButton }),
+                // First column is categories checkbox
                 categoriesCheck,
+                hiddenEmptyButton,
+                // OK / Cancel
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 4, 0, 0),
                     Children = { okButton, cancelButton },
                 },
             },
         };
 
-        return await dialog.ShowDialog<(string, bool)?>(this);
+        return await dialog.ShowDialog<SelectDataSourceResult?>(this);
     }
+
+    /// <summary>
+    /// Parity-capture entry point for the Select Data Source dialog.  Replaced by the full series
+    /// management dialog so the captured surface now shows the complete WPF-parity UI.
+    /// </summary>
+    private Task<SelectDataSourceResult?> ShowSelectDataDialogAsync(
+        string initialRange,
+        bool firstColumnIsCategories) =>
+        ShowSelectDataSourceDialogAsync(initialRange, firstColumnIsCategories);
 
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------
 
