@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
@@ -1786,5 +1787,150 @@ public sealed class FreeWRibbonParityTests
         var run = ((Paragraph)editor.Model.Blocks.Last()).Runs
             .Single(r => r.SmartArt is not null);
         run.SmartArt!.Nodes.Should().HaveCount(2, "Remove Shape must remove the last node");
+    }
+
+    // ── Header & Footer Design contextual tab ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Build_ExposesHeaderFooterDesignContextualTab()
+    {
+        var definition = FreeWRibbon.Build();
+
+        var tab = definition.FindTab("header-footer-design");
+        tab.Should().NotBeNull("header-footer-design contextual tab must be declared");
+        tab!.Context.Should().NotBeNull("must have a context");
+        tab.Context!.ActivationKey.Should().Be("header-footer");
+        tab.Context.Label.Should().Be("Header & Footer Tools");
+        tab.Context.Color.Should().Be(RibbonContextColor.Purple);
+    }
+
+    [Fact]
+    public void HeaderFooterDesign_ContextualTabHasExpectedGroups()
+    {
+        var definition = FreeWRibbon.Build();
+        var tab = definition.FindTab("header-footer-design");
+
+        tab.Should().NotBeNull();
+        tab!.Groups.Select(g => g.Id)
+            .Should()
+            .Equal("hf-header-footer", "hf-insert", "hf-navigation", "hf-options", "hf-position", "hf-close");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_AllTabCommandsAreBacked()
+    {
+        var definition = FreeWRibbon.Build();
+        var tab = definition.FindTab("header-footer-design");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        tab.Should().NotBeNull();
+
+        // All top-level command ids in the tab must be registered.
+        foreach (var commandId in CommandIds(tab!))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed in header-footer-design tab");
+
+        // All menu item command ids must also be registered.
+        foreach (var commandId in MenuCommandIds(tab))
+            registry.TryGet(commandId, out _).Should().BeTrue($"menu item {commandId} must be backed");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_DifferentFirstPageToggle_FlipsModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        editor.Model.Page.DifferentFirstPage.Should().BeFalse("initial state is false");
+        registry.TryGet("freew.hf-different-first-page", out var cmd).Should().BeTrue();
+
+        cmd!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.DifferentFirstPage.Should().BeTrue("toggle ON must set DifferentFirstPage = true");
+
+        cmd.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.DifferentFirstPage.Should().BeFalse("toggle OFF must set DifferentFirstPage = false");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_DifferentOddEvenPagesToggle_FlipsModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        editor.Model.Page.DifferentOddEvenPages.Should().BeFalse("initial state is false");
+        registry.TryGet("freew.hf-different-odd-even", out var cmd).Should().BeTrue();
+
+        cmd!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.DifferentOddEvenPages.Should().BeTrue("toggle ON must set DifferentOddEvenPages = true");
+
+        cmd.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.DifferentOddEvenPages.Should().BeFalse("toggle OFF must set DifferentOddEvenPages = false");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_HeaderFromTopCommand_WritesDistanceIntoModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        registry.TryGet("freew.hf-header-from-top", out var cmd).Should().BeTrue();
+
+        var ctx = new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "36" });
+        cmd!.Execute(ctx);
+
+        editor.Model.Page.HeaderDistancePt.Should().Be(36, "HeaderDistancePt must be set to the given value");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_FooterFromBottomCommand_WritesDistanceIntoModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        registry.TryGet("freew.hf-footer-from-bottom", out var cmd).Should().BeTrue();
+
+        var ctx = new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "54" });
+        cmd!.Execute(ctx);
+
+        editor.Model.Page.FooterDistancePt.Should().Be(54, "FooterDistancePt must be set to the given value");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_InsertPageNumberIntoFooterSlot_WritesPageNumberRun()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        editor.Model.Footer.Should().BeNull("footer starts empty");
+        registry.TryGet("freew.hf-insert-page-number-footer", out var cmd).Should().BeTrue();
+        cmd!.Execute(RibbonCommandContext.Empty);
+
+        editor.Model.Footer.Should().NotBeNull("inserting a page number must create the footer slot");
+        var runs = editor.Model.Footer!.Paragraphs.SelectMany(p => p.Runs).ToList();
+        runs.Should().Contain(r => r.FieldKind == RunFieldKind.PageNumber,
+            "a page-number field run must be present after the command");
+    }
+
+    [StaFact]
+    public void HeaderFooterDesign_InsertPageNumberTwice_DoesNotDuplicate()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        registry.TryGet("freew.hf-insert-page-number-footer", out var cmd).Should().BeTrue();
+        cmd!.Execute(RibbonCommandContext.Empty);
+        cmd.Execute(RibbonCommandContext.Empty);
+
+        var pageNumberCount = editor.Model.Footer!.Paragraphs.SelectMany(p => p.Runs)
+            .Count(r => r.FieldKind == RunFieldKind.PageNumber);
+        pageNumberCount.Should().Be(1, "inserting page number twice must not duplicate the field run");
     }
 }
