@@ -33,6 +33,14 @@ public sealed class App : Application
         RequestedThemeVariant = ThemeVariant.Light;
         Styles.Add(new FluentTheme());
 
+        // App-wide compact dialog control styles: override Avalonia Fluent's oversized defaults for
+        // CheckBox, RadioButton, TabItem, and ListBox/ListBoxItem to match the WPF shell's compact look.
+        // Applied AFTER FluentTheme so they override its defaults.  The ribbon's own TabControl.Styles
+        // block (AvaloniaRibbonRenderer.ApplyRibbonTheme) is a local style collection with higher
+        // priority than application-level styles, so it is unaffected by this block.
+        foreach (var style in DialogControlStyles.Build())
+            Styles.Add(style);
+
         // Select the active brand theme and register token brushes into Application.Resources
         // so that chrome surfaces can look them up by key.  FREEX_THEME=midnight swaps in the
         // alternate palette; otherwise the default FreeX palette applies (values are identical
