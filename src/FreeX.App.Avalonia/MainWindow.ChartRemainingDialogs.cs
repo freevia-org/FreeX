@@ -310,22 +310,28 @@ public sealed partial class MainWindow
     private async Task<ChartAreaFormatInput?> ShowFormatChartAreaDialogAsync(ChartAreaFormatInput current)
     {
         // Per-color edit state so each picker button updates its own field and label.
+        // Layout matches the WPF ChartAreaLegendDialog: "Fill & Line" group-box containing an inline
+        // help text, three color-picker buttons (chart area fill, plot area fill, plot area border) and
+        // a border-width text box; buttons are [OK][Cancel] right-aligned (primary on the left).
         var state = current;
 
-        var chartAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_ChartAreaFill"), current.ChartAreaFillColor), Width = 260 };
-        ApplyChartButtonChrome(chartAreaButton, 260);
+        // Button width matches WPF inner content area (~380px dialog → 300px control width).
+        const int ControlWidth = 300;
+
+        var chartAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_ChartAreaFill"), current.ChartAreaFillColor), Width = ControlWidth };
+        ApplyChartButtonChrome(chartAreaButton, ControlWidth);
         AutomationProperties.SetAutomationId(chartAreaButton, "ChartAreaFillButton");
-        var plotAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaFill"), current.PlotAreaFillColor), Width = 260 };
-        ApplyChartButtonChrome(plotAreaButton, 260);
+        var plotAreaButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaFill"), current.PlotAreaFillColor), Width = ControlWidth };
+        ApplyChartButtonChrome(plotAreaButton, ControlWidth);
         AutomationProperties.SetAutomationId(plotAreaButton, "ChartAreaPlotFillButton");
-        var plotBorderButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaBorder"), current.PlotAreaBorderColor), Width = 260 };
-        ApplyChartButtonChrome(plotBorderButton, 260);
+        var plotBorderButton = new Button { Content = DescribeColor(UiText.Get("ChartArea_PlotAreaBorder"), current.PlotAreaBorderColor), Width = ControlWidth };
+        ApplyChartButtonChrome(plotBorderButton, ControlWidth);
         AutomationProperties.SetAutomationId(plotBorderButton, "ChartAreaPlotBorderButton");
 
         var borderWidthBox = new TextBox
         {
             Text = current.PlotAreaBorderThickness.ToString(CultureInfo.InvariantCulture),
-            Width = 260,
+            Width = ControlWidth,
             Height = 24,
             MinHeight = 24,
             MaxHeight = 24,
@@ -373,13 +379,45 @@ public sealed partial class MainWindow
             }
         };
 
+        // "Fill & Line" group box — matches WPF CreateGroupBox(ChartDialog_FillLineGroup, ...) with
+        // the inline help paragraph at the top (ChartAreaLegend_FillLineHelpText).
+        var fillLineStack = new StackPanel
+        {
+            Margin = new Thickness(10, 8, 10, 10),
+            Spacing = 6,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("ChartAreaLegend_FillLineHelpText"),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.FromRgb(96, 96, 96)),
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                new TextBlock { Text = UiText.Get("ChartAreaLegend_ChartAreaFillColorLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                chartAreaButton,
+                new TextBlock { Text = UiText.Get("ChartAreaLegend_PlotAreaFillColorLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                plotAreaButton,
+                new TextBlock { Text = UiText.Get("ChartAreaLegend_PlotAreaBorderColorLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 4, 0, 0) },
+                plotBorderButton,
+                new TextBlock { Text = UiText.Get("ChartAreaLegend_PlotAreaBorderWidthLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
+                borderWidthBox,
+            },
+        };
+
+        var fillLineGroup = new GroupBox
+        {
+            Header = UiText.Get("ChartDialog_FillLineGroup"),
+            Content = fillLineStack,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+
+        // Dialog: SizeToContent (set by NewChartDialog) — no fixed Width/Height so the group box
+        // expands naturally, matching the WPF 420×(auto) layout.
         var dialog = NewChartDialog(UiText.Get("ChartArea_Title"), "FormatChartAreaDialog");
-        dialog.Width = 340;
-        dialog.Height = 330;
-        dialog.MinWidth = 340;
-        dialog.MinHeight = 330;
-        dialog.MaxWidth = 340;
-        dialog.MaxHeight = 330;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
@@ -402,17 +440,11 @@ public sealed partial class MainWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 300,
+            Spacing = 0,
+            MinWidth = 380,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartArea_FillLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
-                chartAreaButton,
-                plotAreaButton,
-                new TextBlock { Text = UiText.Get("ChartArea_BorderLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 6, 0, 0) },
-                plotBorderButton,
-                new TextBlock { Text = UiText.Get("ChartArea_BorderWidthLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
-                borderWidthBox,
+                fillLineGroup,
                 buttonRow,
             },
         };
