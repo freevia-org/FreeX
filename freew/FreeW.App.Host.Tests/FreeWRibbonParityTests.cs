@@ -841,8 +841,7 @@ public sealed class FreeWRibbonParityTests
                 "freew.merge-greeting-line",
                 "freew.merge-field",
                 "freew.merge-match-fields",
-                "freew.merge-next-record",
-                "freew.merge-record-number",
+                "freew.merge-rules",           // Rules dropdown (replaces bare next-record / record-number buttons)
                 // Preview Results group
                 "freew.merge-preview",
                 "freew.merge-preview-first",
@@ -864,8 +863,7 @@ public sealed class FreeWRibbonParityTests
                 "Greeting Line",
                 "Insert Merge Field",
                 "Match Fields",
-                "Next Record",
-                "Merge Record #",
+                "Rules",
                 "Preview Results",
                 "First Record",
                 "Previous Record",
@@ -885,6 +883,26 @@ public sealed class FreeWRibbonParityTests
                 ("freew.start-mail-merge-directory", "Directory"),
                 ("freew.start-mail-merge-normal", "Normal Word Document"));
 
+        // Verify the Rules dropdown exposes all rule command ids.
+        var rulesDropdown = mailings.Groups.Single(g => g.Id == "merge-write").Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.merge-rules");
+        rulesDropdown.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal(
+                "freew.merge-rule-if",
+                "freew.merge-rule-skip-record-if",
+                "freew.merge-rule-next-record-if",
+                "freew.merge-next-record",
+                "freew.merge-record-number",
+                "freew.merge-sequence-number",
+                "freew.merge-rule-fill-in",
+                "freew.merge-rule-ask",
+                "freew.merge-rule-set",
+                "freew.merge-rule-ref");
+
         foreach (var commandId in CommandIds(mailings))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Mailings tab");
 
@@ -892,6 +910,11 @@ public sealed class FreeWRibbonParityTests
                      .Where(item => item.Kind == RibbonMenuItemKind.Command)
                      .Select(item => item.CommandId!.Value))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Start Mail Merge menu");
+
+        foreach (var commandId in rulesDropdown.Menu.Items
+                     .Where(item => item.Kind == RibbonMenuItemKind.Command)
+                     .Select(item => item.CommandId!.Value))
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Rules menu");
     }
 
     [StaFact]

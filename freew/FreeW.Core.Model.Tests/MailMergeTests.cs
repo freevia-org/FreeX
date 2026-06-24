@@ -530,4 +530,469 @@ public class MailMergeTests
 
         m[FieldRole.Country].Should().BeNull();
     }
+
+    // ── MergeRuleEvaluator — If…Then…Else ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_IfEqual_TrueCondition_EmitsTrueText()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Status"] = "VIP" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Status", MergeConditionOperator.Equal, "VIP", "Gold", "Standard");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result.Should().NotBeNull();
+        result!.Value.Text.Should().Be("Gold");
+        result.Value.SkipRecord.Should().BeFalse();
+        result.Value.AdvanceRecord.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfEqual_FalseCondition_EmitsFalseText()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Status"] = "Regular" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Status", MergeConditionOperator.Equal, "VIP", "Gold", "Standard");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Standard");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfNotEqual_EmitsCorrectBranch()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Country"] = "UK" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Country", MergeConditionOperator.NotEqual, "US", "International", "Domestic");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("International");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfLessThan_NumericComparison()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Score"] = "45" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Score", MergeConditionOperator.LessThan, "50", "Low", "High");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Low");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfGreaterThanOrEqual_NumericComparison()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Score"] = "100" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Score", MergeConditionOperator.GreaterThanOrEqual, "100", "Perfect", "Not perfect");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Perfect");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfIsBlank_TrueWhenFieldEmpty()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["MiddleName"] = "" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("MiddleName", MergeConditionOperator.IsBlank, "", "No middle name", "Has middle name");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("No middle name");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfIsNotBlank_TrueWhenFieldPopulated()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Title"] = "Dr." };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Title", MergeConditionOperator.IsNotBlank, "", "Dr. ", "");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Dr. ");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfContains_CaseInsensitiveSubstring()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Notes"] = "Premium subscriber since 2020" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Notes", MergeConditionOperator.Contains, "premium", "VIP", "Regular");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("VIP");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_IfMissingField_TreatedAsBlank()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("NoSuchField", MergeConditionOperator.IsBlank, "", "Blank", "NotBlank");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Blank");
+    }
+
+    // ── MergeRuleEvaluator — Skip Record If ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_SkipRecordIf_ConditionTrue_MarksSkipAndSetsFlag()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Opted Out"] = "Yes" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildSkipRecordIfInstruction("Opted Out", MergeConditionOperator.Equal, "Yes");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 2);
+
+        result!.Value.SkipRecord.Should().BeTrue();
+        result.Value.Text.Should().BeEmpty();
+        state.SkippedIndices.Should().Contain(2);
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_SkipRecordIf_ConditionFalse_DoesNotSkip()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Opted Out"] = "No" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildSkipRecordIfInstruction("Opted Out", MergeConditionOperator.Equal, "Yes");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 2);
+
+        result!.Value.SkipRecord.Should().BeFalse();
+        state.SkippedIndices.Should().BeEmpty();
+    }
+
+    // ── MergeRuleEvaluator — Next Record If ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_NextRecordIf_ConditionTrue_SetsAdvanceFlag()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Type"] = "Header" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction("Type", MergeConditionOperator.Equal, "Header");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.AdvanceRecord.Should().BeTrue();
+        result.Value.SkipRecord.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_NextRecordIf_ConditionFalse_NoAdvance()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Type"] = "Data" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction("Type", MergeConditionOperator.Equal, "Header");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.AdvanceRecord.Should().BeFalse();
+    }
+
+    // ── MergeRuleEvaluator — Merge Sequence # ───────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_MergeSequenceNumber_EmitsCurrentSequenceNumber()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState { SequenceNumber = 3 };
+        var instruction = "Merge Sequence #";
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("3");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_MergeSequenceNumber_CaseInsensitive()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState { SequenceNumber = 7 };
+
+        var result = MergeRuleEvaluator.Evaluate("merge sequence #", row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("7");
+    }
+
+    // ── MergeRuleEvaluator — Set / Ref Bookmark ─────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_SetBookmark_StoresValueInState()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Region"] = "EMEA" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildSetInstruction("MyBookmark", "fixed value");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().BeEmpty();
+        state.Bookmarks["MyBookmark"].Should().Be("fixed value");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_RefBookmark_EmitsStoredValue()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+        state.Bookmarks["Greeting"] = "Hello, friend";
+        var instruction = MergeRuleEvaluator.BuildRefInstruction("Greeting");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Hello, friend");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_RefBookmark_MissingBookmark_EmitsEmpty()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildRefInstruction("NoSuchBookmark");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().BeEmpty();
+    }
+
+    // ── MergeRuleEvaluator — Fill-in / Ask ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_FillIn_EmitsPrePopulatedAnswer()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+        state.FillInAnswers["Enter your name:"] = "John Smith";
+        var instruction = MergeRuleEvaluator.BuildFillInInstruction("Enter your name:");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("John Smith");
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_FillIn_MissingAnswer_EmitsEmpty()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildFillInInstruction("What is your department?");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MergeRuleEvaluator_Ask_StoresAnswerAsBookmarkAndEmitsIt()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+        state.AskAnswers["Manager"] = "Alice";
+        var instruction = MergeRuleEvaluator.BuildAskInstruction("Manager", "Who is the manager?");
+
+        var result = MergeRuleEvaluator.Evaluate(instruction, row, state, recordIndex: 0);
+
+        result!.Value.Text.Should().Be("Alice");
+        state.Bookmarks["Manager"].Should().Be("Alice");
+    }
+
+    // ── MergeRuleEvaluator — unrecognised instruction ────────────────────────────────────────────
+
+    [Fact]
+    public void MergeRuleEvaluator_UnrecognisedInstruction_ReturnsNull()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = "Ada" };
+        var state = new MergeState();
+
+        var result = MergeRuleEvaluator.Evaluate("Name", row, state, recordIndex: 0);
+
+        result.Should().BeNull("plain merge-field names are not rule instructions");
+    }
+
+    // ── MergeRuleEvaluator.EvaluateCondition — standalone operator tests ─────────────────────────
+
+    [Theory]
+    [InlineData("apple", MergeConditionOperator.Equal, "apple", true)]
+    [InlineData("apple", MergeConditionOperator.Equal, "Apple", true)]   // case-insensitive
+    [InlineData("apple", MergeConditionOperator.NotEqual, "banana", true)]
+    [InlineData("10",    MergeConditionOperator.LessThan, "20", true)]
+    [InlineData("20",    MergeConditionOperator.LessThan, "10", false)]
+    [InlineData("10",    MergeConditionOperator.LessThanOrEqual, "10", true)]
+    [InlineData("15",    MergeConditionOperator.GreaterThan, "10", true)]
+    [InlineData("10",    MergeConditionOperator.GreaterThanOrEqual, "10", true)]
+    [InlineData("",      MergeConditionOperator.IsBlank, "", true)]
+    [InlineData("  ",    MergeConditionOperator.IsBlank, "", true)]
+    [InlineData("x",     MergeConditionOperator.IsBlank, "", false)]
+    [InlineData("x",     MergeConditionOperator.IsNotBlank, "", true)]
+    [InlineData("Hello World", MergeConditionOperator.Contains, "world", true)]
+    [InlineData("Hello World", MergeConditionOperator.Contains, "xyz", false)]
+    public void EvaluateCondition_OperatorCases(string fieldValue, MergeConditionOperator op, string value, bool expected)
+    {
+        MergeRuleEvaluator.EvaluateCondition(fieldValue, op, value).Should().Be(expected);
+    }
+
+    // ── MailMerge.MergeAllWithRules — integration tests ──────────────────────────────────────────
+
+    [Fact]
+    public void MergeAllWithRules_SkipRecordIf_ExcludesMatchingRecords()
+    {
+        var template = new TextDocument();
+        var para = new Paragraph();
+        // First run: Skip Record If Type = Header
+        para.Runs.Add(new Run($"{MailMerge.FieldOpen}{MergeRuleEvaluator.BuildSkipRecordIfInstruction("Type", MergeConditionOperator.Equal, "Header")}{MailMerge.FieldClose}"));
+        para.Runs.Add(new Run("«Name»"));
+        template.Blocks.Add(para);
+
+        var data = new MergeData(
+            ["Type", "Name"],
+            [["Header", "Section A"], ["Data", "Alice"], ["Data", "Bob"], ["Header", "Section B"], ["Data", "Carol"]]);
+
+        var state = new MergeState();
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        // Header records (indices 0 and 3) should be skipped.
+        merged.Should().HaveCount(3);
+        merged[0].PlainText.Should().Contain("Alice");
+        merged[1].PlainText.Should().Contain("Bob");
+        merged[2].PlainText.Should().Contain("Carol");
+        state.SkippedIndices.Should().BeEquivalentTo([0, 3]);
+    }
+
+    [Fact]
+    public void MergeAllWithRules_MergeSequenceNumber_CountsNonSkippedRecords()
+    {
+        // Template: «Skip Record If Type = Header»«Merge Sequence #» «Name»
+        var template = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}{MergeRuleEvaluator.BuildSkipRecordIfInstruction("Type", MergeConditionOperator.Equal, "Header")}{MailMerge.FieldClose}" +
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose} «Name»"));
+        template.Blocks.Add(para);
+
+        var data = new MergeData(
+            ["Type", "Name"],
+            [["Header", "Ignored"], ["Data", "Alice"], ["Data", "Bob"]]);
+
+        var state = new MergeState();
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        // Record 0 (Header) is skipped; Alice is sequence 1, Bob is sequence 2.
+        merged.Should().HaveCount(2);
+        merged[0].PlainText.Should().Contain("1 Alice");
+        merged[1].PlainText.Should().Contain("2 Bob");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_SetAndRefBookmark_ResolveAcrossRuns()
+    {
+        // Template: «Set Region "EMEA"»Dear «Name», your region is «Ref Region».
+        var template = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}{MergeRuleEvaluator.BuildSetInstruction("Region", "EMEA")}{MailMerge.FieldClose}" +
+            $"Dear «Name», your region is {MailMerge.FieldOpen}{MergeRuleEvaluator.BuildRefInstruction("Region")}{MailMerge.FieldClose}."));
+        template.Blocks.Add(para);
+
+        var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
+        var state = new MergeState();
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        merged.Should().HaveCount(2);
+        merged[0].PlainText.Should().Be("Dear Ada, your region is EMEA.");
+        merged[1].PlainText.Should().Be("Dear Grace, your region is EMEA.");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_IfThenElse_EmitsCorrectBranchPerRecord()
+    {
+        // Template: «If Status = VIP Then "Gold treatment" Else "Standard treatment"»
+        var template = new TextDocument();
+        var para = new Paragraph();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction("Status", MergeConditionOperator.Equal, "VIP", "Gold treatment", "Standard treatment");
+        para.Runs.Add(new Run($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}"));
+        template.Blocks.Add(para);
+
+        var data = new MergeData(["Status"], [["VIP"], ["Regular"], ["VIP"]]);
+        var state = new MergeState();
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        merged.Should().HaveCount(3);
+        merged[0].PlainText.Should().Be("Gold treatment");
+        merged[1].PlainText.Should().Be("Standard treatment");
+        merged[2].PlainText.Should().Be("Gold treatment");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_FillIn_UsesPrePopulatedAnswer()
+    {
+        var template = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run(
+            $"Hello «Name», {MailMerge.FieldOpen}{MergeRuleEvaluator.BuildFillInInstruction("Department:")}{MailMerge.FieldClose}"));
+        template.Blocks.Add(para);
+
+        var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
+        var state = new MergeState();
+        state.FillInAnswers["Department:"] = "Engineering";
+
+        var merged = MailMerge.MergeAllWithRules(template, data, state);
+
+        merged.Should().HaveCount(2);
+        merged[0].PlainText.Should().Be("Hello Ada, Engineering");
+        merged[1].PlainText.Should().Be("Hello Grace, Engineering");
+    }
+
+    // ── SubstituteSpecialWithRules — unit tests ──────────────────────────────────────────────────
+
+    [Fact]
+    public void SubstituteSpecialWithRules_MergeSequenceNumber_EmitsSequenceNumber()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState { SequenceNumber = 5 };
+
+        var result = MailMerge.SubstituteSpecialWithRules(
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}",
+            row, state, recordIndex: 7, out var advance, out var skip);
+
+        result.Should().Be("5");
+        advance.Should().BeFalse();
+        skip.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SubstituteSpecialWithRules_SkipRule_SetsSkipFlag()
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["X"] = "Y" };
+        var state = new MergeState();
+        var instruction = MergeRuleEvaluator.BuildSkipRecordIfInstruction("X", MergeConditionOperator.Equal, "Y");
+
+        MailMerge.SubstituteSpecialWithRules(
+            $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}",
+            row, state, recordIndex: 1, out _, out var skip);
+
+        skip.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SubstituteSpecialWithRules_MergeRecordNumber_StillWorks()
+    {
+        var row = new Dictionary<string, string>();
+        var state = new MergeState();
+
+        var result = MailMerge.SubstituteSpecialWithRules(
+            $"Record {MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}",
+            row, state, recordIndex: 4, out _, out _);
+
+        result.Should().Be("Record 4");
+    }
 }

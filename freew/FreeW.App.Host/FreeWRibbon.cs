@@ -542,10 +542,25 @@ internal static class FreeWRibbon
                     g.Medium("freew.merge-greeting-line", "Greeting Line", RibbonCommandIconKind.GreetingLine, "G");
                     g.Medium("freew.merge-field", "Insert Merge Field", RibbonCommandIconKind.MergeField, "F");
                     g.Medium("freew.merge-match-fields", "Match Fields", RibbonCommandIconKind.MergeField, "H");
-                    // Rules: special merge fields exposed in Word's "Rules" dropdown; surfaced here as
-                    // individual small items for parity without needing a full expression evaluator.
-                    g.Medium("freew.merge-next-record", "Next Record", RibbonCommandIconKind.Next, "N");
-                    g.Medium("freew.merge-record-number", "Merge Record #", RibbonCommandIconKind.Field, "R");
+                    // Rules: Word's "Rules" dropdown — conditional expressions and special fields that are
+                    // evaluated per-record by MergeRuleEvaluator during Preview Results and Finish & Merge.
+                    g.Medium("freew.merge-rules", "Rules", RibbonCommandIconKind.Field, "U", menu: m =>
+                    {
+                        m.Item("freew.merge-rule-if", "If…Then…Else", "I");
+                        m.Separator();
+                        m.Item("freew.merge-rule-skip-record-if", "Skip Record If", "K");
+                        m.Item("freew.merge-rule-next-record-if", "Next Record If", "X");
+                        m.Separator();
+                        m.Item("freew.merge-next-record", "Next Record", "N");
+                        m.Item("freew.merge-record-number", "Merge Record #", "R");
+                        m.Item("freew.merge-sequence-number", "Merge Sequence #", "Q");
+                        m.Separator();
+                        m.Item("freew.merge-rule-fill-in", "Fill-in", "L");
+                        m.Item("freew.merge-rule-ask", "Ask", "A");
+                        m.Separator();
+                        m.Item("freew.merge-rule-set", "Set Bookmark", "B");
+                        m.Item("freew.merge-rule-ref", "Ref Bookmark", "E");
+                    });
                 });
                 tab.Group("merge-preview", "Preview Results", "P", 120, g =>
                 {

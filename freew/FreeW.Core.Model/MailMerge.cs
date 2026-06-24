@@ -1,6 +1,616 @@
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FreeW.Core.Model;
+
+// ── Merge rule types ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// The comparison operator used in a conditional merge rule (If…Then…Else, Skip Record If, Next
+/// Record If). Matches the operators Word exposes in its Rules dialog.
+/// </summary>
+public enum MergeConditionOperator
+{
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    IsBlank,
+    IsNotBlank,
+    Contains
+}
+
+/// <summary>
+/// A single conditional expression: <c>FieldName Operator Value</c>. For <see cref="MergeConditionOperator.IsBlank"/>
+/// and <see cref="MergeConditionOperator.IsNotBlank"/> the <see cref="Value"/> is ignored. For
+/// <see cref="MergeConditionOperator.Contains"/> the comparison is case-insensitive substring. All
+/// other comparisons are case-insensitive string comparisons (numeric comparison is tried first when
+/// both sides parse as <see cref="double"/>).
+/// </summary>
+public sealed class MergeCondition
+{
+    public string FieldName { get; init; } = string.Empty;
+    public MergeConditionOperator Operator { get; init; }
+    public string Value { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Carries bookmark values set by <c>«Set»</c> rules and Fill-in / Ask answers collected at merge
+/// time. Passed through the entire merge run so later rules can reference earlier values.
+/// </summary>
+public sealed class MergeState
+{
+    /// <summary>Named bookmark values set by <c>«Set Name Value»</c> rules.</summary>
+    public Dictionary<string, string> Bookmarks { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Answers given by the user for Fill-in prompts (keyed by prompt text, so repeated identical
+    /// prompts reuse the same answer without asking again).
+    /// </summary>
+    public Dictionary<string, string> FillInAnswers { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Answers for Ask prompts (keyed by bookmark name). Ask sets a bookmark and the answer persists
+    /// for the whole merge run.
+    /// </summary>
+    public Dictionary<string, string> AskAnswers { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Records whose 0-based index appears in this set are skipped in Finish &amp; Merge output.</summary>
+    public HashSet<int> SkippedIndices { get; } = [];
+
+    /// <summary>The count of non-skipped records emitted so far (the merge sequence number).</summary>
+    public int SequenceNumber { get; set; }
+}
+
+/// <summary>
+/// The result of evaluating a merge rule field instruction against a single data row.
+/// </summary>
+public readonly record struct MergeRuleResult(
+    /// <summary>The text to emit in place of the field instruction.</summary>
+    string Text,
+    /// <summary>True when this result causes the current record to be skipped.</summary>
+    bool SkipRecord,
+    /// <summary>True when this result causes the record index to advance by one («Next Record If»).</summary>
+    bool AdvanceRecord);
+
+/// <summary>
+/// Pure, deterministic evaluator for Word's conditional merge-rule field instructions. All rule
+/// placeholders follow the same guillemet convention as ordinary merge fields: <c>«instruction»</c>.
+/// The evaluator is stateless per-call except for the <see cref="MergeState"/> passed in.
+/// <para>
+/// Supported instructions (parsed from the text between guillemets):
+/// <list type="bullet">
+///   <item><c>If FieldName Op Value Then TrueText Else FalseText</c> — emit one literal vs another.</item>
+///   <item><c>Skip Record If FieldName Op Value</c> — mark record as skipped when condition is true.</item>
+///   <item><c>Next Record If FieldName Op Value</c> — advance to next record when condition is true.</item>
+///   <item><c>Merge Sequence #</c> — the 1-based sequence number of non-skipped records emitted so far.</item>
+///   <item><c>Fill-in Prompt</c> — emit the answer given by the user for this prompt (UI-level: the
+///     answer is pre-populated in <see cref="MergeState.FillInAnswers"/> before calling).</item>
+///   <item><c>Ask BookmarkName Prompt</c> — emit the bookmark value (answer pre-populated in
+///     <see cref="MergeState.AskAnswers"/>); sets the bookmark in <see cref="MergeState.Bookmarks"/>.</item>
+///   <item><c>Set BookmarkName Value</c> — set a named bookmark; emits nothing.</item>
+///   <item><c>Ref BookmarkName</c> — emit the current value of a named bookmark.</item>
+/// </list>
+/// </para>
+/// </summary>
+public static class MergeRuleEvaluator
+{
+    /// <summary>
+    /// Evaluate a single field-instruction string (the text <em>between</em> the guillemets) against
+    /// <paramref name="row"/> and <paramref name="state"/>. Returns a <see cref="MergeRuleResult"/>
+    /// describing the text to emit and any control effects (skip/advance). Returns
+    /// <c>default(MergeRuleResult)</c> (empty text, no effects) when the instruction is not recognised
+    /// as a rule (so the caller can fall back to plain merge-field substitution).
+    /// </summary>
+    public static MergeRuleResult? Evaluate(
+        string instruction,
+        IReadOnlyDictionary<string, string> row,
+        MergeState state,
+        int recordIndex)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(state);
+
+        var span = instruction.AsSpan().Trim();
+
+        // ── Merge Sequence # ─────────────────────────────────────────────────────────────────────
+        if (span.Equals("Merge Sequence #", StringComparison.OrdinalIgnoreCase))
+            return new MergeRuleResult(state.SequenceNumber.ToString(), false, false);
+
+        // ── Set BookmarkName Value ────────────────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Set ", out var afterSet))
+        {
+            var setTokens = Tokenize(afterSet.ToString());
+            if (setTokens.Count >= 1)
+            {
+                var bookmarkName = setTokens[0];
+                // The value is everything after the bookmark name, unquoted.
+                var rawValue = setTokens.Count >= 2 ? setTokens[1] : string.Empty;
+                // Resolve any merge-field references inside the value.
+                var resolvedValue = SubstituteRow(rawValue, row);
+                state.Bookmarks[bookmarkName] = resolvedValue;
+                return new MergeRuleResult(string.Empty, false, false);
+            }
+        }
+
+        // ── Ref BookmarkName ─────────────────────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Ref ", out var afterRef))
+        {
+            var name = afterRef.Trim();
+            var value = state.Bookmarks.TryGetValue(name.ToString(), out var bv) ? bv : string.Empty;
+            return new MergeRuleResult(value, false, false);
+        }
+
+        // ── Fill-in Prompt ───────────────────────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Fill-in ", out var afterFillIn))
+        {
+            var prompt = Unquote(afterFillIn.Trim());
+            var answer = state.FillInAnswers.TryGetValue(prompt, out var fa) ? fa : string.Empty;
+            return new MergeRuleResult(answer, false, false);
+        }
+
+        // ── Ask BookmarkName "Prompt" ─────────────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Ask ", out var afterAsk))
+        {
+            var askTokens = Tokenize(afterAsk.ToString());
+            if (askTokens.Count >= 1)
+            {
+                var bmName = askTokens[0];
+                var prompt = askTokens.Count >= 2 ? askTokens[1] : string.Empty;
+                var answer = state.AskAnswers.TryGetValue(bmName, out var aa) ? aa : string.Empty;
+                state.Bookmarks[bmName] = answer;
+                return new MergeRuleResult(answer, false, false);
+            }
+        }
+
+        // ── If FieldName Op Value Then TrueText Else FalseText ───────────────────────────────────
+        if (TryParsePrefix(span, "If ", out var afterIf))
+        {
+            if (TryParseConditionAndBranches(afterIf, out var cond, out var trueText, out var falseText))
+            {
+                var fieldValue = LookupField(row, cond.FieldName);
+                var condMet = EvaluateCondition(fieldValue, cond.Operator, cond.Value);
+                var emit = condMet ? SubstituteRow(trueText, row) : SubstituteRow(falseText, row);
+                return new MergeRuleResult(emit, false, false);
+            }
+        }
+
+        // ── Skip Record If FieldName Op Value ────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Skip Record If ", out var afterSkip))
+        {
+            if (TryParseCondition(afterSkip, out var cond))
+            {
+                var fieldValue = LookupField(row, cond.FieldName);
+                var condMet = EvaluateCondition(fieldValue, cond.Operator, cond.Value);
+                if (condMet)
+                    state.SkippedIndices.Add(recordIndex);
+                return new MergeRuleResult(string.Empty, condMet, false);
+            }
+        }
+
+        // ── Next Record If FieldName Op Value ────────────────────────────────────────────────────
+        if (TryParsePrefix(span, "Next Record If ", out var afterNextIf))
+        {
+            if (TryParseCondition(afterNextIf, out var cond))
+            {
+                var fieldValue = LookupField(row, cond.FieldName);
+                var condMet = EvaluateCondition(fieldValue, cond.Operator, cond.Value);
+                return new MergeRuleResult(string.Empty, false, condMet);
+            }
+        }
+
+        return null; // not a recognised rule instruction
+    }
+
+    /// <summary>
+    /// Build the field instruction string (to be wrapped in guillemets) for an If…Then…Else rule.
+    /// Field names containing spaces are quoted so the parser can round-trip them. For the
+    /// <see cref="MergeConditionOperator.IsBlank"/> and <see cref="MergeConditionOperator.IsNotBlank"/>
+    /// operators no comparison value is emitted (the value is ignored by the evaluator anyway).
+    /// </summary>
+    public static string BuildIfInstruction(string fieldName, MergeConditionOperator op, string value, string trueText, string falseText)
+    {
+        var condPart = BuildConditionPart(fieldName, op, value);
+        return $"If {condPart} Then {Quote(trueText)} Else {Quote(falseText)}";
+    }
+
+    /// <summary>Build the field instruction string for a Skip Record If rule.</summary>
+    public static string BuildSkipRecordIfInstruction(string fieldName, MergeConditionOperator op, string value) =>
+        $"Skip Record If {BuildConditionPart(fieldName, op, value)}";
+
+    /// <summary>Build the field instruction string for a Next Record If rule.</summary>
+    public static string BuildNextRecordIfInstruction(string fieldName, MergeConditionOperator op, string value) =>
+        $"Next Record If {BuildConditionPart(fieldName, op, value)}";
+
+    // Build the "FieldName Op [Value]" portion of a condition, omitting the value for blank operators.
+    private static string BuildConditionPart(string fieldName, MergeConditionOperator op, string value)
+    {
+        var opToken = OperatorToToken(op);
+        if (op == MergeConditionOperator.IsBlank || op == MergeConditionOperator.IsNotBlank)
+            return $"{QuoteIfNeeded(fieldName)} {opToken}";
+        return $"{QuoteIfNeeded(fieldName)} {opToken} {Quote(value)}";
+    }
+
+    /// <summary>Build the field instruction string for a Set Bookmark rule.</summary>
+    public static string BuildSetInstruction(string bookmarkName, string value) =>
+        $"Set {bookmarkName} {Quote(value)}";
+
+    /// <summary>Build the field instruction string for a Ref Bookmark rule.</summary>
+    public static string BuildRefInstruction(string bookmarkName) => $"Ref {bookmarkName}";
+
+    /// <summary>Build the field instruction string for a Fill-in rule.</summary>
+    public static string BuildFillInInstruction(string prompt) => $"Fill-in {Quote(prompt)}";
+
+    /// <summary>Build the field instruction string for an Ask rule.</summary>
+    public static string BuildAskInstruction(string bookmarkName, string prompt) => $"Ask {bookmarkName} {Quote(prompt)}";
+
+    // ── Condition evaluation ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Evaluate <paramref name="fieldValue"/> against <paramref name="op"/> and
+    /// <paramref name="ruleValue"/>. Numeric comparison is attempted when both sides parse as
+    /// <see cref="double"/>; otherwise lexicographic (case-insensitive) string comparison.
+    /// </summary>
+    public static bool EvaluateCondition(string fieldValue, MergeConditionOperator op, string ruleValue)
+    {
+        return op switch
+        {
+            MergeConditionOperator.IsBlank       => string.IsNullOrWhiteSpace(fieldValue),
+            MergeConditionOperator.IsNotBlank    => !string.IsNullOrWhiteSpace(fieldValue),
+            MergeConditionOperator.Contains      => fieldValue.Contains(ruleValue, StringComparison.OrdinalIgnoreCase),
+            _ => CompareValues(fieldValue, ruleValue, op)
+        };
+    }
+
+    private static bool CompareValues(string fieldValue, string ruleValue, MergeConditionOperator op)
+    {
+        // Try numeric comparison first.
+        if (double.TryParse(fieldValue, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var fNum) &&
+            double.TryParse(ruleValue,  System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rNum))
+        {
+            return op switch
+            {
+                MergeConditionOperator.Equal              => fNum == rNum,
+                MergeConditionOperator.NotEqual           => fNum != rNum,
+                MergeConditionOperator.LessThan           => fNum  < rNum,
+                MergeConditionOperator.LessThanOrEqual    => fNum <= rNum,
+                MergeConditionOperator.GreaterThan        => fNum  > rNum,
+                MergeConditionOperator.GreaterThanOrEqual => fNum >= rNum,
+                _ => false
+            };
+        }
+
+        // Fallback: case-insensitive string comparison.
+        var cmp = string.Compare(fieldValue, ruleValue, StringComparison.OrdinalIgnoreCase);
+        return op switch
+        {
+            MergeConditionOperator.Equal              => cmp == 0,
+            MergeConditionOperator.NotEqual           => cmp != 0,
+            MergeConditionOperator.LessThan           => cmp  < 0,
+            MergeConditionOperator.LessThanOrEqual    => cmp <= 0,
+            MergeConditionOperator.GreaterThan        => cmp  > 0,
+            MergeConditionOperator.GreaterThanOrEqual => cmp >= 0,
+            _ => false
+        };
+    }
+
+    // ── Parsing helpers ──────────────────────────────────────────────────────────────────────────
+
+    private static bool TryParseConditionAndBranches(
+        ReadOnlySpan<char> span,
+        out MergeCondition condition,
+        out string trueText,
+        out string falseText)
+    {
+        condition = new MergeCondition();
+        trueText = falseText = string.Empty;
+
+        // Parse: FieldName Op Value Then "TrueText" Else "FalseText"
+        // The FieldName ends at the first recognized operator keyword or symbol.
+        if (!TryParseConditionCore(span, out condition, out var rest))
+            return false;
+
+        // Expect "Then" keyword.
+        rest = rest.TrimStart();
+        if (!TryParsePrefix(rest, "Then ", out var afterThen))
+            return false;
+        afterThen = afterThen.TrimStart();
+
+        // Then-text (optionally quoted), followed by optional " Else ...".
+        if (TryParsePrefix(afterThen, "Else ", out _))
+        {
+            // Empty then-text.
+            var elseStart = afterThen;
+            if (!TryParsePrefix(elseStart, "Else ", out var afterElse))
+                return false;
+            trueText = string.Empty;
+            falseText = Unquote(afterElse.Trim());
+            return true;
+        }
+
+        // Extract the quoted or unquoted then-text.
+        string rawThen;
+        if (afterThen.Length > 0 && afterThen[0] == '"')
+        {
+            if (!TryReadQuoted(afterThen, out rawThen, out var afterQuote))
+                return false;
+            afterQuote = afterQuote.TrimStart();
+            if (TryParsePrefix(afterQuote, "Else ", out var afterElse2))
+                falseText = Unquote(afterElse2.Trim());
+            trueText = rawThen;
+        }
+        else
+        {
+            // Unquoted: everything before " Else " (if present) is the then-text.
+            var elseIdx = IndexOfKeyword(afterThen, " Else ");
+            if (elseIdx >= 0)
+            {
+                trueText  = afterThen.Slice(0, elseIdx).Trim().ToString();
+                falseText = Unquote(afterThen.Slice(elseIdx + 6).Trim());
+            }
+            else
+            {
+                trueText  = afterThen.Trim().ToString();
+                falseText = string.Empty;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryParseCondition(ReadOnlySpan<char> span, out MergeCondition condition)
+    {
+        condition = new MergeCondition();
+        if (!TryParseConditionCore(span, out condition, out _))
+            return false;
+        return true;
+    }
+
+    // Core parser: FieldName Op Value → condition; rest = text after the value.
+    // Op may be a symbol (=, <>, <, <=, >, >=) or a keyword (is blank, is not blank, contains).
+    private static bool TryParseConditionCore(ReadOnlySpan<char> span, out MergeCondition condition, out ReadOnlySpan<char> rest)
+    {
+        condition = new MergeCondition();
+        rest = default;
+
+        span = span.TrimStart();
+        if (span.IsEmpty)
+            return false;
+
+        // Field name: up to the first space followed by operator.
+        // We tokenise by splitting on whitespace sequences.
+        var tokens = Tokenize(span.ToString());
+        if (tokens.Count < 2)
+            return false;
+
+        // Match: FieldName (Op | "is blank" | "is not blank" | "contains") [Value]
+        var fieldName = tokens[0];
+
+        // 2-word operators: "is blank", "is not blank", "contains"
+        if (tokens.Count >= 3 && tokens[1].Equals("is", StringComparison.OrdinalIgnoreCase) &&
+            tokens[2].Equals("blank", StringComparison.OrdinalIgnoreCase))
+        {
+            condition = new MergeCondition { FieldName = fieldName, Operator = MergeConditionOperator.IsBlank, Value = string.Empty };
+            rest = ConsumeTokens(span, 3);
+            return true;
+        }
+
+        if (tokens.Count >= 4 && tokens[1].Equals("is", StringComparison.OrdinalIgnoreCase) &&
+            tokens[2].Equals("not", StringComparison.OrdinalIgnoreCase) &&
+            tokens[3].Equals("blank", StringComparison.OrdinalIgnoreCase))
+        {
+            condition = new MergeCondition { FieldName = fieldName, Operator = MergeConditionOperator.IsNotBlank, Value = string.Empty };
+            rest = ConsumeTokens(span, 4);
+            return true;
+        }
+
+        if (tokens.Count >= 3 && tokens[1].Equals("contains", StringComparison.OrdinalIgnoreCase))
+        {
+            var value = Unquote(tokens[2].AsSpan());
+            condition = new MergeCondition { FieldName = fieldName, Operator = MergeConditionOperator.Contains, Value = value };
+            rest = ConsumeTokens(span, 3);
+            return true;
+        }
+
+        // Symbolic operators.
+        if (tokens.Count >= 3 && TryParseOperator(tokens[1].AsSpan(), out var op))
+        {
+            var rawValue = tokens[2];
+            // Allow the value to be the rest of the string (for multi-word unquoted values
+            // in Then/Else context the caller handles the rest).
+            var value = Unquote(rawValue.AsSpan());
+            condition = new MergeCondition { FieldName = fieldName, Operator = op, Value = value };
+            rest = ConsumeTokens(span, 3);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseOperator(ReadOnlySpan<char> token, out MergeConditionOperator op)
+    {
+        if (token.SequenceEqual("=".AsSpan()))           { op = MergeConditionOperator.Equal;              return true; }
+        if (token.SequenceEqual("<>".AsSpan()))          { op = MergeConditionOperator.NotEqual;           return true; }
+        if (token.SequenceEqual("!=".AsSpan()))          { op = MergeConditionOperator.NotEqual;           return true; }
+        if (token.SequenceEqual("<=".AsSpan()))          { op = MergeConditionOperator.LessThanOrEqual;    return true; }
+        if (token.SequenceEqual(">=".AsSpan()))          { op = MergeConditionOperator.GreaterThanOrEqual; return true; }
+        if (token.SequenceEqual("<".AsSpan()))           { op = MergeConditionOperator.LessThan;           return true; }
+        if (token.SequenceEqual(">".AsSpan()))           { op = MergeConditionOperator.GreaterThan;        return true; }
+        if (token.Equals("contains".AsSpan(), StringComparison.OrdinalIgnoreCase)) { op = MergeConditionOperator.Contains; return true; }
+        op = default;
+        return false;
+    }
+
+    private static string OperatorToToken(MergeConditionOperator op) => op switch
+    {
+        MergeConditionOperator.Equal              => "=",
+        MergeConditionOperator.NotEqual           => "<>",
+        MergeConditionOperator.LessThan           => "<",
+        MergeConditionOperator.LessThanOrEqual    => "<=",
+        MergeConditionOperator.GreaterThan        => ">",
+        MergeConditionOperator.GreaterThanOrEqual => ">=",
+        MergeConditionOperator.IsBlank            => "is blank",
+        MergeConditionOperator.IsNotBlank         => "is not blank",
+        MergeConditionOperator.Contains           => "contains",
+        _ => "="
+    };
+
+    // Split into whitespace-separated tokens (respecting quoted strings as single tokens).
+    private static List<string> Tokenize(string s)
+    {
+        var tokens = new List<string>();
+        var i = 0;
+        while (i < s.Length)
+        {
+            while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
+            if (i >= s.Length) break;
+            if (s[i] == '"')
+            {
+                var sb = new StringBuilder();
+                i++; // skip opening quote
+                while (i < s.Length)
+                {
+                    if (s[i] == '"')
+                    {
+                        if (i + 1 < s.Length && s[i + 1] == '"') { sb.Append('"'); i += 2; }
+                        else { i++; break; }
+                    }
+                    else { sb.Append(s[i++]); }
+                }
+                tokens.Add(sb.ToString());
+            }
+            else
+            {
+                var start = i;
+                while (i < s.Length && !char.IsWhiteSpace(s[i])) i++;
+                tokens.Add(s.Substring(start, i - start));
+            }
+        }
+        return tokens;
+    }
+
+    // Return the portion of span after consuming n whitespace-separated tokens.
+    private static ReadOnlySpan<char> ConsumeTokens(ReadOnlySpan<char> span, int n)
+    {
+        var rest = span.TrimStart();
+        for (var i = 0; i < n && !rest.IsEmpty; i++)
+        {
+            if (rest.Length > 0 && rest[0] == '"')
+            {
+                // Skip quoted token.
+                var j = 1;
+                while (j < rest.Length)
+                {
+                    if (rest[j] == '"') { j++; if (j < rest.Length && rest[j] == '"') j++; else break; }
+                    else j++;
+                }
+                rest = rest.Slice(j).TrimStart();
+            }
+            else
+            {
+                var j = 0;
+                while (j < rest.Length && !char.IsWhiteSpace(rest[j])) j++;
+                rest = rest.Slice(j).TrimStart();
+            }
+        }
+        return rest;
+    }
+
+    private static bool TryParsePrefix(ReadOnlySpan<char> span, string prefix, out ReadOnlySpan<char> rest)
+    {
+        if (span.StartsWith(prefix.AsSpan(), StringComparison.OrdinalIgnoreCase))
+        {
+            rest = span.Slice(prefix.Length);
+            return true;
+        }
+        rest = default;
+        return false;
+    }
+
+    private static void SplitFirstToken(ReadOnlySpan<char> span, out ReadOnlySpan<char> first, out ReadOnlySpan<char> rest)
+    {
+        span = span.TrimStart();
+        var j = 0;
+        while (j < span.Length && !char.IsWhiteSpace(span[j])) j++;
+        first = span.Slice(0, j);
+        rest  = j < span.Length ? span.Slice(j + 1) : ReadOnlySpan<char>.Empty;
+    }
+
+    // Unquote a double-quoted string span (or return the raw string if not quoted).
+    private static string Unquote(ReadOnlySpan<char> s)
+    {
+        s = s.Trim();
+        if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
+        {
+            var inner = s.Slice(1, s.Length - 2).ToString();
+            return inner.Replace("\"\"", "\"");
+        }
+        return s.ToString();
+    }
+
+    private static bool TryReadQuoted(ReadOnlySpan<char> span, out string value, out ReadOnlySpan<char> rest)
+    {
+        value = string.Empty;
+        rest = default;
+        if (span.IsEmpty || span[0] != '"') return false;
+        var sb = new StringBuilder();
+        var i = 1;
+        while (i < span.Length)
+        {
+            if (span[i] == '"')
+            {
+                if (i + 1 < span.Length && span[i + 1] == '"') { sb.Append('"'); i += 2; }
+                else { i++; break; }
+            }
+            else sb.Append(span[i++]);
+        }
+        value = sb.ToString();
+        rest = span.Slice(i);
+        return true;
+    }
+
+    // Case-insensitive index-of keyword in a span.
+    private static int IndexOfKeyword(ReadOnlySpan<char> span, string keyword)
+    {
+        var s = span.ToString();
+        var idx = s.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+        return idx;
+    }
+
+    // Quote a string for embedding in a field instruction (double-quote escaping).
+    private static string Quote(string s) => $"\"{s.Replace("\"", "\"\"")}\"";
+
+    // Quote only when the string contains whitespace (field names with spaces must be quoted for the
+    // tokeniser to treat them as a single token; plain names without spaces round-trip without quotes).
+    private static string QuoteIfNeeded(string s) => s.Any(char.IsWhiteSpace) ? Quote(s) : s;
+
+    private static string LookupField(IReadOnlyDictionary<string, string> row, string name) =>
+        row.TryGetValue(name, out var v) ? v ?? string.Empty : string.Empty;
+
+    private static string SubstituteRow(string text, IReadOnlyDictionary<string, string> row)
+    {
+        if (text.IndexOf('«') < 0)
+            return text;
+        var sb = new StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] == '«')
+            {
+                var close = text.IndexOf('»', i + 1);
+                if (close < 0) { sb.Append(text, i, text.Length - i); break; }
+                var name = text.Substring(i + 1, close - i - 1).Trim();
+                sb.Append(LookupField(row, name));
+                i = close + 1;
+            }
+            else sb.Append(text[i++]);
+        }
+        return sb.ToString();
+    }
+}
 
 /// <summary>
 /// The semantic roles Word maps recipient-list columns to when composing an Address Block or Greeting
@@ -234,6 +844,14 @@ public static class MailMerge
     /// <see cref="SubstituteSpecial"/> this is replaced by the 1-based record index.
     /// </summary>
     public const string MergeRecordNumberField = "Merge Record #";
+
+    /// <summary>
+    /// The placeholder text (without guillemets) for the «Merge Sequence #» special field. During
+    /// <see cref="SubstituteSpecialWithRules"/> this is replaced by the 1-based count of non-skipped
+    /// records emitted so far — distinct from <see cref="MergeRecordNumberField"/> which is the absolute
+    /// row index. Stored as a constant so it round-trips through the document as plain text.
+    /// </summary>
+    public const string MergeSequenceNumberField = "Merge Sequence #";
 
     // ── Canonical synonyms for each role used by AutoMatchFields (case-insensitive) ────────────────
     private static readonly Dictionary<FieldRole, string[]> RoleSynonyms = new()
@@ -604,6 +1222,164 @@ public static class MailMerge
     }
 
     /// <summary>
+    /// Produce merged documents for every non-skipped row in <paramref name="data"/> by evaluating
+    /// conditional merge rules in addition to plain field substitution. Rule placeholders use the same
+    /// <c>«instruction»</c> syntax but their instruction text is recognised by
+    /// <see cref="MergeRuleEvaluator"/>. The <paramref name="state"/> accumulates skip decisions and
+    /// bookmark values across the whole merge run; callers may pre-populate
+    /// <see cref="MergeState.FillInAnswers"/> and <see cref="MergeState.AskAnswers"/> before calling
+    /// (for Fill-in / Ask rules whose prompts were shown to the user at merge-start time).
+    /// The returned list contains only non-skipped records (so its count may be less than
+    /// <paramref name="data"/>.<see cref="MergeData.Count"/>).
+    /// </summary>
+    public static IReadOnlyList<TextDocument> MergeAllWithRules(
+        TextDocument template,
+        MergeData data,
+        MergeState state)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(state);
+
+        var result = new List<TextDocument>(data.Count);
+        for (var i = 0; i < data.Count; i++)
+        {
+            var row = data.Rows[i];
+            // Pre-increment SequenceNumber so «Merge Sequence #» in the template sees the correct
+            // value for this record. If the record is subsequently skipped by a «Skip Record If»
+            // rule, we roll the counter back so the sequence remains gapless.
+            state.SequenceNumber++;
+            // Evaluate the template against this row with full rule support. This also marks
+            // state.SkippedIndices[i] when a «Skip Record If» condition fires.
+            var merged = MergeRecordWithRules(template, row, state, recordIndex: i + 1);
+            if (state.SkippedIndices.Contains(i))
+            {
+                // Roll back — this record won't appear in the output.
+                state.SequenceNumber--;
+            }
+            else
+            {
+                result.Add(merged);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Deep-clone <paramref name="template"/> with both plain merge-field substitution and conditional
+    /// rule evaluation applied for the given row. Rule placeholders are resolved via
+    /// <see cref="MergeRuleEvaluator.Evaluate"/>; skip/advance side-effects update
+    /// <paramref name="state"/>. The <paramref name="recordIndex"/> is 1-based.
+    /// </summary>
+    public static TextDocument MergeRecordWithRules(
+        TextDocument template,
+        IReadOnlyDictionary<string, string> row,
+        MergeState state,
+        int recordIndex)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(state);
+
+        var doc = new TextDocument
+        {
+            DefaultRun = template.DefaultRun,
+            DefaultParagraph = template.DefaultParagraph
+        };
+
+        foreach (var (id, style) in template.Styles)
+            doc.Styles[id] = style;
+
+        CopyPageSettings(template.Page, doc.Page);
+        doc.Header = CloneHeaderFooterWithRules(template.Header, row, state, recordIndex);
+        doc.Footer = CloneHeaderFooterWithRules(template.Footer, row, state, recordIndex);
+
+        foreach (var block in template.Blocks)
+            doc.Blocks.Add(CloneBlockWithRules(block, row, state, recordIndex));
+
+        return doc;
+    }
+
+    /// <summary>
+    /// Replace every <c>«instruction»</c> placeholder in <paramref name="text"/> with the matching
+    /// value from <paramref name="row"/>, evaluating conditional rules via
+    /// <see cref="MergeRuleEvaluator"/> in addition to the standard special fields handled by
+    /// <see cref="SubstituteSpecial"/>. The <paramref name="recordIndex"/> is 1-based.
+    /// </summary>
+    public static string SubstituteSpecialWithRules(
+        string text,
+        IReadOnlyDictionary<string, string> row,
+        MergeState state,
+        int recordIndex,
+        out bool advanceRecord,
+        out bool skipRecord)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(row);
+        ArgumentNullException.ThrowIfNull(state);
+
+        advanceRecord = false;
+        skipRecord = false;
+
+        if (text.IndexOf(FieldOpen) < 0)
+            return text;
+
+        var sb = new StringBuilder(text.Length);
+        var i = 0;
+        while (i < text.Length)
+        {
+            var c = text[i];
+            if (c == FieldOpen)
+            {
+                var close = text.IndexOf(FieldClose, i + 1);
+                if (close < 0)
+                {
+                    sb.Append(text, i, text.Length - i);
+                    break;
+                }
+
+                var name = text.Substring(i + 1, close - i - 1).Trim();
+                i = close + 1;
+
+                // Try rule evaluator first.
+                var ruleResult = MergeRuleEvaluator.Evaluate(name, row, state, recordIndex - 1 /* 0-based */);
+                if (ruleResult.HasValue)
+                {
+                    sb.Append(ruleResult.Value.Text);
+                    if (ruleResult.Value.SkipRecord)  skipRecord    = true;
+                    if (ruleResult.Value.AdvanceRecord) advanceRecord = true;
+                    continue;
+                }
+
+                // Fall through to standard special-field handling.
+                if (name.Equals(NextRecordField, StringComparison.OrdinalIgnoreCase))
+                {
+                    advanceRecord = true;
+                }
+                else if (name.Equals(MergeRecordNumberField, StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(recordIndex);
+                }
+                else if (name.Equals(MergeSequenceNumberField, StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(state.SequenceNumber);
+                }
+                else
+                {
+                    sb.Append(Lookup(row, name));
+                }
+            }
+            else
+            {
+                sb.Append(c);
+                i++;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Combine already-merged records into a single document using the selected output mode. Letters force
     /// a page break before each record after the first; Directory appends records continuously. The merged
     /// record documents are consumed into the returned document.
@@ -747,6 +1523,85 @@ public static class MailMerge
             }
             clone.Rows.Add(newRow);
         }
+        return clone;
+    }
+
+    private static Block CloneBlockWithRules(Block block, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex) => block switch
+    {
+        Paragraph p => CloneParagraphWithRules(p, row, state, recordIndex),
+        Table t => CloneTableWithRules(t, row, state, recordIndex),
+        _ => new Paragraph()
+    };
+
+    private static Paragraph CloneParagraphWithRules(Paragraph source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
+    {
+        var clone = new Paragraph
+        {
+            Formatting = source.Formatting,
+            StyleId = source.StyleId,
+            BookmarkName = source.BookmarkName
+        };
+        foreach (var run in source.Runs)
+            clone.Runs.Add(CloneRunWithRules(run, row, state, recordIndex));
+        return clone;
+    }
+
+    private static Run CloneRunWithRules(Run source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
+    {
+        var resolvedText = SubstituteSpecialWithRules(source.Text, row, state, recordIndex, out _, out _);
+        return new Run(resolvedText, source.Formatting)
+        {
+            Image = source.Image,
+            HyperlinkUrl = source.HyperlinkUrl,
+            HyperlinkAnchor = source.HyperlinkAnchor,
+            HyperlinkTooltip = source.HyperlinkTooltip,
+            FieldKind = source.FieldKind,
+            FootnoteId = source.FootnoteId,
+            EndnoteId = source.EndnoteId,
+            CommentId = source.CommentId,
+            IsCommentReference = source.IsCommentReference,
+            Revision = source.Revision,
+            Control = source.Control,
+            Citation = source.Citation,
+            CrossReference = source.CrossReference,
+            ComplexField = source.ComplexField,
+            RevisionAuthor = source.RevisionAuthor,
+            RevisionDateXml = source.RevisionDateXml
+        };
+    }
+
+    private static Table CloneTableWithRules(Table source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
+    {
+        var clone = new Table { Formatting = source.Formatting };
+        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
+        foreach (var sourceRow in source.Rows)
+        {
+            var newRow = new TableRow();
+            foreach (var cell in sourceRow.Cells)
+            {
+                var newCell = new TableCell
+                {
+                    ShadingColorHex = cell.ShadingColorHex,
+                    WidthPt = cell.WidthPt,
+                    GridSpan = cell.GridSpan,
+                    VerticalMerge = cell.VerticalMerge
+                };
+                foreach (var p in cell.Paragraphs)
+                    newCell.Paragraphs.Add(CloneParagraphWithRules(p, row, state, recordIndex));
+                newRow.Cells.Add(newCell);
+            }
+            clone.Rows.Add(newRow);
+        }
+        return clone;
+    }
+
+    private static HeaderFooter? CloneHeaderFooterWithRules(HeaderFooter? source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
+    {
+        if (source is null)
+            return null;
+        var clone = new HeaderFooter();
+        foreach (var p in source.Paragraphs)
+            clone.Paragraphs.Add(CloneParagraphWithRules(p, row, state, recordIndex));
         return clone;
     }
 
