@@ -297,6 +297,39 @@ public sealed record RunFormatting
     /// </summary>
     public NumberSpacing NumberSpacing { get; init; } = NumberSpacing.Default;
 
+    /// <summary>
+    /// Character border: a box drawn around the run's glyphs (rPr/w:rBdr). Null means no border.
+    /// Reuses <see cref="ParagraphBorder"/> for colour, width and line style; the per-edge flags and
+    /// <see cref="ParagraphBorder.BottomOnly"/> are honoured by the writer so an asymmetric character
+    /// border round-trips. Round-trips to docx as the four <c>w:rBdr</c> edges in the same encoding as
+    /// <c>w:pBdr</c>, so existing paragraphs are unaffected.
+    /// </summary>
+    public ParagraphBorder? CharacterBorder { get; init; }
+
+    /// <summary>
+    /// Character shading (background fill with optional pattern) as an RRGGBB hex (e.g. <c>"#FFFF00"</c>).
+    /// Null means no shading. Round-trips to docx as run shading (<c>w:rPr/w:shd</c>) using the
+    /// <see cref="CharacterShadingPattern"/> for <c>w:val</c> and this value for <c>w:fill</c>. When set,
+    /// overrides <see cref="HighlightColorHex"/> in the DOCX writer (both share the <c>w:shd</c> slot;
+    /// this field takes precedence so patterns are preserved).
+    /// </summary>
+    public string? CharacterShadingHex { get; init; }
+
+    /// <summary>
+    /// The fill pattern of <see cref="CharacterShadingHex"/> (rPr/w:shd/@w:val). Defaults to
+    /// <see cref="ShadingPattern.Clear"/> — a solid fill — which preserves existing highlight behaviour.
+    /// Only meaningful when <see cref="CharacterShadingHex"/> is set.
+    /// </summary>
+    public ShadingPattern CharacterShadingPattern { get; init; } = ShadingPattern.Clear;
+
+    /// <summary>
+    /// BCP-47 proofing language tag for this run (rPr/w:lang), e.g. <c>"en-US"</c>, <c>"fr-FR"</c>.
+    /// Null means no explicit language (inherits from the paragraph/document default). Round-trips to
+    /// docx as <c>w:lang w:val</c>; also sets the WPF run's <c>xml:lang</c> so the built-in spell checker
+    /// uses the correct dictionary when one is available.
+    /// </summary>
+    public string? LanguageTag { get; init; }
+
     public static readonly RunFormatting Default = new();
 }
 

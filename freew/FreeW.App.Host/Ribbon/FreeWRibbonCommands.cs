@@ -166,6 +166,16 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.smallcaps", new CharacterEffectCommand(editor, CharacterEffect.SmallCaps));
         registry.Register("freew.allcaps", new CharacterEffectCommand(editor, CharacterEffect.AllCaps));
 
+        // Home > Font: character border and character shading (new W20 commands). These are model-only
+        // run properties with full DOCX round-trip (w:rBdr / w:shd). Character Border opens a border-
+        // colour/style picker; Character Shading opens a colour swatch picker like paragraph shading.
+        registry.Register("freew.char-border", new CharacterBorderCommand(editor));
+        registry.Register("freew.char-shading", new CharacterShadingCommand(editor));
+
+        // Review > Language > Set Proofing Language: opens a dialog listing common BCP-47 tags and
+        // applies the chosen language to the selected runs (rPr/w:lang) for spell-check fidelity.
+        registry.Register("freew.set-proofing-language", new SetProofingLanguageCommand(editor));
+
         Routed("freew.grow-font", EditingCommands.IncreaseFontSize);
         Routed("freew.shrink-font", EditingCommands.DecreaseFontSize);
         Routed("freew.align-left", EditingCommands.AlignLeft);
@@ -7313,6 +7323,230 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.SetSelectedShapeAlignment(alignment);
+        }
+    }
+
+    // Home > Font > Character Border (freew.char-border): opens a small border-style/colour picker and
+    // applies a character border to all runs in the selected paragraphs via the undo/redo bus.
+    // "None" clears the border. Uses the ParagraphShadingCommand colour-swatch pattern for consistency.
+    private sealed class CharacterBorderCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly string[] Palette =
+        [
+            "#000000", "#FF0000", "#0070C0", "#00B050", "#FFC000", "#7030A0",
+            "#808080", "#C00000", "#002060", "#375623", "#974706", "#3F3F3F",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, border) = ShowPicker(owner);
+            if (!chosen)
+                return;
+            editor.SetCharacterBorder(border);
+        }
+
+        private (bool Chosen, ParagraphBorder? Border) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            ParagraphBorder? border = null;
+            var window = new Window
+            {
+                Title = "Character Border",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Choose border colour:", Margin = new Thickness(0, 0, 0, 4) });
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22, Height = 22, Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) =>
+                {
+                    chosen = true;
+                    border = new ParagraphBorder(swatchHex, 0.5) { LineStyle = BorderLineStyle.Single };
+                    window.Close();
+                };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var clear = new Button { Content = "No Border", Margin = new Thickness(2, 6, 2, 0), Padding = new Thickness(8, 2, 8, 2) };
+            clear.Click += (_, _) => { chosen = true; border = null; window.Close(); };
+            panel.Children.Add(clear);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, border);
+        }
+    }
+
+    // Home > Font > Character Shading (freew.char-shading): colour swatch picker for run background
+    // fill (pattern-aware w:shd at run level). Mirrors ParagraphShadingCommand's UI.
+    private sealed class CharacterShadingCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly string[] Palette =
+        [
+            "#FFFF00", "#92D050", "#00B0F0", "#FFC000", "#FF0000", "#D9D9D9",
+            "#A6A6A6", "#FFF2CC", "#DEEBF7", "#E2EFDA", "#FCE4D6", "#EDEDED",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var (chosen, hex) = ShowPicker(owner);
+            if (!chosen)
+                return;
+            editor.SetCharacterShading(hex);
+        }
+
+        private (bool Chosen, string? Hex) ShowPicker(Window? owner)
+        {
+            var chosen = false;
+            string? hex = null;
+            var window = new Window
+            {
+                Title = "Character Shading",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var panel = new StackPanel { Margin = new Thickness(8) };
+            var grid = new WrapPanel { Width = 6 * 26 };
+            foreach (var swatchHex in Palette)
+            {
+                var swatch = new Button
+                {
+                    Width = 22, Height = 22, Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(swatchHex)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    BorderThickness = new Thickness(1),
+                    ToolTip = swatchHex
+                };
+                swatch.Click += (_, _) => { chosen = true; hex = swatchHex; window.Close(); };
+                grid.Children.Add(swatch);
+            }
+            panel.Children.Add(grid);
+
+            var clear = new Button { Content = "No Color", Margin = new Thickness(2, 6, 2, 0), Padding = new Thickness(8, 2, 8, 2) };
+            clear.Click += (_, _) => { chosen = true; hex = null; window.Close(); };
+            panel.Children.Add(clear);
+
+            window.Content = panel;
+            window.ShowDialog();
+            return (chosen, hex);
+        }
+    }
+
+    // Review > Language > Set Proofing Language (freew.set-proofing-language): dialog listing common
+    // BCP-47 language tags; applies the chosen tag to all runs in the selected paragraphs (rPr/w:lang).
+    // The WPF spell checker uses the run's Language property so the correct dictionary is active.
+    private sealed class SetProofingLanguageCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly (string Tag, string Label)[] Languages =
+        [
+            ("en-US", "English (United States)"),
+            ("en-GB", "English (United Kingdom)"),
+            ("en-AU", "English (Australia)"),
+            ("fr-FR", "French (France)"),
+            ("fr-CA", "French (Canada)"),
+            ("de-DE", "German (Germany)"),
+            ("es-ES", "Spanish (Spain)"),
+            ("es-MX", "Spanish (Mexico)"),
+            ("it-IT", "Italian (Italy)"),
+            ("pt-BR", "Portuguese (Brazil)"),
+            ("pt-PT", "Portuguese (Portugal)"),
+            ("nl-NL", "Dutch (Netherlands)"),
+            ("pl-PL", "Polish (Poland)"),
+            ("ru-RU", "Russian (Russia)"),
+            ("ja-JP", "Japanese (Japan)"),
+            ("zh-CN", "Chinese Simplified (China)"),
+            ("zh-TW", "Chinese Traditional (Taiwan)"),
+            ("ko-KR", "Korean (Korea)"),
+            ("ar-SA", "Arabic (Saudi Arabia)"),
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var current = editor.CurrentRunFormatting.LanguageTag;
+            var chosen = ShowDialog(owner, current);
+            if (chosen is null)
+                return; // cancelled
+            editor.SetProofingLanguage(chosen == string.Empty ? null : chosen);
+        }
+
+        private static string? ShowDialog(Window? owner, string? current)
+        {
+            string? result = null;
+            var window = new Window
+            {
+                Title = "Set Proofing Language",
+                Width = 320,
+                Height = 420,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
+            // "(None)" entry clears the language.
+            listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = "(None — clear language)", Tag = string.Empty });
+            foreach (var (tag, label) in Languages)
+                listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = $"{label} [{tag}]", Tag = tag });
+
+            // Pre-select the current tag if present.
+            foreach (System.Windows.Controls.ListBoxItem item in listBox.Items)
+                if ((string?)item.Tag == current) { listBox.SelectedItem = item; break; }
+
+            var ok = new Button { Content = "OK", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+            ok.Click += (_, _) =>
+            {
+                if (listBox.SelectedItem is System.Windows.Controls.ListBoxItem selected)
+                    result = (string?)selected.Tag;
+                window.DialogResult = true;
+            };
+            cancel.Click += (_, _) => window.Close();
+
+            var btnRow = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            btnRow.Children.Add(ok);
+            btnRow.Children.Add(cancel);
+
+            var outer = new StackPanel { Margin = new Thickness(12) };
+            outer.Children.Add(new System.Windows.Controls.TextBlock { Text = "Select the proofing language for the selected text:", TextWrapping = System.Windows.TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
+            outer.Children.Add(listBox);
+            outer.Children.Add(btnRow);
+
+            var scroll = new System.Windows.Controls.ScrollViewer { Content = listBox, Height = 280, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
+            outer.Children.RemoveAt(1); // remove the un-scrolled list
+            outer.Children.Insert(1, scroll);
+
+            window.Content = outer;
+            return window.ShowDialog() == true ? result : null; // null = cancelled
         }
     }
 }

@@ -3832,7 +3832,9 @@ public static class DocxReader
 
         var underline = rPr.Element(W + "u");
         var color = rPr.Element(W + "color")?.Attribute(W + "val")?.Value;
-        var highlight = rPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
+        var shdEl = rPr.Element(W + "shd");
+        var highlight = shdEl?.Attribute(W + "fill")?.Value;
+        var shdVal = shdEl?.Attribute(W + "val")?.Value;
         var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
         // Advanced typography (Z1). The three core elements use the standard unit conversions; the
@@ -3847,6 +3849,22 @@ public static class DocxReader
         // A stylistic set is the first w14:styleSet inside w14:stylisticSets (the common single-set case).
         var styleSetId = rPr.Element(W14 + "stylisticSets")?.Element(W14 + "styleSet")?.Attribute(W14 + "id")?.Value;
 
+        // w:shd on a run: when val is "clear" (or absent, which defaults to clear) it is a solid highlight;
+        // any other val token means a pattern-based character shading. Map the two cases to distinct fields.
+        var shdPattern = ShadingPatterns.FromToken(shdVal);
+        var isSolidHighlight = shdVal is null or "clear";
+        var fillHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#');
+        string? highlightHex = isSolidHighlight ? fillHex : null;
+        string? charShadingHex = !isSolidHighlight ? fillHex : null;
+
+        // w:rBdr (character border) — same edge encoding as w:pBdr. ReadParagraphBorder reuses the same
+        // structure so we delegate to it directly.
+        var charBorder = ReadParagraphBorder(rPr.Element(W + "rBdr"));
+
+        // w:lang (proofing language) — recover the val attribute (BCP-47 tag). @w:eastAsia and @w:bidi are
+        // also written but the main @w:val is authoritative for spell-check; we use it as the canonical tag.
+        var langTag = rPr.Element(W + "lang")?.Attribute(W + "val")?.Value;
+
         return new RunFormatting
         {
             Bold = ReadToggle(rPr, "b"),
@@ -3859,7 +3877,7 @@ public static class DocxReader
             FontFamily = rPr.Element(W + "rFonts")?.Attribute(W + "ascii")?.Value,
             FontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value),
             ColorHex = color is null or "auto" ? null : "#" + color.TrimStart('#'),
-            HighlightColorHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#'),
+            HighlightColorHex = highlightHex,
             VerticalAlign = vertAlign switch
             {
                 "superscript" => VerticalAlign.Superscript,
@@ -3876,7 +3894,11 @@ public static class DocxReader
             NumberForm = NumberFormFromToken(numForm),
             NumberSpacing = NumberSpacingFromToken(numSpacing),
             StylisticSet = styleSetId is null ? null
-                : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null
+                : int.TryParse(styleSetId, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null,
+            CharacterBorder = charBorder,
+            CharacterShadingHex = charShadingHex,
+            CharacterShadingPattern = charShadingHex is not null ? shdPattern : ShadingPattern.Clear,
+            LanguageTag = string.IsNullOrEmpty(langTag) ? null : langTag,
         };
     }
 

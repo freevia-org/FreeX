@@ -232,7 +232,10 @@ public enum RibbonCommandIconKind
     AxisBounds,
 
     // Insert > Illustrations > Icons (W20).
-    Icons
+    Icons,
+
+    // Review > Language glyph (added for character border/shading + proofing language W20).
+    Language
 }
 
 public enum RibbonCommandIconAccent

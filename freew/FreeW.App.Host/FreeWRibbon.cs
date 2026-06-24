@@ -79,6 +79,8 @@ internal static class FreeWRibbon
                     g.Icon("freew.allcaps", "All Caps", RibbonCommandIconKind.Font);
                     g.Icon("freew.highlight", "Text Highlight Colour", RibbonCommandIconKind.Highlight);
                     g.Icon("freew.font-color", "Font Colour", RibbonCommandIconKind.FontColor);
+                    g.Icon("freew.char-border", "Character Border", RibbonCommandIconKind.Border);
+                    g.Icon("freew.char-shading", "Character Shading", RibbonCommandIconKind.Fill);
                     g.Icon("freew.clear-formatting", "Clear All Formatting", RibbonCommandIconKind.Clear);
                 });
                 tab.Group("paragraph", "Paragraph", "P", 80, g =>
@@ -586,6 +588,10 @@ internal static class FreeWRibbon
                     g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
                     g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
                     g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
+                    // Set Proofing Language lives in the Proofing group (matching Word's Review tab layout).
+                    // It applies a BCP-47 language tag to the selected runs (rPr/w:lang) so the built-in
+                    // spell checker uses the correct dictionary per run.
+                    g.Medium("freew.set-proofing-language", "Set Proofing Language", RibbonCommandIconKind.Language);
                 });
                 // Single-command group → labelled Medium toggle (Word's Speech > Read Aloud). Reads the
                 // document from the caret to the end using in-box text-to-speech; the toggle reflects
