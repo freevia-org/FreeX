@@ -1021,7 +1021,7 @@ public sealed class FreeWRibbonParityTests
 
         definition.ContextualTabs.Select(tab => tab.Id)
             .Should()
-            .ContainInOrder("picture-format", "table-design", "table-layout");
+            .ContainInOrder("picture-format", "chart-design", "chart-format", "table-design", "table-layout");
 
         foreach (var tabId in new[] { "table-design", "table-layout" })
         {
@@ -1033,6 +1033,169 @@ public sealed class FreeWRibbonParityTests
             tab.Context.Label.Should().Be("Table Tools");
             tab.Context.Color.Should().Be(RibbonContextColor.Teal);
         }
+    }
+
+    [Fact]
+    public void Build_ExposesWordStyleChartDesignAndChartFormatContextualTabs()
+    {
+        var definition = FreeWRibbon.Build();
+
+        foreach (var tabId in new[] { "chart-design", "chart-format" })
+        {
+            var tab = definition.FindTab(tabId);
+
+            tab.Should().NotBeNull();
+            tab!.Context.Should().NotBeNull();
+            tab.Context!.ActivationKey.Should().Be("chart");
+            tab.Context.Label.Should().Be("Chart Tools");
+            tab.Context.Color.Should().Be(RibbonContextColor.Orange);
+        }
+    }
+
+    [StaFact]
+    public void ChartDesign_ContextualTabContainsBackedChartCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var chartDesign = definition.FindTab("chart-design");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        chartDesign.Should().NotBeNull();
+        chartDesign!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("chart-type", "chart-data", "chart-elements");
+
+        CommandIds(chartDesign)
+            .Should()
+            .Contain(new[]
+            {
+                "freew.chart-type-column",
+                "freew.chart-edit-data",
+                "freew.chart-title",
+                "freew.chart-axis-titles",
+                "freew.chart-toggle-legend"
+            });
+
+        foreach (var commandId in new[]
+        {
+            "freew.chart-type-column",
+            "freew.chart-type-bar",
+            "freew.chart-type-line",
+            "freew.chart-type-pie",
+            "freew.chart-type-scatter",
+            "freew.chart-type-area",
+            "freew.chart-type-doughnut",
+            "freew.chart-edit-data",
+            "freew.chart-title",
+            "freew.chart-axis-titles",
+            "freew.chart-toggle-legend"
+        })
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed in the Chart Design tab");
+    }
+
+    [StaFact]
+    public void ChartFormat_ContextualTabContainsBackedSizeCommand()
+    {
+        var definition = FreeWRibbon.Build();
+        var chartFormat = definition.FindTab("chart-format");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        chartFormat.Should().NotBeNull();
+        chartFormat!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("chart-size");
+
+        CommandIds(chartFormat)
+            .Should()
+            .Equal("freew.chart-size");
+        Labels(chartFormat)
+            .Should()
+            .Equal("Size");
+
+        registry.TryGet("freew.chart-size", out _).Should().BeTrue("freew.chart-size must execute from Chart Format");
+    }
+
+    [StaFact]
+    public void ChartDesign_ChangeTypeMutatesSelectedChart()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "S"));
+        var chart = editor.SelectedChart() ?? editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        chart!.Kind.Should().Be(ChartKind.Column);
+
+        editor.SetSelectedChartKind(ChartKind.Bar);
+
+        chart.Kind.Should().Be(ChartKind.Bar);
+    }
+
+    [StaFact]
+    public void ChartDesign_ToggleLegendMutatesSelectedChart()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Line, ["X", "Y"], [3.0, 4.0]));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        var initial = chart!.ShowLegend;
+
+        editor.ToggleSelectedChartLegend();
+        chart.ShowLegend.Should().Be(!initial);
+
+        editor.ToggleSelectedChartLegend();
+        chart.ShowLegend.Should().Be(initial);
+    }
+
+    [StaFact]
+    public void ChartDesign_SetSizeMutatesWidthAndHeight()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.InsertChart(Chart.Create(ChartKind.Pie, ["A"], [1.0]));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        editor.SetSelectedChartSize(400, 300);
+        chart!.WidthPt.Should().Be(400);
+        chart.HeightPt.Should().Be(300);
+    }
+
+    [StaFact]
+    public void ChartDesign_ReplaceChartDataMutatesModel()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], seriesName: "Sales"));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+
+        var replacement = Chart.Create(ChartKind.Bar, ["Jan", "Feb", "Mar"], [5.0, 6.0, 7.0], seriesName: "Revenue");
+        editor.ReplaceSelectedChartData(replacement);
+
+        chart!.Kind.Should().Be(ChartKind.Bar);
+        chart.Categories.Should().Equal("Jan", "Feb", "Mar");
+        chart.Series.Should().HaveCount(1);
+        chart.Series[0].Name.Should().Be("Revenue");
+        chart.Series[0].Values.Should().Equal(5.0, 6.0, 7.0);
     }
 
     [StaFact]

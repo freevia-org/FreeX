@@ -662,6 +662,36 @@ internal static class FreeWRibbon
                     g.Medium("freew.image-alt-text", "Alt Text", RibbonCommandIconKind.Info);
                 });
             })
+            // ── Chart contextual tabs — Chart Tools (shown when a chart is selected) ──────────────
+            .ContextualTab("chart-design", "Chart Design",
+                new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("chart-type", "Type", "T", 100, g =>
+                    g.Medium("freew.chart-type-column", "Column", RibbonCommandIconKind.ChartColumn, menu: m =>
+                    {
+                        m.Item("freew.chart-type-column", "Column", "C");
+                        m.Item("freew.chart-type-bar", "Bar", "B");
+                        m.Item("freew.chart-type-line", "Line", "L");
+                        m.Item("freew.chart-type-pie", "Pie", "P");
+                        m.Item("freew.chart-type-scatter", "Scatter", "X");
+                        m.Item("freew.chart-type-area", "Area", "A");
+                        m.Item("freew.chart-type-doughnut", "Doughnut", "D");
+                    }));
+                tab.Group("chart-data", "Data", "D", 90, g =>
+                    g.Medium("freew.chart-edit-data", "Edit Data", RibbonCommandIconKind.Table));
+                tab.Group("chart-elements", "Chart Layouts", "E", 80, g =>
+                {
+                    g.Medium("freew.chart-title", "Chart Title", RibbonCommandIconKind.Header);
+                    g.Medium("freew.chart-axis-titles", "Axis Titles", RibbonCommandIconKind.Ruler);
+                    g.Medium("freew.chart-toggle-legend", "Legend", RibbonCommandIconKind.List);
+                });
+            })
+            .ContextualTab("chart-format", "Chart Format",
+                new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("chart-size", "Size", "S", 90, g =>
+                    g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size));
+            })
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
             {

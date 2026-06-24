@@ -132,6 +132,20 @@ internal static class FreeWRibbonIcons
             ["freew.screenshot"] = RibbonCommandIconKind.Picture,
             ["freew.screen-clipping"] = RibbonCommandIconKind.Picture,
 
+            // Chart contextual tab commands (Chart Design + Chart Format)
+            ["freew.chart-type-column"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-bar"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-line"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-pie"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-scatter"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-area"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-type-doughnut"] = RibbonCommandIconKind.ChartColumn,
+            ["freew.chart-edit-data"] = RibbonCommandIconKind.Table,
+            ["freew.chart-title"] = RibbonCommandIconKind.Header,
+            ["freew.chart-axis-titles"] = RibbonCommandIconKind.Ruler,
+            ["freew.chart-toggle-legend"] = RibbonCommandIconKind.List,
+            ["freew.chart-size"] = RibbonCommandIconKind.Size,
+
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
             ["freew.equation-fraction"] = RibbonCommandIconKind.Equation,

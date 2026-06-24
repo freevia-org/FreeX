@@ -1340,6 +1340,163 @@ public sealed class DocumentView : RichTextBox
     /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
 
+    // ── Chart selection (mirrors SelectedImage / SelectedImageLocation) ──────────────────────────
+
+    /// <summary>The inline chart targeted by the current selection/caret, or null if none is selected.</summary>
+    public Chart? SelectedChart() => SelectedChartLocation().Chart;
+
+    // Locate the model paragraph/run index of the inline chart under the selection, plus the chart itself.
+    private (int BlockIndex, int RunIndex, Chart? Chart) SelectedChartLocation()
+    {
+        var chart = ChartAtPointer(CaretPosition)
+            ?? ChartAtPointer(Selection.Start)
+            ?? ChartAtPointer(Selection.End)
+            ?? ChartInElement(CaretPosition?.Parent as TextElement)
+            ?? ChartInElement(Selection.Start.Parent as TextElement)
+            ?? ChartInElement(Selection.End.Parent as TextElement);
+        if (chart is null)
+            return (-1, -1, null);
+
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].Chart, chart))
+                    return (b, r, chart);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static Chart? ChartAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (ChartInElement(pointer.Parent as TextElement) is { } parentChart)
+            return parentChart;
+        return ChartFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? ChartFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static Chart? ChartFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: Border { Tag: Chart modelChart } }
+            ? modelChart
+            : null;
+
+    private static Chart? ChartInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: Border { Tag: Chart modelChart } })
+                return modelChart;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // ── Chart mutation methods (used by chart contextual tab commands) ────────────────────────────
+
+    /// <summary>
+    /// Change the kind of the selected chart and re-render. No-op without a chart selection.
+    /// Mutates the model chart in place — it persists through the next <see cref="CommitToModel"/>.
+    /// </summary>
+    public void SetSelectedChartKind(ChartKind kind)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Kind = kind;
+        Render();
+    }
+
+    /// <summary>
+    /// Toggle the legend on the selected chart and re-render. No-op without a chart selection.
+    /// </summary>
+    public void ToggleSelectedChartLegend()
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.ShowLegend = !chart.ShowLegend;
+        Render();
+    }
+
+    /// <summary>
+    /// Set (or clear, when null/empty) the chart title on the selected chart and re-render.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void SetSelectedChartTitle(string? title)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Title = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Set (or clear) axis titles on the selected chart and re-render.
+    /// No-op without a chart selection or for pie/doughnut charts.
+    /// </summary>
+    public void SetSelectedChartAxisTitles(string? categoryAxisTitle, string? valueAxisTitle)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.CategoryAxisTitle = string.IsNullOrWhiteSpace(categoryAxisTitle) ? null : categoryAxisTitle.Trim();
+        chart.ValueAxisTitle = string.IsNullOrWhiteSpace(valueAxisTitle) ? null : valueAxisTitle.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Set the size (width and height in points) of the selected chart and re-render.
+    /// No-op without a chart selection or when both dimensions are non-positive.
+    /// </summary>
+    public void SetSelectedChartSize(double widthPt, double heightPt)
+    {
+        if (widthPt <= 0 || heightPt <= 0)
+            return;
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.WidthPt = widthPt;
+        chart.HeightPt = heightPt;
+        Render();
+    }
+
+    /// <summary>
+    /// Replace the data of the selected chart (categories + series) and re-render.
+    /// Called after the user edits data via the Edit Data dialog.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void ReplaceSelectedChartData(Chart replacement)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Kind = replacement.Kind;
+        chart.Title = replacement.Title;
+        chart.ShowLegend = replacement.ShowLegend;
+        chart.CategoryAxisTitle = replacement.CategoryAxisTitle;
+        chart.ValueAxisTitle = replacement.ValueAxisTitle;
+        chart.WidthPt = replacement.WidthPt > 0 ? replacement.WidthPt : chart.WidthPt;
+        chart.HeightPt = replacement.HeightPt > 0 ? replacement.HeightPt : chart.HeightPt;
+        chart.Categories.Clear();
+        chart.Categories.AddRange(replacement.Categories);
+        chart.Series.Clear();
+        foreach (var s in replacement.Series)
+            chart.Series.Add(s);
+        Render();
+    }
+
     /// <summary>
     /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
     /// Mutates the model image in place — the alt text is carried by the image instance, so it survives
