@@ -6,7 +6,7 @@ FreeX is a free spreadsheet app for local workbook files. It opens and saves sta
 
 - Native Windows desktop app built with .NET 10 and WPF, with Avalonia app-preview lanes for macOS/Linux work.
 - Spreadsheet editing, formulas, charts, PivotTables, conditional formatting, data tools, printing, and export.
-- Workbook and interchange workflows for `.xlsx`, `.xltx`, `.xlsm` open, `.xltm` open, `.xls/.xlsb/.xlt` open, `.ods`, SpreadsheetML `.xml`, CSV variants, tabular text, SYLK, DIF, DBF open, HTML tables, and FreeX native `.fxl`.
+- Workbook and interchange workflows for `.xlsx`, `.xltx`, `.xlsm`/`.xltm` open and save, `.xls/.xlsb/.xlt` open, `.ods`, SpreadsheetML `.xml`, CSV variants, tabular text, Formatted Text `.prn`, SYLK, DIF, DBF open, HTML tables, Single File Web Page `.mht`/`.mhtml`, PDF tabular-data import (open-only), and FreeX native `.fxl`.
 - Local files by default; Microsoft 365 cloud services, account integration, and proprietary Microsoft runtimes are outside the app scope.
 
 ## Downloads
