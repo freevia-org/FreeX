@@ -25,6 +25,19 @@ public enum ShapeKind
 }
 
 /// <summary>
+/// The text direction inside a text-box shape. Maps onto <c>wps:bodyPr/@vert</c> / <c>wps:bodyPr/@rot</c>:
+/// <see cref="Horizontal"/> → default (no attribute), <see cref="Rotate90"/> → <c>vert="eaVert"</c> +
+/// <c>rot="5400000"</c> (text rotated 90°), <see cref="Rotate270"/> → <c>vert="eaVert"</c> +
+/// <c>rot="-5400000"</c> (text rotated 270°).
+/// </summary>
+public enum ShapeTextDirection
+{
+    Horizontal,
+    Rotate90,
+    Rotate270
+}
+
+/// <summary>
 /// A basic DrawingML shape or text box carried inline by a <see cref="Run"/> (via <see cref="Run.Shape"/>),
 /// mirroring <see cref="InlineImage"/> and <see cref="Equation"/>. It serialises as an inline
 /// <c>w:drawing</c> wrapping a <c>wps:wsp</c> (a preset-geometry shape) and, when it carries
@@ -54,6 +67,36 @@ public sealed class Shape
     /// round-trips through the existing paragraph reader/writer.
     /// </summary>
     public List<Paragraph> TextParagraphs { get; } = [];
+
+    /// <summary>
+    /// Optional outline color as an RRGGBB hex string. Null means no explicit outline.
+    /// Maps onto <c>a:ln/a:solidFill/a:srgbClr/@val</c> in the shape properties.
+    /// </summary>
+    public string? OutlineColorHex { get; set; }
+
+    /// <summary>
+    /// Outline stroke width in points (default 0 = hairline / inherited). Only meaningful when
+    /// <see cref="OutlineColorHex"/> is set. Maps onto <c>a:ln/@w</c> in EMU (1 pt = 12700 EMU).
+    /// </summary>
+    public double OutlineWidthPt { get; set; }
+
+    /// <summary>
+    /// Optional outline dash token (e.g. <c>"dash"</c>, <c>"sysDot"</c>, <c>"dashDot"</c>).
+    /// Null means solid. Maps onto <c>a:ln/a:prstDash/@val</c>.
+    /// </summary>
+    public string? OutlineDash { get; set; }
+
+    /// <summary>
+    /// Accessibility description (maps onto <c>wp:docPr/@descr</c>). Null means no alt text.
+    /// Mirrors <see cref="InlineImage.AltText"/>.
+    /// </summary>
+    public string? AltText { get; set; }
+
+    /// <summary>
+    /// Text direction for text-box shapes. Ignored for non-text-box shapes.
+    /// Maps onto <c>wps:bodyPr/@vert</c> / <c>wps:bodyPr/@rot</c>.
+    /// </summary>
+    public ShapeTextDirection TextDirection { get; set; } = ShapeTextDirection.Horizontal;
 
     public Shape() { }
 

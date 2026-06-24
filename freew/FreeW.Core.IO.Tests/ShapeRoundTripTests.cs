@@ -179,6 +179,93 @@ public class ShapeRoundTripTests
         ids.Should().OnlyHaveUniqueItems();
     }
 
+    // ── New-field round-trip tests (outline, alt text, text direction) ───────────────────────────
+
+    [Fact]
+    public void Shape_WithOutline_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 120, heightPt: 60, fillColorHex: "#DCE6F1");
+        shape.OutlineColorHex = "#FF0000";
+        shape.OutlineWidthPt = 1.5;
+        shape.OutlineDash = "dash";
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.OutlineColorHex.Should().Be("#FF0000");
+        read.OutlineWidthPt.Should().BeApproximately(1.5, 0.01);
+        read.OutlineDash.Should().Be("dash");
+    }
+
+    [Fact]
+    public void Shape_WithAltText_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Ellipse, widthPt: 80, heightPt: 80);
+        shape.AltText = "Blue circle decoration";
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.AltText.Should().Be("Blue circle decoration");
+    }
+
+    [Fact]
+    public void TextBox_WithTextDirectionRotate90_SurvivesRoundTrip()
+    {
+        var shape = Shape.TextBoxWith("Rotated", widthPt: 80, heightPt: 120);
+        shape.TextDirection = ShapeTextDirection.Rotate90;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.TextDirection.Should().Be(ShapeTextDirection.Rotate90);
+    }
+
+    [Fact]
+    public void TextBox_WithTextDirectionRotate270_SurvivesRoundTrip()
+    {
+        var shape = Shape.TextBoxWith("Rotated270", widthPt: 80, heightPt: 120);
+        shape.TextDirection = ShapeTextDirection.Rotate270;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.TextDirection.Should().Be(ShapeTextDirection.Rotate270);
+    }
+
+    [Fact]
+    public void Shape_HorizontalTextDirection_IsDefault_AndDoesNotEmitBodyPrAttributes()
+    {
+        var shape = Shape.TextBoxWith("Normal", widthPt: 80, heightPt: 60);
+        // TextDirection defaults to Horizontal — no special bodyPr attrs should be emitted.
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        var bodyPr = xml.Descendants(Wps + "bodyPr").FirstOrDefault();
+        bodyPr!.Attribute("vert").Should().BeNull();
+        bodyPr.Attribute("rot").Should().BeNull();
+    }
+
+    [Fact]
+    public void Shape_Outline_EmitsALnElement()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 50);
+        shape.OutlineColorHex = "#0070C0";
+        shape.OutlineWidthPt = 2.0;
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        var ln = xml.Descendants(A + "ln").FirstOrDefault();
+        ln.Should().NotBeNull();
+        var w = (long?)ln!.Attribute("w");
+        w.Should().Be((long)(2.0 * 12700));
+        ln.Descendants(A + "srgbClr").First().Attribute("val")!.Value.Should().Be("0070C0");
+    }
+
+    [Fact]
+    public void Shape_NoOutlineColor_DoesNotEmitALn()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 50, fillColorHex: "#DCE6F1");
+        // OutlineColorHex not set — a:ln must not be emitted.
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        xml.Descendants(A + "ln").Should().BeEmpty();
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside shapes.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

@@ -2832,7 +2832,7 @@ public static class DocxWriter
         var docPrId = ids.NextShapeDrawingId();
         var name = $"{shape.Kind}{(uint)docPrId}";
 
-        // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill.
+        // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill and/or outline.
         var spPr = new XElement(Wps + "spPr",
             new XElement(A + "xfrm",
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
@@ -2842,6 +2842,19 @@ public static class DocxWriter
         if (shape.FillColorHex is { Length: > 0 } fill)
             spPr.Add(new XElement(A + "solidFill",
                 new XElement(A + "srgbClr", new XAttribute("val", fill.TrimStart('#')))));
+        // Outline: a:ln carries the stroke width (in EMU) and, inside, a:solidFill + optional a:prstDash.
+        if (shape.OutlineColorHex is { Length: > 0 } outlineColor)
+        {
+            var lnAttrs = new List<object>();
+            if (shape.OutlineWidthPt > 0)
+                lnAttrs.Add(new XAttribute("w", (long)(shape.OutlineWidthPt * 12700)));
+            var ln = new XElement(A + "ln", lnAttrs);
+            ln.Add(new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", outlineColor.TrimStart('#')))));
+            if (shape.OutlineDash is { Length: > 0 } dash)
+                ln.Add(new XElement(A + "prstDash", new XAttribute("val", dash)));
+            spPr.Add(ln);
+        }
 
         var wsp = new XElement(Wps + "wsp",
             new XElement(Wps + "cNvSpPr"),
@@ -2859,8 +2872,23 @@ public static class DocxWriter
             wsp.Add(new XElement(Wps + "txbx", txbxContent));
         }
 
-        // wps:bodyPr is required by the schema for a valid wsp; defaults are fine.
-        wsp.Add(new XElement(Wps + "bodyPr"));
+        // wps:bodyPr: required by the schema; carries text-direction attributes for text-box shapes.
+        var bodyPr = new XElement(Wps + "bodyPr");
+        if (shape.HasText && shape.TextDirection != ShapeTextDirection.Horizontal)
+        {
+            // vert="eaVert" + rot: rot is in 1/60000-degree units (5400000 = 90°, -5400000 = 270°).
+            bodyPr.Add(new XAttribute("vert", "eaVert"));
+            var rot = shape.TextDirection == ShapeTextDirection.Rotate90 ? 5400000 : -5400000;
+            bodyPr.Add(new XAttribute("rot", rot));
+        }
+        wsp.Add(bodyPr);
+
+        // wp:docPr carries the accessibility description (@descr) when AltText is set.
+        var docPr = new XElement(Wp + "docPr",
+            new XAttribute("id", (uint)docPrId),
+            new XAttribute("name", name));
+        if (shape.AltText is { Length: > 0 } altText)
+            docPr.Add(new XAttribute("descr", altText));
 
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
@@ -2870,7 +2898,7 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                docPr,
                 new XElement(A + "graphic",
                     new XElement(A + "graphicData",
                         new XAttribute("uri", Wps.NamespaceName),
@@ -2920,6 +2948,13 @@ public static class DocxWriter
                 new XElement(W + "txbxContent", BuildWordArtParagraph(wordArt))),
             new XElement(Wps + "bodyPr"));
 
+        // wp:docPr carries the accessibility description (@descr) when AltText is set.
+        var wordArtDocPr = new XElement(Wp + "docPr",
+            new XAttribute("id", (uint)docPrId),
+            new XAttribute("name", name));
+        if (wordArt.AltText is { Length: > 0 } wordArtAltText)
+            wordArtDocPr.Add(new XAttribute("descr", wordArtAltText));
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute("distT", 0), new XAttribute("distB", 0),
@@ -2928,7 +2963,7 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                new XElement(Wp + "docPr", new XAttribute("id", (uint)docPrId), new XAttribute("name", name)),
+                wordArtDocPr,
                 new XElement(A + "graphic",
                     new XElement(A + "graphicData",
                         new XAttribute("uri", Wps.NamespaceName),

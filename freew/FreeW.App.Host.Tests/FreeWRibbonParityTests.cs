@@ -1632,4 +1632,83 @@ public sealed class FreeWRibbonParityTests
         ((Paragraph)editor.Model.Blocks[1]).SectionBreak.Should().NotBeNull();
         ((Paragraph)editor.Model.Blocks[1]).SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
     }
+
+    [StaFact]
+    public void DrawingFormat_ContextualTabExposesBackedShapeCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var drawing = definition.FindTab("drawing-format");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        drawing.Should().NotBeNull("drawing-format contextual tab must exist");
+        drawing!.Context.Should().NotBeNull();
+        drawing.Context!.ActivationKey.Should().Be("drawing");
+        drawing.Context.Label.Should().Be("Drawing Tools");
+        drawing.Context.Color.Should().Be(RibbonContextColor.Purple);
+
+        // Groups (in order): drawing-insert, drawing-styles, drawing-text, drawing-wordart, drawing-arrange, drawing-size
+        drawing.Groups.Select(g => g.Id)
+            .Should()
+            .Equal("drawing-insert", "drawing-styles", "drawing-text", "drawing-wordart", "drawing-arrange", "drawing-size");
+
+        // Top-level command ids surfaced in the tab
+        CommandIds(drawing)
+            .Should()
+            .Contain("freew.shape-change")
+            .And.Contain("freew.shape-fill")
+            .And.Contain("freew.shape-outline")
+            .And.Contain("freew.shape-text-direction")
+            .And.Contain("freew.wordart-style")
+            .And.Contain("freew.shape-align-left")
+            .And.Contain("freew.shape-align-center")
+            .And.Contain("freew.shape-align-right")
+            .And.Contain("freew.shape-size")
+            .And.Contain("freew.shape-alt-text");
+
+        // Menu items for Change Shape
+        var changeShape = drawing.FindGroup("drawing-insert")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.shape-change");
+        changeShape.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal("freew.shape-change-rectangle", "freew.shape-change-rounded", "freew.shape-change-ellipse");
+
+        // Menu items for Text Direction
+        var textDir = drawing.FindGroup("drawing-text")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.shape-text-direction");
+        textDir.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal("freew.shape-text-horizontal", "freew.shape-text-rotate90", "freew.shape-text-rotate270");
+
+        // Menu items for WordArt Style gallery
+        var wordArtStyle = drawing.FindGroup("drawing-wordart")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.wordart-style");
+        wordArtStyle.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal("freew.wordart-style-fill-blue", "freew.wordart-style-gradient",
+                   "freew.wordart-style-outline", "freew.wordart-style-shadow");
+
+        // Every command id in the tab + menus must be registered (backed).
+        var allIds = CommandIds(drawing)
+            .Concat(MenuCommandIds(changeShape))
+            .Concat(MenuCommandIds(textDir))
+            .Concat(MenuCommandIds(wordArtStyle))
+            .Concat(drawing.FindGroup("drawing-styles")!.Controls.OfType<RibbonDropdown>()
+                .SelectMany(MenuCommandIds))
+            .Distinct()
+            .Where(id => id is not ("freew.shape-change" or "freew.shape-fill" or "freew.shape-outline"
+                or "freew.shape-text-direction" or "freew.wordart-style"));
+
+        foreach (var commandId in allIds)
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed");
+    }
 }

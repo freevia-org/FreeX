@@ -823,3 +823,256 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
         context.Document.Sources.AddRange(_previous);
     }
 }
+
+// ── Shape / Drawing commands (Drawing Format contextual tab) ──────────────────────────────────────
+
+/// <summary>
+/// Change the <see cref="Shape.Kind"/> of the inline shape at the given paragraph/run indices,
+/// snapshotting the prior kind for undo.
+/// </summary>
+public sealed class SetShapeKindCommand(int paragraphIndex, int runIndex, ShapeKind kind) : IDocumentCommand
+{
+    private ShapeKind _previous;
+    private bool _applied;
+
+    public string Label => "Change Shape";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previous = shape.Kind;
+        shape.Kind = kind;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.Kind = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the fill colour of the inline shape at the given paragraph/run indices, snapshotting the
+/// prior colour for undo. Pass null to remove the fill.
+/// </summary>
+public sealed class SetShapeFillCommand(int paragraphIndex, int runIndex, string? colorHex) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Shape Fill";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previous = shape.FillColorHex;
+        shape.FillColorHex = colorHex;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.FillColorHex = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the outline (color hex, width in points, dash token) of the inline shape at the given
+/// paragraph/run indices, snapshotting prior values for undo. Pass null colorHex to remove the outline.
+/// </summary>
+public sealed class SetShapeOutlineCommand(int paragraphIndex, int runIndex,
+    string? colorHex, double widthPt, string? dash) : IDocumentCommand
+{
+    private string? _prevColor;
+    private double _prevWidth;
+    private string? _prevDash;
+    private bool _applied;
+
+    public string Label => "Shape Outline";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevColor = shape.OutlineColorHex; _prevWidth = shape.OutlineWidthPt; _prevDash = shape.OutlineDash;
+        shape.OutlineColorHex = colorHex; shape.OutlineWidthPt = widthPt; shape.OutlineDash = dash;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.OutlineColorHex = _prevColor; shape.OutlineWidthPt = _prevWidth; shape.OutlineDash = _prevDash;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the size (points) of the inline shape at the given paragraph/run indices, snapshotting the
+/// prior size for undo.
+/// </summary>
+public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double widthPt, double heightPt) : IDocumentCommand
+{
+    private double _prevWidth;
+    private double _prevHeight;
+    private bool _applied;
+
+    public string Label => "Resize Shape";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevWidth = shape.WidthPt; _prevHeight = shape.HeightPt;
+        shape.WidthPt = widthPt; shape.HeightPt = heightPt;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.WidthPt = _prevWidth; shape.HeightPt = _prevHeight;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the alt-text accessibility description on the inline shape at the given paragraph/run indices,
+/// snapshotting the prior value for undo.
+/// </summary>
+public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, string? altText) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Shape Alt Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previous = shape.AltText;
+        shape.AltText = altText;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.AltText = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the text direction on the inline text-box shape at the given paragraph/run indices,
+/// snapshotting the prior value for undo. No-op for non-text-box shapes.
+/// </summary>
+public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runIndex, ShapeTextDirection direction) : IDocumentCommand
+{
+    private ShapeTextDirection _previous;
+    private bool _applied;
+
+    public string Label => "Text Direction";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previous = shape.TextDirection;
+        shape.TextDirection = direction;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.TextDirection = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the alt-text accessibility description on the WordArt at the given paragraph/run indices,
+/// snapshotting the prior value for undo.
+/// </summary>
+public sealed class SetWordArtAltTextCommand(int paragraphIndex, int runIndex, string? altText) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "WordArt Alt Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (WordArtAt(context) is not { } wordArt) return;
+        _previous = wordArt.AltText;
+        wordArt.AltText = altText;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || WordArtAt(context) is not { } wordArt) return;
+        wordArt.AltText = _previous;
+        _applied = false;
+    }
+
+    private WordArt? WordArtAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].WordArt : null;
+}
+
+/// <summary>
+/// Set the WordArt style preset at the given paragraph/run indices, snapshotting the prior value for undo.
+/// </summary>
+public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, WordArtStyle style) : IDocumentCommand
+{
+    private WordArtStyle _previous;
+    private bool _applied;
+
+    public string Label => "WordArt Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (WordArtAt(context) is not { } wordArt) return;
+        _previous = wordArt.Style;
+        wordArt.Style = style;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || WordArtAt(context) is not { } wordArt) return;
+        wordArt.Style = _previous;
+        _applied = false;
+    }
+
+    private WordArt? WordArtAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].WordArt : null;
+}

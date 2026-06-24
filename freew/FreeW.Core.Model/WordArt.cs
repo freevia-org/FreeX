@@ -50,6 +50,12 @@ public sealed class WordArt
     /// <summary>Font size in points (defaults to a typical WordArt heading size).</summary>
     public double FontSizePt { get; set; } = 36;
 
+    /// <summary>
+    /// Accessibility description (maps onto <c>wp:docPr/@descr</c>). Null means no alt text.
+    /// Mirrors <see cref="InlineImage.AltText"/> and <see cref="Shape.AltText"/>.
+    /// </summary>
+    public string? AltText { get; set; }
+
     public WordArt() { }
 
     public WordArt(string text, WordArtStyle style = WordArtStyle.FillBlue, double fontSizePt = 36)

@@ -439,6 +439,180 @@ internal static class FreeWRibbonCommands
             if (result is not null)
                 editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
         }));
+        // ── Drawing Format contextual tab — Shape/Drawing/TextBox/WordArt commands ─────────────────
+        // Change Shape: picker over ShapeKind; no model work — ShapeKind already exists.
+        registry.Register("freew.shape-change-rectangle", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Change Shape");
+                return;
+            }
+            editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.Rectangle);
+        }));
+        registry.Register("freew.shape-change-rounded", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Change Shape");
+                return;
+            }
+            editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.RoundedRectangle);
+        }));
+        registry.Register("freew.shape-change-ellipse", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Change Shape");
+                return;
+            }
+            editor.SetSelectedShapeKind(FreeW.Core.Model.ShapeKind.Ellipse);
+        }));
+        // Shape Fill: solid color picker or No Fill.
+        registry.Register("freew.shape-fill", new ShapeFillCommand(editor));
+        registry.Register("freew.shape-fill-no-fill", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Fill");
+                return;
+            }
+            editor.SetSelectedShapeFill(null);
+        }));
+        // Shape Outline: reuse same dialog as image border; dash presets; No Outline option.
+        registry.Register("freew.shape-outline", new ShapeOutlineCommand(editor));
+        registry.Register("freew.shape-outline-no-outline", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Outline");
+                return;
+            }
+            editor.SetSelectedShapeOutline(null, 0, null);
+        }));
+        registry.Register("freew.shape-outline-solid", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Outline");
+                return;
+            }
+            editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), null);
+        }));
+        registry.Register("freew.shape-outline-dash", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Outline");
+                return;
+            }
+            editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), "dash");
+        }));
+        registry.Register("freew.shape-outline-dot", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Outline");
+                return;
+            }
+            editor.SetSelectedShapeOutline(shape.OutlineColorHex ?? "000000", Math.Max(0.75, shape.OutlineWidthPt), "sysDot");
+        }));
+        // Text Direction: Horizontal / Rotate 90 / Rotate 270 — text-box only.
+        registry.Register("freew.shape-text-direction", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text direction from the dropdown.", "Text Direction");
+        }));
+        registry.Register("freew.shape-text-horizontal", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a text box first.", "Text Direction");
+                return;
+            }
+            editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Horizontal);
+        }));
+        registry.Register("freew.shape-text-rotate90", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a text box first.", "Text Direction");
+                return;
+            }
+            editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate90);
+        }));
+        registry.Register("freew.shape-text-rotate270", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a text box first.", "Text Direction");
+                return;
+            }
+            editor.SetSelectedShapeTextDirection(FreeW.Core.Model.ShapeTextDirection.Rotate270);
+        }));
+        // Shape Size: reuse ImageSizeDialog (same W/H in points).
+        registry.Register("freew.shape-size", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Size");
+                return;
+            }
+            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), shape.WidthPt, shape.HeightPt) is { } sz)
+                editor.SetSelectedShapeSize(sz.Width, sz.Height);
+        }));
+        // Alt Text: text prompt for shape or WordArt.
+        registry.Register("freew.shape-alt-text", new ShapeAltTextCommand(editor));
+        // Shape align left/center/right (paragraph alignment of the containing run paragraph).
+        registry.Register("freew.shape-align-left",   new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
+        registry.Register("freew.shape-align-center", new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
+        registry.Register("freew.shape-align-right",  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        // WordArt style gallery — four existing presets.
+        registry.Register("freew.wordart-style", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a WordArt style from the dropdown.", "WordArt Style");
+        }));
+        foreach (WordArtStyle preset in Enum.GetValues<WordArtStyle>())
+        {
+            var p = preset;
+            var id = p switch
+            {
+                WordArtStyle.FillBlue    => "freew.wordart-style-fill-blue",
+                WordArtStyle.GradientFill => "freew.wordart-style-gradient",
+                WordArtStyle.Outline     => "freew.wordart-style-outline",
+                WordArtStyle.Shadow      => "freew.wordart-style-shadow",
+                _ => $"freew.wordart-style-{p.ToString().ToLowerInvariant()}"
+            };
+            registry.Register(id, new ActionCommand(() =>
+            {
+                editor.Focus();
+                if (editor.SelectedWordArt() is null)
+                {
+                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select WordArt first.", "WordArt Style");
+                    return;
+                }
+                editor.SetSelectedWordArtStyle(p);
+            }));
+        }
+        // ── End Drawing Format commands ───────────────────────────────────────────────────────────
+
         registry.Register("freew.wordart", new ActionCommand(() =>
         {
             editor.Focus();
@@ -5743,6 +5917,90 @@ internal static class FreeWRibbonCommands
         {
             var value = editor.Selection.GetPropertyValue(property);
             return new RibbonCommandState(IsEnabled: true, IsChecked: value != DependencyProperty.UnsetValue && isOn(value));
+        }
+    }
+
+    // ── Drawing Format contextual tab private commands ───────────────────────────────────────────
+
+    // Drawing Format > Shape Styles > Shape Fill: open a color hex prompt; apply to selected shape.
+    private sealed class ShapeFillCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first, then choose Shape Fill.", "Shape Fill");
+                return;
+            }
+            var current = shape.FillColorHex?.TrimStart('#') ?? string.Empty;
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Shape Fill",
+                "Fill color (6-digit hex, or blank for no fill):", current);
+            if (text is null) return;
+            var trimmed = text.Trim().TrimStart('#');
+            editor.SetSelectedShapeFill(trimmed.Length == 6 ? "#" + trimmed.ToUpperInvariant() : null);
+        }
+    }
+
+    // Drawing Format > Shape Styles > Shape Outline: reuse ImageBorderDialog (same fields).
+    private sealed class ShapeOutlineCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first, then choose Shape Outline.", "Shape Outline");
+                return;
+            }
+            var result = ImageBorderDialog.Prompt(
+                Window.GetWindow(editor),
+                shape.OutlineColorHex, shape.OutlineWidthPt, shape.OutlineDash);
+            if (result is { } r)
+                editor.SetSelectedShapeOutline(r.Color is { Length: > 0 } c ? "#" + c : null, r.Width, r.Dash);
+        }
+    }
+
+    // Drawing Format > Size > Alt Text: prompt for shape or WordArt alt text.
+    private sealed class ShapeAltTextCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            var wordArt = editor.SelectedWordArt();
+            if (shape is null && wordArt is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Select a shape or WordArt first, then choose Alt Text.", "Alt Text");
+                return;
+            }
+            var current = shape?.AltText ?? wordArt?.AltText ?? string.Empty;
+            var text = TextPrompt.Ask(Window.GetWindow(editor), "Alt Text", "Description:", current);
+            if (text is not null)
+            {
+                if (shape is not null)
+                    editor.SetSelectedShapeAltText(text);
+                else
+                    editor.SetSelectedWordArtAltText(text);
+            }
+        }
+    }
+
+    // Drawing Format > Arrange > Align: set paragraph alignment of the containing paragraph.
+    private sealed class ShapeAlignCommand(DocumentView editor, FreeW.Core.Model.TextAlignment alignment) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Align");
+                return;
+            }
+            editor.SetSelectedShapeAlignment(alignment);
         }
     }
 }

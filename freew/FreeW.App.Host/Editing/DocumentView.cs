@@ -1707,6 +1707,234 @@ public sealed class DocumentView : RichTextBox
         return null;
     }
 
+    // ── Shape selection (mirrors SelectedImage / SelectedChart) ──────────────────────────────────
+
+    /// <summary>The inline shape targeted by the current selection/caret, or null if none is selected.</summary>
+    public Shape? SelectedShape() => SelectedShapeLocation().Shape;
+
+    // Locate the model paragraph/run index of the inline shape under the selection, plus the shape itself.
+    private (int BlockIndex, int RunIndex, Shape? Shape) SelectedShapeLocation()
+    {
+        var shape = ShapeAtPointer(CaretPosition)
+            ?? ShapeAtPointer(Selection.Start)
+            ?? ShapeAtPointer(Selection.End)
+            ?? ShapeInElement(CaretPosition?.Parent as TextElement)
+            ?? ShapeInElement(Selection.Start.Parent as TextElement)
+            ?? ShapeInElement(Selection.End.Parent as TextElement);
+        if (shape is null)
+            return (-1, -1, null);
+
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].Shape, shape))
+                    return (b, r, shape);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static Shape? ShapeAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (ShapeInElement(pointer.Parent as TextElement) is { } parentShape)
+            return parentShape;
+        return ShapeFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? ShapeFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static Shape? ShapeFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } }
+            ? modelShape
+            : null;
+
+    private static Shape? ShapeInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: FrameworkElement { Tag: Shape modelShape } })
+                return modelShape;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // ── WordArt selection (mirrors SelectedShape) ─────────────────────────────────────────────────
+
+    /// <summary>The inline WordArt targeted by the current selection/caret, or null if none is selected.</summary>
+    public WordArt? SelectedWordArt() => SelectedWordArtLocation().WordArt;
+
+    // Locate the model paragraph/run index of the inline WordArt under the selection, plus the WordArt itself.
+    private (int BlockIndex, int RunIndex, WordArt? WordArt) SelectedWordArtLocation()
+    {
+        var wordArt = WordArtAtPointer(CaretPosition)
+            ?? WordArtAtPointer(Selection.Start)
+            ?? WordArtAtPointer(Selection.End)
+            ?? WordArtInElement(CaretPosition?.Parent as TextElement)
+            ?? WordArtInElement(Selection.Start.Parent as TextElement)
+            ?? WordArtInElement(Selection.End.Parent as TextElement);
+        if (wordArt is null)
+            return (-1, -1, null);
+
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].WordArt, wordArt))
+                    return (b, r, wordArt);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static WordArt? WordArtAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (WordArtInElement(pointer.Parent as TextElement) is { } parentWordArt)
+            return parentWordArt;
+        return WordArtFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? WordArtFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static WordArt? WordArtFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } }
+            ? modelWordArt
+            : null;
+
+    private static WordArt? WordArtInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: FrameworkElement { Tag: WordArt modelWordArt } })
+                return modelWordArt;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // ── Shape mutation methods (used by drawing-format contextual tab commands) ─────────────────
+
+    /// <summary>
+    /// Change the kind of the selected shape. Routes through the command bus (undoable). No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeKind(ShapeKind kind)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeKindCommand(blockIndex, runIndex, kind));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the fill color of the selected shape. Pass null to remove fill. Undoable. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeFill(string? colorHex)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeFillCommand(blockIndex, runIndex, colorHex));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the outline on the selected shape. Pass null colorHex to remove. Undoable. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeOutline(string? colorHex, double widthPt, string? dash = null)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeOutlineCommand(blockIndex, runIndex, colorHex, widthPt, dash));
+        Render();
+    }
+
+    /// <summary>
+    /// Resize the selected shape. Undoable. No-op without a shape or if widthPt ≤ 0.
+    /// </summary>
+    public void SetSelectedShapeSize(double widthPt, double heightPt)
+    {
+        if (widthPt <= 0 || heightPt <= 0) return;
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeSizeCommand(blockIndex, runIndex, widthPt, heightPt));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the alt text on the selected shape. Undoable. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeAltText(string? altText)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex,
+            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the text direction on the selected text-box shape. Undoable. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeTextDirection(ShapeTextDirection direction)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeTextDirectionCommand(blockIndex, runIndex, direction));
+        Render();
+    }
+
+    /// <summary>
+    /// Align the selected shape's paragraph left/center/right. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeAlignment(ModelTextAlignment alignment)
+    {
+        CommitToModel();
+        var (blockIndex, _, shape) = SelectedShapeLocation();
+        if (shape is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+            return;
+        paragraph.Formatting = paragraph.Formatting with { Alignment = alignment };
+        Render();
+    }
+
+    // ── WordArt mutation methods (used by drawing-format contextual tab commands) ───────────────
+
+    /// <summary>
+    /// Change the style preset on the selected WordArt. Undoable. No-op without a WordArt selection.
+    /// </summary>
+    public void SetSelectedWordArtStyle(WordArtStyle style)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
+        if (wordArt is null) return;
+        _commands.Execute(new SetWordArtStyleCommand(blockIndex, runIndex, style));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the alt text on the selected WordArt. Undoable. No-op without a WordArt selection.
+    /// </summary>
+    public void SetSelectedWordArtAltText(string? altText)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
+        if (wordArt is null) return;
+        _commands.Execute(new SetWordArtAltTextCommand(blockIndex, runIndex,
+            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
+        Render();
+    }
+
     // ── Chart mutation methods (used by chart contextual tab commands) ────────────────────────────
 
     /// <summary>
@@ -5792,7 +6020,14 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
             ? new SolidColorBrush(fillColor)
             : System.Windows.Media.Brushes.Transparent;
-        var stroke = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+
+        // Outline: use model OutlineColorHex/OutlineWidthPt when set; fall back to a faint grey hairline.
+        System.Windows.Media.Brush stroke = TryParseColor(shape.OutlineColorHex, out var strokeColor)
+            ? new SolidColorBrush(strokeColor)
+            : new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80));
+        var outlineThickness = shape.OutlineColorHex is { Length: > 0 }
+            ? Math.Max(1, shape.OutlineWidthPt * PxPerPoint)
+            : strokeThickness;
 
         FrameworkElement element;
         if (shape.Kind == ShapeKind.Ellipse)
@@ -5803,7 +6038,7 @@ public sealed class DocumentView : RichTextBox
                 Height = heightPx,
                 Fill = fill,
                 Stroke = stroke,
-                StrokeThickness = strokeThickness,
+                StrokeThickness = outlineThickness,
             };
         }
         else
@@ -5814,17 +6049,25 @@ public sealed class DocumentView : RichTextBox
                 Height = heightPx,
                 Background = fill,
                 BorderBrush = stroke,
-                BorderThickness = new Thickness(strokeThickness),
+                BorderThickness = new Thickness(outlineThickness),
                 CornerRadius = shape.Kind == ShapeKind.RoundedRectangle ? new CornerRadius(6) : new CornerRadius(0),
             };
             if (shape.HasText)
-                border.Child = new TextBlock
+            {
+                var textBlock = new TextBlock
                 {
                     Text = shape.PlainText,
                     Margin = new Thickness(4),
                     TextWrapping = TextWrapping.Wrap,
                     VerticalAlignment = VerticalAlignment.Top,
                 };
+                // Apply LayoutTransform for rotated text directions.
+                if (shape.TextDirection == ShapeTextDirection.Rotate90)
+                    textBlock.LayoutTransform = new RotateTransform(90);
+                else if (shape.TextDirection == ShapeTextDirection.Rotate270)
+                    textBlock.LayoutTransform = new RotateTransform(270);
+                border.Child = textBlock;
+            }
             element = border;
         }
 

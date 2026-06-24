@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Gradient Fill">
+  <rect width="32" height="32" fill="none"/>
+  <defs><linearGradient id="wag" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4472C4"/><stop offset="100%" stop-color="#ED7D31"/></linearGradient></defs>
+  <text x="16" y="22" font-size="22" fill="url(#wag)" font-family="Segoe UI,Arial,sans-serif" font-weight="800" text-anchor="middle">A</text>
+</svg>
