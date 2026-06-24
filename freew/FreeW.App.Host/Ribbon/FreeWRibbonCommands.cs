@@ -1289,6 +1289,16 @@ internal static class FreeWRibbonCommands
         // the engine recognises them during substitution via SubstituteSpecial).
         registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
         registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
+        registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
+        // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
+        registry.Register("freew.merge-rules", new NoOpRibbonCommand()); // dropdown host: no action of its own
+        registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
+        registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
+        registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
+        registry.Register("freew.merge-rule-fill-in", new InsertMergeRuleFillInCommand(editor));
+        registry.Register("freew.merge-rule-ask", new InsertMergeRuleAskCommand(editor));
+        registry.Register("freew.merge-rule-set", new InsertMergeRuleSetCommand(editor));
+        registry.Register("freew.merge-rule-ref", new InsertMergeRuleRefCommand(editor));
         registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Register("freew.merge-preview-first", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
         registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
@@ -4714,6 +4724,389 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // A no-op command used as the host command for dropdown buttons that carry only a menu. The button
+    // itself has no direct action; all behaviour lives in the sub-items.
+    private sealed class NoOpRibbonCommand : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) { }
+    }
+
+    // ── Merge Rules: command kind tag for Skip/Next Record If ───────────────────────────────────
+    private enum RuleCondKind { SkipRecordIf, NextRecordIf }
+
+    // Mailings > Rules > If…Then…Else: ask the user for field/operator/value/true-text/false-text via
+    // a dialog and insert «If FieldName Op Value Then "TrueText" Else "FalseText"» at the caret.
+    // MergeRuleEvaluator.Evaluate recognises this instruction at preview/merge time.
+    private sealed class InsertMergeRuleIfCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var header = session.Data?.Header ?? [];
+            var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
+            if (result is null) return;
+            var instruction = MergeRuleEvaluator.BuildIfInstruction(
+                result.FieldName, result.Operator, result.Value, result.TrueText, result.FalseText);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Rules > Skip Record If / Next Record If: insert «Skip Record If …» or «Next Record If …».
+    private sealed class InsertMergeRuleCondCommand(
+        DocumentView editor,
+        MailMergeSession session,
+        RuleCondKind kind) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var header = session.Data?.Header ?? [];
+            var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
+            var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
+            if (result is null) return;
+            var instruction = kind == RuleCondKind.SkipRecordIf
+                ? MergeRuleEvaluator.BuildSkipRecordIfInstruction(result.FieldName, result.Operator, result.Value)
+                : MergeRuleEvaluator.BuildNextRecordIfInstruction(result.FieldName, result.Operator, result.Value);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Rules > Fill-in: prompt for the prompt text; insert «Fill-in "Prompt"» at the caret.
+    // At merge time MergeRuleEvaluator looks up the answer in MergeState.FillInAnswers (pre-populated
+    // by FinishMergeCommand which shows the Fill-in dialogs before iterating records).
+    private sealed class InsertMergeRuleFillInCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
+            if (prompt is null) return;
+            var instruction = MergeRuleEvaluator.BuildFillInInstruction(prompt);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Rules > Ask: prompt for bookmark name + prompt text; insert «Ask BookmarkName "Prompt"».
+    private sealed class InsertMergeRuleAskCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var result = MergeRuleAskSetDialog.AskAsk(Window.GetWindow(editor));
+            if (result is null) return;
+            var instruction = MergeRuleEvaluator.BuildAskInstruction(result.Value.Name, result.Value.Value);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Rules > Set Bookmark: prompt for name + value; insert «Set BookmarkName "Value"».
+    private sealed class InsertMergeRuleSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var result = MergeRuleAskSetDialog.AskSet(Window.GetWindow(editor));
+            if (result is null) return;
+            var instruction = MergeRuleEvaluator.BuildSetInstruction(result.Value.Name, result.Value.Value);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // Mailings > Rules > Ref Bookmark: prompt for bookmark name; insert «Ref BookmarkName».
+    private sealed class InsertMergeRuleRefCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var name = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Ref Bookmark",
+                "Enter the bookmark name to reference:");
+            if (name is null) return;
+            var instruction = MergeRuleEvaluator.BuildRefInstruction(name);
+            editor.Focus();
+            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        }
+    }
+
+    // ── Merge Rule dialogs ───────────────────────────────────────────────────────────────────────
+
+    // All operators available in the Rules condition dialogs (matching Word's Rules dialog).
+    private static readonly (MergeConditionOperator Op, string Label)[] ConditionOperators =
+    [
+        (MergeConditionOperator.Equal,              "Equal to (=)"),
+        (MergeConditionOperator.NotEqual,           "Not equal to (<>)"),
+        (MergeConditionOperator.LessThan,           "Less than (<)"),
+        (MergeConditionOperator.LessThanOrEqual,    "Less than or equal (<=)"),
+        (MergeConditionOperator.GreaterThan,        "Greater than (>)"),
+        (MergeConditionOperator.GreaterThanOrEqual, "Greater than or equal (>=)"),
+        (MergeConditionOperator.IsBlank,            "Is blank"),
+        (MergeConditionOperator.IsNotBlank,         "Is not blank"),
+        (MergeConditionOperator.Contains,           "Contains"),
+    ];
+
+    // Result from If…Then…Else dialog.
+    private sealed record MergeRuleIfResult(
+        string FieldName,
+        MergeConditionOperator Operator,
+        string Value,
+        string TrueText,
+        string FalseText);
+
+    // Result from Skip/Next Record If dialog.
+    private sealed record MergeRuleCondResult(
+        string FieldName,
+        MergeConditionOperator Operator,
+        string Value);
+
+    // If…Then…Else dialog: builds the complete rule definition.
+    private static class MergeRuleIfDialog
+    {
+        public static MergeRuleIfResult? Ask(Window? owner, IReadOnlyList<string> header)
+        {
+            MergeRuleIfResult? result = null;
+            var dialog = new Window
+            {
+                Title = "If…Then…Else",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var fieldCombo = new System.Windows.Controls.ComboBox { MinWidth = 140 };
+            foreach (var h in header) fieldCombo.Items.Add(h);
+            if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
+
+            var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
+            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            opCombo.SelectedIndex = 0;
+
+            var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
+            var trueBox  = new System.Windows.Controls.TextBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 6) };
+            var falseBox = new System.Windows.Controls.TextBox { MinWidth = 260 };
+
+            // Disable value field for blank/not blank operators.
+            opCombo.SelectionChanged += (_, _) =>
+            {
+                var idx = opCombo.SelectedIndex;
+                var op = ConditionOperators[idx].Op;
+                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
+                result = new MergeRuleIfResult(
+                    fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
+                    ConditionOperators[opIdx].Op,
+                    valueBox.Text,
+                    trueBox.Text,
+                    falseBox.Text);
+                dialog.DialogResult = true;
+            };
+
+            var grid = new Grid { Margin = new Thickness(14) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var i = 0; i < 7; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            void AddRow(int row, string label, System.Windows.UIElement control)
+            {
+                var lbl = new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 8, 6), VerticalAlignment = VerticalAlignment.Center };
+                Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
+                Grid.SetRow(control, row); Grid.SetColumn(control, 1);
+                grid.Children.Add(lbl);
+                grid.Children.Add(control);
+            }
+
+            AddRow(0, "Field name:", fieldCombo);
+            AddRow(1, "Comparison:", opCombo);
+            AddRow(2, "Compare to:", valueBox);
+            AddRow(3, "Insert this text (true):", trueBox);
+            AddRow(4, "Otherwise insert (false):", falseBox);
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            Grid.SetRow(buttons, 6); Grid.SetColumnSpan(buttons, 2);
+            grid.Children.Add(buttons);
+
+            dialog.Content = grid;
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Skip Record If / Next Record If dialog.
+    private static class MergeRuleCondDialog
+    {
+        public static MergeRuleCondResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
+        {
+            MergeRuleCondResult? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var fieldCombo = new System.Windows.Controls.ComboBox { MinWidth = 140 };
+            foreach (var h in header) fieldCombo.Items.Add(h);
+            if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
+
+            var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
+            foreach (var (_, label) in ConditionOperators) opCombo.Items.Add(label);
+            opCombo.SelectedIndex = 0;
+
+            var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
+            opCombo.SelectionChanged += (_, _) =>
+            {
+                var idx = opCombo.SelectedIndex;
+                var op = ConditionOperators[idx].Op;
+                valueBox.IsEnabled = op != MergeConditionOperator.IsBlank && op != MergeConditionOperator.IsNotBlank;
+            };
+
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) =>
+            {
+                var opIdx = opCombo.SelectedIndex < 0 ? 0 : opCombo.SelectedIndex;
+                result = new MergeRuleCondResult(
+                    fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
+                    ConditionOperators[opIdx].Op,
+                    valueBox.Text);
+                dialog.DialogResult = true;
+            };
+
+            var grid = new Grid { Margin = new Thickness(14) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var i = 0; i < 5; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            void AddRow(int row, string label, System.Windows.UIElement control)
+            {
+                var lbl = new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 8, 6), VerticalAlignment = VerticalAlignment.Center };
+                Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
+                Grid.SetRow(control, row); Grid.SetColumn(control, 1);
+                grid.Children.Add(lbl);
+                grid.Children.Add(control);
+            }
+
+            AddRow(0, "Field name:", fieldCombo);
+            AddRow(1, "Comparison:", opCombo);
+            AddRow(2, "Compare to:", valueBox);
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+            Grid.SetRow(buttons, 4); Grid.SetColumnSpan(buttons, 2);
+            grid.Children.Add(buttons);
+
+            dialog.Content = grid;
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Simple single-prompt dialog (for Fill-in prompt text and Ref bookmark name).
+    private static class MergeRulePromptDialog
+    {
+        public static string? AskPrompt(Window? owner, string title, string label)
+        {
+            string? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var box = new System.Windows.Controls.TextBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(14), MinWidth = 320 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(box);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            box.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // Two-field dialog for Ask (bookmark name + prompt) and Set (bookmark name + value).
+    private static class MergeRuleAskSetDialog
+    {
+        public static (string Name, string Value)? AskAsk(Window? owner) =>
+            AskTwo(owner, "Ask", "Bookmark name:", "Prompt text:");
+
+        public static (string Name, string Value)? AskSet(Window? owner) =>
+            AskTwo(owner, "Set Bookmark", "Bookmark name:", "Value:");
+
+        private static (string Name, string Value)? AskTwo(Window? owner, string title, string label1, string label2)
+        {
+            (string, string)? result = null;
+            var dialog = new Window
+            {
+                Title = title,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var nameBox  = new System.Windows.Controls.TextBox { MinWidth = 200, Margin = new Thickness(0, 0, 0, 6) };
+            var valueBox = new System.Windows.Controls.TextBox { MinWidth = 200, Margin = new Thickness(0, 0, 0, 10) };
+            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            ok.Click += (_, _) => { result = (nameBox.Text, valueBox.Text); dialog.DialogResult = true; };
+
+            var buttons = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(14), MinWidth = 320 };
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label1, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(nameBox);
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label2, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(valueBox);
+            panel.Children.Add(buttons);
+            dialog.Content = panel;
+            nameBox.Focus();
+            return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
     // Mailings > Select Recipients: open a dialog to paste/type CSV (first line = headers). The parsed MergeData
     // is stored on the session. If the document already has merge fields, they are shown as a hint so the
     // user knows which columns to provide.
@@ -4852,6 +5245,9 @@ internal static class FreeWRibbonCommands
     // Mailings > Finish & Merge: produce the merged documents and load the concatenation of every record
     // into the editor as a single document (records separated by a page break), so the result is visible
     // and saveable. This replaces the editor's content; the template is no longer needed afterwards.
+    // When the template contains Fill-in or Ask rule instructions, the user is prompted once per unique
+    // Fill-in prompt / Ask bookmark before iterating records; all answers are stored in MergeState so
+    // the evaluator can resolve them without further prompts.
     private sealed class FinishMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4877,24 +5273,90 @@ internal static class FreeWRibbonCommands
                 template = editor.Model;
             }
 
+            // Collect Fill-in and Ask prompts from the template body so we can ask the user once
+            // before the merge run starts (matching Word's behaviour).
+            var mergeState = new MergeState();
+            var owner = Window.GetWindow(editor);
+            CollectFillInAndAskAnswers(template, mergeState, owner);
+
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
             var augmentedRows = data.Rows.Select(r => session.AugmentRow(r)).ToList();
-            var augmentedData = new MergeData(data.Header, augmentedRows.Select(r => (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList()).ToList());
-            var merged = MailMerge.MergeAll(template, augmentedData);
+            var augmentedData = new MergeData(data.Header,
+                augmentedRows.Select(r =>
+                    (IReadOnlyList<string>)data.Header.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
+                .ToList());
+
+            // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.
+            var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
+            var skipped = mergeState.SkippedIndices.Count;
             var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
 
             editor.LoadModel(combined);
             session.Template = null;
             session.CurrentIndex = 0;
 
-            DialogMessageHelper.ShowInfo(
-                Window.GetWindow(editor),
-                $"Merged {merged.Count} record(s) into a single document.",
-                "Mail Merge");
+            var msg = skipped > 0
+                ? $"Merged {merged.Count} record(s) into a single document ({skipped} skipped)."
+                : $"Merged {merged.Count} record(s) into a single document.";
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), msg, "Mail Merge");
             editor.Focus();
         }
 
+        // Scan the template for «Fill-in "Prompt"» and «Ask BookmarkName "Prompt"» instructions and
+        // prompt the user once per unique prompt/bookmark before the merge run.
+        private static void CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
+        {
+            var allText = string.Join(" ", template.Blocks.OfType<FreeW.Core.Model.Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Select(r => r.Text));
+
+            // Extract field instructions.
+            var i = 0;
+            while (i < allText.Length)
+            {
+                var open = allText.IndexOf(MailMerge.FieldOpen, i);
+                if (open < 0) break;
+                var close = allText.IndexOf(MailMerge.FieldClose, open + 1);
+                if (close < 0) break;
+                var instruction = allText.Substring(open + 1, close - open - 1).Trim();
+                i = close + 1;
+
+                const string fillInPrefix = "Fill-in ";
+                const string askPrefix = "Ask ";
+
+                if (instruction.StartsWith(fillInPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    var promptRaw = instruction.Substring(fillInPrefix.Length).Trim();
+                    var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
+                        ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
+                        : promptRaw;
+                    if (!state.FillInAnswers.ContainsKey(prompt))
+                    {
+                        var answer = MergeRulePromptDialog.AskPrompt(owner, "Fill-in", $"{prompt}");
+                        state.FillInAnswers[prompt] = answer ?? string.Empty;
+                    }
+                }
+                else if (instruction.StartsWith(askPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    var rest = instruction.Substring(askPrefix.Length).TrimStart();
+                    var spaceIdx = rest.IndexOf(' ');
+                    if (spaceIdx > 0)
+                    {
+                        var bmName = rest.Substring(0, spaceIdx);
+                        if (!state.AskAnswers.ContainsKey(bmName))
+                        {
+                            var promptRaw = rest.Substring(spaceIdx + 1).Trim();
+                            var prompt = promptRaw.Length >= 2 && promptRaw[0] == '"'
+                                ? promptRaw.Substring(1, promptRaw.Length - 2).Replace("\"\"", "\"")
+                                : promptRaw;
+                            var answer = MergeRulePromptDialog.AskPrompt(owner, "Ask", $"{prompt}");
+                            state.AskAnswers[bmName] = answer ?? string.Empty;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Mailings > Filter & Sort Recipients: present the active session's MergeData as a list of rows with
