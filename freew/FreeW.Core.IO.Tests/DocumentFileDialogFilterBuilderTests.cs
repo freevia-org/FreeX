@@ -52,6 +52,8 @@ public class DocumentFileDialogFilterBuilderTests
             "Web Page (*.htm)", "*.htm",
             "MHTML document (*.mhtml)", "*.mhtml",
             "MHTML document (*.mht)", "*.mht",
+            "Word 97-2003 Document (*.doc)", "*.doc",
+            "Word 97-2003 Template (*.dot)", "*.dot",
             "OpenDocument Text (*.odt)", "*.odt",
             "OpenDocument Text Template (*.ott)", "*.ott",
             "Plain text (*.txt)", "*.txt",
