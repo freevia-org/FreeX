@@ -4999,7 +4999,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null);
 
     /// <summary>
     /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
@@ -5118,10 +5118,11 @@ public sealed class DocumentView : RichTextBox
         var modelParagraph = new ModelParagraph
         {
             Formatting = ReadParagraphFormatting(wpfParagraph, document),
-            // The bookmark name and style id (invisible markers with no FlowDocument slot) are preserved
-            // across edits via the paragraph Tag (see ParagraphTag).
+            // The bookmark name, style id, and section break (invisible markers with no FlowDocument slot)
+            // are preserved across edits via the paragraph Tag (see ParagraphTag).
             BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null,
-            StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null
+            StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null,
+            SectionBreak = wpfParagraph.Tag is ParagraphTag { SectionBreak: { } sec } ? sec : null
         };
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
@@ -5807,13 +5808,14 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens)
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null)
             wpf.Tag = new ParagraphTag(
                 paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
                 paragraph.StyleId, paraFmt.ListLevel,
                 borderNeedsTag ? paraFmt.Border : null,
                 shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
-                paraFmt.SuppressAutoHyphens);
+                paraFmt.SuppressAutoHyphens,
+                paragraph.SectionBreak);
 
         foreach (var run in paragraph.Runs)
             wpf.Inlines.Add(BuildRun(run, paragraph, document));
