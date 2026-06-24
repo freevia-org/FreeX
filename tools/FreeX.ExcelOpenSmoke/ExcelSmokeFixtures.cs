@@ -142,6 +142,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_sparkline_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeSparklineCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -3350,4 +3356,513 @@ internal static class ExcelSmokeFixtures
             showLastColumn: true,
             showTotals: true,
             addSumOnNumericColumns: true);
+
+    // =========================================================================
+    // Sparkline corpus fixtures
+    // =========================================================================
+    //
+    // Excel COM constants for sparklines
+    private const int XlSparkLine    = 1;  // xlSparkLine
+    private const int XlSparkColumn  = 2;  // xlSparkColumn
+    private const int XlSparkColumnStacked100 = 3;  // xlSparkColumnStacked100 (win/loss)
+    // xlSparkScale values for MinScaleType / MaxScaleType
+    private const int XlSparkScaleCustom     = 1;
+    private const int XlSparkScaleGroup      = 2;
+    private const int XlSparkScaleIndividual = 3;
+
+    public static IReadOnlyList<string> GetExcelSparklineCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_sparkline_line_markers_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_column_highlow_negative_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_winloss_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_axis_shown_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_custom_minmax_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_group_scaling_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_series_color_007.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_sparkline_line_weight_008.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for sparkline corpus fixtures.</summary>
+    private static void GenerateExcelNativeSparklineCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("line_markers_001", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_LineMarkers(workbooks, outputPath);
+        else if (fileName.Contains("column_highlow_negative_002", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_ColumnHighLowNegative(workbooks, outputPath);
+        else if (fileName.Contains("winloss_003", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_WinLoss(workbooks, outputPath);
+        else if (fileName.Contains("axis_shown_004", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_AxisShown(workbooks, outputPath);
+        else if (fileName.Contains("custom_minmax_005", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_CustomMinMax(workbooks, outputPath);
+        else if (fileName.Contains("group_scaling_006", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_GroupScaling(workbooks, outputPath);
+        else if (fileName.Contains("series_color_007", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_SeriesColor(workbooks, outputPath);
+        else if (fileName.Contains("line_weight_008", StringComparison.OrdinalIgnoreCase))
+            GenerateSparklineFixture_LineWeight(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown sparkline corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared helpers for sparkline fixtures
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes a small 5-row data block into columns A–B starting at the given row.
+    /// Returns the data range address (e.g. "A2:A6") for use as the sparkline source.
+    /// The sparkline cell is placed in the column immediately to the right at the top row.
+    /// </summary>
+    private static (string DataRange, string SparklineCell) WriteSparklineData(
+        object worksheet, int startRow, int dataCol, double[] values)
+    {
+        for (var i = 0; i < values.Length; i++)
+            SetExcelCellValue(worksheet, startRow + i, dataCol, values[i]);
+
+        var colLetter = ColLetter(dataCol);
+        var spCol = ColLetter(dataCol + values.Length + 1); // skip one blank column
+        var dataRange = $"{colLetter}{startRow}:{colLetter}{startRow + values.Length - 1}";
+        var sparkCell = $"{spCol}{startRow}";
+        return (dataRange, sparkCell);
+    }
+
+    private static string ColLetter(int col)
+    {
+        // 1-based column index → letter(s) (A, B, ..., Z, AA, ...)
+        var result = "";
+        while (col > 0)
+        {
+            col--;
+            result = (char)('A' + col % 26) + result;
+            col /= 26;
+        }
+        return result;
+    }
+
+    private static object OpenSparklineWorkbook(dynamic workbooks, string outputPath, string sheetName,
+        out object worksheet)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        var workbook = workbooks.Add();
+        worksheet = ((dynamic)workbook).Worksheets[1];
+        // Keep the default sheet name "Sheet1" so that source-data addresses
+        // (which all reference "Sheet1!…") remain valid.
+        // The sheetName parameter is kept for API compatibility but not applied.
+        _ = sheetName;
+        return workbook;
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — line sparkline with all marker types visible
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_LineMarkers(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? points = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "LineMarkers", out object ws);
+            worksheet = ws;
+
+            double[] data = [3, 7, 2, 9, 5, 1, 8];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+            SetExcelCellValue(worksheet, 1, ColLetterToIndex(sparkCell[..^1]) , "Sparkline");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
+            points = ((dynamic)group).Points;
+            ((dynamic)points).Markers.Visible = true;
+            ((dynamic)points).Highpoint.Visible = true;
+            ((dynamic)points).Lowpoint.Visible = true;
+            ((dynamic)points).Firstpoint.Visible = true;
+            ((dynamic)points).Lastpoint.Visible = true;
+            ((dynamic)points).Negative.Visible = true;
+            // Assign distinct colors so we can verify each role
+            ((dynamic)points).Markers.Color.Color   = ToOleColor(70, 130, 180);   // steel blue — all markers
+            ((dynamic)points).Highpoint.Color.Color  = ToOleColor(255, 0, 0);      // red — high
+            ((dynamic)points).Lowpoint.Color.Color   = ToOleColor(0, 0, 255);      // blue — low
+            ((dynamic)points).Firstpoint.Color.Color = ToOleColor(0, 200, 0);      // green — first
+            ((dynamic)points).Lastpoint.Color.Color  = ToOleColor(255, 165, 0);    // orange — last
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(points);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 002 — column sparkline, high/low/negative coloring
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_ColumnHighLowNegative(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? points = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "ColHighLowNeg", out object ws);
+            worksheet = ws;
+
+            double[] data = [5, -3, 8, -1, 4, -6, 2];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkColumn, $"Sheet1!{dataRange}");
+            points = ((dynamic)group).Points;
+            ((dynamic)points).Highpoint.Visible = true;
+            ((dynamic)points).Lowpoint.Visible  = true;
+            ((dynamic)points).Negative.Visible  = true;
+            ((dynamic)points).Highpoint.Color.Color = ToOleColor(0, 176, 80);   // green — high
+            ((dynamic)points).Lowpoint.Color.Color  = ToOleColor(255, 192, 0);  // gold — low
+            ((dynamic)points).Negative.Color.Color  = ToOleColor(255, 0, 0);    // red — negative
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(points);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 003 — win/loss sparkline
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_WinLoss(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? points = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "WinLoss", out object ws);
+            worksheet = ws;
+
+            double[] data = [1, -1, 1, 1, -1, 1, -1, 1];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkColumnStacked100, $"Sheet1!{dataRange}");
+            points = ((dynamic)group).Points;
+            ((dynamic)points).Negative.Visible = true;
+            ((dynamic)points).Negative.Color.Color = ToOleColor(255, 0, 0);  // red for loss
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(points);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 004 — line sparkline with axis line shown
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_AxisShown(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? axes = null;
+        object? hAxis = null;
+        object? axisObj = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "AxisShown", out object ws);
+            worksheet = ws;
+
+            double[] data = [3, -2, 5, -1, 4, -3, 2];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
+            axes = ((dynamic)group).Axes;
+            hAxis = ((dynamic)axes).Horizontal;
+            axisObj = ((dynamic)hAxis).Axis;
+            ((dynamic)axisObj).Visible = true;
+            ((dynamic)axisObj).Color.Color = ToOleColor(0, 0, 128);  // navy — axis
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(axisObj);
+            ReleaseComObject(hAxis);
+            ReleaseComObject(axes);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 005 — line sparkline with custom min/max axis bounds
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_CustomMinMax(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? axes = null;
+        object? vAxis = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "CustomMinMax", out object ws);
+            worksheet = ws;
+
+            double[] data = [2, 5, 3, 7, 4];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
+            axes = ((dynamic)group).Axes;
+            vAxis = ((dynamic)axes).Vertical;
+            ((dynamic)vAxis).MinScaleType = XlSparkScaleCustom;
+            ((dynamic)vAxis).MaxScaleType = XlSparkScaleCustom;
+            ((dynamic)vAxis).CustomMinScaleValue = 0.0;
+            ((dynamic)vAxis).CustomMaxScaleValue = 10.0;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(vAxis);
+            ReleaseComObject(axes);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 006 — two column sparkline groups with Group scaling
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_GroupScaling(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? rangeA = null;
+        object? rangeB = null;
+        object? groupsA = null;
+        object? groupsB = null;
+        object? group1 = null;
+        object? group2 = null;
+        object? axes1 = null;
+        object? axes2 = null;
+        object? vAxis1 = null;
+        object? vAxis2 = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "GroupScaling", out object ws);
+            worksheet = ws;
+
+            // Group A: small values (sparkline at C2)
+            double[] dataA = [1, 2, 3, 2, 1];
+            SetExcelCellValue(worksheet, 1, 1, "Group A data");
+            for (var i = 0; i < dataA.Length; i++)
+                SetExcelCellValue(worksheet, 2 + i, 1, dataA[i]);
+            SetExcelCellValue(worksheet, 1, 3, "Spark A");
+
+            // Group B: large values (sparkline at G2)
+            double[] dataB = [5, 10, 7, 9, 6];
+            SetExcelCellValue(worksheet, 1, 5, "Group B data");
+            for (var i = 0; i < dataB.Length; i++)
+                SetExcelCellValue(worksheet, 2 + i, 5, dataB[i]);
+            SetExcelCellValue(worksheet, 1, 7, "Spark B");
+
+            // SparklineGroups must be accessed on the destination Range, not the Worksheet
+            rangeA = ((dynamic)worksheet).Range("C2");
+            groupsA = ((dynamic)rangeA).SparklineGroups;
+            group1 = ((dynamic)groupsA).Add(XlSparkColumn, "Sheet1!A2:A6");
+
+            rangeB = ((dynamic)worksheet).Range("G2");
+            groupsB = ((dynamic)rangeB).SparklineGroups;
+            group2 = ((dynamic)groupsB).Add(XlSparkColumn, "Sheet1!E2:E6");
+
+            // Apply Group scaling to both
+            axes1 = ((dynamic)group1).Axes;
+            vAxis1 = ((dynamic)axes1).Vertical;
+            ((dynamic)vAxis1).MinScaleType = XlSparkScaleGroup;
+            ((dynamic)vAxis1).MaxScaleType = XlSparkScaleGroup;
+
+            axes2 = ((dynamic)group2).Axes;
+            vAxis2 = ((dynamic)axes2).Vertical;
+            ((dynamic)vAxis2).MinScaleType = XlSparkScaleGroup;
+            ((dynamic)vAxis2).MaxScaleType = XlSparkScaleGroup;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(vAxis2);
+            ReleaseComObject(vAxis1);
+            ReleaseComObject(axes2);
+            ReleaseComObject(axes1);
+            ReleaseComObject(group2);
+            ReleaseComObject(group1);
+            ReleaseComObject(groupsB);
+            ReleaseComObject(groupsA);
+            ReleaseComObject(rangeB);
+            ReleaseComObject(rangeA);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 007 — line sparkline with custom series color
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_SeriesColor(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        object? seriesColor = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "SeriesColor", out object ws);
+            worksheet = ws;
+
+            double[] data = [4, 6, 2, 8, 5, 3, 7];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
+            seriesColor = ((dynamic)group).SeriesColor;
+            ((dynamic)seriesColor).Color = ToOleColor(148, 0, 211);  // purple
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(seriesColor);
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 008 — line sparkline with non-default line weight
+    // -------------------------------------------------------------------------
+    private static void GenerateSparklineFixture_LineWeight(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? groups = null;
+        object? group = null;
+        try
+        {
+            workbook = OpenSparklineWorkbook(workbooks, outputPath, "LineWeight", out object ws);
+            worksheet = ws;
+
+            double[] data = [3, 6, 4, 7, 2, 5, 8];
+            var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
+            SetExcelCellValue(worksheet, 1, 1, "Data");
+
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
+            group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
+            ((dynamic)group).LineWeight = 2.25;  // thick line — distinctly visible vs default 0.75
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(group);
+            ReleaseComObject(groups);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    private static int ColLetterToIndex(string col)
+    {
+        var index = 0;
+        foreach (var c in col.ToUpperInvariant())
+            index = index * 26 + (c - 'A' + 1);
+        return index;
+    }
 }

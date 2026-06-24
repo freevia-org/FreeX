@@ -437,40 +437,50 @@ public sealed partial class GridViewRenderPerformanceTests
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Overlays.Sparklines.cs");
-        var renderSparklines = source[
-            source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("private static SolidColorBrush FrozenBrush", StringComparison.Ordinal)];
+        // Slice the RenderSparklines method body (entry point is last method in file).
+        // Ends at the closing brace of the class (last "}" in the file).
+        var renderSparklinesStart = source.IndexOf("private void RenderSparklines(DrawingContext dc)", StringComparison.Ordinal);
+        var renderSparklines = source[renderSparklinesStart..];
 
+        // Early-out guards are still in place — no work done when there's nothing to render.
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
         renderSparklines.Should().Contain("SparklineValues is not { Count: > 0 }");
+
+        // Cell-lookup path is reused (no per-sparkline separate lookup builds).
         renderSparklines.Should().Contain("GetRenderCellLookups(Viewport)");
         renderSparklines.Should().Contain("var rowLookup = lookups.Rows;");
         renderSparklines.Should().Contain("var colLookup = lookups.Columns;");
+
+        // Visible-grid intersection guard is still present.
         renderSparklines.Should().Contain("var visibleLeft = ActualRowHeaderWidth;");
         renderSparklines.Should().Contain("var visibleTop = EffectiveColHeaderHeight;");
         renderSparklines.Should().Contain("var visibleRight = ActualWidth;");
         renderSparklines.Should().Contain("var visibleBottom = ActualHeight;");
         renderSparklines.Should().Contain("IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom)");
-        source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
-        source.Should().Contain("private static readonly Pen SparklineLinePen");
-        renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
-        renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
+
+        // Clip and draw calls exist.
         renderSparklines.Should().Contain("dc.PushClip(GetCellClipGeometry(rect));");
+        renderSparklines.Should().Contain("DrawLineSparkline(dc, sparkline, values, rect,");
+        renderSparklines.Should().Contain("DrawColumnSparkline(");
+
+        // Visibility intersection happens before the clip push (performance invariant).
         renderSparklines.IndexOf("IntersectsVisibleGrid(rect", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderSparklines.IndexOf("dc.PushClip(GetCellClipGeometry(rect));", StringComparison.Ordinal));
-        renderSparklines.IndexOf("IntersectsVisibleGrid(rect", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(renderSparklines.IndexOf("DrawLineSparkline(dc, values, rect, SparklineLinePen)", StringComparison.Ordinal));
+
+        // No inline geometry allocation inside the hot loop.
         renderSparklines.Should().NotContain("new RectangleGeometry(rect)");
-        source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
-        source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");
-        source.Should().NotContain("BuildSparklineRowMetricLookup");
-        source.Should().NotContain("BuildSparklineColumnMetricLookup");
         renderSparklines.Should().NotContain(".ToDictionary(");
         renderSparklines.Should().NotContain(".Select(");
+        // Brushes are obtained from the shared cache, not allocated inline in the render loop.
         renderSparklines.Should().NotContain("new SolidColorBrush");
-        renderSparklines.Should().NotContain("new Pen");
+        renderSparklines.Should().NotContain("new Pen(");
+
+        // Engine calls are still used (no layout math re-implemented here).
+        source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer");
+        source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer");
+        source.Should().NotContain("BuildSparklineRowMetricLookup");
+        source.Should().NotContain("BuildSparklineColumnMetricLookup");
         source.Should().NotContain("CalculateLineLayout(values, rect)");
         source.Should().NotContain("CalculateColumnLayout(values, rect, winLoss)");
     }

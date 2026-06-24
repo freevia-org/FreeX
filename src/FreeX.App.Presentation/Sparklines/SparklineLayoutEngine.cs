@@ -83,6 +83,21 @@ public static class SparklineLayoutEngine
         IReadOnlyList<double> values,
         LayoutRect rect,
         ref TConsumer consumer)
+        where TConsumer : struct, ISparklineLineLayoutConsumer =>
+        VisitLineLayout(values, rect, ref consumer, overrideMin: null, overrideMax: null);
+
+    /// <summary>
+    /// Streams a line sparkline's geometry into <paramref name="consumer"/> with optional axis-bound
+    /// overrides for group or custom scaling. When <paramref name="overrideMin"/> or
+    /// <paramref name="overrideMax"/> is non-null the supplied value replaces the per-sparkline
+    /// min/max so that all sparklines in a group share the same scale.
+    /// </summary>
+    public static void VisitLineLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        ref TConsumer consumer,
+        double? overrideMin,
+        double? overrideMax)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
@@ -124,6 +139,12 @@ public static class SparklineLayoutEngine
                 max = value;
         }
 
+        // Apply axis-bound overrides (group or custom scaling).
+        if (overrideMin.HasValue && double.IsFinite(overrideMin.Value))
+            min = overrideMin.Value;
+        if (overrideMax.HasValue && double.IsFinite(overrideMax.Value))
+            max = overrideMax.Value;
+
         var span = Math.Abs(max - min) < Epsilon ? 1 : max - min;
         LayoutPoint? previous = null;
         var visiblePointCount = 0;
@@ -139,7 +160,7 @@ public static class SparklineLayoutEngine
 
             var point = new LayoutPoint(
                 rect.Left + (rect.Width * i / (values.Count - 1)),
-                rect.Bottom - ((value - min) / span * rect.Height));
+                rect.Bottom - (Math.Clamp((value - min) / span, 0, 1) * rect.Height));
 
             if (previous is { } start)
                 consumer.AcceptSegment(start, point);
@@ -175,6 +196,20 @@ public static class SparklineLayoutEngine
         LayoutRect rect,
         bool winLoss,
         ref TConsumer consumer)
+        where TConsumer : struct, ISparklineColumnLayoutConsumer =>
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs: null);
+
+    /// <summary>
+    /// Streams a column / win-loss sparkline's bar geometry into <paramref name="consumer"/> with an
+    /// optional maximum-absolute-value override for group scaling. When <paramref name="overrideMaxAbs"/>
+    /// is non-null it replaces the per-sparkline max so all sparklines in a group share the same bar scale.
+    /// </summary>
+    public static void VisitColumnLayout<TConsumer>(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        bool winLoss,
+        ref TConsumer consumer,
+        double? overrideMaxAbs)
         where TConsumer : struct, ISparklineColumnLayoutConsumer
     {
         if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
@@ -190,6 +225,10 @@ public static class SparklineLayoutEngine
             if (absolute > maxAbs)
                 maxAbs = absolute;
         }
+
+        // Apply group-scale override (use the largest magnitude across the whole group).
+        if (overrideMaxAbs.HasValue && overrideMaxAbs.Value > maxAbs)
+            maxAbs = overrideMaxAbs.Value;
 
         if (maxAbs < Epsilon)
             maxAbs = 1;
@@ -223,6 +262,60 @@ public static class SparklineLayoutEngine
     /// </summary>
     public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, LayoutRect rect, SparklineKind kind) =>
         CalculateColumnLayout(values, rect, kind == SparklineKind.WinLoss);
+
+    /// <summary>
+    /// Returns the per-point Y positions for a line sparkline with the given axis bounds.
+    /// Used by the renderer to place marker dots at each data point.
+    /// </summary>
+    public static IReadOnlyList<(int Index, LayoutPoint Point)> GetLinePoints(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax)
+    {
+        if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
+            return [];
+
+        var firstIndex = -1;
+        var min = 0d;
+        var max = 0d;
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (!double.IsFinite(values[i])) continue;
+            firstIndex = i;
+            min = values[i];
+            max = values[i];
+            break;
+        }
+
+        if (firstIndex < 0)
+            return [];
+
+        for (var i = firstIndex + 1; i < values.Count; i++)
+        {
+            if (!double.IsFinite(values[i])) continue;
+            if (values[i] < min) min = values[i];
+            if (values[i] > max) max = values[i];
+        }
+
+        if (overrideMin.HasValue && double.IsFinite(overrideMin.Value)) min = overrideMin.Value;
+        if (overrideMax.HasValue && double.IsFinite(overrideMax.Value)) max = overrideMax.Value;
+
+        var span = Math.Abs(max - min) < Epsilon ? 1 : max - min;
+        var result = new List<(int, LayoutPoint)>(values.Count);
+        for (var i = 0; i < values.Count; i++)
+        {
+            if (!double.IsFinite(values[i])) continue;
+            var n = values.Count == 1 ? 0 : i;
+            var denom = values.Count == 1 ? 1 : values.Count - 1;
+            var pt = new LayoutPoint(
+                rect.Left + (rect.Width * n / denom),
+                rect.Bottom - (Math.Clamp((values[i] - min) / span, 0, 1) * rect.Height));
+            result.Add((i, pt));
+        }
+
+        return result;
+    }
 
     private struct LineLayoutCollector(int valueCount) : ISparklineLineLayoutConsumer
     {

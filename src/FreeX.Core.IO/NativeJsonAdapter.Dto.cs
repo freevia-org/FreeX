@@ -926,6 +926,42 @@ public sealed partial class NativeJsonAdapter
         public string? DataRange { get; set; }
         public string? Location { get; set; }
         public SparklineKind Kind { get; set; } = SparklineKind.Line;
+
+        // Group identity (for multi-group round-trips)
+        public int GroupId { get; set; }
+
+        // Show-flags
+        public bool ShowMarkers { get; set; }
+        public bool ShowHighPoint { get; set; }
+        public bool ShowLowPoint { get; set; }
+        public bool ShowFirstPoint { get; set; }
+        public bool ShowLastPoint { get; set; }
+        public bool ShowNegativePoints { get; set; }
+        public bool ShowAxis { get; set; }
+        public bool DisplayHidden { get; set; }
+        public bool RightToLeft { get; set; }
+
+        // Colors (stored as "RRGGBB" hex strings; null = not set)
+        public string? SeriesColor { get; set; }
+        public string? NegativeColor { get; set; }
+        public string? AxisColor { get; set; }
+        public string? MarkersColor { get; set; }
+        public string? HighPointColor { get; set; }
+        public string? LowPointColor { get; set; }
+        public string? FirstPointColor { get; set; }
+        public string? LastPointColor { get; set; }
+
+        // Appearance
+        public double? LineWeight { get; set; }
+
+        // Axis scaling
+        public SparklineAxisScaling MinAxisType { get; set; } = SparklineAxisScaling.Individual;
+        public SparklineAxisScaling MaxAxisType { get; set; } = SparklineAxisScaling.Individual;
+        public double? ManualMin { get; set; }
+        public double? ManualMax { get; set; }
+
+        // Empty-cell handling
+        public SparklineEmptyCellDisplay DisplayEmptyCellsAs { get; set; } = SparklineEmptyCellDisplay.Gap;
     }
 
     private class PivotCacheDto
