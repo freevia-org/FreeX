@@ -92,6 +92,14 @@ public sealed partial class MainWindow
         {
             Text = "1",
             Width = 44,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
             Margin = new Thickness(4, 0),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
@@ -99,6 +107,8 @@ public sealed partial class MainWindow
         var pageStatusText = new TextBlock
         {
             Text = PrintPreviewNavigationState.Create(1, context.PageCount).StatusText,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
         };
@@ -111,11 +121,42 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(prevButton, PrintPreviewDialogPlanner.PreviousButtonAutomationId);
         AutomationProperties.SetAutomationId(nextButton, PrintPreviewDialogPlanner.NextButtonAutomationId);
 
-        var exportButton = new Button { Content = PrintPreviewText("PrintPreview_PrintButton", "Print..."), MinWidth = 68, Padding = new Thickness(10, 4) };
+        var exportButton = new Button
+        {
+            Content = PrintPreviewText("PrintPreview_PrintButton", "Print..."),
+            MinWidth = 68,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(10, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         AutomationProperties.SetAutomationId(exportButton, PrintPreviewDialogPlanner.ExportPdfButtonAutomationId);
         exportButton.IsEnabled = StorageProvider.CanSave;
 
-        var closeButton = new Button { Content = PrintPreviewText("PrintPreview_CloseButton", "Close"), MinWidth = 68, Padding = new Thickness(10, 4), IsCancel = true };
+        var closeButton = new Button
+        {
+            Content = PrintPreviewText("PrintPreview_CloseButton", "Close"),
+            MinWidth = 68,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(10, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            IsCancel = true,
+        };
         AutomationProperties.SetAutomationId(closeButton, PrintPreviewDialogPlanner.CloseButtonAutomationId);
 
         void Render()
@@ -237,12 +278,34 @@ public sealed partial class MainWindow
             Children =
             {
                 printButton,
-                new TextBlock { Text = PrintPreviewText("PrintPreview_PrinterLabel", "Printer:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_PrinterLabel", "Printer:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 CreatePreviewComboBox(190, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_CopiesLabel", "Copies:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                new TextBox { Text = "1", Width = 44, VerticalContentAlignment = AvaloniaVerticalAlignment.Center },
-                new CheckBox { Content = PrintPreviewText("PrintPreview_CollatedLabel", "Collated"), IsChecked = true, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                new TextBlock { Text = PrintPreviewText("PrintPreview_SidesLabel", "Sides:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_CopiesLabel", "Copies:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBox
+                {
+                    Text = "1",
+                    Width = 44,
+                    Height = 24,
+                    MinHeight = 24,
+                    MaxHeight = 24,
+                    Padding = new Thickness(4, 1),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    BorderBrush = Brush(130, 130, 130),
+                    BorderThickness = new Thickness(1),
+                    VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+                },
+                new CheckBox
+                {
+                    Content = PrintPreviewText("PrintPreview_CollatedLabel", "Collated"),
+                    IsChecked = true,
+                    MinHeight = 20,
+                    MaxHeight = 20,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_SidesLabel", "Sides:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 CreatePreviewComboBox(178, PrintPreviewText("PrintPreview_SidesOneSided", "Print One Sided")),
                 new TextBlock
                 {
@@ -277,10 +340,37 @@ public sealed partial class MainWindow
             Children =
             {
                 CreateSettingsSection(PrintPreviewText("PrintPreview_CopiesSectionLabel", "Copies:")),
-                new TextBox { Text = "1", Width = 60, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                new TextBox
+                {
+                    Text = "1",
+                    Width = 60,
+                    Height = 24,
+                    MinHeight = 24,
+                    MaxHeight = 24,
+                    Padding = new Thickness(4, 1),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    BorderBrush = Brush(130, 130, 130),
+                    BorderThickness = new Thickness(1),
+                    VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrinterSectionLabel", "Printer:")),
                 CreatePreviewComboBox(183, "HP30138B4D655D(HP Color Laser MFP 178 179)"),
-                new Button { Content = PrintPreviewText("PrintPreview_PrinterPropertiesButton", "Printer Properties"), Padding = new Thickness(6, 3), HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                new Button
+                {
+                    Content = PrintPreviewText("PrintPreview_PrinterPropertiesButton", "Printer Properties"),
+                    Height = 24,
+                    MinHeight = 24,
+                    MaxHeight = 24,
+                    Padding = new Thickness(6, 1),
+                    Background = Brushes.White,
+                    BorderBrush = Brush(112, 112, 112),
+                    BorderThickness = new Thickness(1),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrintWhatLabel", "Print What:")),
                 CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_PrintWhatActiveSheets", "Print Active Sheets")),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PagesLabel", "Pages:")),
@@ -297,9 +387,9 @@ public sealed partial class MainWindow
                 CreatePreviewComboBox(183, "Narrow"),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_ScalingLabel", "Scaling:")),
                 CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_ScaleNoScaling", "No Scaling")),
-                new CheckBox { Content = PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area"), IsChecked = false },
+                new CheckBox { Content = PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area"), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrintOptionsSection", "Print Options")),
-                new CheckBox { Content = PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines"), IsChecked = false },
+                new CheckBox { Content = PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines"), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
 
@@ -318,9 +408,35 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto"),
         };
-        var fromBox = new TextBox { Text = "1", Width = 44 };
-        var toLabel = new TextBlock { Text = PrintPreviewText("PrintPreview_PageRangeToText", "To:"), Margin = new Thickness(6, 0), VerticalAlignment = AvaloniaVerticalAlignment.Center };
-        var toBox = new TextBox { Text = totalPages.ToString(CultureInfo.InvariantCulture), Width = 44 };
+        var fromBox = new TextBox
+        {
+            Text = "1",
+            Width = 44,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        var toLabel = new TextBlock { Text = PrintPreviewText("PrintPreview_PageRangeToText", "To:"), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(6, 0), VerticalAlignment = AvaloniaVerticalAlignment.Center };
+        var toBox = new TextBox
+        {
+            Text = totalPages.ToString(CultureInfo.InvariantCulture),
+            Width = 44,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
         Grid.SetColumn(fromBox, 0);
         Grid.SetColumn(toLabel, 1);
         Grid.SetColumn(toBox, 2);
@@ -335,6 +451,8 @@ public sealed partial class MainWindow
         {
             Text = text,
             FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 4, 0, -4),
         };
 
@@ -351,7 +469,11 @@ public sealed partial class MainWindow
             PlaceholderText = "Type text to find...",
             Margin = new Thickness(4, 2),
             Height = 22,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             FontStyle = FontStyle.Italic,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
         };
         var previous = CreatePreviewToolbarButton("<");
         var next = CreatePreviewToolbarButton(">");
@@ -396,11 +518,11 @@ public sealed partial class MainWindow
                 nextButton,
                 lastButton,
                 CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_PageLabel", "Page:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_PageLabel", "Page:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 pageNumberBox,
                 pageStatusText,
                 CreatePreviewToolbarSeparator(),
-                new TextBlock { Text = PrintPreviewText("PrintPreview_ZoomLabel", "Zoom:"), VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = PrintPreviewText("PrintPreview_ZoomLabel", "Zoom:"), FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 CreatePreviewComboBox(82, "100%"),
                 CreatePreviewToolbarSeparator(),
                 CreatePreviewToolbarButton(PrintPreviewText("PrintPreview_MarginsButton", "Margins")),
@@ -430,7 +552,17 @@ public sealed partial class MainWindow
         {
             Content = text,
             MinWidth = 26,
-            Padding = new Thickness(6, 3),
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(6, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
 
     private static ComboBox CreatePreviewComboBox(double width, string selectedText) =>

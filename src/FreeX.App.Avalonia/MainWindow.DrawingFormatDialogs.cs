@@ -598,13 +598,10 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("ShapeGradient_Title"),
             Width = 500,
-            Height = 295,
+            SizeToContent = SizeToContent.Height,
             MinWidth = 500,
-            MinHeight = 295,
-            MaxWidth = 500,
-            MaxHeight = 295,
             Background = Brushes.White,
-            FontFamily = new FontFamily("Segoe UI, Arial"),
+            FontFamily = FormulaBarFontFamily,
             FontSize = 12,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -659,8 +656,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 12),
         };
 
-        var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12 };
-        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, Margin = new Thickness(0, 2, 0, 8) };
+        var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 8) };
         var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 10, 18, 8) };
         content.Children.Add(gradientGroup);
         content.Children.Add(startSummary);
@@ -668,9 +665,9 @@ public sealed partial class MainWindow
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(286, 16, 0, 0),
+            Margin = new Thickness(0, 16, 0, 0),
             Children = { ok, cancel },
         });
         dialog.Content = content;
