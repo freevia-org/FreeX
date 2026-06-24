@@ -240,6 +240,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId);
 
         var rangeBox = new TextBox { Text = defaultRangeText, MinWidth = 248 };
+        rangeBox.Height = 24;
+        rangeBox.MinHeight = 24;
+        rangeBox.MaxHeight = 24;
+        rangeBox.Padding = new Thickness(4, 1);
+        rangeBox.FontSize = 12;
+        rangeBox.FontFamily = FormulaBarFontFamily;
+        rangeBox.BorderBrush = Brush(130, 130, 130);
+        rangeBox.BorderThickness = new Thickness(1);
+        rangeBox.VerticalContentAlignment = VerticalAlignment.Center;
         AutomationProperties.SetName(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationNameKey));
         AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId);
         AutomationProperties.SetHelpText(rangeBox, UiText.Get(CreateTableDialogPlanner.RangeAutomationHelpTextKey));
@@ -248,6 +257,15 @@ public sealed partial class MainWindow
         {
             Content = "...",
             Width = 28,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(4, 0, 0, 0),
         };
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
@@ -263,6 +281,10 @@ public sealed partial class MainWindow
             Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey),
             IsChecked = true,
             Margin = new Thickness(0, 0, 0, 16),
+            MinHeight = 20,
+            MaxHeight = 20,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
         AutomationProperties.SetAutomationId(headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
@@ -272,6 +294,17 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("Common_Ok"),
             Width = CreateTableDialogPlanner.ButtonWidth,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
             Margin = new Thickness(0, 0, 8, 0),
         };
@@ -279,6 +312,17 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("Common_Cancel"),
             Width = CreateTableDialogPlanner.ButtonWidth,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
         };
         okButton.Click += (_, _) =>
@@ -318,6 +362,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(CreateTableDialogPlanner.RangeLabelKey),
                     Margin = new Thickness(0, 0, 0, 4),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                 },
                 new StackPanel
                 {

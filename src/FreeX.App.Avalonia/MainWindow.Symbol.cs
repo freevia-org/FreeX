@@ -52,16 +52,30 @@ public sealed partial class MainWindow
         var selectedName = new TextBlock
         {
             FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 10, 0, 0),
         };
-        var selectedSubset = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
-        var selectedCode = new TextBox { Width = 120 };
+        var selectedSubset = new TextBlock { FontSize = 12, FontFamily = FormulaBarFontFamily, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+        var selectedCode = new TextBox
+        {
+            Width = 120,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
         var preview = new TextBlock
         {
             FontSize = 44,
             Width = 116,
-            Height = 94,
+            Height = 96,
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -111,6 +125,8 @@ public sealed partial class MainWindow
         var resultCount = new TextBlock
         {
             Text = $"Symbols shown: {symbols.Count}",
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Foreground = Brush(96, 96, 96),
             Margin = new Thickness(0, 4, 0, 6),
         };
@@ -142,6 +158,8 @@ public sealed partial class MainWindow
         var recentLabel = new TextBlock
         {
             Text = "Recently used symbols",
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             VerticalAlignment = VerticalAlignment.Center,
             Width = 150,
         };
@@ -187,7 +205,7 @@ public sealed partial class MainWindow
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, ApplySelection);
         var contentGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,170"),
+            ColumnDefinitions = new ColumnDefinitions("*,190"),
         };
         Grid.SetColumn(details, 1);
         contentGrid.Children.Add(tabs);
@@ -197,12 +215,34 @@ public sealed partial class MainWindow
         {
             Content = "Insert",
             MinWidth = 84,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(0, 120, 215),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             IsDefault = true,
         };
         var cancel = new Button
         {
             Content = "Cancel",
             MinWidth = 84,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             IsCancel = true,
             Margin = new Thickness(8, 0, 0, 0),
         };
@@ -268,6 +308,8 @@ public sealed partial class MainWindow
         var labelControl = new TextBlock
         {
             Text = label,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(column == 0 ? 0 : 10, 0, 6, 0),
         };
@@ -317,13 +359,24 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
-                new TextBlock { Text = "Character code:", VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "Character code:", FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         var goButton = new Button
         {
             Content = "Go",
             MinWidth = 64,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 6, 0, 0),
         };
         goButton.Click += (_, _) =>
@@ -348,11 +401,11 @@ public sealed partial class MainWindow
                     Child = preview,
                 },
                 selectedName,
-                new TextBlock { Text = "Subset:", Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
+                new TextBlock { Text = "Subset:", FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 14, 0, 0) },
                 selectedSubset,
                 codeRow,
                 selectedCode,
-                new TextBlock { Text = "from: Unicode (hex)", Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
+                new TextBlock { Text = "from: Unicode (hex)", FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), Margin = new Thickness(0, 6, 0, 0) },
                 goButton,
             },
         };
