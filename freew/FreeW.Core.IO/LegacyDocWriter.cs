@@ -252,26 +252,10 @@ internal static class LegacyDocWriter
         w.Write((ushort)0);            // rgftcStandardChpStsh[0] -> font 0
         w.Write((ushort)0);            // rgftcStandardChpStsh[1] -> font 0
         w.Write((ushort)0);            // rgftcStandardChpStsh[2] -> font 0
-        // No [3] byte in this struct because cbStshi=20 means bytes.Length=20 -> conditional [3] is read at bytes[18..19]
-        // But we only wrote 10 ushorts = 20 bytes above EXCLUDING the cbStshi field.
-        // Wait: cbStshi (2 bytes) + 10 ushorts (20 bytes) = 22 bytes written so far.
-        // DocSharp reads cbStshi=20, then reads 20 bytes as the STSHI body.
-        // Our 10 ushorts ARE the body: cstd(2)+cbSTDBase(2)+fStd(2)+stiMax(2)+istdMax(2)+nVer(2)+rg[0](2)+rg[1](2)+rg[2](2)
-        // That's 9 ushorts = 18 bytes. But we wrote 10 = 20. Let me add rg[3]:
-        // Actually the above writes are: cbStshi(1 ushort) + 9 ushorts body = 10 ushorts total.
-        // Wait I'm confusing myself. Let me count line by line:
-        // w.Write cbStshiBytes -> 2 bytes (this is the HEADER, not counted in body)
-        // w.Write numStyles    -> 2 bytes (body byte 0-1 = cstd)
-        // w.Write 10           -> 2 bytes (body byte 2-3 = cbSTDBaseInFile)
-        // w.Write 1            -> 2 bytes (body byte 4-5 = fStdStylenamesWritten+spare)
-        // w.Write 105          -> 2 bytes (body byte 6-7 = stiMaxWhenSaved)
-        // w.Write 15           -> 2 bytes (body byte 8-9 = istdMaxFixedWhenSaved)
-        // w.Write 0            -> 2 bytes (body byte 10-11 = nVerBuiltInNamesWhenSaved)
-        // w.Write 0            -> 2 bytes (body byte 12-13 = rgftcStandardChpStsh[0])
-        // w.Write 0            -> 2 bytes (body byte 14-15 = rgftcStandardChpStsh[1])
-        // w.Write 0            -> 2 bytes (body byte 16-17 = rgftcStandardChpStsh[2])
-        // total body = 18 bytes, but cbStshi = 20! We need 2 more bytes for rg[3]:
-        w.Write((ushort)0);            // rgftcStandardChpStsh[3] (body byte 18-19)
+        // STSHI body so far = 18 bytes (9 ushorts). cbStshi=20 means DocSharp reads 20 bytes,
+        // so bytes.Length=20 > 18 -> rgftcStandardChpStsh[3] is populated from bytes[18..19].
+        // bytes.Length=20 is NOT > 20 -> cbLSD/mpstilsd loop is NOT entered.
+        w.Write((ushort)0);            // rgftcStandardChpStsh[3] -> font 0 (body bytes 18-19)
 
         // STD slot 0 = "Normal" style
         // Body layout (cbSTDBaseInFile=10 declared):
@@ -551,3 +535,4 @@ internal static class LegacyDocWriter
             for (int i = 0; i < SectorSize - rem; i++) bw.Write((byte)0);
     }
 }
+
