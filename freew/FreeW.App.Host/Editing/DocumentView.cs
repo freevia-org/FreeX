@@ -85,6 +85,25 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     private static string? _renderFileName;
 
+#if DEBUG
+    /// <summary>
+    /// The 1-based page number to use when resolving PAGE fields during a header/footer sub-editor render
+    /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Set just
+    /// before <see cref="LoadModel"/> on a header/footer sub-editor, then cleared immediately after so it
+    /// cannot leak into unrelated renders. Thread-static to mirror <see cref="_renderFileName"/>.
+    /// </summary>
+    [ThreadStatic]
+    internal static int _renderHfPageNumber;
+
+    /// <summary>
+    /// The total page count to use when resolving NUMPAGES fields during a header/footer sub-editor render
+    /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Mirrors
+    /// <see cref="_renderHfPageNumber"/>.
+    /// </summary>
+    [ThreadStatic]
+    internal static int _renderHfPageCount;
+#endif
+
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
@@ -6335,12 +6354,23 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Resolves a field's display text in the app layer. DATE/TIME use the current date/time; AUTHOR uses
     /// <see cref="DocumentProperties.Author"/>; FILENAME uses <paramref name="fileName"/>; PAGE/NUMPAGES
-    /// and any unresolved value fall back to <paramref name="cached"/> (the last-computed text). This is
-    /// the only place date/time is read — the model and docx IO stay deterministic.
+    /// resolve live when a paged-edit sub-editor context is active (non-zero
+    /// <see cref="_renderHfPageNumber"/>/<see cref="_renderHfPageCount"/>), otherwise fall back to
+    /// <paramref name="cached"/> (the last-computed text). This is the only place date/time is read —
+    /// the model and docx IO stay deterministic.
     /// </summary>
     private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
     {
         var culture = System.Globalization.CultureInfo.CurrentCulture;
+#if DEBUG
+        // In PagedEdit mode, PAGE and NUMPAGES are resolved to the actual page-box page number / page
+        // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
+        // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
+        if (kind == RunFieldKind.PageNumber && _renderHfPageNumber > 0)
+            return _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
+            return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+#endif
         return kind switch
         {
             RunFieldKind.Date => DateTime.Now.ToString("d", culture),
