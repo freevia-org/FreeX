@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Edit Chart Data">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="18" rx="1.5" fill="none" stroke="#242424" stroke-width="1.4"/>
+  <line x1="6" y1="12" x2="26" y2="12" stroke="#242424" stroke-width="1.2"/>
+  <line x1="13" y1="7" x2="13" y2="25" stroke="#242424" stroke-width="1.2"/>
+  <rect x="14" y="16" width="4" height="4" fill="#5b9bd5"/>
+  <rect x="14" y="13" width="4" height="2.5" fill="#ed7d31"/>
+</svg>

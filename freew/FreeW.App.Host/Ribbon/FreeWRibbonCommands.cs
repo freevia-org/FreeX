@@ -352,12 +352,66 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.chart", new ActionCommand(() =>
         {
             editor.Focus();
-            editor.InsertChart(Chart.Create(
-                ChartKind.Column,
-                categories: ["Q1", "Q2", "Q3", "Q4"],
-                values: [8.0, 5.0, 11.0, 7.0],
-                seriesName: "Sales",
-                title: "Quarterly Sales"));
+            var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
+            if (chart is not null)
+                editor.InsertChart(chart);
+        }));
+        // Chart Design contextual tab commands — all mutate the selected chart's model + re-render.
+        // Change Chart Type: picker over ChartKind.
+        foreach (ChartKind kind in Enum.GetValues<ChartKind>())
+        {
+            var k = kind; // capture
+            registry.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                editor.SetSelectedChartKind(k);
+            }));
+        }
+        // Add Chart Element — toggle Legend.
+        registry.Register("freew.chart-toggle-legend", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.ToggleSelectedChartLegend();
+        }));
+        // Add Chart Element — set/clear Chart Title.
+        registry.Register("freew.chart-title", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var (accepted, newTitle) = ChartTitleDialog.Prompt(Application.Current?.MainWindow, chart.Title);
+            if (accepted)
+                editor.SetSelectedChartTitle(newTitle);
+        }));
+        // Add Chart Element — set axis titles.
+        registry.Register("freew.chart-axis-titles", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var result = ChartAxisTitlesDialog.Prompt(Application.Current?.MainWindow, chart.CategoryAxisTitle, chart.ValueAxisTitle);
+            if (result is not null)
+                editor.SetSelectedChartAxisTitles(result.Value.CategoryTitle, result.Value.ValueTitle);
+        }));
+        // Edit Data — reopen the data grid dialog.
+        registry.Register("freew.chart-edit-data", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var replacement = InsertChartDialog.Prompt(Application.Current?.MainWindow, chart);
+            if (replacement is not null)
+                editor.ReplaceSelectedChartData(replacement);
+        }));
+        // Chart Format contextual tab — Size dialog.
+        registry.Register("freew.chart-size", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var result = ChartSizeDialog.Prompt(Application.Current?.MainWindow, chart.WidthPt, chart.HeightPt);
+            if (result is not null)
+                editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
         }));
         registry.Register("freew.wordart", new ActionCommand(() =>
         {
