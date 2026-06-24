@@ -352,12 +352,19 @@ public sealed partial class MainWindow : Window
 
     // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
     // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
+    // WS-G token: FreeXChromeSurfaceBrush (#F7F8F8) — byte-identical to the literal; falls back to the
+    // literal when no Application is running (e.g. unit-test environments).
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
-        global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8);
-    private static readonly IBrush ChromeSurface = new SolidColorBrush(ChromeSurfaceColor);
+        ResolveTokenColor("FreeXChromeSurfaceColor", global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
+    private static readonly IBrush ChromeSurface =
+        ResolveTokenBrush("FreeXChromeSurfaceBrush") ?? new SolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
-    private static readonly IBrush SheetTabContourBrush = Brush(15, 109, 140);
-    private static readonly IBrush CheckedCommandBackground = Brush(230, 246, 250);
+    // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal.
+    private static readonly IBrush SheetTabContourBrush =
+        ResolveTokenBrush("FreeXAccentBrush") ?? Brush(15, 109, 140);
+    // WS-G token: FreeXAccentSoftBrush (#E6F6FA) — byte-identical to the literal.
+    private static readonly IBrush CheckedCommandBackground =
+        ResolveTokenBrush("FreeXAccentSoftBrush") ?? Brush(230, 246, 250);
     private static readonly FuncControlTemplate<ToggleButton> StatusBarViewButtonTemplate = new((button, _) =>
     {
         var presenter = new ContentPresenter();
@@ -380,7 +387,9 @@ public sealed partial class MainWindow : Window
 
     // Status-bar text token — the muted header foreground, applied uniformly to the status / selection-stats
     // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
-    private static readonly IBrush StatusBarForeground = Brushes.White;
+    // WS-G token: FreeXWhiteBrush (#FFFFFF) — byte-identical to the literal.
+    private static readonly IBrush StatusBarForeground =
+        ResolveTokenBrush("FreeXWhiteBrush") ?? Brushes.White;
 
     // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
     // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
@@ -3429,6 +3438,24 @@ public sealed partial class MainWindow : Window
         return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
                value is double d
             ? d
+            : fallback;
+    }
+
+    /// <summary>
+    /// Looks up a named <see cref="global::Avalonia.Media.Color"/> from the Application's resource registry
+    /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
+    /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
+    /// Used for static field initializers — the fallback literal is byte-identical to the token value for
+    /// the default theme, so appearance is unchanged when no app is running (e.g. unit-test environments).
+    /// </summary>
+    private static global::Avalonia.Media.Color ResolveTokenColor(string key, global::Avalonia.Media.Color fallback)
+    {
+        var app = global::Avalonia.Application.Current;
+        if (app is null)
+            return fallback;
+        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+               value is global::Avalonia.Media.Color c
+            ? c
             : fallback;
     }
 

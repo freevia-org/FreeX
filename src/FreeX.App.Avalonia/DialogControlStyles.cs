@@ -40,10 +40,32 @@ internal static class DialogControlStyles
     private const double ListItemMinHeight = 22d;
 
     // ── Colors (shared with the ribbon palette) ──────────────────────────────────────────────────────
+    // WS-G divergence: BorderBrush (#ABABAB) has no matching FreeX token role — left as literal.
     private static readonly IBrush BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB));
-    private static readonly IBrush AccentBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+    // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal; falls back when no app.
+    private static readonly IBrush AccentBrush =
+        ResolveTokenBrush("FreeXAccentBrush") ?? new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+    // WS-G note: SelectionBrush is derived (AccentSoft @ alpha 0x40) — no standalone token role; left as literal.
     private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x0F, 0x6D, 0x8C));
-    private static readonly IBrush SelectionForegroundBrush = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
+    // WS-G token: FreeXTextBrush (#1F1F1F) — byte-identical to the literal; falls back when no app.
+    private static readonly IBrush SelectionForegroundBrush =
+        ResolveTokenBrush("FreeXTextBrush") ?? new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
+
+    /// <summary>
+    /// Looks up a named brush from the Application's resource registry (populated by
+    /// <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
+    /// Returns <c>null</c> when no Application is available (e.g. unit-test environments).
+    /// </summary>
+    private static IBrush? ResolveTokenBrush(string key)
+    {
+        var app = global::Avalonia.Application.Current;
+        if (app is null)
+            return null;
+        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+               value is IBrush brush
+            ? brush
+            : null;
+    }
 
     // ── CheckBox template (compact, WPF-like 13 px box) ─────────────────────────────────────────────
     private static readonly FuncControlTemplate<CheckBox> CompactCheckBoxTemplate = new((checkBox, _) =>
