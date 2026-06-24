@@ -254,9 +254,23 @@ internal abstract record ManageStyleAction
 }
 
 /// <summary>
-/// A pragmatic Manage Styles dialog: a list of the document's styles (built-ins flagged) with Apply,
-/// Modify and Delete buttons. Delete is disabled for built-in styles (the pure <see cref="StyleManager"/>
-/// also refuses them, so this is just UI affordance). Returns the chosen action, or null if cancelled.
+/// The sort order exposed in the <see cref="ManageStylesDialog"/> sort-order dropdown.
+/// </summary>
+internal enum ManageStylesSortOrder
+{
+    /// <summary>Sort style names alphabetically (A → Z), case-insensitive.</summary>
+    Alphabetical,
+    /// <summary>Built-in styles first (alphabetical within group), then custom styles.</summary>
+    ByType,
+    /// <summary>Sort by most-recently used — not yet tracked, falls back to alphabetical.</summary>
+    ByUse,
+}
+
+/// <summary>
+/// A Manage Styles dialog: a list of the document's styles (built-ins flagged) with Apply, Modify and
+/// Delete buttons plus a <b>sort order</b> dropdown (Alphabetical / By Type / By Use). Delete is disabled
+/// for built-in styles (the pure <see cref="StyleManager"/> also refuses them, so this is just UI
+/// affordance). Returns the chosen action, or null if cancelled.
 /// </summary>
 internal static class ManageStylesDialog
 {
@@ -276,27 +290,52 @@ internal static class ManageStylesDialog
             ShowInTaskbar = false,
         };
 
-        var rows = model.Styles.Values
-            .Select(s => new StyleRow(s.Id, StyleManager.IsBuiltIn(s.Id) ? $"{s.Name}  (built-in)" : s.Name, StyleManager.IsBuiltIn(s.Id)))
-            .OrderBy(r => r.Display, System.StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Sort order picker — Alphabetical / By Type / By Use (by-use falls back to alphabetical because
+        // FreeW does not yet track per-style usage counts; the option is present for UI parity).
+        var sortOrderBox = new ComboBox { MinWidth = 160, Margin = new Thickness(0, 0, 0, 8) };
+        sortOrderBox.Items.Add("Alphabetical");
+        sortOrderBox.Items.Add("By type (built-ins first)");
+        sortOrderBox.Items.Add("By use (most-used first)");
+        sortOrderBox.SelectedIndex = 0;
 
         var list = new ListBox { MinWidth = 320, MinHeight = 220 };
-        list.ItemsSource = rows;
-        list.DisplayMemberPath = nameof(StyleRow.Display);
-        var preselect = rows.FindIndex(r => r.Id == preselectStyleId);
-        list.SelectedIndex = preselect >= 0 ? preselect : 0;
 
-        var apply = new Button { Content = "Apply", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var modify = new Button { Content = "Modify…", MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var delete = new Button { Content = "Delete", MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
-        var close = new Button { Content = "Close", IsCancel = true, MinWidth = 80 };
+        // Rebuild the list whenever the sort order changes.
+        void RebuildList(ManageStylesSortOrder order)
+        {
+            var currentId = (list.SelectedItem as StyleRow)?.Id ?? preselectStyleId;
+
+            var rows = BuildRows(model, order);
+            list.ItemsSource = rows;
+            list.DisplayMemberPath = nameof(StyleRow.Display);
+
+            var preselect = rows.FindIndex(r => r.Id == currentId);
+            list.SelectedIndex = preselect >= 0 ? preselect : 0;
+        }
+
+        sortOrderBox.SelectionChanged += (_, _) =>
+        {
+            var order = sortOrderBox.SelectedIndex switch
+            {
+                1 => ManageStylesSortOrder.ByType,
+                2 => ManageStylesSortOrder.ByUse,
+                _ => ManageStylesSortOrder.Alphabetical,
+            };
+            RebuildList(order);
+        };
+
+        RebuildList(ManageStylesSortOrder.Alphabetical);
+
+        var apply  = new Button { Content = "Apply",   IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var modify = new Button { Content = "Modify…",               MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var delete = new Button { Content = "Delete",                MinWidth = 80, Margin = new Thickness(0, 0, 0, 8) };
+        var close  = new Button { Content = "Close", IsCancel = true, MinWidth = 80 };
 
         void SyncButtons()
         {
             var row = list.SelectedItem as StyleRow;
             var hasSelection = row is not null;
-            apply.IsEnabled = hasSelection;
+            apply.IsEnabled  = hasSelection;
             modify.IsEnabled = hasSelection;
             delete.IsEnabled = hasSelection && row is { IsBuiltIn: false };
         }
@@ -329,6 +368,19 @@ internal static class ManageStylesDialog
             }
         };
 
+        var sortRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+        sortRow.Children.Add(new TextBlock
+        {
+            Text = "Sort:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        });
+        sortRow.Children.Add(sortOrderBox);
+
+        var listPane = new StackPanel();
+        listPane.Children.Add(sortRow);
+        listPane.Children.Add(list);
+
         var buttons = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 0, 0, 0) };
         buttons.Children.Add(apply);
         buttons.Children.Add(modify);
@@ -336,11 +388,32 @@ internal static class ManageStylesDialog
         buttons.Children.Add(close);
 
         var body = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16) };
-        body.Children.Add(list);
+        body.Children.Add(listPane);
         body.Children.Add(buttons);
         dialog.Content = body;
 
         list.Focus();
         return dialog.ShowDialog() == true ? result : null;
+    }
+
+    // Build the sorted list of StyleRow entries for the given sort order.
+    private static List<StyleRow> BuildRows(TextDocument model, ManageStylesSortOrder order)
+    {
+        var all = model.Styles.Values
+            .Select(s => new StyleRow(s.Id, StyleManager.IsBuiltIn(s.Id) ? $"{s.Name}  (built-in)" : s.Name, StyleManager.IsBuiltIn(s.Id)));
+
+        return order switch
+        {
+            ManageStylesSortOrder.ByType =>
+                // Built-ins first (alphabetical within each group), then custom styles.
+                all.OrderBy(r => r.IsBuiltIn ? 0 : 1)
+                   .ThenBy(r => r.Display, System.StringComparer.OrdinalIgnoreCase)
+                   .ToList(),
+
+            // ByUse: not yet tracked; fall back to alphabetical so the option is harmless.
+            _ =>
+                all.OrderBy(r => r.Display, System.StringComparer.OrdinalIgnoreCase)
+                   .ToList(),
+        };
     }
 }
