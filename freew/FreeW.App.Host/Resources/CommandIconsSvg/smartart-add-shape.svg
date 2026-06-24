@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="SmartArt Add Shape">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4" y="10" width="10" height="12" rx="1.5" fill="#5b9bd5" stroke="#245a8e" stroke-width="1.2"/>
+  <rect x="17" y="10" width="10" height="12" rx="1.5" fill="#5b9bd5" stroke="#245a8e" stroke-width="1.2"/>
+  <line x1="9" y1="16" x2="17" y2="16" stroke="#245a8e" stroke-width="1.2" stroke-dasharray="2,1"/>
+  <circle cx="25" cy="8" r="5" fill="#107C10"/>
+  <line x1="25" y1="5.5" x2="25" y2="10.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="22.5" y1="8" x2="27.5" y2="8" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

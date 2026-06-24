@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="SmartArt Remove Shape">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4" y="10" width="10" height="12" rx="1.5" fill="#5b9bd5" stroke="#245a8e" stroke-width="1.2"/>
+  <rect x="17" y="10" width="10" height="12" rx="1.5" fill="#c8c8c8" stroke="#888" stroke-width="1.2"/>
+  <line x1="9" y1="16" x2="17" y2="16" stroke="#888" stroke-width="1.2" stroke-dasharray="2,1"/>
+  <line x1="20" y1="13" x2="24" y2="19" stroke="#CC0000" stroke-width="2" stroke-linecap="round"/>
+  <line x1="24" y1="13" x2="20" y2="19" stroke="#CC0000" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -276,4 +276,68 @@ public class SmartArtRoundTripTests
         diagrams[1].Nodes.Single().Text.Should().Be("Second diagram");
         diagrams[1].Kind.Should().Be(SmartArtKind.Process);
     }
+
+    // ── Mutation round-trips: each mutation must survive write→read unchanged ──────────────────
+
+    [Fact]
+    public void MutatedDiagram_AddedNode_SurvivesRoundTrip()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["One", "Two"]);
+        smartArt.Nodes.Add(new SmartArtNode("Three")); // Add Shape mutation
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Nodes.Select(n => n.Text).Should().Equal("One", "Two", "Three");
+    }
+
+    [Fact]
+    public void MutatedDiagram_RemovedNode_SurvivesRoundTrip()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Alpha", "Beta", "Gamma"]);
+        smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1); // Remove Shape mutation
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Nodes.Select(n => n.Text).Should().Equal("Alpha", "Beta");
+    }
+
+    [Fact]
+    public void MutatedDiagram_PromotedNode_SurvivesRoundTrip()
+    {
+        // CEO → { VP Eng, VP Sales }  →  promote VP Sales  →  CEO → { VP Eng }, VP Sales
+        var ceo = new SmartArtNode("CEO");
+        ceo.AddChild("VP Eng");
+        ceo.AddChild("VP Sales");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(ceo);
+
+        var last = ceo.Children[^1];
+        ceo.Children.RemoveAt(ceo.Children.Count - 1);
+        smartArt.Nodes.Insert(1, last);
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Nodes.Select(n => n.Text).Should().Equal("CEO", "VP Sales");
+        diagram.Nodes[0].Children.Select(c => c.Text).Should().Equal("VP Eng");
+    }
+
+    [Fact]
+    public void MutatedDiagram_KindChangedByReplace_SurvivesRoundTrip()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["A", "B"]);
+        var replacement = SmartArt.Create(SmartArtKind.List, ["X", "Y", "Z"]);
+        smartArt.Kind = replacement.Kind;
+        smartArt.Nodes.Clear();
+        foreach (var node in replacement.Nodes)
+            smartArt.Nodes.Add(node);
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.Kind.Should().Be(SmartArtKind.List);
+        diagram.Nodes.Select(n => n.Text).Should().Equal("X", "Y", "Z");
+    }
 }

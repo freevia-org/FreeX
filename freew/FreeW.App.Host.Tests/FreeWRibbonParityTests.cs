@@ -1632,4 +1632,77 @@ public sealed class FreeWRibbonParityTests
         ((Paragraph)editor.Model.Blocks[1]).SectionBreak.Should().NotBeNull();
         ((Paragraph)editor.Model.Blocks[1]).SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
     }
+
+    // ── SmartArt Design contextual tab ─────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void SmartArtDesignContextualTab_ExposesAllBackedNodeMutationCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        // The contextual tab must be declared and placed under "SmartArt Tools".
+        var smartArtTab = definition.ContextualTabs
+            .SingleOrDefault(t => t.Id == "smartart-design");
+        smartArtTab.Should().NotBeNull("the smartart-design contextual tab must be declared in FreeWRibbon");
+        smartArtTab!.Context!.Label.Should().Be("SmartArt Tools");
+        smartArtTab.Context.ActivationKey.Should().Be("smartart");
+
+        // The tab must expose the expected command ids.
+        var commandIds = CommandIds(smartArtTab).ToList();
+        commandIds.Should().Contain("freew.smartart-add-shape",    "Add Shape must be backed");
+        commandIds.Should().Contain("freew.smartart-remove-shape", "Remove Shape must be backed");
+        commandIds.Should().Contain("freew.smartart-promote",      "Promote must be backed");
+        commandIds.Should().Contain("freew.smartart-demote",       "Demote must be backed");
+        commandIds.Should().Contain("freew.smartart-move-up",      "Move Up must be backed");
+        commandIds.Should().Contain("freew.smartart-move-down",    "Move Down must be backed");
+        commandIds.Should().Contain("freew.smartart-edit-text",    "Edit Text must be backed");
+
+        // Every command on the tab must be registered.
+        foreach (var commandId in commandIds)
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed before it appears on SmartArt Design");
+    }
+
+    [StaFact]
+    public void SmartArtDesignContextualTab_AddShape_MutatesModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        // Insert a diagram and then run Add Shape via the registered command.
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Alpha", "Beta"]);
+        editor.InsertSmartArt(smartArt);
+        editor.CommitToModel();
+
+        registry.TryGet("freew.smartart-add-shape", out var addShape).Should().BeTrue();
+        addShape!.Execute(RibbonCommandContext.Empty);
+        editor.CommitToModel();
+
+        // The selected (just-inserted) SmartArt now carries 3 nodes.
+        var run = ((Paragraph)editor.Model.Blocks.Last()).Runs
+            .Single(r => r.SmartArt is not null);
+        run.SmartArt!.Nodes.Should().HaveCount(3, "Add Shape must append a node");
+    }
+
+    [StaFact]
+    public void SmartArtDesignContextualTab_RemoveShape_MutatesModel()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Alpha", "Beta", "Gamma"]);
+        editor.InsertSmartArt(smartArt);
+        editor.CommitToModel();
+
+        registry.TryGet("freew.smartart-remove-shape", out var removeShape).Should().BeTrue();
+        removeShape!.Execute(RibbonCommandContext.Empty);
+        editor.CommitToModel();
+
+        var run = ((Paragraph)editor.Model.Blocks.Last()).Runs
+            .Single(r => r.SmartArt is not null);
+        run.SmartArt!.Nodes.Should().HaveCount(2, "Remove Shape must remove the last node");
+    }
 }

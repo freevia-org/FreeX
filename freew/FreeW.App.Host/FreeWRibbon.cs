@@ -728,6 +728,24 @@ internal static class FreeWRibbon
                 tab.Group("chart-size", "Size", "S", 90, g =>
                     g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size));
             })
+            // ── SmartArt contextual tab — SmartArt Tools (shown when a SmartArt is selected) ─────
+            .ContextualTab("smartart-design", "SmartArt Design",
+                new RibbonTabContext("smartart", "SmartArt Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("smartart-create-graphic", "Create Graphic", "G", 100, g =>
+                {
+                    g.Medium("freew.smartart-add-shape", "Add Shape", RibbonCommandIconKind.Insert);
+                    g.Medium("freew.smartart-remove-shape", "Remove Shape", RibbonCommandIconKind.Delete);
+                    g.RowBreak();
+                    g.Medium("freew.smartart-promote", "Promote", RibbonCommandIconKind.IndentDecrease);
+                    g.Medium("freew.smartart-demote", "Demote", RibbonCommandIconKind.IndentIncrease);
+                    g.RowBreak();
+                    g.Medium("freew.smartart-move-up", "Move Up", RibbonCommandIconKind.ArrowUp);
+                    g.Medium("freew.smartart-move-down", "Move Down", RibbonCommandIconKind.ArrowDown);
+                });
+                tab.Group("smartart-edit", "Edit", "E", 90, g =>
+                    g.Medium("freew.smartart-edit-text", "Edit Text", RibbonCommandIconKind.TextFunction));
+            })
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
             {

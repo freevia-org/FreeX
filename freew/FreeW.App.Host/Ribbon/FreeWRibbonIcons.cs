@@ -198,6 +198,15 @@ internal static class FreeWRibbonIcons
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,
             ["freew.object"] = RibbonCommandIconKind.Object,
 
+            // SmartArt Design contextual tab commands
+            ["freew.smartart-add-shape"] = RibbonCommandIconKind.Insert,
+            ["freew.smartart-remove-shape"] = RibbonCommandIconKind.Delete,
+            ["freew.smartart-promote"] = RibbonCommandIconKind.IndentDecrease,
+            ["freew.smartart-demote"] = RibbonCommandIconKind.IndentIncrease,
+            ["freew.smartart-move-up"] = RibbonCommandIconKind.ArrowUp,
+            ["freew.smartart-move-down"] = RibbonCommandIconKind.ArrowDown,
+            ["freew.smartart-edit-text"] = RibbonCommandIconKind.TextFunction,
+
             // Insert: links
             ["freew.hyperlink"] = RibbonCommandIconKind.Link,
             ["freew.edit-hyperlink"] = RibbonCommandIconKind.Link,

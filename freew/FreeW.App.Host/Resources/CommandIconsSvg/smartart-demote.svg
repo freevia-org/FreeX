@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="SmartArt Demote">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4" y="6" width="9" height="8" rx="1.5" fill="#5b9bd5" stroke="#245a8e" stroke-width="1.2"/>
+  <rect x="9" y="19" width="9" height="7" rx="1.2" fill="#8fc4e6" stroke="#245a8e" stroke-width="1"/>
+  <line x1="8.5" y1="14" x2="13.5" y2="19" stroke="#245a8e" stroke-width="1.2"/>
+  <polyline points="19,12 24,16 29,12" fill="none" stroke="#245a8e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="24" y1="6" x2="24" y2="16" stroke="#245a8e" stroke-width="2" stroke-linecap="round"/>
+</svg>

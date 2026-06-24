@@ -520,6 +520,8 @@ public sealed class MainWindow : Window
             state = state.With("table");
         if (_editor.SelectedChart() is not null)
             state = state.With("chart");
+        if (_editor.SelectedSmartArt() is not null)
+            state = state.With("smartart");
 
         _contextualTabs.Apply(state);
     }
