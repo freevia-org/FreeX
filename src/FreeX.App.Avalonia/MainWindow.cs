@@ -13202,18 +13202,6 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(dialog, "AdvancedFilterCompactDialog");
 
-        static void ApplyAdvancedFilterTextBoxChrome(TextBox textBox)
-        {
-            textBox.Height = 24;
-            textBox.MinHeight = 24;
-            textBox.MaxHeight = 24;
-            textBox.Padding = new Thickness(4, 1);
-            textBox.FontSize = 12;
-            textBox.BorderBrush = Brush(130, 130, 130);
-            textBox.BorderThickness = new Thickness(1);
-            textBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
-        }
-
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
             button.Width = 28;
@@ -13236,7 +13224,7 @@ public sealed partial class MainWindow : Window
             Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
             MinWidth = 0,
         };
-        ApplyAdvancedFilterTextBoxChrome(listRangeBox);
+        ApplyDialogTextBoxChrome(listRangeBox);
         AutomationProperties.SetName(listRangeBox, "List range");
         AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
         AutomationProperties.SetHelpText(listRangeBox, "Range containing list headers and records.");
@@ -13245,7 +13233,7 @@ public sealed partial class MainWindow : Window
         {
             MinWidth = 0,
         };
-        ApplyAdvancedFilterTextBoxChrome(criteriaRangeBox);
+        ApplyDialogTextBoxChrome(criteriaRangeBox);
         AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
         AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
         AutomationProperties.SetHelpText(criteriaRangeBox, "Range containing criteria headers and criteria rows.");
@@ -13256,7 +13244,7 @@ public sealed partial class MainWindow : Window
             GroupName = "AdvancedFilterOutputMode",
             IsChecked = true,
         };
-        ApplySortOptionsRadioButtonChrome(inPlaceButton);
+        ApplyDialogRadioButtonChrome(inPlaceButton);
         AutomationProperties.SetName(inPlaceButton, "Filter in-place");
         AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
         AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
@@ -13266,7 +13254,7 @@ public sealed partial class MainWindow : Window
             Content = "Copy to another location",
             GroupName = "AdvancedFilterOutputMode",
         };
-        ApplySortOptionsRadioButtonChrome(copyToAnotherLocationButton);
+        ApplyDialogRadioButtonChrome(copyToAnotherLocationButton);
         AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
         AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
@@ -13276,7 +13264,7 @@ public sealed partial class MainWindow : Window
             IsEnabled = false,
             MinWidth = 0,
         };
-        ApplyAdvancedFilterTextBoxChrome(copyToBox);
+        ApplyDialogTextBoxChrome(copyToBox);
         AutomationProperties.SetName(copyToBox, "Copy to");
         AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
         AutomationProperties.SetHelpText(copyToBox, "Destination cell or one-row header range on the list sheet.");
@@ -13286,7 +13274,7 @@ public sealed partial class MainWindow : Window
             Content = "Unique records only",
             Margin = new Thickness(0, 8, 0, 0),
         };
-        ApplySortOptionsCheckBoxChrome(uniqueBox);
+        ApplyDialogCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, "Unique records only");
         AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
         AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
@@ -13298,6 +13286,7 @@ public sealed partial class MainWindow : Window
             IsVisible = false,
             Margin = new Thickness(0, 6, 0, 0),
             FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(errorText, "Advanced Filter validation");
         AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
@@ -13310,7 +13299,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             IsDefault = true,
         };
-        ApplySortDialogButtonChrome(okButton, isDefault: true);
+        ApplyDialogButtonChrome(okButton, width: 76, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
         AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
@@ -13322,7 +13311,7 @@ public sealed partial class MainWindow : Window
             MinWidth = 76,
             IsCancel = true,
         };
-        ApplySortDialogButtonChrome(cancelButton);
+        ApplyDialogButtonChrome(cancelButton, width: 76);
         AutomationProperties.SetName(cancelButton, "Cancel");
         AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
@@ -13354,6 +13343,7 @@ public sealed partial class MainWindow : Window
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 8, 0),
                 FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
             };
             var pickerButton = new Button
             {
@@ -13390,6 +13380,7 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 0),
             FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
         var criteriaHint = new TextBlock
         {
@@ -13398,6 +13389,7 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
             FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
         };
 
         var showInteractiveValidation = false;
@@ -13513,6 +13505,7 @@ public sealed partial class MainWindow : Window
                 {
                     Text = "Action",
                     FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                     Background = Brushes.White,
                     Padding = new Thickness(3, 0),
                     Margin = new Thickness(8, 0, 0, 0),
@@ -20078,8 +20071,8 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = title,
-            Width = 544,
-            Height = 384,
+            Width = 560,
+            Height = 420,
             MinWidth = 480,
             MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -20096,6 +20089,7 @@ public sealed partial class MainWindow : Window
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             Padding = new Thickness(8),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
@@ -20111,18 +20105,10 @@ public sealed partial class MainWindow : Window
             IsDefault = true,
             IsCancel = true,
             Width = 84,
-            Height = 24,
-            MinHeight = 24,
-            MaxHeight = 24,
-            Padding = new Thickness(8, 1),
-            Background = Brushes.White,
-            BorderBrush = Brush(0, 120, 215),
-            BorderThickness = new Thickness(1),
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0),
         };
+        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
         AutomationProperties.SetAutomationId(okButton, "AboutFreeXOkButton");
         AutomationProperties.SetHelpText(okButton, "Close About FreeX.");
