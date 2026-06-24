@@ -366,13 +366,15 @@ public sealed partial class MainWindow
 
     private static DockPanel ProtectionDialogLayout(Controls bodyChildren, Button cancelButton, Button okButton)
     {
+        // WPF order: [OK] [Cancel] — primary button on the left
+        cancelButton.Margin = new Thickness(8, 0, 0, 0);
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 0,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 

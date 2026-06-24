@@ -1738,4 +1738,39 @@
   <data name="MainWindow_Content_ErrorChecking" xml:space="preserve"><value>Error Checking</value></data>
   <data name="MainWindow_TooltipTitle_ErrorChecking" xml:space="preserve"><value>Error Checking</value></data>
   <data name="MainWindow_TooltipDescription_CheckForCommonErrorsInTheFormulasOnThisSheetOrOpenErrorCheckingOptions" xml:space="preserve"><value>Check for common errors in the formulas on this sheet, or open error-checking options.</value></data>
+  <!-- Export Options dialog (ExportOptionsDialogSurfacePlanner / ShowExportOptionsParityDialogAsync) -->
+  <data name="ExportOptions_ExportOptions" xml:space="preserve"><value>Export Options</value></data>
+  <data name="ExportOptions_PublishWhat" xml:space="preserve"><value>Publish what</value></data>
+  <data name="ExportOptions_ActiveSheetS" xml:space="preserve"><value>Active sheet(s)</value></data>
+  <data name="ExportOptions_SelectedRange" xml:space="preserve"><value>Selected range</value></data>
+  <data name="ExportOptions_Workbook" xml:space="preserve"><value>Workbook</value></data>
+  <data name="ExportOptions_PageRange" xml:space="preserve"><value>Page range</value></data>
+  <data name="ExportOptions_All" xml:space="preserve"><value>All</value></data>
+  <data name="ExportOptions_Pages" xml:space="preserve"><value>Pages</value></data>
+  <data name="ExportOptions_From" xml:space="preserve"><value>From</value></data>
+  <data name="ExportOptions_To" xml:space="preserve"><value>to</value></data>
+  <data name="ExportOptions_PdfXpsOptions" xml:space="preserve"><value>PDF/XPS options</value></data>
+  <data name="ExportOptions_IncludeDocumentProperties" xml:space="preserve"><value>Include document properties</value></data>
+  <data name="ExportOptions_IgnorePrintAreas" xml:space="preserve"><value>Ignore print areas</value></data>
+  <data name="ExportOptions_CreatePdfBookmarks" xml:space="preserve"><value>Create PDF bookmarks</value></data>
+  <data name="ExportOptions_BookmarkMode" xml:space="preserve"><value>Bookmark mode:</value></data>
+  <data name="ExportOptions_InitialView" xml:space="preserve"><value>Initial view:</value></data>
+  <data name="ExportOptions_OpenMode" xml:space="preserve"><value>Open mode:</value></data>
+  <data name="ExportOptions_PdfLanguage" xml:space="preserve"><value>PDF language:</value></data>
+  <data name="ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded" xml:space="preserve"><value>Bitmap text when fonts may not be embedded</value></data>
+  <data name="ExportOptions_PdfACompliantNotSupported" xml:space="preserve"><value>PDF/A compliant (not supported)</value></data>
+  <data name="ExportOptions_DocumentStructureTagsNotSupported" xml:space="preserve"><value>Document structure tags (not supported)</value></data>
+  <data name="ExportOptions_Standard" xml:space="preserve"><value>Standard</value></data>
+  <data name="ExportOptions_MinimumSize" xml:space="preserve"><value>Minimum size</value></data>
+  <data name="ExportOptions_OpenAfterPublishing" xml:space="preserve"><value>Open after publishing</value></data>
+  <data name="ExportOptions_SheetNames" xml:space="preserve"><value>Sheet names</value></data>
+  <data name="ExportOptions_PrintTitles" xml:space="preserve"><value>Print titles</value></data>
+  <data name="ExportOptions_PageNumbers" xml:space="preserve"><value>Page numbers</value></data>
+  <data name="ExportOptions_SinglePage" xml:space="preserve"><value>Single page</value></data>
+  <data name="ExportOptions_OneContinuousColumn" xml:space="preserve"><value>One continuous column</value></data>
+  <data name="ExportOptions_TwoColumnsOddPagesLeft" xml:space="preserve"><value>Two columns, odd pages left</value></data>
+  <data name="ExportOptions_TwoColumnsOddPagesRight" xml:space="preserve"><value>Two columns, odd pages right</value></data>
+  <data name="ExportOptions_Normal" xml:space="preserve"><value>Normal</value></data>
+  <data name="ExportOptions_BookmarksVisible" xml:space="preserve"><value>Bookmarks visible</value></data>
+  <data name="ExportOptions_FullScreen" xml:space="preserve"><value>Full screen</value></data>
 </root>

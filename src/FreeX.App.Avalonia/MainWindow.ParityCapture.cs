@@ -844,7 +844,8 @@ public sealed partial class MainWindow
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                     Margin = new Thickness(0, 8, 0, 0),
-                    Children = { cancelButton, okButton },
+                    // WPF order: [OK] [Cancel]
+                    Children = { okButton, cancelButton },
                 },
             },
         };
@@ -1988,6 +1989,11 @@ public sealed partial class MainWindow
 
     private static Control CreateParityCapturedBackstageRailButton(RibbonCommandIconKind iconKind, string text, string commandName, bool isSelected)
     {
+        // Strip WPF-style access-key markers (_Save → Save, Save _As → Save As) so underscores
+        // are not rendered literally. WPF shows these as underlined mnemonics; Avalonia has no
+        // AccessText equivalent, so we simply remove the marker character.
+        var displayText = text.Replace("_", string.Empty, StringComparison.Ordinal);
+
         var content = new AvaloniaGrid
         {
             Width = 190,
@@ -2004,7 +2010,7 @@ public sealed partial class MainWindow
         AddGridChild(content, AvaloniaRibbonIcons.BuildMonochrome(iconKind, 22, commandName, Brushes.White), 0, 1);
         AddGridChild(content, new TextBlock
         {
-            Text = text,
+            Text = displayText,
             FontSize = 13,
             FontFamily = ParityNarrowUiFontFamily,
             Foreground = Brushes.White,
