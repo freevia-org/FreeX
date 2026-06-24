@@ -1,4 +1,3 @@
-#if DEBUG
 using System.IO;
 using System.Linq;
 using System.Windows.Documents;
@@ -384,4 +383,3 @@ public sealed class PagedEditW18HfPolishTests
                 .Select(r => r.Text));
     }
 }
-#endif

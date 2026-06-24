@@ -1,4 +1,3 @@
-#if DEBUG
 using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
@@ -426,4 +425,3 @@ public sealed class PagedEdit4HfRegionTests
         return doc;
     }
 }
-#endif

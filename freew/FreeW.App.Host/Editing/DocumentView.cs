@@ -48,15 +48,15 @@ public enum DocumentViewMode
     PrintLayout,
     WebLayout,
     Draft,
-#if DEBUG
     /// <summary>
-    /// DEV-ONLY: renders the document as discrete editable page boxes (<see cref="PageBox"/>)
-    /// stacked in a <see cref="PaginatedEditorPanel"/>.  Not exposed in the production ribbon.
-    /// Entered/exited via <see cref="MainWindow"/> test-only path; the default continuous editor
-    /// (PrintLayout/Web/Draft) and its <see cref="DocumentView.CommitToModel"/> path are untouched.
+    /// Renders the document as discrete editable page boxes (<see cref="PageBox"/>)
+    /// stacked in a <see cref="PaginatedEditorPanel"/>.  Opt-in via View ▸ Views ▸ Page Edit.
+    /// Entering commits the continuous editor first; exiting commits all page boxes back to the
+    /// model and reloads the continuous editor so PrintLayout/Web/Draft work normally again.
+    /// The default continuous editor (PrintLayout/Web/Draft) and its
+    /// <see cref="DocumentView.CommitToModel"/> path are untouched.
     /// </summary>
     PagedEdit,
-#endif
 }
 
 /// <summary>
@@ -85,7 +85,6 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     private static string? _renderFileName;
 
-#if DEBUG
     /// <summary>
     /// The 1-based page number to use when resolving PAGE fields during a header/footer sub-editor render
     /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Set just
@@ -102,7 +101,6 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     [ThreadStatic]
     internal static int _renderHfPageCount;
-#endif
 
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
@@ -4814,7 +4812,6 @@ public sealed class DocumentView : RichTextBox
     /// </para>
     private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false);
 
-#if DEBUG
     /// <summary>
     /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
     /// by a <see cref="Render"/>/<see cref="LoadModel"/> call on this or a same-model scratch editor
@@ -4844,7 +4841,6 @@ public sealed class DocumentView : RichTextBox
             }
         }
     }
-#endif
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()
@@ -6362,7 +6358,6 @@ public sealed class DocumentView : RichTextBox
     private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
     {
         var culture = System.Globalization.CultureInfo.CurrentCulture;
-#if DEBUG
         // In PagedEdit mode, PAGE and NUMPAGES are resolved to the actual page-box page number / page
         // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
         // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
@@ -6370,7 +6365,6 @@ public sealed class DocumentView : RichTextBox
             return _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
             return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-#endif
         return kind switch
         {
             RunFieldKind.Date => DateTime.Now.ToString("d", culture),

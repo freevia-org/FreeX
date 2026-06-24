@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
@@ -326,15 +325,14 @@ public sealed class PagedEdit3b2Tests
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The PagedEdit mode is present in DEBUG builds (regression guard matching
-    /// PagedEditFlagTests.ProductionBuild_DocumentViewMode_ContainsExactlyThreeModes).
+    /// The PagedEdit mode is present in all builds (regression guard: it is now a shipped opt-in mode).
     /// </summary>
     [Fact]
-    public void PagedEditMode_PresentInDebug_3b2Guard()
+    public void PagedEditMode_PresentInAllBuilds_3b2Guard()
     {
         var allValues = Enum.GetValues<DocumentViewMode>();
         allValues.Should().Contain(DocumentViewMode.PagedEdit,
-            "PagedEdit must be present in DEBUG builds (Phase 3b-2 guard)");
+            "PagedEdit is a shipped opt-in mode and must be present in all builds");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -401,4 +399,3 @@ public sealed class PagedEdit3b2Tests
         return range.Text;
     }
 }
-#endif

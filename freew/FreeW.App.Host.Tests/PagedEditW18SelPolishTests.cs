@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
@@ -339,19 +338,18 @@ public sealed class PagedEditW18SelPolishTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
-    // 5. Release excludes PagedEdit (flag regression guard)
+    // 5. PagedEdit shipped flag regression guard
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Drag-drop and column-aware features are behind #if DEBUG.  In a DEBUG build, the
-    /// DocumentViewMode enum must still contain PagedEdit.
+    /// PagedEdit is a shipped opt-in mode and must be present in all builds.
     /// </summary>
     [Fact]
-    public void PagedEditMode_PresentInDebug_W18Guard()
+    public void PagedEditMode_PresentInAllBuilds_W18Guard()
     {
         var allValues = Enum.GetValues<DocumentViewMode>();
         allValues.Should().Contain(DocumentViewMode.PagedEdit,
-            "PagedEdit must be present in DEBUG builds (W18 sel-polish guard)");
+            "PagedEdit is a shipped opt-in mode and must be present in all builds (W18 sel-polish guard)");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -394,4 +392,3 @@ public sealed class PagedEditW18SelPolishTests
         sel.ExtendSelection(boxes, boxes[endBoxIdx], activePtr);
     }
 }
-#endif

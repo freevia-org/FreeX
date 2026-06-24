@@ -357,6 +357,7 @@ internal static class FreeWRibbonIcons
             ["freew.page-color"] = RibbonCommandIconKind.Fill,
 
             // View
+            ["freew.paged-edit-view"] = RibbonCommandIconKind.PrintLayout,
             ["freew.print-layout"] = RibbonCommandIconKind.PrintLayout,
             ["freew.ruler"] = RibbonCommandIconKind.Ruler,
             ["freew.nav-pane"] = RibbonCommandIconKind.NavigationPane,

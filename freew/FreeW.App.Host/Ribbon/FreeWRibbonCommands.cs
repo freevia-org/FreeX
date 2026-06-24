@@ -126,7 +126,9 @@ internal static class FreeWRibbonCommands
         Action? onToggleNotesPane = null,
         Func<bool>? isNotesPaneVisible = null,
         Action<string>? onOpenHeaderFooterPane = null,
-        Action? onCloseHeaderFooterPane = null)
+        Action? onCloseHeaderFooterPane = null,
+        Action? onTogglePagedEditView = null,
+        Func<bool>? isPagedEditViewActive = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -1211,6 +1213,13 @@ internal static class FreeWRibbonCommands
             registry.Register("freew.web-layout", new ToggleActionCommand(onWebLayout, isWebLayoutActive));
         if (onDraftView is not null && isDraftViewActive is not null)
             registry.Register("freew.draft-view", new ToggleActionCommand(onDraftView, isDraftViewActive));
+
+        // View tab — toggle Page Edit mode (opt-in editable-pagination surface). Stateful so the
+        // ribbon's toggle button reflects whether the paged surface is currently active. Mutually
+        // exclusive with Print Layout / Web Layout / Draft; the host owns the exclusivity via
+        // TogglePagedEditView / EnterPagedEdit / ExitPagedEdit.
+        if (onTogglePagedEditView is not null && isPagedEditViewActive is not null)
+            registry.Register("freew.paged-edit-view", new ToggleActionCommand(onTogglePagedEditView, isPagedEditViewActive));
 
         // Home tab — toggle the Reveal Formatting pane (Word's Shift+F1 pane), a read-only side pane
         // showing the effective FONT / PARAGRAPH / SECTION formatting of the selection. Stateful so the

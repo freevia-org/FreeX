@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Linq;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
@@ -211,4 +210,3 @@ public sealed class PagedEditRoundTripTests
         editor.Model.Blocks.OfType<Paragraph>().First().PlainText.Should().Be("Unchanged");
     }
 }
-#endif

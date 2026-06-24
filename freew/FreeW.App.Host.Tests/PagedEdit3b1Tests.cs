@@ -1,4 +1,3 @@
-#if DEBUG
 using System.Linq;
 using System.Windows;
 using System.Windows.Documents;
@@ -308,20 +307,20 @@ public sealed class PagedEdit3b1Tests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
-    // 6. Release flag guard (existing PagedEditFlagTests passes — regression guard)
+    // 6. Shipped flag regression guard
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Confirms the #if DEBUG guard is honoured: <see cref="DocumentViewMode.PagedEdit"/> is present
-    /// in Debug and absent in Release.  Matches <c>PagedEditFlagTests.ProductionBuild_DocumentViewMode_ContainsExactlyThreeModes</c>.
+    /// Confirms <see cref="DocumentViewMode.PagedEdit"/> is present in all builds (Debug and Release)
+    /// now that it is a shipped opt-in mode.  Matches
+    /// <c>PagedEditFlagTests.DocumentViewMode_ContainsFourModes_IncludingPagedEdit</c>.
     /// </summary>
     [Fact]
-    public void PagedEditMode_PresentInDebug()
+    public void PagedEditMode_PresentInAllBuilds()
     {
-        // This file is #if DEBUG so this test only compiles in Debug.
         var allValues = Enum.GetValues<DocumentViewMode>();
         allValues.Should().Contain(DocumentViewMode.PagedEdit,
-            "PagedEdit must be present in DEBUG builds");
+            "PagedEdit is a shipped opt-in mode and must be present in all builds");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -354,4 +353,3 @@ public sealed class PagedEdit3b1Tests
         return false;
     }
 }
-#endif

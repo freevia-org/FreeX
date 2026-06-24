@@ -4,8 +4,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
 
-#if DEBUG
-
 /// <summary>
 /// Shared cross-page undo coordinator for <see cref="PaginatedEditorPanel"/>.
 ///
@@ -256,5 +254,3 @@ internal sealed class CrossPageUndoCoordinator
         internal IReadOnlyList<FreeW.Core.Model.Block> Blocks { get; } = blocks;
     }
 }
-
-#endif
