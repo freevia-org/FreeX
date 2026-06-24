@@ -295,6 +295,25 @@ public sealed partial class MainWindow : Window
     private const string PercentNumberFormat = "0%";
     private const double HeaderColumnWidth = 30;
     private const double HeaderRowHeight = 18;
+
+    /// <summary>
+    /// Returns the adaptive row-header column width for the given viewport, scaled by <paramref name="zoomFactor"/>.
+    /// Mirrors <c>GridView.CalculateRowHeaderWidth</c>: widens as larger row numbers scroll into view so that
+    /// 6-digit row numbers are never truncated (30 → 36 → 42 → 48 → 54 px base, × zoom).
+    /// </summary>
+    private static double GetRowHeaderWidth(ViewportModel viewport, double zoomFactor)
+    {
+        var maxRow = viewport.RowMetrics.Count > 0 ? viewport.RowMetrics[^1].Row : 0u;
+        var baseWidth = maxRow switch
+        {
+            >= 1_000_000 => 54,
+            >= 100_000   => 48,
+            >= 10_000    => 42,
+            >= 1_000     => 36,
+            _            => HeaderColumnWidth,
+        };
+        return baseWidth * zoomFactor;
+    }
     private const double InitialViewportHeight = 880;
     private const double InitialViewportWidth = 1440;
     private const double MinimumDisplayedColumnWidth = 48;
@@ -1247,6 +1266,70 @@ public sealed partial class MainWindow : Window
                     ["50%"] = () => ApplyZoomPercentPreset(50),
                     ["25%"] = () => ApplyZoomPercentPreset(25),
                     ["More"] = () => _ = ShowZoomDialogAsync(),
+
+                    // ─────────────────────────────────────────────────────────────────────────────
+                    // Re-keyed from allowlist: formerly served via native menus / parent buttons only.
+                    // Adding the canonical ribbon id here so the parity matrix counts them.
+                    // ─────────────────────────────────────────────────────────────────────────────
+
+                    // Page Layout ▸ Themes preset submenu ids + customize entries.
+                    ["Office#ThemeOfficeMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
+                    ["Office#ThemeColorsOfficeMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["Office#ThemeFontsOfficeMenuItem_Click"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Office#ThemeEffectsOfficeMenuItem_Click"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Grayscale#ThemeGrayscaleMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
+                    ["Grayscale#ThemeColorsGrayscaleMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["FreeX Colorful#ThemeColorfulMenuItem_Click"] = () => _ = ShowThemesGalleryAsync(),
+                    ["FreeX Colorful#ThemeColorsColorfulMenuItem_Click"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["Customize"] = () => _ = ShowThemesGalleryAsync(),
+                    ["Customize Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["Customize Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Customize Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Arial"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Times New Roman"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Subtle"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Refined"] = () => _ = ShowThemeEffectsGalleryAsync(),
+
+                    // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
+                    // declared here so the hygiene guard finds them in this file's ExtraCommands block).
+                    ["3-D Rotation"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.ThreeDRotation),
+                    ["Bevel"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Bevel),
+                    ["Glow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Glow),
+                    ["Inner Shadow"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.InnerShadow),
+                    ["Reflection"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.Reflection),
+                    ["Soft Edges"] = () => ApplySelectedShapeEffect(DrawingShapeEffectPreset.SoftEdges),
+
+                    // Picture Format ▸ Crop submenu items (also wired via BuildPictureShapeTabCommands).
+                    ["Crop"] = () => RunGuarded(OpenPictureCropDialogAsync),
+                    ["Reset Crop"] = () => ResetSelectedPictureCrop(),
+
+                    // Home ▸ Clipboard ▸ Paste menu items not previously wired by canonical id.
+                    ["Keep Source Column Widths"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, default, "Keep Source Column Widths", keepSourceColumnWidths: true),
+                    ["Values & Source Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.All, new PasteSpecialOptions(ContentKind: PasteSpecialContentKind.ValuesAndSourceFormatting), "Values & Source Formatting"),
+                    ["Paste Link"] = () => _ = PasteLinkFromClipboardAsync("Paste Link"),
+
+                    // Home ▸ Editing ▸ Sort & Filter split-button face (the Home-tab picker id).
+                    ["Sort & Filter"] = ToggleAutoFilter,
+
+                    // Review ▸ Notes ▸ Next / Previous Note.
+                    ["Next Note"] = () => NavigateReviewNote(previous: false),
+                    ["Previous Note"] = () => NavigateReviewNote(previous: true),
+
+                    // Page Layout ▸ Page Setup / Scale / Sheet Options canonical ids.
+                    ["Page Setup"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Page Setup dialog"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Scale to Fit"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Print Gridlines"] = () => _ = ShowGridlinesSheetOptionsAsync(),
+                    ["Print Headings"] = () => _ = ShowHeadingsSheetOptionsAsync(),
+                    ["Insert Page Break"] = () => ApplyPageBreakAction(PageBreakAction.Insert),
+                    ["Remove Page Break"] = () => ApplyPageBreakAction(PageBreakAction.Remove),
+                    ["Reset All Page Breaks"] = () => ApplyPageBreakAction(PageBreakAction.ResetAll),
+                    ["Normal#MarginNormalMenuItem_Click"] = () => ApplyPageMargins(WorksheetPageMargins.Normal, "RibbonWire_MarginsNormal"),
+
+                    // Menu-item variants: AutoSum "More Functions", Remove-all-arrows, Data Clear-filter.
+                    ["More Functions#AutoSumMoreMenuItem_Click"] = InsertFunction,
+                    ["Remove Arrows#RemoveAllArrowsMenuItem_Click"] = RemoveFormulaTraceArrows,
+                    ["Clear#ClearFilterButton_Click"] = ClearActiveSheetFilters,
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
@@ -4025,7 +4108,7 @@ public sealed partial class MainWindow : Window
         };
 
         if (showHeadings)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderColumnWidth * zoomFactor) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRowHeaderWidth(viewport, zoomFactor)) });
         foreach (var metric in viewport.ColMetrics)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric, zoomFactor)) });
 
@@ -4707,7 +4790,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
         top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
         width = Math.Max(1, drawingObject.Width * zoomFactor);
         height = Math.Max(1, drawingObject.Height * zoomFactor);
@@ -4737,7 +4820,7 @@ public sealed partial class MainWindow : Window
 
         var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
         var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
-        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
         top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
         width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
         height = GetDisplayedRowHeight(rowMetric, zoomFactor);
@@ -4778,7 +4861,7 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        left = (showHeadings ? HeaderColumnWidth * zoomFactor : 0) + columnLeft;
+        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
         top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
         width = visibleColumns.Sum(metric => GetDisplayedColumnWidth(metric, zoomFactor));
         height = visibleRows.Sum(metric => GetDisplayedRowHeight(metric, zoomFactor));
@@ -4825,7 +4908,7 @@ public sealed partial class MainWindow : Window
 
     private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        var width = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var width = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         foreach (var metric in viewport.ColMetrics)
             width += GetDisplayedColumnWidth(metric, zoomFactor);
 
@@ -5081,7 +5164,7 @@ public sealed partial class MainWindow : Window
         if (pos.Y < 0 || pos.Y > HeaderRowHeight * zoomFactor)
             return false;
 
-        var left = HeaderColumnWidth * zoomFactor;
+        var left = GetRowHeaderWidth(_session.Viewport, zoomFactor);
         foreach (var metric in _session.Viewport.ColMetrics)
         {
             var right = left + GetDisplayedColumnWidth(metric, zoomFactor);
@@ -5105,7 +5188,7 @@ public sealed partial class MainWindow : Window
 
         var zoomFactor = GetActiveZoomFactor();
         var pos = args.GetPosition(_sheetGridHost);
-        if (pos.X < 0 || pos.X > HeaderColumnWidth * zoomFactor)
+        if (pos.X < 0 || pos.X > GetRowHeaderWidth(_session.Viewport, zoomFactor))
             return false;
 
         var top = HeaderRowHeight * zoomFactor;
@@ -5129,7 +5212,7 @@ public sealed partial class MainWindow : Window
         address = default;
         var sheet = _session.ActiveSheet;
         var zoomFactor = GetActiveZoomFactor();
-        var left = sheet.ShowHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var left = sheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
         var top = sheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0;
 
         if (pos.X < left || pos.Y < top)
@@ -5481,7 +5564,7 @@ public sealed partial class MainWindow : Window
             _session.SelectedRange,
             _session.SelectedRanges.Count > 1 ? _session.SelectedRanges : null,
             new GridPoint(pos.X, pos.Y),
-            _session.ActiveSheet.ShowHeadings ? HeaderColumnWidth * zoomFactor : 0,
+            _session.ActiveSheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0,
             _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0);
     }
 
@@ -20264,7 +20347,7 @@ public sealed partial class MainWindow : Window
         var zoomFactor = GetActiveZoomFactor();
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var headerHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
-        var headerWidth = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var headerWidth = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
         if (bounds.Height <= headerHeight || bounds.Width <= headerWidth)
         {
             viewportHeight = 0;

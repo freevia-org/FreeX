@@ -319,7 +319,7 @@ public sealed partial class MainWindow
             zoomFactor = 1;
 
         var showHeadings = sheet.ShowHeadings;
-        var headerLeft = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var headerLeft = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
         var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
 
         var canvasLeft = AvaloniaCanvas.GetLeft(container);

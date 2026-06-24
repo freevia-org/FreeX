@@ -146,7 +146,7 @@ public sealed partial class MainWindow
             MinimumDisplayedColumnWidth,
             MinimumDisplayedRowHeight);
 
-        var rowHeaderWidth = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
         var actualWidth = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
         var actualHeight = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
