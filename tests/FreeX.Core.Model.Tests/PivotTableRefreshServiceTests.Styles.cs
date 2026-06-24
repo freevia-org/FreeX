@@ -910,8 +910,10 @@ public sealed partial class PivotTableRefreshServiceTests
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
             .FillColor.Should().Be(new CellColor(208, 223, 230));
+        // A5 is a label column (col < firstDataColumn); Medium9 has BodyFill=null so the
+        // col-gate prevents stripe from bleeding onto label cells — label stays un-filled.
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(232, 239, 242));
+            .FillColor.Should().Be(CellColor.White, "label col with null BodyFill must not receive stripe fill");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
             .FillColor.Should().Be(CellColor.White);
     }

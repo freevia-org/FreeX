@@ -200,6 +200,7 @@ public static partial class PivotTableRefreshService
             var bodyColIndex = col - firstDataColumn;
             var isRowStripe =
                 pivotTable.ShowRowStripes &&
+                (palette.BodyFill is not null || col >= firstDataColumn) &&
                 row >= firstDataRow &&
                 GetPivotBodyBandIndex(row, firstDataRow, groupHeaderRows, subtotalRows, grandTotalRows) % 2 == 0;
             var isColumnStripe =
