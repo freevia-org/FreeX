@@ -1723,16 +1723,20 @@ public static class DocxWriter
         // recovered on read from these attributes (see DocxReader.ReadTable). Only emitted when a toggle
         // is set, so plain tables stay unchanged.
         var fmt = table.Formatting;
-        if (fmt.HeaderRow || fmt.BandedRows)
+        if (fmt.HeaderRow || fmt.LastRow || fmt.FirstColumn || fmt.LastColumn || fmt.BandedRows || fmt.BandedColumns)
         {
             tblPr.Add(new XElement(W + "tblLook",
                 new XAttribute(W + "firstRow", fmt.HeaderRow ? "1" : "0"),
-                new XAttribute(W + "lastRow", "0"),
-                new XAttribute(W + "firstColumn", "0"),
-                new XAttribute(W + "lastColumn", "0"),
+                new XAttribute(W + "lastRow", fmt.LastRow ? "1" : "0"),
+                new XAttribute(W + "firstColumn", fmt.FirstColumn ? "1" : "0"),
+                new XAttribute(W + "lastColumn", fmt.LastColumn ? "1" : "0"),
                 new XAttribute(W + "noHBand", fmt.BandedRows ? "0" : "1"),
-                new XAttribute(W + "noVBand", "1")));
+                new XAttribute(W + "noVBand", fmt.BandedColumns ? "0" : "1")));
         }
+        // w:tblLayout controls auto-fit behaviour. "fixed" (Word default) is not emitted; "autofit" is
+        // emitted for both Contents and Window modes.
+        if (table.AutoFit != AutoFitMode.Fixed)
+            tblPr.Add(new XElement(W + "tblLayout", new XAttribute(W + "type", "autofit")));
         return tblPr;
     }
 

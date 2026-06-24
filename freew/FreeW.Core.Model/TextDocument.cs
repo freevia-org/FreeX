@@ -1294,6 +1294,15 @@ public sealed record TableFormatting
     /// </summary>
     public bool RepeatHeaderRow { get; init; }
 
+    /// <summary>When true, the last row is styled distinctly (Word's "Last Row" toggle). Round-trips via <c>w:tblPr/w:tblLook w:lastRow="1"</c>. Default false.</summary>
+    public bool LastRow { get; init; }
+    /// <summary>When true, the first column is styled distinctly (bold). Round-trips via <c>w:tblPr/w:tblLook w:firstColumn="1"</c>. Default false.</summary>
+    public bool FirstColumn { get; init; }
+    /// <summary>When true, the last column is styled distinctly. Round-trips via <c>w:tblPr/w:tblLook w:lastColumn="1"</c>. Default false.</summary>
+    public bool LastColumn { get; init; }
+    /// <summary>When true, alternate columns are shaded (banded columns). Round-trips via <c>w:tblPr/w:tblLook w:noVBand="0"</c>. Default false.</summary>
+    public bool BandedColumns { get; init; }
+
     public static readonly TableFormatting Default = new();
 }
 
@@ -1307,6 +1316,19 @@ public enum TableAlignment
     Left,
     Center,
     Right
+}
+
+/// <summary>
+/// Controls how a table fits its content and container (<c>w:tbl/w:tblPr/w:tblLayout</c>).
+/// <see cref="Fixed"/> keeps column widths fixed; <see cref="Contents"/> shrinks/grows columns to
+/// their content; <see cref="Window"/> stretches the table to the container width. <see cref="Fixed"/>
+/// is the default (no element emitted) so existing tables round-trip unchanged.
+/// </summary>
+public enum AutoFitMode
+{
+    Fixed,
+    Contents,
+    Window
 }
 
 /// <summary>A table block: rows of cells, each cell holding paragraphs (w:tbl / w:tr / w:tc).</summary>
@@ -1360,6 +1382,14 @@ public sealed class Table : Block
     /// Word's "Allow spacing between cells" on the Table Options dialog.
     /// </summary>
     public double? CellSpacingPt { get; set; }
+
+    /// <summary>
+    /// How the table auto-fits to its content or container (<c>tbl/tblPr/w:tblLayout</c>).
+    /// <see cref="AutoFitMode.Fixed"/> is the default (no element emitted). <see cref="AutoFitMode.Contents"/>
+    /// maps to <c>w:type="autofit"</c>; <see cref="AutoFitMode.Window"/> maps to <c>w:type="autofit"</c> with
+    /// the table's preferred width set to 100% of the page. Set by Table Layout > Cell Size > AutoFit.
+    /// </summary>
+    public AutoFitMode AutoFit { get; set; } = AutoFitMode.Fixed;
 
     public Table() { }
 

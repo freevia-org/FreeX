@@ -224,6 +224,47 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
 
+        // Table Tools — Directional insert/delete
+        registry.Register("freew.table-insert-above", new ActionCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
+        registry.Register("freew.table-insert-col-left", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
+        registry.Register("freew.table-delete", new ActionCommand(() => { editor.Focus(); editor.DeleteTable(); }));
+        // Table Tools — Merge/Split enhancements
+        registry.Register("freew.split-table", new ActionCommand(() => { editor.Focus(); editor.SplitTable(); }));
+        // Table Tools — Select
+        registry.Register("freew.table-select-table", new ActionCommand(() => { editor.Focus(); editor.SelectTable(); }));
+        registry.Register("freew.table-select-row", new ActionCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
+        registry.Register("freew.table-select-col", new ActionCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
+        registry.Register("freew.table-select-cell", new ActionCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
+        // Table Tools — View Gridlines (toggle; display-only)
+        registry.Register("freew.table-view-gridlines", new ActionCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
+        // Table Tools — Cell Size
+        registry.Register("freew.table-row-height", new TablePropertiesCommand(editor));
+        registry.Register("freew.table-col-width", new TablePropertiesCommand(editor));
+        registry.Register("freew.table-distribute-rows", new ActionCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
+        registry.Register("freew.table-distribute-cols", new ActionCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
+        registry.Register("freew.table-autofit-contents", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
+        registry.Register("freew.table-autofit-window", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
+        registry.Register("freew.table-autofit-fixed", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
+        // Table Tools — Cell Alignment (9-way)
+        registry.Register("freew.cell-align-top-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-top-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-top-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-middle-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-middle-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-middle-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-bottom-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-bottom-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-bottom-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
+        // Table Tools — Cell Margins (opens Table Properties dialog)
+        registry.Register("freew.table-cell-margins", new TablePropertiesCommand(editor));
+        // Table Design — Style Options toggles
+        registry.Register("freew.table-last-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
+        registry.Register("freew.table-first-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
+        registry.Register("freew.table-last-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
+        registry.Register("freew.table-banded-cols", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
+        // Table Layout Data group — Convert to Text
+        registry.Register("freew.table-to-text", new ActionCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
+
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
