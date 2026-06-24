@@ -20,22 +20,34 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Brushes (self-contained; tuned to the FreeX #17324D navy title/status bar) ──── -->
-    <SolidColorBrush x:Key="ChromeWhiteBrush" Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ChromeTextBrush" Color="#1F1F1F"/>
-    <SolidColorBrush x:Key="ChromeMutedTextBrush" Color="#5F6368"/>
-    <!-- Flat (light-background) command-button hover/press fills -->
-    <SolidColorBrush x:Key="ChromeButtonHoverBrush" Color="#D6EEF4"/>
-    <SolidColorBrush x:Key="ChromeButtonPressedBrush" Color="#BFE2EC"/>
-    <SolidColorBrush x:Key="ChromeButtonBorderBrush" Color="#8FC3D2"/>
-    <SolidColorBrush x:Key="ChromeAccentBrush" Color="#0F6D8C"/>
+    <!-- NEUTRAL chrome brushes — tokenized (WS-G round 8).
+         ThemeNeutralWhiteBrush / ThemeNeutralTextBrush / ThemeNeutralMutedTextBrush /
+         ThemeNeutralDangerBrush are registered by WpfThemeApplier.BuildResources with values
+         byte-identical across FreeX/FreeW/FreeP (all three share the same neutral palette).
+         The Chrome* aliases below re-expose the tokens under the original keys so all downstream
+         {StaticResource Chrome*Brush} usages in the styles below continue to work unchanged. -->
+    <DynamicResource x:Key="ChromeWhiteBrush"     ResourceKey="ThemeNeutralWhiteBrush"/>
+    <DynamicResource x:Key="ChromeTextBrush"      ResourceKey="ThemeNeutralTextBrush"/>
+    <DynamicResource x:Key="ChromeMutedTextBrush" ResourceKey="ThemeNeutralMutedTextBrush"/>
+    <!-- Close-button pressed: Danger role (#C42B1C) — identical across all three brand themes. -->
+    <DynamicResource x:Key="ChromeClosePressedBrush" ResourceKey="ThemeNeutralDangerBrush"/>
+
+    <!-- Non-neutral / accent-derived brushes: left inline (structural / accent-family shades).
+         See WS-G round 8 classification comment in SharedChromeResources.xaml. -->
+    <!-- Flat (light-background) command-button hover/press fills — accent tinted, structural -->
+    <SolidColorBrush x:Key="ChromeButtonHoverBrush"   Color="#D6EEF4"/>
+    <SolidColorBrush x:Key="ChromeButtonPressedBrush"  Color="#BFE2EC"/>
+    <SolidColorBrush x:Key="ChromeButtonBorderBrush"   Color="#8FC3D2"/>
+    <!-- Accent: FreeX/FreeW teal — ACCENT-DERIVED, deferred (FreeP uses brick #B7472A) -->
+    <SolidColorBrush x:Key="ChromeAccentBrush"         Color="#0F6D8C"/>
     <!-- Title-bar / status-bar (dark-background) hover/press fills — FreeX #17324D navy family -->
-    <SolidColorBrush x:Key="ChromeCaptionHoverBrush" Color="#264B6B"/>
-    <SolidColorBrush x:Key="ChromeCaptionPressedBrush" Color="#0F2438"/>
+    <SolidColorBrush x:Key="ChromeCaptionHoverBrush"        Color="#264B6B"/>
+    <SolidColorBrush x:Key="ChromeCaptionPressedBrush"      Color="#0F2438"/>
+    <!-- TitleBarButtonBorder alpha key — ACCENT-DERIVED (lives in accent family), deferred -->
     <SolidColorBrush x:Key="ChromeCaptionButtonBorderBrush" Color="#55FFFFFF"/>
-    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush" Color="#7E97B4"/>
-    <!-- Close-button red hover/press -->
-    <SolidColorBrush x:Key="ChromeCloseHoverBrush" Color="#E81123"/>
-    <SolidColorBrush x:Key="ChromeClosePressedBrush" Color="#C42B1C"/>
+    <SolidColorBrush x:Key="ChromeCaptionDisabledBrush"     Color="#7E97B4"/>
+    <!-- Close-button red hover — close to Danger but distinct (#E81123 vs #C42B1C), structural -->
+    <SolidColorBrush x:Key="ChromeCloseHoverBrush"          Color="#E81123"/>
 
     <!-- ── Backstage sidebar (FreeX Office-backstage navy rail) ─────────────
          The full-window File-screen nav rail: a dark navy column, light-on-dark

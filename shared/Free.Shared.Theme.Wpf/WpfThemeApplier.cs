@@ -100,7 +100,33 @@ public static class WpfThemeApplier
         AddTypo("Heading",       t.Heading);
         AddTypo("StatusBarText", t.StatusBarText);
 
+        // ── Neutral keys (WS-G round 8) ─────────────────────────────────────────
+        // The shared ribbon renderer (Free.Shared.Ribbon.Wpf) is app-neutral and cannot
+        // know the per-app key prefix (FreeX/FreeW/FreeP).  For the NEUTRAL roles whose
+        // values are byte-identical across all three brand themes, we also emit prefix-free
+        // "ThemeNeutral{Role}Brush" keys so the shared renderer can bind to them with
+        // {DynamicResource ThemeNeutralTextBrush} etc.  Because the neutral role values are
+        // truly identical across all apps, this is safe and does not introduce any visual
+        // divergence.
+        AddNeutralBrush(dict, "Text",         c.Text);
+        AddNeutralBrush(dict, "MutedText",    c.MutedText);
+        AddNeutralBrush(dict, "White",        c.White);
+        AddNeutralBrush(dict, "Danger",       c.Danger);
+        AddNeutralBrush(dict, "SheetSurface", c.SheetSurface);
+
         return dict;
+    }
+
+    /// <summary>
+    /// Emits a <c>ThemeNeutral{role}Brush</c> key into <paramref name="dict"/>.
+    /// Used by <see cref="BuildResources"/> to register prefix-free neutral-role keys
+    /// that the shared ribbon renderer can consume via <c>{DynamicResource}</c>.
+    /// </summary>
+    private static void AddNeutralBrush(ResourceDictionary dict, string role, ThemeColor color)
+    {
+        var brush = new SolidColorBrush(ToColor(color));
+        brush.Freeze();
+        dict[$"ThemeNeutral{role}Brush"] = brush;
     }
 
     /// <summary>

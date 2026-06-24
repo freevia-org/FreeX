@@ -14,13 +14,19 @@
          is default-targeted (applies to every plain control in the dialog).
          ════════════════════════════════════════════════════════════════════ -->
 
-    <SolidColorBrush x:Key="DialogText" Color="#1F1F1F"/>
-    <SolidColorBrush x:Key="DialogBorder" Color="#C8C8C8"/>
+    <!-- NEUTRAL dialog brushes — tokenized (WS-G round 8).
+         DialogText aliases ThemeNeutralTextBrush (#1F1F1F), identical across FreeX/FreeW/FreeP.
+         All other dialog brushes are accent-derived or structural — left inline (see classification). -->
+    <DynamicResource x:Key="DialogText" ResourceKey="ThemeNeutralTextBrush"/>
+    <!-- Structural border shades: #C8C8C8 ≠ BorderStrong (#C8CCD0); #B7BCC2 has no exact role match. -->
+    <SolidColorBrush x:Key="DialogBorder"      Color="#C8C8C8"/>
     <SolidColorBrush x:Key="DialogFieldBorder" Color="#B7BCC2"/>
-    <SolidColorBrush x:Key="DialogAccent" Color="#0F6D8C"/>
-    <SolidColorBrush x:Key="DialogAccentDark" Color="#0B556E"/>
-    <SolidColorBrush x:Key="DialogHover" Color="#E6F6FA"/>
-    <SolidColorBrush x:Key="DialogPressed" Color="#CCEAF2"/>
+    <!-- ACCENT-DERIVED: DialogAccent/AccentDark/Hover/Pressed derive from the teal accent family;
+         FreeP's accent is brick — tokenizing these would diverge visually across apps. Deferred. -->
+    <SolidColorBrush x:Key="DialogAccent"      Color="#0F6D8C"/>
+    <SolidColorBrush x:Key="DialogAccentDark"  Color="#0B556E"/>
+    <SolidColorBrush x:Key="DialogHover"       Color="#E6F6FA"/>
+    <SolidColorBrush x:Key="DialogPressed"     Color="#CCEAF2"/>
 
     <!-- Standard dialog button: white resting fill + subtle border; hover/press wash with accent border. -->
     <Style TargetType="{x:Type Button}">
@@ -31,7 +37,7 @@
         <Setter Property="FontFamily" Value="Segoe UI"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
-        <Setter Property="Background" Value="#FFFFFF"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -60,8 +66,10 @@
                             <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
+                            <!-- #9AA0A6 and #E0E0E0: structural disabled shades with no exact theme role. -->
                             <Setter Property="Foreground" Value="#9AA0A6"/>
-                            <Setter TargetName="bd" Property="Background" Value="#F3F3F3"/>
+                            <!-- SheetSurface (#F3F3F3): neutral role, identical across all 3 brand themes. -->
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeNeutralSheetSurfaceBrush}"/>
                             <Setter TargetName="bd" Property="BorderBrush" Value="#E0E0E0"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -72,7 +80,7 @@
 
     <!-- Accent primary button (OK / Insert / Apply): teal fill, white text. -->
     <Style x:Key="DialogPrimaryButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="Foreground" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="Background" Value="{StaticResource DialogAccent}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogAccent}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
@@ -113,7 +121,7 @@
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Padding" Value="5,3"/>
         <Setter Property="Foreground" Value="{StaticResource DialogText}"/>
-        <Setter Property="Background" Value="#FFFFFF"/>
+        <Setter Property="Background" Value="{DynamicResource ThemeNeutralWhiteBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource DialogFieldBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
