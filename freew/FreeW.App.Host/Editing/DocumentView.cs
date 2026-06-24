@@ -591,6 +591,19 @@ public sealed class DocumentView : RichTextBox
         ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
 
     /// <summary>
+    /// Set (or clear) the page watermark with full options (text, font, colour, layout, opacity). A
+    /// null value removes the watermark. Re-renders immediately and round-trips on save. Design-ribbon
+    /// command (Custom Watermark dialog).
+    /// </summary>
+    public void SetWatermarkOptions(WatermarkOptions? options) =>
+        ApplyPageSettings(page =>
+        {
+            page.WatermarkOptions = options;
+            // Clear the legacy plain-text field so EffectiveWatermark is driven entirely by the new options.
+            page.Watermark = null;
+        });
+
+    /// <summary>
     /// Set (or clear) the page background colour (Word's Design &gt; Page Color). A null/empty value
     /// clears it back to the default white sheet. The hex is normalised to an "#RRGGBB" form. Re-renders
     /// so the page sheet recolours immediately, and round-trips through the model's w:background on save.
@@ -3258,6 +3271,19 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set the document's protection to the given <see cref="ProtectionSettings"/> (which may include a
+    /// password hash). Commits pending edits first so they are not lost, then re-renders. Used by the
+    /// Restrict Editing dialog when a password is provided.
+    /// </summary>
+    public void SetProtection(ProtectionSettings settings)
+    {
+        if (!IsReadOnly)
+            CommitToModel();
+        _model.Protection = settings;
+        Render();
+    }
+
+    /// <summary>
     /// Cycle the document protection: None → ReadOnly → None. Returns the mode now in effect so the
     /// caller (the Review ribbon's Restrict Editing button) can report it. A simple on/off toggle of
     /// read-only protection, the common restrict-editing gesture.
@@ -3322,13 +3348,14 @@ public sealed class DocumentView : RichTextBox
         }
 
         // The page sheet colour: the model's Design > Page Color (defaults to white). The watermark, when
-        // present, composes its faint diagonal text over that same base colour.
+        // present, composes its faint text over that same base colour.
         var pageColor = string.IsNullOrEmpty(_model.Page.BackgroundColorHex)
             ? Colors.White
             : ParseColor(_model.Page.BackgroundColorHex!, Colors.White);
-        Background = string.IsNullOrEmpty(_model.Page.Watermark)
+        var effectiveWatermark = _model.Page.EffectiveWatermark;
+        Background = effectiveWatermark is null
             ? new SolidColorBrush(pageColor)
-            : BuildWatermarkBrush(_model.Page.Watermark!, pageColor);
+            : BuildWatermarkBrush(effectiveWatermark, pageColor);
 
         if (PrintLayoutEnabled)
         {
@@ -3484,21 +3511,30 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Builds a tiling brush that paints faint, 45-degree watermark text on a white page so it sits
-    /// behind the document content. Used by the editor background; the print/preview path draws the
+    /// Builds a tiling brush that paints watermark text on a white page so it sits behind the document
+    /// content. Respects the full <see cref="WatermarkOptions"/> — font family, colour, opacity and
+    /// diagonal vs horizontal layout. Used by the editor background; the print/preview path draws the
     /// same text per page so on-screen and printed output match.
     /// </summary>
-    internal static Brush BuildWatermarkBrush(string text) => BuildWatermarkBrush(text, Colors.White);
+    internal static Brush BuildWatermarkBrush(WatermarkOptions options) =>
+        BuildWatermarkBrush(options, Colors.White);
 
-    internal static Brush BuildWatermarkBrush(string text, Color pageColor)
+    internal static Brush BuildWatermarkBrush(WatermarkOptions options, Color pageColor)
     {
+        var baseColor = ParseColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
+        var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
+        var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
+
         var label = new TextBlock
         {
-            Text = text,
+            Text = options.Text,
             FontSize = 48,
             FontWeight = FontWeights.Bold,
-            Foreground = new SolidColorBrush(Color.FromArgb(0x28, 0x80, 0x80, 0x80)),
-            LayoutTransform = new RotateTransform(-45)
+            FontFamily = new System.Windows.Media.FontFamily(options.FontFamily),
+            Foreground = foreground,
+            LayoutTransform = options.Layout == WatermarkLayout.Horizontal
+                ? null
+                : new RotateTransform(-45)
         };
         label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         label.Arrange(new Rect(label.DesiredSize));
@@ -3514,12 +3550,20 @@ public sealed class DocumentView : RichTextBox
             AlignmentY = AlignmentY.Center
         };
 
-        // Compose the faint tiled watermark over the opaque page colour so the editing surface keeps the
+        // Compose the watermark over the opaque page colour so the editing surface keeps the
         // chosen page background behind the text.
         var canvas = new Grid { Background = new SolidColorBrush(pageColor) };
         canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
         return new VisualBrush(canvas) { Stretch = Stretch.Fill };
     }
+
+    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
+    internal static Brush BuildWatermarkBrush(string text) =>
+        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), Colors.White);
+
+    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
+    internal static Brush BuildWatermarkBrush(string text, Color pageColor) =>
+        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), pageColor);
 
     private static Color ParseColor(string hex, Color fallback)
     {

@@ -202,7 +202,21 @@ public static class DocxReader
 
         var mode = ProtectionModeFromEditToken(protection.Attribute(W + "edit")?.Value);
         if (mode != ProtectionMode.None)
-            document.Protection = new ProtectionSettings(mode);
+        {
+            // Read optional password hash attributes (OOXML legacy hash format: w:hash + w:salt + w:cryptSpinCount).
+            var hash = protection.Attribute(W + "hash")?.Value;
+            var salt = protection.Attribute(W + "salt")?.Value;
+            var spinCountStr = protection.Attribute(W + "cryptSpinCount")?.Value;
+            var spinCount = int.TryParse(spinCountStr, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var sc) && sc > 0 ? sc : 50000;
+
+            document.Protection = new ProtectionSettings(mode)
+            {
+                PasswordHash = string.IsNullOrEmpty(hash) ? null : hash,
+                PasswordSalt = string.IsNullOrEmpty(salt) ? null : salt,
+                SpinCount = spinCount
+            };
+        }
     }
 
     /// <summary>
@@ -3754,8 +3768,10 @@ public static class DocxReader
 
     /// <summary>
     /// Reads FreeW custom document properties from docProps/custom.xml: the page watermark into
-    /// <see cref="PageSettings.Watermark"/> and Word's "Mark as Final" flag (<c>_MarkAsFinal</c>) into
-    /// <see cref="TextDocument.MarkedAsFinal"/>, mirroring how the writer persists them. A missing part is fine.
+    /// <see cref="PageSettings.WatermarkOptions"/> (or the legacy <see cref="PageSettings.Watermark"/>
+    /// string), and Word's "Mark as Final" flag (<c>_MarkAsFinal</c>) into
+    /// <see cref="TextDocument.MarkedAsFinal"/>, mirroring how the writer persists them.
+    /// A missing part is fine.
     /// </summary>
     private static void ReadCustomProperties(ZipArchive archive, TextDocument document)
     {
@@ -3767,10 +3783,41 @@ public static class DocxReader
 
         var properties = root.Elements(CustomProps + "property").ToList();
 
-        var watermark = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkPropertyName);
-        var text = watermark?.Element(VtVariant + "lpwstr")?.Value;
+        static string? PropStr(List<System.Xml.Linq.XElement> props, string name)
+        {
+            var el = props.FirstOrDefault(p => p.Attribute("name")?.Value == name);
+            return el?.Element(VtVariant + "lpwstr")?.Value;
+        }
+
+        var text = PropStr(properties, WatermarkPropertyName);
         if (!string.IsNullOrEmpty(text))
-            document.Page.Watermark = text;
+        {
+            // Check if full WatermarkOptions properties are present (written by the new writer).
+            var font = PropStr(properties, WatermarkFontFamilyPropertyName);
+            var color = PropStr(properties, WatermarkColorPropertyName);
+            var layoutStr = PropStr(properties, WatermarkLayoutPropertyName);
+            var opacityStr = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkOpacityPropertyName)
+                ?.Element(VtVariant + "r8")?.Value;
+
+            if (font is not null || color is not null || layoutStr is not null || opacityStr is not null)
+            {
+                var layout = layoutStr is "Horizontal" ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
+                var opacity = double.TryParse(opacityStr, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var op) ? op : 0.3;
+                document.Page.WatermarkOptions = new WatermarkOptions(text)
+                {
+                    FontFamily = font ?? "Calibri",
+                    FontColorHex = color ?? "#808080",
+                    Layout = layout,
+                    Opacity = System.Math.Clamp(opacity, 0.0, 1.0)
+                };
+            }
+            else
+            {
+                // Legacy: only the plain text property was written — migrate to legacy field.
+                document.Page.Watermark = text;
+            }
+        }
 
         var markAsFinal = properties.FirstOrDefault(p => p.Attribute("name")?.Value == MarkAsFinalPropertyName);
         var flag = markAsFinal?.Element(VtVariant + "bool")?.Value;

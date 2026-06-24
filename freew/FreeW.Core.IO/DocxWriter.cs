@@ -120,9 +120,11 @@ public static class DocxWriter
         // round-trip referenced rather than orphaned. Empty for text-only comments.
         var commentImages = hasComments ? CollectCommentImages(document, usedPartNames) : new List<ImagePart>();
 
-        // The watermark text is persisted best-effort as a custom document property (docProps/custom.xml),
-        // emitted only when a watermark is set.
-        var hasWatermark = !string.IsNullOrEmpty(document.Page.Watermark);
+        // The watermark options (or legacy text) are persisted as custom document properties
+        // (docProps/custom.xml). WatermarkOptions takes precedence; a legacy Watermark text is used
+        // as a fallback (migrated on load to EffectiveWatermark).
+        var hasWatermark = document.Page.WatermarkOptions is not null
+            || !string.IsNullOrEmpty(document.Page.Watermark);
 
         // A docProps/custom.xml part is emitted when the watermark, Word's "Mark as Final" flag, or
         // source-package custom properties need to round-trip; all ride in the same custom-properties part.
@@ -186,7 +188,7 @@ public static class DocxWriter
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps));
         WritePart(archive, "docProps/core.xml", BuildCoreProperties(document.Properties));
         if (hasCustomProps)
-            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.Watermark, document.MarkedAsFinal));
+            WritePart(archive, "docProps/custom.xml", BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
         WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
@@ -854,7 +856,7 @@ public static class DocxWriter
     /// named custom properties. This is a standards-compliant OPC custom-properties part. Properties get
     /// sequential pids starting at 2 (pid 0/1 are reserved); only set properties are emitted.
     /// </summary>
-    private static XDocument BuildCustomProperties(XElement? originalProperties, string? watermark, bool markedAsFinal)
+    private static XDocument BuildCustomProperties(XElement? originalProperties, WatermarkOptions? watermarkOptions, string? legacyWatermark, bool markedAsFinal)
     {
         var properties = originalProperties is null
             ? new XElement(CustomProps + "Properties",
@@ -862,24 +864,51 @@ public static class DocxWriter
             : new XElement(originalProperties);
 
         properties.SetAttributeValue(XNamespace.Xmlns + "vt", VtVariant.NamespaceName);
+        // Remove all FreeW watermark properties (both legacy and new) and MarkAsFinal so we can re-add cleanly.
         properties.Elements(CustomProps + "property")
             .Where(p =>
             {
                 var name = p.Attribute("name")?.Value;
-                return name == WatermarkPropertyName || name == MarkAsFinalPropertyName;
+                return name == WatermarkPropertyName
+                    || name == WatermarkFontFamilyPropertyName
+                    || name == WatermarkColorPropertyName
+                    || name == WatermarkLayoutPropertyName
+                    || name == WatermarkOpacityPropertyName
+                    || name == MarkAsFinalPropertyName;
             })
             .Remove();
+
+        static XElement StringProp(string name, int pid, string value) =>
+            new(CustomProps + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", pid.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new XAttribute("name", name),
+                new XElement(VtVariant + "lpwstr", value));
 
         var pid = Math.Max(2, properties.Elements(CustomProps + "property")
             .Select(p => int.TryParse(p.Attribute("pid")?.Value, out var parsed) ? parsed + 1 : 2)
             .DefaultIfEmpty(2)
             .Max());
-        if (!string.IsNullOrEmpty(watermark))
+
+        // Write full WatermarkOptions if present; otherwise fall back to legacy plain text.
+        if (watermarkOptions is not null)
+        {
+            // Always emit the text (the primary property that the legacy reader also picks up).
+            properties.Add(StringProp(WatermarkPropertyName, pid++, watermarkOptions.Text));
+            properties.Add(StringProp(WatermarkFontFamilyPropertyName, pid++, watermarkOptions.FontFamily));
+            properties.Add(StringProp(WatermarkColorPropertyName, pid++, watermarkOptions.FontColorHex));
+            properties.Add(StringProp(WatermarkLayoutPropertyName, pid++, watermarkOptions.Layout.ToString()));
             properties.Add(new XElement(CustomProps + "property",
                 new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
                 new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                new XAttribute("name", WatermarkPropertyName),
-                new XElement(VtVariant + "lpwstr", watermark)));
+                new XAttribute("name", WatermarkOpacityPropertyName),
+                new XElement(VtVariant + "r8", watermarkOptions.Opacity.ToString("G", System.Globalization.CultureInfo.InvariantCulture))));
+        }
+        else if (!string.IsNullOrEmpty(legacyWatermark))
+        {
+            properties.Add(StringProp(WatermarkPropertyName, pid++, legacyWatermark));
+        }
+
         if (markedAsFinal)
             properties.Add(new XElement(CustomProps + "property",
                 new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
@@ -4363,9 +4392,7 @@ public static class DocxWriter
             if (differentOddEvenPages)
                 fresh.Add(new XElement(W + "evenAndOddHeaders"));
             if (ProtectionEditToken(protection.Mode) is { } freshEdit)
-                fresh.Add(new XElement(W + "documentProtection",
-                    new XAttribute(W + "edit", freshEdit),
-                    new XAttribute(W + "enforcement", "1")));
+                fresh.Add(BuildDocumentProtectionElement(protection, freshEdit));
             // Footnote/endnote numbering options (w:footnotePr / w:endnotePr) follow evenAndOddHeaders in
             // CT_Settings schema order. Only emit when non-default (keeps a freshly authored document minimal).
             if (BuildNotePr(footnoteNumbering, "footnotePr") is { } freshFootnotePr)
@@ -4391,9 +4418,7 @@ public static class DocxWriter
         OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
         OverlaySetting(settings, "documentProtection",
             ProtectionEditToken(protection.Mode) is { } edit
-                ? new XElement(W + "documentProtection",
-                    new XAttribute(W + "edit", edit),
-                    new XAttribute(W + "enforcement", "1"))
+                ? BuildDocumentProtectionElement(protection, edit)
                 : null);
         // Overlay footnote/endnote numbering: non-default options replace any existing w:footnotePr /
         // w:endnotePr from the preserved settings; default values remove the element (FreeW owns it now).
@@ -4404,6 +4429,30 @@ public static class DocxWriter
 
     private static bool HasCustomDefaultTabStop(PageSettings page) =>
         Math.Abs(page.DefaultTabStopPt - PageSettings.WordDefaultTabStopPt) > 0.01;
+
+    /// <summary>
+    /// Builds a w:documentProtection element for word/settings.xml from the given
+    /// <paramref name="protection"/> settings and resolved <paramref name="editToken"/>. When the
+    /// settings carry a password hash the OOXML legacy attributes (w:cryptProviderType, w:cryptAlgorithmSid,
+    /// w:cryptSpinCount, w:hash, w:salt) are also emitted so Microsoft Word honours the password.
+    /// </summary>
+    private static XElement BuildDocumentProtectionElement(ProtectionSettings protection, string editToken)
+    {
+        var el = new XElement(W + "documentProtection",
+            new XAttribute(W + "edit", editToken),
+            new XAttribute(W + "enforcement", "1"));
+        if (protection.HasPassword)
+        {
+            el.Add(new XAttribute(W + "cryptProviderType", "rsaAES"));
+            el.Add(new XAttribute(W + "cryptAlgorithmClass", "hash"));
+            el.Add(new XAttribute(W + "cryptAlgorithmType", "typeAny"));
+            el.Add(new XAttribute(W + "cryptAlgorithmSid", "4")); // SHA-1
+            el.Add(new XAttribute(W + "cryptSpinCount", protection.SpinCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            el.Add(new XAttribute(W + "hash", protection.PasswordHash!));
+            el.Add(new XAttribute(W + "salt", protection.PasswordSalt!));
+        }
+        return el;
+    }
 
     /// <summary>
     /// Builds a w:footnotePr or w:endnotePr child element for word/settings.xml from the given

@@ -3306,9 +3306,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var chosen = RestrictEditingDialog.Prompt(Window.GetWindow(editor), editor.ProtectionMode);
-            if (chosen is { } mode)
-                editor.SetProtection(mode);
+            var chosen = RestrictEditingDialog.Prompt(Window.GetWindow(editor), editor.Model.Protection);
+            if (chosen is { } settings)
+                editor.SetProtection(settings);
         }
 
         public RibbonCommandState GetState() =>
@@ -5178,18 +5178,26 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Design > Page Background > Watermark: prompt for the page watermark text (seeded with the current one). An empty
-    // result clears the watermark. Delegates to the view, which mutates PageSettings and re-renders.
+    // Design > Page Background > Watermark: open the Custom Watermark dialog (seeded with any current
+    // watermark options). The dialog returns new options (OK), null + removeRequested (Remove Watermark),
+    // or null (Cancel — no change). Delegates to the view, which mutates PageSettings and re-renders.
     private sealed class WatermarkCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            var seed = editor.Model.Page.Watermark ?? string.Empty;
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Watermark", "Watermark text (empty to remove):", seed);
-            if (text is null)
-                return; // cancelled — leave the model untouched
+            var current = editor.Model.Page.EffectiveWatermark;
+            var chosen = WatermarkOptionsDialog.Prompt(Window.GetWindow(editor), current, out var removeRequested);
 
-            editor.SetWatermark(text);
+            if (chosen is not null)
+            {
+                editor.SetWatermarkOptions(chosen);
+            }
+            else if (removeRequested)
+            {
+                editor.SetWatermarkOptions(null);
+            }
+            // else: cancelled — leave the model untouched
+
             editor.Focus();
         }
     }
