@@ -171,7 +171,7 @@ public sealed partial class MainWindow
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
         ("dialog.ProtectWorkbook", () => ShowProtectWorkbookDialogAsync()),
-        ("dialog.AccessibilityChecker", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),
+        ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),

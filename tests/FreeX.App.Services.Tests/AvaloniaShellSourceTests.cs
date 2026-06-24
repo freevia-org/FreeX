@@ -2316,7 +2316,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.AllowEditRanges\", () => ShowAllowEditRangesParityDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectSheet\", () => ShowProtectSheetDialogAsync()),");
         parityCaptureSource.Should().Contain("(\"dialog.ProtectWorkbook\", () => ShowProtectWorkbookDialogAsync()),");
-        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowReviewSummaryDialogAsync(focusAccessibility: true)),");
+        parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerDialogAsync()),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
         parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
@@ -3085,7 +3085,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_nextCommentMenuItem.Header = \"Next Comment\";");
         source.Should().Contain("_previousCommentMenuItem.Header = \"Previous Comment\";");
         source.Should().Contain("_reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();");
-        source.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync(focusAccessibility: true);");
+        source.Should().Contain("_checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();");
         source.Should().Contain("_nextNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: false);");
         source.Should().Contain("_previousNoteMenuItem.Click += (_, _) => NavigateReviewNote(previous: true);");
         source.Should().Contain("_nextCommentMenuItem.Click += (_, _) => NavigateReviewThreadedComment(previous: false);");

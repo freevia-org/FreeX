@@ -835,7 +835,7 @@ public sealed partial class MainWindow : Window
                     ["Use in Formula"] = PasteNames,
                     // Review tab.
                     ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
-                    ["review.checkAccessibility"] = () => _ = ShowReviewSummaryDialogAsync(focusAccessibility: true),
+                    ["review.checkAccessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
                     ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
                     ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
@@ -2004,7 +2004,7 @@ public sealed partial class MainWindow : Window
         _reviewSummaryMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync();
 
         _checkAccessibilityMenuItem.Header = "Check Accessibility...";
-        _checkAccessibilityMenuItem.Click += async (_, _) => await ShowReviewSummaryDialogAsync(focusAccessibility: true);
+        _checkAccessibilityMenuItem.Click += async (_, _) => await ShowAccessibilityCheckerDialogAsync();
 
         _protectSheetMenuItem.Header = "Protect Sheet...";
         _protectSheetMenuItem.Click += async (_, _) => await ShowProtectSheetDialogAsync();
