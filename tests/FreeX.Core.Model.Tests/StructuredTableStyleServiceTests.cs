@@ -87,6 +87,126 @@ public sealed class StructuredTableStyleServiceTests
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeFalse();
     }
 
+    // ── Column-stripe tests ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// When ShowColumnStripes=true (and ShowRowStripes=false) the load-time materializer must paint
+    /// vertical column bands, mirroring StructuredTableCommand.BuildStyleCommands.  Column 1 (offset 0)
+    /// gets the even fill, column 2 (offset 1) gets the odd fill.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_PaintsColumnStripesWhenShowColumnStripesTrue()
+    {
+        var workbook = new Workbook("ColumnStripes");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = false,
+            ShowColumnStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        // Seed a third column of data
+        for (var r = 1u; r <= 4u; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 3), new NumberValue(r));
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+
+        // Data rows: col 1 (offset 0) → even fill; col 2 (offset 1) → odd fill; col 3 (offset 2) → even fill
+        for (var row = 2u; row <= 4u; row++)
+        {
+            StyleAt(workbook, sheet, row, 1).FillColor.Should().Be(banding.EvenRowFill, $"col 1 row {row} should be even (offset 0)");
+            StyleAt(workbook, sheet, row, 2).FillColor.Should().Be(banding.OddRowFill,  $"col 2 row {row} should be odd (offset 1)");
+            StyleAt(workbook, sheet, row, 3).FillColor.Should().Be(banding.EvenRowFill, $"col 3 row {row} should be even (offset 2)");
+        }
+    }
+
+    // ── First/last column bold tests ────────────────────────────────────────
+
+    [Fact]
+    public void ApplyLoadedTableStyles_BoldsFirstAndLastColumnWhenFlagsSet()
+    {
+        var workbook = new Workbook("FirstLastCol");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        // Seed a third column
+        for (var r = 1u; r <= 4u; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 3), new NumberValue(r));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            ShowFirstColumn = true,
+            ShowLastColumn = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        // Every row of the first column must be bold.
+        for (var row = 1u; row <= 4u; row++)
+            StyleAt(workbook, sheet, row, 1).Bold.Should().BeTrue($"first column row {row} must be bold");
+
+        // Every row of the last column must be bold.
+        for (var row = 1u; row <= 4u; row++)
+            StyleAt(workbook, sheet, row, 3).Bold.Should().BeTrue($"last column row {row} must be bold");
+
+        // The middle column must NOT have bold added by first/last emphasis.
+        StyleAt(workbook, sheet, 2, 2).Bold.Should().NotBe(true, "middle column must not be bolded by first/last emphasis");
+    }
+
+    // ── Totals-row regression: must not use header fill ─────────────────────
+
+    [Fact]
+    public void ApplyLoadedTableStyles_TotalsRowGetsBodyFillNotHeaderFill()
+    {
+        var workbook = new Workbook("TotalsRow");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
+            HeaderRowCount = 1,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+
+        // The totals row (row 5) must NOT carry the header fill.
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().NotBe(banding.HeaderFill,
+            "totals row must not be painted with the header fill");
+
+        // The header row (row 1) must still have the header fill.
+        StyleAt(workbook, sheet, 1, 1).FillColor.Should().Be(banding.HeaderFill,
+            "header row must still carry the header fill");
+    }
+
     private static bool AnyHeaderFill(Workbook workbook, Sheet sheet)
     {
         for (var col = 1u; col <= 2u; col++)
