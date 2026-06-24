@@ -2516,6 +2516,31 @@ public static class DocxReader
             image.CropBottom = PerMille(srcRect.Attribute("b")?.Value);
         }
 
+        // a:lum: brightness and contrast (per-mille integers, value / 1000 = percent).
+        // Located as a direct child of a:blip (inside pic:blipFill).
+        var blip = picPic.Descendants(A + "blip").FirstOrDefault();
+        if (blip is not null)
+        {
+            var lum = blip.Element(A + "lum");
+            if (lum is not null)
+            {
+                static double PerMillePct(string? val) =>
+                    long.TryParse(val, out var v) ? v / 1000.0 : 0;
+                image.BrightnessPct = PerMillePct(lum.Attribute("bright")?.Value);
+                image.ContrastPct   = PerMillePct(lum.Attribute("contrast")?.Value);
+            }
+
+            // a:satMod: saturation modifier per-mille (100 % = 100000; 100000 / 1000 = 100 → neutral).
+            var satMod = blip.Element(A + "satMod");
+            if (satMod is not null && long.TryParse(satMod.Attribute("val")?.Value, out var satVal))
+                image.SaturationPct = satVal / 1000.0;
+
+            // a:alphaModFix: opacity per-mille = (100 - transparencyPct) × 1000.
+            var alphaFix = blip.Element(A + "alphaModFix");
+            if (alphaFix is not null && long.TryParse(alphaFix.Attribute("amt")?.Value, out var amt))
+                image.TransparencyPct = 100.0 - amt / 1000.0;
+        }
+
         // a:ln (inside pic:spPr): border width, solid-fill color, dash.
         var ln = picPic.Descendants(A + "ln").FirstOrDefault();
         if (ln is not null)

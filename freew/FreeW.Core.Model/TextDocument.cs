@@ -290,6 +290,47 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// persisted to DOCX (editor-only state). Defaults to 0 when unknown.
     /// </summary>
     public int OriginalPixelHeight { get; set; }
+
+    // ── Adjust: Corrections / Color / Transparency ────────────────────────────────────────────────────
+    // Picture Format > Adjust group. Values are non-destructive — Bytes is always the original;
+    // adjustments are applied at render time and round-tripped through DOCX IO.
+    //
+    // IO paths (see DocxWriter/DocxReader):
+    //   BrightnessPct  → a:blip child a:lum @bright (per-mille, ×1000) — DrawingML lum element.
+    //   ContrastPct    → a:blip child a:lum @contrast (per-mille, ×1000) — same element.
+    //   SaturationPct  → a:blip child a:satMod @val (per-mille of 100 % = 100000, so 100 % = 100000).
+    //   TransparencyPct→ a:blip child a:alphaModFix @amt (per-mille inverse: 100 % opaque = 100000).
+    //   All four are persisted as standard DrawingML; no custom extension needed for these.
+
+    /// <summary>
+    /// Brightness adjustment in percent offset from neutral: -100 (black) to +100 (white), 0 = neutral.
+    /// Round-trips as <c>a:lum/@bright</c> (per-mille: value × 1000).
+    /// </summary>
+    public double BrightnessPct { get; set; }
+
+    /// <summary>
+    /// Contrast adjustment in percent offset from neutral: -100 (flat) to +100 (maximum), 0 = neutral.
+    /// Round-trips as <c>a:lum/@contrast</c> (per-mille: value × 1000).
+    /// </summary>
+    public double ContrastPct { get; set; }
+
+    /// <summary>
+    /// Saturation in percent: 0 = greyscale, 100 = normal, 200 = double, 400 = maximum.
+    /// Round-trips as <c>a:satMod/@val</c> (per-mille: value × 1000, so 100 % = 100000).
+    /// Defaults to 100 (neutral).
+    /// </summary>
+    public double SaturationPct { get; set; } = 100;
+
+    /// <summary>
+    /// Transparency in percent: 0 = fully opaque, 100 = fully transparent.
+    /// Round-trips as <c>a:alphaModFix/@amt</c> (per-mille of opacity: (100-value) × 1000).
+    /// Defaults to 0 (fully opaque).
+    /// </summary>
+    public double TransparencyPct { get; set; }
+
+    /// <summary>True when any pixel adjustment deviates from the neutral defaults.</summary>
+    public bool HasAdjustments =>
+        BrightnessPct != 0 || ContrastPct != 0 || SaturationPct != 100 || TransparencyPct != 0;
 }
 
 /// <summary>

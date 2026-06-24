@@ -768,6 +768,30 @@ internal static class FreeWRibbon
                 });
                 tab.Group("picture-adjust", "Adjust", "J", 95, g =>
                 {
+                    g.Medium("freew.image-corrections", "Corrections", RibbonCommandIconKind.Effects, menu: m =>
+                    {
+                        m.Item("freew.image-brightness-plus20",   "Brightness: +20%",   "1");
+                        m.Item("freew.image-brightness-plus40",   "Brightness: +40%",   "2");
+                        m.Item("freew.image-brightness-minus20",  "Brightness: -20%",   "3");
+                        m.Item("freew.image-brightness-minus40",  "Brightness: -40%",   "4");
+                        m.Item("freew.image-contrast-plus20",     "Contrast: +20%",     "5");
+                        m.Item("freew.image-contrast-minus20",    "Contrast: -20%",     "6");
+                        m.Item("freew.image-adjust-dialog",       "Picture Corrections…","D");
+                    });
+                    g.Medium("freew.image-color", "Color", RibbonCommandIconKind.Color, menu: m =>
+                    {
+                        m.Item("freew.image-saturation-0",        "Saturation: 0% (Greyscale)",   "G");
+                        m.Item("freew.image-saturation-50",       "Saturation: 50%",              "H");
+                        m.Item("freew.image-saturation-200",      "Saturation: 200%",             "J");
+                        m.Item("freew.image-color-dialog",        "Color…",                       "C");
+                    });
+                    g.Medium("freew.image-transparency", "Transparency", RibbonCommandIconKind.View, menu: m =>
+                    {
+                        m.Item("freew.image-transparency-25",     "Transparency: 25%",    "A");
+                        m.Item("freew.image-transparency-50",     "Transparency: 50%",    "B");
+                        m.Item("freew.image-transparency-75",     "Transparency: 75%",    "C");
+                        m.Item("freew.image-transparency-dialog", "Transparency…",        "D");
+                    });
                     g.Medium("freew.image-crop", "Crop", RibbonCommandIconKind.Scale);
                     g.Medium("freew.image-reset", "Reset Picture", RibbonCommandIconKind.Refresh);
                     g.Medium("freew.image-border", "Picture Border", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
