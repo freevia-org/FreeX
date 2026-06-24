@@ -2101,6 +2101,60 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Re-render the document without committing to the model first. Called by the gallery hover
+    /// preview path (ChartDesignGallery) after transiently mutating the selected chart's style/color/
+    /// quick-layout properties so the live preview is visible. The next CommitToModel call (or the
+    /// leave-revert) restores the pre-hover state.
+    /// </summary>
+    public void RerenderSelectedChart() => Render();
+
+    /// <summary>
+    /// Apply a <see cref="ChartStyle"/> to the selected chart and re-render.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void ApplySelectedChartStyle(ChartStyle style)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.StyleId = style.Id;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a <see cref="ChartColorScheme"/> to the selected chart and re-render.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void ApplySelectedChartColorScheme(ChartColorScheme scheme)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.ColorSchemeId = scheme.Id;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a <see cref="ChartQuickLayout"/> to the selected chart and re-render.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void ApplySelectedChartQuickLayout(ChartQuickLayout layout)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.QuickLayoutId = layout.Id;
+        // Sync model toggle fields to match the layout's intent so that charts without
+        // QuickLayoutId still display consistently when the id is later cleared.
+        if (!string.IsNullOrEmpty(chart.Title))
+            chart.ShowLegend = layout.ShowLegend;
+        Render();
+    }
+
     // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
 
     /// <summary>The inline SmartArt diagram targeted by the current selection/caret, or null if none is selected.</summary>
@@ -7353,13 +7407,8 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
 
-    /// <summary>Office-style series/slice colour palette (blue, orange, grey, gold, indigo, green).</summary>
-    private static readonly Color[] ChartPalette =
-    {
-        Color.FromRgb(0x5B, 0x9B, 0xD5), Color.FromRgb(0xED, 0x7D, 0x31),
-        Color.FromRgb(0xA5, 0xA5, 0xA5), Color.FromRgb(0xFF, 0xC0, 0x00),
-        Color.FromRgb(0x44, 0x72, 0xC4), Color.FromRgb(0x70, 0xAD, 0x47)
-    };
+    // ChartPalette removed: the palette is now resolved per-chart from ChartColorScheme.Default/FindById.
+    // Use ResolveChartRenderSettings(chart).Palette at render time.
 
     /// <summary>
     /// Renders an inline chart as an InlineUIContainer hosting a Border that carries the model
@@ -7369,15 +7418,78 @@ public sealed class DocumentView : RichTextBox
     /// DrawingML chart. Sizes the plot Canvas explicitly so the code-positioned children land correctly in
     /// the headless print/measure pass (there is no live layout to query ActualWidth).
     /// </summary>
+    // ── Chart Design render helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolved render settings derived from a chart's StyleId, ColorSchemeId and QuickLayoutId
+    /// selections. The Quick Layout (when non-zero) overrides the ShowTitle/ShowLegend flags so
+    /// the render reflects the gallery choice without mutating the model's own toggle fields.
+    /// </summary>
+    private readonly record struct ChartRenderSettings(
+        bool ShowTitle,
+        bool ShowLegend,
+        bool ShowGridlines,
+        bool PlotAreaFill,
+        bool ShowMarkers,
+        bool ShowDataLabels,
+        Color[] Palette);
+
+    /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
+    private static ChartRenderSettings ResolveChartRenderSettings(Chart chart)
+    {
+        // Color scheme → palette
+        var scheme = (chart.ColorSchemeId is not null ? ChartColorScheme.FindById(chart.ColorSchemeId) : null)
+                     ?? ChartColorScheme.Default;
+        var palette = scheme.Colors.Select(hex => ParseHexColor(hex)).ToArray();
+
+        // Chart style → visual treatment
+        var style = (chart.StyleId > 0 ? ChartStyle.FindById(chart.StyleId) : null)
+                    ?? ChartStyle.Default;
+
+        // Quick layout → element visibility (overrides model toggles when set)
+        bool showTitle, showLegend;
+        bool showGridlines = style.ShowGridlines;
+        bool showDataLabels = style.ShowDataLabels;
+        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
+        {
+            showTitle = ql.ShowTitle && !string.IsNullOrEmpty(chart.Title);
+            showLegend = ql.ShowLegend && chart.Series.Count > 0;
+            showGridlines = ql.ShowGridlines;
+            showDataLabels = ql.ShowDataLabels;
+        }
+        else
+        {
+            showTitle = !string.IsNullOrEmpty(chart.Title);
+            showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
+        }
+
+        return new ChartRenderSettings(
+            ShowTitle: showTitle,
+            ShowLegend: showLegend,
+            ShowGridlines: showGridlines,
+            PlotAreaFill: style.PlotAreaFill,
+            ShowMarkers: style.ShowMarkers,
+            ShowDataLabels: showDataLabels,
+            Palette: palette);
+    }
+
+    /// <summary>Parse a #RRGGBB hex colour string to a WPF Color, falling back to the Office blue.</summary>
+    private static Color ParseHexColor(string hex)
+    {
+        try { return (Color)ColorConverter.ConvertFromString(hex); }
+        catch { return Color.FromRgb(0x5B, 0x9B, 0xD5); }
+    }
+
     private static InlineUIContainer BuildChartRun(Chart chart, DocumentEffectSet effectSet)
     {
+        var settings = ResolveChartRenderSettings(chart);
         var widthPx = chart.WidthPt * PxPerPoint;
         var heightPx = chart.HeightPt * PxPerPoint;
         var strokeThickness = EffectLineThickness(effectSet);
 
         var root = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
 
-        if (!string.IsNullOrEmpty(chart.Title))
+        if (settings.ShowTitle && !string.IsNullOrEmpty(chart.Title))
         {
             var title = new TextBlock
             {
@@ -7390,35 +7502,41 @@ public sealed class DocumentView : RichTextBox
             root.Children.Add(title);
         }
 
-        var showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
-        if (showLegend)
+        if (settings.ShowLegend)
         {
-            var legend = BuildChartLegend(chart);
+            var legend = BuildChartLegend(chart, settings.Palette);
             DockPanel.SetDock(legend, Dock.Bottom);
             root.Children.Add(legend);
         }
 
-        var titleH = string.IsNullOrEmpty(chart.Title) ? 0 : 22;
-        var legendH = showLegend ? 22 : 0;
+        var actualShowTitle = settings.ShowTitle && !string.IsNullOrEmpty(chart.Title);
+        var titleH = actualShowTitle ? 22 : 0;
+        var legendH = settings.ShowLegend ? 22 : 0;
         var plotW = Math.Max(24, widthPx - 12);
         var plotH = Math.Max(24, heightPx - 12 - titleH - legendH);
-        var plot = new Canvas { Width = plotW, Height = plotH };
+
+        // Plot-area background fill (Style 2/3/7/8 use a coloured background).
+        var plotBg = settings.PlotAreaFill
+            ? new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3))
+            : System.Windows.Media.Brushes.Transparent;
+
+        var plot = new Canvas { Width = plotW, Height = plotH, Background = plotBg };
         switch (chart.Kind)
         {
             case ChartKind.Pie:
             case ChartKind.Doughnut:
-                DrawPieChart(plot, chart, plotW, plotH, doughnut: chart.Kind == ChartKind.Doughnut);
+                DrawPieChart(plot, chart, plotW, plotH, doughnut: chart.Kind == ChartKind.Doughnut, settings: settings);
                 break;
             case ChartKind.Line:
             case ChartKind.Area:
             case ChartKind.Scatter:
-                DrawLineChart(plot, chart, plotW, plotH);
+                DrawLineChart(plot, chart, plotW, plotH, settings: settings);
                 break;
             case ChartKind.Bar:
-                DrawBarChart(plot, chart, plotW, plotH, horizontal: true);
+                DrawBarChart(plot, chart, plotW, plotH, horizontal: true, settings: settings);
                 break;
             default: // Column
-                DrawBarChart(plot, chart, plotW, plotH, horizontal: false);
+                DrawBarChart(plot, chart, plotW, plotH, horizontal: false, settings: settings);
                 break;
         }
         root.Children.Add(plot);
@@ -7455,7 +7573,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>A centred horizontal legend: a colour swatch + label per series (or per slice for pie).</summary>
-    private static FrameworkElement BuildChartLegend(Chart chart)
+    private static FrameworkElement BuildChartLegend(Chart chart, Color[] palette)
     {
         var pie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var labels = pie
@@ -7473,7 +7591,7 @@ public sealed class DocumentView : RichTextBox
                 Width = 10,
                 Height = 10,
                 VerticalAlignment = VerticalAlignment.Center,
-                Fill = new SolidColorBrush(ChartPalette[i % ChartPalette.Length])
+                Fill = new SolidColorBrush(palette[i % palette.Length])
             });
             item.Children.Add(new TextBlock { Text = labels[i], FontSize = 10, Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
             panel.Children.Add(item);
@@ -7502,8 +7620,22 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>Adds a small data-value label above (column) or to the right (bar) of a bar.</summary>
+    private static void AddDataLabel(Canvas plot, double value, double x, double y)
+    {
+        var tb = new TextBlock
+        {
+            Text = value.ToString("G4", System.Globalization.CultureInfo.InvariantCulture),
+            FontSize = 8,
+            Foreground = System.Windows.Media.Brushes.Black
+        };
+        Canvas.SetLeft(tb, x);
+        Canvas.SetTop(tb, y);
+        plot.Children.Add(tb);
+    }
+
     /// <summary>Grouped column (vertical) or bar (horizontal) chart over all series, with category labels.</summary>
-    private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal)
+    private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal, ChartRenderSettings settings)
     {
         var cats = ChartCategoryCount(chart);
         if (cats == 0 || chart.Series.Count == 0)
@@ -7518,7 +7650,8 @@ public sealed class DocumentView : RichTextBox
             var groupW = w / cats;
             var gap = groupW * 0.15;
             var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
-            DrawChartGridlines(plot, plotH, w);
+            if (settings.ShowGridlines)
+                DrawChartGridlines(plot, plotH, w);
             plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
             for (var c = 0; c < cats; c++)
             {
@@ -7528,15 +7661,19 @@ public sealed class DocumentView : RichTextBox
                     if (c >= vals.Count)
                         continue;
                     var barH = plotH * (Math.Max(0, vals[c]) / max);
+                    var rectLeft = c * groupW + gap + s * barW;
+                    var rectTop = plotH - barH;
                     var rect = new System.Windows.Shapes.Rectangle
                     {
                         Width = barW * 0.92,
                         Height = Math.Max(1, barH),
-                        Fill = new SolidColorBrush(ChartPalette[s % ChartPalette.Length])
+                        Fill = new SolidColorBrush(settings.Palette[s % settings.Palette.Length])
                     };
-                    Canvas.SetLeft(rect, c * groupW + gap + s * barW);
-                    Canvas.SetTop(rect, plotH - barH);
+                    Canvas.SetLeft(rect, rectLeft);
+                    Canvas.SetTop(rect, rectTop);
                     plot.Children.Add(rect);
+                    if (settings.ShowDataLabels)
+                        AddDataLabel(plot, vals[c], rectLeft, Math.Max(0, rectTop - 12));
                 }
                 AddCategoryLabel(plot, chart, c, c * groupW, plotH + 1, groupW, System.Windows.TextAlignment.Center);
             }
@@ -7557,15 +7694,18 @@ public sealed class DocumentView : RichTextBox
                     if (c >= vals.Count)
                         continue;
                     var barW = plotW * (Math.Max(0, vals[c]) / max);
+                    var barTop = c * groupH + gap + s * barH;
                     var rect = new System.Windows.Shapes.Rectangle
                     {
                         Width = Math.Max(1, barW),
                         Height = barH * 0.92,
-                        Fill = new SolidColorBrush(ChartPalette[s % ChartPalette.Length])
+                        Fill = new SolidColorBrush(settings.Palette[s % settings.Palette.Length])
                     };
                     Canvas.SetLeft(rect, gutter);
-                    Canvas.SetTop(rect, c * groupH + gap + s * barH);
+                    Canvas.SetTop(rect, barTop);
                     plot.Children.Add(rect);
+                    if (settings.ShowDataLabels)
+                        AddDataLabel(plot, vals[c], gutter + barW + 2, barTop);
                 }
                 AddCategoryLabel(plot, chart, c, 0, c * groupH + groupH / 2 - 7, gutter - 3, System.Windows.TextAlignment.Right);
             }
@@ -7573,7 +7713,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>Multi-series line chart (also used for area/scatter): one polyline per series.</summary>
-    private static void DrawLineChart(Canvas plot, Chart chart, double w, double h)
+    private static void DrawLineChart(Canvas plot, Chart chart, double w, double h, ChartRenderSettings settings)
     {
         var cats = ChartCategoryCount(chart);
         if (cats == 0 || chart.Series.Count == 0)
@@ -7581,7 +7721,8 @@ public sealed class DocumentView : RichTextBox
         var max = ChartMax(chart);
         const double labelStrip = 14;
         var plotH = Math.Max(8, h - labelStrip);
-        DrawChartGridlines(plot, plotH, w);
+        if (settings.ShowGridlines)
+            DrawChartGridlines(plot, plotH, w);
         plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
 
         double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
@@ -7589,7 +7730,7 @@ public sealed class DocumentView : RichTextBox
         for (var s = 0; s < chart.Series.Count; s++)
         {
             var vals = chart.Series[s].Values;
-            var color = new SolidColorBrush(ChartPalette[s % ChartPalette.Length]);
+            var color = new SolidColorBrush(settings.Palette[s % settings.Palette.Length]);
             var poly = new System.Windows.Shapes.Polyline
             {
                 Stroke = color,
@@ -7597,7 +7738,25 @@ public sealed class DocumentView : RichTextBox
                 StrokeLineJoin = PenLineJoin.Round
             };
             for (var c = 0; c < vals.Count; c++)
-                poly.Points.Add(new System.Windows.Point(X(c), plotH - plotH * (Math.Max(0, vals[c]) / max)));
+            {
+                var px = X(c);
+                var py = plotH - plotH * (Math.Max(0, vals[c]) / max);
+                poly.Points.Add(new System.Windows.Point(px, py));
+                // Markers (Style 4/7/8): small filled circle at each data point.
+                if (settings.ShowMarkers)
+                {
+                    var dot = new System.Windows.Shapes.Ellipse
+                    {
+                        Width = 6, Height = 6,
+                        Fill = color
+                    };
+                    Canvas.SetLeft(dot, px - 3);
+                    Canvas.SetTop(dot, py - 3);
+                    plot.Children.Add(dot);
+                }
+                if (settings.ShowDataLabels && c < vals.Count)
+                    AddDataLabel(plot, vals[c], px + 2, py - 12);
+            }
             plot.Children.Add(poly);
         }
 
@@ -7606,7 +7765,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>
-    private static void DrawPieChart(Canvas plot, Chart chart, double w, double h, bool doughnut)
+    private static void DrawPieChart(Canvas plot, Chart chart, double w, double h, bool doughnut, ChartRenderSettings settings)
     {
         if (chart.Series.Count == 0)
             return;
@@ -7634,11 +7793,28 @@ public sealed class DocumentView : RichTextBox
             geo.Figures.Add(fig);
             plot.Children.Add(new System.Windows.Shapes.Path
             {
-                Fill = new SolidColorBrush(ChartPalette[i % ChartPalette.Length]),
+                Fill = new SolidColorBrush(settings.Palette[i % settings.Palette.Length]),
                 Stroke = System.Windows.Media.Brushes.White,
                 StrokeThickness = 1,
                 Data = geo
             });
+            // Data labels: percentage of total at the slice midpoint.
+            if (settings.ShowDataLabels)
+            {
+                var midAngle = start + sweep / 2;
+                var lx = cx + r * 0.65 * Math.Cos(midAngle);
+                var ly = cy + r * 0.65 * Math.Sin(midAngle);
+                var pct = vals[i] / total * 100;
+                var tb = new TextBlock
+                {
+                    Text = $"{pct:F0}%",
+                    FontSize = 8,
+                    Foreground = System.Windows.Media.Brushes.White
+                };
+                Canvas.SetLeft(tb, lx - 10);
+                Canvas.SetTop(tb, ly - 6);
+                plot.Children.Add(tb);
+            }
             start = end;
         }
 

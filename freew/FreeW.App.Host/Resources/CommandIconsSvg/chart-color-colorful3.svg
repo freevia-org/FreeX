@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Color Scheme colorful3">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4" y="4"  width="24" height="5" rx="1" fill="#264478"/>
+  <rect x="4" y="11" width="24" height="5" rx="1" fill="#FF0000"/>
+  <rect x="4" y="18" width="24" height="5" rx="1" fill="#FFC000"/>
+  <rect x="4" y="25" width="24" height="4" rx="1" fill="#70AD47"/>
+</svg>

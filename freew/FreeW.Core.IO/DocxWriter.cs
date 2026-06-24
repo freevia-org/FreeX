@@ -3669,17 +3669,39 @@ public static class DocxWriter
                 new XElement(C + "overlay", new XAttribute(C + "val", "0"))));
         chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute(C + "val", "1")));
 
+        // c:style — persists the selected ChartStyle id so Word and the reader can recover it.
+        // Omitted when StyleId == 0 (default — no explicit style chosen).
+        XElement? styleElement = chart.StyleId > 0
+            ? new XElement(C + "style", new XAttribute(C + "val", chart.StyleId))
+            : null;
+
+        // freew:ext — FreeW-private extension persisting ColorSchemeId and QuickLayoutId losslessly.
+        // Written as a c:extLst / c:ext child with a private URI so Word ignores it gracefully.
+        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        XElement? extLst = null;
+        if (!string.IsNullOrEmpty(chart.ColorSchemeId) || chart.QuickLayoutId > 0)
+        {
+            var ext = new XElement(C + "ext", new XAttribute("uri", "{FW-ChartDesign-2026}"));
+            if (!string.IsNullOrEmpty(chart.ColorSchemeId))
+                ext.Add(new XElement(freew + "colorScheme", new XAttribute("id", chart.ColorSchemeId!)));
+            if (chart.QuickLayoutId > 0)
+                ext.Add(new XElement(freew + "quickLayout", new XAttribute("id", chart.QuickLayoutId)));
+            extLst = new XElement(C + "extLst", ext);
+        }
+
         return new XDocument(
             new XElement(C + "chartSpace",
                 new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                styleElement,
                 chartElement,
                 // c:externalData ties the chart to its editable companion workbook (resolved via the chart
                 // part's own _rels). autoUpdate=0 keeps the literal caches authoritative for display.
                 new XElement(C + "externalData",
                     new XAttribute(R + "id", part.ExternalDataRelId),
-                    new XElement(C + "autoUpdate", new XAttribute(C + "val", "0")))));
+                    new XElement(C + "autoUpdate", new XAttribute(C + "val", "0"))),
+                extLst));
     }
 
     /// <summary>

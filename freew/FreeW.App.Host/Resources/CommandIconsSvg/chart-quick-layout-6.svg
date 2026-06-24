@@ -1,0 +1,12 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Quick Layout 6">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="3" width="20" height="3" rx="1" fill="#242424"/>
+  <path d="M6 26h17M6.5 26V8" fill="none" stroke="#242424" stroke-width="1.2" stroke-linecap="round"/>
+  
+  <rect x="8"  y="20" width="3" height="6" fill="#4472C4"/>
+  <rect x="12" y="16" width="3" height="10" fill="#4472C4"/>
+  <rect x="16" y="13" width="3" height="13" fill="#4472C4"/>
+  
+  <text x="11" y="15" font-size="4" text-anchor="middle" fill="#242424">5</text><text x="16" y="13" font-size="4" text-anchor="middle" fill="#242424">8</text>
+  
+</svg>

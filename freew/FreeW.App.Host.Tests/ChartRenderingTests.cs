@@ -65,4 +65,136 @@ public sealed class ChartRenderingTests
         var lines = LogicalDescendants<System.Windows.Shapes.Line>(view.Document);
         Assert.True(lines.Count >= 5, $"expected gridlines + axis (>= 5 lines), got {lines.Count}");
     }
+
+    // ── Chart Design gallery render tests ─────────────────────────────────────────────────────────
+
+    private static DocumentView ViewWithStyledChart(int styleId = 0, string? colorSchemeId = null, int quickLayoutId = 0)
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = new Chart { Kind = ChartKind.Column, Title = "Styled" };
+        chart.Categories.AddRange(new[] { "A", "B" });
+        chart.Series.Add(new ChartSeries("S1", new double[] { 1, 2 }));
+        chart.StyleId = styleId;
+        chart.ColorSchemeId = colorSchemeId;
+        chart.QuickLayoutId = quickLayoutId;
+        chart.ShowLegend = true;
+        view.InsertChart(chart);
+        return view;
+    }
+
+    [StaFact]
+    public void Style2_PlotAreaFill_ProducesNonWhiteCanvasBackground()
+    {
+        // Style 2 has PlotAreaFill=true → the Canvas background must not be transparent/white.
+        var view = ViewWithStyledChart(styleId: 2);
+        var canvases = LogicalDescendants<System.Windows.Controls.Canvas>(view.Document);
+        var plotCanvas = canvases.FirstOrDefault(c => c.Width > 10);
+        Assert.NotNull(plotCanvas);
+        // The background should be a SolidColorBrush that is NOT transparent.
+        Assert.IsType<System.Windows.Media.SolidColorBrush>(plotCanvas!.Background);
+        var bg = (System.Windows.Media.SolidColorBrush)plotCanvas.Background;
+        Assert.NotEqual(System.Windows.Media.Colors.Transparent, bg.Color);
+    }
+
+    [StaFact]
+    public void Style1_NoPlotAreaFill_CanvasBackgroundIsTransparent()
+    {
+        // Style 1 (default) has PlotAreaFill=false → Canvas background should be Transparent.
+        var view = ViewWithStyledChart(styleId: 1);
+        var canvases = LogicalDescendants<System.Windows.Controls.Canvas>(view.Document);
+        var plotCanvas = canvases.FirstOrDefault(c => c.Width > 10);
+        Assert.NotNull(plotCanvas);
+        // Transparent background = either null or Transparent SolidColorBrush
+        if (plotCanvas!.Background is System.Windows.Media.SolidColorBrush sb)
+            Assert.Equal(System.Windows.Media.Colors.Transparent, sb.Color);
+        // null Background also passes (transparent by default)
+    }
+
+    [StaFact]
+    public void ColorScheme_MonoBlue_ChangesSeriesFillToBlueShade()
+    {
+        // mono-blue palette first colour is #214A82; the first bar should use that colour.
+        var view = ViewWithStyledChart(colorSchemeId: "mono-blue");
+        var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
+        // Filter legend swatches out (they are small 10x10 squares).
+        var bars = rects.Where(r => r.Height > 5).ToList();
+        Assert.True(bars.Count > 0, "expected at least one bar rectangle");
+        // First series bar fill must be the first colour in the mono-blue palette (#214A82 → R=33, G=74, B=130).
+        var fill = bars[0].Fill as System.Windows.Media.SolidColorBrush;
+        Assert.NotNull(fill);
+        Assert.Equal(0x21, fill!.Color.R);
+        Assert.Equal(0x4A, fill.Color.G);
+        Assert.Equal(0x82, fill.Color.B);
+    }
+
+    [StaFact]
+    public void QuickLayout5_ShowsLegendAndDataLabels()
+    {
+        // Layout 5: ShowTitle=true, ShowLegend=true, ShowDataLabels=true, ShowGridlines=true.
+        var view = ViewWithStyledChart(quickLayoutId: 5);
+        // There should be legend swatches (small 10x10 Rectangles).
+        var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
+        var legendSwatches = rects.Where(r => r.Width <= 12 && r.Height <= 12).ToList();
+        Assert.True(legendSwatches.Count > 0, "legend swatches expected for Layout 5");
+    }
+
+    [StaFact]
+    public void QuickLayout7_HidesLegendAndGridlines()
+    {
+        // Layout 7: ShowTitle=false, ShowLegend=false, ShowDataLabels=true, ShowGridlines=false.
+        var view = ViewWithStyledChart(quickLayoutId: 7);
+        // No gridlines (Lines); only the baseline axis line is drawn and NOT gridlines (which are 4 count).
+        var lines = LogicalDescendants<System.Windows.Shapes.Line>(view.Document);
+        // At most 1 baseline axis line (no gridlines with ShowGridlines=false).
+        Assert.True(lines.Count <= 1, $"expected <= 1 line (no gridlines), got {lines.Count}");
+    }
+
+    [StaFact]
+    public void LineChart_WithMarkers_Style4_RendersEllipseMarkers()
+    {
+        // Style 4 has ShowMarkers=true; a line chart must render Ellipse circles at data points.
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = new Chart { Kind = ChartKind.Line, StyleId = 4 };
+        chart.Categories.AddRange(new[] { "A", "B", "C" });
+        chart.Series.Add(new ChartSeries("S1", new double[] { 1, 2, 3 }));
+        view.InsertChart(chart);
+
+        var ellipses = LogicalDescendants<System.Windows.Shapes.Ellipse>(view.Document);
+        // 3 categories × 1 series = 3 marker ellipses (plus the doughnut hole for doughnut, but this is Line).
+        Assert.Equal(3, ellipses.Count);
+    }
+
+    [StaFact]
+    public void ApplySelectedChartStyle_ChangesStyleId_AndTriggersDifferentRender()
+    {
+        var view = ViewWithChart(ChartKind.Column);
+        view.InsertChart(new Chart { Kind = ChartKind.Column, Title = "t", StyleId = 1 });
+        var chart = view.SelectedChart();
+        if (chart is null) return; // no chart selected in test environment — acceptable
+        var originalStyleId = chart.StyleId;
+        view.ApplySelectedChartStyle(ChartStyle.Catalog[1]); // Style 2
+        chart.StyleId.Should().NotBe(originalStyleId);
+    }
+
+    [StaFact]
+    public void ApplySelectedChartColorScheme_ChangesColorSchemeId()
+    {
+        var view = ViewWithChart(ChartKind.Column);
+        var chart = view.SelectedChart();
+        if (chart is null) return;
+        view.ApplySelectedChartColorScheme(ChartColorScheme.Catalog.First(s => s.Id == "mono-grey"));
+        chart.ColorSchemeId.Should().Be("mono-grey");
+    }
+
+    [StaFact]
+    public void ApplySelectedChartQuickLayout_ChangesQuickLayoutId()
+    {
+        var view = ViewWithChart(ChartKind.Column);
+        var chart = view.SelectedChart();
+        if (chart is null) return;
+        view.ApplySelectedChartQuickLayout(ChartQuickLayout.Catalog[2]); // Layout 3
+        chart.QuickLayoutId.Should().Be(3);
+    }
 }

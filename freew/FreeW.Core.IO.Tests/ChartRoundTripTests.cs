@@ -371,4 +371,112 @@ public class ChartRoundTripTests
         charts[1].Title.Should().Be("Second");
         charts[1].Kind.Should().Be(ChartKind.Bar);
     }
+
+    // ── Chart Design galleries round-trip (StyleId / ColorSchemeId / QuickLayoutId) ──
+
+    [Fact]
+    public void ChartStyleId_RoundTripsViaC_StyleElement()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0]);
+        chart.StyleId = 3; // Style 3
+        var doc = new TextDocument();
+        var p = new Paragraph();
+        p.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(p);
+
+        var docx = WriteBytes(doc);
+
+        // The chart part must carry a c:style element with val="3".
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        var styleElem = chartXml.Descendants(C + "style").Should().ContainSingle().Subject;
+        styleElem.Attribute(C + "val")!.Value.Should().Be("3");
+
+        // And the reader must recover it.
+        var read = RoundTrip(doc);
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.StyleId.Should().Be(3);
+    }
+
+    [Fact]
+    public void ChartColorSchemeId_RoundTripsViaFreewExtension()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0]);
+        chart.ColorSchemeId = "mono-blue";
+        var doc = new TextDocument();
+        var p = new Paragraph();
+        p.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(p);
+
+        var docx = WriteBytes(doc);
+
+        // The chart part must carry a freew:colorScheme element inside a c:extLst.
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        var colorElem = chartXml.Descendants(freew + "colorScheme").Should().ContainSingle().Subject;
+        colorElem.Attribute("id")!.Value.Should().Be("mono-blue");
+
+        // And the reader must recover it.
+        var read = RoundTrip(doc);
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.ColorSchemeId.Should().Be("mono-blue");
+    }
+
+    [Fact]
+    public void ChartQuickLayoutId_RoundTripsViaFreewExtension()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0]);
+        chart.QuickLayoutId = 5;
+        var doc = new TextDocument();
+        var p = new Paragraph();
+        p.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(p);
+
+        var docx = WriteBytes(doc);
+
+        // The chart part must carry a freew:quickLayout element.
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        var qlElem = chartXml.Descendants(freew + "quickLayout").Should().ContainSingle().Subject;
+        qlElem.Attribute("id")!.Value.Should().Be("5");
+
+        // And the reader must recover it.
+        var read = RoundTrip(doc);
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.QuickLayoutId.Should().Be(5);
+    }
+
+    [Fact]
+    public void AllThreeGalleryIds_RoundTripTogether()
+    {
+        var chart = Chart.Create(ChartKind.Line, ["X", "Y"], [3.0, 4.0]);
+        chart.StyleId = 7;
+        chart.ColorSchemeId = "colorful3";
+        chart.QuickLayoutId = 9;
+        var doc = new TextDocument();
+        var p = new Paragraph();
+        p.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(p);
+
+        var read = RoundTrip(doc);
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
+        roundTripped.StyleId.Should().Be(7);
+        roundTripped.ColorSchemeId.Should().Be("colorful3");
+        roundTripped.QuickLayoutId.Should().Be(9);
+    }
+
+    [Fact]
+    public void DefaultStyleIdZero_DoesNotEmitC_StyleElement()
+    {
+        // When StyleId == 0 (default) the writer must omit c:style so existing docx output stays clean.
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1.0]);
+        // chart.StyleId is 0 by default
+        var doc = new TextDocument();
+        var p = new Paragraph();
+        p.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(p);
+
+        var docx = WriteBytes(doc);
+        var chartXml = EntryXml(docx, "word/charts/chart1.xml");
+        chartXml.Descendants(C + "style").Should().BeEmpty("StyleId 0 (default) must not emit c:style");
+    }
 }
