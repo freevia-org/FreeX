@@ -430,6 +430,8 @@ public sealed partial class PivotTableRefreshServiceTests
     [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 234)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
     [InlineData("PivotStyleDark7", 31, 78, 121, 232, 240, 248)]
+    [InlineData("PivotStyleLight9", 208, 223, 230, 243, 247, 249)]
+    [InlineData("PivotStyleLight14", 220, 237, 213, 246, 251, 245)]
     public void Refresh_MapsAdditionalBuiltInPivotStyleFamilies(string styleName, byte headerR, byte headerG, byte headerB, byte stripeR, byte stripeG, byte stripeB)
     {
         var workbook = new Workbook("PivotStyleFamilyExpansionTest");
@@ -908,8 +910,10 @@ public sealed partial class PivotTableRefreshServiceTests
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
             .FillColor.Should().Be(new CellColor(208, 223, 230));
+        // A5 is a label column (col < firstDataColumn); Medium9 has BodyFill=null so the
+        // col-gate prevents stripe from bleeding onto label cells — label stays un-filled.
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(232, 239, 242));
+            .FillColor.Should().Be(CellColor.White, "label col with null BodyFill must not receive stripe fill");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
             .FillColor.Should().Be(CellColor.White);
     }
@@ -992,11 +996,11 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A6"))!.StyleId)
             .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "C6"))!.StyleId)
-            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+            .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "D6"))!.StyleId)
             .FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95));
     }
@@ -1200,11 +1204,15 @@ public sealed partial class PivotTableRefreshServiceTests
             : theme.ResolveColor(expectedSlot);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
             .FillColor.Should().Be(expectedHeaderFill);
+        var expectedStripeFill = styleName.Equals("PivotStyleMedium13", StringComparison.OrdinalIgnoreCase)
+            ? theme.ResolveColor(expectedSlot, 0.85)
+            : theme.ResolveColor(expectedSlot, 0.9);
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(theme.ResolveColor(expectedSlot, 0.9));
+            .FillColor.Should().Be(expectedStripeFill);
         CellColor? expectedGrandTotalFill = styleName.Equals("PivotStyleMedium5", StringComparison.OrdinalIgnoreCase) ||
                                             styleName.Equals("PivotStyleMedium6", StringComparison.OrdinalIgnoreCase) ||
-                                            styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase)
+                                            styleName.Equals("PivotStyleMedium12", StringComparison.OrdinalIgnoreCase) ||
+                                            styleName.Equals("PivotStyleMedium13", StringComparison.OrdinalIgnoreCase)
             ? null
             : styleName.Equals("PivotStyleMedium7", StringComparison.OrdinalIgnoreCase)
                 ? theme.ResolveColor(expectedSlot, 0.8)

@@ -66,6 +66,7 @@ internal static class PivotStylePaletteResolver
 
         return styleName switch
         {
+            "PivotStyleMedium8" => MediumPalette(new CellColor(128, 128, 128), new CellColor(217, 217, 217), null, new CellColor(234, 234, 234), new CellColor(166, 166, 166)),
             "PivotStyleDark3" => OrangeDarkPalette(),
             "PivotStyleDark4" => DarkPalette(new CellColor(68, 84, 106), new CellColor(217, 225, 242), new CellColor(180, 198, 231), new CellColor(242, 242, 242), new CellColor(142, 169, 219)),
             "PivotStyleDark7" => DarkPalette(new CellColor(31, 78, 121), new CellColor(217, 226, 243), new CellColor(184, 204, 228), new CellColor(232, 240, 248), new CellColor(149, 179, 215)),
@@ -107,10 +108,18 @@ internal static class PivotStylePaletteResolver
             return true;
         }
 
+        if (string.Equals(styleName, "PivotStyleMedium10", StringComparison.OrdinalIgnoreCase))
+        {
+            palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent2) with { GrandTotalFill = null };
+            return true;
+        }
+
         if (string.Equals(styleName, "PivotStyleMedium13", StringComparison.OrdinalIgnoreCase))
         {
             palette = ThemedMediumPalette(theme, WorkbookThemeColorSlot.Accent5) with
             {
+                GrandTotalFill = null,
+                StripeFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85),
                 BodyFill = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.95),
                 BodyBorder = theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5)
             };
@@ -172,6 +181,18 @@ internal static class PivotStylePaletteResolver
 
     private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot)
     {
+        if (string.Equals(styleName, "PivotStyleLight9", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent1;
+            return true;
+        }
+
+        if (string.Equals(styleName, "PivotStyleLight14", StringComparison.OrdinalIgnoreCase))
+        {
+            slot = WorkbookThemeColorSlot.Accent6;
+            return true;
+        }
+
         if (string.Equals(styleName, "PivotStyleLight16", StringComparison.OrdinalIgnoreCase))
         {
             slot = WorkbookThemeColorSlot.Accent4;
