@@ -10,6 +10,8 @@ using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.Core.IO;
 using FreeX.App.UI;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 
 namespace FreeX.App.Host;
 
@@ -34,6 +36,15 @@ public partial class App : Application
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
+        // Flag-guarded theme swap: unset / "default" → no-op (ThemeResources.xaml fully controls
+        // appearance; the default look is byte-identical to what it was before this line).
+        // "midnight" → merge FreeXMidnight token-overrides as the last ResourceDictionary so they
+        // override the 21 brush keys from ThemeResources.xaml.  Any value other than "midnight"
+        // is silently ignored, leaving the default unchanged.
+        var themeEnv = System.Environment.GetEnvironmentVariable("FREEX_THEME");
+        if (string.Equals(themeEnv, "midnight", StringComparison.OrdinalIgnoreCase))
+            WpfThemeApplier.Apply(this, BrandThemes.FreeXMidnight, "FreeX");
+
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
         var options = FreeXOptions.Load();

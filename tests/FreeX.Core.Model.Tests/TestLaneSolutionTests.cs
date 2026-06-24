@@ -28,7 +28,8 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
             "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj",
             "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
-            "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj"
+            "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
+            "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj"
         });
 
         uiLaneProjects.Should().BeEquivalentTo(new[]
