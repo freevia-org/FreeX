@@ -427,7 +427,9 @@ function Test-AvaloniaProject {
         "FreeX.Core.IO",
         "FreeX.Core.Model",
         "FreeX.Ribbon.Definitions",
-        "Free.Shared.Ribbon.Avalonia"
+        "Free.Shared.Ribbon.Avalonia",
+        "Free.Shared.Theme",
+        "Free.Shared.Theme.Avalonia"
     )
     $projectReferences = @(Get-ProjectItems -Project $project -Name "ProjectReference")
     Assert-True -Condition ($projectReferences.Count -gt 0) -Message "Avalonia app project must reference shared portable projects."
