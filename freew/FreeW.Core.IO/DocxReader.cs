@@ -2115,7 +2115,11 @@ public static class DocxReader
         // and, for RepeatHeaderRow, via w:trPr/w:tblHeader on the first row. See DocxWriter.BuildTable.
         var tblLook = tblPr?.Element(W + "tblLook");
         var headerRow = tblLook?.Attribute(W + "firstRow")?.Value == "1";
+        var lastRow = tblLook?.Attribute(W + "lastRow")?.Value == "1";
+        var firstColumn = tblLook?.Attribute(W + "firstColumn")?.Value == "1";
+        var lastColumn = tblLook?.Attribute(W + "lastColumn")?.Value == "1";
         var bandedRows = tblLook?.Attribute(W + "noHBand")?.Value == "0";
+        var bandedColumns = tblLook?.Attribute(W + "noVBand")?.Value == "0";
         var firstRow = tbl.Elements(W + "tr").FirstOrDefault();
         var repeatHeader = firstRow?.Element(W + "trPr")?.Element(W + "tblHeader") is not null;
 
@@ -2123,7 +2127,11 @@ public static class DocxReader
         {
             Borders = ReadBorders(borders) || styleBorders,
             HeaderRow = headerRow,
+            LastRow = lastRow,
+            FirstColumn = firstColumn,
+            LastColumn = lastColumn,
             BandedRows = bandedRows,
+            BandedColumns = bandedColumns,
             RepeatHeaderRow = repeatHeader
         };
 

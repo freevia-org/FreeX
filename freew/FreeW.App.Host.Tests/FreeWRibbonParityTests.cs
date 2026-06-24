@@ -1046,14 +1046,18 @@ public sealed class FreeWRibbonParityTests
         tableDesign.Should().NotBeNull();
         tableDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-style");
+            .Equal("table-style-options", "table-style");
 
         CommandIds(tableDesign)
             .Should()
             .Equal(
-                "freew.cell-shading",
                 "freew.table-header-row",
-                "freew.table-banded-rows");
+                "freew.table-last-row",
+                "freew.table-first-column",
+                "freew.table-last-column",
+                "freew.table-banded-rows",
+                "freew.table-banded-cols",
+                "freew.cell-shading");
 
         foreach (var commandId in CommandIds(tableDesign))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
@@ -1114,20 +1118,54 @@ public sealed class FreeWRibbonParityTests
         tableLayout.Should().NotBeNull();
         tableLayout!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-properties", "table-rows-cols", "table-merge", "table-data");
+            .Equal("table-table", "table-rows-cols", "table-merge", "table-cell-size", "table-alignment", "table-data");
 
         CommandIds(tableLayout)
             .Should()
             .Equal(
+                // table-table group
+                "freew.table-select-table",
+                "freew.table-select-row",
+                "freew.table-select-col",
+                "freew.table-select-cell",
+                "freew.table-view-gridlines",
                 "freew.table-properties",
+                // table-rows-cols group
+                "freew.table-insert-above",
                 "freew.table-insert-row",
-                "freew.table-delete-row",
+                "freew.table-insert-col-left",
                 "freew.table-insert-col",
+                "freew.table-delete-row",
                 "freew.table-delete-col",
+                "freew.table-delete",
+                // table-merge group
                 "freew.merge-cells",
                 "freew.split-cell",
+                "freew.split-table",
+                // table-cell-size group
+                "freew.table-row-height",
+                "freew.table-col-width",
+                "freew.table-distribute-rows",
+                "freew.table-distribute-cols",
+                "freew.table-autofit-contents",
+                "freew.table-autofit-window",
+                "freew.table-autofit-fixed",
+                // table-alignment group
+                "freew.cell-align-top-left",
+                "freew.cell-align-top-center",
+                "freew.cell-align-top-right",
+                "freew.cell-align-middle-left",
+                "freew.cell-align-middle-center",
+                "freew.cell-align-middle-right",
+                "freew.cell-align-bottom-left",
+                "freew.cell-align-bottom-center",
+                "freew.cell-align-bottom-right",
+                "freew.table-cell-margins",
+                // table-data group
                 "freew.table-repeat-header",
-                "freew.table-formula");
+                "freew.table-formula",
+                "freew.sort",
+                "freew.table-to-text");
 
         foreach (var commandId in CommandIds(tableLayout))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Layout tab");

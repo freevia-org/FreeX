@@ -1202,6 +1202,10 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
     }
 
+    /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
+    public void InsertTableRowAbove() => MutateCaretTable((index, rowIndex, _) =>
+        new InsertTableRowCommand(index, rowIndex));
+
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
     public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new InsertTableRowCommand(index, rowIndex + 1));
@@ -1210,6 +1214,10 @@ public sealed class DocumentView : RichTextBox
     public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new DeleteTableRowCommand(index, rowIndex));
 
+    /// <summary>Insert a blank column to the left of the caret's column in the table containing the caret.</summary>
+    public void InsertTableColumnLeft() => MutateCaretTable((index, _, columnIndex) =>
+        new InsertTableColumnCommand(index, columnIndex));
+
     /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
     public void InsertTableColumn() => MutateCaretTable((index, _, columnIndex) =>
         new InsertTableColumnCommand(index, columnIndex + 1));
@@ -1217,6 +1225,223 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
     public void DeleteTableColumn() => MutateCaretTable((index, _, columnIndex) =>
         new DeleteTableColumnCommand(index, columnIndex));
+
+    /// <summary>Delete the entire table containing the caret from the document (routes through the undo/redo bus).</summary>
+    public void DeleteTable()
+    {
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0)
+            return;
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [new ModelParagraph(string.Empty)]));
+    }
+
+    /// <summary>
+    /// Split the table at the caret row into two tables: the current row becomes the first row of the
+    /// new (lower) table, and a blank paragraph is inserted between them. Routes through the undo/redo
+    /// bus (one reversible <see cref="ReplaceBlocksCommand"/>). No-op outside a table or when the caret
+    /// is in the first row (nothing to split off above).
+    /// </summary>
+    public void SplitTable()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex <= 0)
+            return; // nothing above — already the first row
+
+        // Top table: rows [0, rowIndex-1]
+        var top = new ModelTable { Formatting = table.Formatting };
+        top.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        for (var i = 0; i < rowIndex; i++)
+            top.Rows.Add(table.Rows[i]);
+
+        // Bottom table: rows [rowIndex, end]
+        var bottom = new ModelTable { Formatting = table.Formatting };
+        bottom.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        for (var i = rowIndex; i < table.Rows.Count; i++)
+            bottom.Rows.Add(table.Rows[i]);
+
+        // Replace the single table block with: top table + blank paragraph + bottom table
+        var separator = new ModelParagraph(string.Empty);
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [top, separator, bottom]));
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire table containing the caret (navigates caret to first cell).
+    /// No-op outside a table or when the table has no rows.
+    /// </summary>
+    public void SelectTable()
+    {
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count == 0)
+            return;
+        // Move caret to start of first cell — full WPF cross-cell selection is not supported
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire row containing the caret. No-op outside a table.
+    /// </summary>
+    public void SelectTableRow()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the caret's column. No-op outside a table.
+    /// </summary>
+    public void SelectTableColumn()
+    {
+        CommitToModel();
+        var (blockIndex, _, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (columnIndex < 0)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire cell containing the caret. No-op outside a table.
+    /// </summary>
+    public void SelectTableCell()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Set the vertical and horizontal alignment of the cell containing the caret. No-op outside a table.
+    /// </summary>
+    public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, ModelTextAlignment horizontalAlignment)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        var cell = cells[columnIndex];
+        cell.VerticalAlignment = verticalAlignment;
+        foreach (var paragraph in cell.Paragraphs)
+            paragraph.Formatting = paragraph.Formatting with { Alignment = horizontalAlignment };
+        Render();
+    }
+
+    /// <summary>
+    /// Set all rows in the table containing the caret to the same height (the average of any explicit
+    /// heights, or auto when none are set). No-op outside a table.
+    /// </summary>
+    public void DistributeTableRows()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count == 0)
+            return;
+
+        var explicitHeights = table.Rows
+            .Where(r => r.HeightPt.HasValue)
+            .Select(r => r.HeightPt!.Value)
+            .ToList();
+        var targetHeight = explicitHeights.Count > 0
+            ? explicitHeights.Average()
+            : (double?)null;
+
+        foreach (var row in table.Rows)
+        {
+            row.HeightPt = targetHeight;
+            row.HeightRule = targetHeight.HasValue ? TableRowHeightRule.Exact : TableRowHeightRule.Auto;
+        }
+        Render();
+    }
+
+    /// <summary>
+    /// Set all columns in the table containing the caret to equal width. No-op outside a table or when
+    /// there are no columns.
+    /// </summary>
+    public void DistributeTableColumns()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        var colCount = table.ColumnCount;
+        if (colCount == 0)
+            return;
+
+        double totalWidth = table.ColumnWidthsPt.Count == colCount
+            ? table.ColumnWidthsPt.Sum()
+            : table.PreferredWidthPt ?? 468.0;
+        var colWidth = totalWidth / colCount;
+
+        table.ColumnWidthsPt.Clear();
+        for (var i = 0; i < colCount; i++)
+            table.ColumnWidthsPt.Add(colWidth);
+
+        foreach (var row in table.Rows)
+            foreach (var cell in row.Cells)
+                cell.WidthPt = colWidth;
+
+        Render();
+    }
+
+    /// <summary>
+    /// Apply an auto-fit mode to the table containing the caret. No-op outside a table.
+    /// </summary>
+    public void SetTableAutoFit(AutoFitMode mode)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        table.AutoFit = mode;
+        if (mode == AutoFitMode.Contents)
+        {
+            table.ColumnWidthsPt.Clear();
+            foreach (var row in table.Rows)
+                foreach (var cell in row.Cells)
+                    cell.WidthPt = null;
+        }
+        else if (mode == AutoFitMode.Window)
+        {
+            table.PreferredWidthPt = 468.0;
+        }
+        Render();
+    }
 
     /// <summary>
     /// Merge the table cells spanned by the current selection. When the selection covers several cells
@@ -1306,6 +1531,28 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ToggleTableRepeatHeaderRow() =>
         UpdateCaretTableFormatting(f => f with { RepeatHeaderRow = !f.RepeatHeaderRow });
+
+    /// <summary>Toggle the last-row distinct style on the table containing the caret.</summary>
+    public void ToggleTableLastRow() =>
+        UpdateCaretTableFormatting(f => f with { LastRow = !f.LastRow });
+
+    /// <summary>Toggle the first-column distinct style on the table containing the caret.</summary>
+    public void ToggleTableFirstColumn() =>
+        UpdateCaretTableFormatting(f => f with { FirstColumn = !f.FirstColumn });
+
+    /// <summary>Toggle the last-column distinct style on the table containing the caret.</summary>
+    public void ToggleTableLastColumn() =>
+        UpdateCaretTableFormatting(f => f with { LastColumn = !f.LastColumn });
+
+    /// <summary>Toggle banded-column shading (alternate columns shaded) on the table containing the caret.</summary>
+    public void ToggleTableBandedColumns() =>
+        UpdateCaretTableFormatting(f => f with { BandedColumns = !f.BandedColumns });
+
+    /// <summary>
+    /// When true, faint gridlines are drawn on tables that have no visible borders. This is a
+    /// display-only toggle (like Word's View > Table Gridlines) — it does not mutate the document model.
+    /// </summary>
+    public bool ViewGridlines { get; set; }
 
     /// <summary>
     /// Apply <paramref name="update"/> to the formatting of the table containing the caret (direct model
