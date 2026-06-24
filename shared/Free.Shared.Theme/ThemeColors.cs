@@ -1,0 +1,28 @@
+namespace Free.Shared.Theme;
+
+/// <summary>
+/// The 21 semantic color roles that drive all chrome surfaces in a FreeFamily app.
+/// Seeded from FreeX's ThemeResources.xaml palette; other apps provide alternate values.
+/// </summary>
+public sealed record ThemeColors(
+    ThemeColor Accent,
+    ThemeColor AccentDark,
+    ThemeColor AccentSoft,
+    ThemeColor AccentPressed,
+    ThemeColor TitleBar,
+    ThemeColor TitleBarHover,
+    ThemeColor TitleBarPressed,
+    ThemeColor TitleBarDisabled,
+    ThemeColor TitleBarButtonBorder,
+    ThemeColor RibbonButtonHover,
+    ThemeColor Text,
+    ThemeColor MutedText,
+    ThemeColor SubtleText,
+    ThemeColor RibbonSurface,
+    ThemeColor ChromeSurface,
+    ThemeColor SheetSurface,
+    ThemeColor StatusSurface,
+    ThemeColor Border,
+    ThemeColor BorderStrong,
+    ThemeColor Danger,
+    ThemeColor White);

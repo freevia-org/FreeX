@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
   <ItemGroup>
