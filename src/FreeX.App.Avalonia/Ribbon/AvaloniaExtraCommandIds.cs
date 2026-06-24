@@ -73,5 +73,31 @@ internal static class AvaloniaExtraCommandIds
         "Set Print Area", "Clear Print Area", "Choose Background", "Delete Background",
         // Paper sizes the Avalonia shell wires individually.
         "Letter", "Legal", "Executive", "Statement", "Tabloid", "A3", "A4", "A5", "B4", "B5",
+
+        // ── Re-keyed ids (formerly allowlisted as native-menu-only, now wired as ExtraCommands) ─────
+        // Page Layout ▸ Themes preset submenu + customize entries.
+        "Office#ThemeOfficeMenuItem_Click", "Office#ThemeColorsOfficeMenuItem_Click",
+        "Office#ThemeFontsOfficeMenuItem_Click", "Office#ThemeEffectsOfficeMenuItem_Click",
+        "Grayscale#ThemeGrayscaleMenuItem_Click", "Grayscale#ThemeColorsGrayscaleMenuItem_Click",
+        "FreeX Colorful#ThemeColorfulMenuItem_Click", "FreeX Colorful#ThemeColorsColorfulMenuItem_Click",
+        "Customize", "Customize Colors", "Customize Fonts", "Customize Effects",
+        "Arial", "Times New Roman", "Subtle", "Refined",
+        // Shape Format ▸ Shape Effects submenu items.
+        "3-D Rotation", "Bevel", "Glow", "Inner Shadow", "Reflection", "Soft Edges",
+        // Picture Format ▸ Crop submenu items.
+        "Crop", "Reset Crop",
+        // Home ▸ Clipboard ▸ Paste menu items.
+        "Keep Source Column Widths", "Values & Source Formatting", "Paste Link",
+        // Home ▸ Editing ▸ Sort & Filter split-button face.
+        "Sort & Filter",
+        // Review ▸ Notes navigation.
+        "Next Note", "Previous Note",
+        // Page Layout ▸ Page Setup / Scale / Sheet Options canonical ids.
+        "Page Setup", "Page Setup dialog", "Scale to Fit", "Print Gridlines", "Print Headings",
+        "Insert Page Break", "Remove Page Break", "Reset All Page Breaks",
+        "Normal#MarginNormalMenuItem_Click",
+        // Menu-item variants.
+        "More Functions#AutoSumMoreMenuItem_Click", "Remove Arrows#RemoveAllArrowsMenuItem_Click",
+        "Clear#ClearFilterButton_Click",
     };
 }

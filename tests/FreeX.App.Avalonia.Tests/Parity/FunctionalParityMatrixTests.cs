@@ -44,35 +44,11 @@ public sealed class FunctionalParityMatrixTests
         "B4 (JIS)", "B5 (JIS)",
 
         // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // (2) SERVED VIA A NATIVE MENU / PARENT BUTTON IN AVALONIA (not the per-item canonical ribbon id)
+        // (2) NOT YET IMPLEMENTED IN THE AVALONIA SHELL
         // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // Page Layout ▸ Themes: Linux applies themes through its own Themes.cs menus + the parent Theme*
-        // buttons; the per-preset submenu ids are not registered as ribbon commands.
-        "Office#ThemeOfficeMenuItem_Click", "Office#ThemeColorsOfficeMenuItem_Click",
-        "Office#ThemeFontsOfficeMenuItem_Click", "Office#ThemeEffectsOfficeMenuItem_Click",
-        "Grayscale#ThemeGrayscaleMenuItem_Click", "Grayscale#ThemeColorsGrayscaleMenuItem_Click",
-        "FreeX Colorful#ThemeColorfulMenuItem_Click", "FreeX Colorful#ThemeColorsColorfulMenuItem_Click",
-        "Customize", "Customize Colors", "Customize Fonts", "Customize Effects",
-        "Arial", "Times New Roman", "Subtle", "Refined",
-        // Draw / Shape ▸ Format ▸ Shape Effects presets: wired via the native shape-effects menu, not per id.
-        "3-D Rotation", "Bevel", "Glow", "Inner Shadow", "Reflection", "Soft Edges",
-        // Draw ▸ Format ▸ Crop submenu + Border draw mode: served via the drawing-format dialogs / border menu.
-        "Crop", "Reset Crop", "Draw Border",
-        // Home ▸ Clipboard ▸ Paste-special submenu items the Linux Paste menu does not expose individually.
-        "Keep Source Column Widths", "Values & Source Formatting", "Paste Link",
-        // Home ▸ Editing ▸ Sort & Filter picker (Linux wires the Data-tab Sort/Filter commands, not this
-        // Home-tab split-button id).
-        "Sort & Filter",
-        // Review ▸ Notes ▸ Next/Previous Note: wired as native note-navigation menu items, not ribbon commands.
-        "Next Note", "Previous Note",
-        // Page Layout ▸ Page Setup / Scale / Sheet Options items served via the PageLayout/PageBreak handlers
-        // and the Page Setup dialog rather than these per-item canonical ribbon ids.
-        "Page Setup", "Page Setup dialog", "Scale to Fit", "Print Gridlines", "Print Headings",
-        "Insert Page Break", "Remove Page Break", "Reset All Page Breaks", "Normal#MarginNormalMenuItem_Click",
-        // Menu-item variants whose parent picker is wired on Linux, but not this specific child id:
-        // Formulas ▸ AutoSum "More Functions", Formulas ▸ Remove-all-arrows, Data ▸ Clear-filter, View ▸ Zoom "More".
-        "More Functions#AutoSumMoreMenuItem_Click", "Remove Arrows#RemoveAllArrowsMenuItem_Click",
-        "Clear#ClearFilterButton_Click", "More",
+        // Draw ▸ Format ▸ Border draw mode: WPF's pen-based interactive border drawing is a Windows-only
+        // interaction model (mouse-drag across cells in draw mode); no equivalent handler exists in Avalonia.
+        "Draw Border",
     };
 
     [Fact]

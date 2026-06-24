@@ -33,7 +33,7 @@ public sealed partial class MainWindow
         var showHeadings = sheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
         var accessor = BuildChartCellAccessor(viewport, sheet.Id);
-        var headerLeft = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
 
         foreach (var chart in sheet.Charts)

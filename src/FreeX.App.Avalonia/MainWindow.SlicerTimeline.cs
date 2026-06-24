@@ -309,7 +309,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        var headerLeft = showHeadings ? HeaderColumnWidth * zoomFactor : 0;
+        var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
         var left = headerLeft + fromLeft + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
         var top = headerTop + fromTop + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
