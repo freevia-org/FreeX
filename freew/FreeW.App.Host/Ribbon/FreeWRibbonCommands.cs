@@ -5611,16 +5611,18 @@ internal static class FreeWRibbonCommands
     }
 
     // Mailings > Labels: set the page to a label-sheet geometry via ApplyPageSettings, then insert a
-    // table grid (rows × columns) via editor.InsertTable so each cell is one label. The session parameter
-    // is accepted for future merge-aware population (populate each cell via MailMerge.MergeRecord); for
-    // now the grid is inserted blank so the user can type or let Preview/Finish fill it.
+    // table grid (rows × columns) via editor.InsertTable so each cell is one label.
+    //
+    // When a merge session with data is active the command also populates each grid cell with the
+    // per-record merged content (using MailMerge.MergeRecord on the current editor body as template),
+    // advancing one record per cell, left-to-right, top-to-bottom across the sheet.  Each cell-write
+    // goes through SetTableCellContent which routes through the undo/redo bus — the whole operation is
+    // reversible in one Ctrl+Z because InsertTable and SetTableCellContent share the same bus.  When
+    // there are no data records (or no session) the grid is inserted blank, as before.
     private sealed class LabelsCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            // session is available for future merge-aware cell population (deferred; see report).
-            _ = session;
-
             if (LabelSetupDialog.Ask(Window.GetWindow(editor)) is not { } label)
                 return; // cancelled
 
@@ -5638,7 +5640,66 @@ internal static class FreeWRibbonCommands
 
             // Insert the label grid — the editor routes this through the undo/redo bus.
             editor.InsertTable(label.Rows, label.Columns);
+
+            // Populate cells with merged content when the session has recipient data.
+            PopulateLabelCells(label.Rows, label.Columns);
+
             editor.Focus();
+        }
+
+        // Populate each cell of the freshly-inserted table (which is the last block in the document)
+        // with the per-record merged template content.  The editor body at the time Labels is invoked
+        // serves as the label template (typically pre-populated with «Field» placeholders).  Records
+        // advance one per cell left-to-right, top-to-bottom.  Excess cells (beyond the last record)
+        // are left with the default empty paragraph.
+        private void PopulateLabelCells(int rows, int columns)
+        {
+            var data = session.Data;
+            if (data is not { Count: > 0 })
+                return; // no recipients — leave grid blank
+
+            // The template is the current editor content, already committed by InsertTable.
+            // Use the session's stashed template when a preview is active; otherwise the
+            // current model is the template.
+            var template = session.IsPreviewing ? session.Template! : editor.Model;
+
+            // The label table was just inserted; it is the last block in the model.
+            var blockIndex = editor.Model.Blocks.Count - 1;
+            if (blockIndex < 0 || editor.Model.Blocks[blockIndex] is not FreeW.Core.Model.Table)
+                return; // safety — should never happen right after InsertTable
+
+            var mergeState = new MergeState();
+            int recordIndex = 0;
+
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < columns; c++)
+                {
+                    if (recordIndex >= data.Count)
+                        return; // no more records; remaining cells stay empty
+
+                    var row = session.AugmentRow(data.Rows[recordIndex]);
+                    // Merge the template for this record, then extract the body paragraphs.
+                    var merged = MailMerge.MergeRecordWithRules(template, row, mergeState, recordIndex + 1);
+                    if (mergeState.SkippedIndices.Contains(recordIndex))
+                    {
+                        // «Skip Record If» fired — don't consume a cell; try same cell with next record.
+                        mergeState.SequenceNumber--;
+                        recordIndex++;
+                        c--; // retry this cell
+                        if (c < -1) c = -1; // clamp
+                        continue;
+                    }
+
+                    // Extract body paragraphs from the merged document as the cell content.
+                    var paragraphs = merged.Blocks
+                        .OfType<FreeW.Core.Model.Paragraph>()
+                        .ToList();
+
+                    editor.SetTableCellContent(blockIndex, r, c, paragraphs);
+                    recordIndex++;
+                }
+            }
         }
     }
 
