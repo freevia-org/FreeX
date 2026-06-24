@@ -1007,6 +1007,19 @@
   <data name="ChartLoc_SelectDataSourceTitle" xml:space="preserve"><value>Select Data Source</value></data>
   <data name="ChartLoc_ChartDataRangeLabel" xml:space="preserve"><value>Chart data range:</value></data>
   <data name="ChartLoc_RangePlaceholder" xml:space="preserve"><value>e.g. A1:C10</value></data>
+  <data name="ChartLoc_SwitchRowColumn" xml:space="preserve"><value>Switch Row/Column</value></data>
+  <data name="ChartLoc_SeriesPanelTitle" xml:space="preserve"><value>Legend Entries (Series)</value></data>
+  <data name="ChartLoc_SeriesListHelpText" xml:space="preserve"><value>Name and values are inferred from the selected chart range.</value></data>
+  <data name="ChartLoc_AxisLabelsPanelTitle" xml:space="preserve"><value>Horizontal (Category) Axis Labels</value></data>
+  <data name="ChartLoc_AxisLabelsListHelpText" xml:space="preserve"><value>Axis labels are inferred from the first category column.</value></data>
+  <data name="ChartLoc_AddSeriesButton" xml:space="preserve"><value>Add series</value></data>
+  <data name="ChartLoc_EditSeriesButton" xml:space="preserve"><value>Edit series</value></data>
+  <data name="ChartLoc_RemoveSeriesButton" xml:space="preserve"><value>Remove series</value></data>
+  <data name="ChartLoc_EditAxisLabelsButton" xml:space="preserve"><value>Edit Axis Labels</value></data>
+  <data name="ChartLoc_HiddenEmptyCellsButton" xml:space="preserve"><value>Hidden and Empty Cells</value></data>
+  <data name="ChartLoc_HiddenEmptyCellsTitle" xml:space="preserve"><value>Hidden and Empty Cell Settings</value></data>
+  <data name="ChartLoc_HiddenEmptyCellsMessage" xml:space="preserve"><value>Hidden rows and columns are not plotted. Empty cells are shown as gaps.</value></data>
+  <data name="ChartLoc_InvalidRangeMessage" xml:space="preserve"><value>Enter a valid chart data range.</value></data>
   <data name="ChartLoc_ChartTitlesTitle" xml:space="preserve"><value>Chart Titles</value></data>
   <data name="ChartLoc_ChartTitleLabel" xml:space="preserve"><value>Chart title:</value></data>
   <data name="ChartLoc_HorizontalAxisTitleLabel" xml:space="preserve"><value>Horizontal (category) axis title:</value></data>
