@@ -296,6 +296,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
         // Insert tab — Illustrations: pick an image file and insert it as an inline image run.
         registry.Register("freew.picture", new InsertPictureCommand(editor));
+        // Insert tab — Illustrations: open the searchable icon picker and insert the chosen SVG
+        // icon as a rasterised InlineImage (same round-trip path as Insert Picture).
+        registry.Register("freew.insert-icon", new InsertIconCommand(editor));
         // Insert tab — Illustrations > Screenshot: the top-level "freew.screenshot" id only opens the
         // dropdown (no direct insert, so it isn't registered — mirroring "freew.shapes" above). "Screen
         // Clipping" drag-selects a screen region and inserts the captured PNG as an inline image through
@@ -2593,6 +2596,38 @@ internal static class FreeWRibbonCommands
                 OriginalPixelWidth  = origPxW,
                 OriginalPixelHeight = origPxH,
             };
+        }
+    }
+
+    // Insert > Illustrations > Icons: open the searchable icon picker (IconPickerDialog) and insert
+    // the chosen SVG icon as a rasterised InlineImage via SvgRasterizerHelper. No new model type —
+    // the result is plain PNG bytes that round-trip through DocxWriter/DocxReader identically to any
+    // Insert Picture insert. Inserted at a sensible default size (≤ 72 pt = 1 inch square).
+    private sealed class InsertIconCommand(DocumentView editor) : IRibbonCommand
+    {
+        // Icons are decorative items — 72 pt (1 inch) is a sane default; the user can resize after.
+        private const double IconDefaultWidthPt = 72;
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var image  = IconPickerDialog.Prompt(owner);
+            if (image is null)
+                return;
+
+            // Scale down to 72 pt wide (preserving aspect ratio) if the rasteriser returned larger.
+            if (image.WidthPt > IconDefaultWidthPt && image.WidthPt > 0)
+            {
+                var scale  = IconDefaultWidthPt / image.WidthPt;
+                image = new InlineImage(image.PngBytes, IconDefaultWidthPt, image.HeightPt * scale)
+                {
+                    OriginalPixelWidth  = image.OriginalPixelWidth,
+                    OriginalPixelHeight = image.OriginalPixelHeight,
+                };
+            }
+
+            editor.Focus();
+            editor.InsertImage(image);
         }
     }
 

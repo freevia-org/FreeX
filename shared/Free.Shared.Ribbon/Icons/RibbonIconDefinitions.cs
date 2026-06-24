@@ -1021,6 +1021,13 @@ public static class RibbonIconDefinitions
             Path("M3,8 L5,5 L7,8", 1.3),
             Path("M17,18 L20,20 L17,22", 1.3));
 
+        // Icons: a 2×2 tile grid — four small filled squares representing an icon library.
+        Add(RibbonCommandIconKind.Icons,
+            FilledRectangle(4, 4, 6.5, 6.5),
+            FilledRectangle(13.5, 4, 6.5, 6.5),
+            FilledRectangle(4, 13.5, 6.5, 6.5),
+            FilledRectangle(13.5, 13.5, 6.5, 6.5));
+
         // The remaining kinds have no dedicated drawing in the WPF source-of-truth and render via
         // DrawGeneric there. They are intentionally NOT added here: Resolve() falls them back to the
         // shared Generic glyph, so WPF and Avalonia stay identical. These are:
