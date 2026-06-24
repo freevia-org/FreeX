@@ -2487,6 +2487,8 @@ public static class DocxWriter
             r.Add(rPr);
         if (run.PreservedDrawing is { } preservedDrawing)
             r.Add(BuildPreservedDrawing(preservedDrawing, drawings.PreservedDrawingRelIds));
+        else if (run.DrawingGroup is not null)
+            r.Add(BuildDrawingGroupDrawing(run.DrawingGroup, drawings.Ids));
         else if (run.Image is not null && drawings.Images.TryGetValue(run, out var imagePart))
             r.Add(BuildDrawing(imagePart));
         else if (run.Chart is not null && drawings.Charts.TryGetValue(run, out var chartPart))
@@ -3265,6 +3267,100 @@ public static class DocxWriter
                     new XAttribute("r", 0), new XAttribute("b", 0)),
                 smartArtDocPr,
                 smartArtGraphic));
+    }
+
+    /// <summary>
+    /// Builds the <c>w:drawing/wp:anchor</c> for a <see cref="DrawingGroup"/>, emitting the group as
+    /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Each child is rendered as a simple shape
+    /// placeholder (<c>wps:wsp</c> with a preset-geometry fill) positioned by a child-local <c>a:xfrm</c>
+    /// offset relative to the group origin. Groups are always floating (no inline path).
+    /// </summary>
+    private static XElement BuildDrawingGroupDrawing(DrawingGroup group, IdAllocator ids)
+    {
+        var cx = PointsToEmu(group.WidthPt);
+        var cy = PointsToEmu(group.HeightPt);
+
+        var groupDocPrId = ids.NextShapeDrawingId();
+        var docPr = new XElement(Wp + "docPr",
+            new XAttribute("id", groupDocPrId),
+            new XAttribute("name", "Group " + groupDocPrId));
+
+        // Build child elements inside wpg:wgp.
+        var children = new List<XElement>();
+        for (var i = 0; i < group.Children.Count; i++)
+        {
+            var child = group.Children[i];
+            var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
+            var childW = group.ChildWidthPt(i);
+            var childH = group.ChildHeightPt(i);
+
+            var xfrm = new XElement(A + "xfrm",
+                new XElement(A + "off",
+                    new XAttribute("x", PointsToEmu(ox)),
+                    new XAttribute("y", PointsToEmu(oy))),
+                new XElement(A + "ext",
+                    new XAttribute("cx", PointsToEmu(childW)),
+                    new XAttribute("cy", PointsToEmu(childH))));
+
+            // Encode child metadata in the name attribute so the reader can reconstruct the type.
+            var childName = child switch
+            {
+                InlineImage => "GroupChild:Image",
+                Shape s => "GroupChild:Shape:" + s.Kind,
+                Chart c => "GroupChild:Chart:" + c.Kind,
+                SmartArt => "GroupChild:SmartArt",
+                WordArt wa => "GroupChild:WordArt:" + wa.Style,
+                _ => "GroupChild:Unknown"
+            };
+
+            var childDocPr = new XElement(Wp + "docPr",
+                new XAttribute("id", ids.NextShapeDrawingId()),
+                new XAttribute("name", childName));
+
+            var spPr = new XElement(Wps + "spPr",
+                xfrm,
+                new XElement(A + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(A + "avLst")),
+                new XElement(A + "solidFill",
+                    new XElement(A + "srgbClr",
+                        new XAttribute("val", "C0C0C0"))));
+
+            var wsp = new XElement(Wps + "wsp",
+                new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+                childDocPr,
+                new XElement(Wps + "cNvSpPr",
+                    new XElement(A + "spLocks",
+                        new XAttribute("noChangeArrowheads", 1))),
+                spPr);
+
+            children.Add(wsp);
+        }
+
+        var grpSpPr = new XElement(Wpg + "grpSpPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off",
+                    new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "ext",
+                    new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(A + "chOff",
+                    new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(A + "chExt",
+                    new XAttribute("cx", cx), new XAttribute("cy", cy))));
+
+        var wgp = new XElement(Wpg + "wgp",
+            new XAttribute(XNamespace.Xmlns + "wpg", Wpg.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+            grpSpPr);
+        foreach (var child in children) wgp.Add(child);
+
+        var graphic = new XElement(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", GroupGraphicDataUri),
+                wgp));
+
+        return BuildAnchorContainer(cx, cy, docPr, graphic, group.Placement);
     }
 
     /// <summary>

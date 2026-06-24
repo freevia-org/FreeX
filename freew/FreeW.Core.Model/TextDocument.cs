@@ -406,6 +406,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         new(string.Empty) { PreservedDrawing = drawing };
 
     /// <summary>
+    /// Optional floating drawing group (<c>wpg:wgp</c>). When non-null this run carries a group of two or
+    /// more drawing objects that move and render as a unit on the floating-objects overlay canvas.
+    /// Serialised as <c>w:drawing/wp:anchor/a:graphic/a:graphicData[uri=wpg]/wpg:wgp</c>.
+    /// </summary>
+    public DrawingGroup? DrawingGroup { get; set; }
+
+    /// <summary>Creates a run that carries a floating drawing group instead of text.</summary>
+    public static Run FromDrawingGroup(DrawingGroup group) =>
+        new(string.Empty) { DrawingGroup = group };
+
+    /// <summary>
     /// Optional external hyperlink target (absolute URL). When non-null the run is wrapped in a
     /// w:hyperlink on save, with the URL stored as an external relationship, and rendered as a link.
     /// Mutually exclusive with <see cref="HyperlinkAnchor"/>: a run links either externally or

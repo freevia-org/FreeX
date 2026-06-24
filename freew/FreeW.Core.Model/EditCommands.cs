@@ -890,6 +890,10 @@ public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrder
                 {
                     result.Add(new FloatingRef(b, r, () => wap.ZOrderIndex, z => wap.ZOrderIndex = z));
                 }
+                else if (run.DrawingGroup is { } grp)
+                {
+                    result.Add(new FloatingRef(b, r, () => grp.Placement.ZOrderIndex, z => grp.Placement.ZOrderIndex = z));
+                }
             }
         }
         return result;
@@ -1282,4 +1286,220 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
     private WordArt? WordArtAt(IDocumentCommandContext context) =>
         context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].WordArt : null;
+}
+
+// ── Group / Ungroup commands (Phase 4 — floating multi-select) ──────────────────────────────────
+
+/// <summary>
+/// Groups two or more selected floating objects into a single <see cref="DrawingGroup"/>. The members'
+/// anchor runs are removed from their paragraphs; a new run carrying the group is inserted at the
+/// location of the first member. Undoable via <see cref="Revert"/>.
+/// </summary>
+public sealed class GroupFloatingObjectsCommand : IDocumentCommand
+{
+    private List<(int Bi, int Ri, Run RemovedRun)>? _snapshot;
+    private (int Bi, int Ri)? _groupLocation;
+
+    public string Label => "Group";
+
+    public GroupFloatingObjectsCommand(IReadOnlyList<(int Bi, int Ri)> members)
+    {
+        _members = [.. members.OrderBy(m => m.Bi).ThenBy(m => m.Ri)];
+    }
+
+    private readonly (int Bi, int Ri)[] _members;
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var doc = context.Document;
+        var group = new DrawingGroup();
+        double minH = double.MaxValue, minV = double.MaxValue;
+        double maxH = double.MinValue, maxV = double.MinValue;
+
+        foreach (var (bi, ri) in _members)
+        {
+            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            var (obj, widthPt, heightPt, placement) = ExtractFloatingInfo(p.Runs[ri]);
+            if (obj is null || placement is null) continue;
+
+            group.Children.Add(obj);
+            group.ChildOffsets.Add((placement.HorizontalOffsetPt, placement.VerticalOffsetPt));
+
+            if (placement.HorizontalOffsetPt < minH) minH = placement.HorizontalOffsetPt;
+            if (placement.VerticalOffsetPt < minV) minV = placement.VerticalOffsetPt;
+            if (placement.HorizontalOffsetPt + widthPt > maxH) maxH = placement.HorizontalOffsetPt + widthPt;
+            if (placement.VerticalOffsetPt + heightPt > maxV) maxV = placement.VerticalOffsetPt + heightPt;
+        }
+
+        if (group.Children.Count < 2) return;
+
+        if (minH == double.MaxValue) minH = 0;
+        if (minV == double.MaxValue) minV = 0;
+        group.WidthPt = Math.Max(1, maxH - minH);
+        group.HeightPt = Math.Max(1, maxV - minV);
+
+        for (var i = 0; i < group.ChildOffsets.Count; i++)
+        {
+            var (ox, oy) = group.ChildOffsets[i];
+            group.ChildOffsets[i] = (ox - minH, oy - minV);
+        }
+
+        var (firstBi, firstRi) = _members[0];
+        FloatingPlacement? firstPlacement = null;
+        if (doc.Blocks[firstBi] is Paragraph fp && firstRi < fp.Runs.Count)
+            firstPlacement = ExtractFloatingInfo(fp.Runs[firstRi]).Placement;
+
+        group.Placement = new FloatingPlacement
+        {
+            Wrapping = firstPlacement?.Wrapping ?? ImageWrapping.Square,
+            HorizontalOffsetPt = minH,
+            VerticalOffsetPt = minV,
+            HorizontalAnchor = firstPlacement?.HorizontalAnchor ?? HorizontalAnchor.Column,
+            VerticalAnchor = firstPlacement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
+            ZOrderIndex = firstPlacement?.ZOrderIndex ?? 0
+        };
+
+        _snapshot = [];
+        foreach (var (bi, ri) in _members.Reverse())
+        {
+            if (doc.Blocks[bi] is not Paragraph p || ri >= p.Runs.Count) continue;
+            _snapshot.Add((bi, ri, p.Runs[ri]));
+            p.Runs.RemoveAt(ri);
+        }
+
+        if (doc.Blocks[firstBi] is not Paragraph insertPara) return;
+        var insertRi = Math.Min(firstRi, insertPara.Runs.Count);
+        insertPara.Runs.Insert(insertRi, Run.FromDrawingGroup(group));
+        _groupLocation = (firstBi, insertRi);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_snapshot is null || _groupLocation is null) return;
+        var doc = context.Document;
+        var (gBi, gRi) = _groupLocation.Value;
+        if (doc.Blocks[gBi] is Paragraph gPara && gRi < gPara.Runs.Count)
+            gPara.Runs.RemoveAt(gRi);
+        foreach (var (bi, ri, run) in ((IEnumerable<(int, int, Run)>)_snapshot).Reverse())
+        {
+            if (doc.Blocks[bi] is not Paragraph p) continue;
+            p.Runs.Insert(Math.Min(ri, p.Runs.Count), run);
+        }
+        _snapshot = null;
+        _groupLocation = null;
+    }
+
+    internal static (object? Obj, double WidthPt, double HeightPt, FloatingPlacement? Placement)
+        ExtractFloatingInfo(Run run)
+    {
+        if (run.Image is { IsFloating: true } img)
+            return (img, img.WidthPt, img.HeightPt, new FloatingPlacement
+            {
+                Wrapping = img.Wrapping,
+                HorizontalOffsetPt = img.HorizontalOffsetPt,
+                VerticalOffsetPt = img.VerticalOffsetPt,
+                HorizontalAnchor = img.HorizontalAnchor,
+                VerticalAnchor = img.VerticalAnchor,
+                ZOrderIndex = img.ZOrderIndex
+            });
+        if (run.Shape is { IsFloating: true } s && s.Placement is { } sp) return (s, s.WidthPt, s.HeightPt, sp);
+        if (run.Chart is { IsFloating: true } c && c.Placement is { } cp) return (c, c.WidthPt, c.HeightPt, cp);
+        if (run.SmartArt is { IsFloating: true } sa && sa.Placement is { } sap) return (sa, sa.WidthPt, sa.HeightPt, sap);
+        if (run.WordArt is { IsFloating: true } wa && wa.Placement is { } wap)
+            return (wa, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62, wa.FontSizePt * 1.6, wap);
+        return (null, 0, 0, null);
+    }
+}
+
+/// <summary>
+/// Ungroups a <see cref="DrawingGroup"/> back into individual floating objects, restoring each
+/// member's absolute placement from the group origin + per-child offset.  Undoable.
+/// </summary>
+public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runIndex) : IDocumentCommand
+{
+    private DrawingGroup? _group;
+    private bool _applied;
+
+    public string Label => "Ungroup";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var doc = context.Document;
+        if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return;
+        if (p.Runs[runIndex].DrawingGroup is not { } group || !group.IsValid) return;
+        _group = group;
+
+        p.Runs.RemoveAt(runIndex);
+
+        for (var i = 0; i < group.Children.Count; i++)
+        {
+            var child = group.Children[i];
+            var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
+            var absH = group.Placement.HorizontalOffsetPt + ox;
+            var absV = group.Placement.VerticalOffsetPt + oy;
+            var z = group.Placement.ZOrderIndex + i;
+
+            Run? memberRun = child switch
+            {
+                InlineImage img => RestoreImagePlacement(img, group.Placement, absH, absV, z),
+                Shape shape     => RestoreShapePlacement(shape, group.Placement, absH, absV, z),
+                Chart chart     => RestoreChartPlacement(chart, group.Placement, absH, absV, z),
+                SmartArt sa     => RestoreSmartArtPlacement(sa, group.Placement, absH, absV, z),
+                WordArt wa      => RestoreWordArtPlacement(wa, group.Placement, absH, absV, z),
+                _               => null
+            };
+            if (memberRun is null) continue;
+            p.Runs.Insert(runIndex + i, memberRun);
+        }
+
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _group is null) return;
+        var doc = context.Document;
+        if (doc.Blocks[paragraphIndex] is not Paragraph p) return;
+        var count = Math.Min(_group.Children.Count, p.Runs.Count - runIndex);
+        for (var i = 0; i < count; i++) p.Runs.RemoveAt(runIndex);
+        p.Runs.Insert(runIndex, Run.FromDrawingGroup(_group));
+        _applied = false;
+        _group = null;
+    }
+
+    private static Run RestoreImagePlacement(InlineImage img, FloatingPlacement gp, double h, double v, int z)
+    {
+        img.Wrapping = gp.Wrapping; img.HorizontalOffsetPt = h; img.VerticalOffsetPt = v;
+        img.HorizontalAnchor = gp.HorizontalAnchor; img.VerticalAnchor = gp.VerticalAnchor; img.ZOrderIndex = z;
+        return Run.FromImage(img);
+    }
+    private static Run RestoreShapePlacement(Shape s, FloatingPlacement gp, double h, double v, int z)
+    {
+        s.Placement ??= new FloatingPlacement();
+        s.Placement.Wrapping = gp.Wrapping; s.Placement.HorizontalOffsetPt = h; s.Placement.VerticalOffsetPt = v;
+        s.Placement.HorizontalAnchor = gp.HorizontalAnchor; s.Placement.VerticalAnchor = gp.VerticalAnchor; s.Placement.ZOrderIndex = z;
+        return Run.FromShape(s);
+    }
+    private static Run RestoreChartPlacement(Chart c, FloatingPlacement gp, double h, double v, int z)
+    {
+        c.Placement ??= new FloatingPlacement { Wrapping = gp.Wrapping };
+        c.Placement.Wrapping = gp.Wrapping; c.Placement.HorizontalOffsetPt = h; c.Placement.VerticalOffsetPt = v;
+        c.Placement.HorizontalAnchor = gp.HorizontalAnchor; c.Placement.VerticalAnchor = gp.VerticalAnchor; c.Placement.ZOrderIndex = z;
+        return Run.FromChart(c);
+    }
+    private static Run RestoreSmartArtPlacement(SmartArt sa, FloatingPlacement gp, double h, double v, int z)
+    {
+        sa.Placement ??= new FloatingPlacement { Wrapping = gp.Wrapping };
+        sa.Placement.Wrapping = gp.Wrapping; sa.Placement.HorizontalOffsetPt = h; sa.Placement.VerticalOffsetPt = v;
+        sa.Placement.HorizontalAnchor = gp.HorizontalAnchor; sa.Placement.VerticalAnchor = gp.VerticalAnchor; sa.Placement.ZOrderIndex = z;
+        return Run.FromSmartArt(sa);
+    }
+    private static Run RestoreWordArtPlacement(WordArt wa, FloatingPlacement gp, double h, double v, int z)
+    {
+        wa.Placement ??= new FloatingPlacement { Wrapping = gp.Wrapping };
+        wa.Placement.Wrapping = gp.Wrapping; wa.Placement.HorizontalOffsetPt = h; wa.Placement.VerticalOffsetPt = v;
+        wa.Placement.HorizontalAnchor = gp.HorizontalAnchor; wa.Placement.VerticalAnchor = gp.VerticalAnchor; wa.Placement.ZOrderIndex = z;
+        return Run.FromWordArt(wa);
+    }
 }

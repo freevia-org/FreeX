@@ -1,0 +1,224 @@
+namespace FreeW.Core.Model.Tests;
+
+/// <summary>
+/// Unit tests for <see cref="DrawingGroup"/> model construction, the
+/// <see cref="GroupFloatingObjectsCommand"/>, and <see cref="UngroupFloatingObjectsCommand"/>
+/// (Phase 4: floating object Group/Ungroup).
+/// </summary>
+public sealed class DrawingGroupModelTests
+{
+    private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
+
+    private static InlineImage FloatingImage(double x, double y, int z = 1) =>
+        new(Png(), 60, 60)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = x,
+            VerticalOffsetPt = y,
+            ZOrderIndex = z
+        };
+
+    private static Shape FloatingShape(double x, double y, int z = 2) =>
+        new(ShapeKind.Rectangle, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = x,
+                VerticalOffsetPt = y,
+                ZOrderIndex = z
+            }
+        };
+
+    /// <summary>
+    /// Build a document with two floating objects (image + shape) in two paragraphs,
+    /// execute GroupFloatingObjectsCommand, and assert the group run is placed at the
+    /// first member's paragraph/run position.
+    /// </summary>
+    private static (TextDocument doc, DocumentCommandBus bus) TwoMemberDoc()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+
+        var p0 = new Paragraph();
+        p0.Runs.Add(Run.FromImage(FloatingImage(36, 18, z: 1)));
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromShape(FloatingShape(108, 54, z: 2)));
+        doc.Blocks.Add(p1);
+
+        var bus = new DocumentCommandBus(new TestCtx(doc));
+        return (doc, bus);
+    }
+
+    // ── DrawingGroup model ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DrawingGroup_DefaultsAreValid()
+    {
+        var grp = new DrawingGroup();
+        grp.WidthPt.Should().BeGreaterThan(0);
+        grp.HeightPt.Should().BeGreaterThan(0);
+        grp.Placement.Wrapping.Should().Be(ImageWrapping.Square);
+        grp.Children.Should().BeEmpty();
+        grp.IsFloating.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DrawingGroup_IsValidRequiresTwoChildren()
+    {
+        var grp = new DrawingGroup();
+        grp.IsValid.Should().BeFalse("empty group");
+
+        grp.Children.Add(new Shape(ShapeKind.Ellipse, 60, 30));
+        grp.IsValid.Should().BeFalse("single-child group");
+
+        grp.Children.Add(new Shape(ShapeKind.Rectangle, 72, 36));
+        grp.IsValid.Should().BeTrue("two-child group");
+    }
+
+    // ── GroupFloatingObjectsCommand ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Group_TwoMembers_CreatesGroupRun()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        // After grouping: first paragraph should contain the group run; second's run removed.
+        var p0 = (Paragraph)doc.Blocks[0];
+        var p1 = (Paragraph)doc.Blocks[1];
+
+        p0.Runs.Should().ContainSingle();
+        p0.Runs[0].DrawingGroup.Should().NotBeNull();
+        p0.Runs[0].DrawingGroup!.IsValid.Should().BeTrue();
+        p1.Runs.Should().BeEmpty("member run should have been removed and replaced by the group");
+    }
+
+    [Fact]
+    public void Group_TwoMembers_ChildrenPreserved()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        var grp = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        grp.Children.Should().HaveCount(2);
+        grp.Children[0].Should().BeOfType<InlineImage>();
+        grp.Children[1].Should().BeOfType<Shape>();
+    }
+
+    [Fact]
+    public void Group_PlacementOriginIsMinBoundingCorner()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        // image at (36,18), shape at (108,54)
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        var grp = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        // Group origin should be at the minimum of the two positions.
+        grp.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        grp.Placement.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+    }
+
+    [Fact]
+    public void Group_ChildOffsetsAreRelativeToGroupOrigin()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        // image at (36,18), shape at (108,54)
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+
+        var grp = ((Paragraph)doc.Blocks[0]).Runs[0].DrawingGroup!;
+        grp.ChildOffsets.Should().HaveCount(2);
+        grp.ChildOffsets[0].X.Should().BeApproximately(0, 0.5,   "image is at group origin → offset 0");
+        grp.ChildOffsets[0].Y.Should().BeApproximately(0, 0.5);
+        grp.ChildOffsets[1].X.Should().BeApproximately(72, 0.5,  "shape is 72 pts to the right of image");
+        grp.ChildOffsets[1].Y.Should().BeApproximately(36, 0.5,  "shape is 36 pts below the image");
+    }
+
+    // ── GroupFloatingObjectsCommand.Revert ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Group_Revert_RestoresBothMembers()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Undo();
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var p1 = (Paragraph)doc.Blocks[1];
+        p0.Runs.Should().ContainSingle();
+        p1.Runs.Should().ContainSingle();
+        p0.Runs[0].Image.Should().NotBeNull();
+        p1.Runs[0].Shape.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Group_Revert_RestoresPlacementsAndZOrder()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Undo();
+
+        var img = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        var shp = ((Paragraph)doc.Blocks[1]).Runs[0].Shape!;
+        img.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        img.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+        img.ZOrderIndex.Should().Be(1);
+        shp.Placement!.HorizontalOffsetPt.Should().BeApproximately(108, 0.5);
+        shp.Placement.VerticalOffsetPt.Should().BeApproximately(54, 0.5);
+        shp.Placement.ZOrderIndex.Should().Be(2);
+    }
+
+    // ── UngroupFloatingObjectsCommand ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Ungroup_RestoresBothMembers()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        p0.Runs.Should().HaveCount(2);
+        p0.Runs.Any(r => r.Image is not null).Should().BeTrue();
+        p0.Runs.Any(r => r.Shape is not null).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Ungroup_RestoresAbsoluteOffsets()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        var img = p0.Runs.First(r => r.Image is not null).Image!;
+        var shp = p0.Runs.First(r => r.Shape is not null).Shape!;
+        img.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        img.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+        shp.Placement!.HorizontalOffsetPt.Should().BeApproximately(108, 0.5);
+        shp.Placement.VerticalOffsetPt.Should().BeApproximately(54, 0.5);
+    }
+
+    [Fact]
+    public void Ungroup_Revert_RestoresGroup()
+    {
+        var (doc, bus) = TwoMemberDoc();
+        bus.Execute(new GroupFloatingObjectsCommand([(0, 0), (1, 0)]));
+        bus.Execute(new UngroupFloatingObjectsCommand(0, 0));
+        bus.Undo();
+
+        var p0 = (Paragraph)doc.Blocks[0];
+        p0.Runs.Should().ContainSingle();
+        p0.Runs[0].DrawingGroup.Should().NotBeNull();
+        p0.Runs[0].DrawingGroup!.Children.Should().HaveCount(2);
+    }
+
+    // ── TestContext ──────────────────────────────────────────────────────────────────────────────
+
+    private sealed class TestCtx(TextDocument doc) : IDocumentCommandContext
+    {
+        public TextDocument Document => doc;
+    }
+}

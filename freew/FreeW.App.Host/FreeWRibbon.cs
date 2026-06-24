@@ -721,6 +721,9 @@ internal static class FreeWRibbon
                     g.Medium("freew.shape-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.shape-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.shape-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    // Group / Ungroup (Phase 4).
+                    g.Medium("freew.object-group", "Group", RibbonCommandIconKind.Generic);
+                    g.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Generic);
                 });
                 tab.Group("drawing-size", "Size", "S", 70, g =>
                 {
@@ -758,6 +761,9 @@ internal static class FreeWRibbon
                     g.Medium("freew.image-send-to-back",    "Send to Back",    RibbonCommandIconKind.SendToBack);
                     g.Medium("freew.image-bring-forward",   "Bring Forward",   RibbonCommandIconKind.BringForward);
                     g.Medium("freew.image-send-backward",   "Send Backward",   RibbonCommandIconKind.SendBackward);
+                    // Group / Ungroup for floating images (Phase 4).
+                    g.Medium("freew.object-group",   "Group",   RibbonCommandIconKind.Generic);
+                    g.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Generic);
                 });
                 tab.Group("picture-adjust", "Adjust", "J", 95, g =>
                 {

@@ -37,6 +37,17 @@ internal static class Ooxml
     public static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
 
     /// <summary>
+    /// The Office 2010 WordprocessingGroup namespace (wpg), used for floating drawing groups
+    /// (<c>w:drawing/wp:anchor/a:graphic/a:graphicData[uri=wpg]/wpg:wgp</c>). The group element
+    /// (<c>wpg:wgp</c>) wraps child drawing elements inside a shared coordinate frame defined by
+    /// <c>a:grpSpPr</c>.
+    /// </summary>
+    public static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
+
+    /// <summary>The a:graphicData/@uri that marks a DrawingML graphic frame as a drawing group.</summary>
+    public const string GroupGraphicDataUri = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
+
+    /// <summary>
     /// The DrawingML chart namespace (c), used by the chart part (c:chartSpace / c:barChart / c:ser / …)
     /// and by the a:graphicData that references the chart from the inline w:drawing.
     /// </summary>

@@ -106,9 +106,14 @@ public sealed class DocumentView : RichTextBox
     // Null when no floating image is selected. Used by SelectedImage()/SelectedImageLocation() as
     // a fallback when no inline-image selection exists in the RichTextBox.
     private InlineImage? _selectedFloatingImage;
-    // The floating non-image object currently selected on the overlay canvas (Shape/Chart/SmartArt/WordArt).
+    // The floating non-image object currently selected on the overlay canvas (Shape/Chart/SmartArt/WordArt/DrawingGroup).
     // Null when the selected floating object is an InlineImage (use _selectedFloatingImage) or none.
     private object? _selectedFloatingObject;
+
+    // Multi-select: the set of currently selected floating objects (each an InlineImage / Shape / Chart /
+    // SmartArt / WordArt / FreeW.Core.Model.DrawingGroup). Populated by Shift/Ctrl-click; the single-select path keeps this
+    // in sync (1-element set).  Group command uses this to collect members.
+    private readonly List<object> _selectedFloatingObjects = [];
 
 
     private static DropShadowEffect CreatePageShadow()
@@ -4041,7 +4046,7 @@ public sealed class DocumentView : RichTextBox
 
         canvas.Children.Clear();
 
-        // Gather all floating objects (images + shapes + charts + smartArt + wordArt) sorted by z-order.
+        // Gather all floating objects (images + shapes + charts + smartArt + wordArt + groups) sorted by z-order.
         var floating = new List<(int ZOrder, double HOffPt, double VOffPt, HorizontalAnchor HAnchor, VerticalAnchor VAnchor, Func<FrameworkElement> BuildVisual)>();
         foreach (var block in _model.Blocks)
         {
@@ -4077,6 +4082,13 @@ public sealed class DocumentView : RichTextBox
                     floating.Add((wap.ZOrderIndex, wap.HorizontalOffsetPt, wap.VerticalOffsetPt,
                         wap.HorizontalAnchor, wap.VerticalAnchor,
                         () => BuildFloatingObjectVisual(wordArt, EstimateWordArtWidth(wordArt), EstimateWordArtHeight(wordArt), wap)));
+                }
+                else if (run.DrawingGroup is { } grp)
+                {
+                    floating.Add((grp.Placement.ZOrderIndex,
+                        grp.Placement.HorizontalOffsetPt, grp.Placement.VerticalOffsetPt,
+                        grp.Placement.HorizontalAnchor, grp.Placement.VerticalAnchor,
+                        () => BuildFloatingGroupVisual(grp)));
                 }
             }
         }
@@ -4201,11 +4213,12 @@ public sealed class DocumentView : RichTextBox
             root = element;
         }
 
-        // Wire click to select this floating image.
+        // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
         root.Cursor = Cursors.SizeAll;
         root.MouseLeftButtonDown += (_, e) =>
         {
-            SelectFloatingImage(image);
+            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+            SelectFloatingImage(image, addToMulti);
             e.Handled = true;
         };
         return root;
@@ -4254,7 +4267,8 @@ public sealed class DocumentView : RichTextBox
         root.Cursor = Cursors.SizeAll;
         root.MouseLeftButtonDown += (_, e) =>
         {
-            SelectFloatingObject(modelObject);
+            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+            SelectFloatingObject(modelObject, addToMulti);
             e.Handled = true;
         };
         return root;
@@ -4267,10 +4281,110 @@ public sealed class DocumentView : RichTextBox
         wordArt.FontSizePt * 1.6;
 
     /// <summary>
-    /// Select a floating non-image object. Mirrors SelectFloatingImage but clears the image selection.
+    /// Builds a group visual: a container Border sized to the group bounding box, with each child drawn
+    /// as a sub-Border inside a Canvas at its local offset. The group is tagged with the FreeW.Core.Model.DrawingGroup
+    /// model object for click-selection.
     /// </summary>
-    private void SelectFloatingObject(object obj)
+    private FrameworkElement BuildFloatingGroupVisual(FreeW.Core.Model.DrawingGroup group)
     {
+        var widthPx = group.WidthPt * PxPerPoint;
+        var heightPx = group.HeightPt * PxPerPoint;
+
+        var isSelected = _selectedFloatingObjects.Contains(group);
+        var borderColor = isSelected
+            ? System.Windows.Media.Brushes.DodgerBlue
+            : System.Windows.Media.Brushes.SlateGray;
+
+        var innerCanvas = new Canvas
+        {
+            Width = widthPx,
+            Height = heightPx,
+            ClipToBounds = true
+        };
+
+        // Draw each child as a placeholder sub-element.
+        for (var i = 0; i < group.Children.Count; i++)
+        {
+            var child = group.Children[i];
+            var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
+            var cw = group.ChildWidthPt(i) * PxPerPoint;
+            var ch = group.ChildHeightPt(i) * PxPerPoint;
+
+            var label = child switch
+            {
+                InlineImage => "Image",
+                Shape s => s.Kind.ToString(),
+                Chart c => c.Kind.ToString() + " Chart",
+                SmartArt => "SmartArt",
+                WordArt wa => "WordArt: " + wa.Text,
+                _ => "Object"
+            };
+
+            var tb = new TextBlock
+            {
+                Text = label,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = System.Windows.Media.Brushes.DimGray,
+                FontSize = Math.Max(7, Math.Min(11, cw / 10)),
+                TextWrapping = TextWrapping.Wrap
+            };
+
+            var childBorder = new System.Windows.Controls.Border
+            {
+                Width = cw,
+                Height = ch,
+                BorderBrush = System.Windows.Media.Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(15, 100, 100, 200)),
+                Child = tb
+            };
+
+            Canvas.SetLeft(childBorder, ox * PxPerPoint);
+            Canvas.SetTop(childBorder, oy * PxPerPoint);
+            innerCanvas.Children.Add(childBorder);
+        }
+
+        var root = new System.Windows.Controls.Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            BorderBrush = borderColor,
+            BorderThickness = new Thickness(isSelected ? 2 : 1.5),
+            Background = System.Windows.Media.Brushes.Transparent,
+            Child = innerCanvas,
+            Tag = group
+        };
+
+        root.Cursor = Cursors.SizeAll;
+        root.MouseLeftButtonDown += (_, e) =>
+        {
+            var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
+            SelectFloatingObject(group, addToMulti);
+            e.Handled = true;
+        };
+        return root;
+    }
+
+    /// <summary>
+    /// Select a floating non-image object. Mirrors SelectFloatingImage but clears the image selection.
+    /// Pass <paramref name="addToMultiSelect"/> true (Shift/Ctrl held) to extend the multi-select set.
+    /// </summary>
+    internal void SelectFloatingObject(object obj, bool addToMultiSelect = false)
+    {
+        if (addToMultiSelect)
+        {
+            if (_selectedFloatingObjects.Contains(obj))
+                _selectedFloatingObjects.Remove(obj);
+            else
+                _selectedFloatingObjects.Add(obj);
+        }
+        else
+        {
+            _selectedFloatingObjects.Clear();
+            _selectedFloatingObjects.Add(obj);
+        }
         _selectedFloatingObject = obj;
         _selectedFloatingImage = null;
         SyncFloatingObjectsCanvas();
@@ -4282,9 +4396,22 @@ public sealed class DocumentView : RichTextBox
     /// Select a floating image: set <see cref="_selectedFloatingImage"/> and fire the selection-changed
     /// path so the Picture Format contextual tab activates. Clears the RichTextBox selection so the
     /// picture-format commands see no competing inline selection.
+    /// Pass <paramref name="addToMultiSelect"/> true (Shift/Ctrl held) to extend the multi-select set.
     /// </summary>
-    private void SelectFloatingImage(InlineImage image)
+    internal void SelectFloatingImage(InlineImage image, bool addToMultiSelect = false)
     {
+        if (addToMultiSelect)
+        {
+            if (_selectedFloatingObjects.Contains(image))
+                _selectedFloatingObjects.Remove(image);
+            else
+                _selectedFloatingObjects.Add(image);
+        }
+        else
+        {
+            _selectedFloatingObjects.Clear();
+            _selectedFloatingObjects.Add(image);
+        }
         _selectedFloatingImage = image;
         // Refresh the overlay so the selection highlight can be drawn next cycle.
         SyncFloatingObjectsCanvas();
@@ -4292,6 +4419,15 @@ public sealed class DocumentView : RichTextBox
         Focus();
         RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
     }
+
+    /// <summary>Returns the current multi-select set as a read-only snapshot.</summary>
+    internal IReadOnlyList<object> SelectedFloatingObjects => _selectedFloatingObjects.AsReadOnly();
+
+    /// <summary>Returns true when two or more floating objects are currently multi-selected.</summary>
+    internal bool HasMultipleFloatingObjectsSelected => _selectedFloatingObjects.Count >= 2;
+
+    /// <summary>Returns true when exactly one FreeW.Core.Model.DrawingGroup is selected.</summary>
+    internal bool IsGroupSelected => _selectedFloatingObjects.Count == 1 && _selectedFloatingObjects[0] is FreeW.Core.Model.DrawingGroup;
 
     /// <summary>
     /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.
@@ -4317,6 +4453,73 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Groups the current multi-select set into a FreeW.Core.Model.DrawingGroup, if at least 2 objects are selected.
+    /// Executes a <see cref="GroupFloatingObjectsCommand"/> via the undoable command bus.
+    /// </summary>
+    public void GroupSelectedFloatingObjects()
+    {
+        if (_selectedFloatingObjects.Count < 2) return;
+        CommitToModel();
+
+        // Collect (blockIndex, runIndex) for each selected floating object.
+        var members = new List<(int Bi, int Ri)>();
+        foreach (var obj in _selectedFloatingObjects)
+        {
+            if (obj is InlineImage img)
+            {
+                var (bi, ri, _) = SelectedImageLocationForObject(img);
+                if (bi >= 0) members.Add((bi, ri));
+            }
+            else
+            {
+                var (bi, ri) = FindFloatingObjectLocation(obj);
+                if (bi >= 0) members.Add((bi, ri));
+            }
+        }
+
+        if (members.Count < 2) return;
+
+        _commands.Execute(new GroupFloatingObjectsCommand(members));
+        _selectedFloatingObjects.Clear();
+        _selectedFloatingImage = null;
+        _selectedFloatingObject = null;
+        SyncFloatingObjectsCanvas();
+    }
+
+    /// <summary>
+    /// Ungroups the currently selected FreeW.Core.Model.DrawingGroup, if exactly one group is selected.
+    /// Executes a <see cref="UngroupFloatingObjectsCommand"/> via the undoable command bus.
+    /// </summary>
+    public void UngroupSelectedFloatingObject()
+    {
+        if (_selectedFloatingObject is not FreeW.Core.Model.DrawingGroup group) return;
+        CommitToModel();
+
+        var (bi, ri) = FindFloatingObjectLocation(group);
+        if (bi < 0) return;
+
+        _commands.Execute(new UngroupFloatingObjectsCommand(bi, ri));
+        _selectedFloatingObjects.Clear();
+        _selectedFloatingImage = null;
+        _selectedFloatingObject = null;
+        SyncFloatingObjectsCanvas();
+    }
+
+    private (int BlockIndex, int RunIndex, InlineImage? Image) SelectedImageLocationForObject(InlineImage target)
+    {
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph para) continue;
+            for (var r = 0; r < para.Runs.Count; r++)
+            {
+                if (ReferenceEquals(para.Runs[r].Image, target))
+                    return (b, r, target);
+            }
+        }
+        return (-1, -1, null);
+    }
+
     /// <summary>Locates a floating non-image object in the model to get its (blockIndex, runIndex).</summary>
     private (int BlockIndex, int RunIndex) FindFloatingObjectLocation(object obj)
     {
@@ -4327,7 +4530,8 @@ public sealed class DocumentView : RichTextBox
             {
                 var run = para.Runs[r];
                 if (ReferenceEquals(run.Shape, obj) || ReferenceEquals(run.Chart, obj)
-                    || ReferenceEquals(run.SmartArt, obj) || ReferenceEquals(run.WordArt, obj))
+                    || ReferenceEquals(run.SmartArt, obj) || ReferenceEquals(run.WordArt, obj)
+                    || ReferenceEquals(run.DrawingGroup, obj))
                     return (b, r);
             }
         }
@@ -4784,6 +4988,9 @@ public sealed class DocumentView : RichTextBox
                 break;
             case WpfRun { Tag: AnchorMarker { WordArt: { } anchorWordArt } }:
                 modelParagraph.Runs.Add(ModelRun.FromWordArt(anchorWordArt));
+                break;
+            case WpfRun { Tag: AnchorMarker { DrawingGroup: { } anchorGroup } }:
+                modelParagraph.Runs.Add(ModelRun.FromDrawingGroup(anchorGroup));
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
@@ -5414,6 +5621,11 @@ public sealed class DocumentView : RichTextBox
             return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
         }
 
+        // DrawingGroup is always floating; emit a zero-width AnchorMarker so CommitToModel
+        // can recover the group object verbatim via the floating canvas path.
+        if (run.DrawingGroup is { } drawingGroup)
+            return new WpfRun(string.Empty) { Tag = new AnchorMarker(DrawingGroup: drawingGroup) };
+
         if (run.EmbeddedObject is { } embedded)
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
 
@@ -6020,7 +6232,8 @@ public sealed class DocumentView : RichTextBox
         Shape? Shape = null,
         Chart? Chart = null,
         SmartArt? SmartArt = null,
-        WordArt? WordArt = null);
+        WordArt? WordArt = null,
+        FreeW.Core.Model.DrawingGroup? DrawingGroup = null);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged

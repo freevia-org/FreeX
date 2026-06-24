@@ -1,0 +1,208 @@
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
+
+namespace FreeW.Core.IO.Tests;
+
+/// <summary>
+/// Round-trip (write → read) tests for <see cref="DrawingGroup"/> (wpg:wgp).
+/// Verifies that group placement, member count, member types, and child offsets
+/// survive a DOCX serialization cycle (Phase 4).
+/// </summary>
+public sealed class DrawingGroupRoundTripTests
+{
+    private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+    private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
+
+    private static byte[] Png() => [0x89, 0x50, 0x4E, 0x47];
+
+    private static TextDocument RoundTrip(TextDocument doc)
+    {
+        using var ms = new MemoryStream();
+        DocxWriter.Write(doc, ms);
+        ms.Position = 0;
+        return DocxReader.Read(ms);
+    }
+
+    private static XDocument DocXml(TextDocument doc)
+    {
+        using var ms = new MemoryStream();
+        DocxWriter.Write(doc, ms);
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        var entry = zip.GetEntry("word/document.xml")!;
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
+    private static DrawingGroup TwoMemberGroup()
+    {
+        var grp = new DrawingGroup
+        {
+            WidthPt  = 180,
+            HeightPt = 90
+        };
+        grp.Placement.Wrapping             = ImageWrapping.Square;
+        grp.Placement.HorizontalOffsetPt   = 36;
+        grp.Placement.VerticalOffsetPt     = 18;
+        grp.Placement.HorizontalAnchor     = HorizontalAnchor.Margin;
+        grp.Placement.VerticalAnchor       = VerticalAnchor.Page;
+        grp.Placement.ZOrderIndex          = 7;
+
+        grp.Children.Add(new InlineImage(Png(), 60, 60));
+        grp.ChildOffsets.Add((0, 0));
+
+        grp.Children.Add(new Shape(ShapeKind.Rectangle, 72, 36));
+        grp.ChildOffsets.Add((90, 30));
+
+        return grp;
+    }
+
+    private static DrawingGroup ThreeMemberGroup()
+    {
+        var grp = new DrawingGroup { WidthPt = 200, HeightPt = 100 };
+        grp.Placement.Wrapping           = ImageWrapping.Square;
+        grp.Placement.HorizontalOffsetPt = 72;
+        grp.Placement.VerticalOffsetPt   = 36;
+        grp.Placement.ZOrderIndex        = 3;
+
+        grp.Children.Add(new Shape(ShapeKind.Ellipse, 50, 50));
+        grp.ChildOffsets.Add((0, 0));
+
+        grp.Children.Add(new InlineImage(Png(), 60, 60));
+        grp.ChildOffsets.Add((60, 0));
+
+        grp.Children.Add(new Shape(ShapeKind.Rectangle, 60, 40));
+        grp.ChildOffsets.Add((130, 20));
+
+        return grp;
+    }
+
+    private static TextDocument DocumentWith(DrawingGroup grp)
+    {
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromDrawingGroup(grp));
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    // ── XML structure ────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DrawingGroup_EmitsWpAnchorWithWpgWgp()
+    {
+        var xml = DocXml(DocumentWith(TwoMemberGroup()));
+        xml.Descendants(Wp + "anchor").Should().NotBeEmpty("group should be floating → anchor");
+        xml.Descendants(Wp + "inline").Should().BeEmpty();
+        xml.Descendants(Wpg + "wgp").Should().NotBeEmpty("wpg:wgp element must be present");
+    }
+
+    [Fact]
+    public void DrawingGroup_EmitsGrpSpPr()
+    {
+        var xml = DocXml(DocumentWith(TwoMemberGroup()));
+        var wgp = xml.Descendants(Wpg + "wgp").Single();
+        wgp.Element(Wpg + "grpSpPr").Should().NotBeNull("wpg:grpSpPr must be present inside wpg:wgp");
+    }
+
+    // ── Two-member round-trip ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DrawingGroup_TwoMembers_RoundTrips_MemberCount()
+    {
+        var recovered = RoundTrip(DocumentWith(TwoMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.Children.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void DrawingGroup_TwoMembers_RoundTrips_MemberTypes()
+    {
+        var recovered = RoundTrip(DocumentWith(TwoMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.Children[0].Should().BeOfType<InlineImage>();
+        grp.Children[1].Should().BeOfType<Shape>();
+    }
+
+    [Fact]
+    public void DrawingGroup_TwoMembers_RoundTrips_Placement()
+    {
+        var recovered = RoundTrip(DocumentWith(TwoMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.Placement.Wrapping.Should().Be(ImageWrapping.Square);
+        grp.Placement.HorizontalOffsetPt.Should().BeApproximately(36, 0.5);
+        grp.Placement.VerticalOffsetPt.Should().BeApproximately(18, 0.5);
+        grp.Placement.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
+        grp.Placement.VerticalAnchor.Should().Be(VerticalAnchor.Page);
+        grp.Placement.ZOrderIndex.Should().Be(7);
+    }
+
+    [Fact]
+    public void DrawingGroup_TwoMembers_RoundTrips_ChildOffsets()
+    {
+        var recovered = RoundTrip(DocumentWith(TwoMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.ChildOffsets.Should().HaveCount(2);
+        grp.ChildOffsets[0].X.Should().BeApproximately(0,  1.0);
+        grp.ChildOffsets[0].Y.Should().BeApproximately(0,  1.0);
+        grp.ChildOffsets[1].X.Should().BeApproximately(90, 1.0);
+        grp.ChildOffsets[1].Y.Should().BeApproximately(30, 1.0);
+    }
+
+    [Fact]
+    public void DrawingGroup_TwoMembers_RoundTrips_GroupSize()
+    {
+        var recovered = RoundTrip(DocumentWith(TwoMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.WidthPt.Should().BeApproximately(180, 1.0);
+        grp.HeightPt.Should().BeApproximately(90, 1.0);
+    }
+
+    // ── Three-member round-trip ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DrawingGroup_ThreeMembers_RoundTrips()
+    {
+        var recovered = RoundTrip(DocumentWith(ThreeMemberGroup()));
+        var grp = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.Children.Should().HaveCount(3);
+        grp.Placement.ZOrderIndex.Should().Be(3);
+        grp.Placement.HorizontalOffsetPt.Should().BeApproximately(72, 0.5);
+    }
+
+    // ── Existing floating objects are unaffected ─────────────────────────────────────────────────
+
+    [Fact]
+    public void StandaloneFloatingShape_Unaffected_WhenGroupAlsoPresentInSameDoc()
+    {
+        var doc = new TextDocument();
+        var p0 = new Paragraph();
+        var shape = new Shape(ShapeKind.Ellipse, 60, 30)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 100,
+                ZOrderIndex = 1
+            }
+        };
+        p0.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(p0);
+
+        var p1 = new Paragraph();
+        p1.Runs.Add(Run.FromDrawingGroup(TwoMemberGroup()));
+        doc.Blocks.Add(p1);
+
+        var recovered = RoundTrip(doc);
+
+        // Paragraph 0 → standalone shape
+        var s = ((Paragraph)recovered.Blocks[0]).Runs.Single(r => r.Shape is not null).Shape!;
+        s.IsFloating.Should().BeTrue();
+        s.Placement!.HorizontalOffsetPt.Should().BeApproximately(100, 0.5);
+
+        // Paragraph 1 → group
+        var grp = ((Paragraph)recovered.Blocks[1]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+        grp.Children.Should().HaveCount(2);
+    }
+}

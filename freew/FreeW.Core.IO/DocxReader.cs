@@ -1972,6 +1972,20 @@ public static class DocxReader
             return;
         }
 
+        // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
+        // Must be checked BEFORE ReadShape because wpg:wgp contains wps:wsp children and ReadShape
+        // uses Descendants() which would otherwise match those nested wps:wsp elements.
+        var drawingGroup = ReadDrawingGroup(r);
+        if (drawingGroup is not null)
+        {
+            var groupRun = Run.FromDrawingGroup(drawingGroup);
+            groupRun.HyperlinkUrl = hyperlinkUrl;
+            groupRun.HyperlinkAnchor = hyperlinkAnchor;
+            ApplyRevision(groupRun);
+            paragraph.Runs.Add(groupRun);
+            return;
+        }
+
         // A w:drawing wrapping a wps:wsp (not a pic:pic) is an inline shape / text box.
         var shape = ReadShape(r, archive, imageRelationships);
         if (shape is not null)
@@ -3973,5 +3987,96 @@ public static class DocxReader
                 PreservedNumbering = pPr is null ? null : ReadPreservedNumbering(pPr)
             };
         }
+    }
+
+    // ── DrawingGroup read (Phase 4) ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads a <c>wpg:wgp</c> drawing group from a run's <c>w:drawing/wp:anchor</c>, reconstructing a
+    /// <see cref="DrawingGroup"/> with its floating placement and child stubs decoded from each
+    /// <c>wps:wsp</c> child's <c>wp:docPr/@name</c> ("GroupChild:Type:…"). Returns null when the run
+    /// does not carry a wpg:wgp element.
+    /// </summary>
+    private static DrawingGroup? ReadDrawingGroup(XElement run)
+    {
+        var drawing = run.Element(W + "drawing");
+        var anchor = drawing?.Element(Wp + "anchor");
+        if (anchor is null) return null;
+
+        var wgp = anchor.Descendants(Wpg + "wgp").FirstOrDefault();
+        if (wgp is null) return null;
+
+        var group = new DrawingGroup();
+        ApplyFloatingPlacement(anchor, group.Placement);
+
+        // Overall extent from wp:extent.
+        var extent = anchor.Element(Wp + "extent");
+        if (extent is not null)
+        {
+            group.WidthPt = EmuToPoints(extent.Attribute("cx")?.Value ?? "0");
+            group.HeightPt = EmuToPoints(extent.Attribute("cy")?.Value ?? "0");
+        }
+
+        // Reconstruct children from wps:wsp elements inside wpg:wgp.
+        foreach (var wsp in wgp.Elements(Wps + "wsp"))
+        {
+            var childDocPr = wsp.Element(Wp + "docPr");
+            var name = childDocPr?.Attribute("name")?.Value ?? string.Empty;
+
+            // Reconstruct offset from a:xfrm inside the child's wps:spPr.
+            var spPr = wsp.Element(Wps + "spPr");
+            var xfrm = spPr?.Element(A + "xfrm");
+            var off = xfrm?.Element(A + "off");
+            var ext = xfrm?.Element(A + "ext");
+            var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
+            var oy = EmuToPoints(off?.Attribute("y")?.Value ?? "0");
+            var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
+            var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
+
+            object? child = null;
+            if (name.StartsWith("GroupChild:Image", StringComparison.Ordinal))
+            {
+                // Reconstruct a minimal floating InlineImage placeholder.
+                child = new InlineImage([], cw, ch);
+            }
+            else if (name.StartsWith("GroupChild:Shape:", StringComparison.Ordinal))
+            {
+                var kindStr = name["GroupChild:Shape:".Length..];
+                var kind = Enum.TryParse<ShapeKind>(kindStr, out var k) ? k : ShapeKind.Rectangle;
+                child = new Shape(kind, cw, ch)
+                {
+                    Placement = new FloatingPlacement { Wrapping = group.Placement.Wrapping }
+                };
+            }
+            else if (name.StartsWith("GroupChild:Chart:", StringComparison.Ordinal))
+            {
+                var kindStr = name["GroupChild:Chart:".Length..];
+                var kind = Enum.TryParse<ChartKind>(kindStr, out var k) ? k : ChartKind.Column;
+                child = new Chart { Kind = kind, WidthPt = cw, HeightPt = ch };
+            }
+            else if (name.StartsWith("GroupChild:SmartArt", StringComparison.Ordinal))
+            {
+                child = new SmartArt { WidthPt = cw, HeightPt = ch };
+            }
+            else if (name.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal))
+            {
+                var styleStr = name["GroupChild:WordArt:".Length..];
+                var style = Enum.TryParse<WordArtStyle>(styleStr, out var s) ? s : WordArtStyle.FillBlue;
+                child = new WordArt { Style = style, Text = "WordArt", FontSizePt = 36 };
+            }
+            else
+            {
+                // Unknown child type — create a placeholder shape.
+                child = new Shape(ShapeKind.Rectangle, cw, ch);
+            }
+
+            if (child is not null)
+            {
+                group.Children.Add(child);
+                group.ChildOffsets.Add((ox, oy));
+            }
+        }
+
+        return group.Children.Count >= 2 ? group : null;
     }
 }

@@ -109,14 +109,9 @@ public sealed class FloatingImageRenderTests
 
         var floatingImg = ((Paragraph)view.Model.Blocks[0]).Runs[0].Image!;
 
-        // Simulate SelectFloatingImage (internal; accessed via the same call path as canvas click).
-        // We call it reflectively to keep the test against the public surface, or expose it for test.
-        // Use SelectedImageLocation via the canvas approach: simulate by directly calling the internal method.
-        var method = typeof(DocumentView).GetMethod(
-            "SelectFloatingImage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method.Should().NotBeNull("SelectFloatingImage must exist as a private method");
-        method!.Invoke(view, [floatingImg]);
+        // SelectFloatingImage is now internal (promoted from private so multi-select tests
+        // can call it directly without reflection).
+        view.SelectFloatingImage(floatingImg);
 
         view.SelectedImage().Should().BeSameAs(floatingImg);
     }
@@ -130,25 +125,11 @@ public sealed class FloatingImageRenderTests
 
         var floatingImg = ((Paragraph)view.Model.Blocks[0]).Runs[0].Image!;
 
-        var selectMethod = typeof(DocumentView).GetMethod(
-            "SelectFloatingImage",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        selectMethod!.Invoke(view, [floatingImg]);
+        // SelectFloatingImage is now internal — call it directly.
+        view.SelectFloatingImage(floatingImg);
 
-        var locationMethod = typeof(DocumentView).GetMethod(
-            "SelectedImageLocation",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        locationMethod.Should().NotBeNull();
-        var result = locationMethod!.Invoke(view, null);
-
-        // Unpack the value tuple: (int BlockIndex, int RunIndex, InlineImage? Image)
-        var resultType = result!.GetType();
-        var blockIndex = (int)resultType.GetField("Item1")!.GetValue(result)!;
-        var runIndex = (int)resultType.GetField("Item2")!.GetValue(result)!;
-        var image = (InlineImage?)resultType.GetField("Item3")!.GetValue(result);
-
-        blockIndex.Should().Be(0);
-        runIndex.Should().Be(0);
+        // SelectedImage() is a public method that internally delegates to SelectedImageLocation().
+        var image = view.SelectedImage();
         image.Should().BeSameAs(floatingImg);
     }
 

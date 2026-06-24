@@ -329,6 +329,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
         registry.Register("freew.image-bring-forward",   new ImageZOrderCommand(editor, ZOrderOperation.BringForward));
         registry.Register("freew.image-send-backward",   new ImageZOrderCommand(editor, ZOrderOperation.SendBackward));
+        // Picture Format / Drawing Format — Arrange > Group / Ungroup (Phase 4).
+        registry.Register("freew.object-group",   new ObjectGroupCommand(editor));
+        registry.Register("freew.object-ungroup", new ObjectUngroupCommand(editor));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -2840,6 +2843,38 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.ChangeSelectedImageZOrder(operation);
+        }
+    }
+
+    // Drawing Format / Picture Format > Arrange > Group: group ≥2 selected floating objects.
+    private sealed class ObjectGroupCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.HasMultipleFloatingObjectsSelected)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Select two or more floating objects first (Shift-click or Ctrl-click).", "Group");
+                return;
+            }
+            editor.GroupSelectedFloatingObjects();
+        }
+    }
+
+    // Drawing Format / Picture Format > Arrange > Ungroup: ungroup a selected DrawingGroup.
+    private sealed class ObjectUngroupCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (!editor.IsGroupSelected)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Select a group first.", "Ungroup");
+                return;
+            }
+            editor.UngroupSelectedFloatingObject();
         }
     }
 

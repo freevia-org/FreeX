@@ -1271,7 +1271,10 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-bring-to-front",
                 "freew.image-send-to-back",
                 "freew.image-bring-forward",
-                "freew.image-send-backward");
+                "freew.image-send-backward",
+                // Phase 4: group / ungroup for floating objects.
+                "freew.object-group",
+                "freew.object-ungroup");
 
         CommandIds(picture.FindGroup("picture-adjust")!)
             .Should()
