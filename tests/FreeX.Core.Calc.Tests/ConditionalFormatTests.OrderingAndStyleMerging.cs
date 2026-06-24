@@ -146,7 +146,7 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
-    public void ConditionalFormats_DefaultBaseStyleKeepsDifferentialMergeSemantics()
+    public void ConditionalFormats_DxfNumberFormatOverridesBaseStyle()
     {
         var (wb, sheet) = MakeWorkbook();
         var address = new CellAddress(sheet.Id, 1, 1);
@@ -170,6 +170,69 @@ public partial class ConditionalFormatTests
         var style = GetCell(vp, 1, 1).Style!;
 
         style.FillColor.Should().Be(new CellColor(255, 199, 206));
-        style.NumberFormat.Should().Be("General", "viewport CF style merging only applies supported differential style fields");
+        style.NumberFormat.Should().Be("$0.00", "CF dxf number format overrides base cell format when the rule matches");
+    }
+
+    [Fact]
+    public void ConditionalFormats_DxfGeneralNumberFormatDoesNotOverrideBaseStyle()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        var baseStyle = new CellStyle { NumberFormat = "#,##0.00" };
+        var styleId = wb.RegisterStyle(baseStyle);
+        var cell = Cell.FromValue(new NumberValue(99));
+        cell.StyleId = styleId;
+        sheet.SetCell(address, cell);
+
+        // A CF dxf that sets fill only — NumberFormat defaults to "General" in CellStyle, meaning no override.
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 199, 206) }
+        });
+
+        var vp = GetViewport(wb, sheet);
+        var style = GetCell(vp, 1, 1).Style!;
+
+        style.FillColor.Should().Be(new CellColor(255, 199, 206));
+        style.NumberFormat.Should().Be("#,##0.00", "base number format preserved when CF dxf does not set one (General means unset)");
+    }
+
+    [Fact]
+    public void ConditionalFormats_DxfBorderOverridesBaseStyle()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(99)));
+
+        var redBorder = new CellBorder(BorderStyle.Thin, new CellColor(255, 0, 0));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle
+            {
+                BorderTop = redBorder,
+                BorderRight = redBorder,
+                BorderBottom = redBorder,
+                BorderLeft = redBorder
+            }
+        });
+
+        var vp = GetViewport(wb, sheet);
+        var style = GetCell(vp, 1, 1).Style!;
+
+        style.BorderTop.Should().Be(redBorder, "CF dxf border top applied when rule matches");
+        style.BorderRight.Should().Be(redBorder, "CF dxf border right applied when rule matches");
+        style.BorderBottom.Should().Be(redBorder, "CF dxf border bottom applied when rule matches");
+        style.BorderLeft.Should().Be(redBorder, "CF dxf border left applied when rule matches");
     }
 }

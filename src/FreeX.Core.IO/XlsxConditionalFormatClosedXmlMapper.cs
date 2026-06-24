@@ -198,5 +198,57 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 style.FillColor.Value.G,
                 style.FillColor.Value.B);
         }
+
+        // dxf number format: write to ClosedXML if explicitly set (not "General").
+        if (!string.IsNullOrEmpty(style.NumberFormat) &&
+            !string.Equals(style.NumberFormat, "General", StringComparison.OrdinalIgnoreCase))
+        {
+            xlStyle.NumberFormat.Format = style.NumberFormat;
+        }
+
+        // dxf borders: write each edge that has a non-None style.
+        ApplyBorderEdge(xlStyle.Border, style.BorderTop, "top");
+        ApplyBorderEdge(xlStyle.Border, style.BorderRight, "right");
+        ApplyBorderEdge(xlStyle.Border, style.BorderBottom, "bottom");
+        ApplyBorderEdge(xlStyle.Border, style.BorderLeft, "left");
+    }
+
+    private static void ApplyBorderEdge(IXLBorder xlBorder, CellBorder edge, string side)
+    {
+        if (edge.Style == BorderStyle.None)
+            return;
+
+        var xlStyle = edge.Style switch
+        {
+            BorderStyle.Thin => XLBorderStyleValues.Thin,
+            BorderStyle.Medium => XLBorderStyleValues.Medium,
+            BorderStyle.Thick => XLBorderStyleValues.Thick,
+            BorderStyle.Dashed => XLBorderStyleValues.Dashed,
+            BorderStyle.Dotted => XLBorderStyleValues.Dotted,
+            BorderStyle.Double => XLBorderStyleValues.Double,
+            _ => XLBorderStyleValues.None
+        };
+
+        var xlColor = XLColor.FromArgb(255, edge.Color.R, edge.Color.G, edge.Color.B);
+
+        switch (side)
+        {
+            case "top":
+                xlBorder.TopBorder = xlStyle;
+                xlBorder.TopBorderColor = xlColor;
+                break;
+            case "right":
+                xlBorder.RightBorder = xlStyle;
+                xlBorder.RightBorderColor = xlColor;
+                break;
+            case "bottom":
+                xlBorder.BottomBorder = xlStyle;
+                xlBorder.BottomBorderColor = xlColor;
+                break;
+            case "left":
+                xlBorder.LeftBorder = xlStyle;
+                xlBorder.LeftBorderColor = xlColor;
+                break;
+        }
     }
 }

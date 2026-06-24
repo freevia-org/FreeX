@@ -387,6 +387,23 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
 
+        // dxf number format: override cell format when the CF explicitly specifies one.
+        if (!string.IsNullOrEmpty(cfStyle.NumberFormat) &&
+            !string.Equals(cfStyle.NumberFormat, "General", StringComparison.OrdinalIgnoreCase))
+        {
+            result.NumberFormat = cfStyle.NumberFormat;
+        }
+
+        // dxf borders: apply each edge from the CF when the CF dxf has a visible border on that edge.
+        if (cfStyle.BorderTop.Style != BorderStyle.None)
+            result.BorderTop = cfStyle.BorderTop;
+        if (cfStyle.BorderRight.Style != BorderStyle.None)
+            result.BorderRight = cfStyle.BorderRight;
+        if (cfStyle.BorderBottom.Style != BorderStyle.None)
+            result.BorderBottom = cfStyle.BorderBottom;
+        if (cfStyle.BorderLeft.Style != BorderStyle.None)
+            result.BorderLeft = cfStyle.BorderLeft;
+
         return result;
     }
 
@@ -410,6 +427,24 @@ internal static partial class ViewportConditionalFormatEvaluator
             result.Underline = true;
         if (result.FontColor == CellColor.Black && cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
+
+        // dxf number format: first matching rule wins (highest-priority rule that specifies a format).
+        if (string.Equals(result.NumberFormat, "General", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrEmpty(cfStyle.NumberFormat) &&
+            !string.Equals(cfStyle.NumberFormat, "General", StringComparison.OrdinalIgnoreCase))
+        {
+            result.NumberFormat = cfStyle.NumberFormat;
+        }
+
+        // dxf borders: first matching rule wins per edge (highest-priority rule that sets that edge).
+        if (result.BorderTop.Style == BorderStyle.None && cfStyle.BorderTop.Style != BorderStyle.None)
+            result.BorderTop = cfStyle.BorderTop;
+        if (result.BorderRight.Style == BorderStyle.None && cfStyle.BorderRight.Style != BorderStyle.None)
+            result.BorderRight = cfStyle.BorderRight;
+        if (result.BorderBottom.Style == BorderStyle.None && cfStyle.BorderBottom.Style != BorderStyle.None)
+            result.BorderBottom = cfStyle.BorderBottom;
+        if (result.BorderLeft.Style == BorderStyle.None && cfStyle.BorderLeft.Style != BorderStyle.None)
+            result.BorderLeft = cfStyle.BorderLeft;
 
         return result;
     }
