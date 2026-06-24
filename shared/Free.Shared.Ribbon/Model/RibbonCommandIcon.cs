@@ -229,7 +229,10 @@ public enum RibbonCommandIconKind
     Marker,
     ComboChart,
     MoveChart,
-    AxisBounds
+    AxisBounds,
+
+    // Review > Language glyph (added for character border/shading + proofing language W20).
+    Language
 }
 
 public enum RibbonCommandIconAccent

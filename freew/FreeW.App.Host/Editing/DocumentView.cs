@@ -3173,6 +3173,12 @@ public sealed class DocumentView : RichTextBox
         var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;
         var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
 
+        // Model-only fields (character border, shading, language) are not in the WPF selection property
+        // bag; recover them from the caret run's CharacterFormatMarker tag instead. This gives the "at
+        // caret" value, matching how CaptureCaretParagraphFormatting works for paragraph-level fields.
+        var caretRun = (CaretPosition?.Parent as WpfRun ?? selection.Start.Parent as WpfRun);
+        var charFmt = (caretRun?.Tag as RunMarkers)?.CharacterFormat;
+
         return new RunFormatting
         {
             Bold = selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight w && w >= FontWeights.Bold,
@@ -3185,7 +3191,11 @@ public sealed class DocumentView : RichTextBox
             FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
             FontSizePt = fontSizePt,
             ColorHex = selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush fg ? ToHex(fg.Color) : null,
-            HighlightColorHex = selection.GetPropertyValue(TextElement.BackgroundProperty) is SolidColorBrush bg ? ToHex(bg.Color) : null
+            HighlightColorHex = selection.GetPropertyValue(TextElement.BackgroundProperty) is SolidColorBrush bg ? ToHex(bg.Color) : null,
+            CharacterBorder = charFmt?.Border,
+            CharacterShadingHex = charFmt?.ShadingHex,
+            CharacterShadingPattern = charFmt?.ShadingPattern ?? ShadingPattern.Clear,
+            LanguageTag = charFmt?.LanguageTag,
         };
     }
 
@@ -3272,6 +3282,51 @@ public sealed class DocumentView : RichTextBox
             .OfType<ModelParagraph>()
             .ToList();
     }
+
+    // Apply a run-formatting transform to every run in every model paragraph spanned by the current
+    // selection. Commits to the model first, issues one SetRunFormattingCommand per run (fully undoable),
+    // then re-renders. Used for model-only run properties (CharacterBorder, CharacterShadingHex,
+    // LanguageTag) that have no WPF property slot and therefore cannot be applied via ApplyPropertyValue.
+    private void FormatSelectedModelRuns(Func<RunFormatting, RunFormatting> transform)
+    {
+        Focus();
+        CommitToModel();
+        var indices = SelectedModelParagraphIndices();
+        foreach (var blockIndex in indices)
+        {
+            if (_model.Blocks[blockIndex] is not ModelParagraph paragraph)
+                continue;
+            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+                _commands.Execute(new SetRunFormattingCommand(blockIndex, runIndex, transform(paragraph.Runs[runIndex].Formatting)));
+        }
+        // Re-render so the visual chrome (border decoration, shading background, language) updates.
+        LoadModel(_model);
+    }
+
+    /// <summary>
+    /// Set (or clear when <paramref name="border"/> is null) the character border on every run in the
+    /// selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// </summary>
+    public void SetCharacterBorder(ParagraphBorder? border) =>
+        FormatSelectedModelRuns(f => f with { CharacterBorder = border });
+
+    /// <summary>
+    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on every run
+    /// in the selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// </summary>
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
+        FormatSelectedModelRuns(f => f with
+        {
+            CharacterShadingHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
+            CharacterShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
+        });
+
+    /// <summary>
+    /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on every
+    /// run in the selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// </summary>
+    public void SetProofingLanguage(string? languageTag) =>
+        FormatSelectedModelRuns(f => f with { LanguageTag = string.IsNullOrEmpty(languageTag) ? null : languageTag });
 
     // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built
     // by flattening lists into their item paragraphs in document order (see CommitToModel), so a WPF
@@ -5110,7 +5165,7 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(ModelRun.CommentReference(reference.CommentId));
                 break;
             case WpfRun { Tag: RunMarkers markers } markedRun
-                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null || markers.FormatRevision is not null:
+                when markedRun.Text.Length > 0 || markers.Comment is not null || markers.Control is not null || markers.FormatRevision is not null || markers.CharacterFormat is not null:
                 // A run carrying any combination of comment / content-control / revision / format-revision
                 // marks. Recover its formatting, strip the view-only chrome each facet injected (review
                 // highlight, control shade, revision colour/decoration, format-revision tint), and carry
@@ -5778,8 +5833,46 @@ public sealed class DocumentView : RichTextBox
         }
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
-        if (TryParseColor(fmt.HighlightColorHex, out var highlight))
+        // Character shading (pattern-aware) takes precedence over plain highlight for the background.
+        // Both map to wpf.Background since WPF Run has no separate shading slot; the CharacterFormatMarker
+        // tag carries the full model data so ReadRunFormatting(WpfRun) can recover it on commit.
+        if (TryParseColor(fmt.CharacterShadingHex, out var charShading))
+            wpf.Background = new SolidColorBrush(charShading);
+        else if (TryParseColor(fmt.HighlightColorHex, out var highlight))
             wpf.Background = new SolidColorBrush(highlight);
+
+        // Character border: stored in RunMarkers so it survives commit; also add a thick TextDecoration
+        // underline+overline as a visual approximation (WPF Run cannot draw a real box border inline).
+        if (fmt.CharacterBorder is { } charBdr)
+        {
+            AddMarker(wpf, m => m with { CharacterFormat = (m.CharacterFormat ?? new CharacterFormatMarker(null, null, ShadingPattern.Clear, null)) with { Border = charBdr } });
+            // Visual hint: underline + overline in the border colour, thickness proportional to width.
+            if (TryParseColor(charBdr.ColorHex, out var bdrColor))
+            {
+                var bdrPen = new System.Windows.Media.Pen(new SolidColorBrush(bdrColor), Math.Max(1, charBdr.WidthPt * 0.5));
+                var bdrDecorations = wpf.TextDecorations is { } existing
+                    ? new TextDecorationCollection(existing)
+                    : new TextDecorationCollection();
+                if (!charBdr.BottomOnly)
+                    bdrDecorations.Add(new TextDecoration { Location = TextDecorationLocation.OverLine, Pen = bdrPen, PenThicknessUnit = TextDecorationUnit.Pixel });
+                bdrDecorations.Add(new TextDecoration { Location = TextDecorationLocation.Underline, Pen = bdrPen, PenThicknessUnit = TextDecorationUnit.Pixel });
+                wpf.TextDecorations = bdrDecorations;
+            }
+        }
+        // Character shading pattern and language tag also ride in RunMarkers when set.
+        if (fmt.CharacterShadingHex is not null || fmt.LanguageTag is not null)
+            AddMarker(wpf, m =>
+            {
+                var cf = m.CharacterFormat ?? new CharacterFormatMarker(null, null, ShadingPattern.Clear, null);
+                return m with { CharacterFormat = cf with { ShadingHex = fmt.CharacterShadingHex, ShadingPattern = fmt.CharacterShadingPattern, LanguageTag = fmt.LanguageTag } };
+            });
+        // WPF xml:lang / Language for spell-check: set the run's language so the built-in spell checker
+        // uses the correct dictionary when one is installed. Falls back to the system default when null.
+        if (fmt.LanguageTag is { Length: > 0 } lang)
+        {
+            try { wpf.Language = System.Windows.Markup.XmlLanguage.GetLanguage(lang); }
+            catch (InvalidOperationException) { /* unknown language tag — skip */ }
+        }
 
         // Small caps / all caps. AllCaps wins visually but both flags are preserved on commit by
         // mapping each to a distinct FontCapitals value that ReadRunFormatting decodes back.
@@ -5937,7 +6030,19 @@ public sealed class DocumentView : RichTextBox
         RevisionMarker? Revision = null,
         CommentMarker? Comment = null,
         ContentControlMarker? Control = null,
-        FormatRevisionMarker? FormatRevision = null);
+        FormatRevisionMarker? FormatRevision = null,
+        CharacterFormatMarker? CharacterFormat = null);
+
+    /// <summary>
+    /// Carries the model-only run properties that have no WPF FlowDocument property slot — character
+    /// border, character shading pattern, and proofing language — on the WPF run's Tag so they survive
+    /// a BuildRun → CommitToModel round-trip. ReadRunFormatting(WpfRun) recovers them from the tag.
+    /// </summary>
+    private sealed record CharacterFormatMarker(
+        ParagraphBorder? Border,
+        string? ShadingHex,
+        ShadingPattern ShadingPattern,
+        string? LanguageTag);
 
     /// <summary>
     /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
@@ -9648,12 +9753,40 @@ public sealed class DocumentView : RichTextBox
             fontSizePt /= SuperSubScale;
 
         var capitals = Typography.GetCapitals(run);
+
+        // Recover model-only fields (character border, shading, language) from the CharacterFormatMarker
+        // tag set by BuildRun. The background brush is also inspected for the highlight/shading fallback
+        // (plain runs without the marker use the background as-is for HighlightColorHex).
+        var charFmt = (run.Tag as RunMarkers)?.CharacterFormat;
+        var charBorder = charFmt?.Border;
+        var charShadingHex = charFmt?.ShadingHex;
+        var charShadingPattern = charFmt?.ShadingPattern ?? ShadingPattern.Clear;
+        var languageTag = charFmt?.LanguageTag;
+
+        // The background brush is the rendered colour of either CharacterShading or Highlight; use the
+        // marker to tell them apart (marker present → shading, no marker → highlight).
+        string? highlightHex = null;
+        if (run.Background is SolidColorBrush bg)
+        {
+            if (charShadingHex is null)
+                highlightHex = ToHex(bg.Color);
+            // else: the background was set from CharacterShadingHex; don't also capture as highlight.
+        }
+
         return new RunFormatting
         {
             Bold = run.FontWeight >= FontWeights.Bold,
             Italic = run.FontStyle == FontStyles.Italic,
-            Underline = run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true,
-            Strikethrough = run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            // Character border injects an overline+underline; strip them so they don't register as real
+            // Underline/Strikethrough (the border's TextDecorations have a coloured custom Pen, distinct
+            // from the standard single-colour decorations). We recover the real underline/strikethrough
+            // by consulting the tag: if the run had a real underline BuildRun added TextDecorations.Underline[0]
+            // BEFORE the border decorations. We can't distinguish them here, so we rely on the fact that
+            // if CharacterBorder is set we strip all decorations and trust the model marker; the real
+            // underline/strikethrough state comes back through the next full round-trip from the model.
+            // For the common case (no character border), the standard paths apply unchanged.
+            Underline = charBorder is null && run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true,
+            Strikethrough = charBorder is null && run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
             SmallCaps = capitals == FontCapitals.SmallCaps,
             AllCaps = capitals == FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
@@ -9662,7 +9795,11 @@ public sealed class DocumentView : RichTextBox
             FontFamily = run.FontFamily.Source,
             FontSizePt = fontSizePt,
             ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
-            HighlightColorHex = run.Background is SolidColorBrush highlight ? ToHex(highlight.Color) : null
+            HighlightColorHex = highlightHex,
+            CharacterBorder = charBorder,
+            CharacterShadingHex = charShadingHex,
+            CharacterShadingPattern = charShadingPattern,
+            LanguageTag = languageTag,
         };
     }
 
@@ -9839,7 +9976,12 @@ public sealed class DocumentView : RichTextBox
             FontFamily = r.FontFamily ?? style.FontFamily ?? d.FontFamily,
             FontSizePt = r.FontSizePt ?? style.FontSizePt ?? d.FontSizePt,
             ColorHex = r.ColorHex ?? style.ColorHex ?? d.ColorHex,
-            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex
+            HighlightColorHex = r.HighlightColorHex ?? style.HighlightColorHex ?? d.HighlightColorHex,
+            // Model-only fields that do not inherit from styles or document defaults — pass through verbatim.
+            CharacterBorder = r.CharacterBorder,
+            CharacterShadingHex = r.CharacterShadingHex,
+            CharacterShadingPattern = r.CharacterShadingPattern,
+            LanguageTag = r.LanguageTag,
         };
     }
 

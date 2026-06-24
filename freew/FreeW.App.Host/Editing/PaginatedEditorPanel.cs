@@ -441,6 +441,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private string? _panelClipboard;
 
     /// <summary>
+    /// The in-process copy of the most recently copied/cut cross-page selection text.
+    /// Always set on a successful CopySelection; independent of the OS clipboard availability so
+    /// callers (and tests) can verify the copy payload even when the system clipboard is locked.
+    /// </summary>
+    internal string? LastCopiedText => _panelClipboard;
+
+    /// <summary>
     /// Copies the current cross-page selection to the clipboard as plain text.
     /// Within-box copy is handled natively by the RichTextBox.
     /// </summary>
@@ -454,7 +461,34 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             return;
 
         _panelClipboard = text;
-        try { System.Windows.Clipboard.SetText(text); } catch { /* clipboard locked */ }
+        SetClipboardTextWithRetry(text);
+    }
+
+    /// <summary>
+    /// Sets the system clipboard text, retrying a few times with a short delay to handle the transient
+    /// COM error (CLIPBRD_E_CANT_OPEN / 0x800401D0) that WPF's clipboard raises under contention.
+    /// Swallows the failure gracefully after all retries are exhausted so a locked clipboard never
+    /// crashes the editor — the panel clipboard (<see cref="LastCopiedText"/>) is always set regardless.
+    /// </summary>
+    private static void SetClipboardTextWithRetry(string text)
+    {
+        const int MaxAttempts = 3;
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(text);
+                return; // success
+            }
+            catch when (attempt < MaxAttempts - 1)
+            {
+                System.Threading.Thread.Sleep(10); // brief yield before retry
+            }
+            catch
+            {
+                // Final attempt failed — clipboard contention; panel clipboard is still set.
+            }
+        }
     }
 
     /// <summary>
