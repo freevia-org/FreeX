@@ -708,15 +708,54 @@ public partial class GridView
 
     private void DrawNativeTimelineControl(DrawingContext dc, Rect rect, TimelineModel timeline, double pixelsPerDip)
     {
+        // Resolve colors from the timeline's built-in style (TimeSlicerStyleLight1..6) and workbook theme.
+        var style = TimelineStyleColors.Resolve(timeline.StyleName, WorkbookTheme);
+        var bodyBrush = GetDrawingObjectBrush(255, style.Body);
+        var borderPen = GetDrawingObjectPen(255, style.Border, 1);
+        var trackBrush = GetDrawingObjectBrush(255, style.Track);
+        var selectionBandBrush = GetDrawingObjectBrush(255, style.SelectionBand);
+        var summaryLabelBrush = GetDrawingObjectBrush(255, style.SummaryLabel);
+        var headerBrush = GetDrawingObjectBrush(255, style.Header);
+        var headerTextBrush = GetDrawingObjectBrush(255, style.HeaderText);
+
+        // Light2–6 use a white header with a bold dark caption; Light1 uses the grey-filled header.
+        var isAccentStyle = style.Header == CellColor.White;
+
         var layout = TimelineLayoutBuilder.Build(
             timeline,
             new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
             ResolveTimelineGranularity(timeline));
 
-        DrawNativeControlFrame(dc, rect, layout.Caption, pixelsPerDip);
-        DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), NativeControlMutedTextBrush, 9, verticalPadding: 0, pixelsPerDip);
-        dc.DrawRoundedRectangle(NativeControlTileBrush, null, ToRect(layout.TrackRect), 3, 3);
-        dc.DrawRoundedRectangle(NativeControlSelectedTileBrush, null, ToRect(layout.SelectionRect), 3, 3);
+        DrawNativeControlFrame(
+            dc,
+            rect,
+            layout.Caption,
+            pixelsPerDip,
+            bodyBrush,
+            borderPen,
+            headerBrush,
+            headerTextBrush,
+            hasHeader: true,
+            boldHeader: isAccentStyle);
+
+        // Draw the clear-filter (×) glyph top-right of the header when an active filter exists.
+        if (layout.HasActiveFilter)
+        {
+            var headerRect = new Rect(rect.Left, rect.Top, rect.Width, Math.Min(22, rect.Height));
+            const double glyphSize = 10;
+            const double glyphMargin = 4;
+            var glyphRect = new Rect(
+                headerRect.Right - glyphSize - glyphMargin,
+                headerRect.Top + (headerRect.Height - glyphSize) / 2,
+                glyphSize,
+                glyphSize);
+            DrawClippedText(dc, "×", glyphRect, headerTextBrush, 9, verticalPadding: 0, pixelsPerDip);
+        }
+
+        // Summary date label — accent color and bold so it reads clearly against the white body.
+        DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), summaryLabelBrush, 9, verticalPadding: 0, pixelsPerDip, isBold: isAccentStyle);
+        dc.DrawRoundedRectangle(trackBrush, null, ToRect(layout.TrackRect), 3, 3);
+        dc.DrawRoundedRectangle(selectionBandBrush, null, ToRect(layout.SelectionRect), 3, 3);
         DrawTimelineHandle(dc, layout.StartHandle);
         DrawTimelineHandle(dc, layout.EndHandle);
     }

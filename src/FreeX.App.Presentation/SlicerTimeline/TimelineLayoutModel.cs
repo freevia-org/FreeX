@@ -217,7 +217,8 @@ public static class TimelineLayoutBuilder
     /// <summary>
     /// Formats the date label the renderers show under the header. When no sub-range is selected and no
     /// bounds are known this is the field name; otherwise it is the selected (or full) range formatted
-    /// per <paramref name="granularity"/>.
+    /// per <paramref name="granularity"/>. For the Month granularity, Excel shows abbreviated month names
+    /// with a shared trailing year (e.g. "Feb – Apr 2026"); other granularities use a simple separator.
     /// </summary>
     public static string FormatDateLabel(TimelineModel timeline, TimelineGranularity granularity)
     {
@@ -228,9 +229,45 @@ public static class TimelineLayoutBuilder
         if (start is null && end is null)
             return timeline.SourceFieldName ?? timeline.CacheName ?? "";
 
+        if (granularity == TimelineGranularity.Month)
+            return FormatMonthRangeLabel(start, end);
+
         var startLabel = FormatBoundary(start, granularity);
         var endLabel = FormatBoundary(end, granularity);
-        return $"{startLabel} - {endLabel}".Trim();
+        return $"{startLabel} – {endLabel}".Trim();
+    }
+
+    // Formats a month-granularity range label matching Excel's style:
+    // "Feb – Apr 2026" (same year) or "Dec 2025 – Feb 2026" (cross-year).
+    private static string FormatMonthRangeLabel(string? startRaw, string? endRaw)
+    {
+        var startDate = ParseDate(startRaw);
+        var endDate = ParseDate(endRaw);
+
+        if (startDate is null && endDate is null)
+            return "";
+
+        if (startDate is { } s && endDate is { } e)
+        {
+            if (s.Year == e.Year)
+            {
+                // Same year: "Feb – Apr 2026"
+                var startMon = s.ToString("MMM", CultureInfo.InvariantCulture);
+                var endMon = e.ToString("MMM", CultureInfo.InvariantCulture);
+                return $"{startMon} – {endMon} {s.Year}";
+            }
+            else
+            {
+                // Cross-year: "Dec 2025 – Feb 2026"
+                var startFmt = s.ToString("MMM yyyy", CultureInfo.InvariantCulture);
+                var endFmt = e.ToString("MMM yyyy", CultureInfo.InvariantCulture);
+                return $"{startFmt} – {endFmt}";
+            }
+        }
+
+        // Only one bound available — format as "MMM yyyy"
+        var date = startDate ?? endDate;
+        return date!.Value.ToString("MMM yyyy", CultureInfo.InvariantCulture);
     }
 
     /// <summary>Formats a single date string per <paramref name="granularity"/> (day/month/quarter/year).</summary>
@@ -244,7 +281,7 @@ public static class TimelineLayoutBuilder
         {
             TimelineGranularity.Year => parsed.Year.ToString(CultureInfo.InvariantCulture),
             TimelineGranularity.Quarter => $"{parsed.Year}-Q{((parsed.Month - 1) / 3) + 1}",
-            TimelineGranularity.Month => parsed.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+            TimelineGranularity.Month => parsed.ToString("MMM yyyy", CultureInfo.InvariantCulture),
             _ => parsed.ToString(DateFormat, CultureInfo.InvariantCulture)
         };
     }
