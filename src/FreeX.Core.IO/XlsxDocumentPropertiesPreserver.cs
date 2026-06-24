@@ -1,21 +1,18 @@
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeX.Core.IO;
 
 internal static class XlsxDocumentPropertiesPreserver
 {
-    private const string CorePropertiesPart = "docProps/core.xml";
-    private const string CorePropertiesContentType =
-        "application/vnd.openxmlformats-package.core-properties+xml";
-    private const string CorePropertiesRelationshipType =
-        "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-    private const string ExtendedPropertiesPart = "docProps/app.xml";
-    private const string ExtendedPropertiesRelationshipType =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-    private const string CustomPropertiesPart = "docProps/custom.xml";
-    private const string CustomPropertiesRelationshipType =
-        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+    private const string CorePropertiesPart = OpcPackageProperties.CorePropertiesZipEntry;
+    private const string CorePropertiesContentType = OpcPackageProperties.CorePropertiesContentType;
+    private const string CorePropertiesRelationshipType = OpcPackageProperties.CorePropertiesRelationshipType;
+    private const string ExtendedPropertiesPart = OpcPackageProperties.ExtendedPropertiesZipEntry;
+    private const string ExtendedPropertiesRelationshipType = OpcPackageProperties.ExtendedPropertiesRelationshipType;
+    private const string CustomPropertiesPart = OpcPackageProperties.CustomPropertiesZipEntry;
+    private const string CustomPropertiesRelationshipType = OpcPackageProperties.CustomPropertiesRelationshipType;
     private const string CorePropertiesServicePartPrefix = "package/services/metadata/core-properties/";
 
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)

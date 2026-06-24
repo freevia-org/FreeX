@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeW.Core.Model;
 
 namespace FreeW.Core.IO;
@@ -135,22 +136,22 @@ internal static class Ooxml
     public static readonly XNamespace DcmiType = "http://purl.org/dc/dcmitype/";
     public static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
-    public const string CorePropertiesContentType = "application/vnd.openxmlformats-package.core-properties+xml";
-    public const string CorePropertiesRelType = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
-    public const string CorePropertiesPartName = "/docProps/core.xml";
+    public const string CorePropertiesContentType = OpcPackageProperties.CorePropertiesContentType;
+    public const string CorePropertiesRelType = OpcPackageProperties.CorePropertiesRelationshipType;
+    public const string CorePropertiesPartName = OpcPackageProperties.CorePropertiesPartName;
 
     // OPC custom properties (docProps/custom.xml): used best-effort to persist the page watermark text.
     public static readonly XNamespace CustomProps = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
     public static readonly XNamespace VtVariant = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
-    public const string CustomPropertiesContentType = "application/vnd.openxmlformats-officedocument.custom-properties+xml";
-    public const string CustomPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
-    public const string CustomPropertiesPartName = "/docProps/custom.xml";
+    public const string CustomPropertiesContentType = OpcPackageProperties.CustomPropertiesContentType;
+    public const string CustomPropertiesRelType = OpcPackageProperties.CustomPropertiesRelationshipType;
+    public const string CustomPropertiesPartName = OpcPackageProperties.CustomPropertiesPartName;
 
     // OPC extended properties (docProps/app.xml): application/company/template and other package metadata
     // Word stores outside the core/custom property model.
-    public const string ExtendedPropertiesContentType = "application/vnd.openxmlformats-officedocument.extended-properties+xml";
-    public const string ExtendedPropertiesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-    public const string ExtendedPropertiesPartName = "/docProps/app.xml";
+    public const string ExtendedPropertiesContentType = OpcPackageProperties.ExtendedPropertiesContentType;
+    public const string ExtendedPropertiesRelType = OpcPackageProperties.ExtendedPropertiesRelationshipType;
+    public const string ExtendedPropertiesPartName = OpcPackageProperties.ExtendedPropertiesPartName;
 
     /// <summary>The custom-property name under which the FreeW page watermark text is persisted.</summary>
     public const string WatermarkPropertyName = "FreeWWatermark";
@@ -336,12 +337,9 @@ internal static class Ooxml
     };
 
     /// <summary>W3CDTF as used by dcterms:created/modified (UTC, second precision, trailing 'Z').</summary>
-    public static string ToW3CDtf(DateTimeOffset value) =>
-        value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+    public static string ToW3CDtf(DateTimeOffset value) => OpcPackageProperties.ToW3CDtf(value);
 
-    public static DateTimeOffset? ParseW3CDtf(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var v) ? v : null;
+    public static DateTimeOffset? ParseW3CDtf(string? value) => OpcPackageProperties.ParseW3CDtf(value);
 
     /// <summary>DrawingML "EMU" = English Metric Units; 914400 per inch, 12700 per point.</summary>
     public const long EmuPerPoint = 12700;
