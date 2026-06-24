@@ -9,7 +9,7 @@ public sealed class AvaloniaUiTextTests
     public void UiText_DelegatesSharedLocalizationHelpers()
     {
         UiText.Get("Common_Cancel").Should().Be(FreeX.App.Localization.Loc.Get("Common_Cancel"));
-        UiText.GetNeutral("Common_Cancel").Should().Be("Cancel");
+        UiText.GetNeutral("Common_Cancel").Should().Be("_Cancel"); // canonical value includes WPF access-key prefix; Avalonia strips it at render time
         UiText.Format("PivotOptions_Title", "Sales")
             .Should()
             .Be(FreeX.App.Localization.Loc.Format("PivotOptions_Title", "Sales"));

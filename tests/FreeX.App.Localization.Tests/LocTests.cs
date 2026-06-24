@@ -30,7 +30,8 @@ public sealed class LocTests
     [Fact]
     public void Get_NeutralCulture_ReturnsEnglish()
     {
-        WithUiCulture("en-US", () => Loc.Get("Common_Cancel")).Should().Be("Cancel");
+        // Common_Cancel carries the WPF access-key underscore (canonical from Host); Avalonia strips it at render time.
+        WithUiCulture("en-US", () => Loc.Get("Common_Cancel")).Should().Be("_Cancel");
     }
 
     [Fact]
@@ -53,14 +54,15 @@ public sealed class LocTests
     [Fact]
     public void Get_FrenchCulture_ReturnsTranslation()
     {
-        WithUiCulture("fr-FR", () => Loc.Get("Common_Cancel")).Should().Be("Annuler");
+        // fr-FR satellite has "_Annuler" (with WPF access-key mnemonic — canonical from Host).
+        WithUiCulture("fr-FR", () => Loc.Get("Common_Cancel")).Should().Be("_Annuler");
     }
 
     [Fact]
     public void Get_FrenchCulture_FallsBackToNeutralForUntranslatedKey()
     {
-        // OK is intentionally identical across catalogs; pick a key present only in neutral if needed.
-        WithUiCulture("fr-FR", () => Loc.Get("Common_Ok")).Should().Be("OK");
+        // fr-FR satellite carries "_OK" (with WPF access-key mnemonic — canonical from Host).
+        WithUiCulture("fr-FR", () => Loc.Get("Common_Ok")).Should().Be("_OK");
     }
 
     [Fact]
@@ -68,13 +70,15 @@ public sealed class LocTests
     {
         var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => Loc.Get("Common_Cancel"));
         pseudo.Should().StartWith("[[").And.EndWith("]]");
+        // Neutral value is "_Cancel"; pseudo-loc expands letters including the prefix, so "Cancel" doubled letters appear.
         pseudo.Should().Contain("CCaanncceell");
     }
 
     [Fact]
     public void GetNeutral_AlwaysReturnsEnglishRegardlessOfCulture()
     {
-        WithUiCulture("fr-FR", () => Loc.GetNeutral("Common_Cancel")).Should().Be("Cancel");
+        // "_Cancel" is the canonical neutral value (includes WPF access-key mnemonic).
+        WithUiCulture("fr-FR", () => Loc.GetNeutral("Common_Cancel")).Should().Be("_Cancel");
     }
 
     [Fact]
@@ -181,8 +185,9 @@ public sealed class LocTests
         var neutral = Loc.GetNeutralResourceKeys();
         var frenchKeys = WithUiCulture("fr-FR", () =>
         {
-            // Round-trip a couple of representative keys to confirm the satellite loads at all.
-            Loc.Get("Common_Cancel").Should().Be("Annuler");
+            // Round-trip a representative key to confirm the satellite loads at all.
+            // fr-FR carries "_Annuler" (canonical from Host, with WPF access-key mnemonic).
+            Loc.Get("Common_Cancel").Should().Be("_Annuler");
             return neutral;
         });
         frenchKeys.Should().NotBeEmpty();

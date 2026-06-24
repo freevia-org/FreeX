@@ -5,8 +5,8 @@ namespace FreeX.App.Host;
 
 internal static class UiText
 {
-    private const string ResourceBaseName = "FreeX.App.Host.Resources.Strings";
-    private static readonly ResourceManager ResourceManager = new(ResourceBaseName, typeof(UiText).Assembly);
+    private const string ResourceBaseName = "FreeX.App.Localization.Resources.Strings";
+    private static readonly ResourceManager ResourceManager = new(ResourceBaseName, typeof(Loc).Assembly);
     private static readonly LocalizedTextCatalog Catalog = new(ResourceManager);
 
     public static string Ok => Get("Common_Ok");
