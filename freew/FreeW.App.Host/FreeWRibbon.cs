@@ -147,7 +147,12 @@ internal static class FreeWRibbon
                 tab.Group("pages", "Pages", "P", 100, g =>
                 {
                     // Word shows the Pages group as labelled icon+label rows — use Medium so the labels read.
-                    g.Medium("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage);
+                    g.Medium("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage, menu: m =>
+                    {
+                        m.Item("freew.cover-page-default", "Default", "D");
+                        m.Item("freew.cover-page-banded", "Banded", "B");
+                        m.Item("freew.cover-page-motion", "Motion", "M");
+                    });
                     g.Medium("freew.blank-page", "Blank Page", RibbonCommandIconKind.OnePage);
                     g.Medium("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
                     g.RowBreak();
@@ -197,7 +202,14 @@ internal static class FreeWRibbon
                     // Small group -> labelled Medium buttons, Word-style.
                     g.Medium("freew.header", "Header", RibbonCommandIconKind.Header);
                     g.Medium("freew.footer", "Footer", RibbonCommandIconKind.Footer);
-                    g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
+                    g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber, menu: m =>
+                    {
+                        m.Item("freew.page-number-top", "Top of Page", "T");
+                        m.Item("freew.page-number-bottom", "Bottom of Page", "B");
+                        m.Item("freew.page-number-current", "Current Position", "C");
+                        m.Separator();
+                        m.Item("freew.page-number-format", "Format Page Numbers…", "F");
+                    });
                 });
                 tab.Group("text", "Text", "X", 74, g =>
                 {
@@ -326,6 +338,16 @@ internal static class FreeWRibbon
                         m.Item("freew.columns-left", "Left", "L");
                         m.Item("freew.columns-right", "Right", "R");
                         m.Item("freew.columns-more", "More Columns...", "M");
+                    });
+                    g.Medium("freew.breaks", "Breaks", RibbonCommandIconKind.PageBreak, "B", menu: m =>
+                    {
+                        m.Item("freew.page-break", "Page Break", "P");
+                        m.Item("freew.column-break", "Column Break", "C");
+                        m.Separator();
+                        m.Item("freew.section-break-next-page", "Next Page", "N");
+                        m.Item("freew.section-break-continuous", "Continuous", "O");
+                        m.Item("freew.section-break-even-page", "Even Page", "E");
+                        m.Item("freew.section-break-odd-page", "Odd Page", "D");
                     });
                     g.RowBreak();
                     // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).
@@ -652,9 +674,23 @@ internal static class FreeWRibbon
                         m.Item("freew.image-wrap-behind", "Behind Text", "H");
                         m.Item("freew.image-wrap-front", "In Front of Text", "F");
                     });
+                    g.Medium("freew.image-position", "Position", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.image-rotate", "Rotate", RibbonCommandIconKind.Rotate, menu: m =>
+                    {
+                        m.Item("freew.image-rotate-right90", "Rotate Right 90°", "R");
+                        m.Item("freew.image-rotate-left90",  "Rotate Left 90°",  "L");
+                        m.Item("freew.image-flip-vertical",  "Flip Vertical",    "V");
+                        m.Item("freew.image-flip-horizontal","Flip Horizontal",  "H");
+                    });
                     g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                });
+                tab.Group("picture-adjust", "Adjust", "J", 95, g =>
+                {
+                    g.Medium("freew.image-crop", "Crop", RibbonCommandIconKind.Scale);
+                    g.Medium("freew.image-reset", "Reset Picture", RibbonCommandIconKind.Refresh);
+                    g.Medium("freew.image-border", "Picture Border", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border);
                 });
                 tab.Group("picture-size", "Size", "S", 90, g =>
                 {
@@ -662,39 +698,124 @@ internal static class FreeWRibbon
                     g.Medium("freew.image-alt-text", "Alt Text", RibbonCommandIconKind.Info);
                 });
             })
+            // ── Chart contextual tabs — Chart Tools (shown when a chart is selected) ──────────────
+            .ContextualTab("chart-design", "Chart Design",
+                new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("chart-type", "Type", "T", 100, g =>
+                    g.Medium("freew.chart-type-column", "Column", RibbonCommandIconKind.ChartColumn, menu: m =>
+                    {
+                        m.Item("freew.chart-type-column", "Column", "C");
+                        m.Item("freew.chart-type-bar", "Bar", "B");
+                        m.Item("freew.chart-type-line", "Line", "L");
+                        m.Item("freew.chart-type-pie", "Pie", "P");
+                        m.Item("freew.chart-type-scatter", "Scatter", "X");
+                        m.Item("freew.chart-type-area", "Area", "A");
+                        m.Item("freew.chart-type-doughnut", "Doughnut", "D");
+                    }));
+                tab.Group("chart-data", "Data", "D", 90, g =>
+                    g.Medium("freew.chart-edit-data", "Edit Data", RibbonCommandIconKind.Table));
+                tab.Group("chart-elements", "Chart Layouts", "E", 80, g =>
+                {
+                    g.Medium("freew.chart-title", "Chart Title", RibbonCommandIconKind.Header);
+                    g.Medium("freew.chart-axis-titles", "Axis Titles", RibbonCommandIconKind.Ruler);
+                    g.Medium("freew.chart-toggle-legend", "Legend", RibbonCommandIconKind.List);
+                });
+            })
+            .ContextualTab("chart-format", "Chart Format",
+                new RibbonTabContext("chart", "Chart Tools", RibbonContextColor.Orange), tab =>
+            {
+                tab.Group("chart-size", "Size", "S", 90, g =>
+                    g.Medium("freew.chart-size", "Size", RibbonCommandIconKind.Size));
+            })
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
             {
+                tab.Group("table-style-options", "Table Style Options", "O", 100, g =>
+                {
+                    g.Medium("freew.table-header-row", "Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-last-row", "Last Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.table-first-column", "First Column", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-last-column", "Last Column", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-banded-cols", "Banded Columns", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                });
                 tab.Group("table-style", "Table Style", "Y", 80, g =>
                 {
                     g.Medium("freew.cell-shading", "Shading", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill);
-                    g.Medium("freew.table-header-row", "Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
-                    g.RowBreak();
-                    g.Medium("freew.table-banded-rows", "Banded Rows", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                 });
             })
             .ContextualTab("table-layout", "Table Layout",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
             {
-                tab.Group("table-properties", "Properties", "P", 60, g =>
-                    g.Large("freew.table-properties", "Properties", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green));
-                tab.Group("table-rows-cols", "Rows & Columns", "R", 100, g =>
+                tab.Group("table-table", "Table", "T", 70, g =>
                 {
-                    g.Medium("freew.table-insert-row", "Insert Row", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
-                    g.Medium("freew.table-delete-row", "Delete Row", RibbonCommandIconKind.Delete);
+                    g.Medium("freew.table-select-table", "Select Table", RibbonCommandIconKind.Table);
+                    g.Medium("freew.table-select-row", "Select Row", RibbonCommandIconKind.Table);
                     g.RowBreak();
-                    g.Medium("freew.table-insert-col", "Insert Column", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
-                    g.Medium("freew.table-delete-col", "Delete Column", RibbonCommandIconKind.Delete);
+                    g.Medium("freew.table-select-col", "Select Column", RibbonCommandIconKind.Table);
+                    g.Medium("freew.table-select-cell", "Select Cell", RibbonCommandIconKind.Table);
+                    g.RowBreak();
+                    g.Medium("freew.table-view-gridlines", "View Gridlines", RibbonCommandIconKind.Grid);
+                    g.Medium("freew.table-properties", "Properties", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
+                });
+                tab.Group("table-rows-cols", "Rows & Columns", "R", 120, g =>
+                {
+                    g.Medium("freew.table-insert-above", "Insert Above", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-insert-row", "Insert Below", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.table-insert-col-left", "Insert Left", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.Medium("freew.table-insert-col", "Insert Right", RibbonCommandIconKind.Insert, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.table-delete-row", "Delete Rows", RibbonCommandIconKind.Delete);
+                    g.Medium("freew.table-delete-col", "Delete Columns", RibbonCommandIconKind.Delete);
+                    g.RowBreak();
+                    g.Medium("freew.table-delete", "Delete Table", RibbonCommandIconKind.Delete);
                 });
                 tab.Group("table-merge", "Merge", "M", 90, g =>
                 {
                     g.Medium("freew.merge-cells", "Merge Cells", RibbonCommandIconKind.Merge);
                     g.Medium("freew.split-cell", "Split Cell", RibbonCommandIconKind.Grid);
+                    g.RowBreak();
+                    g.Medium("freew.split-table", "Split Table", RibbonCommandIconKind.Grid);
+                });
+                tab.Group("table-cell-size", "Cell Size", "Z", 100, g =>
+                {
+                    g.Medium("freew.table-row-height", "Row Height", RibbonCommandIconKind.Size);
+                    g.Medium("freew.table-col-width", "Column Width", RibbonCommandIconKind.Size);
+                    g.RowBreak();
+                    g.Medium("freew.table-distribute-rows", "Distribute Rows", RibbonCommandIconKind.Grid);
+                    g.Medium("freew.table-distribute-cols", "Distribute Columns", RibbonCommandIconKind.Grid);
+                    g.RowBreak();
+                    g.Medium("freew.table-autofit-contents", "AutoFit Contents", RibbonCommandIconKind.Scale);
+                    g.Medium("freew.table-autofit-window", "AutoFit Window", RibbonCommandIconKind.Scale);
+                    g.Medium("freew.table-autofit-fixed", "Fixed Column Width", RibbonCommandIconKind.Size);
+                });
+                tab.Group("table-alignment", "Alignment", "A", 110, g =>
+                {
+                    g.Medium("freew.cell-align-top-left", "Top Left", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.cell-align-top-center", "Top Center", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.cell-align-top-right", "Top Right", RibbonCommandIconKind.AlignRight);
+                    g.RowBreak();
+                    g.Medium("freew.cell-align-middle-left", "Middle Left", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.cell-align-middle-center", "Middle Center", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.cell-align-middle-right", "Middle Right", RibbonCommandIconKind.AlignRight);
+                    g.RowBreak();
+                    g.Medium("freew.cell-align-bottom-left", "Bottom Left", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.cell-align-bottom-center", "Bottom Center", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.cell-align-bottom-right", "Bottom Right", RibbonCommandIconKind.AlignRight);
+                    g.RowBreak();
+                    g.Medium("freew.table-cell-margins", "Cell Margins", RibbonCommandIconKind.Margins);
                 });
                 tab.Group("table-data", "Data", "D", 70, g =>
                 {
                     g.Medium("freew.table-repeat-header", "Repeat Header Row", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Green);
                     g.Medium("freew.table-formula", "Formula", RibbonCommandIconKind.Sum, accent: RibbonCommandIconAccent.Green);
+                    g.RowBreak();
+                    g.Medium("freew.sort", "Sort", RibbonCommandIconKind.Sort);
+                    g.Medium("freew.table-to-text", "Convert to Text", RibbonCommandIconKind.TextFunction);
                 });
             })
             .Build();

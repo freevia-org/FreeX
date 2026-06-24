@@ -198,10 +198,25 @@ internal static class FreeWRibbonCommands
 
         // Insert tab — Pages: prepend a cover page, insert a blank page, or drop a horizontal rule / page break at the caret.
         // Each mutates the model through the view's undo/redo bus and re-renders.
-        registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(); }));
+        // Insert > Pages > Cover Page gallery: Default (existing centred layout), Banded (dark-blue title
+        // band), and Motion (right-aligned title with date). The top-level id inserts the default preset
+        // so clicking the button face (not the dropdown arrow) always works as before.
+        registry.Register("freew.cover-page", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
+        registry.Register("freew.cover-page-default", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Default); }));
+        registry.Register("freew.cover-page-banded", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Banded); }));
+        registry.Register("freew.cover-page-motion", new ActionCommand(() => { editor.Focus(); editor.InsertCoverPage(CoverPagePreset.Motion); }));
         registry.Register("freew.blank-page", new ActionCommand(() => { editor.Focus(); editor.InsertBlankPage(); }));
         registry.Register("freew.horizontal-rule", new ActionCommand(() => { editor.Focus(); editor.InsertHorizontalRule(); }));
         registry.Register("freew.page-break", new ActionCommand(() => { editor.Focus(); editor.InsertPageBreak(); }));
+
+        // Layout > Page Setup > Breaks: section/column breaks. The page-break item reuses the existing
+        // command (registered above). Each section break inserts a paragraph whose SectionBreak property
+        // is set to the appropriate SectionBreakKind, inheriting the current document's page settings.
+        registry.Register("freew.column-break", new ActionCommand(() => { editor.Focus(); editor.InsertColumnBreak(); }));
+        registry.Register("freew.section-break-next-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.NextPage); }));
+        registry.Register("freew.section-break-continuous", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.Continuous); }));
+        registry.Register("freew.section-break-even-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.EvenPage); }));
+        registry.Register("freew.section-break-odd-page", new ActionCommand(() => { editor.Focus(); editor.InsertSectionBreak(SectionBreakKind.OddPage); }));
 
         // Insert tab — insert a small 2x2 table at the caret (routes through the undo/redo bus).
         registry.Register("freew.table", new InsertTableCommand(editor, rows: 2, columns: 2));
@@ -223,6 +238,47 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-header-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         registry.Register("freew.table-banded-rows", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         registry.Register("freew.table-repeat-header", new ActionCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
+
+        // Table Tools — Directional insert/delete
+        registry.Register("freew.table-insert-above", new ActionCommand(() => { editor.Focus(); editor.InsertTableRowAbove(); }));
+        registry.Register("freew.table-insert-col-left", new ActionCommand(() => { editor.Focus(); editor.InsertTableColumnLeft(); }));
+        registry.Register("freew.table-delete", new ActionCommand(() => { editor.Focus(); editor.DeleteTable(); }));
+        // Table Tools — Merge/Split enhancements
+        registry.Register("freew.split-table", new ActionCommand(() => { editor.Focus(); editor.SplitTable(); }));
+        // Table Tools — Select
+        registry.Register("freew.table-select-table", new ActionCommand(() => { editor.Focus(); editor.SelectTable(); }));
+        registry.Register("freew.table-select-row", new ActionCommand(() => { editor.Focus(); editor.SelectTableRow(); }));
+        registry.Register("freew.table-select-col", new ActionCommand(() => { editor.Focus(); editor.SelectTableColumn(); }));
+        registry.Register("freew.table-select-cell", new ActionCommand(() => { editor.Focus(); editor.SelectTableCell(); }));
+        // Table Tools — View Gridlines (toggle; display-only)
+        registry.Register("freew.table-view-gridlines", new ActionCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
+        // Table Tools — Cell Size
+        registry.Register("freew.table-row-height", new TablePropertiesCommand(editor));
+        registry.Register("freew.table-col-width", new TablePropertiesCommand(editor));
+        registry.Register("freew.table-distribute-rows", new ActionCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
+        registry.Register("freew.table-distribute-cols", new ActionCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
+        registry.Register("freew.table-autofit-contents", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
+        registry.Register("freew.table-autofit-window", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Window); }));
+        registry.Register("freew.table-autofit-fixed", new ActionCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Fixed); }));
+        // Table Tools — Cell Alignment (9-way)
+        registry.Register("freew.cell-align-top-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-top-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-top-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Top, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-middle-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-middle-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-middle-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Center, FreeW.Core.Model.TextAlignment.Right); }));
+        registry.Register("freew.cell-align-bottom-left", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
+        registry.Register("freew.cell-align-bottom-center", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
+        registry.Register("freew.cell-align-bottom-right", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
+        // Table Tools — Cell Margins (opens Table Properties dialog)
+        registry.Register("freew.table-cell-margins", new TablePropertiesCommand(editor));
+        // Table Design — Style Options toggles
+        registry.Register("freew.table-last-row", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
+        registry.Register("freew.table-first-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
+        registry.Register("freew.table-last-column", new ActionCommand(() => { editor.Focus(); editor.ToggleTableLastColumn(); }));
+        registry.Register("freew.table-banded-cols", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
+        // Table Layout Data group — Convert to Text
+        registry.Register("freew.table-to-text", new ActionCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
 
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
@@ -247,6 +303,17 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-wrap-top-bottom", new ImageWrapCommand(editor, ImageWrapping.TopAndBottom));
         registry.Register("freew.image-wrap-behind", new ImageWrapCommand(editor, ImageWrapping.Behind));
         registry.Register("freew.image-wrap-front", new ImageWrapCommand(editor, ImageWrapping.InFront));
+        // Picture Format tab — Arrange > Rotate / Flip.
+        registry.Register("freew.image-rotate-right90", new ImageRotateStepCommand(editor, +90));
+        registry.Register("freew.image-rotate-left90",  new ImageRotateStepCommand(editor, -90));
+        registry.Register("freew.image-flip-vertical",  new ImageFlipCommand(editor, vertical: true));
+        registry.Register("freew.image-flip-horizontal",new ImageFlipCommand(editor, vertical: false));
+        // Picture Format tab — Arrange > Position.
+        registry.Register("freew.image-position", new ImagePositionCommand(editor));
+        // Picture Format tab — Adjust > Crop / Reset / Border.
+        registry.Register("freew.image-crop",   new ImageCropCommand(editor));
+        registry.Register("freew.image-reset",  new ImageResetCommand(editor));
+        registry.Register("freew.image-border", new ImageBorderCommand(editor));
         // Insert tab — Illustrations > Shapes: a small gallery of preset DrawingML shapes. Each menu item
         // inserts the matching Shape (preset geometry, or a text box carrying placeholder text) at the caret
         // via DocumentView.InsertShape. Round-trips through docx as an inline w:drawing/wps:wsp (see
@@ -311,12 +378,66 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.chart", new ActionCommand(() =>
         {
             editor.Focus();
-            editor.InsertChart(Chart.Create(
-                ChartKind.Column,
-                categories: ["Q1", "Q2", "Q3", "Q4"],
-                values: [8.0, 5.0, 11.0, 7.0],
-                seriesName: "Sales",
-                title: "Quarterly Sales"));
+            var chart = InsertChartDialog.Prompt(Application.Current?.MainWindow);
+            if (chart is not null)
+                editor.InsertChart(chart);
+        }));
+        // Chart Design contextual tab commands — all mutate the selected chart's model + re-render.
+        // Change Chart Type: picker over ChartKind.
+        foreach (ChartKind kind in Enum.GetValues<ChartKind>())
+        {
+            var k = kind; // capture
+            registry.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                editor.SetSelectedChartKind(k);
+            }));
+        }
+        // Add Chart Element — toggle Legend.
+        registry.Register("freew.chart-toggle-legend", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.ToggleSelectedChartLegend();
+        }));
+        // Add Chart Element — set/clear Chart Title.
+        registry.Register("freew.chart-title", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var (accepted, newTitle) = ChartTitleDialog.Prompt(Application.Current?.MainWindow, chart.Title);
+            if (accepted)
+                editor.SetSelectedChartTitle(newTitle);
+        }));
+        // Add Chart Element — set axis titles.
+        registry.Register("freew.chart-axis-titles", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var result = ChartAxisTitlesDialog.Prompt(Application.Current?.MainWindow, chart.CategoryAxisTitle, chart.ValueAxisTitle);
+            if (result is not null)
+                editor.SetSelectedChartAxisTitles(result.Value.CategoryTitle, result.Value.ValueTitle);
+        }));
+        // Edit Data — reopen the data grid dialog.
+        registry.Register("freew.chart-edit-data", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var replacement = InsertChartDialog.Prompt(Application.Current?.MainWindow, chart);
+            if (replacement is not null)
+                editor.ReplaceSelectedChartData(replacement);
+        }));
+        // Chart Format contextual tab — Size dialog.
+        registry.Register("freew.chart-size", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var chart = editor.SelectedChart();
+            if (chart is null) return;
+            var result = ChartSizeDialog.Prompt(Application.Current?.MainWindow, chart.WidthPt, chart.HeightPt);
+            if (result is not null)
+                editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
         }));
         registry.Register("freew.wordart", new ActionCommand(() =>
         {
@@ -560,7 +681,13 @@ internal static class FreeWRibbonCommands
         // into the footer. These edit the model's Header/Footer directly (saved into docx + printed).
         registry.Register("freew.header", new HeaderFooterCommand(editor, isFooter: false));
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true));
-        registry.Register("freew.page-number", new InsertPageNumberCommand(editor));
+        // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
+        // The top-level id inserts into the footer (Word's default button-face action).
+        registry.Register("freew.page-number", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
+        registry.Register("freew.page-number-top", new InsertPageNumberCommand(editor, PageNumberPosition.Top));
+        registry.Register("freew.page-number-bottom", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
+        registry.Register("freew.page-number-current", new InsertPageNumberCommand(editor, PageNumberPosition.Current));
+        registry.Register("freew.page-number-format", new PageNumberFormatCommand(editor));
         registry.Register("freew.field", new InsertFieldCommand(editor));
         registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
         registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
@@ -945,15 +1072,21 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) => action();
     }
 
-    // Home > Clipboard > Format Painter: arm the painter from the current selection (capture its run +
-    // paragraph formatting), then let the editor stamp it onto the user's next mouse selection and
-    // disarm — the classic capture-then-apply-to-next gesture. Clicking again while armed cancels it.
+    // Home > Clipboard > Format Painter: single-click arms for one-shot (stamps the next selection, then
+    // disarms); double-click arms for persistent lock mode (re-applies on every subsequent selection until
+    // Escape or another click cancels it). The timestamp of the last Execute call detects a double-click.
     private sealed class FormatPainterCommand(DocumentView editor) : IRibbonCommand
     {
+        private DateTime _lastExecute = DateTime.MinValue;
+        private const double DoubleClickMs = 500;
+
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            editor.ArmFormatPainter();
+            var now = DateTime.UtcNow;
+            var isDouble = (now - _lastExecute).TotalMilliseconds <= DoubleClickMs;
+            _lastExecute = now;
+            editor.ArmFormatPainter(locked: isDouble);
         }
     }
 
@@ -2109,14 +2242,21 @@ internal static class FreeWRibbonCommands
             encoder.Save(buffer);
 
             // Convert device-independent pixels to points, capping the width so large photos fit.
-            var widthPt = source.PixelWidth / PxPerPoint;
-            var heightPt = source.PixelHeight / PxPerPoint;
+            var origPxW = source.PixelWidth;
+            var origPxH = source.PixelHeight;
+            var widthPt = origPxW / PxPerPoint;
+            var heightPt = origPxH / PxPerPoint;
             if (widthPt > MaxWidthPt && widthPt > 0)
             {
                 heightPt *= MaxWidthPt / widthPt;
                 widthPt = MaxWidthPt;
             }
-            return new InlineImage(buffer.ToArray(), widthPt, heightPt);
+            // Store original pixel dimensions so Reset Size can restore the 100% natural size.
+            return new InlineImage(buffer.ToArray(), widthPt, heightPt)
+            {
+                OriginalPixelWidth  = origPxW,
+                OriginalPixelHeight = origPxH,
+            };
         }
     }
 
@@ -2185,8 +2325,8 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt) is { } widthPt)
-                editor.SetSelectedImageSize(widthPt);
+            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt, image.HeightPt) is { } size)
+                editor.SetSelectedImageSize(size.Width, size.Height);
         }
     }
 
@@ -2247,6 +2387,118 @@ internal static class FreeWRibbonCommands
             }
 
             editor.SetSelectedImageWrapping(wrapping);
+        }
+    }
+
+    // Picture Format > Arrange > Rotate: rotate the selected image by a fixed step (relative to current).
+    private sealed class ImageRotateStepCommand(DocumentView editor, double stepDeg) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Rotate");
+                return;
+            }
+            var newAngle = (image.RotationAngle + stepDeg + 360) % 360;
+            editor.SetSelectedImageRotation(newAngle, image.FlipH, image.FlipV);
+        }
+    }
+
+    // Picture Format > Arrange > Flip Vertical / Flip Horizontal.
+    private sealed class ImageFlipCommand(DocumentView editor, bool vertical) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Flip");
+                return;
+            }
+            if (vertical)
+                editor.SetSelectedImageRotation(image.RotationAngle, image.FlipH, !image.FlipV);
+            else
+                editor.SetSelectedImageRotation(image.RotationAngle, !image.FlipH, image.FlipV);
+        }
+    }
+
+    // Picture Format > Arrange > Position: open the position dialog for floating offset + anchors.
+    private sealed class ImagePositionCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Position");
+                return;
+            }
+            var result = ImagePositionDialog.Prompt(
+                Window.GetWindow(editor),
+                image.HorizontalOffsetPt, image.VerticalOffsetPt,
+                image.HorizontalAnchor, image.VerticalAnchor);
+            if (result is { } r)
+                editor.SetSelectedImagePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
+        }
+    }
+
+    // Picture Format > Adjust > Crop: open the numeric crop dialog.
+    private sealed class ImageCropCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Crop");
+                return;
+            }
+            var result = ImageCropDialog.Prompt(
+                Window.GetWindow(editor),
+                image.CropLeft, image.CropRight, image.CropTop, image.CropBottom);
+            if (result is { } r)
+                editor.SetSelectedImageCrop(r.Left, r.Right, r.Top, r.Bottom);
+        }
+    }
+
+    // Picture Format > Adjust > Reset Picture: restore natural size, clear rotation/flip/crop.
+    private sealed class ImageResetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Reset Picture");
+                return;
+            }
+            editor.ResetSelectedImage();
+        }
+    }
+
+    // Picture Format > Adjust > Picture Border: open the border color/width/dash dialog.
+    private sealed class ImageBorderCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Border");
+                return;
+            }
+            var result = ImageBorderDialog.Prompt(
+                Window.GetWindow(editor),
+                image.BorderColorHex, image.BorderWidthPt, image.BorderDash);
+            if (result is { } r)
+                editor.SetSelectedImageBorder(r.Color, r.Width, r.Dash);
         }
     }
 
@@ -2814,15 +3066,15 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Review > Proofing > Word Count: commit pending edits, compute the document statistics with the
-    // pure DocumentStatistics helper, and show them in a read-only modal.
+    // Review > Proofing > Word Count: commit pending edits, then open the statistics dialog. The dialog
+    // accepts the TextDocument directly so it can recompute when the user toggles "Include footnotes
+    // and endnotes" — no need to pre-compute here.
     private sealed class StatisticsCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.CommitToModel();
-            var stats = DocumentStatistics.Compute(editor.Model);
-            var dialog = new StatisticsDialog(Window.GetWindow(editor)!, stats);
+            var dialog = new StatisticsDialog(Window.GetWindow(editor)!, editor.Model);
             dialog.ShowDialog();
         }
     }
@@ -5054,29 +5306,76 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Header & Footer > Page Number: drop a centered page-number field into the footer.
-    private sealed class InsertPageNumberCommand(DocumentView editor) : IRibbonCommand
+    // The three gallery positions for Insert > Header & Footer > Page Number.
+    private enum PageNumberPosition { Bottom, Top, Current }
+
+    // Insert > Header & Footer > Page Number: drop a page-number field into the header (Top), footer
+    // (Bottom), or body at the caret (Current). The gallery maps each position to an instance of this
+    // command. Top and Bottom edit the model's Header/Footer directly. Current inserts a page-number
+    // run into the body at the caret block's position.
+    private sealed class InsertPageNumberCommand(DocumentView editor, PageNumberPosition position) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            editor.Focus();
             var model = editor.Model;
-            var footer = model.Footer ?? new HeaderFooter();
 
-            var alreadyPresent = footer.Paragraphs.SelectMany(p => p.Runs)
-                .Any(r => r.FieldKind == RunFieldKind.PageNumber);
-            if (!alreadyPresent)
+            if (position == PageNumberPosition.Current)
             {
-                var paragraph = new FreeW.Core.Model.Paragraph
-                {
-                    Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
-                };
-                paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
-                paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
-                footer.Paragraphs.Add(paragraph);
+                // Insert a page-number run in the body at the caret (undoable via undo/redo bus).
+                editor.InsertPageNumberAtCaret();
+                return;
             }
 
-            model.Footer = footer;
+            if (position == PageNumberPosition.Top)
+            {
+                var header = model.Header ?? new HeaderFooter();
+                var alreadyPresent = header.Paragraphs.SelectMany(p => p.Runs)
+                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
+                if (!alreadyPresent)
+                {
+                    var paragraph = new FreeW.Core.Model.Paragraph
+                    {
+                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
+                    };
+                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
+                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                    header.Paragraphs.Add(paragraph);
+                }
+                model.Header = header;
+            }
+            else
+            {
+                var footer = model.Footer ?? new HeaderFooter();
+                var alreadyPresent = footer.Paragraphs.SelectMany(p => p.Runs)
+                    .Any(r => r.FieldKind == RunFieldKind.PageNumber);
+                if (!alreadyPresent)
+                {
+                    var paragraph = new FreeW.Core.Model.Paragraph
+                    {
+                        Formatting = ParagraphFormatting.Default with { Alignment = FreeW.Core.Model.TextAlignment.Center }
+                    };
+                    paragraph.Runs.Add(new FreeW.Core.Model.Run("Page "));
+                    paragraph.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+                    footer.Paragraphs.Add(paragraph);
+                }
+                model.Footer = footer;
+            }
+        }
+    }
+
+    // Insert > Header & Footer > Page Number > Format Page Numbers…: shows a simple dialog where the
+    // user can set the starting page number (a common use case). For now shows an informational message
+    // — a full format dialog (number style, chapter numbering, start-at) is out of scope for this wave.
+    private sealed class PageNumberFormatCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
             editor.Focus();
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                "Page number format options (number style, chapter numbering, start-at) are not yet implemented.",
+                "Format Page Numbers");
         }
     }
 

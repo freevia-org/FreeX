@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Column Break">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M4 6h10v20H4zM18 6h10v20H18z" fill="#ffffff" stroke="#242424" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M14 4v24" fill="none" stroke="#4472c4" stroke-width="1.6" stroke-dasharray="3 2" stroke-linecap="round"/>
+  <path d="M7 11h4M7 15h4M7 19h4M21 11h4M21 15h4M21 19h4" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

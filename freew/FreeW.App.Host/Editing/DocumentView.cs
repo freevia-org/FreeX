@@ -114,9 +114,16 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
     /// painter is idle). On the next selection the user makes, this is stamped onto that selection
-    /// and the painter disarms. See <see cref="ArmFormatPainter"/>.
+    /// and the painter disarms (single-shot) or stays armed (locked mode). See <see cref="ArmFormatPainter"/>.
     /// </summary>
     private FormatPainterClipboard? _formatPainter;
+
+    /// <summary>
+    /// When true the painter stays armed after each application (double-click / lock mode), re-applying
+    /// on every new selection until the user clicks the button again or presses Escape. False for the
+    /// default single-shot gesture.
+    /// </summary>
+    private bool _formatPainterLocked;
 
     /// <summary>
     /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
@@ -1162,6 +1169,19 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Prepend a cover page using the given <paramref name="preset"/> at the start of the document,
+    /// routing each block insert through the undo/redo bus so it is reversible. The title/author come
+    /// from <see cref="TextDocument.Properties"/>. Re-renders the surface.
+    /// </summary>
+    public void InsertCoverPage(CoverPagePreset preset)
+    {
+        CommitToModel();
+        var blocks = DocumentOps.BuildCoverPage(_model, preset);
+        for (var i = 0; i < blocks.Count; i++)
+            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+    }
+
+    /// <summary>
     /// Insert a full blank page after the block the caret sits in. FreeW represents this with two
     /// page-break-before paragraphs so following content moves after the inserted blank page.
     /// </summary>
@@ -1202,6 +1222,51 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
     }
 
+    /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
+    public void InsertTableRowAbove() => MutateCaretTable((index, rowIndex, _) =>
+        new InsertTableRowCommand(index, rowIndex));
+
+    /// <summary>
+    /// Insert a page-number field run in a new paragraph after the caret's block, routing through the
+    /// undo/redo bus. Used by Insert &gt; Header &amp; Footer &gt; Page Number &gt; Current Position.
+    /// </summary>
+    public void InsertPageNumberAtCaret()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        var para = new FreeW.Core.Model.Paragraph();
+        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+        _commands.Execute(new InsertBlockCommand(index, para));
+    }
+
+    /// <summary>
+    /// Insert a section break of the given <paramref name="breakKind"/> after the caret's block, routing
+    /// through the undo/redo bus. The new paragraph's SectionBreak inherits the current document's final
+    /// page settings so the new section starts with the same layout.
+    /// </summary>
+    public void InsertSectionBreak(SectionBreakKind breakKind)
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateSectionBreak(breakKind, _model.Page)));
+    }
+
+    /// <summary>
+    /// Insert a column break after the caret's block, routing through the undo/redo bus.
+    /// </summary>
+    public void InsertColumnBreak()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateColumnBreak()));
+    }
+
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
     public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new InsertTableRowCommand(index, rowIndex + 1));
@@ -1210,6 +1275,10 @@ public sealed class DocumentView : RichTextBox
     public void DeleteTableRow() => MutateCaretTable((index, rowIndex, _) =>
         new DeleteTableRowCommand(index, rowIndex));
 
+    /// <summary>Insert a blank column to the left of the caret's column in the table containing the caret.</summary>
+    public void InsertTableColumnLeft() => MutateCaretTable((index, _, columnIndex) =>
+        new InsertTableColumnCommand(index, columnIndex));
+
     /// <summary>Insert a blank column to the right of the caret's column in the table containing the caret.</summary>
     public void InsertTableColumn() => MutateCaretTable((index, _, columnIndex) =>
         new InsertTableColumnCommand(index, columnIndex + 1));
@@ -1217,6 +1286,223 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Delete the caret's column from the table containing the caret (no-op on the last column).</summary>
     public void DeleteTableColumn() => MutateCaretTable((index, _, columnIndex) =>
         new DeleteTableColumnCommand(index, columnIndex));
+
+    /// <summary>Delete the entire table containing the caret from the document (routes through the undo/redo bus).</summary>
+    public void DeleteTable()
+    {
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0)
+            return;
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [new ModelParagraph(string.Empty)]));
+    }
+
+    /// <summary>
+    /// Split the table at the caret row into two tables: the current row becomes the first row of the
+    /// new (lower) table, and a blank paragraph is inserted between them. Routes through the undo/redo
+    /// bus (one reversible <see cref="ReplaceBlocksCommand"/>). No-op outside a table or when the caret
+    /// is in the first row (nothing to split off above).
+    /// </summary>
+    public void SplitTable()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex <= 0)
+            return; // nothing above — already the first row
+
+        // Top table: rows [0, rowIndex-1]
+        var top = new ModelTable { Formatting = table.Formatting };
+        top.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        for (var i = 0; i < rowIndex; i++)
+            top.Rows.Add(table.Rows[i]);
+
+        // Bottom table: rows [rowIndex, end]
+        var bottom = new ModelTable { Formatting = table.Formatting };
+        bottom.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
+        for (var i = rowIndex; i < table.Rows.Count; i++)
+            bottom.Rows.Add(table.Rows[i]);
+
+        // Replace the single table block with: top table + blank paragraph + bottom table
+        var separator = new ModelParagraph(string.Empty);
+        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [top, separator, bottom]));
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire table containing the caret (navigates caret to first cell).
+    /// No-op outside a table or when the table has no rows.
+    /// </summary>
+    public void SelectTable()
+    {
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count == 0)
+            return;
+        // Move caret to start of first cell — full WPF cross-cell selection is not supported
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire row containing the caret. No-op outside a table.
+    /// </summary>
+    public void SelectTableRow()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, _) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the caret's column. No-op outside a table.
+    /// </summary>
+    public void SelectTableColumn()
+    {
+        CommitToModel();
+        var (blockIndex, _, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (columnIndex < 0)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Extend the selection to span the entire cell containing the caret. No-op outside a table.
+    /// </summary>
+    public void SelectTableCell()
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        Focus();
+    }
+
+    /// <summary>
+    /// Set the vertical and horizontal alignment of the cell containing the caret. No-op outside a table.
+    /// </summary>
+    public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, ModelTextAlignment horizontalAlignment)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        var cell = cells[columnIndex];
+        cell.VerticalAlignment = verticalAlignment;
+        foreach (var paragraph in cell.Paragraphs)
+            paragraph.Formatting = paragraph.Formatting with { Alignment = horizontalAlignment };
+        Render();
+    }
+
+    /// <summary>
+    /// Set all rows in the table containing the caret to the same height (the average of any explicit
+    /// heights, or auto when none are set). No-op outside a table.
+    /// </summary>
+    public void DistributeTableRows()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (table.Rows.Count == 0)
+            return;
+
+        var explicitHeights = table.Rows
+            .Where(r => r.HeightPt.HasValue)
+            .Select(r => r.HeightPt!.Value)
+            .ToList();
+        var targetHeight = explicitHeights.Count > 0
+            ? explicitHeights.Average()
+            : (double?)null;
+
+        foreach (var row in table.Rows)
+        {
+            row.HeightPt = targetHeight;
+            row.HeightRule = targetHeight.HasValue ? TableRowHeightRule.Exact : TableRowHeightRule.Auto;
+        }
+        Render();
+    }
+
+    /// <summary>
+    /// Set all columns in the table containing the caret to equal width. No-op outside a table or when
+    /// there are no columns.
+    /// </summary>
+    public void DistributeTableColumns()
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        var colCount = table.ColumnCount;
+        if (colCount == 0)
+            return;
+
+        double totalWidth = table.ColumnWidthsPt.Count == colCount
+            ? table.ColumnWidthsPt.Sum()
+            : table.PreferredWidthPt ?? 468.0;
+        var colWidth = totalWidth / colCount;
+
+        table.ColumnWidthsPt.Clear();
+        for (var i = 0; i < colCount; i++)
+            table.ColumnWidthsPt.Add(colWidth);
+
+        foreach (var row in table.Rows)
+            foreach (var cell in row.Cells)
+                cell.WidthPt = colWidth;
+
+        Render();
+    }
+
+    /// <summary>
+    /// Apply an auto-fit mode to the table containing the caret. No-op outside a table.
+    /// </summary>
+    public void SetTableAutoFit(AutoFitMode mode)
+    {
+        Focus();
+        CommitToModel();
+        var (blockIndex, _, _) = CaretTableLocation();
+        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
+            || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+
+        table.AutoFit = mode;
+        if (mode == AutoFitMode.Contents)
+        {
+            table.ColumnWidthsPt.Clear();
+            foreach (var row in table.Rows)
+                foreach (var cell in row.Cells)
+                    cell.WidthPt = null;
+        }
+        else if (mode == AutoFitMode.Window)
+        {
+            table.PreferredWidthPt = 468.0;
+        }
+        Render();
+    }
 
     /// <summary>
     /// Merge the table cells spanned by the current selection. When the selection covers several cells
@@ -1307,6 +1593,28 @@ public sealed class DocumentView : RichTextBox
     public void ToggleTableRepeatHeaderRow() =>
         UpdateCaretTableFormatting(f => f with { RepeatHeaderRow = !f.RepeatHeaderRow });
 
+    /// <summary>Toggle the last-row distinct style on the table containing the caret.</summary>
+    public void ToggleTableLastRow() =>
+        UpdateCaretTableFormatting(f => f with { LastRow = !f.LastRow });
+
+    /// <summary>Toggle the first-column distinct style on the table containing the caret.</summary>
+    public void ToggleTableFirstColumn() =>
+        UpdateCaretTableFormatting(f => f with { FirstColumn = !f.FirstColumn });
+
+    /// <summary>Toggle the last-column distinct style on the table containing the caret.</summary>
+    public void ToggleTableLastColumn() =>
+        UpdateCaretTableFormatting(f => f with { LastColumn = !f.LastColumn });
+
+    /// <summary>Toggle banded-column shading (alternate columns shaded) on the table containing the caret.</summary>
+    public void ToggleTableBandedColumns() =>
+        UpdateCaretTableFormatting(f => f with { BandedColumns = !f.BandedColumns });
+
+    /// <summary>
+    /// When true, faint gridlines are drawn on tables that have no visible borders. This is a
+    /// display-only toggle (like Word's View > Table Gridlines) — it does not mutate the document model.
+    /// </summary>
+    public bool ViewGridlines { get; set; }
+
     /// <summary>
     /// Apply <paramref name="update"/> to the formatting of the table containing the caret (direct model
     /// set + re-render), mirroring <see cref="SetCaretCellShading"/>. No-op outside a table.
@@ -1322,10 +1630,11 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Resize the currently selected inline image to <paramref name="widthPt"/> points wide, scaling
-    /// the height to preserve aspect ratio. Routes through the bus (undoable). No-op without a selection.
+    /// Resize the currently selected inline image to <paramref name="widthPt"/> × <paramref name="heightPt"/>
+    /// points. If <paramref name="heightPt"/> is omitted (≤ 0), the height scales to preserve the aspect ratio.
+    /// Routes through the bus (undoable). No-op without a selection.
     /// </summary>
-    public void SetSelectedImageSize(double widthPt)
+    public void SetSelectedImageSize(double widthPt, double heightPt = 0)
     {
         if (widthPt <= 0)
             return;
@@ -1333,12 +1642,171 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        var aspect = image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1;
-        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, widthPt * aspect));
+        var finalHeight = heightPt > 0
+            ? heightPt
+            : (image.WidthPt > 0 ? image.HeightPt / image.WidthPt : 1) * widthPt;
+        _commands.Execute(new SetImageSizeCommand(blockIndex, runIndex, widthPt, finalHeight));
     }
 
     /// <summary>The inline image targeted by the current selection/caret, or null if none is selected.</summary>
     public InlineImage? SelectedImage() => SelectedImageLocation().Image;
+
+    // ── Chart selection (mirrors SelectedImage / SelectedImageLocation) ──────────────────────────
+
+    /// <summary>The inline chart targeted by the current selection/caret, or null if none is selected.</summary>
+    public Chart? SelectedChart() => SelectedChartLocation().Chart;
+
+    // Locate the model paragraph/run index of the inline chart under the selection, plus the chart itself.
+    private (int BlockIndex, int RunIndex, Chart? Chart) SelectedChartLocation()
+    {
+        var chart = ChartAtPointer(CaretPosition)
+            ?? ChartAtPointer(Selection.Start)
+            ?? ChartAtPointer(Selection.End)
+            ?? ChartInElement(CaretPosition?.Parent as TextElement)
+            ?? ChartInElement(Selection.Start.Parent as TextElement)
+            ?? ChartInElement(Selection.End.Parent as TextElement);
+        if (chart is null)
+            return (-1, -1, null);
+
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].Chart, chart))
+                    return (b, r, chart);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static Chart? ChartAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (ChartInElement(pointer.Parent as TextElement) is { } parentChart)
+            return parentChart;
+        return ChartFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? ChartFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static Chart? ChartFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: Border { Tag: Chart modelChart } }
+            ? modelChart
+            : null;
+
+    private static Chart? ChartInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: Border { Tag: Chart modelChart } })
+                return modelChart;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // ── Chart mutation methods (used by chart contextual tab commands) ────────────────────────────
+
+    /// <summary>
+    /// Change the kind of the selected chart and re-render. No-op without a chart selection.
+    /// Mutates the model chart in place — it persists through the next <see cref="CommitToModel"/>.
+    /// </summary>
+    public void SetSelectedChartKind(ChartKind kind)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Kind = kind;
+        Render();
+    }
+
+    /// <summary>
+    /// Toggle the legend on the selected chart and re-render. No-op without a chart selection.
+    /// </summary>
+    public void ToggleSelectedChartLegend()
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.ShowLegend = !chart.ShowLegend;
+        Render();
+    }
+
+    /// <summary>
+    /// Set (or clear, when null/empty) the chart title on the selected chart and re-render.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void SetSelectedChartTitle(string? title)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Title = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Set (or clear) axis titles on the selected chart and re-render.
+    /// No-op without a chart selection or for pie/doughnut charts.
+    /// </summary>
+    public void SetSelectedChartAxisTitles(string? categoryAxisTitle, string? valueAxisTitle)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.CategoryAxisTitle = string.IsNullOrWhiteSpace(categoryAxisTitle) ? null : categoryAxisTitle.Trim();
+        chart.ValueAxisTitle = string.IsNullOrWhiteSpace(valueAxisTitle) ? null : valueAxisTitle.Trim();
+        Render();
+    }
+
+    /// <summary>
+    /// Set the size (width and height in points) of the selected chart and re-render.
+    /// No-op without a chart selection or when both dimensions are non-positive.
+    /// </summary>
+    public void SetSelectedChartSize(double widthPt, double heightPt)
+    {
+        if (widthPt <= 0 || heightPt <= 0)
+            return;
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.WidthPt = widthPt;
+        chart.HeightPt = heightPt;
+        Render();
+    }
+
+    /// <summary>
+    /// Replace the data of the selected chart (categories + series) and re-render.
+    /// Called after the user edits data via the Edit Data dialog.
+    /// No-op without a chart selection.
+    /// </summary>
+    public void ReplaceSelectedChartData(Chart replacement)
+    {
+        CommitToModel();
+        var chart = SelectedChartLocation().Chart;
+        if (chart is null)
+            return;
+        chart.Kind = replacement.Kind;
+        chart.Title = replacement.Title;
+        chart.ShowLegend = replacement.ShowLegend;
+        chart.CategoryAxisTitle = replacement.CategoryAxisTitle;
+        chart.ValueAxisTitle = replacement.ValueAxisTitle;
+        chart.WidthPt = replacement.WidthPt > 0 ? replacement.WidthPt : chart.WidthPt;
+        chart.HeightPt = replacement.HeightPt > 0 ? replacement.HeightPt : chart.HeightPt;
+        chart.Categories.Clear();
+        chart.Categories.AddRange(replacement.Categories);
+        chart.Series.Clear();
+        foreach (var s in replacement.Series)
+            chart.Series.Add(s);
+        Render();
+    }
 
     /// <summary>
     /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
@@ -1382,6 +1850,92 @@ public sealed class DocumentView : RichTextBox
         if (image is null)
             return;
         image.Wrapping = wrapping;
+        Render();
+    }
+
+    /// <summary>
+    /// Set rotation angle (degrees) and flip flags on the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageRotation(double angleDeg, bool flipH, bool flipV)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
+        Render();
+    }
+
+    /// <summary>
+    /// Set crop fractions (0–1 per edge) on the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageCrop(double left, double right, double top, double bottom)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageCropCommand(blockIndex, runIndex, left, right, top, bottom));
+        Render();
+    }
+
+    /// <summary>
+    /// Set picture border (colorHex = 6-digit RGB hex, widthPt, dash token) on the currently
+    /// selected image. Pass null colorHex to remove the border. Undoable. No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageBorder(string? colorHex, double widthPt, string? dash = null)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageBorderCommand(blockIndex, runIndex, colorHex, widthPt, dash));
+        Render();
+    }
+
+    /// <summary>
+    /// Restore the currently selected image to its natural size (from OriginalPixelWidth/Height), clearing
+    /// any rotation, flip, and crop. Uses the current screen DPI for the pt→px conversion. Undoable.
+    /// No-op without an image selection, or when OriginalPixelWidth is 0 (not recorded at insert time).
+    /// </summary>
+    public void ResetSelectedImage()
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+
+        double naturalWidthPt, naturalHeightPt;
+        if (image.OriginalPixelWidth > 0 && image.OriginalPixelHeight > 0)
+        {
+            // Convert pixel dimensions to points at 96 dpi (WPF device-independent pixels).
+            naturalWidthPt  = image.OriginalPixelWidth  / 96.0 * 72.0;
+            naturalHeightPt = image.OriginalPixelHeight / 96.0 * 72.0;
+        }
+        else
+        {
+            // Fallback: restore current size (effectively just clears rotation/flip/crop).
+            naturalWidthPt  = image.WidthPt;
+            naturalHeightPt = image.HeightPt;
+        }
+
+        _commands.Execute(new ResetImageSizeCommand(blockIndex, runIndex, naturalWidthPt, naturalHeightPt));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the floating position offsets and anchors for the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImagePosition(double horizontalOffsetPt, double verticalOffsetPt,
+        HorizontalAnchor horizontalAnchor = HorizontalAnchor.Column,
+        VerticalAnchor verticalAnchor = VerticalAnchor.Paragraph)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImagePositionCommand(
+            blockIndex, runIndex,
+            horizontalOffsetPt, verticalOffsetPt,
+            horizontalAnchor, verticalAnchor));
         Render();
     }
 
@@ -2082,21 +2636,31 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Arm the Format Painter: capture the run formatting under the caret/selection and the caret
-    /// paragraph's formatting, then wait for the user's next selection to stamp it (the classic
-    /// capture-then-apply-to-next gesture). Calling this while already armed disarms it (a toggle).
-    /// Returns true if the painter is now armed, false if it was disarmed.
+    /// paragraph's formatting, then wait for the user's next selection to stamp it. Calling this while
+    /// already armed disarms it (a toggle). When <paramref name="locked"/> is true the painter stays
+    /// armed after each application (double-click lock mode) until the user clicks again or presses
+    /// Escape. Returns true if the painter is now armed, false if it was disarmed.
     /// </summary>
-    public bool ArmFormatPainter()
+    public bool ArmFormatPainter(bool locked = false)
     {
         Focus();
         if (_formatPainter is not null)
         {
             _formatPainter = null;
+            _formatPainterLocked = false;
             return false;
         }
 
         _formatPainter = FormatPainterClipboard.Capture(CaptureSelectionRunFormatting(), CaptureCaretParagraphFormatting());
+        _formatPainterLocked = locked;
         return true;
+    }
+
+    /// <summary>Disarm the Format Painter regardless of lock mode (e.g. on Escape key).</summary>
+    public void EscapeFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
     }
 
     /// <summary>
@@ -2110,7 +2674,8 @@ public sealed class DocumentView : RichTextBox
         if (_formatPainter is not { } clipboard || Selection.IsEmpty)
             return false;
 
-        _formatPainter = null; // disarm first so a re-render mid-apply cannot re-trigger
+        if (!_formatPainterLocked)
+            _formatPainter = null; // disarm first in single-shot mode; locked mode stays armed
 
         // Run formatting: stamp the captured character formatting onto the selected text via WPF
         // selection property values (covers partial-run selections), mirroring the inverse of
@@ -4960,6 +5525,66 @@ public sealed class DocumentView : RichTextBox
             element.ToolTip = image.AltText;
             System.Windows.Automation.AutomationProperties.SetName(element, image.AltText);
         }
+
+        // Apply crop as a WPF RectangleGeometry clip on the Image.
+        if (image.HasCrop)
+        {
+            var clipX  = image.CropLeft  * widthPx;
+            var clipY  = image.CropTop   * heightPx;
+            var clipW  = (1 - image.CropLeft - image.CropRight)  * widthPx;
+            var clipH  = (1 - image.CropTop  - image.CropBottom) * heightPx;
+            if (clipW > 0 && clipH > 0)
+                element.Clip = new System.Windows.Media.RectangleGeometry(new Rect(clipX, clipY, clipW, clipH));
+        }
+
+        // Apply rotation and/or flip via a WPF TransformGroup on the Image.
+        if (image.RotationAngle != 0 || image.FlipH || image.FlipV)
+        {
+            var group = new System.Windows.Media.TransformGroup();
+            if (image.FlipH || image.FlipV)
+                group.Children.Add(new System.Windows.Media.ScaleTransform(
+                    image.FlipH ? -1 : 1, image.FlipV ? -1 : 1,
+                    widthPx / 2, heightPx / 2));
+            if (image.RotationAngle != 0)
+                group.Children.Add(new System.Windows.Media.RotateTransform(
+                    image.RotationAngle, widthPx / 2, heightPx / 2));
+            element.RenderTransform = group;
+        }
+
+        // Apply picture border as WPF border around the image.
+        if (image.HasBorder)
+        {
+            var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
+            var colorHex = image.BorderColorHex!.TrimStart('#');
+            System.Windows.Media.Color borderColor;
+            try
+            {
+                borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex);
+            }
+            catch
+            {
+                borderColor = System.Windows.Media.Colors.Black;
+            }
+            var borderBrush = new System.Windows.Media.SolidColorBrush(borderColor);
+
+            System.Windows.Media.Brush strokeBrush = borderBrush;
+            // Apply dash if specified (use DashStyles for dotted/dashed).
+            if (!string.IsNullOrEmpty(image.BorderDash) && image.BorderDash != "solid")
+            {
+                strokeBrush = borderBrush; // keep solid brush; WPF Border doesn't do dash natively, we use a simpler style
+            }
+
+            var border = new System.Windows.Controls.Border
+            {
+                BorderBrush = strokeBrush,
+                BorderThickness = new Thickness(borderWidthPx),
+                Child = element,
+                Width = widthPx + borderWidthPx * 2,
+                Height = heightPx + borderWidthPx * 2,
+            };
+            return new InlineUIContainer(border) { BaselineAlignment = BaselineAlignment.Bottom };
+        }
+
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 

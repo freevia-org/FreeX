@@ -518,6 +518,8 @@ public sealed class MainWindow : Window
             state = state.With("picture");
         if (_editor.IsCaretInTable())
             state = state.With("table");
+        if (_editor.SelectedChart() is not null)
+            state = state.With("chart");
 
         _contextualTabs.Apply(state);
     }

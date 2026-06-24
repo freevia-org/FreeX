@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
+using FreeW.Core.Model;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -231,5 +232,39 @@ public class SectionHeaderFooterRoundTripTests
         var sectPr = document.Root!.Element(W + "body")!.Element(W + "sectPr")!;
         sectPr.Elements(W + "headerReference").Single().Attribute(R + "id")!.Value.Should().Be("rIdHeader1");
         sectPr.Elements(W + "footerReference").Single().Attribute(R + "id")!.Value.Should().Be("rIdFooter1");
+    }
+
+    // --- Section break kind round-trips -----------------------------------------------------------
+
+    [Theory]
+    [InlineData(SectionBreakKind.NextPage)]
+    [InlineData(SectionBreakKind.Continuous)]
+    [InlineData(SectionBreakKind.EvenPage)]
+    [InlineData(SectionBreakKind.OddPage)]
+    public void SectionBreak_RoundTrips_ThroughDocxWriterReader(SectionBreakKind kind)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("first") { SectionBreak = new Section(new PageSettings(), kind) });
+        doc.Blocks.Add(new Paragraph("second"));
+
+        var result = RoundTrip(doc);
+
+        result.Sections.Should().HaveCount(2);
+        result.Sections[0].BreakKind.Should().Be(kind);
+    }
+
+    [Fact]
+    public void CreateSectionBreak_DocumentOps_RoundTrips()
+    {
+        var doc = new TextDocument();
+        var inherited = new PageSettings { MarginLeftPt = 55 };
+        doc.Blocks.Add(DocumentOps.CreateSectionBreak(SectionBreakKind.NextPage, inherited));
+        doc.Blocks.Add(new Paragraph("second"));
+
+        var result = RoundTrip(doc);
+
+        result.Sections.Should().HaveCount(2);
+        result.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
+        result.Sections[0].Page.MarginLeftPt.Should().Be(55);
     }
 }

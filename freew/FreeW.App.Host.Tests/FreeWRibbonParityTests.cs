@@ -1021,7 +1021,7 @@ public sealed class FreeWRibbonParityTests
 
         definition.ContextualTabs.Select(tab => tab.Id)
             .Should()
-            .ContainInOrder("picture-format", "table-design", "table-layout");
+            .ContainInOrder("picture-format", "chart-design", "chart-format", "table-design", "table-layout");
 
         foreach (var tabId in new[] { "table-design", "table-layout" })
         {
@@ -1035,6 +1035,169 @@ public sealed class FreeWRibbonParityTests
         }
     }
 
+    [Fact]
+    public void Build_ExposesWordStyleChartDesignAndChartFormatContextualTabs()
+    {
+        var definition = FreeWRibbon.Build();
+
+        foreach (var tabId in new[] { "chart-design", "chart-format" })
+        {
+            var tab = definition.FindTab(tabId);
+
+            tab.Should().NotBeNull();
+            tab!.Context.Should().NotBeNull();
+            tab.Context!.ActivationKey.Should().Be("chart");
+            tab.Context.Label.Should().Be("Chart Tools");
+            tab.Context.Color.Should().Be(RibbonContextColor.Orange);
+        }
+    }
+
+    [StaFact]
+    public void ChartDesign_ContextualTabContainsBackedChartCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var chartDesign = definition.FindTab("chart-design");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        chartDesign.Should().NotBeNull();
+        chartDesign!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("chart-type", "chart-data", "chart-elements");
+
+        CommandIds(chartDesign)
+            .Should()
+            .Contain(new[]
+            {
+                "freew.chart-type-column",
+                "freew.chart-edit-data",
+                "freew.chart-title",
+                "freew.chart-axis-titles",
+                "freew.chart-toggle-legend"
+            });
+
+        foreach (var commandId in new[]
+        {
+            "freew.chart-type-column",
+            "freew.chart-type-bar",
+            "freew.chart-type-line",
+            "freew.chart-type-pie",
+            "freew.chart-type-scatter",
+            "freew.chart-type-area",
+            "freew.chart-type-doughnut",
+            "freew.chart-edit-data",
+            "freew.chart-title",
+            "freew.chart-axis-titles",
+            "freew.chart-toggle-legend"
+        })
+            registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed in the Chart Design tab");
+    }
+
+    [StaFact]
+    public void ChartFormat_ContextualTabContainsBackedSizeCommand()
+    {
+        var definition = FreeWRibbon.Build();
+        var chartFormat = definition.FindTab("chart-format");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        chartFormat.Should().NotBeNull();
+        chartFormat!.Groups.Select(group => group.Id)
+            .Should()
+            .Equal("chart-size");
+
+        CommandIds(chartFormat)
+            .Should()
+            .Equal("freew.chart-size");
+        Labels(chartFormat)
+            .Should()
+            .Equal("Size");
+
+        registry.TryGet("freew.chart-size", out _).Should().BeTrue("freew.chart-size must execute from Chart Format");
+    }
+
+    [StaFact]
+    public void ChartDesign_ChangeTypeMutatesSelectedChart()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], seriesName: "S"));
+        var chart = editor.SelectedChart() ?? editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        chart!.Kind.Should().Be(ChartKind.Column);
+
+        editor.SetSelectedChartKind(ChartKind.Bar);
+
+        chart.Kind.Should().Be(ChartKind.Bar);
+    }
+
+    [StaFact]
+    public void ChartDesign_ToggleLegendMutatesSelectedChart()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("Before"));
+        editor.InsertChart(Chart.Create(ChartKind.Line, ["X", "Y"], [3.0, 4.0]));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        var initial = chart!.ShowLegend;
+
+        editor.ToggleSelectedChartLegend();
+        chart.ShowLegend.Should().Be(!initial);
+
+        editor.ToggleSelectedChartLegend();
+        chart.ShowLegend.Should().Be(initial);
+    }
+
+    [StaFact]
+    public void ChartDesign_SetSizeMutatesWidthAndHeight()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.InsertChart(Chart.Create(ChartKind.Pie, ["A"], [1.0]));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+        editor.SetSelectedChartSize(400, 300);
+        chart!.WidthPt.Should().Be(400);
+        chart.HeightPt.Should().Be(300);
+    }
+
+    [StaFact]
+    public void ChartDesign_ReplaceChartDataMutatesModel()
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.InsertChart(Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], seriesName: "Sales"));
+        var chart = editor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Select(r => r.Chart)
+            .FirstOrDefault(c => c is not null);
+
+        chart.Should().NotBeNull();
+
+        var replacement = Chart.Create(ChartKind.Bar, ["Jan", "Feb", "Mar"], [5.0, 6.0, 7.0], seriesName: "Revenue");
+        editor.ReplaceSelectedChartData(replacement);
+
+        chart!.Kind.Should().Be(ChartKind.Bar);
+        chart.Categories.Should().Equal("Jan", "Feb", "Mar");
+        chart.Series.Should().HaveCount(1);
+        chart.Series[0].Name.Should().Be("Revenue");
+        chart.Series[0].Values.Should().Equal(5.0, 6.0, 7.0);
+    }
+
     [StaFact]
     public void TableDesign_ContextualTabContainsOnlyImplementedStyleCommands()
     {
@@ -1046,14 +1209,18 @@ public sealed class FreeWRibbonParityTests
         tableDesign.Should().NotBeNull();
         tableDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-style");
+            .Equal("table-style-options", "table-style");
 
         CommandIds(tableDesign)
             .Should()
             .Equal(
-                "freew.cell-shading",
                 "freew.table-header-row",
-                "freew.table-banded-rows");
+                "freew.table-last-row",
+                "freew.table-first-column",
+                "freew.table-last-column",
+                "freew.table-banded-rows",
+                "freew.table-banded-cols",
+                "freew.cell-shading");
 
         foreach (var commandId in CommandIds(tableDesign))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
@@ -1074,11 +1241,24 @@ public sealed class FreeWRibbonParityTests
         picture.Context.Color.Should().Be(RibbonContextColor.Orange);
         picture.Groups.Select(group => group.Id)
             .Should()
-            .Equal("picture-arrange", "picture-size");
+            .Equal("picture-arrange", "picture-adjust", "picture-size");
 
         CommandIds(picture.FindGroup("picture-arrange")!)
             .Should()
-            .Equal("freew.image-wrap", "freew.image-align-left", "freew.image-align-center", "freew.image-align-right");
+            .Equal(
+                "freew.image-wrap",
+                "freew.image-position",
+                "freew.image-rotate",
+                "freew.image-align-left",
+                "freew.image-align-center",
+                "freew.image-align-right");
+
+        CommandIds(picture.FindGroup("picture-adjust")!)
+            .Should()
+            .Equal(
+                "freew.image-crop",
+                "freew.image-reset",
+                "freew.image-border");
 
         var wrap = picture.FindGroup("picture-arrange")!.Controls
             .OfType<RibbonDropdown>()
@@ -1095,9 +1275,22 @@ public sealed class FreeWRibbonParityTests
                 ("freew.image-wrap-behind", "Behind Text"),
                 ("freew.image-wrap-front", "In Front of Text"));
 
-        foreach (var commandId in MenuCommandIds(wrap).Concat(CommandIds(picture)))
+        var rotate = picture.FindGroup("picture-arrange")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.image-rotate");
+        rotate.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal(
+                "freew.image-rotate-right90",
+                "freew.image-rotate-left90",
+                "freew.image-flip-vertical",
+                "freew.image-flip-horizontal");
+
+        foreach (var commandId in MenuCommandIds(wrap).Concat(MenuCommandIds(rotate)).Concat(CommandIds(picture)))
         {
-            if (commandId == "freew.image-wrap")
+            if (commandId is "freew.image-wrap" or "freew.image-rotate")
                 continue;
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Picture Format");
         }
@@ -1114,20 +1307,54 @@ public sealed class FreeWRibbonParityTests
         tableLayout.Should().NotBeNull();
         tableLayout!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-properties", "table-rows-cols", "table-merge", "table-data");
+            .Equal("table-table", "table-rows-cols", "table-merge", "table-cell-size", "table-alignment", "table-data");
 
         CommandIds(tableLayout)
             .Should()
             .Equal(
+                // table-table group
+                "freew.table-select-table",
+                "freew.table-select-row",
+                "freew.table-select-col",
+                "freew.table-select-cell",
+                "freew.table-view-gridlines",
                 "freew.table-properties",
+                // table-rows-cols group
+                "freew.table-insert-above",
                 "freew.table-insert-row",
-                "freew.table-delete-row",
+                "freew.table-insert-col-left",
                 "freew.table-insert-col",
+                "freew.table-delete-row",
                 "freew.table-delete-col",
+                "freew.table-delete",
+                // table-merge group
                 "freew.merge-cells",
                 "freew.split-cell",
+                "freew.split-table",
+                // table-cell-size group
+                "freew.table-row-height",
+                "freew.table-col-width",
+                "freew.table-distribute-rows",
+                "freew.table-distribute-cols",
+                "freew.table-autofit-contents",
+                "freew.table-autofit-window",
+                "freew.table-autofit-fixed",
+                // table-alignment group
+                "freew.cell-align-top-left",
+                "freew.cell-align-top-center",
+                "freew.cell-align-top-right",
+                "freew.cell-align-middle-left",
+                "freew.cell-align-middle-center",
+                "freew.cell-align-middle-right",
+                "freew.cell-align-bottom-left",
+                "freew.cell-align-bottom-center",
+                "freew.cell-align-bottom-right",
+                "freew.table-cell-margins",
+                // table-data group
                 "freew.table-repeat-header",
-                "freew.table-formula");
+                "freew.table-formula",
+                "freew.sort",
+                "freew.table-to-text");
 
         foreach (var commandId in CommandIds(tableLayout))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Layout tab");
@@ -1360,5 +1587,49 @@ public sealed class FreeWRibbonParityTests
             if (!string.IsNullOrWhiteSpace(control.Label))
                 yield return control.Label;
         }
+    }
+
+    [StaFact]
+    public void LayoutPageSetup_BreaksDropdownExposesBackedSectionBreakCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        // The Breaks dropdown must exist in the Page Setup group.
+        var breaks = pageSetup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.breaks");
+
+        breaks.Should().NotBeNull("Layout > Page Setup > Breaks dropdown must exist");
+
+        var menuCommandIds = breaks.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .ToList();
+
+        menuCommandIds.Should().Contain("freew.page-break");
+        menuCommandIds.Should().Contain("freew.column-break");
+        menuCommandIds.Should().Contain("freew.section-break-next-page");
+        menuCommandIds.Should().Contain("freew.section-break-continuous");
+        menuCommandIds.Should().Contain("freew.section-break-even-page");
+        menuCommandIds.Should().Contain("freew.section-break-odd-page");
+
+        // All menu command ids must be backed by the registry.
+        foreach (var id in menuCommandIds)
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be backed");
+
+        // Functional: inserting a section break creates a paragraph with SectionBreak set.
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("before"));
+        registry.TryGet("freew.section-break-next-page", out var nextPage).Should().BeTrue();
+        nextPage!.Execute(RibbonCommandContext.Empty);
+
+        // After execution the model must have a new block with SectionBreak set.
+        editor.Model.Blocks.Should().HaveCount(2);
+        editor.Model.Blocks[1].Should().BeOfType<Paragraph>();
+        ((Paragraph)editor.Model.Blocks[1]).SectionBreak.Should().NotBeNull();
+        ((Paragraph)editor.Model.Blocks[1]).SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
     }
 }
