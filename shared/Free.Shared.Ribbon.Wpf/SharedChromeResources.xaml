@@ -20,17 +20,19 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Brushes (self-contained; tuned to the FreeX #17324D navy title/status bar) ──── -->
-    <!-- NEUTRAL chrome brushes — tokenized (WS-G round 8).
-         ThemeNeutralWhiteBrush / ThemeNeutralTextBrush / ThemeNeutralMutedTextBrush /
-         ThemeNeutralDangerBrush are registered by WpfThemeApplier.BuildResources with values
-         byte-identical across FreeX/FreeW/FreeP (all three share the same neutral palette).
-         The Chrome* aliases below re-expose the tokens under the original keys so all downstream
-         {StaticResource Chrome*Brush} usages in the styles below continue to work unchanged. -->
-    <DynamicResource x:Key="ChromeWhiteBrush"     ResourceKey="ThemeNeutralWhiteBrush"/>
-    <DynamicResource x:Key="ChromeTextBrush"      ResourceKey="ThemeNeutralTextBrush"/>
-    <DynamicResource x:Key="ChromeMutedTextBrush" ResourceKey="ThemeNeutralMutedTextBrush"/>
+    <!-- NEUTRAL chrome brushes — byte-identical across FreeX/FreeW/FreeP.
+         These four roles are defined as concrete SolidColorBrush values (not DynamicResource aliases)
+         so that BackstageFrame works correctly in any host — including unit-test hosts where no
+         Application.Current with ThemeNeutral*Brush entries has been set up.
+         The values match BrandThemes.cs:
+           s_white     = #FFFFFF, s_text = #1F1F1F, s_mutedText = #5F6368, s_danger = #C42B1C.
+         All three brand themes (FreeX / FreeW / FreeP) share the same neutral palette, so
+         making these concrete does not change any rendered pixel in production. -->
+    <SolidColorBrush x:Key="ChromeWhiteBrush"        Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ChromeTextBrush"          Color="#1F1F1F"/>
+    <SolidColorBrush x:Key="ChromeMutedTextBrush"     Color="#5F6368"/>
     <!-- Close-button pressed: Danger role (#C42B1C) — identical across all three brand themes. -->
-    <DynamicResource x:Key="ChromeClosePressedBrush" ResourceKey="ThemeNeutralDangerBrush"/>
+    <SolidColorBrush x:Key="ChromeClosePressedBrush"  Color="#C42B1C"/>
 
     <!-- ACCENT-DERIVED brushes — tokenized (WS-G round 9).
          ThemeAccent*Brush / ThemeRibbonButtonHoverBrush are registered by WpfThemeApplier.BuildResources
