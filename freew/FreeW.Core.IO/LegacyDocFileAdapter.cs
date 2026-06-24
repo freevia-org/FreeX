@@ -7,12 +7,13 @@ using DocSharpWordprocessingDocument = DocSharp.Binary.OpenXmlLib.Wordprocessing
 namespace FreeW.Core.IO;
 
 /// <summary>
-/// Read-only import of legacy Word 97-2003 binary documents (<c>.doc</c>/<c>.dot</c>) — design §5.5. The
-/// binary OLE2/CFB format is transcoded to an in-memory <c>.docx</c> with DocSharp.Binary.Doc (an MIT fork of
-/// b2xtranslator) and then read by the existing <see cref="DocxReader"/>, so all of FreeW's WordprocessingML
-/// mapping is reused for free. Open-only (<see cref="FileFormatDescriptor.CanSave"/> is false); users
-/// round-trip out via <em>Save As .docx</em>. Pre-97 Word 6.0/95 binaries are a different format and fail
-/// with a clear message. Mirrors the sibling app's read-only legacy-binary adapter.
+/// Legacy Word 97-2003 binary document adapter (<c>.doc</c>/<c>.dot</c>) — design §5.5. Load uses
+/// DocSharp.Binary.Doc to transcode the binary OLE2/CFB format to an in-memory <c>.docx</c> which is
+/// then read by the existing <see cref="DocxReader"/>, so all of FreeW's WordprocessingML mapping is
+/// reused for free. Save uses <see cref="LegacyDocWriter"/> to produce a minimal but valid Word 97-2003
+/// binary <c>.doc</c> (OLE2/CFB container + FIB + Unicode text stream + CLX piece table) that
+/// round-trips through DocSharp's binary-Word reader. Pre-97 Word 6.0/95 binaries and non-Word OLE
+/// documents fail with a clear message on load. Mirrors the sibling app's legacy-binary adapter.
 /// </summary>
 public sealed class LegacyDocFileAdapter : IDocumentFileAdapter
 {
@@ -21,8 +22,8 @@ public sealed class LegacyDocFileAdapter : IDocumentFileAdapter
 
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
-        new(".doc", "Word 97-2003 Document", CanOpen: true, CanSave: false),
-        new(".dot", "Word 97-2003 Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
+        new(".doc", "Word 97-2003 Document", CanOpen: true, CanSave: true),
+        new(".dot", "Word 97-2003 Template", CanOpen: true, CanSave: true, OpensAsTemplate: true),
     ];
 
     public TextDocument Load(Stream stream)
@@ -73,6 +74,10 @@ public sealed class LegacyDocFileAdapter : IDocumentFileAdapter
         }
     }
 
-    public void Save(TextDocument document, Stream stream) =>
-        throw new NotSupportedException("Legacy .doc is read-only — use Save As .docx.");
+    public void Save(TextDocument document, Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(stream);
+        LegacyDocWriter.Write(document, stream);
+    }
 }
