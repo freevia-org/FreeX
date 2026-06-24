@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using FreeW.Core.Model;
@@ -61,6 +63,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private readonly DocumentView _sourceEditor;  // kept for repagination
     private DispatcherTimer? _repaginateTimer;
 
+    // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
+    private readonly CrossPageSelection _crossPageSelection = new();
+    private readonly CrossPageUndoCoordinator _undoCoordinator = new();
+
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
     private PaginatedEditorPanel(DocumentView sourceEditor, List<PageBox> boxes)
@@ -78,12 +84,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         {
             _stack.Children.Add(box);
             HookTextChanged(box);
+            HookShiftArrow(box);
         }
 
         Background = WorkspaceBrush;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         Content = _stack;
+
+        // Attach undo coordinator after all boxes are wired.
+        _undoCoordinator.Attach(this, sourceEditor);
+
+        // Panel-level Ctrl+C / Ctrl+X / Ctrl+V for cross-page clipboard.
+        PreviewKeyDown += OnPanelPreviewKeyDown;
     }
 
     // ── factory ───────────────────────────────────────────────────────────────────────────────────
@@ -166,8 +179,210 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         box.Body.TextChanged -= OnAnyPageBodyTextChanged;
     }
 
+    private void HookShiftArrow(PageBox box)
+    {
+        box.ShiftArrowBoundaryReached += OnShiftArrowBoundaryReached;
+    }
+
+    private void UnhookShiftArrow(PageBox box)
+    {
+        box.ShiftArrowBoundaryReached -= OnShiftArrowBoundaryReached;
+    }
+
     private void OnAnyPageBodyTextChanged(object? sender, System.Windows.Controls.TextChangedEventArgs e)
         => ScheduleRepaginate();
+
+    // ── Phase 3b-2: cross-page selection keyboard handler ────────────────────────────────────────
+
+    /// <summary>
+    /// Called by a <see cref="PageBox"/> when Shift+Down/Right is pressed at the end of the box,
+    /// or Shift+Up/Left at the start.  Extends the cross-page selection into the adjacent box.
+    /// </summary>
+    private void OnShiftArrowBoundaryReached(PageBox source, bool movingForward)
+    {
+        var targetBox = movingForward ? source.NextBox : source.PreviousBox;
+        if (targetBox is null)
+            return;
+
+        // Ensure we have an anchor.
+        if (!_crossPageSelection.HasAnchor)
+        {
+            // Anchor at the current caret end of source.
+            var anchorPtr = movingForward
+                ? source.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward)
+                : source.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward);
+            if (anchorPtr is null)
+                return;
+            _crossPageSelection.BeginSelection(_pageBoxes, source, anchorPtr);
+        }
+
+        // Active end is at the start/end of the target box.
+        var targetPtr = movingForward
+            ? targetBox.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward)
+            : targetBox.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward);
+        if (targetPtr is null)
+            return;
+
+        _crossPageSelection.ExtendSelection(_pageBoxes, targetBox, targetPtr);
+
+        // Move keyboard focus to the target box without clearing selection.
+        targetBox.Body.Focus();
+    }
+
+    // ── Phase 3b-2: panel-level keyboard handler (Ctrl+C/X/V) ───────────────────────────────────
+
+    private void OnPanelPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.C when _crossPageSelection.IsActive:
+                CopySelection();
+                e.Handled = true;
+                break;
+
+            case Key.X when _crossPageSelection.IsActive:
+                CutSelection();
+                e.Handled = true;
+                break;
+
+            // Ctrl+V: paste at caret (handled only when we have something on the panel clipboard).
+            // When there is no cross-page payload the native RichTextBox Ctrl+V fires.
+            case Key.V:
+                if (PasteAtCaret())
+                    e.Handled = true;
+                break;
+        }
+    }
+
+    // ── Phase 3b-2: cross-page clipboard ─────────────────────────────────────────────────────────
+
+    // Panel-level clipboard payload: plain-text representation of the most recent cross-page copy/cut.
+    // This is a simple in-process clipboard — the system clipboard also receives the text.
+    private string? _panelClipboard;
+
+    /// <summary>
+    /// Copies the current cross-page selection to the clipboard as plain text.
+    /// Within-box copy is handled natively by the RichTextBox.
+    /// </summary>
+    internal void CopySelection()
+    {
+        if (!_crossPageSelection.IsActive)
+            return;
+
+        var text = _crossPageSelection.GetSelectedText(_pageBoxes);
+        if (text.Length == 0)
+            return;
+
+        _panelClipboard = text;
+        try { System.Windows.Clipboard.SetText(text); } catch { /* clipboard locked */ }
+    }
+
+    /// <summary>
+    /// Cuts the current cross-page selection: copies it to the clipboard, then deletes the
+    /// selected content from all spanned boxes and triggers re-pagination.
+    /// </summary>
+    internal void CutSelection()
+    {
+        if (!_crossPageSelection.IsActive)
+            return;
+
+        CopySelection();
+        DeleteCrossPageSelection();
+    }
+
+    /// <summary>
+    /// Pastes the panel clipboard (or system clipboard text) at the current caret.
+    /// Returns true when paste was handled; false to let native RichTextBox handle it.
+    /// </summary>
+    internal bool PasteAtCaret()
+    {
+        // Only handle when there is text on the system clipboard.
+        string text;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsText())
+                return false;
+            text = System.Windows.Clipboard.GetText();
+        }
+        catch { return false; }
+
+        if (text.Length == 0)
+            return false;
+
+        // Find the focused box.
+        var focusedBox = _pageBoxes.FirstOrDefault(b => b.Body.IsKeyboardFocusWithin);
+        if (focusedBox is null)
+            return false;
+
+        // Clear any cross-page selection first.
+        if (_crossPageSelection.IsActive)
+            DeleteCrossPageSelection();
+
+        // Insert text at the caret inside the focused box.
+        var caret = focusedBox.Body.CaretPosition;
+        try
+        {
+            caret.InsertTextInRun(text);
+        }
+        catch { return false; }
+
+        // Re-paginate.
+        ScheduleRepaginate();
+        return true;
+    }
+
+    /// <summary>
+    /// Deletes the content spanned by the current cross-page selection from all boxes.
+    /// After deletion, clears the selection and triggers re-pagination.
+    /// </summary>
+    private void DeleteCrossPageSelection()
+    {
+        if (!_crossPageSelection.IsActive)
+            return;
+
+        // Get normalized range.
+        var startBoxIdx = _crossPageSelection.AnchorBoxIndex < _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.AnchorBoxIndex
+            : _crossPageSelection.ActiveBoxIndex;
+        var endBoxIdx = _crossPageSelection.AnchorBoxIndex < _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.ActiveBoxIndex
+            : _crossPageSelection.AnchorBoxIndex;
+
+        var startPtr = _crossPageSelection.AnchorBoxIndex <= _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.AnchorPointer
+            : _crossPageSelection.ActivePointer;
+        var endPtr = _crossPageSelection.AnchorBoxIndex <= _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.ActivePointer
+            : _crossPageSelection.AnchorPointer;
+
+        if (startPtr is null || endPtr is null)
+            return;
+
+        // Delete from each spanned box.
+        for (int i = startBoxIdx; i <= endBoxIdx && i < _pageBoxes.Count; i++)
+        {
+            var box = _pageBoxes[i];
+            try
+            {
+                TextPointer from = (i == startBoxIdx)
+                    ? startPtr
+                    : box.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? box.Body.Document.ContentStart;
+                TextPointer to = (i == endBoxIdx)
+                    ? endPtr
+                    : box.Body.Document.ContentEnd.GetInsertionPosition(LogicalDirection.Backward) ?? box.Body.Document.ContentEnd;
+
+                var range = new TextRange(from, to);
+                range.Text = string.Empty;
+            }
+            catch { /* skip — position may be invalid after earlier deletions */ }
+        }
+
+        _crossPageSelection.Clear(_pageBoxes);
+        ScheduleRepaginate();
+    }
 
     /// <summary>
     /// Arms a one-shot ~300 ms timer to commit and re-paginate. Resets on every TextChanged so rapid
@@ -258,9 +473,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
         // ── Rebuild page boxes ────────────────────────────────────────────────────────────────────
-        // Unhook TextChanged from old boxes before discarding them.
+        // Notify undo coordinator that a repagination is starting (resets burst flag).
+        _undoCoordinator.OnRepaginationStarting();
+
+        // Unhook TextChanged and ShiftArrow from old boxes before discarding them.
         foreach (var old in _pageBoxes)
+        {
             UnhookTextChanged(old);
+            _undoCoordinator.UnhookBox(old);
+            UnhookShiftArrow(old);
+        }
+
+        // Clear any cross-page selection since page boxes are being rebuilt.
+        _crossPageSelection.Clear(_pageBoxes);
 
         _stack.Children.Clear();
         _pageBoxes.Clear();
@@ -271,6 +496,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
+            HookShiftArrow(box);
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -279,6 +505,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
             _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
         }
+
+        // Re-attach undo coordinator to the new boxes.
+        _undoCoordinator.ReAttach(_pageBoxes);
 
         // ── Restore focus ─────────────────────────────────────────────────────────────────────────
         if (focusedBoxIndex >= 0 && _pageBoxes.Count > 0)
@@ -296,6 +525,81 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             }
             catch { /* ignore — caret lands at start */ }
         }
+    }
+
+    // ── Phase 3b-2: cross-page selection accessor ────────────────────────────────────────────────
+
+    /// <summary>The panel-level cross-page selection model.</summary>
+    internal CrossPageSelection CrossPageSelection => _crossPageSelection;
+
+    /// <summary>The panel-level cross-page undo coordinator.</summary>
+    internal CrossPageUndoCoordinator UndoCoordinator => _undoCoordinator;
+
+    // ── Phase 3b-2: full rebuild (used by undo coordinator to restore a snapshot) ───────────────
+
+    /// <summary>
+    /// Re-shards the panel from the <see cref="_sourceEditor"/>'s current model state, rebuilding
+    /// all page boxes.  Called by <see cref="CrossPageUndoCoordinator"/> after restoring a snapshot.
+    /// The caret is moved to the first box.
+    /// </summary>
+    internal void Rebuild()
+    {
+        // Re-run the full Repaginate logic but without caret tracking (we lost the old boxes).
+        _undoCoordinator.OnRepaginationStarting();
+
+        foreach (var old in _pageBoxes)
+        {
+            UnhookTextChanged(old);
+            _undoCoordinator.UnhookBox(old);
+            UnhookShiftArrow(old);
+        }
+        _crossPageSelection.Clear(_pageBoxes);
+        _stack.Children.Clear();
+        _pageBoxes.Clear();
+
+        var model = _sourceEditor.Model;
+        var page = model.Page;
+
+        var scratch = new DocumentView();
+        scratch.LoadModel(model);
+        var allBlocks = scratch.Document.Blocks.ToList();
+        scratch.Document.Blocks.Clear();
+
+        int[] assignment;
+        int pageCount;
+        try
+        {
+            assignment = PaginationEngine.ComputeBlockPageAssignment(_sourceEditor);
+            pageCount = assignment.Length > 0 ? assignment.Max() + 1 : 1;
+            pageCount = Math.Max(1, pageCount);
+        }
+        catch
+        {
+            assignment = new int[allBlocks.Count];
+            pageCount = 1;
+        }
+
+        var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
+
+        for (var i = 0; i < pageCount; i++)
+        {
+            var box = new PageBox(i + 1, page, shards[i]);
+            _pageBoxes.Add(box);
+            _stack.Children.Add(box);
+            HookTextChanged(box);
+            HookShiftArrow(box);
+        }
+
+        for (var i = 0; i < _pageBoxes.Count; i++)
+        {
+            _pageBoxes[i].PreviousBox = i > 0 ? _pageBoxes[i - 1] : null;
+            _pageBoxes[i].NextBox = i < _pageBoxes.Count - 1 ? _pageBoxes[i + 1] : null;
+        }
+
+        _undoCoordinator.ReAttach(_pageBoxes);
+
+        if (_pageBoxes.Count > 0)
+            _pageBoxes[0].Body.Focus();
     }
 
     // ── sharding ──────────────────────────────────────────────────────────────────────────────────

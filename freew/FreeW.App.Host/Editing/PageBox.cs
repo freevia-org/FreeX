@@ -9,6 +9,11 @@ namespace FreeW.App.Host.Editing;
 
 #if DEBUG
 
+/// <summary>Delegate used by <see cref="PageBox"/> to notify the panel that a cross-page
+/// Shift+arrow selection boundary was crossed.</summary>
+internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingForward);
+
+
 /// <summary>
 /// One physical page slot in the <see cref="PaginatedEditorPanel"/>.  Hosts a read-only header strip
 /// at the top, a body <see cref="RichTextBox"/> that the user edits, and a read-only footer strip at
@@ -49,6 +54,14 @@ internal sealed class PageBox : Border
     // ── neighbour references (set by PaginatedEditorPanel after all boxes are created) ────────────
     internal PageBox? PreviousBox { get; set; }
     internal PageBox? NextBox { get; set; }
+
+    // ── cross-page selection (Phase 3b-2) ─────────────────────────────────────────────────────────
+    /// <summary>
+    /// Fired when a Shift+Down/Right at the document end (or Shift+Up/Left at the document start)
+    /// means the selection should extend into an adjacent box.  The panel intercepts this to update
+    /// the <see cref="CrossPageSelection"/> model.
+    /// </summary>
+    internal event CrossPageShiftArrowHandler? ShiftArrowBoundaryReached;
 
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
@@ -125,23 +138,24 @@ internal sealed class PageBox : Border
     // ── cross-page caret routing ──────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Intercepts arrow-key presses at the edges of the page box and routes the caret to the
-    /// adjacent page box.
+    /// Intercepts arrow-key presses at the edges of the page box and routes the caret (or
+    /// cross-page selection) to the adjacent page box.
     ///
     /// <list type="bullet">
     ///   <item><c>Down</c> or <c>Right</c> at the document end → next box start.</item>
     ///   <item><c>Up</c> or <c>Left</c> at the document start → previous box end.</item>
+    ///   <item><c>Shift+Down/Right</c> at the document end → fires
+    ///   <see cref="ShiftArrowBoundaryReached"/> so the panel can extend the cross-page
+    ///   selection into the next box.</item>
+    ///   <item><c>Shift+Up/Left</c> at the document start → same, backwards.</item>
     /// </list>
     ///
     /// All other keys, and arrow keys that are not at an edge, fall through to the native
-    /// <see cref="RichTextBox"/> handler.  Cross-page SELECTION (Shift+arrow) is deferred to
-    /// Phase 3b-2.
+    /// <see cref="RichTextBox"/> handler.
     /// </summary>
     private void OnBodyPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Never intercept while Shift is held — cross-page selection is 3b-2.
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
-            return;
+        bool shiftHeld = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
 
         switch (e.Key)
         {
@@ -149,8 +163,17 @@ internal sealed class PageBox : Border
             case Key.Right:
                 if (NextBox is not null && IsCaretAtDocumentEnd())
                 {
-                    MoveCaretToBoxStart(NextBox);
-                    e.Handled = true;
+                    if (shiftHeld)
+                    {
+                        // Notify the panel: extend selection into next box.
+                        ShiftArrowBoundaryReached?.Invoke(this, movingForward: true);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        MoveCaretToBoxStart(NextBox);
+                        e.Handled = true;
+                    }
                 }
                 break;
 
@@ -158,8 +181,17 @@ internal sealed class PageBox : Border
             case Key.Left:
                 if (PreviousBox is not null && IsCaretAtDocumentStart())
                 {
-                    MoveCaretToBoxEnd(PreviousBox);
-                    e.Handled = true;
+                    if (shiftHeld)
+                    {
+                        // Notify the panel: extend selection into previous box.
+                        ShiftArrowBoundaryReached?.Invoke(this, movingForward: false);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        MoveCaretToBoxEnd(PreviousBox);
+                        e.Handled = true;
+                    }
                 }
                 break;
         }
