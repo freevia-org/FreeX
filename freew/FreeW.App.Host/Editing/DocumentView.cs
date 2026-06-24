@@ -47,7 +47,16 @@ public enum DocumentViewMode
 {
     PrintLayout,
     WebLayout,
-    Draft
+    Draft,
+#if DEBUG
+    /// <summary>
+    /// DEV-ONLY: renders the document as discrete editable page boxes (<see cref="PageBox"/>)
+    /// stacked in a <see cref="PaginatedEditorPanel"/>.  Not exposed in the production ribbon.
+    /// Entered/exited via <see cref="MainWindow"/> test-only path; the default continuous editor
+    /// (PrintLayout/Web/Draft) and its <see cref="DocumentView.CommitToModel"/> path are untouched.
+    /// </summary>
+    PagedEdit,
+#endif
 }
 
 /// <summary>
@@ -4785,6 +4794,38 @@ public sealed class DocumentView : RichTextBox
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
     private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false);
+
+#if DEBUG
+    /// <summary>
+    /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
+    /// by a <see cref="Render"/>/<see cref="LoadModel"/> call on this or a same-model scratch editor
+    /// so its elements carry the standard Tag payloads — into <paramref name="target"/>.
+    ///
+    /// <para>
+    /// Used by <see cref="PaginatedCommitCoordinator"/> to reassemble the full model from the
+    /// per-page <see cref="PageBox"/> body FlowDocuments without duplicating the private static
+    /// <c>ReadParagraph</c> / <c>ReadList</c> / <c>ReadTable</c> logic.
+    /// </para>
+    /// </summary>
+    internal void ReadBlocksInto(FlowDocument flowDoc, IList<ModelBlock> target)
+    {
+        foreach (var block in flowDoc.Blocks)
+        {
+            switch (block)
+            {
+                case WpfList wpfList:
+                    ReadList(target, wpfList, _model);
+                    break;
+                case WpfParagraph wpfParagraph:
+                    target.Add(ReadParagraph(wpfParagraph, _model));
+                    break;
+                case WpfTable wpfTable:
+                    target.Add(ReadTable(wpfTable, _model));
+                    break;
+            }
+        }
+    }
+#endif
 
     /// <summary>Read the edited FlowDocument back into the model (paragraphs + tables).</summary>
     public void CommitToModel()

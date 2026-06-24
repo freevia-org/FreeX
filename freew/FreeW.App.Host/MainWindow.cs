@@ -171,6 +171,14 @@ public sealed class MainWindow : Window
     private Grid? _splitGrid;                      // the split host grid (non-null while active)
     private System.Windows.Threading.DispatcherTimer? _splitDebounceTimer; // ~300 ms refresh gate
 
+#if DEBUG
+    // PagedEdit (DEV-ONLY): editable paginated surface. When active the workspace child is swapped
+    // from the live workspaceGrid to a PaginatedEditorPanel. Exiting commits all page boxes back to
+    // the model and reloads the continuous editor. Not exposed in the production ribbon.
+    private bool _pagedEditMode;
+    private PaginatedEditorPanel? _pagedEditPanel;  // non-null while PagedEdit is active
+#endif
+
     // Outline view (View > Outline). The outline surface overlays the normal editing surface; entering the
     // view hides the workspace (and its rulers) and shows the outline, exiting restores them verbatim —
     // the same save/restore shape as Read Mode. The model is never mutated by switching views.
@@ -1842,6 +1850,13 @@ public sealed class MainWindow : Window
         if (_multiplePagesMode || _sideToSideMode)
             ExitPaginatedView();
 
+#if DEBUG
+        // PagedEdit also swaps the workspace child; switching to any print-family mode exits it,
+        // committing the page boxes back to the model first.
+        if (_pagedEditMode)
+            ExitPagedEdit();
+#endif
+
         _editor.SetViewMode(mode);
         RefreshViewModeChecks();
     }
@@ -1998,6 +2013,64 @@ public sealed class MainWindow : Window
         _stateStore.SetChecked("freew.zoom-multiple-pages", false);
         _stateStore.SetChecked("freew.zoom-side-to-side", false);
     }
+
+#if DEBUG
+    // ── PagedEdit (DEV-ONLY) ──────────────────────────────────────────────────────────────────────
+    // Feature-flagged editable-pagination surface.  Swaps the workspace child from the live
+    // workspaceGrid to a PaginatedEditorPanel; exiting commits all page boxes back into the model
+    // and reloads the continuous editor unchanged.  Not wired into any ribbon item so it is
+    // unreachable in production builds.
+
+    /// <summary>
+    /// DEV-ONLY entry point: commits the live editor, builds the <see cref="PaginatedEditorPanel"/>,
+    /// and swaps it in as the workspace child.  The default continuous editor is untouched.
+    /// </summary>
+    internal void EnterPagedEdit()
+    {
+        if (_pagedEditMode)
+            return;
+
+        // Leave any overlay modes that also swap the workspace child.
+        if (_multiplePagesMode || _sideToSideMode)
+            ExitPaginatedView();
+        if (_outlineMode)
+            ToggleOutlineView();
+
+        // Commit so the panel reflects the latest edits.
+        _editor.CommitToModel();
+
+        _pagedEditPanel = PaginatedEditorPanel.Build(_editor);
+        _pagedEditMode = true;
+
+        // Swap workspace child exactly like EnterPaginatedView / ToggleSplitWindow.
+        _workspaceGridChild = _workspace.Child;
+        _workspace.Child = _pagedEditPanel;
+    }
+
+    /// <summary>
+    /// DEV-ONLY exit: commits all page boxes back to the model via
+    /// <see cref="PaginatedCommitCoordinator"/>, restores the workspace child, and reloads the
+    /// continuous editor from the updated model so PrintLayout/Web/Draft work normally again.
+    /// </summary>
+    internal void ExitPagedEdit()
+    {
+        if (!_pagedEditMode || _pagedEditPanel is null)
+            return;
+
+        // Commit all page boxes into the model.
+        PaginatedCommitCoordinator.Commit(_pagedEditPanel, _editor);
+
+        // Restore workspace.
+        if (_workspaceGridChild is not null)
+            _workspace.Child = _workspaceGridChild;
+        _workspaceGridChild = null;
+        _pagedEditPanel = null;
+        _pagedEditMode = false;
+
+        // Reload the continuous editor from the just-committed model so the view is current.
+        _editor.LoadModel(_editor.Model);
+    }
+#endif
 
     // ── Split Window ─────────────────────────────────────────────────────────────────────────────
     // Split divides the workspace border into a top pane (the live workspaceGrid + editor) and a
