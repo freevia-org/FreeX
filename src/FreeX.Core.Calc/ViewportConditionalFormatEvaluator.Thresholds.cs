@@ -482,18 +482,70 @@ internal static partial class ViewportConditionalFormatEvaluator
             if (maxLength < minLength)
                 (minLength, maxLength) = (maxLength, minLength);
 
+            // Negative-axis path: when the range straddles zero and axisPosition is not "none",
+            // place the axis proportionally at the zero crossing. Positive bars extend rightward
+            // from the axis; negative bars extend leftward from the axis using the negative fill color.
+            var axisAtNone = string.Equals(cf.DataBarAxisPosition, "none", StringComparison.OrdinalIgnoreCase);
+            if (!axisAtNone && min < 0 && max > 0)
+            {
+                var axisFraction = (0d - min) / (max - min);
+                if (cellValue >= 0)
+                {
+                    var t = Math.Clamp((cellValue - 0d) / (max - 0d), 0d, 1d);
+                    var length = (minLength + (maxLength - minLength) * t) * (1d - axisFraction);
+                    if (length <= 0)
+                        continue;
+                    return new ConditionalFormatDataBar(
+                        axisFraction,
+                        axisFraction + length,
+                        cf.DataBarColor,
+                        cf.DataBarGradient,
+                        cf.DataBarBorder,
+                        cf.DataBarShowValue,
+                        IsNegative: false,
+                        AxisFraction: axisFraction,
+                        NegativeFillColor: cf.DataBarNegativeFillColor,
+                        AxisColor: cf.DataBarAxisColor,
+                        BorderColor: cf.DataBarBorderColor);
+                }
+                else
+                {
+                    var t = Math.Clamp((0d - cellValue) / (0d - min), 0d, 1d);
+                    var length = (minLength + (maxLength - minLength) * t) * axisFraction;
+                    if (length <= 0)
+                        continue;
+                    var negColor = cf.DataBarNegativeFillColor ?? cf.DataBarColor;
+                    // For negative bars use the negative border color when available, otherwise fall
+                    // back to the positive border color.
+                    var negBorderColor = cf.DataBarNegativeBorderColor ?? cf.DataBarBorderColor;
+                    return new ConditionalFormatDataBar(
+                        axisFraction - length,
+                        axisFraction,
+                        negColor,
+                        cf.DataBarGradient,
+                        cf.DataBarBorder,
+                        cf.DataBarShowValue,
+                        IsNegative: true,
+                        AxisFraction: axisFraction,
+                        NegativeFillColor: cf.DataBarNegativeFillColor,
+                        AxisColor: cf.DataBarAxisColor,
+                        BorderColor: negBorderColor);
+                }
+            }
+
             var fraction = Math.Clamp((cellValue - min) / (max - min), 0d, 1d);
-            var length = minLength + (maxLength - minLength) * fraction;
-            if (length <= 0)
+            var barLength = minLength + (maxLength - minLength) * fraction;
+            if (barLength <= 0)
                 continue;
 
             return new ConditionalFormatDataBar(
                 0d,
-                Math.Clamp(length, 0d, 1d),
+                Math.Clamp(barLength, 0d, 1d),
                 cf.DataBarColor,
                 cf.DataBarGradient,
                 cf.DataBarBorder,
-                cf.DataBarShowValue);
+                cf.DataBarShowValue,
+                BorderColor: cf.DataBarBorderColor);
         }
 
         return null;

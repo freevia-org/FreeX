@@ -135,12 +135,12 @@ public sealed partial class XlsxFileAdapter
 
     private static bool IsAdvancedDataBarColorChild(XElement element, XNamespace dataBarNs) =>
         element.Name == dataBarNs + "axisColor" ||
+        element.Name == dataBarNs + "borderColor" ||
         element.Name == dataBarNs + "negativeFillColor" ||
         element.Name == dataBarNs + "negativeBorderColor";
 
     private static bool IsNativeOnlyX14DataBarColorChild(XElement element, XNamespace x14Ns) =>
-        element.Name == x14Ns + "fillColor" ||
-        element.Name == x14Ns + "borderColor";
+        element.Name == x14Ns + "fillColor";
 
     private static IReadOnlyList<string> AppendNativePayloadChildXmls(
         IReadOnlyList<string>? existing,

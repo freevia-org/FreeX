@@ -126,6 +126,8 @@ public sealed class ConditionalFormat
     /// <summary>When false the bar uses a solid fill instead of the default gradient.</summary>
     public bool DataBarGradient { get; set; } = true;
     public bool DataBarBorder { get; set; }
+    /// <summary>Explicit border color for the positive (or only) bar when <see cref="DataBarBorder"/> is true.</summary>
+    public RgbColor? DataBarBorderColor { get; set; }
     public string? DataBarAxisPosition { get; set; }
     public RgbColor? DataBarAxisColor { get; set; }
     public RgbColor? DataBarNegativeFillColor { get; set; }
@@ -226,6 +228,7 @@ public sealed class ConditionalFormat
             DataBarMaxLength = DataBarMaxLength,
             DataBarGradient = DataBarGradient,
             DataBarBorder = DataBarBorder,
+            DataBarBorderColor = DataBarBorderColor,
             DataBarAxisPosition = DataBarAxisPosition,
             DataBarAxisColor = DataBarAxisColor,
             DataBarNegativeFillColor = DataBarNegativeFillColor,

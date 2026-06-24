@@ -29,16 +29,81 @@ public partial class GridView
             barWidth,
             drawableHeight);
         var color = dataBar.FillColor.ToCellColor();
-        Brush fill = dataBar.Gradient
-            ? CreateDataBarGradientBrush(color)
-            : BrushForCellColor(color, brushCache);
-        var border = dataBar.Border
-            ? new Pen(BrushForCellColor(color, brushCache), 0.75)
-            : null;
-        if (border?.CanFreeze == true)
-            border.Freeze();
+
+        // For negative bars with gradient, reverse gradient direction so the bar appears to flow
+        // from the axis (right side of the bar) toward the left edge.
+        Brush fill;
+        if (dataBar.Gradient)
+        {
+            fill = dataBar.IsNegative
+                ? CreateDataBarGradientBrushReversed(color)
+                : CreateDataBarGradientBrush(color);
+        }
+        else
+        {
+            fill = BrushForCellColor(color, brushCache);
+        }
+
+        Pen? border = null;
+        if (dataBar.Border)
+        {
+            // Use the authored border color when available; otherwise fall back to the fill color.
+            CellColor borderColor;
+            if (dataBar.BorderColor.HasValue)
+            {
+                var bc = dataBar.BorderColor.Value;
+                borderColor = new CellColor(bc.R, bc.G, bc.B);
+            }
+            else
+            {
+                borderColor = color;
+            }
+            border = new Pen(BrushForCellColor(borderColor, brushCache), 0.75);
+            if (border.CanFreeze)
+                border.Freeze();
+        }
 
         dc.DrawRectangle(fill, border, rect);
+
+        // Draw the zero-crossing axis line when the data bar has an axis position (negative bar scenario).
+        if (dataBar.AxisFraction > 0d && dataBar.AxisFraction < 1d)
+        {
+            var axisX = cellRect.Left + layout.HorizontalInset + drawableWidth * dataBar.AxisFraction;
+            var axisTop = cellRect.Top + layout.VerticalInset;
+            var axisBottom = cellRect.Top + layout.VerticalInset + drawableHeight;
+
+            // Use the authored axis color if supplied, otherwise a neutral mid-grey.
+            CellColor axisColor;
+            if (dataBar.AxisColor.HasValue)
+            {
+                var ac = dataBar.AxisColor.Value;
+                axisColor = new CellColor(ac.R, ac.G, ac.B);
+            }
+            else
+            {
+                axisColor = new CellColor(0, 0, 0);
+            }
+
+            var axisPen = new Pen(BrushForCellColor(axisColor, brushCache), 1d);
+            if (axisPen.CanFreeze)
+                axisPen.Freeze();
+            dc.DrawLine(axisPen, new Point(axisX, axisTop), new Point(axisX, axisBottom));
+        }
+    }
+
+    private static LinearGradientBrush CreateDataBarGradientBrushReversed(CellColor color)
+    {
+        // For negative bars: dark on the left (away from axis), fading toward the axis on the right.
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(1, 0)
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(color.R, color.G, color.B), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(90, color.R, color.G, color.B), 1));
+        if (brush.CanFreeze)
+            brush.Freeze();
+        return brush;
     }
 
     private static LinearGradientBrush CreateDataBarGradientBrush(CellColor color)

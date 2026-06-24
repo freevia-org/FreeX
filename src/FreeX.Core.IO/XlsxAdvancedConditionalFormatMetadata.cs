@@ -18,6 +18,7 @@ internal static class XlsxAdvancedConditionalFormatMetadata
     public static bool RequiresGeneratedX14DataBar(ConditionalFormat cf) =>
         !cf.DataBarGradient ||
         cf.DataBarBorder ||
+        cf.DataBarBorderColor is not null ||
         !string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ||
         cf.DataBarAxisColor is not null ||
         cf.DataBarNegativeFillColor is not null ||
@@ -41,6 +42,8 @@ internal static class XlsxAdvancedConditionalFormatMetadata
     public static HashSet<string> ModeledDataBarPayloadChildren(ConditionalFormat cf)
     {
         var children = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (cf.DataBarBorderColor is not null)
+            children.Add("borderColor");
         if (cf.DataBarAxisColor is not null)
             children.Add("axisColor");
         if (cf.DataBarNegativeFillColor is not null)

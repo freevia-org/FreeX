@@ -408,6 +408,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue, isMinimum: false),
                 // x14 CT_DataBar requires this child order: cfvo, cfvo, fillColor?, borderColor?,
                 // negativeFillColor?, negativeBorderColor?, axisColor?. axisColor must come last.
+                ToX14ColorXml(x14Ns, "borderColor", cf.DataBarBorderColor),
                 ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
                 ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor),
                 ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor));

@@ -195,6 +195,8 @@ public sealed partial class XlsxFileAdapter
                                 format.DataBarAxisPosition = axisPosition;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "axisColor"), out var axisColor))
                                 format.DataBarAxisColor = axisColor;
+                            if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "borderColor"), out var borderColor))
+                                format.DataBarBorderColor = borderColor;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "negativeFillColor"), out var negativeFillColor))
                                 format.DataBarNegativeFillColor = negativeFillColor;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "negativeBorderColor"), out var negativeBorderColor))
@@ -420,6 +422,8 @@ public sealed partial class XlsxFileAdapter
             format.DataBarAxisPosition = axisPosition;
         if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "axisColor"), out var axisColor))
             format.DataBarAxisColor = axisColor;
+        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "borderColor"), out var borderColor))
+            format.DataBarBorderColor = borderColor;
         if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "negativeFillColor"), out var negativeFillColor))
             format.DataBarNegativeFillColor = negativeFillColor;
         if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "negativeBorderColor"), out var negativeBorderColor))
@@ -499,6 +503,7 @@ public sealed partial class XlsxFileAdapter
             DataBarMaxLength = source.DataBarMaxLength,
             DataBarGradient  = source.DataBarGradient,
             DataBarBorder = source.DataBarBorder,
+            DataBarBorderColor = source.DataBarBorderColor,
             DataBarAxisPosition = source.DataBarAxisPosition,
             DataBarAxisColor = source.DataBarAxisColor,
             DataBarNegativeFillColor = source.DataBarNegativeFillColor,

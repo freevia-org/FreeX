@@ -40,7 +40,12 @@ public readonly record struct ConditionalFormatDataBar(
     RgbColor FillColor,
     bool Gradient,
     bool Border,
-    bool ShowValue);
+    bool ShowValue,
+    bool IsNegative = false,
+    double AxisFraction = 0d,
+    RgbColor? NegativeFillColor = null,
+    RgbColor? AxisColor = null,
+    RgbColor? BorderColor = null);
 
 /// <summary>Represents a cell-level error for display purposes.</summary>
 public sealed record CellError(string Code, string? Message = null);
