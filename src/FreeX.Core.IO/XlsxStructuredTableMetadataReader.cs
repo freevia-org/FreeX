@@ -227,7 +227,9 @@ internal static class XlsxStructuredTableMetadataReader
                     ReadTableColumnFormula(column, workbookNs, "calculatedColumnFormula"),
                     ReadTableColumnFormula(column, workbookNs, "totalsRowFormula"),
                     XlsxStructuredTableNativeMetadataReader.ReadColumnChildXmls(column, workbookNs),
-                    XlsxStructuredTableNativeMetadataReader.ReadColumnAttributes(column)))
+                    XlsxStructuredTableNativeMetadataReader.ReadColumnAttributes(column),
+                    ReadTableColumnFormulaArray(column, workbookNs, "calculatedColumnFormula"),
+                    ReadTableColumnFormulaArray(column, workbookNs, "totalsRowFormula")))
                 .Where(column => column.Id > 0 && !string.IsNullOrWhiteSpace(column.Name))
                 .ToList() ?? [],
             ReadFilterColumns(autoFilter, workbookNs));
@@ -316,6 +318,15 @@ internal static class XlsxStructuredTableMetadataReader
     {
         var formula = column.Element(workbookNs + elementName)?.Value;
         return string.IsNullOrWhiteSpace(formula) ? null : formula;
+    }
+
+    private static bool ReadTableColumnFormulaArray(XElement column, XNamespace workbookNs, string elementName)
+    {
+        var element = column.Element(workbookNs + elementName);
+        if (element is null)
+            return false;
+        var raw = element.Attribute("array")?.Value;
+        return raw is "1" or "true";
     }
 
     private static List<StructuredTableFilterColumnModel> ReadFilterColumns(

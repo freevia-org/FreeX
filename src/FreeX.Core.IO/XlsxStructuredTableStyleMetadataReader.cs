@@ -46,14 +46,17 @@ internal static class XlsxStructuredTableStyleMetadataReader
 
                 var appliesToTables = XlsxXmlAttributeReader.ReadBoolAttribute(styleElement, "table");
                 var appliesToPivotTables = XlsxXmlAttributeReader.ReadBoolAttribute(styleElement, "pivot");
-                if (!appliesToTables || appliesToPivotTables)
+                // Skip pivot-only styles (pivot="1", table="0"/absent). Load table styles and
+                // dual-use styles (table="1", pivot="1") — Excel itself allows a custom style to
+                // apply to both; dropping it on load causes data loss on round-trip.
+                if (!appliesToTables)
                     continue;
 
                 var style = new StructuredTableStyleModel
                 {
                     Name = name,
                     AppliesToTables = true,
-                    AppliesToPivotTables = false,
+                    AppliesToPivotTables = appliesToPivotTables,
                     NativeXml = styleElement.ToString(SaveOptions.DisableFormatting)
                 };
 
