@@ -164,19 +164,19 @@ public sealed partial class GridViewRenderPerformanceTests
         // The slicer frame is drawn via the themed DrawNativeControlFrame overload (style colors +
         // showCaption), still threading the cached pixelsPerDip into its clipped-text calls.
         drawNativeSlicer.Should().Contain("GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName),");
-        drawNativeSlicer.Should().Contain("hasHeader);");
+        drawNativeSlicer.Should().Contain("boldHeader: isAccentStyle);");
         drawNativeSlicer.Should().Contain("DrawClippedText(dc, caption, tileRect, itemTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
         drawNativeTimeline.Should().Contain("TimelineLayoutBuilder.Build(");
         drawNativeTimeline.Should().Contain("ResolveTimelineGranularity(timeline)");
-        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, layout.Caption, pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("layout.Caption,");
         drawNativeTimeline.Should().Contain("DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect)");
         drawNativeTimeline.Should().Contain("ToRect(layout.SelectionRect)");
         drawNativeTimeline.Should().Contain("DrawTimelineHandle(dc, layout.StartHandle);");
         drawNativeTimeline.Should().Contain("DrawTimelineHandle(dc, layout.EndHandle);");
         drawNativeTimeline.Should().Contain("pixelsPerDip);");
         drawNativeFrame.Should().Contain("DrawClippedText(dc, caption, new Rect");
-        drawNativeFrame.Should().Contain("pixelsPerDip);");
-        drawClippedText.Should().Contain("double pixelsPerDip)");
+        drawNativeFrame.Should().Contain("pixelsPerDip, isBold: boldHeader);");
+        drawClippedText.Should().Contain("double pixelsPerDip,");
         drawClippedText.Should().Contain("GetDrawingObjectText(");
         drawClippedText.Should().NotContain("VisualTreeHelper.GetDpi(this)");
     }
