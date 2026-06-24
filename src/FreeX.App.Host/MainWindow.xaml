@@ -1117,7 +1117,6 @@
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
-                Height="{DynamicResource FreeXStatusBarHeight}"
                 AutomationProperties.AutomationId="StatusBarRoot"
                 Loaded="StatusBarRoot_Loaded"
                 ClipToBounds="True">
