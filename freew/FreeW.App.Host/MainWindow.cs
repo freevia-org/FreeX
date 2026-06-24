@@ -522,6 +522,8 @@ public sealed class MainWindow : Window
             state = state.With("chart");
         if (_editor.SelectedShape() is not null || _editor.SelectedWordArt() is not null)
             state = state.With("drawing");
+        if (_editor.SelectedSmartArt() is not null)
+            state = state.With("smartart");
 
         _contextualTabs.Apply(state);
     }

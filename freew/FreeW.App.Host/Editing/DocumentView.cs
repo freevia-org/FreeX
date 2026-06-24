@@ -2036,8 +2036,178 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    // ── SmartArt selection (mirrors SelectedChart / SelectedChartLocation) ────────────────────────
+
+    /// <summary>The inline SmartArt diagram targeted by the current selection/caret, or null if none is selected.</summary>
+    public SmartArt? SelectedSmartArt() => SelectedSmartArtLocation().SmartArt;
+
+    // Locate the model paragraph/run index of the inline SmartArt under the selection, plus the diagram.
+    private (int BlockIndex, int RunIndex, SmartArt? SmartArt) SelectedSmartArtLocation()
+    {
+        var smartArt = SmartArtAtPointer(CaretPosition)
+            ?? SmartArtAtPointer(Selection.Start)
+            ?? SmartArtAtPointer(Selection.End)
+            ?? SmartArtInElement(CaretPosition?.Parent as TextElement)
+            ?? SmartArtInElement(Selection.Start.Parent as TextElement)
+            ?? SmartArtInElement(Selection.End.Parent as TextElement);
+        if (smartArt is null)
+            return (-1, -1, null);
+
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph paragraph)
+                continue;
+            for (var r = 0; r < paragraph.Runs.Count; r++)
+            {
+                if (ReferenceEquals(paragraph.Runs[r].SmartArt, smartArt))
+                    return (b, r, smartArt);
+            }
+        }
+        return (-1, -1, null);
+    }
+
+    private static SmartArt? SmartArtAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+        if (SmartArtInElement(pointer.Parent as TextElement) is { } parentDiagram)
+            return parentDiagram;
+        return SmartArtFromAdjacent(pointer, LogicalDirection.Forward)
+            ?? SmartArtFromAdjacent(pointer, LogicalDirection.Backward);
+    }
+
+    private static SmartArt? SmartArtFromAdjacent(TextPointer pointer, LogicalDirection direction) =>
+        pointer.GetAdjacentElement(direction) is InlineUIContainer { Child: Border { Tag: SmartArt modelSmartArt } }
+            ? modelSmartArt
+            : null;
+
+    private static SmartArt? SmartArtInElement(TextElement? element)
+    {
+        while (element is not null)
+        {
+            if (element is InlineUIContainer { Child: Border { Tag: SmartArt modelSmartArt } })
+                return modelSmartArt;
+            element = element.Parent as TextElement;
+        }
+        return null;
+    }
+
+    // ── SmartArt mutation methods (used by SmartArt Design contextual tab commands) ──────────────
+
+    /// <summary>
+    /// Append a new node to the selected SmartArt and re-render. No-op without a SmartArt selection.
+    /// </summary>
+    public void SmartArtAddShape()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null) return;
+        smartArt.Nodes.Add(new SmartArtNode("New Item"));
+        Render();
+    }
+
+    /// <summary>
+    /// Remove the last node from the selected SmartArt and re-render. No-op without a selection or
+    /// when only one node remains (a SmartArt must have at least one node).
+    /// </summary>
+    public void SmartArtRemoveShape()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
+        smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
+        Render();
+    }
+
+    /// <summary>
+    /// Move the last top-level node of the selected SmartArt up one position (i.e. swap it with its
+    /// preceding sibling). No-op without a selection or when there is only one node or it is already first.
+    /// </summary>
+    public void SmartArtMoveUp()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
+        var idx = smartArt.Nodes.Count - 1;
+        if (idx <= 0) return;
+        (smartArt.Nodes[idx], smartArt.Nodes[idx - 1]) = (smartArt.Nodes[idx - 1], smartArt.Nodes[idx]);
+        Render();
+    }
+
+    /// <summary>
+    /// Move the first top-level node of the selected SmartArt down one position (i.e. swap it with its
+    /// following sibling). No-op without a selection or when there is only one node or it is already last.
+    /// </summary>
+    public void SmartArtMoveDown()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null || smartArt.Nodes.Count <= 1) return;
+        var idx = 0;
+        if (idx >= smartArt.Nodes.Count - 1) return;
+        (smartArt.Nodes[idx], smartArt.Nodes[idx + 1]) = (smartArt.Nodes[idx + 1], smartArt.Nodes[idx]);
+        Render();
+    }
+
+    /// <summary>
+    /// Promote the last top-level node in a Hierarchy SmartArt: move it from being a child of its parent to
+    /// being a sibling after its parent at the top level. For List/Process (flat) diagrams this is a no-op.
+    /// No-op without a selection.
+    /// </summary>
+    public void SmartArtPromote()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null || smartArt.Kind != SmartArtKind.Hierarchy) return;
+        // Find a parent that has children and promote the last child to sibling after the parent.
+        for (var i = 0; i < smartArt.Nodes.Count; i++)
+        {
+            var node = smartArt.Nodes[i];
+            if (node.Children.Count <= 0) continue;
+            var last = node.Children[^1];
+            node.Children.RemoveAt(node.Children.Count - 1);
+            smartArt.Nodes.Insert(i + 1, last);
+            break;
+        }
+        Render();
+    }
+
+    /// <summary>
+    /// Demote the last top-level node in a Hierarchy SmartArt: move it to become the last child of the node
+    /// preceding it. No-op when there are fewer than two top-level nodes, or for non-Hierarchy diagrams.
+    /// No-op without a selection.
+    /// </summary>
+    public void SmartArtDemote()
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null || smartArt.Kind != SmartArtKind.Hierarchy || smartArt.Nodes.Count < 2) return;
+        var last = smartArt.Nodes[^1];
+        smartArt.Nodes.RemoveAt(smartArt.Nodes.Count - 1);
+        smartArt.Nodes[^1].Children.Add(last);
+        Render();
+    }
+
+    /// <summary>
+    /// Replace the node texts of the selected SmartArt with those from <paramref name="replacement"/>
+    /// (the result of re-opening the Insert SmartArt dialog). Also updates the Kind if changed.
+    /// No-op without a SmartArt selection.
+    /// </summary>
+    public void ReplaceSelectedSmartArt(SmartArt replacement)
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null) return;
+        smartArt.Kind = replacement.Kind;
+        smartArt.Nodes.Clear();
+        foreach (var node in replacement.Nodes)
+            smartArt.Nodes.Add(node);
+        Render();
+    }
+
     /// <summary>
     /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
+
     /// Mutates the model image in place — the alt text is carried by the image instance, so it survives
     /// the next <see cref="CommitToModel"/> — then re-renders so the tooltip/automation name refresh.
     /// No-op without an image selection.

@@ -620,8 +620,52 @@ internal static class FreeWRibbonCommands
         }));
         registry.Register("freew.smartart", new ActionCommand(() =>
         {
+            var owner = Application.Current?.MainWindow;
+            var result = InsertSmartArtDialog.Prompt(owner);
+            if (result is null) return;
             editor.Focus();
-            editor.InsertSmartArt(SmartArt.Create(SmartArtKind.Process, ["First", "Second", "Third"]));
+            editor.InsertSmartArt(result);
+        }));
+        // SmartArt Design contextual tab — node mutation commands.
+        registry.Register("freew.smartart-add-shape", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtAddShape();
+        }));
+        registry.Register("freew.smartart-remove-shape", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtRemoveShape();
+        }));
+        registry.Register("freew.smartart-promote", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtPromote();
+        }));
+        registry.Register("freew.smartart-demote", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtDemote();
+        }));
+        registry.Register("freew.smartart-move-up", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtMoveUp();
+        }));
+        registry.Register("freew.smartart-move-down", new ActionCommand(() =>
+        {
+            editor.Focus();
+            editor.SmartArtMoveDown();
+        }));
+        registry.Register("freew.smartart-edit-text", new ActionCommand(() =>
+        {
+            var owner = Application.Current?.MainWindow;
+            var current = editor.SelectedSmartArt();
+            if (current is null) return;
+            var result = InsertSmartArtDialog.Prompt(owner, current);
+            if (result is null) return;
+            editor.Focus();
+            editor.ReplaceSelectedSmartArt(result);
         }));
         registry.Register("freew.object", new ActionCommand(() =>
         {
@@ -2372,7 +2416,7 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Illustrations > Picture: pick an image, normalise to PNG, insert as an inline image run.
+    // Insert > Illustrations > Picture: pick an image (including SVG), normalise to PNG, insert as an inline image run.
     private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
     {
         private const double PxPerPoint = 96.0 / 72.0;
@@ -2383,7 +2427,7 @@ internal static class FreeWRibbonCommands
             var owner = Window.GetWindow(editor);
             var result = WpfFileDialogService.ShowOpenDialog(
                 owner,
-                "Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*",
+                "Images (*.png;*.jpg;*.jpeg;*.svg)|*.png;*.jpg;*.jpeg;*.svg|All files (*.*)|*.*",
                 title: "Insert Picture");
             if (!result.Chosen)
                 return;
@@ -2401,8 +2445,13 @@ internal static class FreeWRibbonCommands
         }
 
         // Decode any supported format and re-encode to PNG so the docx writer only ever emits PNG.
+        // SVG files are rasterized via SvgRasterizerHelper (SharpVectors) at a sensible default size,
+        // preserving aspect ratio. No new model field is needed — the result is plain PNG bytes.
         private static InlineImage LoadAsInlineImage(string path)
         {
+            if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                return SvgRasterizerHelper.RasterizeToInlineImage(path);
+
             var source = new BitmapImage();
             source.BeginInit();
             source.CacheOption = BitmapCacheOption.OnLoad;
