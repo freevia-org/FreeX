@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:FreeX.App.Host">
         <ResourceDictionary.MergedDictionaries>
@@ -14,7 +14,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXTextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Focusable" Value="True"/>
             <Setter Property="IsTabStop" Value="True"/>
@@ -37,7 +37,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Chrome" Property="Background" Value="Transparent"/>
@@ -50,17 +50,17 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXRibbonButtonHoverBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXBorderStrongBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource FreeXRibbonButtonHoverBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXAccentBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXMutedTextBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXMutedTextBrush}"/>
                     <Setter Property="Cursor" Value="Arrow"/>
                 </Trigger>
             </Style.Triggers>
@@ -72,7 +72,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXTextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Focusable" Value="True"/>
             <Setter Property="IsTabStop" Value="True"/>
@@ -95,7 +95,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FreeXAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Chrome" Property="Background" Value="Transparent"/>
@@ -108,25 +108,25 @@
             </Setter>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXRibbonButtonHoverBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXBorderStrongBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource FreeXRibbonButtonHoverBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXBorderStrongBrush}"/>
                 </Trigger>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXAccentBrush}"/>
                 </Trigger>
                 <MultiTrigger>
                     <MultiTrigger.Conditions>
                         <Condition Property="IsChecked" Value="True"/>
                         <Condition Property="IsMouseOver" Value="True"/>
                     </MultiTrigger.Conditions>
-                    <Setter Property="Background" Value="{StaticResource FreeXAccentPressedBrush}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource FreeXAccentDarkBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource FreeXAccentPressedBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource FreeXAccentDarkBrush}"/>
                 </MultiTrigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXMutedTextBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXMutedTextBrush}"/>
                     <Setter Property="Cursor" Value="Arrow"/>
                 </Trigger>
             </Style.Triggers>
@@ -135,7 +135,7 @@
         <!-- Group label text style -->
         <Style x:Key="GroupLbl" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXMutedTextBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXMutedTextBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
@@ -148,13 +148,13 @@
 
         <Style x:Key="RibbonGroupLabelBorder" TargetType="Border">
             <Setter Property="BorderThickness" Value="0,1,0,0"/>
-            <Setter Property="BorderBrush" Value="{StaticResource FreeXBorderBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeXBorderBrush}"/>
             <Setter Property="MinHeight" Value="18"/>
         </Style>
 
         <Style x:Key="RibbonGroupDivider" TargetType="Rectangle">
             <Setter Property="Width" Value="1"/>
-            <Setter Property="Fill" Value="{StaticResource FreeXBorderBrush}"/>
+            <Setter Property="Fill" Value="{DynamicResource FreeXBorderBrush}"/>
             <Setter Property="Margin" Value="2,5,3,18"/>
         </Style>
 
@@ -193,7 +193,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -243,7 +243,7 @@
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -296,7 +296,7 @@
         <Style x:Key="TitleBarQatButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="2"/>
             <Setter Property="Cursor" Value="Arrow"/>
@@ -330,17 +330,17 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarPressedBrush}"/>
                     <Setter Property="BorderBrush" Value="{DynamicResource FreeXTitleBarButtonBorderBrush}"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="Transparent"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
                     <Setter Property="Cursor" Value="Arrow"/>
                 </Trigger>
             </Style.Triggers>
@@ -366,11 +366,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource FreeXAccentBrush}"/>
-                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreeXRibbonSurfaceBrush}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource FreeXAccentBrush}"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource FreeXRibbonSurfaceBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource FreeXAccentSoftBrush}"/>
+                                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource FreeXAccentSoftBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -383,7 +383,7 @@
             <Setter Property="Background"   Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="BorderBrush"  Value="Transparent"/>
-            <Setter Property="Foreground"   Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="FontSize"     Value="10"/>
             <Setter Property="Width"        Value="46"/>
             <Setter Property="Padding"      Value="0"/>
@@ -421,12 +421,12 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarHoverBrush}"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="{DynamicResource FreeXTitleBarPressedBrush}"/>
                     <Setter Property="BorderBrush" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="Transparent"/>
@@ -656,7 +656,7 @@
 
         <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
         <Style x:Key="SsNavBtn" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -674,7 +674,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bg" Property="Background" Value="{StaticResource FreeXAccentDarkBrush}"/>
+                                <Setter TargetName="bg" Property="Background" Value="{DynamicResource FreeXAccentDarkBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -683,13 +683,13 @@
         </Style>
 
         <Style x:Key="SsNavBtnActive" BasedOn="{StaticResource SsNavBtn}" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource FreeXAccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource FreeXAccentBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
         <Style x:Key="BackstageSidebarIcon" TargetType="{x:Type local:RibbonIcon}">
             <Setter Property="IconSize" Value="24"/>
-            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeXWhiteBrush}"/>
             <Setter Property="Margin" Value="0,0,12,0"/>
         </Style>
 

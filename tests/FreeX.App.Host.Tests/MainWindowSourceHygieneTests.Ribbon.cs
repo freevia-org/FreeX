@@ -805,7 +805,8 @@ public sealed partial class MainWindowSourceHygieneTests
         }
 
         titleBarCommands.Should().NotContain("Foreground=\"{Binding Foreground");
-        titleBarCommands.Split("Foreground=\"{StaticResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(4);
+        // WS-G round 4: title-bar foregrounds converted to DynamicResource for full-chrome reskin.
+        titleBarCommands.Split("Foreground=\"{DynamicResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(4);
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         qatSource.Should().Contain("? \"FreeXTextBrush\"");
         qatSource.Should().Contain(": \"FreeXWhiteBrush\"");

@@ -1,4 +1,4 @@
-<Window x:Class="FreeX.App.Host.MainWindow"
+﻿<Window x:Class="FreeX.App.Host.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -137,7 +137,7 @@
                                    Grid.RowSpan="3"
                                    Panel.ZIndex="4"
                                    Text="X"
-                                   Foreground="{StaticResource FreeXWhiteBrush}"
+                                   Foreground="{DynamicResource FreeXWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="14.5"
@@ -148,7 +148,7 @@
                         <TextBlock Text="FREE"
                                    Grid.Row="0"
                                    Panel.ZIndex="2"
-                                   Foreground="{StaticResource FreeXWhiteBrush}"
+                                   Foreground="{DynamicResource FreeXWhiteBrush}"
                                    FontFamily="Segoe UI"
                                    FontWeight="Bold"
                                    FontSize="6.6"
@@ -171,7 +171,7 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Close}"
                         AutomationProperties.AutomationId="CloseSysBtn">
                     <local:RibbonIcon Kind="WindowClose" IconSize="18"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
                 </Button>
                 <Button x:Name="MaxRestoreBtn"  DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MaxRestoreBtn_Click"
@@ -179,7 +179,7 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_MaximizeOrRestore}"
                         AutomationProperties.AutomationId="MaxRestoreBtn">
                     <local:RibbonIcon x:Name="MaxRestoreIcon" Kind="WindowMaximize" IconSize="18"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
                 </Button>
                 <Button x:Name="MinimizeBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource SysBtnStyle}"      Click="MinimizeBtn_Click"
@@ -187,20 +187,20 @@
                         AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationName_Minimize}"
                         AutomationProperties.AutomationId="MinimizeBtn">
                     <local:RibbonIcon Kind="WindowMinimize" IconSize="18"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
+                                      Foreground="{DynamicResource FreeXWhiteBrush}"/>
                 </Button>
                 <!-- Workbook name centred -->
                 <TextBlock x:Name="WorkbookNameText"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           FontSize="12" Foreground="{StaticResource FreeXWhiteBrush}" FontWeight="SemiBold"/>
+                           FontSize="12" Foreground="{DynamicResource FreeXWhiteBrush}" FontWeight="SemiBold"/>
             </DockPanel>
         </Border>
 
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 1  Ribbon  (tabbed, groups with labels)
              ═══════════════════════════════════════════════════════════════ -->
-        <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="{StaticResource FreeXRibbonSurfaceBrush}"
-                    BorderThickness="0,0,0,1" BorderBrush="{StaticResource FreeXBorderBrush}"
+        <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="{DynamicResource FreeXRibbonSurfaceBrush}"
+                    BorderThickness="0,0,0,1" BorderBrush="{DynamicResource FreeXBorderBrush}"
                     Padding="0" TabStripPlacement="Top" SelectedIndex="1" MinHeight="132"
                     Focusable="True" IsTabStop="True"
                     KeyboardNavigation.TabNavigation="Continue"
@@ -234,8 +234,8 @@
         <Border x:Name="BelowRibbonQatRoot"
                 Grid.Row="2"
                 Visibility="Collapsed"
-                Background="{StaticResource FreeXRibbonSurfaceBrush}"
-                BorderBrush="{StaticResource FreeXBorderBrush}"
+                Background="{DynamicResource FreeXRibbonSurfaceBrush}"
+                BorderBrush="{DynamicResource FreeXBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="8,2">
             <StackPanel x:Name="BelowRibbonQatPanel"
@@ -748,11 +748,11 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
+        <Border Grid.Row="5" Panel.ZIndex="5" Background="{DynamicResource FreeXSheetSurfaceBrush}" BorderBrush="{DynamicResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
                   MinHeight="28"
-                  Background="{StaticResource FreeXSheetSurfaceBrush}"
+                  Background="{DynamicResource FreeXSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -769,7 +769,7 @@
                         Margin="0"
                         VerticalAlignment="Top"
                         Panel.ZIndex="4"
-                        Background="{StaticResource FreeXSheetSurfaceBrush}"
+                        Background="{DynamicResource FreeXSheetSurfaceBrush}"
                         BorderBrush="Transparent"
                         BorderThickness="0"
                         IsHitTestVisible="False"/>
@@ -787,8 +787,8 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Width="28" Height="26" Padding="0"
-                        FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
-                        Foreground="{StaticResource FreeXAccentDarkBrush}"
+                        FontSize="13" Background="{DynamicResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavLeftBtn_Click" Loaded="SheetNavButton_Loaded" PreviewMouseDown="SheetNavButton_MouseRightButtonDown" PreviewMouseRightButtonDown="SheetNavButton_MouseRightButtonDown" MouseRightButtonDown="SheetNavButton_MouseRightButtonDown" PreviewMouseRightButtonUp="SheetNavButton_MouseRightButtonUp" MouseRightButtonUp="SheetNavButton_MouseRightButtonUp" ContextMenuOpening="SheetNavButton_ContextMenuOpening" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Center" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
@@ -935,13 +935,13 @@
                                                             </Viewbox.Style>
                                                             <Grid Width="12" Height="12">
                                                                 <Path Data="M 3.7 5.2 V 4.1 C 3.7 2.1 5 0.9 6.5 0.9 C 8 0.9 9.3 2.1 9.3 4.1 V 5.2"
-                                                                      Stroke="{StaticResource FreeXAccentDarkBrush}"
+                                                                      Stroke="{DynamicResource FreeXAccentDarkBrush}"
                                                                       StrokeThickness="1.35"
                                                                       StrokeStartLineCap="Round"
                                                                       StrokeEndLineCap="Round"
                                                                       StrokeLineJoin="Round"/>
                                                                 <Path Data="M 2.2 5 H 10.8 V 11 H 2.2 Z"
-                                                                      Fill="{StaticResource FreeXAccentDarkBrush}"/>
+                                                                      Fill="{DynamicResource FreeXAccentDarkBrush}"/>
                                                             </Grid>
                                                         </Viewbox>
                                                         <TextBlock x:Name="SheetTabNameText"
@@ -961,7 +961,7 @@
                                         </Border>
                                         <Border x:Name="TabFocusCue"
                                                 Margin="14,3,14,4"
-                                                BorderBrush="{StaticResource FreeXAccentDarkBrush}"
+                                                BorderBrush="{DynamicResource FreeXAccentDarkBrush}"
                                                 BorderThickness="1"
                                                 CornerRadius="2"
                                                 Panel.ZIndex="8"
@@ -993,7 +993,7 @@
                         <Button x:Name="AddSheetButton" Content="+" Width="44" MinWidth="44" Height="27" MinHeight="27"
                                 FontSize="16" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
                                 Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
-                                Foreground="{StaticResource FreeXAccentBrush}" Opacity="1"
+                                Foreground="{DynamicResource FreeXAccentBrush}" Opacity="1"
                                 VerticalAlignment="Top" Cursor="Hand"
                                 Panel.ZIndex="3"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
@@ -1060,8 +1060,8 @@
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3"
                         Width="28" Height="26" Padding="0"
-                        FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
-                        Foreground="{StaticResource FreeXAccentDarkBrush}"
+                        FontSize="13" Background="{DynamicResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource FreeXAccentDarkBrush}"
                         Cursor="Hand" Click="SheetNavRightBtn_Click" Loaded="SheetNavButton_Loaded" PreviewMouseDown="SheetNavButton_MouseRightButtonDown" PreviewMouseRightButtonDown="SheetNavButton_MouseRightButtonDown" MouseRightButtonDown="SheetNavButton_MouseRightButtonDown" PreviewMouseRightButtonUp="SheetNavButton_MouseRightButtonUp" MouseRightButtonUp="SheetNavButton_MouseRightButtonUp" ContextMenuOpening="SheetNavButton_ContextMenuOpening" Visibility="Hidden" Margin="0,1,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
@@ -1116,7 +1116,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
+        <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{DynamicResource FreeXStatusSurfaceBrush}" Padding="8,3"
                 AutomationProperties.AutomationId="StatusBarRoot"
                 Loaded="StatusBarRoot_Loaded"
                 ClipToBounds="True">
@@ -1218,7 +1218,7 @@
                 <StackPanel x:Name="StatusInteractiveControls" Grid.Column="2"
                             Orientation="Horizontal"
                             HorizontalAlignment="Right" VerticalAlignment="Center"
-                            Background="{StaticResource FreeXStatusSurfaceBrush}"
+                            Background="{DynamicResource FreeXStatusSurfaceBrush}"
                             Panel.ZIndex="1"
                             KeyboardNavigation.TabNavigation="Cycle"
                             KeyboardNavigation.ControlTabNavigation="Cycle"
@@ -1280,7 +1280,7 @@
                     <Grid x:Name="StatusZoomControls"
                           HorizontalAlignment="Right" VerticalAlignment="Center"
                           MinWidth="38" Height="24"
-                          Background="{StaticResource FreeXStatusSurfaceBrush}"
+                          Background="{DynamicResource FreeXStatusSurfaceBrush}"
                           SnapsToDevicePixels="True"
                           UseLayoutRounding="True">
                         <Grid.ColumnDefinitions>

@@ -145,7 +145,8 @@ public sealed partial class MainWindowXamlKeyTipTests
         zoomControls.Attribute("Grid.Column")?.Value.Should().Be("2");
         zoomControls.Attribute("MinWidth")?.Value.Should().NotBeNullOrWhiteSpace();
         zoomControls.Attribute("Height")?.Value.Should().Be("24");
-        zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreeXStatusSurfaceBrush}");
+        // WS-G round 4: converted to DynamicResource so the status bar tracks the active theme.
+        zoomControls.Attribute("Background")?.Value.Should().Be("{DynamicResource FreeXStatusSurfaceBrush}");
         zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
         zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
         zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
