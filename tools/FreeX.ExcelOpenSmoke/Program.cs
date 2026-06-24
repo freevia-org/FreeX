@@ -352,6 +352,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelCfCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelCfCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-cf")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored CF corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))

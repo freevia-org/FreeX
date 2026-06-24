@@ -130,6 +130,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_cf_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeCfCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -2493,5 +2499,566 @@ internal static class ExcelSmokeFixtures
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         using var fs = File.Create(outputPath);
         new XlsxFileAdapter().Save(workbook, fs);
+    }
+
+    // =========================================================================
+    // Conditional Formatting corpus fixtures
+    // =========================================================================
+
+    // XlFormatConditionType enum values
+    private const int XlColorScale = 3;
+    private const int XlDataBar = 4;
+    private const int XlIconSet = 6;
+    private const int XlTop10 = 5;
+    // XlDataBarFillType
+    private const int XlDataBarFillGradient = 0;
+    private const int XlDataBarFillSolid = 1;
+    // XlDataBarBorderType
+    private const int XlDataBarBorderNone = 0;
+    private const int XlDataBarBorderSolid = 1;
+    // XlIconSet enum
+    private const int xl3Arrows = 1;
+    private const int xl5Rating = 18;
+    // XlConditionValueTypes
+    private const int XlConditionValueLowestValue = 1;
+    private const int XlConditionValueHighestValue = 2;
+    private const int XlConditionValueNumber = 0;
+    private const int XlConditionValuePercent = 3;
+    private const int XlConditionValuePercentile = 4;
+    // XlTop10
+    private const int XlTop10Top = 1;
+    private const int XlTop10Bottom = 2;
+    // XlThemeColor
+    private const int XlThemeColorAccent1 = 5;
+
+    /// <summary>Returns the output paths for all nine CF corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelCfCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_cf_databars_pos_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_databars_neg_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_databars_solid_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_colorscale3_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_colorscale2_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_iconset_arrows_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_iconset_rating_007.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_highlight_dxf_008.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cf_top10_009.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for CF corpus fixtures.</summary>
+    private static void GenerateExcelNativeCfCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("databars_pos_001", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_DataBarsPos(workbooks, outputPath);
+        else if (fileName.Contains("databars_neg_002", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_DataBarsNeg(workbooks, outputPath);
+        else if (fileName.Contains("databars_solid_003", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_DataBarsSolid(workbooks, outputPath);
+        else if (fileName.Contains("colorscale3_004", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_ColorScale3(workbooks, outputPath);
+        else if (fileName.Contains("colorscale2_005", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_ColorScale2(workbooks, outputPath);
+        else if (fileName.Contains("iconset_arrows_006", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_IconSetArrows(workbooks, outputPath);
+        else if (fileName.Contains("iconset_rating_007", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_IconSetRating(workbooks, outputPath);
+        else if (fileName.Contains("highlight_dxf_008", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_HighlightDxf(workbooks, outputPath);
+        else if (fileName.Contains("top10_009", StringComparison.OrdinalIgnoreCase))
+            GenerateCfFixture_Top10(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown CF corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared data population for CF fixtures
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes a header row + 11 numeric data rows (including negatives) into columns A and B.
+    /// Returns the data range address for CF application (B2:B12).
+    /// </summary>
+    private static void PopulateCfData(object worksheet, bool includeNegatives)
+    {
+        SetExcelCellValue(worksheet, 1, 1, "Label");
+        SetExcelCellValue(worksheet, 1, 2, "Value");
+
+        double[] values = includeNegatives
+            ? [10, -5, 30, -15, 45, 22, -8, 60, 5, -20, 75]
+            : [10, 5, 30, 15, 45, 22, 8, 60, 5, 20, 75];
+
+        var labels = new[] { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K" };
+        for (var i = 0; i < values.Length; i++)
+        {
+            SetExcelCellValue(worksheet, i + 2, 1, labels[i]);
+            SetExcelCellValue(worksheet, i + 2, 2, values[i]);
+        }
+    }
+
+    private static object OpenCfWorkbook(dynamic workbooks, string outputPath, string sheetName,
+        out object worksheet)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        var workbook = workbooks.Add();
+        worksheet = ((dynamic)workbook).Worksheets[1];
+        ((dynamic)worksheet).Name = sheetName;
+        return workbook;
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — data bars, positive values only (gradient, default)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_DataBarsPos(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? databar = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "DataBarsPos", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            databar = ((dynamic)conditions).AddDatabar();
+            // Gradient fill is the default (XlDataBarFillGradient=0); no extra property needed.
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(databar);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 002 — data bars with positive AND negative values (axis + red bar)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_DataBarsNeg(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? databar = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "DataBarsNeg", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: true);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            databar = ((dynamic)conditions).AddDatabar();
+            // Excel auto-draws axis + red negative bar when negatives exist.
+            // NegativeBarFormat.ColorType and AxisColor can be accessed through
+            // databar.NegativeBarFormat — leaving defaults so Excel picks red / midpoint axis.
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(databar);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 003 — data bars solid fill + solid border
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_DataBarsSolid(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? databar = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "DataBarsSolid", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            databar = ((dynamic)conditions).AddDatabar();
+            ((dynamic)databar).BarFillType = XlDataBarFillSolid;           // 1 = solid
+            ((dynamic)databar).BarBorder.Type = XlDataBarBorderSolid;      // 1 = solid border
+            ((dynamic)databar).BarBorder.Color.Color = ToOleColor(0, 112, 192); // blue border (FormatColor.Color)
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(databar);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 004 — 3-colour scale (green → yellow → red)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_ColorScale3(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? colorScale = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "ColorScale3", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            colorScale = ((dynamic)conditions).AddColorScale(3);
+
+            // Point 1 (min) — green
+            ((dynamic)colorScale).ColorScaleCriteria[1].Type = XlConditionValueLowestValue;
+            ((dynamic)colorScale).ColorScaleCriteria[1].FormatColor.Color = ToOleColor(99, 190, 123);
+
+            // Point 2 (midpoint) — yellow
+            ((dynamic)colorScale).ColorScaleCriteria[2].Type = XlConditionValuePercent;
+            ((dynamic)colorScale).ColorScaleCriteria[2].Value = 50;
+            ((dynamic)colorScale).ColorScaleCriteria[2].FormatColor.Color = ToOleColor(255, 235, 132);
+
+            // Point 3 (max) — red
+            ((dynamic)colorScale).ColorScaleCriteria[3].Type = XlConditionValueHighestValue;
+            ((dynamic)colorScale).ColorScaleCriteria[3].FormatColor.Color = ToOleColor(248, 105, 107);
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(colorScale);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 005 — 2-colour scale (white → blue)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_ColorScale2(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? colorScale = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "ColorScale2", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            colorScale = ((dynamic)conditions).AddColorScale(2);
+
+            // Point 1 (min) — white
+            ((dynamic)colorScale).ColorScaleCriteria[1].Type = XlConditionValueLowestValue;
+            ((dynamic)colorScale).ColorScaleCriteria[1].FormatColor.Color = ToOleColor(255, 255, 255);
+
+            // Point 2 (max) — blue
+            ((dynamic)colorScale).ColorScaleCriteria[2].Type = XlConditionValueHighestValue;
+            ((dynamic)colorScale).ColorScaleCriteria[2].FormatColor.Color = ToOleColor(31, 73, 125);
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(colorScale);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 006 — icon set: 3 arrows (xl3Arrows)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_IconSetArrows(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? iconSet = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "IconSetArrows", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            iconSet = ((dynamic)conditions).AddIconSetCondition();
+            // xl3Arrows = 1 in XlIconSet enum
+            ((dynamic)iconSet).IconSet = ((dynamic)worksheet).Parent.IconSets(xl3Arrows);
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(iconSet);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 007 — icon set: 5 ratings (xl5Rating = 24)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_IconSetRating(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? iconSet = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "IconSetRating", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            iconSet = ((dynamic)conditions).AddIconSetCondition();
+            // xl5Rating = 24 in XlIconSet enum
+            ((dynamic)iconSet).IconSet = ((dynamic)worksheet).Parent.IconSets(xl5Rating);
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(iconSet);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 008 — highlight / DXF: cell-value > 5, fill + bold + font color +
+    //            number format + box border (exercises dxf numfmt + border gaps)
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_HighlightDxf(dynamic workbooks, string outputPath)
+    {
+        // Excel COM cannot set FormatCondition.Borders[index].LineStyle via COM automation
+        // (throws 0x800A03EC "Unable to set the LineStyle property of the Border class").
+        // Strategy: write fill + font + numFmt via COM, then patch the OOXML to inject the border
+        // into the <dxf> element. This gives us a valid Excel-authored file that exercises the
+        // dxf border gap in FreeX rendering.
+
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? condition = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "HighlightDxf", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            // XlCellValue=1, XlGreater=5
+            condition = ((dynamic)conditions).Add(XlCellValue, XlGreater, "5");
+
+            // Fill — light red
+            ((dynamic)condition).Interior.Color = ToOleColor(255, 199, 206);
+
+            // Font — bold + dark red
+            ((dynamic)condition).Font.Bold = true;
+            ((dynamic)condition).Font.Color = ToOleColor(156, 0, 6);
+
+            // Number format (dxf numFmt — known FreeX gap)
+            ((dynamic)condition).NumberFormat = "$#,##0.00";
+
+            // NOTE: border cannot be set via COM — patched in OOXML below.
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(condition);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+
+        // Post-process: inject <border> into the <dxf> in styles.xml so the workbook
+        // has a visible box border in the CF rule (dark red, thin, all edges).
+        PatchHighlightDxfBorder(outputPath);
+
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    /// <summary>
+    /// Opens the .xlsx ZIP, finds the first &lt;dxf&gt; element in styles.xml that has a
+    /// &lt;fill&gt; (our CF highlight rule), and appends a &lt;border&gt; child with thin dark-red
+    /// edges on all four sides after the &lt;fill&gt; (CT_Dxf order: font, numFmt, fill, border).
+    /// Saves back in-place.
+    /// </summary>
+    private static void PatchHighlightDxfBorder(string xlsxPath)
+    {
+        // Dark-red RGB "9C0006" = 156,0,6 → hex ARGB for OOXML
+        const string darkRedHex = "FF9C0006";
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        // Build border element directly in the correct namespace (no redundant xmlns attr)
+        var borderEl = new XElement(ns + "border",
+            new XElement(ns + "left",
+                new XAttribute("style", "thin"),
+                new XElement(ns + "color", new XAttribute("rgb", darkRedHex))),
+            new XElement(ns + "right",
+                new XAttribute("style", "thin"),
+                new XElement(ns + "color", new XAttribute("rgb", darkRedHex))),
+            new XElement(ns + "top",
+                new XAttribute("style", "thin"),
+                new XElement(ns + "color", new XAttribute("rgb", darkRedHex))),
+            new XElement(ns + "bottom",
+                new XAttribute("style", "thin"),
+                new XElement(ns + "color", new XAttribute("rgb", darkRedHex))));
+
+        var tempPath = xlsxPath + ".tmp";
+        using (var inZip = ZipFile.OpenRead(xlsxPath))
+        using (var outZip = ZipFile.Open(tempPath, ZipArchiveMode.Create))
+        {
+            foreach (var entry in inZip.Entries)
+            {
+                var outEntry = outZip.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                using var inStream = entry.Open();
+                using var outStream = outEntry.Open();
+
+                if (!entry.FullName.Equals("xl/styles.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    inStream.CopyTo(outStream);
+                    continue;
+                }
+
+                // Parse and patch styles.xml
+                var doc = XDocument.Load(inStream);
+
+                // Find the first <dxf> that contains <fill> (our CF rule)
+                var dxfsEl = doc.Root?.Element(ns + "dxfs");
+                if (dxfsEl != null)
+                {
+                    var targetDxf = dxfsEl.Elements(ns + "dxf")
+                        .FirstOrDefault(d => d.Element(ns + "fill") != null);
+
+                    if (targetDxf != null)
+                    {
+                        // CT_Dxf sequence: font, numFmt, fill, alignment, border, protection
+                        // Insert <border> after <fill>
+                        var fillEl = targetDxf.Element(ns + "fill");
+                        fillEl?.AddAfterSelf(borderEl);
+                    }
+                }
+
+                doc.Save(outStream);
+            }
+        }
+
+        File.Delete(xlsxPath);
+        File.Move(tempPath, xlsxPath);
+    }
+
+    // XlBordersIndex constants for DXF border in CF (same values as regular borders)
+    private const int Program_XlEdgeLeft = 7;
+    private const int Program_XlEdgeTop = 8;
+    private const int Program_XlEdgeBottom = 9;
+    private const int Program_XlEdgeRight = 10;
+
+    // -------------------------------------------------------------------------
+    // case 009 — Top 10 (Top 3) with fill
+    // -------------------------------------------------------------------------
+    private static void GenerateCfFixture_Top10(dynamic workbooks, string outputPath)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? conditions = null;
+        object? top10 = null;
+        try
+        {
+            workbook = OpenCfWorkbook(workbooks, outputPath, "Top10", out object ws);
+            worksheet = ws;
+            PopulateCfData(worksheet, includeNegatives: false);
+
+            range = ((dynamic)worksheet).Range("B2:B12");
+            conditions = ((dynamic)range).FormatConditions;
+            top10 = ((dynamic)conditions).AddTop10();
+            ((dynamic)top10).TopBottom = XlTop10Top;   // 1 = top
+            ((dynamic)top10).Rank = 3;
+            ((dynamic)top10).Interior.Color = ToOleColor(255, 215, 0);  // gold
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(top10);
+            ReleaseComObject(conditions);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
     }
 }
