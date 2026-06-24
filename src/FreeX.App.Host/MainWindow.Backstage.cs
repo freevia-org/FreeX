@@ -362,7 +362,8 @@ public partial class MainWindow
         SsRecentScroll.Visibility = plan.RecentListVisible ? Visibility.Visible : Visibility.Collapsed;
         SsPinnedScroll.Visibility = plan.PinnedListVisible ? Visibility.Visible : Visibility.Collapsed;
 
-        var activeBrush = (System.Windows.Media.Brush)FindResource("FreeXAccentBrush");
+        var activeBrush = TryFindResource("FreeXAccentBrush") as System.Windows.Media.Brush
+            ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x6D, 0x8C));
         var inactiveBrush = new System.Windows.Media.SolidColorBrush(
             System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
 

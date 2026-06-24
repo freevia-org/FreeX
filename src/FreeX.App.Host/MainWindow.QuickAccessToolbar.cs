@@ -109,7 +109,11 @@ public partial class MainWindow
         double width,
         Thickness margin)
     {
-        var iconBrush = (Brush)FindResource(showBelowRibbon ? "FreeXTextBrush" : "FreeXWhiteBrush");
+        var iconBrushKey = showBelowRibbon ? "FreeXTextBrush" : "FreeXWhiteBrush";
+        var iconBrushFallback = showBelowRibbon
+            ? new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F))
+            : (Brush)Brushes.White;
+        var iconBrush = TryFindResource(iconBrushKey) as Brush ?? iconBrushFallback;
         return new SharedQatOptions
         {
             ButtonStyleKey = showBelowRibbon ? "RibbonBtn" : "TitleBarQatButton",
