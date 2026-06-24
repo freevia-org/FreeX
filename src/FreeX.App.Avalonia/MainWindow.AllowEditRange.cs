@@ -206,12 +206,36 @@ public sealed partial class MainWindow
 
         RefreshRanges();
 
-        // WPF button order: [New...][Modify...][Delete][Permissions...] in a row
+        // WPF button order: [New...][Modify...][Delete][Permissions...] in a row, right-aligned
         var rangeButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 6,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0),
             Children = { newButton, modifyButton, deleteButton, permissionsButton },
+        };
+
+        // WPF: GroupBox (no explicit header visible) containing label + list + action buttons.
+        // The label is shown as the GroupBox Header so it matches the WPF visual framing.
+        var existingRangesGroupContent = new DockPanel { Margin = new Thickness(4), LastChildFill = true };
+        DockPanel.SetDock(rangeButtons, Dock.Bottom);
+        existingRangesGroupContent.Children.Add(rangeButtons);
+        existingRangesGroupContent.Children.Add(rangesList);
+
+        var existingRangesGroup = new GroupBox
+        {
+            Header = UiText.Get("AllowEditRange_ExistingRangesLabel"),
+            Content = existingRangesGroupContent,
+            Margin = new Thickness(0, 4, 0, 8),
+        };
+
+        // WPF: second GroupBox with "Range" header containing the cell-reference textbox.
+        var rangeGroup = new GroupBox
+        {
+            Header = UiText.Get("AllowEditRange_RangeLabel"),
+            Content = new Border { Padding = new Thickness(4), Child = rangeBox },
+            Margin = new Thickness(0, 0, 0, 6),
         };
 
         // WPF bottom button order: [OK][Cancel]
@@ -227,21 +251,18 @@ public sealed partial class MainWindow
 
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             Children =
             {
                 bottomRow,
                 new StackPanel
                 {
-                    Spacing = 8,
+                    Spacing = 4,
                     Children =
                     {
-                        new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                        new TextBlock { Text = UiText.Get("AllowEditRange_ExistingRangesLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                        rangesList,
-                        rangeButtons,
-                        new TextBlock { Text = UiText.Get("AllowEditRange_RangeLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                        rangeBox,
+                        new TextBlock { Text = UiText.Get("AllowEditRange_Intro"), Foreground = HeaderForeground, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
+                        existingRangesGroup,
+                        rangeGroup,
                         new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = SecondaryInk, TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily },
                         warningText,
                     },

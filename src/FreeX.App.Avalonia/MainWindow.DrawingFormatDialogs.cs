@@ -568,6 +568,9 @@ public sealed partial class MainWindow
         DrawingShapeGradientDirection SelectedDirection() =>
             ShapeGradientPlanner.DirectionAt(directionOptions, directionBox.SelectedIndex);
 
+        TextBlock? startSummaryRef = null;
+        TextBlock? endSummaryRef = null;
+
         void UpdatePreview()
         {
             startSwatch.Background = SolidColor(startColor);
@@ -585,6 +588,8 @@ public sealed partial class MainWindow
                     new GradientStop(ToColor(endColor), 1),
                 },
             };
+            if (startSummaryRef is { } ss) ss.Text = $"Start: {FormatRgb(startColor)}";
+            if (endSummaryRef is { } es) es.Text = $"End: {FormatRgb(endColor)}";
         }
 
         directionBox.SelectionChanged += (_, _) => UpdatePreview();
@@ -657,7 +662,9 @@ public sealed partial class MainWindow
         };
 
         var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 8) };
+        var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 6) };
+        startSummaryRef = startSummary;
+        endSummaryRef = endSummary;
         var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 10, 18, 8) };
         content.Children.Add(gradientGroup);
         content.Children.Add(startSummary);
@@ -667,7 +674,7 @@ public sealed partial class MainWindow
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 16, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Children = { ok, cancel },
         });
         dialog.Content = content;

@@ -109,7 +109,7 @@ public sealed partial class MainWindow
         var issueList = new ListBox
         {
             MinHeight = 190,
-            Margin = new Thickness(0, 0, 0, 16),
+            Margin = new Thickness(0, 4, 0, 0),
         };
         AutomationProperties.SetName(issueList, UiText.Get("ShellLoc_AccessibilityCheckerIssueListAutomationName"));
         AutomationProperties.SetAutomationId(issueList, "AccessibilityCheckerIssueList");
@@ -125,6 +125,7 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("ShellLoc_AccessibilityCheckerGoToButton"),
             MinWidth = 76,
+            IsDefault = true,
             Margin = new Thickness(0, 0, 8, 0),
         };
         AutomationProperties.SetName(goToButton, UiText.Get("ShellLoc_AccessibilityCheckerGoToAutomationName"));
@@ -135,6 +136,7 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("Common_Close"),
             MinWidth = 76,
+            IsCancel = true,
         };
         AutomationProperties.SetName(closeButton, UiText.Get("ShellLoc_AccessibilityCheckerCloseAutomationName"));
         AutomationProperties.SetAutomationId(closeButton, "AccessibilityCheckerCloseButton");
@@ -179,6 +181,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
                 goToButton,
@@ -186,16 +189,17 @@ public sealed partial class MainWindow
             },
         };
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Children =
-            {
-                issuesLabel,
-                issueList,
-                buttonRow,
-            },
-        };
+        // Use DockPanel so the button row is anchored to the bottom and the issue list fills the
+        // remaining space — matches the WPF StackPanel-with-fixed-height layout intent where the
+        // button row never scrolls off-screen.
+        var innerPanel = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(issuesLabel, Dock.Top);
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        innerPanel.Children.Add(issuesLabel);
+        innerPanel.Children.Add(buttonRow);
+        innerPanel.Children.Add(issueList);
+
+        dialog.Content = new Border { Padding = new Thickness(16), Child = innerPanel };
 
         dialog.Opened += (_, _) => issueList.Focus();
 
