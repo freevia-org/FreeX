@@ -21,12 +21,15 @@
     <!-- Structural border shades: #C8C8C8 ≠ BorderStrong (#C8CCD0); #B7BCC2 has no exact role match. -->
     <SolidColorBrush x:Key="DialogBorder"      Color="#C8C8C8"/>
     <SolidColorBrush x:Key="DialogFieldBorder" Color="#B7BCC2"/>
-    <!-- ACCENT-DERIVED: DialogAccent/AccentDark/Hover/Pressed derive from the teal accent family;
-         FreeP's accent is brick — tokenizing these would diverge visually across apps. Deferred. -->
-    <SolidColorBrush x:Key="DialogAccent"      Color="#0F6D8C"/>
-    <SolidColorBrush x:Key="DialogAccentDark"  Color="#0B556E"/>
-    <SolidColorBrush x:Key="DialogHover"       Color="#E6F6FA"/>
-    <SolidColorBrush x:Key="DialogPressed"     Color="#CCEAF2"/>
+    <!-- ACCENT-DERIVED — tokenized (WS-G round 9).  ThemeAccent*Brush keys are registered by
+         WpfThemeApplier.BuildResources with per-app values: FreeX/FreeW teal, FreeP brick.
+         The Dialog* aliases re-expose the tokens so downstream {StaticResource Dialog*} bindings
+         in this file continue to work unchanged.  Fallback is FreeX teal (resolved by DynamicResource
+         when the theme key is present; dialogs opened without an applied theme keep the teal value). -->
+    <DynamicResource x:Key="DialogAccent"     ResourceKey="ThemeAccentBrush"/>
+    <DynamicResource x:Key="DialogAccentDark" ResourceKey="ThemeAccentDarkBrush"/>
+    <DynamicResource x:Key="DialogHover"      ResourceKey="ThemeAccentSoftBrush"/>
+    <DynamicResource x:Key="DialogPressed"    ResourceKey="ThemeAccentPressedBrush"/>
 
     <!-- Standard dialog button: white resting fill + subtle border; hover/press wash with accent border. -->
     <Style TargetType="{x:Type Button}">
