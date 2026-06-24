@@ -1,4 +1,4 @@
-namespace FreeW.Core.Model;
+﻿namespace FreeW.Core.Model;
 
 /// <summary>Insert a block (paragraph or table) at an index in the document body.</summary>
 public sealed class InsertBlockCommand(int index, Block block) : IDocumentCommand
@@ -769,16 +769,21 @@ public sealed class SetImagePositionCommand(int paragraphIndex, int runIndex,
 }
 
 /// <summary>
-/// Reorder the z-index of a floating image (<see cref="InlineImage.ZOrderIndex"/>) across all floating
-/// images in the document. Supports four Word-style arrange operations: BringToFront (max+1),
-/// SendToBack (min-1), BringForward (swap with the next-higher neighbour), SendBackward (swap with the
-/// next-lower neighbour). The operation is undoable: <see cref="Revert"/> restores all ZOrderIndex
-/// values exactly as they were before <see cref="Apply"/>. The command is a no-op when no floating
-/// images exist in the document.
+/// Reorder the z-index of any floating drawing object (<see cref="InlineImage"/>,
+/// <see cref="Shape"/>, <see cref="Chart"/>, <see cref="SmartArt"/> or <see cref="WordArt"/>)
+/// across ALL floating objects in the document. Supports four Word-style arrange operations:
+/// BringToFront (max+1), SendToBack (min-1), BringForward (swap with the next-higher neighbour),
+/// SendBackward (swap with the next-lower neighbour). The operation is undoable:
+/// <see cref="Revert"/> restores all ZOrderIndex values exactly as they were before
+/// <see cref="Apply"/>. The command is a no-op when no floating objects exist.
 /// </summary>
 public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrderOperation operation) : IDocumentCommand
 {
-    private (int BlockIndex, int RunIndex, int OldZ)[]? _snapshot;
+    // Internal handle: index pair + stable getter/setter delegates so we can manipulate
+    // ZOrderIndex on any object type without a shared interface.
+    private sealed record FloatingRef(int Bi, int Ri, Func<int> GetZ, Action<int> SetZ);
+
+    private (int Bi, int Ri, int OldZ)[]? _snapshot;
 
     public string Label => operation switch
     {
@@ -791,62 +796,53 @@ public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrder
 
     public void Apply(IDocumentCommandContext context)
     {
-        // Collect all floating images: (block index, run index, image) tuples.
         var all = CollectFloating(context.Document);
         if (all.Count == 0) return;
 
-        // Snapshot current z-order for undo.
-        _snapshot = all.Select(t => (t.bi, t.ri, t.img.ZOrderIndex)).ToArray();
+        _snapshot = all.Select(t => (t.Bi, t.Ri, t.GetZ())).ToArray();
 
-        // Find the target image.
-        var target = all.FirstOrDefault(t => t.bi == paragraphIndex && t.ri == runIndex);
-        if (target.img is null) return;
+        var target = all.FirstOrDefault(t => t.Bi == paragraphIndex && t.Ri == runIndex);
+        if (target is null) return;
 
         switch (operation)
         {
             case ZOrderOperation.BringToFront:
             {
-                var max = all.Max(t => t.img.ZOrderIndex);
-                target.img.ZOrderIndex = max + 1;
+                var max = all.Max(t => t.GetZ());
+                target.SetZ(max + 1);
                 break;
             }
             case ZOrderOperation.SendToBack:
             {
-                var min = all.Min(t => t.img.ZOrderIndex);
-                target.img.ZOrderIndex = min - 1;
+                var min = all.Min(t => t.GetZ());
+                target.SetZ(min - 1);
                 break;
             }
             case ZOrderOperation.BringForward:
             {
-                // Find the next-higher image (the one with the smallest ZOrderIndex > target's).
-                var targetZ = target.img.ZOrderIndex;
+                var targetZ = target.GetZ();
                 var neighbor = all
-                    .Where(t => t.img.ZOrderIndex > targetZ)
-                    .OrderBy(t => t.img.ZOrderIndex)
+                    .Where(t => t.GetZ() > targetZ)
+                    .OrderBy(t => t.GetZ())
                     .FirstOrDefault();
-                if (neighbor.img is not null)
+                if (neighbor is not null)
                 {
-                    target.img.ZOrderIndex = neighbor.img.ZOrderIndex;
-                    neighbor.img.ZOrderIndex = targetZ;
-                }
-                else
-                {
-                    // Already at the top; no-op (but snapshot taken; revert is harmless).
+                    target.SetZ(neighbor.GetZ());
+                    neighbor.SetZ(targetZ);
                 }
                 break;
             }
             case ZOrderOperation.SendBackward:
             {
-                // Find the next-lower image (the one with the largest ZOrderIndex < target's).
-                var targetZ = target.img.ZOrderIndex;
+                var targetZ = target.GetZ();
                 var neighbor = all
-                    .Where(t => t.img.ZOrderIndex < targetZ)
-                    .OrderByDescending(t => t.img.ZOrderIndex)
+                    .Where(t => t.GetZ() < targetZ)
+                    .OrderByDescending(t => t.GetZ())
                     .FirstOrDefault();
-                if (neighbor.img is not null)
+                if (neighbor is not null)
                 {
-                    target.img.ZOrderIndex = neighbor.img.ZOrderIndex;
-                    neighbor.img.ZOrderIndex = targetZ;
+                    target.SetZ(neighbor.GetZ());
+                    neighbor.SetZ(targetZ);
                 }
                 break;
             }
@@ -856,26 +852,44 @@ public sealed class ChangeZOrderCommand(int paragraphIndex, int runIndex, ZOrder
     public void Revert(IDocumentCommandContext context)
     {
         if (_snapshot is null) return;
+        var all = CollectFloating(context.Document);
         foreach (var (bi, ri, oldZ) in _snapshot)
         {
-            if (context.Document.Blocks[bi] is Paragraph p
-                && ri >= 0 && ri < p.Runs.Count
-                && p.Runs[ri].Image is { } img)
-                img.ZOrderIndex = oldZ;
+            var t = all.FirstOrDefault(x => x.Bi == bi && x.Ri == ri);
+            t?.SetZ(oldZ);
         }
         _snapshot = null;
     }
 
-    private static List<(int bi, int ri, InlineImage img)> CollectFloating(TextDocument doc)
+    private static List<FloatingRef> CollectFloating(TextDocument doc)
     {
-        var result = new List<(int, int, InlineImage)>();
+        var result = new List<FloatingRef>();
         for (var b = 0; b < doc.Blocks.Count; b++)
         {
             if (doc.Blocks[b] is not Paragraph para) continue;
             for (var r = 0; r < para.Runs.Count; r++)
             {
-                if (para.Runs[r].Image is { IsFloating: true } img)
-                    result.Add((b, r, img));
+                var run = para.Runs[r];
+                if (run.Image is { IsFloating: true } img)
+                {
+                    result.Add(new FloatingRef(b, r, () => img.ZOrderIndex, z => img.ZOrderIndex = z));
+                }
+                else if (run.Shape is { IsFloating: true } shape && shape.Placement is { } sp)
+                {
+                    result.Add(new FloatingRef(b, r, () => sp.ZOrderIndex, z => sp.ZOrderIndex = z));
+                }
+                else if (run.Chart is { IsFloating: true } chart && chart.Placement is { } cp)
+                {
+                    result.Add(new FloatingRef(b, r, () => cp.ZOrderIndex, z => cp.ZOrderIndex = z));
+                }
+                else if (run.SmartArt is { IsFloating: true } smartArt && smartArt.Placement is { } sap)
+                {
+                    result.Add(new FloatingRef(b, r, () => sap.ZOrderIndex, z => sap.ZOrderIndex = z));
+                }
+                else if (run.WordArt is { IsFloating: true } wordArt && wordArt.Placement is { } wap)
+                {
+                    result.Add(new FloatingRef(b, r, () => wap.ZOrderIndex, z => wap.ZOrderIndex = z));
+                }
             }
         }
         return result;
@@ -889,6 +903,76 @@ public enum ZOrderOperation
     SendToBack,
     BringForward,
     SendBackward
+}
+
+/// <summary>
+/// Switches a drawing object's wrapping between <see cref="ImageWrapping.Inline"/> and a floating
+/// mode (<see cref="ImageWrapping.Square"/> by default), applying to <see cref="InlineImage"/>,
+/// <see cref="Shape"/>, <see cref="Chart"/>, <see cref="SmartArt"/> and <see cref="WordArt"/>.
+/// When converting Inline to floating, the wrapping is set to <paramref name="floatingWrapping"/>
+/// (Square if omitted) and <see cref="FloatingPlacement"/> is created/populated. When converting
+/// floating to Inline, the wrapping is set to Inline (placement fields are preserved so a
+/// subsequent float-again restores the last position). Undoable.
+/// </summary>
+public sealed class ToggleObjectWrappingCommand(
+    int paragraphIndex,
+    int runIndex,
+    ImageWrapping floatingWrapping = ImageWrapping.Square) : IDocumentCommand
+{
+    private ImageWrapping _previousWrapping;
+    private bool _applied;
+
+    public string Label => "Set Wrap";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        ApplyTo(context, floatingWrapping);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied) return;
+        ApplyTo(context, _previousWrapping);
+        _applied = false;
+    }
+
+    private void ApplyTo(IDocumentCommandContext context, ImageWrapping targetWrapping)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return;
+        var run = p.Runs[runIndex];
+
+        if (run.Image is { } img)
+        {
+            _previousWrapping = img.Wrapping;
+            img.Wrapping = targetWrapping;
+        }
+        else if (run.Shape is { } shape)
+        {
+            shape.Placement ??= new FloatingPlacement();
+            _previousWrapping = shape.Placement.Wrapping;
+            shape.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.Chart is { } chart)
+        {
+            chart.Placement ??= new FloatingPlacement();
+            _previousWrapping = chart.Placement.Wrapping;
+            chart.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.SmartArt is { } smartArt)
+        {
+            smartArt.Placement ??= new FloatingPlacement();
+            _previousWrapping = smartArt.Placement.Wrapping;
+            smartArt.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.WordArt is { } wordArt)
+        {
+            wordArt.Placement ??= new FloatingPlacement();
+            _previousWrapping = wordArt.Placement.Wrapping;
+            wordArt.Placement.Wrapping = targetWrapping;
+        }
+    }
 }
 
 /// <summary>

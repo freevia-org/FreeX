@@ -1,4 +1,4 @@
-namespace FreeW.Core.Model;
+﻿namespace FreeW.Core.Model;
 
 // MODEL-DESIGN CHOICE (roadmap item W2, basic DrawingML shapes & text boxes):
 // A shape is modelled as an OPTIONAL INLINE RUN MARK (Run.Shape) exactly like Run.Equation / Run.Image.
@@ -6,14 +6,14 @@ namespace FreeW.Core.Model;
 // sequence, hyperlink/comment/revision wrapping, table cells, headers and footers with zero new plumbing,
 // and they round-trip through docx as an inline w:drawing emitted in place of the run's w:t. A Shape is a
 // single DrawingML preset geometry (rect / roundRect / ellipse / a plain text-box rect) plus a size, an
-// optional solid fill, and — for text boxes — text content held as a list of paragraphs (the same Paragraph
+// optional solid fill, and â€” for text boxes â€” text content held as a list of paragraphs (the same Paragraph
 // model used everywhere else, so the txbx body round-trips through the ordinary paragraph reader/writer).
 // We deliberately stop at preset geometries + simple text: no connectors, grouping or freeform geometry.
 
 /// <summary>
 /// The preset DrawingML geometry of a <see cref="Shape"/>. Maps onto <c>a:prstGeom/@prst</c>:
-/// <see cref="Rectangle"/> → <c>rect</c>, <see cref="RoundedRectangle"/> → <c>roundRect</c>,
-/// <see cref="Ellipse"/> → <c>ellipse</c>. <see cref="TextBox"/> is a rectangle whose purpose is to hold
+/// <see cref="Rectangle"/> â†’ <c>rect</c>, <see cref="RoundedRectangle"/> â†’ <c>roundRect</c>,
+/// <see cref="Ellipse"/> â†’ <c>ellipse</c>. <see cref="TextBox"/> is a rectangle whose purpose is to hold
 /// text (it also serialises as <c>rect</c>, but the model distinguishes it so a caller's intent survives).
 /// </summary>
 public enum ShapeKind
@@ -26,9 +26,9 @@ public enum ShapeKind
 
 /// <summary>
 /// The text direction inside a text-box shape. Maps onto <c>wps:bodyPr/@vert</c> / <c>wps:bodyPr/@rot</c>:
-/// <see cref="Horizontal"/> → default (no attribute), <see cref="Rotate90"/> → <c>vert="eaVert"</c> +
-/// <c>rot="5400000"</c> (text rotated 90°), <see cref="Rotate270"/> → <c>vert="eaVert"</c> +
-/// <c>rot="-5400000"</c> (text rotated 270°).
+/// <see cref="Horizontal"/> â†’ default (no attribute), <see cref="Rotate90"/> â†’ <c>vert="eaVert"</c> +
+/// <c>rot="5400000"</c> (text rotated 90Â°), <see cref="Rotate270"/> â†’ <c>vert="eaVert"</c> +
+/// <c>rot="-5400000"</c> (text rotated 270Â°).
 /// </summary>
 public enum ShapeTextDirection
 {
@@ -98,6 +98,14 @@ public sealed class Shape
     /// </summary>
     public ShapeTextDirection TextDirection { get; set; } = ShapeTextDirection.Horizontal;
 
+    /// <summary>
+    /// Floating-position state. Null (the default) means the shape is inline.
+    /// Set <see cref="FloatingPlacement.Wrapping"/> to any non-Inline value to make it float.
+    /// </summary>
+    public FloatingPlacement? Placement { get; set; }
+
+    /// <summary>True when this shape is floating (non-null Placement with Wrapping != Inline).</summary>
+    public bool IsFloating => Placement?.IsFloating ?? false;
     public Shape() { }
 
     public Shape(ShapeKind kind, double widthPt, double heightPt, string? fillColorHex = null)

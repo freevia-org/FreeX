@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
@@ -2435,6 +2435,27 @@ public static class DocxReader
     /// <see cref="ImageWrapping"/> (wp:wrapNone disambiguated by @behindDoc into Behind / InFront), and
     /// wp:positionH/V supply the anchors (@relativeFrom) and offsets (wp:posOffset, EMU → points).
     /// </summary>
+    /// <summary>
+    /// Reads a floating object's position/wrapping from a <c>wp:anchor</c> element into a
+    /// <see cref="FloatingPlacement"/>. Mirrors <see cref="ApplyFloatingPosition"/> for images.
+    /// </summary>
+    private static void ApplyFloatingPlacement(XElement anchor, FloatingPlacement placement)
+    {
+        placement.Wrapping = ReadWrapping(anchor);
+
+        if (anchor.Attribute("relativeHeight")?.Value is { } relH
+            && int.TryParse(relH, out var zOrder))
+            placement.ZOrderIndex = zOrder;
+
+        var positionH = anchor.Element(Wp + "positionH");
+        placement.HorizontalAnchor = ReadHorizontalAnchor(positionH?.Attribute("relativeFrom")?.Value);
+        placement.HorizontalOffsetPt = EmuToPoints(positionH?.Element(Wp + "posOffset")?.Value);
+
+        var positionV = anchor.Element(Wp + "positionV");
+        placement.VerticalAnchor = ReadVerticalAnchor(positionV?.Attribute("relativeFrom")?.Value);
+        placement.VerticalOffsetPt = EmuToPoints(positionV?.Element(Wp + "posOffset")?.Value);
+    }
+
     private static void ApplyFloatingPosition(XElement anchor, InlineImage image)
     {
         image.Wrapping = ReadWrapping(anchor);
@@ -2544,8 +2565,11 @@ public static class DocxReader
     /// </summary>
     private static WordArt? ReadWordArt(XElement run)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        var drawing = run.Element(W + "drawing");
+        var inline = drawing?.Element(Wp + "inline");
+        var anchor = drawing?.Element(Wp + "anchor");
+        var container = inline ?? anchor;
+        var wsp = container?.Descendants(Wps + "wsp").FirstOrDefault();
         var txbxContent = wsp?.Element(Wps + "txbx")?.Element(W + "txbxContent");
         if (txbxContent is null)
             return null;
@@ -2561,11 +2585,16 @@ public static class DocxReader
 
         var wordArt = new WordArt(text, style, fontSizePt);
 
-        // Alt text: wp:docPr/@descr on the inline drawing.
-        var waDocPrDescr = inline!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        // Alt text: wp:docPr/@descr on the inline or anchor drawing.
+        var waDocPrDescr = container!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
         if (!string.IsNullOrEmpty(waDocPrDescr))
             wordArt.AltText = waDocPrDescr;
 
+        if (anchor is not null)
+        {
+            wordArt.Placement = new FloatingPlacement();
+            ApplyFloatingPlacement(anchor, wordArt.Placement);
+        }
         return wordArt;
     }
 
@@ -2596,12 +2625,15 @@ public static class DocxReader
     /// </summary>
     private static Shape? ReadShape(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        var wsp = inline?.Descendants(Wps + "wsp").FirstOrDefault();
+        var drawing = run.Element(W + "drawing");
+        var inline = drawing?.Element(Wp + "inline");
+        var anchor = drawing?.Element(Wp + "anchor");
+        var container = inline ?? anchor;
+        var wsp = container?.Descendants(Wps + "wsp").FirstOrDefault();
         if (wsp is null)
             return null;
 
-        var extent = inline!.Element(Wp + "extent");
+        var extent = container!.Element(Wp + "extent");
         var widthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         var heightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
 
@@ -2630,8 +2662,8 @@ public static class DocxReader
             }
         }
 
-        // Alt text: wp:docPr/@descr on the inline drawing.
-        var docPrDescr = inline!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        // Alt text: wp:docPr/@descr on the inline or anchor drawing.
+        var docPrDescr = container!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
         if (!string.IsNullOrEmpty(docPrDescr))
             shape.AltText = docPrDescr;
 
@@ -2654,6 +2686,12 @@ public static class DocxReader
             && int.TryParse(bodyPr?.Attribute("rot")?.Value, out var rotVal))
         {
             shape.TextDirection = rotVal > 0 ? ShapeTextDirection.Rotate90 : ShapeTextDirection.Rotate270;
+        }
+
+        if (anchor is not null)
+        {
+            shape.Placement = new FloatingPlacement();
+            ApplyFloatingPlacement(anchor, shape.Placement);
         }
 
         return shape;
@@ -2760,11 +2798,14 @@ public static class DocxReader
     /// </summary>
     private static Chart? ReadChart(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        if (inline is null)
+        var drawing = run.Element(W + "drawing");
+        var inline = drawing?.Element(Wp + "inline");
+        var anchor = drawing?.Element(Wp + "anchor");
+        var container = inline ?? anchor;
+        if (container is null)
             return null;
 
-        var chartRef = inline.Descendants(C + "chart").FirstOrDefault(e => e.Attribute(R + "id") is not null);
+        var chartRef = container.Descendants(C + "chart").FirstOrDefault(e => e.Attribute(R + "id") is not null);
         var relationshipId = chartRef?.Attribute(R + "id")?.Value;
         if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
             return null;
@@ -2824,10 +2865,16 @@ public static class DocxReader
             chart.Series.Add(series);
         }
 
-        // Size: the inline extent (EMU) maps back to points.
-        var extent = inline.Element(Wp + "extent");
+        // Size: the inline or anchor extent (EMU) maps back to points.
+        var extent = container.Element(Wp + "extent");
         chart.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         chart.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        if (anchor is not null)
+        {
+            chart.Placement = new FloatingPlacement();
+            ApplyFloatingPlacement(anchor, chart.Placement);
+        }
 
         return chart;
     }
@@ -3107,11 +3154,14 @@ public static class DocxReader
     /// </summary>
     private static SmartArt? ReadSmartArt(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
     {
-        var inline = run.Element(W + "drawing")?.Element(Wp + "inline");
-        if (inline is null)
+        var drawing = run.Element(W + "drawing");
+        var inline = drawing?.Element(Wp + "inline");
+        var anchor = drawing?.Element(Wp + "anchor");
+        var container = inline ?? anchor;
+        if (container is null)
             return null;
 
-        var relIds = inline.Descendants(Dgm + "relIds").FirstOrDefault();
+        var relIds = container.Descendants(Dgm + "relIds").FirstOrDefault();
         var dataRelId = relIds?.Attribute(R + "dm")?.Value;
         if (dataRelId is null || !relationships.TryGetValue(dataRelId, out var dataPath))
             return null;
@@ -3171,10 +3221,16 @@ public static class DocxReader
         var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
         smartArt.Nodes.AddRange(topLevel);
 
-        // Size: the inline extent (EMU) maps back to points.
-        var extent = inline.Element(Wp + "extent");
+        // Size: the inline or anchor extent (EMU) maps back to points.
+        var extent = container.Element(Wp + "extent");
         smartArt.WidthPt = EmuToPoints(extent?.Attribute("cx")?.Value);
         smartArt.HeightPt = EmuToPoints(extent?.Attribute("cy")?.Value);
+
+        if (anchor is not null)
+        {
+            smartArt.Placement = new FloatingPlacement();
+            ApplyFloatingPlacement(anchor, smartArt.Placement);
+        }
 
         return smartArt;
     }

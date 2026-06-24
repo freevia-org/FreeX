@@ -1,9 +1,9 @@
-namespace FreeW.Core.Model;
+﻿namespace FreeW.Core.Model;
 
 // MODEL-DESIGN CHOICE (roadmap item W3, basic DrawingML charts):
 // A chart is modelled as an OPTIONAL INLINE RUN MARK (Run.Chart), mirroring Run.Equation / Run.Image and
 // every other inline run feature. This lets a chart flow through the existing run sequence, table cells,
-// headers/footers and hyperlink/comment/revision wrapping with zero new plumbing, and — like images — it
+// headers/footers and hyperlink/comment/revision wrapping with zero new plumbing, and â€” like images â€” it
 // round-trips through docx as a separate part referenced by an inline w:drawing. A Chart holds only the
 // self-contained, cache-based data the roadmap calls for: a kind (bar/column/line/pie), an optional title,
 // string category labels, and one or more numeric series. Size is kept in points to match the rest of the
@@ -12,7 +12,7 @@ namespace FreeW.Core.Model;
 
 /// <summary>
 /// The kind of a <see cref="Chart"/>. <see cref="Bar"/> and <see cref="Column"/> both serialise as an OOXML
-/// <c>c:barChart</c> (differing only by <c>c:barDir</c> — bar = horizontal, col = vertical);
+/// <c>c:barChart</c> (differing only by <c>c:barDir</c> â€” bar = horizontal, col = vertical);
 /// <see cref="Line"/> is a <c>c:lineChart</c>, <see cref="Pie"/> a <c>c:pieChart</c>, <see cref="Area"/> a
 /// <c>c:areaChart</c>, <see cref="Doughnut"/> a <c>c:doughnutChart</c> and <see cref="Scatter"/> a
 /// <c>c:scatterChart</c> (whose series carry <c>c:xVal</c>/<c>c:yVal</c> instead of <c>c:cat</c>/<c>c:val</c>).
@@ -37,7 +37,7 @@ public enum ChartKind
     /// <summary>An area chart (OOXML c:areaChart).</summary>
     Area,
 
-    /// <summary>A doughnut chart (OOXML c:doughnutChart — a pie with a hole; uses the first series).</summary>
+    /// <summary>A doughnut chart (OOXML c:doughnutChart â€” a pie with a hole; uses the first series).</summary>
     Doughnut
 }
 
@@ -45,7 +45,7 @@ public enum ChartKind
 /// One data series of a <see cref="Chart"/>: an optional display <see cref="Name"/> and an ordered list of
 /// numeric <see cref="Values"/> aligned with the chart's category labels. Immutable so it round-trips
 /// cleanly. The writer emits the name as a <c>c:tx</c>/<c>c:strRef</c> cache and the values as a
-/// <c>c:val</c>/<c>c:numRef</c>/<c>c:numCache</c> (literal caches — no embedded workbook).
+/// <c>c:val</c>/<c>c:numRef</c>/<c>c:numCache</c> (literal caches â€” no embedded workbook).
 /// </summary>
 public sealed class ChartSeries
 {
@@ -70,8 +70,8 @@ public sealed class ChartSeries
 /// a <see cref="Kind"/>, an optional <see cref="Title"/>, the shared category labels
 /// (<see cref="Categories"/>) and one or more numeric <see cref="Series"/>. On save it serialises as a
 /// separate chart part (<c>word/charts/chartN.xml</c>) referenced by an inline <c>w:drawing</c>; the data is
-/// embedded as literal caches so no companion workbook is needed. Modelled as an inline run mark — mirroring
-/// <see cref="Run.Image"/> and <see cref="Run.Equation"/> — so charts round-trip through the existing run
+/// embedded as literal caches so no companion workbook is needed. Modelled as an inline run mark â€” mirroring
+/// <see cref="Run.Image"/> and <see cref="Run.Equation"/> â€” so charts round-trip through the existing run
 /// flow without a new block type.
 /// </summary>
 public sealed class Chart
@@ -95,14 +95,14 @@ public sealed class Chart
     public bool ShowLegend { get; set; }
 
     /// <summary>
-    /// An optional title for the category (x) axis (OOXML <c>c:title</c> on <c>c:catAx</c>). Null — the
-    /// default — emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
+    /// An optional title for the category (x) axis (OOXML <c>c:title</c> on <c>c:catAx</c>). Null â€” the
+    /// default â€” emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
     /// </summary>
     public string? CategoryAxisTitle { get; set; }
 
     /// <summary>
-    /// An optional title for the value (y) axis (OOXML <c>c:title</c> on <c>c:valAx</c>). Null — the
-    /// default — emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
+    /// An optional title for the value (y) axis (OOXML <c>c:title</c> on <c>c:valAx</c>). Null â€” the
+    /// default â€” emits no axis title, preserving existing output. Ignored for pie/doughnut (axis-less) charts.
     /// </summary>
     public string? ValueAxisTitle { get; set; }
 
@@ -111,6 +111,15 @@ public sealed class Chart
 
     /// <summary>The rendered height in points (converted to EMU on save). Defaults to a Word-typical 3in.</summary>
     public double HeightPt { get; set; } = 216;
+
+    /// <summary>
+    /// Floating-position state. Null (the default) means the chart is inline.
+    /// Set <see cref="FloatingPlacement.Wrapping"/> to any non-Inline value to make it float.
+    /// </summary>
+    public FloatingPlacement? Placement { get; set; }
+
+    /// <summary>True when this chart is floating (non-null Placement with Wrapping != Inline).</summary>
+    public bool IsFloating => Placement?.IsFloating ?? false;
 
     public Chart() { }
 
