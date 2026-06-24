@@ -209,6 +209,8 @@ internal static class FreeWRibbon
                     g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
                     g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
                     g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
+                    g.Icon("freew.update-fields", "Update Fields", RibbonCommandIconKind.Refresh);
+                    g.Icon("freew.toggle-field-codes", "Toggle Field Codes", RibbonCommandIconKind.Field);
                     g.Icon("freew.object", "Object", RibbonCommandIconKind.Object);
                     g.Icon("freew.save-quickpart", "Save Selection", RibbonCommandIconKind.QuickParts);
                     g.Icon("freew.building-blocks-organizer", "Building Blocks Organizer", RibbonCommandIconKind.QuickParts);

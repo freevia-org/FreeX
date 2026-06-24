@@ -159,6 +159,7 @@ internal static class FreeWRibbonCommands
         Routed("freew.align-left", EditingCommands.AlignLeft);
         Routed("freew.align-center", EditingCommands.AlignCenter);
         Routed("freew.align-right", EditingCommands.AlignRight);
+        Routed("freew.align-justify", EditingCommands.AlignJustify);
         Routed("freew.bullets", EditingCommands.ToggleBullets);
         Routed("freew.numbering", EditingCommands.ToggleNumbering);
         Routed("freew.select", ApplicationCommands.SelectAll);

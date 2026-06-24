@@ -115,6 +115,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.drop-cap",
                 "freew.datetime",
                 "freew.field",
+                "freew.update-fields",
+                "freew.toggle-field-codes",
                 "freew.object",
                 "freew.save-quickpart",
                 "freew.building-blocks-organizer");
@@ -150,6 +152,8 @@ public sealed class FreeWRibbonParityTests
             "freew.drop-cap",
             "freew.datetime",
             "freew.field",
+            "freew.update-fields",
+            "freew.toggle-field-codes",
             "freew.object",
             "freew.save-quickpart",
             "freew.building-blocks-organizer",

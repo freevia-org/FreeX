@@ -210,6 +210,8 @@ internal static class FreeWRibbonIcons
             ["freew.symbol"] = RibbonCommandIconKind.Symbol,
             ["freew.datetime"] = RibbonCommandIconKind.Date,
             ["freew.field"] = RibbonCommandIconKind.Field,
+            ["freew.update-fields"] = RibbonCommandIconKind.Refresh,
+            ["freew.toggle-field-codes"] = RibbonCommandIconKind.Field,
 
             // Layout: page setup
             ["freew.margins"] = RibbonCommandIconKind.Margins,
