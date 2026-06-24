@@ -19,6 +19,8 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />

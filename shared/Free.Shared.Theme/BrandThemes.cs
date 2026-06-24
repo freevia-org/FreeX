@@ -127,19 +127,30 @@ public static class BrandThemes
 
     /// <summary>
     /// FreeP (presentation) brand theme.
-    /// PROVISIONAL: accent/title-bar set to FreeP's brick family (#B7472A); surfaces/text/borders
-    /// reuse FreeX neutrals pending FreeP's own final palette review.
+    /// Colors are BYTE-IDENTICAL to FreeP's current chrome:
+    ///   <c>freep/FreeP.App.Host/MainWindow.cs</c>
+    ///     TitleBarColor = <c>#B7472A</c> (ChromeOptions, line 24)
+    ///     BadgeColor    = <c>#8F3721</c> (ChromeOptions, line 25)
+    ///     FileTabAccent = <c>#B7472A</c> (RibbonShellBuilder, line 237)
+    ///     FileTabHover  = <c>#8F3721</c> (RibbonShellBuilder, line 238)
+    ///     StatusBar surface = <c>#B7472A</c> (BuildStatusBar, line 192)
+    ///   <c>shared/Free.Shared.Ribbon.Wpf/SisterBackstageTheme.cs</c>
+    ///     FreeP.LinkColor = <c>#B7472A</c> (now routed through Accent token — byte-identical).
+    /// Surfaces/text/borders reuse FreeX neutrals (FreeP scaffold has no distinct neutral chrome).
     /// </summary>
     public static readonly Theme FreeP = new(
         Name: "FreeP",
         Colors: new ThemeColors(
-            Accent:               ThemeColor.FromHex("#B7472A"),   // FreeP brick (provisional)
-            AccentDark:           ThemeColor.FromHex("#8C3520"),   // FreeP brick dark (provisional)
+            // ── Accent family: brick primary sourced from TitleBarColor/FileTabAccent/StatusBar/LinkColor ──
+            Accent:               ThemeColor.FromHex("#B7472A"),   // FreeP brick primary
+            // ── AccentDark: sourced from BadgeColor / FileTabHover (#8F3721) ──
+            AccentDark:           ThemeColor.FromHex("#8F3721"),
             AccentSoft:           ThemeColor.FromHex("#F9EAE6"),
             AccentPressed:        ThemeColor.FromHex("#F2D2CB"),
-            TitleBar:             ThemeColor.FromHex("#8C3520"),
-            TitleBarHover:        ThemeColor.FromHex("#B7472A"),
-            TitleBarPressed:      ThemeColor.FromHex("#6A2718"),
+            // ── TitleBar: sourced from MainWindow.cs ChromeOptions.TitleBarColor (#B7472A) ──
+            TitleBar:             ThemeColor.FromHex("#B7472A"),
+            TitleBarHover:        ThemeColor.FromHex("#C95A3D"),   // BackstageAccent.Hover (#C95A3D)
+            TitleBarPressed:      ThemeColor.FromHex("#8F3721"),   // BackstageAccent.Selected (#8F3721)
             TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
             TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),
             RibbonButtonHover:    ThemeColor.FromHex("#FDDDD6"),
@@ -149,7 +160,8 @@ public static class BrandThemes
             RibbonSurface:        s_ribbonSurf,
             ChromeSurface:        s_chromeSurf,
             SheetSurface:         s_sheetSurf,
-            StatusSurface:        ThemeColor.FromHex("#8C3520"),
+            // ── StatusSurface: sourced from MainWindow.cs BuildStatusBar SolidColorBrush (#B7472A) ──
+            StatusSurface:        ThemeColor.FromHex("#B7472A"),
             Border:               s_border,
             BorderStrong:         s_borderStrong,
             Danger:               s_danger,
