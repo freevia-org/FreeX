@@ -5,8 +5,6 @@ using ModelParagraph = FreeW.Core.Model.Paragraph;
 
 namespace FreeW.App.Host.Editing;
 
-#if DEBUG
-
 /// <summary>
 /// Reassembles the full model <see cref="TextDocument"/> from the per-page
 /// <see cref="PageBox"/> body RichTextBoxes when the user exits
@@ -68,5 +66,3 @@ internal static class PaginatedCommitCoordinator
             model.Blocks.Add(new ModelParagraph());
     }
 }
-
-#endif

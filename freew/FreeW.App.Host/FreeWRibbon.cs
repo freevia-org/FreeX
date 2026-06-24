@@ -472,6 +472,7 @@ internal static class FreeWRibbon
                     g.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
                     g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
                     g.MediumToggle("freew.draft-view", "Draft", RibbonCommandIconKind.Draft);
+                    g.MediumToggle("freew.paged-edit-view", "Page Edit", RibbonCommandIconKind.PrintLayout);
                 });
                 tab.Group("show", "Show", "S", 90, g =>
                 {

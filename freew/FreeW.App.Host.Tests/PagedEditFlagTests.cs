@@ -8,29 +8,26 @@ using Xunit;
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
-/// Asserts that the <c>PagedEdit</c> mode is DEV-ONLY and does NOT appear in the production ribbon,
-/// and that the three production view modes (PrintLayout / WebLayout / Draft) are still the only ones
-/// that the editor default and the View ribbon expose.  Runs in both DEBUG and Release builds.
+/// Asserts that the <c>PagedEdit</c> mode is a SHIPPED OPT-IN mode that IS present in the production
+/// ribbon (View ▸ Views ▸ Page Edit / <c>freew.paged-edit-view</c>), that the continuous editor
+/// (PrintLayout) remains the startup default, and that the three continuous print-family view modes
+/// (PrintLayout / WebLayout / Draft) still work.  Runs in both DEBUG and Release builds.
 /// </summary>
 public sealed class PagedEditFlagTests
 {
     // ── enum surface ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ProductionBuild_DocumentViewMode_ContainsExactlyThreeModes()
+    public void DocumentViewMode_ContainsFourModes_IncludingPagedEdit()
     {
-        // In a Release build the #if DEBUG block is excluded and the enum has exactly three members.
-        // In a Debug build the enum has four — but the fourth must NOT be reachable via the ribbon.
+        // PagedEdit is now a shipped opt-in mode.  The enum must have exactly four members in all
+        // builds (DEBUG and Release alike).
         var allValues = Enum.GetValues<DocumentViewMode>();
 
-#if DEBUG
-        allValues.Should().HaveCount(4, "DEBUG build exposes PagedEdit as the fourth enum value");
+        allValues.Should().HaveCount(4,
+            "PagedEdit is a shipped opt-in mode — four enum values expected in all builds");
         allValues.Should().Contain(DocumentViewMode.PagedEdit,
-            "PagedEdit is present in DEBUG builds");
-#else
-        allValues.Should().HaveCount(3,
-            "Release build must have exactly three view-mode enum values (PagedEdit excluded)");
-#endif
+            "PagedEdit must be present in both Debug and Release builds");
     }
 
     // ── default mode ──────────────────────────────────────────────────────────────────────────────
@@ -42,13 +39,13 @@ public sealed class PagedEditFlagTests
         view.LoadModel(TextDocument.CreateEmpty());
 
         view.ViewMode.Should().Be(DocumentViewMode.PrintLayout,
-            "PrintLayout must remain the default; PagedEdit must not change it");
+            "PrintLayout must remain the default; PagedEdit is opt-in and must not change the startup default");
     }
 
-    // ── ribbon: PagedEdit must not appear in the View tab's command ids ───────────────────────────
+    // ── ribbon: freew.paged-edit-view MUST appear in the View tab's Views group ──────────────────
 
     [Fact]
-    public void ViewRibbon_DoesNotContainPagedEditCommand()
+    public void ViewRibbon_ContainsPagedEditCommand_InViewsGroup()
     {
         var definition = FreeWRibbon.Build();
         var viewTab = definition.FindTab("view");
@@ -61,9 +58,20 @@ public sealed class PagedEditFlagTests
             .Select(c => c.CommandId.Value)
             .ToList();
 
-        allCommandIds.Should().NotContain(
-            id => id.Contains("paged-edit", StringComparison.OrdinalIgnoreCase),
-            "PagedEdit is DEV-ONLY and must not appear on the production View ribbon");
+        allCommandIds.Should().Contain(
+            "freew.paged-edit-view",
+            "PagedEdit is a shipped opt-in View mode and must appear on the production View ribbon");
+
+        // Specifically it must live in the Views group.
+        var viewsGroupIds = viewTab.Groups
+            .First(g => g.Id == "views")
+            .Controls
+            .Select(c => c.CommandId.Value)
+            .ToList();
+
+        viewsGroupIds.Should().Contain(
+            "freew.paged-edit-view",
+            "freew.paged-edit-view must be in the Views group alongside Print Layout / Web Layout / Draft");
     }
 
     // ── existing view-mode parity tests still pass (regression guard) ─────────────────────────────
@@ -84,7 +92,7 @@ public sealed class PagedEditFlagTests
         {
             view.SetViewMode(mode);
             view.ViewMode.Should().Be(mode,
-                $"SetViewMode({mode}) must still work after the PagedEdit flag was added");
+                $"SetViewMode({mode}) must still work after the PagedEdit mode was promoted to production");
         }
     }
 }

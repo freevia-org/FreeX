@@ -7,8 +7,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
 
-#if DEBUG
-
 /// <summary>Delegate used by <see cref="PageBox"/> to notify the panel that a cross-page
 /// Shift+arrow selection boundary was crossed.</summary>
 internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingForward);
@@ -511,5 +509,3 @@ internal sealed class PageBox : Border
         };
     }
 }
-
-#endif

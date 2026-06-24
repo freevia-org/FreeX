@@ -6,8 +6,6 @@ using System.Windows.Media;
 
 namespace FreeW.App.Host.Editing;
 
-#if DEBUG
-
 /// <summary>
 /// Panel-level cross-page selection model for <see cref="PaginatedEditorPanel"/>.
 ///
@@ -258,5 +256,3 @@ internal sealed class CrossPageSelection
         return -1;
     }
 }
-
-#endif

@@ -8,11 +8,9 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
 
-#if DEBUG
-
 /// <summary>
 /// A <see cref="ScrollViewer"/> whose content is a <see cref="StackPanel"/> of <see cref="PageBox"/>
-/// objects — one per page.  Used by the DEV-ONLY <see cref="DocumentViewMode.PagedEdit"/> mode.
+/// objects — one per page.  Used by the opt-in <see cref="DocumentViewMode.PagedEdit"/> mode.
 ///
 /// <para>
 /// <strong>Build strategy (Tag preservation):</strong> the panel works from a
@@ -1192,5 +1190,3 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         return result;
     }
 }
-
-#endif
