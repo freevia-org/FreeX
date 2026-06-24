@@ -3,29 +3,41 @@ using System.Linq;
 using FreeW.Core.Model;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
-using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace FreeW.Core.IO;
 
 /// <summary>
 /// Best-effort, read-only PDF text extraction (design §5.8). PDF has no document model — it is a bag of
 /// positioned glyphs — so this reader recovers only <em>text</em>, in best-effort reading order, page by
-/// page. Each recovered text block becomes a <see cref="Paragraph"/> with a single default <see cref="Run"/>
-/// and no <see cref="Paragraph.StyleId"/>. It deliberately does <strong>not</strong> attempt tables, images,
-/// columns, lists, footnotes, comments, fonts/styles, or layout — those are dropped. Fidelity is LOW and
-/// inherently lossy: multi-column, RTL, table-heavy, or scanned (image-only, no text layer) PDFs degrade
-/// badly, and there is no OCR. Because of this, PDF import is read-only — see <see cref="PdfFileAdapter"/>,
-/// which refuses to save back to PDF.
+/// page.
+///
+/// Fidelity improvements over the naive line-per-paragraph approach:
+/// <list type="bullet">
+///   <item>Letters are grouped into <em>lines</em> by comparing each letter's baseline Y value within a
+///   tolerance of half the dominant font size. Lines are sorted top-to-bottom.</item>
+///   <item>Consecutive lines are merged into <em>paragraphs</em> when the vertical gap between them is
+///   ≤ 1.3× the median line height; a larger gap starts a new paragraph, producing structural blocks
+///   that roughly mirror the PDF's visual paragraph breaks.</item>
+///   <item>Each paragraph gets <em>run formatting</em>: the dominant font name and point size are sampled
+///   for every line, and when the font name contains a bold weight marker ("Bold", "-Bd", "-B", or common
+///   weight variants) the run's <see cref="RunFormatting.Bold"/> flag is set. The modal font size among
+///   the letters in the paragraph becomes <see cref="RunFormatting.FontSizePt"/>.</item>
+/// </list>
+/// Known-poor cases (unchanged from before, inherent to text-only PDF): multi-column layouts, RTL text,
+/// table-heavy or scanned (image-only, no text layer) PDFs. No OCR. Fidelity is LOW by design.
+/// Because of this, PDF import is read-only — see <see cref="PdfFileAdapter"/>, which refuses to save.
 /// </summary>
 public static class PdfTextReader
 {
     /// <summary>
     /// Extracts text from the PDF in <paramref name="stream"/> into a sparse <see cref="TextDocument"/>.
-    /// The stream is fully read into memory (PdfPig needs random access) but is <em>not</em> disposed by this
-    /// reader, matching the adapter stream-ownership contract. Each page's recovered text is split on line
-    /// breaks into paragraphs; blank lines collapse to empty paragraphs so vertical spacing is roughly kept.
-    /// An empty or text-less PDF yields a document with a single empty paragraph (never zero blocks), so the
-    /// editor always has a caret position.
+    /// The stream is fully read into memory (PdfPig needs random access) but is <em>not</em> disposed by
+    /// this reader, matching the adapter stream-ownership contract.
+    ///
+    /// The returned document groups glyphs into visual lines then lines into paragraphs. Each paragraph
+    /// becomes one <see cref="Paragraph"/> with a single <see cref="Run"/> whose formatting reflects the
+    /// dominant font/size. An empty or text-less PDF yields a document with a single empty paragraph
+    /// (never zero blocks), so the editor always has a caret position.
     /// </summary>
     public static TextDocument Read(Stream stream)
     {
@@ -46,15 +58,9 @@ public static class PdfTextReader
         {
             foreach (var page in pdf.GetPages())
             {
-                // ContentOrderTextExtractor orders glyphs into a best-effort reading order and inserts line
-                // breaks; far better than the raw Page.Text (which is glyph-storage order) for plain prose.
-                var pageText = ContentOrderTextExtractor.GetText(page);
-                if (string.IsNullOrEmpty(pageText))
-                    continue;
-
-                var normalized = pageText.Replace("\r\n", "\n").Replace('\r', '\n');
-                foreach (var line in normalized.Split('\n'))
-                    document.Blocks.Add(new Paragraph(line.TrimEnd()));
+                var pageBlocks = ExtractPageBlocks(page);
+                foreach (var block in pageBlocks)
+                    document.Blocks.Add(block);
             }
         }
 
@@ -62,5 +68,284 @@ public static class PdfTextReader
             document.Blocks.Add(new Paragraph());
 
         return document;
+    }
+
+    // ── geometry helpers ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns true when the font name contains a bold weight marker in common PDF name conventions.
+    /// Covers: "Bold", "-Bd", "-B" suffix (e.g. "Helvetica-Bd"), ",Bold", weight tokens ("-700",
+    /// "-900", "Black", "Heavy", "ExtraBold", "UltraBold"). Case-insensitive.
+    /// </summary>
+    private static bool FontNameIndicatesBold(string fontName)
+    {
+        if (string.IsNullOrEmpty(fontName))
+            return false;
+        var n = fontName;
+        // Common verbatim substrings (case-insensitive comparison is fine; most PDF names are ASCII).
+        if (n.Contains("Bold", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (n.Contains("Black", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (n.Contains("Heavy", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Abbreviated suffix forms: "-Bd", "-B" (e.g. "Helvetica-Bd"), ",B", ":B"
+        if (n.EndsWith("-Bd", StringComparison.OrdinalIgnoreCase) ||
+            n.EndsWith(",Bd", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (n.EndsWith("-B", StringComparison.OrdinalIgnoreCase) ||
+            n.EndsWith(",B", StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Weight tokens embedded in name: -700, -800, -900 (OpenType/PostScript numerics)
+        if (n.Contains("-700", StringComparison.Ordinal) ||
+            n.Contains("-800", StringComparison.Ordinal) ||
+            n.Contains("-900", StringComparison.Ordinal))
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Groups all letters on <paramref name="page"/> into visual text lines, then groups consecutive
+    /// lines into paragraph blocks, and returns the resulting <see cref="Paragraph"/> objects.
+    /// </summary>
+    private static List<Paragraph> ExtractPageBlocks(Page page)
+    {
+        // 1. Collect all letters with geometry.
+        var letters = page.Letters;
+        if (letters == null || letters.Count == 0)
+            return [];
+
+        // 2. Group letters into lines by baseline Y (PdfPig Y grows upward, so higher Y = higher on page).
+        //    Tolerance: half the modal font point size on the page, or 3pt minimum.
+        var dominantSize = ModalSize(letters) ?? 12.0;
+        var yTolerance = Math.Max(dominantSize * 0.5, 3.0);
+
+        var lines = GroupLettersIntoLines(letters, yTolerance);
+
+        // Sort lines top-to-bottom (descending Y).
+        lines.Sort((a, b) => b.BaselineY.CompareTo(a.BaselineY));
+
+        if (lines.Count == 0)
+            return [];
+
+        // 3. Compute median line height (= dominant font size as a proxy; use actual bbox heights
+        //    if available, but PointSize is more reliable for this purpose).
+        var lineHeights = lines.Select(l => l.DominantSize).Where(s => s > 0).ToList();
+        var medianLineHeight = lineHeights.Count > 0 ? Median(lineHeights) : dominantSize;
+
+        // 4. Group lines into paragraphs: a new paragraph starts when the gap between the bottom of
+        //    the previous line and the top of the current line exceeds 1.3× the median line height.
+        var paragraphGapThreshold = medianLineHeight * 1.3;
+
+        var paragraphs = new List<List<TextLine>>();
+        var currentParagraph = new List<TextLine> { lines[0] };
+
+        for (var i = 1; i < lines.Count; i++)
+        {
+            var prev = lines[i - 1];
+            var curr = lines[i];
+            // Gap between the baselines of consecutive lines (both in PDF coords = up is positive).
+            // We subtract curr.BaselineY from prev.BaselineY since lines are sorted top→bottom.
+            var gap = prev.BaselineY - curr.BaselineY;
+            if (gap > paragraphGapThreshold)
+            {
+                paragraphs.Add(currentParagraph);
+                currentParagraph = [curr];
+            }
+            else
+            {
+                currentParagraph.Add(curr);
+            }
+        }
+        paragraphs.Add(currentParagraph);
+
+        // 5. Convert each paragraph group into a Paragraph model object.
+        var result = new List<Paragraph>(paragraphs.Count);
+        foreach (var paraLines in paragraphs)
+        {
+            var para = BuildParagraph(paraLines);
+            result.Add(para);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Converts a group of text lines (already sorted top-to-bottom within a paragraph) into a
+    /// <see cref="Paragraph"/> with a single <see cref="Run"/> that has best-effort bold and font-size
+    /// formatting derived from the dominant letters in the paragraph.
+    /// </summary>
+    private static Paragraph BuildParagraph(List<TextLine> paraLines)
+    {
+        // Join lines with a space (visual reading order within a paragraph).
+        var text = string.Join(" ", paraLines.Select(l => l.Text.TrimEnd()));
+
+        // Determine dominant formatting across all letters in the paragraph.
+        var allLetters = paraLines.SelectMany(l => l.Letters).ToList();
+
+        var bold = IsDominantlyBold(allLetters);
+        var fontSize = ModalSize(allLetters);
+
+        RunFormatting formatting;
+        if (bold || fontSize.HasValue)
+        {
+            formatting = new RunFormatting
+            {
+                Bold = bold,
+                FontSizePt = fontSize,
+            };
+        }
+        else
+        {
+            formatting = RunFormatting.Default;
+        }
+
+        var run = new Run(text, formatting);
+        var para = new Paragraph();
+        para.Runs.Add(run);
+        return para;
+    }
+
+    /// <summary>
+    /// Returns true when the majority (>50%) of letters in <paramref name="letters"/> come from a bold font.
+    /// </summary>
+    private static bool IsDominantlyBold(List<Letter> letters)
+    {
+        if (letters.Count == 0)
+            return false;
+        var boldCount = letters.Count(l =>
+            l.FontName != null && FontNameIndicatesBold(l.FontName));
+        return boldCount > letters.Count / 2.0;
+    }
+
+    /// <summary>
+    /// Returns the modal (most frequent) point size among <paramref name="letters"/>, or null when the
+    /// collection is empty or all point sizes are zero/absent. Sizes are rounded to the nearest 0.5pt
+    /// to collapse minor floating-point differences.
+    /// </summary>
+    private static double? ModalSize(IReadOnlyList<Letter> letters)
+    {
+        if (letters == null || letters.Count == 0)
+            return null;
+
+        var sizeGroups = letters
+            .Where(l => l.PointSize > 0)
+            .GroupBy(l => Math.Round(l.PointSize * 2) / 2) // round to nearest 0.5
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault();
+
+        return sizeGroups?.Key;
+    }
+
+    /// <summary>
+    /// Groups <paramref name="letters"/> into <see cref="TextLine"/> buckets by baseline Y, merging
+    /// letters whose baseline Y values are within <paramref name="yTolerance"/> of each other.
+    /// </summary>
+    private static List<TextLine> GroupLettersIntoLines(IReadOnlyList<Letter> letters, double yTolerance)
+    {
+        // Sort by Y descending (top to bottom) then X ascending (left to right) for reading order.
+        var sorted = letters
+            .Where(l => !string.IsNullOrEmpty(l.Value))
+            .OrderByDescending(l => l.GlyphRectangle.BottomLeft.Y)
+            .ThenBy(l => l.GlyphRectangle.BottomLeft.X)
+            .ToList();
+
+        var lines = new List<TextLine>();
+
+        foreach (var letter in sorted)
+        {
+            var y = letter.GlyphRectangle.BottomLeft.Y;
+            // Find an existing line whose baseline Y is within tolerance.
+            var matched = lines.FirstOrDefault(ln => Math.Abs(ln.BaselineY - y) <= yTolerance);
+            if (matched != null)
+            {
+                matched.Letters.Add(letter);
+            }
+            else
+            {
+                var line = new TextLine(y);
+                line.Letters.Add(letter);
+                lines.Add(line);
+            }
+        }
+
+        // After grouping, sort each line's letters left-to-right and build the text string.
+        foreach (var line in lines)
+        {
+            line.Letters.Sort((a, b) =>
+                a.GlyphRectangle.BottomLeft.X.CompareTo(b.GlyphRectangle.BottomLeft.X));
+            line.FinalizeText();
+        }
+
+        return lines;
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2.0
+            : sorted[mid];
+    }
+
+    // ── internal model ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Working representation of a single visual text line during extraction.
+    /// </summary>
+    private sealed class TextLine(double baselineY)
+    {
+        public double BaselineY { get; } = baselineY;
+        public List<Letter> Letters { get; } = [];
+        public string Text { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// The modal point size of letters in this line, used for paragraph-gap heuristics.
+        /// </summary>
+        public double DominantSize
+        {
+            get
+            {
+                if (Letters.Count == 0)
+                    return 0;
+                var groups = Letters
+                    .Where(l => l.PointSize > 0)
+                    .GroupBy(l => Math.Round(l.PointSize))
+                    .OrderByDescending(g => g.Count())
+                    .FirstOrDefault();
+                return groups?.Key ?? 0;
+            }
+        }
+
+        /// <summary>
+        /// Builds <see cref="Text"/> from the sorted <see cref="Letters"/> list, inserting a space
+        /// between letters whose horizontal gap exceeds ~0.25× the font size (a simple word-gap heuristic).
+        /// </summary>
+        public void FinalizeText()
+        {
+            if (Letters.Count == 0)
+            {
+                Text = string.Empty;
+                return;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append(Letters[0].Value);
+            var refSize = Letters[0].PointSize > 0 ? Letters[0].PointSize : 12.0;
+            var wordGap = refSize * 0.25;
+
+            for (var i = 1; i < Letters.Count; i++)
+            {
+                var prev = Letters[i - 1];
+                var curr = Letters[i];
+                // Gap between the right edge of prev and the left edge of curr.
+                var gap = curr.GlyphRectangle.BottomLeft.X - prev.GlyphRectangle.TopRight.X;
+                if (gap > wordGap)
+                    sb.Append(' ');
+                sb.Append(curr.Value);
+            }
+
+            Text = sb.ToString();
+        }
     }
 }
