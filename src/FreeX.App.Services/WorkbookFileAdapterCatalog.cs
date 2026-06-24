@@ -24,6 +24,7 @@ public static class WorkbookFileAdapterCatalog
         new DifFileAdapter(),
         new DbfFileAdapter(),
         new HtmlFileAdapter(),
+        new MhtFileAdapter(),
         new NativeJsonAdapter(),
     ];
 }
