@@ -137,12 +137,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("PivotFilter_ItemsTitle"),
-            Width = 300,
-            Height = 350,
-            MinWidth = 300,
-            MinHeight = 250,
-            MaxWidth = 300,
-            MaxHeight = 350,
+            Width = 380,
+            Height = 470,
+            MinWidth = 320,
+            MinHeight = 380,
+            MaxWidth = 480,
+            MaxHeight = 580,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -158,13 +158,39 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
-        content.Children.Add(new StackPanel
+        // WPF layout: "Clear Filters from This Field" at bottom-left; [OK][Cancel] at bottom-right.
+        var clearFiltersBtn = new Button
+        {
+            Content = UiText.Get("PivotFieldFilter_ClearFiltersFromThisField"),
+            MinWidth = 160,
+        };
+        ApplyPivotButtonChrome(clearFiltersBtn, 160);
+        AutomationProperties.SetAutomationId(clearFiltersBtn, "PivotItemFilterClearFiltersButton");
+        clearFiltersBtn.Click += (_, _) => dialog.Close(false);
+
+        var bottomGrid = new Grid
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        Grid.SetColumn(clearFiltersBtn, 0);
+        clearFiltersBtn.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
+        bottomGrid.Children.Add(clearFiltersBtn);
+        var okCancelRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
             Children = { ok, cancel },
-        });
+        };
+        Grid.SetColumn(okCancelRow, 1);
+        bottomGrid.Children.Add(okCancelRow);
+
+        content.Children.Add(bottomGrid);
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);

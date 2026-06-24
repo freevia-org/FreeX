@@ -134,12 +134,10 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("ChartLoc_ChangeChartTypeTitle"),
-            Width = 340,
-            Height = 160,
+            Width = 380,
+            SizeToContent = SizeToContent.Height,
             MinWidth = 340,
-            MinHeight = 160,
-            MaxWidth = 340,
-            MaxHeight = 160,
+            MinHeight = 200,
             Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -160,17 +158,35 @@ public sealed partial class MainWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 12,
+            Spacing = 8,
             MinWidth = 292,
             Children =
             {
-                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType"), FontSize = 12 },
+                // WPF "All Charts" section header + help text
+                new TextBlock
+                {
+                    Text = UiText.Get("ChartTypePicker_AllChartsHeading"),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    FontWeight = FontWeight.SemiBold,
+                },
+                new TextBlock
+                {
+                    Text = UiText.Get("ChartTypePicker_AllChartsHelpText"),
+                    FontSize = 11,
+                    FontFamily = FormulaBarFontFamily,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = Brush(96, 96, 96),
+                    Margin = new Thickness(0, 0, 0, 4),
+                },
+                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType"), FontSize = 12, FontFamily = FormulaBarFontFamily },
                 combo,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                    Margin = new Thickness(0, 4, 0, 0),
                     Children = { okButton, cancelButton },
                 },
             },

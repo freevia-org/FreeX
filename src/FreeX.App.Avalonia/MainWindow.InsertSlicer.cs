@@ -9,7 +9,6 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
-using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -142,32 +141,38 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        // Group box framing around field list to match WPF InsertSlicerDialog layout.
+        var groupHeader = new TextBlock
         {
-            Margin = new Thickness(16),
+            Text = UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        var groupContent = new StackPanel { Spacing = 4 };
+        groupContent.Children.Add(fieldList);
+        groupContent.Children.Add(warningText);
+        var groupBorder = new Border
+        {
+            BorderBrush = Brush(180, 180, 180),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8),
+            Child = groupContent,
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Spacing = 4,
             Children =
             {
+                groupHeader,
+                groupBorder,
                 buttonRow,
-                new DockPanel
-                {
-                    Children =
-                    {
-                        DockTop(new TextBlock
-                        {
-                            Text = UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
-                            TextWrapping = TextWrapping.Wrap,
-                            Margin = new Thickness(0, 0, 0, 8),
-                            FontSize = 12,
-                            FontFamily = FormulaBarFontFamily,
-                        }),
-                        DockBottom(warningText),
-                        fieldList,
-                    },
-                },
             },
         };
 
@@ -273,32 +278,38 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
-            Children = { cancelButton, okButton },
+            Children = { okButton, cancelButton },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        // Group box framing around field list to match WPF InsertTimelineDialog layout.
+        var groupHeader = new TextBlock
         {
-            Margin = new Thickness(16),
+            Text = UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        var groupContent = new StackPanel { Spacing = 4 };
+        groupContent.Children.Add(fieldList);
+        groupContent.Children.Add(warningText);
+        var groupBorder = new Border
+        {
+            BorderBrush = Brush(180, 180, 180),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8),
+            Child = groupContent,
+        };
+
+        dialog.Content = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Spacing = 4,
             Children =
             {
+                groupHeader,
+                groupBorder,
                 buttonRow,
-                new DockPanel
-                {
-                    Children =
-                    {
-                        DockTop(new TextBlock
-                        {
-                            Text = UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
-                            TextWrapping = TextWrapping.Wrap,
-                            Margin = new Thickness(0, 0, 0, 8),
-                            FontSize = 12,
-                            FontFamily = FormulaBarFontFamily,
-                        }),
-                        DockBottom(warningText),
-                        fieldList,
-                    },
-                },
             },
         };
 
@@ -382,15 +393,4 @@ public sealed partial class MainWindow
         }
     }
 
-    private static Control DockTop(Control control)
-    {
-        DockPanel.SetDock(control, Dock.Top);
-        return control;
-    }
-
-    private static Control DockBottom(Control control)
-    {
-        DockPanel.SetDock(control, Dock.Bottom);
-        return control;
-    }
 }
