@@ -147,7 +147,12 @@ internal static class FreeWRibbon
                 tab.Group("pages", "Pages", "P", 100, g =>
                 {
                     // Word shows the Pages group as labelled icon+label rows — use Medium so the labels read.
-                    g.Medium("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage);
+                    g.Medium("freew.cover-page", "Cover Page", RibbonCommandIconKind.CoverPage, menu: m =>
+                    {
+                        m.Item("freew.cover-page-default", "Default", "D");
+                        m.Item("freew.cover-page-banded", "Banded", "B");
+                        m.Item("freew.cover-page-motion", "Motion", "M");
+                    });
                     g.Medium("freew.blank-page", "Blank Page", RibbonCommandIconKind.OnePage);
                     g.Medium("freew.page-break", "Page Break", RibbonCommandIconKind.PageBreak);
                     g.RowBreak();
@@ -197,7 +202,14 @@ internal static class FreeWRibbon
                     // Small group -> labelled Medium buttons, Word-style.
                     g.Medium("freew.header", "Header", RibbonCommandIconKind.Header);
                     g.Medium("freew.footer", "Footer", RibbonCommandIconKind.Footer);
-                    g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber);
+                    g.Medium("freew.page-number", "Page Number", RibbonCommandIconKind.PageNumber, menu: m =>
+                    {
+                        m.Item("freew.page-number-top", "Top of Page", "T");
+                        m.Item("freew.page-number-bottom", "Bottom of Page", "B");
+                        m.Item("freew.page-number-current", "Current Position", "C");
+                        m.Separator();
+                        m.Item("freew.page-number-format", "Format Page Numbers…", "F");
+                    });
                 });
                 tab.Group("text", "Text", "X", 74, g =>
                 {
@@ -326,6 +338,16 @@ internal static class FreeWRibbon
                         m.Item("freew.columns-left", "Left", "L");
                         m.Item("freew.columns-right", "Right", "R");
                         m.Item("freew.columns-more", "More Columns...", "M");
+                    });
+                    g.Medium("freew.breaks", "Breaks", RibbonCommandIconKind.PageBreak, "B", menu: m =>
+                    {
+                        m.Item("freew.page-break", "Page Break", "P");
+                        m.Item("freew.column-break", "Column Break", "C");
+                        m.Separator();
+                        m.Item("freew.section-break-next-page", "Next Page", "N");
+                        m.Item("freew.section-break-continuous", "Continuous", "O");
+                        m.Item("freew.section-break-even-page", "Even Page", "E");
+                        m.Item("freew.section-break-odd-page", "Odd Page", "D");
                     });
                     g.RowBreak();
                     // Page Setup launcher: the unified Margins / Paper / Layout dialog (Word's group launcher).

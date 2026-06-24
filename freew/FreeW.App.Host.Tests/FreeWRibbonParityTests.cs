@@ -1361,4 +1361,48 @@ public sealed class FreeWRibbonParityTests
                 yield return control.Label;
         }
     }
+
+    [StaFact]
+    public void LayoutPageSetup_BreaksDropdownExposesBackedSectionBreakCommands()
+    {
+        var definition = FreeWRibbon.Build();
+        var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        // The Breaks dropdown must exist in the Page Setup group.
+        var breaks = pageSetup!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(control => control.CommandId.Value == "freew.breaks");
+
+        breaks.Should().NotBeNull("Layout > Page Setup > Breaks dropdown must exist");
+
+        var menuCommandIds = breaks.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .ToList();
+
+        menuCommandIds.Should().Contain("freew.page-break");
+        menuCommandIds.Should().Contain("freew.column-break");
+        menuCommandIds.Should().Contain("freew.section-break-next-page");
+        menuCommandIds.Should().Contain("freew.section-break-continuous");
+        menuCommandIds.Should().Contain("freew.section-break-even-page");
+        menuCommandIds.Should().Contain("freew.section-break-odd-page");
+
+        // All menu command ids must be backed by the registry.
+        foreach (var id in menuCommandIds)
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be backed");
+
+        // Functional: inserting a section break creates a paragraph with SectionBreak set.
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("before"));
+        registry.TryGet("freew.section-break-next-page", out var nextPage).Should().BeTrue();
+        nextPage!.Execute(RibbonCommandContext.Empty);
+
+        // After execution the model must have a new block with SectionBreak set.
+        editor.Model.Blocks.Should().HaveCount(2);
+        editor.Model.Blocks[1].Should().BeOfType<Paragraph>();
+        ((Paragraph)editor.Model.Blocks[1]).SectionBreak.Should().NotBeNull();
+        ((Paragraph)editor.Model.Blocks[1]).SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+    }
 }

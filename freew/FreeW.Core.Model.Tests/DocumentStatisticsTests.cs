@@ -140,4 +140,55 @@ public class DocumentStatisticsTests
         stats.ReadingTimeMinutes.Should().Be(1);
         stats.AverageWordsPerSentence.Should().BeApproximately(stats.Words / 3.0, 0.0001);
     }
+
+    [Fact]
+    public void Compute_Lines_CountsNewlinesPlusOne()
+    {
+        // "line one\nline two\nline three" has 2 newlines → 3 lines.
+        var stats = DocumentStatistics.Compute("line one\nline two\nline three");
+
+        stats.Lines.Should().Be(3);
+    }
+
+    [Fact]
+    public void Compute_Lines_IsSingleForOneLineText()
+    {
+        var stats = DocumentStatistics.Compute("no newlines here");
+
+        stats.Lines.Should().Be(1);
+    }
+
+    [Fact]
+    public void Compute_Lines_IsZeroForEmptyDocument()
+    {
+        var stats = DocumentStatistics.Compute((string?)null);
+
+        stats.Lines.Should().Be(0);
+    }
+
+    [Fact]
+    public void Compute_Lines_IsPopulatedOnDocumentOverload()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Line one"));
+        doc.Blocks.Add(new Paragraph("Line two"));
+
+        var stats = DocumentStatistics.Compute(doc);
+
+        // PlainText joins paragraphs with '\n', so two paragraphs → 2 lines.
+        stats.Lines.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Compute_IncludeNotes_AddsFootnoteWords()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text."));
+        doc.Footnotes[1] = new Footnote(1, "Footnote content here.");
+
+        var withoutNotes = DocumentStatistics.Compute(doc, includeNotes: false);
+        var withNotes = DocumentStatistics.Compute(doc, includeNotes: true);
+
+        withNotes.Words.Should().BeGreaterThan(withoutNotes.Words);
+    }
 }

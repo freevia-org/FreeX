@@ -114,9 +114,16 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Holds the run + paragraph formatting captured when Format Painter is armed (null when the
     /// painter is idle). On the next selection the user makes, this is stamped onto that selection
-    /// and the painter disarms. See <see cref="ArmFormatPainter"/>.
+    /// and the painter disarms (single-shot) or stays armed (locked mode). See <see cref="ArmFormatPainter"/>.
     /// </summary>
     private FormatPainterClipboard? _formatPainter;
+
+    /// <summary>
+    /// When true the painter stays armed after each application (double-click / lock mode), re-applying
+    /// on every new selection until the user clicks the button again or presses Escape. False for the
+    /// default single-shot gesture.
+    /// </summary>
+    private bool _formatPainterLocked;
 
     /// <summary>
     /// Model block indices of headings the user has collapsed in the outline. Collapse is purely a
@@ -1162,6 +1169,19 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Prepend a cover page using the given <paramref name="preset"/> at the start of the document,
+    /// routing each block insert through the undo/redo bus so it is reversible. The title/author come
+    /// from <see cref="TextDocument.Properties"/>. Re-renders the surface.
+    /// </summary>
+    public void InsertCoverPage(CoverPagePreset preset)
+    {
+        CommitToModel();
+        var blocks = DocumentOps.BuildCoverPage(_model, preset);
+        for (var i = 0; i < blocks.Count; i++)
+            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+    }
+
+    /// <summary>
     /// Insert a full blank page after the block the caret sits in. FreeW represents this with two
     /// page-break-before paragraphs so following content moves after the inserted blank page.
     /// </summary>
@@ -1200,6 +1220,47 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
         _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert a page-number field run in a new paragraph after the caret's block, routing through the
+    /// undo/redo bus. Used by Insert &gt; Header &amp; Footer &gt; Page Number &gt; Current Position.
+    /// </summary>
+    public void InsertPageNumberAtCaret()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        var para = new FreeW.Core.Model.Paragraph();
+        para.Runs.Add(FreeW.Core.Model.Run.PageNumberField());
+        _commands.Execute(new InsertBlockCommand(index, para));
+    }
+
+    /// <summary>
+    /// Insert a section break of the given <paramref name="breakKind"/> after the caret's block, routing
+    /// through the undo/redo bus. The new paragraph's SectionBreak inherits the current document's final
+    /// page settings so the new section starts with the same layout.
+    /// </summary>
+    public void InsertSectionBreak(SectionBreakKind breakKind)
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateSectionBreak(breakKind, _model.Page)));
+    }
+
+    /// <summary>
+    /// Insert a column break after the caret's block, routing through the undo/redo bus.
+    /// </summary>
+    public void InsertColumnBreak()
+    {
+        CommitToModel();
+        var index = CaretBlockIndex() + 1;
+        if (index < 0 || index > _model.Blocks.Count)
+            index = _model.Blocks.Count;
+        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateColumnBreak()));
     }
 
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
@@ -2082,21 +2143,31 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Arm the Format Painter: capture the run formatting under the caret/selection and the caret
-    /// paragraph's formatting, then wait for the user's next selection to stamp it (the classic
-    /// capture-then-apply-to-next gesture). Calling this while already armed disarms it (a toggle).
-    /// Returns true if the painter is now armed, false if it was disarmed.
+    /// paragraph's formatting, then wait for the user's next selection to stamp it. Calling this while
+    /// already armed disarms it (a toggle). When <paramref name="locked"/> is true the painter stays
+    /// armed after each application (double-click lock mode) until the user clicks again or presses
+    /// Escape. Returns true if the painter is now armed, false if it was disarmed.
     /// </summary>
-    public bool ArmFormatPainter()
+    public bool ArmFormatPainter(bool locked = false)
     {
         Focus();
         if (_formatPainter is not null)
         {
             _formatPainter = null;
+            _formatPainterLocked = false;
             return false;
         }
 
         _formatPainter = FormatPainterClipboard.Capture(CaptureSelectionRunFormatting(), CaptureCaretParagraphFormatting());
+        _formatPainterLocked = locked;
         return true;
+    }
+
+    /// <summary>Disarm the Format Painter regardless of lock mode (e.g. on Escape key).</summary>
+    public void EscapeFormatPainter()
+    {
+        _formatPainter = null;
+        _formatPainterLocked = false;
     }
 
     /// <summary>
@@ -2110,7 +2181,8 @@ public sealed class DocumentView : RichTextBox
         if (_formatPainter is not { } clipboard || Selection.IsEmpty)
             return false;
 
-        _formatPainter = null; // disarm first so a re-render mid-apply cannot re-trigger
+        if (!_formatPainterLocked)
+            _formatPainter = null; // disarm first in single-shot mode; locked mode stays armed
 
         // Run formatting: stamp the captured character formatting onto the selected text via WPF
         // selection property values (covers partial-run selections), mirroring the inverse of
