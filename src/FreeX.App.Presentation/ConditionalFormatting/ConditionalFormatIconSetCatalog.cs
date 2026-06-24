@@ -37,6 +37,9 @@ public static class ConditionalFormatIconSetCatalog
         ("5Rating", 5),
         ("5Quarters", 5),
         ("5Boxes", 5),
+        // x14-extension icon sets (stored in extLst by Excel; rendered by FreeX via x14 reader)
+        ("3Stars", 3),
+        ("3Triangles", 3),
     ];
 
     /// <summary>The icon (bucket) count for a style, defaulting to 3 for unknown styles.</summary>

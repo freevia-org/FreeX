@@ -94,6 +94,11 @@ public static class ConditionalIconGlyphResolver
             return CacheStyleTraits(style, ConditionalIconGlyphKind.Quarter);
         if (style.Contains("Boxes", StringComparison.OrdinalIgnoreCase))
             return CacheStyleTraits(style, ConditionalIconGlyphKind.Box);
+        // x14-extension icon sets
+        if (style.Contains("Stars", StringComparison.OrdinalIgnoreCase))
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Rating);
+        if (style.Contains("Triangles", StringComparison.OrdinalIgnoreCase))
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Arrow);
         return CacheStyleTraits(style, ConditionalIconGlyphKind.Arrow);
     }
 

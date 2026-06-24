@@ -113,6 +113,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         ApplyX14DataBarProperties(dataBarGuids, worksheetXml);
+        ReadX14IconSetConditionalFormats(result, worksheetXml, tempSheet);
         return result;
     }
 
@@ -201,6 +202,97 @@ public sealed partial class XlsxFileAdapter
                             var nativeX14Children = ReadNativeX14DataBarPayloadChildXmls(x14DataBar, x14Ns);
                             if (nativeX14Children.Count > 0)
                                 format.NativePayloadChildXmls = AppendNativePayloadChildXmls(format.NativePayloadChildXmls, nativeX14Children);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads x14-extension icon-set conditional format rules from the worksheet extLst. Excel stores
+    /// "extended" icon sets (3Stars, 3Triangles, 5Boxes (x14) etc.) exclusively in the x14 namespace
+    /// block at the bottom of the worksheet, not in the regular &lt;conditionalFormatting&gt; elements.
+    /// The cfvo threshold values in the x14 schema are stored as &lt;xm:f&gt; child text, not @val attributes.
+    /// </summary>
+    private static void ReadX14IconSetConditionalFormats(
+        List<ConditionalFormat> result,
+        XDocument worksheetXml,
+        SheetId tempSheet)
+    {
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace xmNs  = "http://schemas.microsoft.com/office/excel/2006/main";
+        const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
+
+        var worksheetRoot = worksheetXml.Root;
+        if (worksheetRoot is null)
+            return;
+
+        foreach (var extLst in worksheetRoot.Elements().Where(e => e.Name.LocalName == "extLst"))
+        {
+            foreach (var ext in extLst.Elements().Where(e => e.Name.LocalName == "ext"))
+            {
+                if (ext.Attribute("uri")?.Value != x14CfUri)
+                    continue;
+
+                foreach (var x14CFs in ext.Elements(x14Ns + "conditionalFormattings"))
+                {
+                    foreach (var x14CF in x14CFs.Elements(x14Ns + "conditionalFormatting"))
+                    {
+                        // Range is stored as <xm:sqref> child, not as @sqref attribute.
+                        var sqrefEl = x14CF.Element(xmNs + "sqref");
+                        var sqref = sqrefEl?.Value?.Trim();
+                        if (string.IsNullOrWhiteSpace(sqref))
+                            continue;
+
+                        GridRange appliesTo;
+                        try
+                        {
+                            var firstRef = sqref!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).First();
+                            appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
+                                ? GridRange.Parse(firstRef, tempSheet)
+                                : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+
+                        foreach (var x14CfRule in x14CF.Elements(x14Ns + "cfRule"))
+                        {
+                            var type = x14CfRule.Attribute("type")?.Value;
+                            if (!string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            var x14IconSet = x14CfRule.Element(x14Ns + "iconSet");
+                            if (x14IconSet is null)
+                                continue;
+
+                            var priority = XlsxXmlAttributeReader.ReadIntAttribute(x14CfRule, "priority") ?? 1;
+                            var format = new ConditionalFormat
+                            {
+                                AppliesTo = appliesTo,
+                                Priority = priority,
+                                RuleType = CfRuleType.IconSet,
+                                IconSetStyle = NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value),
+                                IconSetShowValue = !IsFalse(x14IconSet.Attribute("showValue")?.Value),
+                                IconSetReverse = IsTruthy(x14IconSet.Attribute("reverse")?.Value),
+                            };
+
+                            // x14 cfvo values are stored as <xm:f> child text (formula value), not @val.
+                            foreach (var x14Cfvo in x14IconSet.Elements(x14Ns + "cfvo"))
+                            {
+                                var cfvoType = FromCfvoType(x14Cfvo.Attribute("type")?.Value);
+                                var fEl = x14Cfvo.Element(xmNs + "f");
+                                var val = fEl?.Value?.Trim();
+                                var gte = XlsxXmlAttributeReader.ReadNullableBoolAttribute(x14Cfvo, "gte");
+                                format.IconSetThresholds.Add(new CfThresholdModel(cfvoType, val, gte));
+                            }
+
+                            // cfIcon overrides (same structure as standard, under x14Ns)
+                            format.IconOverrides.AddRange(ReadCfIconOverrides(x14IconSet, x14Ns));
+
+                            result.Add(format);
                         }
                     }
                 }

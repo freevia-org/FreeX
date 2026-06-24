@@ -247,45 +247,63 @@ public static class ConditionalIconGlyphGeometry
         return CfGlyphOp.Box(CfGlyphFill.Icon, CfGlyphStroke.Outline, rect);
     }
 
+    /// <summary>
+    /// Builds a chunky filled-arrow polygon that closely matches Excel's icon-set arrow weight.
+    /// Each arrow is a standard 7-point chevron polygon: a rectangular shaft with a wide arrowhead.
+    /// iconIndex 0 = up (best), 1 = right/neutral, 2+ = down (worst).
+    /// </summary>
     private static LayoutPoint[] ArrowPoints(RectInfo r, int iconIndex)
     {
         if (iconIndex == 1)
         {
-            // Sideways (right-pointing) arrow.
+            // Sideways (right-pointing) filled chevron arrow — neutral bucket.
+            // Shaft occupies left ~55% of the width; arrowhead the right ~45%.
+            var shaftTop    = r.Top    + r.Height * 0.30;
+            var shaftBottom = r.Bottom - r.Height * 0.30;
+            var neckX       = r.Left   + r.Width  * 0.55;
             return new[]
             {
-                new LayoutPoint(r.Left, r.Top + r.Height / 2),
-                new LayoutPoint(r.Right - 3, r.Top + r.Height / 2),
-                new LayoutPoint(r.Right - 3, r.Top + 2),
+                new LayoutPoint(r.Left,  shaftTop),
+                new LayoutPoint(neckX,   shaftTop),
+                new LayoutPoint(neckX,   r.Top),
                 new LayoutPoint(r.Right, r.Top + r.Height / 2),
-                new LayoutPoint(r.Right - 3, r.Bottom - 2),
-                new LayoutPoint(r.Right - 3, r.Top + r.Height / 2),
+                new LayoutPoint(neckX,   r.Bottom),
+                new LayoutPoint(neckX,   shaftBottom),
+                new LayoutPoint(r.Left,  shaftBottom),
             };
         }
 
         if (iconIndex == 0)
         {
-            // Up arrow.
+            // Up arrow — best bucket.
+            var shaftLeft  = r.Left + r.Width  * 0.30;
+            var shaftRight = r.Left + r.Width  * 0.70;
+            var neckY      = r.Top  + r.Height * 0.45;
             return new[]
             {
-                new LayoutPoint(r.Left + r.Width / 2, r.Bottom),
-                new LayoutPoint(r.Left + r.Width / 2, r.Top + 3),
-                new LayoutPoint(r.Left + 2, r.Top + 3),
                 new LayoutPoint(r.Left + r.Width / 2, r.Top),
-                new LayoutPoint(r.Right - 2, r.Top + 3),
-                new LayoutPoint(r.Left + r.Width / 2, r.Top + 3),
+                new LayoutPoint(r.Right,  neckY),
+                new LayoutPoint(shaftRight, neckY),
+                new LayoutPoint(shaftRight, r.Bottom),
+                new LayoutPoint(shaftLeft,  r.Bottom),
+                new LayoutPoint(shaftLeft,  neckY),
+                new LayoutPoint(r.Left,   neckY),
             };
         }
 
-        // Down arrow.
+        // Down arrow — worst bucket.
+        var dShaftLeft  = r.Left + r.Width  * 0.30;
+        var dShaftRight = r.Left + r.Width  * 0.70;
+        var dNeckY      = r.Top  + r.Height * 0.55;
         return new[]
         {
-            new LayoutPoint(r.Left + r.Width / 2, r.Top),
-            new LayoutPoint(r.Left + r.Width / 2, r.Bottom - 3),
-            new LayoutPoint(r.Left + 2, r.Bottom - 3),
             new LayoutPoint(r.Left + r.Width / 2, r.Bottom),
-            new LayoutPoint(r.Right - 2, r.Bottom - 3),
-            new LayoutPoint(r.Left + r.Width / 2, r.Bottom - 3),
+            new LayoutPoint(r.Right,  dNeckY),
+            new LayoutPoint(dShaftRight, dNeckY),
+            new LayoutPoint(dShaftRight, r.Top),
+            new LayoutPoint(dShaftLeft,  r.Top),
+            new LayoutPoint(dShaftLeft,  dNeckY),
+            new LayoutPoint(r.Left,   dNeckY),
         };
     }
 

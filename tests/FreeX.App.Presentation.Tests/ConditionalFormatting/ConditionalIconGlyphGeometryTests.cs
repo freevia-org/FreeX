@@ -20,11 +20,11 @@ public sealed class ConditionalIconGlyphGeometryTests
 
     [Theory]
     [InlineData(ConditionalIconGlyphKind.Arrow, 2, 3,
-        "Polygon Icon/Outline [8,0 8,13 2,13 8,16 14,13 8,13]")]
+        "Polygon Icon/Outline [8,16 16,8.8 11.2,8.8 11.2,0 4.8,0 4.8,8.8 0,8.8]")]
     [InlineData(ConditionalIconGlyphKind.Arrow, 1, 3,
-        "Polygon Icon/Outline [0,8 13,8 13,2 16,8 13,14 13,8]")]
+        "Polygon Icon/Outline [0,4.8 8.8,4.8 8.8,0 16,8 8.8,16 8.8,11.2 0,11.2]")]
     [InlineData(ConditionalIconGlyphKind.Arrow, 0, 3,
-        "Polygon Icon/Outline [8,16 8,3 2,3 8,0 14,3 8,3]")]
+        "Polygon Icon/Outline [8,0 16,7.2 11.2,7.2 11.2,16 4.8,16 4.8,7.2 0,7.2]")]
     [InlineData(ConditionalIconGlyphKind.TrafficLight, 0, 3,
         "Ellipse Icon/Outline c=8,8 r=8,8")]
     [InlineData(ConditionalIconGlyphKind.Box, 0, 3,
