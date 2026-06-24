@@ -110,7 +110,15 @@ public static class StructuredTableStyleBandingResolver
             ? accent.Band
             : Lighten(accent.Band, ((index - 1) / accents.Length) * 8);
 
-        return new StructuredTableStyleBanding(accent.Header, oddFill, evenFill, accent.Font);
+        // Border color: only the Medium family uses interior thin borders (a midpoint tint ≈ 0.5 of the
+        // accent, sitting between the solid header and the banded row fill).  Light and Dark families
+        // match Excel's behavior: Light has no interior borders, and Dark uses color contrast from the
+        // alternating band fills instead of an explicit border.
+        CellColor? border = family == StyleFamily.Medium
+            ? MidpointColor(accent.Header, accent.Band)
+            : null;
+
+        return new StructuredTableStyleBanding(accent.Header, oddFill, evenFill, accent.Font, Border: border);
     }
 
     private static bool TryResolveFamily(string styleName, out StyleFamily family, out int index)
@@ -200,7 +208,8 @@ public static class StructuredTableStyleBandingResolver
             HeaderFill: theme.ResolveColor(slot),
             OddRowFill: theme.ResolveColor(slot, 0.8),
             EvenRowFill: CellColor.White,
-            HeaderFontColor: CellColor.White);
+            HeaderFontColor: CellColor.White,
+            Border: theme.ResolveColor(slot, 0.5));
 
     private static StructuredTableStyleBanding CreateThemedLightBanding(
         WorkbookTheme theme,
@@ -209,7 +218,8 @@ public static class StructuredTableStyleBandingResolver
             HeaderFill: theme.ResolveColor(slot, 0.8),
             OddRowFill: theme.ResolveColor(slot, 0.95),
             EvenRowFill: CellColor.White,
-            HeaderFontColor: CellColor.Black);
+            HeaderFontColor: CellColor.Black,
+            Border: theme.ResolveColor(slot, 0.6));
 
     /// <summary>
     /// True for the black-header "Light" family (TableStyleLight 8-14), which Excel renders with a solid
@@ -243,6 +253,17 @@ public static class StructuredTableStyleBandingResolver
             ClampColor(color.R - amount),
             ClampColor(color.G - amount),
             ClampColor(color.B - amount));
+
+    /// <summary>
+    /// Returns the midpoint color between <paramref name="a"/> and <paramref name="b"/>, used to
+    /// approximate a ~tint-0.5 border color from the fixed-palette accent/band pair when a theme is not
+    /// available (the theme-aware path uses <c>theme.ResolveColor(slot, 0.5)</c> directly).
+    /// </summary>
+    private static CellColor MidpointColor(CellColor a, CellColor b) =>
+        new(
+            (byte)((a.R + b.R) / 2),
+            (byte)((a.G + b.G) / 2),
+            (byte)((a.B + b.B) / 2));
 
     private static byte ClampColor(int value) => (byte)Math.Clamp(value, 0, 255);
 }

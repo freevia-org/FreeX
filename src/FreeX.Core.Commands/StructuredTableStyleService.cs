@@ -59,11 +59,12 @@ public static class StructuredTableStyleService
         var dataStartRow = range.Start.Row + (hasHeaderRow ? 1u : 0u);
         var dataEndRow = range.End.Row - (hasTotalsRow ? 1u : 0u);
 
-        var headerFill = workbook.RegisterStyle(BuildHeaderStyle(banding));
-        var oddFill = workbook.RegisterStyle(BuildBodyStyle(banding.OddRowFill));
-        var evenFill = workbook.RegisterStyle(BuildBodyStyle(banding.EvenRowFill));
-        var bodyFill = workbook.RegisterStyle(BuildBodyStyle(banding.EffectiveBodyFill));
-        var totalsRowFill = workbook.RegisterStyle(BuildTotalsRowStyle(banding));
+        var bodyBorder = CreateTableBodyBorder(banding);
+        var headerFill = workbook.RegisterStyle(BuildHeaderStyle(banding, bodyBorder));
+        var oddFill = workbook.RegisterStyle(BuildBodyStyle(banding.OddRowFill, bodyBorder));
+        var evenFill = workbook.RegisterStyle(BuildBodyStyle(banding.EvenRowFill, bodyBorder));
+        var bodyFill = workbook.RegisterStyle(BuildBodyStyle(banding.EffectiveBodyFill, bodyBorder));
+        var totalsRowFill = workbook.RegisterStyle(BuildTotalsRowStyle(banding, bodyBorder));
 
         var styledAny = false;
 
@@ -71,7 +72,7 @@ public static class StructuredTableStyleService
         if (hasHeaderRow)
         {
             for (var col = range.Start.Col; col <= range.End.Col; col++)
-                styledAny |= MergeStyleOntoCell(workbook, sheet, range.Start.Row, col, headerFill, isHeaderOrTotals: true);
+                styledAny |= MergeStyleOntoCell(workbook, sheet, range.Start.Row, col, headerFill, isHeaderOrTotals: true, banding: banding);
         }
 
         // ── Data body rows (row banding, or body fill when row stripes off) ─
@@ -86,7 +87,7 @@ public static class StructuredTableStyleService
                     ? (rowOffset % 2 == 0 ? evenFill : oddFill)
                     : bodyFill;
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
-                    styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false);
+                    styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false, banding: banding);
             }
 
             // ── Column stripes (overrides row fill per column, mirrors StructuredTableCommand) ──
@@ -102,19 +103,18 @@ public static class StructuredTableStyleService
                     var colOffset = col - range.Start.Col;
                     var colFill = colOffset % 2 == 0 ? evenFill : oddFill;
                     for (var row = dataStartRow; row <= dataEndRow; row++)
-                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, forceFill: true);
+                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, banding: banding, forceFill: true);
                 }
             }
         }
 
         // ── Totals row ───────────────────────────────────────────────────────
         // Excel's totals row has its own look (body-level fill, not the header band) with a distinct
-        // top border.  We use a neutral body-fill style here so it no longer mis-paints as a second
-        // header band.  The top border is a borders-wave concern and is left for later.
+        // top border separating it from the data body.
         if (hasTotalsRow)
         {
             for (var col = range.Start.Col; col <= range.End.Col; col++)
-                styledAny |= MergeStyleOntoCell(workbook, sheet, range.End.Row, col, totalsRowFill, isHeaderOrTotals: true);
+                styledAny |= MergeStyleOntoCell(workbook, sheet, range.End.Row, col, totalsRowFill, isHeaderOrTotals: true, banding: banding);
         }
 
         // ── First column emphasis (bold, mirrors StructuredTableCommand) ─────
@@ -136,39 +136,59 @@ public static class StructuredTableStyleService
         return styledAny;
     }
 
-    private static CellStyle BuildHeaderStyle(StructuredTableStyleBanding banding) => new()
+    /// <summary>
+    /// Creates the thin border used on interior table cells when the style family provides a border
+    /// color.  Returns <see cref="CellBorder.None"/> (no border) when the style has no border color
+    /// (e.g. Light family styles where Excel draws no interior borders).
+    /// </summary>
+    private static CellBorder CreateTableBodyBorder(StructuredTableStyleBanding banding) =>
+        banding.Border is { } color
+            ? new CellBorder(BorderStyle.Thin, color)
+            : default;
+
+    /// <summary>
+    /// Header row: bold + header fill + header font color + bottom border (the separator between
+    /// header and data body that Excel draws for styled tables).
+    /// </summary>
+    private static CellStyle BuildHeaderStyle(StructuredTableStyleBanding banding, CellBorder bodyBorder) => new()
     {
         Bold = true,
         FontColor = banding.HeaderFontColor,
-        FillColor = banding.HeaderFill
+        FillColor = banding.HeaderFill,
+        // Header gets a bottom border (separator line) matching the body border color.
+        BorderBottom = bodyBorder
     };
 
-    private static CellStyle BuildBodyStyle(CellColor fill) => new()
+    private static CellStyle BuildBodyStyle(CellColor fill, CellBorder bodyBorder) => new()
     {
-        FillColor = fill
+        FillColor = fill,
+        BorderTop    = bodyBorder,
+        BorderRight  = bodyBorder,
+        BorderBottom = bodyBorder,
+        BorderLeft   = bodyBorder
     };
 
     /// <summary>
-    /// Totals-row style: bold + the effective body fill (not the header fill).  Excel renders the
-    /// totals row with bold text and its own band color, NOT the header color, so we must not reuse
-    /// <see cref="BuildHeaderStyle"/> for it.  A top border separating the totals row from the data
-    /// body is deferred to the borders wave.
+    /// Totals-row style: bold + the effective body fill (not the header fill) + a top border that
+    /// separates the totals row from the data body, matching Excel's distinct separator line.
     /// </summary>
-    private static CellStyle BuildTotalsRowStyle(StructuredTableStyleBanding banding) => new()
+    private static CellStyle BuildTotalsRowStyle(StructuredTableStyleBanding banding, CellBorder bodyBorder) => new()
     {
         Bold = true,
-        FillColor = banding.EffectiveBodyFill
+        FillColor = banding.EffectiveBodyFill,
+        // Totals row gets a top border (separator line above totals, distinct from the interior grid).
+        BorderTop = bodyBorder
     };
 
     /// <summary>Marker style used to apply first/last column bold emphasis.</summary>
     private static CellStyle BuildBoldStyle() => new() { Bold = true };
 
     /// <summary>
-    /// Merges the visual fill/font from <paramref name="visualStyleId"/> onto the cell at
+    /// Merges the visual fill/font/border from <paramref name="visualStyleId"/> onto the cell at
     /// (<paramref name="row"/>, <paramref name="col"/>) while preserving the cell's own number format,
-    /// borders, alignment, and any explicit fill the user already set.  Creates a blank cell when one
-    /// is absent so banding paints across empty body cells (as Excel renders them).  Returns true when
-    /// the cell's style actually changed.
+    /// alignment, and any explicit fill the user already set.  Creates a blank cell when one is absent
+    /// so banding paints across empty body cells (as Excel renders them).  Returns true when the cell's
+    /// style actually changed.
     /// </summary>
     /// <param name="forceFill">
     /// When <see langword="true"/> the fill is always written, overriding any previously-set fill
@@ -182,6 +202,7 @@ public static class StructuredTableStyleService
         uint col,
         StyleId visualStyleId,
         bool isHeaderOrTotals,
+        StructuredTableStyleBanding banding,
         bool forceFill = false)
     {
         var cell = sheet.GetCell(row, col);
@@ -212,6 +233,23 @@ public static class StructuredTableStyleService
             merged.Bold = visual.Bold;
             merged.FontColor = visual.FontColor;
             merged.FontThemeColor = null;
+        }
+
+        // Apply table borders when the style provides them (banding.Border is not null).
+        // Only write borders that the visual style has; preserve any user-set borders on the other sides.
+        // For header: only the bottom border (separator line).
+        // For totals: only the top border (separator line).
+        // For body: all four sides (interior grid).
+        if (banding.Border is not null)
+        {
+            if (visual.BorderBottom.Style != BorderStyle.None)
+                merged.BorderBottom = visual.BorderBottom;
+            if (visual.BorderTop.Style != BorderStyle.None)
+                merged.BorderTop = visual.BorderTop;
+            if (visual.BorderLeft.Style != BorderStyle.None)
+                merged.BorderLeft = visual.BorderLeft;
+            if (visual.BorderRight.Style != BorderStyle.None)
+                merged.BorderRight = visual.BorderRight;
         }
 
         if (merged.Equals(existing))

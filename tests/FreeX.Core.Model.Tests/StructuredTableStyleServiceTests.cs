@@ -172,6 +172,97 @@ public sealed class StructuredTableStyleServiceTests
         StyleAt(workbook, sheet, 2, 2).Bold.Should().NotBe(true, "middle column must not be bolded by first/last emphasis");
     }
 
+    // ── Border tests ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// TableStyleMedium2 (and other medium-family styles) include interior thin borders on every cell
+    /// in the data body, a bottom border on the header row, and a top border on the totals row.  This
+    /// mirrors Excel's built-in table border rendering and the Wave B borders requirement.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_Medium2_AppliesBodyBordersHeaderBottomAndTotalsTop()
+    {
+        var workbook = new Workbook("Borders");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+        // Row 5 is the totals row.
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(60));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
+            HeaderRowCount = 1,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+        banding.Border.Should().NotBeNull("TableStyleMedium2 is a medium-family style and must supply a border color");
+
+        // Header row: bottom border is set (separator between header and data body).
+        var headerStyle = StyleAt(workbook, sheet, 1, 1);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin, "header must have a thin bottom border");
+        headerStyle.BorderBottom.Color.Should().Be(banding.Border!.Value, "header bottom border color must match resolved border color");
+        headerStyle.BorderTop.Style.Should().Be(BorderStyle.None, "header must NOT have a top border");
+
+        // Data body cells: all four sides are bordered.
+        var bodyStyle = StyleAt(workbook, sheet, 2, 1);
+        bodyStyle.BorderTop.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin top border");
+        bodyStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin bottom border");
+        bodyStyle.BorderLeft.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin left border");
+        bodyStyle.BorderRight.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin right border");
+        bodyStyle.BorderTop.Color.Should().Be(banding.Border!.Value, "body border color must match resolved border color");
+
+        // Totals row: top border only (separator above totals, distinct from header bottom).
+        var totalsStyle = StyleAt(workbook, sheet, 5, 1);
+        totalsStyle.BorderTop.Style.Should().Be(BorderStyle.Thin, "totals row must have a thin top border");
+        totalsStyle.BorderTop.Color.Should().Be(banding.Border!.Value, "totals top border color must match resolved border color");
+        totalsStyle.BorderBottom.Style.Should().Be(BorderStyle.None, "totals row must NOT have a bottom border");
+    }
+
+    /// <summary>
+    /// Light-family table styles (e.g. TableStyleLight1) do not draw interior borders in Excel.
+    /// The resolver returns Border=null for these styles, and no borders should be applied.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_Light1_DoesNotApplyBorders()
+    {
+        var workbook = new Workbook("NoBorders");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 2);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleLight1",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleLight1", workbook.Theme);
+        banding.Border.Should().BeNull("TableStyleLight1 is a light-family style with no interior borders");
+
+        // No borders should be applied on any cell.
+        var headerStyle = StyleAt(workbook, sheet, 1, 1);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.None, "light style must have no header bottom border");
+        var bodyStyle = StyleAt(workbook, sheet, 2, 1);
+        bodyStyle.BorderTop.Style.Should().Be(BorderStyle.None, "light style must have no body border");
+    }
+
     // ── Totals-row regression: must not use header fill ─────────────────────
 
     [Fact]

@@ -102,8 +102,8 @@ public sealed partial class StructuredTableCommandTests
         var configured = sheet.StructuredTables.Should().ContainSingle().Subject;
         configured.StyleName.Should().Be("CorporateLedger");
         configured.TotalsRowShown.Should().BeTrue();
-        StyleAt(wb, sheet, 5, 1).FillColor.Should().Be(headerFill);
-        StyleAt(wb, sheet, 5, 1).FontColor.Should().Be(CellColor.White);
+        // Totals row: bold + effective body fill (NOT the header fill), matching Excel and the load path.
+        StyleAt(wb, sheet, 5, 1).FillColor.Should().Be(bodyFill, "totals row gets body fill, not header fill");
         StyleAt(wb, sheet, 5, 1).Bold.Should().BeTrue();
         sheet.GetValue(5, 1).Should().Be(new TextValue("Total"));
         sheet.GetValue(6, 1).Should().Be(new TextValue("Below table"));
