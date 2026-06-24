@@ -153,9 +153,16 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
         // ── Step 4: create one PageBox per page ───────────────────────────────────────────────────
+        // Phase 4: resolve header/footer slots per page.
         var boxes = new List<PageBox>(pageCount);
         for (var i = 0; i < pageCount; i++)
-            boxes.Add(new PageBox(i + 1, page, shards[i]));
+        {
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            boxes.Add(new PageBox(i + 1, page, shards[i],
+                sourceModel: model,
+                headerSlot: hSlot, headerSlotName: hName,
+                footerSlot: fSlot, footerSlotName: fName));
+        }
 
         // Wire neighbour links for cross-page caret routing.
         for (var i = 0; i < boxes.Count; i++)
@@ -165,6 +172,43 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         }
 
         return new PaginatedEditorPanel(sourceEditor, boxes);
+    }
+
+    // ── Phase 4: slot resolution ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Selects the header and footer <see cref="HeaderFooter"/> slots for a given 1-based
+    /// <paramref name="pageNumber"/>, applying Word's DifferentFirstPage / DifferentOddEvenPages
+    /// rules.  Returns the slot object (may be null when the slot is empty) and its canonical name.
+    ///
+    /// <list type="bullet">
+    ///   <item>Page 1 with <c>DifferentFirstPage</c> → first-header / first-footer.</item>
+    ///   <item>Even pages with <c>DifferentOddEvenPages</c> → even-header / even-footer.</item>
+    ///   <item>Otherwise → default header / footer.</item>
+    /// </list>
+    /// </summary>
+    private static (HeaderFooter? hSlot, string hName,
+                    HeaderFooter? fSlot, string fName)
+        ResolveHfSlots(TextDocument model, int pageNumber, int pageCount)
+    {
+        var hf      = model.FinalSectionHeadersFooters;
+        var diffFirst   = model.Page.DifferentFirstPage;
+        var diffOddEven = model.Page.DifferentOddEvenPages;
+
+        if (diffFirst && pageNumber == 1)
+        {
+            return (hf.FirstHeader, "first-header",
+                    hf.FirstFooter, "first-footer");
+        }
+
+        if (diffOddEven && pageNumber % 2 == 0)
+        {
+            return (hf.EvenHeader, "even-header",
+                    hf.EvenFooter, "even-footer");
+        }
+
+        return (hf.Header, "header",
+                hf.Footer, "footer");
     }
 
     // ── live repagination ─────────────────────────────────────────────────────────────────────────
@@ -492,7 +536,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         for (var i = 0; i < pageCount; i++)
         {
-            var box = new PageBox(i + 1, page, shards[i]);
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            var box = new PageBox(i + 1, page, shards[i],
+                sourceModel: model,
+                headerSlot: hSlot, headerSlotName: hName,
+                footerSlot: fSlot, footerSlotName: fName);
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
@@ -583,7 +631,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         for (var i = 0; i < pageCount; i++)
         {
-            var box = new PageBox(i + 1, page, shards[i]);
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            var box = new PageBox(i + 1, page, shards[i],
+                sourceModel: model,
+                headerSlot: hSlot, headerSlotName: hName,
+                footerSlot: fSlot, footerSlotName: fName);
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
@@ -600,6 +652,69 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         if (_pageBoxes.Count > 0)
             _pageBoxes[0].Body.Focus();
+    }
+
+    // ── Phase 4: header/footer slot commit ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Commits all in-page header/footer sub-editors back to the correct
+    /// <see cref="SectionHeadersFooters"/> slots on the source model.
+    ///
+    /// <para>
+    /// Each distinct slot name is committed only once (from the first page box that owns it) so
+    /// that editing a header on page 2 overwrites the shared "header" slot exactly once — the same
+    /// result as the Wave 11 docked pane.
+    /// </para>
+    ///
+    /// <para>
+    /// Called by <see cref="PaginatedCommitCoordinator.Commit"/> before rebuilding the model
+    /// blocks, so the updated header/footer paragraphs are already in the slot when the next
+    /// Render pass picks them up.
+    /// </para>
+    /// </summary>
+    internal void CommitHeaderFooterSlots(DocumentView helperEditor)
+    {
+        var hf          = _sourceEditor.Model.FinalSectionHeadersFooters;
+        var committedSlots = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var box in _pageBoxes)
+        {
+            // Commit header slot (once per distinct slot name).
+            if (box.HeaderSlotName is { } hName && committedSlots.Add(hName))
+                box.CommitHfSlots(helperEditor, hf);
+            // CommitHfSlots commits BOTH header AND footer for this box in one call.
+            // If the footer has a different slot name from the header (shouldn't happen normally)
+            // record it too so we don't commit it again from another box.
+            if (box.FooterSlotName is { } fName)
+                committedSlots.Add(fName);
+        }
+    }
+
+    /// <summary>
+    /// Focuses the in-page header or footer region for a given slot name.  Used to route the
+    /// <c>freew.hf-edit-*</c> ribbon commands to the in-page sub-editor when PagedEdit is active,
+    /// instead of opening the docked pane.
+    ///
+    /// <para>Returns <c>true</c> when a matching sub-editor was found and focused; <c>false</c>
+    /// when the slot is not currently visible (e.g. first-header but DifferentFirstPage is off).</para>
+    /// </summary>
+    internal bool FocusInPageHfRegion(string slotName)
+    {
+        // Find the first page box whose header or footer sub-editor matches the slot name.
+        foreach (var box in _pageBoxes)
+        {
+            if (box.HeaderSlotName == slotName && box.HeaderSubEditor is { } hSub)
+            {
+                hSub.Focus();
+                return true;
+            }
+            if (box.FooterSlotName == slotName && box.FooterSubEditor is { } fSub)
+            {
+                fSub.Focus();
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── sharding ──────────────────────────────────────────────────────────────────────────────────
