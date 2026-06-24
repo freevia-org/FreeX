@@ -15,6 +15,7 @@ public static class WorkbookFileAdapterCatalog
         new CsvUtf8FileAdapter(),
         new DelimitedTextFileAdapter(".txt", "Text (Tab delimited)", '\t'),
         new UnicodeTextFileAdapter(),
+        new PrnFileAdapter(),
         new DelimitedTextFileAdapter(".tsv", "TSV (Tab-separated values)", '\t'),
         new DelimitedTextFileAdapter(".tab", "Tab-delimited text", '\t'),
         new SpreadsheetXmlFileAdapter(),
