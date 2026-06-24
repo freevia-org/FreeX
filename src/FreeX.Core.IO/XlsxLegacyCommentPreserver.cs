@@ -11,6 +11,11 @@ internal static class XlsxLegacyCommentPreserver
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
+    // VML namespaces used in note shapes
+    private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
+    private static readonly XNamespace OfficeNs = "urn:schemas-microsoft-com:office:office";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -69,11 +74,24 @@ internal static class XlsxLegacyCommentPreserver
                 continue;
 
             var sourceCommentsXml = XlsxPackageXmlEditor.LoadXml(sourceCommentsEntry);
-            if (!CanRestoreLegacyCommentPart(sourceCommentsXml, sheet, workbookNs))
+
+            // GAP 5: build a reconciled comments XML rather than the all-or-nothing guard.
+            // When the note set is unchanged, the reconciled XML equals the source XML (same
+            // author/rich-text preservation as before).  When notes were added or deleted, we
+            // keep the source XML entries for every UNCHANGED note (preserving author and rich
+            // text) and fall back to ClosedXML-generated entries for ADDED notes.
+            var targetCommentsPath = GetLegacyCommentPartPath(targetArchive, targetWorksheetPath, packageRelNs);
+            var reconciledCommentsXml = TryBuildReconciledCommentsXml(
+                sourceCommentsXml,
+                sheet,
+                workbookNs,
+                targetArchive,
+                targetCommentsPath);
+            if (reconciledCommentsXml is null)
                 continue;
 
-            XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(sourceCommentsXml);
-            ReplacePackageXmlPart(targetArchive, sourceCommentsPath, sourceCommentsXml);
+            XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(reconciledCommentsXml);
+            ReplacePackageXmlPart(targetArchive, sourceCommentsPath, reconciledCommentsXml);
 
             var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
@@ -87,8 +105,10 @@ internal static class XlsxLegacyCommentPreserver
                 CommentsRelationshipType,
                 new HashSet<string>(StringComparer.Ordinal));
 
+            // GAP 4: reconcile VML drawing so unchanged notes keep source geometry + Visible
+            // even when notes were added or deleted. New notes get ClosedXML's default shape.
             var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
-            var preservedVmlRelId = PreserveCommentVmlDrawing(
+            var preservedVmlRelId = PreserveReconciledVmlDrawing(
                 sourceArchive,
                 targetArchive,
                 sourceWorksheetPath,
@@ -96,7 +116,8 @@ internal static class XlsxLegacyCommentPreserver
                 sourceLegacyDrawing,
                 packageRelNs,
                 relNs,
-                targetWorksheetRelsXml);
+                targetWorksheetRelsXml,
+                sheet);
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
@@ -131,18 +152,186 @@ internal static class XlsxLegacyCommentPreserver
             : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
     }
 
-    private static bool CanRestoreLegacyCommentPart(
+    /// <summary>
+    /// GAP 5 fix: builds a reconciled comments XML that preserves source XML entries for
+    /// unchanged notes (keeping author and rich-text formatting) while removing deleted notes and
+    /// copying new-note entries from the ClosedXML-generated target XML.
+    /// Also applies author changes (GAP 2): if the model's <c>CommentAuthors</c> differs from
+    /// the source XML's author, the <c>&lt;authors&gt;</c> list and <c>authorId</c> attribute
+    /// are updated so the new author is written.
+    /// Returns <c>null</c> if the source XML has no entries that match any modeled note (genuine
+    /// no-match — fall through to ClosedXML output unchanged).
+    /// </summary>
+    private static XDocument? TryBuildReconciledCommentsXml(
         XDocument sourceCommentsXml,
         Sheet sheet,
-        XNamespace workbookNs)
+        XNamespace workbookNs,
+        ZipArchive targetArchive,
+        string? targetCommentsPath)
     {
-        var sourceComments = ReadLegacyCommentPlainTextByReference(sourceCommentsXml, workbookNs);
-        return sourceComments.Count > 0 &&
-               sourceComments.Count == sheet.Comments.Count &&
-               sourceComments.All(pair =>
-                   TryGetModeledCommentText(sheet, pair.Key, out var targetText) &&
-                   string.Equals(pair.Value, targetText, StringComparison.Ordinal));
+        var sourceCommentElements = ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs);
+        if (sourceCommentElements.Count == 0)
+            return null;
+
+        // Read the source authors list (index → name).
+        var sourceAuthors = sourceCommentsXml.Root?
+            .Element(workbookNs + "authors")?
+            .Elements(workbookNs + "author")
+            .Select(a => a.Value)
+            .ToList() ?? [];
+
+        // We will build a new authors list that covers all reconciled entries.
+        // We start from source authors (to preserve existing authorIds) and add new ones as needed.
+        var reconciledAuthors = new List<string>(sourceAuthors);
+
+        // Classify each source comment as: matched, text-changed, or deleted.
+        // Also track which model notes are NEW (not in source).
+        var matchedCount = 0;
+        var reconciledEntries = new List<XElement>(sheet.Comments.Count);
+        var sourceRefsHandled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sourceRef, sourceElement) in sourceCommentElements)
+        {
+            sourceRefsHandled.Add(sourceRef);
+            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var address))
+                continue; // ref unparseable — drop it
+
+            if (!sheet.Comments.TryGetValue(address, out var modelText))
+                continue; // note was deleted — drop it
+
+            var entryToAdd = new XElement(sourceElement); // deep-clone
+
+            // Text reconciliation: update if text changed.
+            if (!string.Equals(ReadCommentPlainText(entryToAdd, workbookNs), modelText, StringComparison.Ordinal))
+                entryToAdd = UpdateCommentText(entryToAdd, modelText, workbookNs);
+
+            // Author reconciliation (GAP 2): if the model's CommentAuthors has a different value
+            // than the source XML author, update the authorId to point to the new author.
+            var modelAuthor = sheet.CommentAuthors.TryGetValue(address, out var ma) ? ma : string.Empty;
+            var sourceAuthorIdStr = entryToAdd.Attribute("authorId")?.Value;
+            var sourceAuthorName = string.Empty;
+            if (int.TryParse(sourceAuthorIdStr, out var sourceAuthorIdx) &&
+                sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
+            {
+                sourceAuthorName = sourceAuthors[sourceAuthorIdx];
+            }
+
+            if (!string.Equals(modelAuthor, sourceAuthorName, StringComparison.Ordinal))
+            {
+                // Need to find or add the new author in the reconciled list.
+                var newAuthorIdx = reconciledAuthors.FindIndex(a =>
+                    string.Equals(a, modelAuthor, StringComparison.Ordinal));
+                if (newAuthorIdx < 0)
+                {
+                    newAuthorIdx = reconciledAuthors.Count;
+                    reconciledAuthors.Add(modelAuthor);
+                }
+                entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
+            }
+
+            reconciledEntries.Add(entryToAdd);
+            matchedCount++;
+        }
+
+        // Require at least one source entry to be usable.
+        if (matchedCount == 0)
+            return null;
+
+        // For NEW notes (in model but not in source) try to copy from ClosedXML's target XML.
+        var newModelAddresses = sheet.Comments.Keys
+            .Where(addr => !sourceRefsHandled.Contains(addr.ToA1()))
+            .ToList();
+
+        if (newModelAddresses.Count > 0 && !string.IsNullOrEmpty(targetCommentsPath))
+        {
+            var targetCommentsEntry = targetArchive.GetEntry(targetCommentsPath);
+            if (targetCommentsEntry is not null)
+            {
+                var targetCommentsXml = XlsxPackageXmlEditor.LoadXml(targetCommentsEntry);
+                var targetAuthors = targetCommentsXml.Root?
+                    .Element(workbookNs + "authors")?
+                    .Elements(workbookNs + "author")
+                    .Select(a => a.Value)
+                    .ToList() ?? [];
+                var targetElements = ReadLegacyCommentElementsByReference(targetCommentsXml, workbookNs);
+                foreach (var addr in newModelAddresses)
+                {
+                    var cellRef = addr.ToA1();
+                    if (!targetElements.TryGetValue(cellRef, out var targetElement))
+                        continue;
+
+                    // Re-map the target element's authorId into the reconciled authors list.
+                    var clonedEntry = new XElement(targetElement);
+                    var targetAuthorIdStr = clonedEntry.Attribute("authorId")?.Value;
+                    if (int.TryParse(targetAuthorIdStr, out var targetAuthorIdx) &&
+                        targetAuthorIdx >= 0 && targetAuthorIdx < targetAuthors.Count)
+                    {
+                        var targetAuthorName = targetAuthors[targetAuthorIdx];
+                        var newIdx = reconciledAuthors.FindIndex(a =>
+                            string.Equals(a, targetAuthorName, StringComparison.Ordinal));
+                        if (newIdx < 0)
+                        {
+                            newIdx = reconciledAuthors.Count;
+                            reconciledAuthors.Add(targetAuthorName);
+                        }
+                        clonedEntry.SetAttributeValue("authorId", newIdx.ToString());
+                    }
+
+                    reconciledEntries.Add(clonedEntry);
+                }
+            }
+        }
+
+        // Build the reconciled document from the source document's structure.
+        var result = new XDocument(sourceCommentsXml); // deep-clone preserves namespace declarations
+        var resultRoot = result.Root!;
+
+        // Rebuild the <authors> list.
+        var authorsElement = resultRoot.Element(workbookNs + "authors");
+        if (authorsElement is null)
+        {
+            authorsElement = new XElement(workbookNs + "authors");
+            resultRoot.AddFirst(authorsElement);
+        }
+        authorsElement.RemoveNodes();
+        foreach (var authorName in reconciledAuthors)
+            authorsElement.Add(new XElement(workbookNs + "author", authorName));
+
+        // Rebuild the <commentList>.
+        var resultList = resultRoot.Element(workbookNs + "commentList");
+        if (resultList is null)
+        {
+            resultList = new XElement(workbookNs + "commentList");
+            resultRoot.Add(resultList);
+        }
+
+        resultList.RemoveNodes();
+        foreach (var entry in reconciledEntries)
+            resultList.Add(entry); // already deep-cloned above
+
+        return result;
     }
+
+    private static XElement UpdateCommentText(XElement commentElement, string newText, XNamespace workbookNs)
+    {
+        // Simplest safe approach: replace the entire <text> element with a single plain-text run.
+        // This loses rich-text formatting for this specific note, but preserves author and keeps
+        // the entry (so deletion detection still works).
+        var cloned = new XElement(commentElement);
+        var textElement = cloned.Element(workbookNs + "text");
+        if (textElement is not null)
+        {
+            textElement.RemoveNodes();
+            textElement.Add(new XElement(workbookNs + "r",
+                new XElement(workbookNs + "t", newText)));
+        }
+        return cloned;
+    }
+
+    private static string ReadCommentPlainText(XElement commentElement, XNamespace workbookNs) =>
+        string.Concat(commentElement.Element(workbookNs + "text")?
+            .Descendants(workbookNs + "t")
+            .Select(t => t.Value) ?? []);
 
     private static bool TryGetModeledCommentText(Sheet sheet, string reference, out string text)
     {
@@ -187,6 +376,261 @@ internal static class XlsxLegacyCommentPreserver
             packageRelNs,
             targetWorksheetPath,
             sourceVmlPath,
+            VmlDrawingRelationshipType,
+            GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+    }
+
+    /// <summary>
+    /// GAP 4 fix: builds a reconciled VML drawing that preserves the source <c>&lt;v:shape&gt;</c>
+    /// (including style geometry and <c>&lt;x:Visible/&gt;</c>) for every unchanged note, drops
+    /// shapes for deleted notes, and takes ClosedXML's generated shape for new notes.
+    /// Matching is by <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c> (0-based) in ClientData.
+    /// Returns the relationship id of the VML part wired into the target worksheet rels, or
+    /// <c>null</c> if no source VML exists (leave ClosedXML's output untouched).
+    /// </summary>
+    private static string? PreserveReconciledVmlDrawing(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XElement? sourceLegacyDrawing,
+        XNamespace packageRelNs,
+        XNamespace relNs,
+        XDocument targetWorksheetRelsXml,
+        Sheet sheet)
+    {
+        // Resolve source VML path.
+        var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceVmlRelId) ||
+            !TryGetInternalRelationshipTarget(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                sourceVmlRelId,
+                VmlDrawingRelationshipType,
+                packageRelNs,
+                out var sourceVmlPath))
+        {
+            // No source VML — leave ClosedXML's VML untouched, just wire the relationship.
+            return WireTargetVmlRelationship(
+                targetArchive, targetWorksheetPath, targetWorksheetRelsXml, packageRelNs, relNs);
+        }
+
+        var sourceVmlEntry = sourceArchive.GetEntry(sourceVmlPath);
+        if (sourceVmlEntry is null)
+        {
+            return WireTargetVmlRelationship(
+                targetArchive, targetWorksheetPath, targetWorksheetRelsXml, packageRelNs, relNs);
+        }
+
+        // Load source VML as text (VML is not well-formed XML in the XLINQ sense due to namespace
+        // prefix aliases, but in practice Excel writes it as parseable XML). We use XDocument with
+        // explicit namespace resolver. If it fails to parse, fall back to verbatim source copy.
+        XDocument sourceVml;
+        try
+        {
+            using var sourceVmlStream = sourceVmlEntry.Open();
+            sourceVml = XDocument.Load(sourceVmlStream);
+        }
+        catch
+        {
+            // Unparseable VML — fall back to verbatim source copy (old behavior).
+            ReplacePackagePart(targetArchive, sourceVmlEntry, sourceVmlPath);
+            return EnsureSingleRelationshipForPackagePart(
+                targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, sourceVmlPath,
+                VmlDrawingRelationshipType,
+                GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+        }
+
+        // Index source note shapes by 0-based (row, col).
+        var sourceShapesByCell = IndexNoteShapesByCell(sourceVml);
+
+        // Find ClosedXML's generated VML for new notes by scanning ALL VML entries in the target
+        // archive. We cannot rely on the target worksheet rels here because XlsxWorksheetVml
+        // ReferencePreserver may have already updated them to point to the source VML copy.
+        // Instead, collect every distinct VML part from the target archive and merge the shapes
+        // from any that are NOT the source path (i.e. ClosedXML's generated file).
+        var targetShapesByCell = IndexAllTargetNoteShapes(targetArchive, sourceVmlPath);
+
+        // Build reconciled shape list: for each current note address, prefer source shape;
+        // fall back to target shape for new notes (not in source).
+        var reconciledShapes = new List<XElement>(sheet.Comments.Count);
+        foreach (var address in sheet.Comments.Keys)
+        {
+            // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
+            var key = (Row: address.Row - 1, Col: address.Col - 1);
+            if (sourceShapesByCell.TryGetValue(key, out var sourceShape))
+            {
+                reconciledShapes.Add(new XElement(sourceShape)); // deep-clone; preserves geometry + Visible
+            }
+            else if (targetShapesByCell.TryGetValue(key, out var targetShape))
+            {
+                reconciledShapes.Add(new XElement(targetShape)); // deep-clone; new note default geometry
+            }
+            // If neither source nor target has a shape for this address, skip (ClosedXML may not
+            // have generated one yet — the package will still be valid, just missing a box).
+        }
+
+        // Build the reconciled VML document: keep source header boilerplate (shapelayout,
+        // shapetype) and replace note shapes with the reconciled set.
+        var reconciledVml = BuildReconciledVml(sourceVml, reconciledShapes);
+
+        // Write reconciled VML to the target package at the source path.
+        ReplacePackageXmlPart(targetArchive, sourceVmlPath, reconciledVml);
+        return EnsureSingleRelationshipForPackagePart(
+            targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, sourceVmlPath,
+            VmlDrawingRelationshipType,
+            GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+    }
+
+    /// <summary>
+    /// Indexes VML note shapes by their 0-based (row, col) ClientData anchor.
+    /// Only shapes with <c>ObjectType="Note"</c> ClientData are indexed.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), XElement> IndexNoteShapesByCell(XDocument vml)
+    {
+        var result = new Dictionary<(uint Row, uint Col), XElement>();
+        if (vml.Root is null)
+            return result;
+
+        foreach (var shape in vml.Root.Elements(VmlNs + "shape"))
+        {
+            var clientData = shape.Elements(ExcelVmlNs + "ClientData")
+                .FirstOrDefault(cd => string.Equals(
+                    cd.Attribute("ObjectType")?.Value, "Note",
+                    StringComparison.OrdinalIgnoreCase));
+            if (clientData is null)
+                continue;
+
+            var rowText = clientData.Element(ExcelVmlNs + "Row")?.Value;
+            var colText = clientData.Element(ExcelVmlNs + "Column")?.Value;
+            if (!uint.TryParse(rowText, out var row0) || !uint.TryParse(colText, out var col0))
+                continue;
+
+            result[(row0, col0)] = shape;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Scans ALL VML entries in the target archive (except <paramref name="excludeVmlPath"/>, which
+    /// is the source VML already indexed separately) and merges the note shapes found into a single
+    /// lookup. This finds ClosedXML's generated VML regardless of what path it was written to,
+    /// without relying on the worksheet relationship that may have already been updated to point
+    /// to the source VML copy.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), XElement> IndexAllTargetNoteShapes(
+        ZipArchive targetArchive,
+        string excludeVmlPath)
+    {
+        var result = new Dictionary<(uint Row, uint Col), XElement>();
+        foreach (var entry in targetArchive.Entries)
+        {
+            var fullName = XlsxPackagePath.NormalizeEntryPath(entry);
+            if (!fullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                !fullName.EndsWith(".vml", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Skip the source VML we already indexed.
+            if (string.Equals(fullName, excludeVmlPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                XDocument vml;
+                using (var stream = entry.Open())
+                    vml = XDocument.Load(stream);
+
+                foreach (var (key, shape) in IndexNoteShapesByCell(vml))
+                {
+                    // Do not overwrite a shape already found in an earlier VML entry.
+                    if (!result.ContainsKey(key))
+                        result[key] = shape;
+                }
+            }
+            catch
+            {
+                // Unparseable VML — skip.
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a reconciled VML document: copies the source header elements (everything that is
+    /// not a note <c>&lt;v:shape&gt;</c>: the <c>&lt;o:shapelayout&gt;</c> and
+    /// <c>&lt;v:shapetype&gt;</c>) then appends the reconciled note shapes.
+    /// </summary>
+    private static XDocument BuildReconciledVml(XDocument sourceVml, IReadOnlyList<XElement> reconciledShapes)
+    {
+        // Deep-clone the source document to preserve namespace declarations on the root.
+        var result = new XDocument(sourceVml);
+        var root = result.Root!;
+
+        // Remove all existing note shapes (keep non-shape boilerplate: shapelayout, shapetype).
+        foreach (var shape in root.Elements(VmlNs + "shape").ToList())
+        {
+            var hasNoteClientData = shape.Elements(ExcelVmlNs + "ClientData")
+                .Any(cd => string.Equals(
+                    cd.Attribute("ObjectType")?.Value, "Note",
+                    StringComparison.OrdinalIgnoreCase));
+            if (hasNoteClientData)
+                shape.Remove();
+        }
+
+        // Append the reconciled note shapes (already deep-cloned by the caller).
+        foreach (var shape in reconciledShapes)
+            root.Add(shape);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the VML drawing path already present in the target worksheet's relationships,
+    /// returning it if found, or null if the target has no VML part.
+    /// </summary>
+    private static string? GetTargetVmlPath(
+        ZipArchive targetArchive,
+        string targetWorksheetPath,
+        XNamespace packageRelNs,
+        XNamespace relNs)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var relsEntry = targetArchive.GetEntry(relsPath);
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        var vmlRel = relsXml.Root?.Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(r => string.Equals(
+                r.Attribute("Type")?.Value, VmlDrawingRelationshipType,
+                StringComparison.OrdinalIgnoreCase));
+        var target = vmlRel?.Attribute("Target")?.Value;
+        return string.IsNullOrWhiteSpace(target)
+            ? null
+            : XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target);
+    }
+
+    /// <summary>
+    /// Wires the target worksheet's existing VML relationship into <paramref name="targetWorksheetRelsXml"/>
+    /// (ensuring a single relationship entry) and returns the relationship id.
+    /// Used when there is no source VML — we simply ensure ClosedXML's VML stays wired correctly.
+    /// </summary>
+    private static string? WireTargetVmlRelationship(
+        ZipArchive targetArchive,
+        string targetWorksheetPath,
+        XDocument targetWorksheetRelsXml,
+        XNamespace packageRelNs,
+        XNamespace relNs)
+    {
+        var targetVmlPath = GetTargetVmlPath(targetArchive, targetWorksheetPath, packageRelNs, relNs);
+        if (targetVmlPath is null)
+            return null;
+
+        return EnsureSingleRelationshipForPackagePart(
+            targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, targetVmlPath,
             VmlDrawingRelationshipType,
             GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
     }
@@ -422,6 +866,20 @@ internal static class XlsxLegacyCommentPreserver
             .ToDictionary(
                 comment => comment.Attribute("ref")!.Value,
                 comment => string.Concat(comment.Element(workbookNs + "text")?.Descendants(workbookNs + "t").Select(text => text.Value) ?? []),
+                StringComparer.OrdinalIgnoreCase) ?? [];
+    }
+
+    private static Dictionary<string, XElement> ReadLegacyCommentElementsByReference(
+        XDocument commentsXml,
+        XNamespace workbookNs)
+    {
+        return commentsXml.Root?
+            .Element(workbookNs + "commentList")?
+            .Elements(workbookNs + "comment")
+            .Where(comment => !string.IsNullOrWhiteSpace(comment.Attribute("ref")?.Value))
+            .ToDictionary(
+                comment => comment.Attribute("ref")!.Value,
+                comment => comment,
                 StringComparer.OrdinalIgnoreCase) ?? [];
     }
 }

@@ -889,6 +889,9 @@ internal static class Program
             dynamic app = excel;
             app.Visible = true;
             app.DisplayAlerts = false;
+            // xlShowAllComments = -4144: pin all legacy note boxes open in the screenshot.
+            if (options.ShowAllComments)
+                app.DisplayCommentIndicator = -4144;
             workbooks = app.Workbooks;
             workbookObject = ((dynamic)workbooks).Open(Path.GetFullPath(workbookPath), 0);
 
@@ -1877,7 +1880,8 @@ internal sealed record GridImageCompareOptions(
     double ThresholdPercent,
     bool FailOnDimensionMismatch,
     int PixelTolerance,
-    double? StrictPixelThresholdPercent)
+    double? StrictPixelThresholdPercent,
+    bool ShowAllComments)
 {
     public static GridImageCompareOptions Parse(string[] args)
     {
@@ -1890,6 +1894,7 @@ internal sealed record GridImageCompareOptions(
         var failOnDimensionMismatch = false;
         var pixelTolerance = 8;
         double? strictPixelThresholdPercent = null;
+        var showAllComments = false;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -1925,6 +1930,9 @@ internal sealed record GridImageCompareOptions(
                         double.TryParse(args[++index], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedStrictThreshold))
                         strictPixelThresholdPercent = Math.Clamp(parsedStrictThreshold, 0.0, 100.0);
                     break;
+                case "--show-all-comments":
+                    showAllComments = true;
+                    break;
                 default:
                     if (!args[index].StartsWith("-", StringComparison.Ordinal))
                         workbookPath ??= args[index];
@@ -1935,7 +1943,7 @@ internal sealed record GridImageCompareOptions(
         if (pivotSheetRanges)
             pivotRangesOnly = false;
 
-        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, thresholdPercent, failOnDimensionMismatch, pixelTolerance, strictPixelThresholdPercent);
+        return new GridImageCompareOptions(workbookPath, outputDirectory, exportExcelPngs, pivotRangesOnly, pivotSheetRanges, thresholdPercent, failOnDimensionMismatch, pixelTolerance, strictPixelThresholdPercent, showAllComments);
     }
 }
 

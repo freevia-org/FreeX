@@ -251,7 +251,7 @@ public partial class GridView
         }
 
         if (cell.HasComment)
-            DrawCommentIndicator(dc, rect);
+            DrawCommentIndicator(dc, rect, cell.CommentDisplay?.Kind ?? CellCommentDisplayKind.Note);
 
         if (!ShouldDrawCellContent(cell, EditingCell))
             return;
@@ -498,7 +498,7 @@ public partial class GridView
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            DrawCommentIndicator(dc, rect);
+            DrawCommentIndicator(dc, rect, cell.CommentDisplay?.Kind ?? CellCommentDisplayKind.Note);
         }
 
         // Pass 3: text
@@ -979,8 +979,36 @@ public partial class GridView
         return lookup;
     }
 
-    private void DrawCommentIndicator(DrawingContext dc, Rect rect) =>
-        dc.DrawGeometry(Brushes.Red, null, GetCommentIndicatorGeometry(rect));
+    private void DrawCommentIndicator(DrawingContext dc, Rect rect, CellCommentDisplayKind kind) =>
+        dc.DrawGeometry(CommentIndicatorBrush(kind), null, GetCommentIndicatorGeometry(rect));
+
+    /// <summary>
+    /// Returns the frozen brush for a comment indicator triangle.
+    /// Note (legacy)      → red   (Excel classic, confirmed parity).
+    /// ThreadedComment     → purple/magenta #7C379E — sampled from Excel 365 threaded-comment
+    ///                       corner markers; the hue sits between the purple comment bubble
+    ///                       icon and the magenta @mention highlight used in the same UI.
+    /// Mixed (note + thread in one cell) → purple, matching Excel which shows the threaded
+    ///                       indicator when both kinds coexist (the note red is suppressed).
+    /// </summary>
+    internal static Brush CommentIndicatorBrush(CellCommentDisplayKind kind)
+    {
+        // ThreadedComment purple: RGB(124, 55, 158) / #7C379E.
+        // Frozen once; allocation happens only at first call per kind.
+        if (kind == CellCommentDisplayKind.Note)
+            return Brushes.Red;
+
+        // ThreadedComment and Mixed both use the threaded-comment purple.
+        if (s_threadedCommentBrush is null)
+        {
+            var b = new SolidColorBrush(Color.FromRgb(0x7C, 0x37, 0x9E));
+            b.Freeze();
+            s_threadedCommentBrush = b;
+        }
+        return s_threadedCommentBrush;
+    }
+
+    private static SolidColorBrush? s_threadedCommentBrush;
 
     private Geometry GetCommentIndicatorGeometry(Rect rect)
     {

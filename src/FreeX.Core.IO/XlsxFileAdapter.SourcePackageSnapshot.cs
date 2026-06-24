@@ -272,9 +272,34 @@ public sealed partial class XlsxFileAdapter
         }
 
         WriteStyleOnlyFingerprint(workbook, stream);
+        // GAP 2: include legacy comment authors so that an author-only change is detected by the
+        // fingerprint comparison and the source-copy path is NOT taken (which would silently
+        // preserve the old author).
+        WriteLegacyCommentAuthorFingerprint(workbook, stream);
         stream.Flush();
         cryptoStream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
+    }
+
+    private static void WriteLegacyCommentAuthorFingerprint(Workbook workbook, Stream stream)
+    {
+        WriteFingerprintToken(stream, "\nfreex-legacy-comment-author-fingerprint-v1\n");
+        WriteFingerprintNumber(stream, workbook.Sheets.Count);
+        foreach (var sheet in workbook.Sheets)
+        {
+            WriteFingerprintToken(stream, "\nsheet:");
+            WriteFingerprintString(stream, sheet.Name);
+            WriteFingerprintNumber(stream, sheet.CommentAuthors.Count);
+            // Sort by address for a deterministic hash regardless of insertion order.
+            foreach (var (address, author) in sheet.CommentAuthors.OrderBy(p => p.Key))
+            {
+                WriteFingerprintNumber(stream, address.Row);
+                WriteFingerprintToken(stream, ",");
+                WriteFingerprintNumber(stream, address.Col);
+                WriteFingerprintToken(stream, ":");
+                WriteFingerprintString(stream, author);
+            }
+        }
     }
 
     private static void WriteCellStyleFingerprint(Workbook workbook, Stream stream)
@@ -8253,6 +8278,14 @@ public sealed partial class XlsxFileAdapter
                 {
                     return false;
                 }
+
+                // GAP 2: an author-only change must also be detected so the full-save path
+                // (which preserves the author, post GAP-1) is invoked rather than the patch
+                // path (which only patches comment text and ignores authors).
+                var baselineAuthor = Authors.TryGetValue(address, out var a) ? a : string.Empty;
+                var currentAuthor = current.Authors.TryGetValue(address, out var ca) ? ca : string.Empty;
+                if (!string.Equals(baselineAuthor, currentAuthor, StringComparison.Ordinal))
+                    return false;
             }
 
             return true;

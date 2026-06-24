@@ -340,6 +340,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelCommentCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelCommentCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-comments")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel/FreeX-authored comment corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
