@@ -40,7 +40,9 @@ public sealed record StructuredTableColumnModel(
     string? CalculatedColumnFormula = null,
     string? TotalsRowFormula = null,
     IReadOnlyList<string>? NativeChildXmls = null,
-    IReadOnlyDictionary<string, string>? NativeAttributes = null);
+    IReadOnlyDictionary<string, string>? NativeAttributes = null,
+    bool IsCalculatedColumnFormulaArray = false,
+    bool IsTotalsRowFormulaArray = false);
 
 public sealed record StructuredTableFilterColumnModel
 {

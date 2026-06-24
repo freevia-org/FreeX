@@ -134,7 +134,8 @@ public sealed record StructuredTableStyleBanding(
     CellColor OddRowFill,
     CellColor EvenRowFill,
     CellColor HeaderFontColor,
-    CellColor? BodyFill = null)
+    CellColor? BodyFill = null,
+    CellColor? Border = null)
 {
     public CellColor EffectiveBodyFill => BodyFill ?? CellColor.White;
 
@@ -316,6 +317,11 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         var dataStartRow = table.Range.Start.Row + (hasHeaderRow ? 1u : 0u);
         var dataEndRow = table.Range.End.Row - (hasTotalsRow && table.Range.End.Row > table.Range.Start.Row ? 1u : 0u);
 
+        // Precompute border StyleDiff fragments for reuse across all cells.
+        var bodyBorderDiff = _banding.Border is { } borderColor
+            ? new CellBorder(BorderStyle.Thin, borderColor)
+            : (CellBorder?)null;
+
         if (hasHeaderRow)
         {
             yield return CreateRangeStyleCommand(
@@ -323,7 +329,11 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
                 table.Range.Start.Col,
                 table.Range.Start.Row,
                 table.Range.End.Col,
-                new StyleDiff(FillColor: _banding.HeaderFill, FontColor: _banding.HeaderFontColor, Bold: true));
+                new StyleDiff(
+                    FillColor: _banding.HeaderFill,
+                    FontColor: _banding.HeaderFontColor,
+                    Bold: true,
+                    BorderBottom: bodyBorderDiff));
         }
 
         if (dataStartRow <= dataEndRow)
@@ -339,7 +349,14 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
                     table.Range.Start.Col,
                     row,
                     table.Range.End.Col,
-                    new StyleDiff(FillColor: fill, FontColor: CellColor.Black, Bold: false));
+                    new StyleDiff(
+                        FillColor: fill,
+                        FontColor: CellColor.Black,
+                        Bold: false,
+                        BorderTop: bodyBorderDiff,
+                        BorderRight: bodyBorderDiff,
+                        BorderBottom: bodyBorderDiff,
+                        BorderLeft: bodyBorderDiff));
             }
 
             if (table.ShowColumnStripes)
@@ -353,7 +370,12 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
                         col,
                         dataEndRow,
                         col,
-                        new StyleDiff(FillColor: fill));
+                        new StyleDiff(
+                            FillColor: fill,
+                            BorderTop: bodyBorderDiff,
+                            BorderRight: bodyBorderDiff,
+                            BorderBottom: bodyBorderDiff,
+                            BorderLeft: bodyBorderDiff));
                 }
             }
         }
@@ -365,7 +387,10 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
                 table.Range.Start.Col,
                 table.Range.End.Row,
                 table.Range.End.Col,
-                new StyleDiff(FillColor: _banding.HeaderFill, FontColor: _banding.HeaderFontColor, Bold: true));
+                new StyleDiff(
+                    FillColor: _banding.EffectiveBodyFill,
+                    Bold: true,
+                    BorderTop: bodyBorderDiff));
         }
 
         if (table.ShowFirstColumn)

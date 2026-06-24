@@ -193,10 +193,16 @@ internal static class XlsxStructuredTableWriter
             string.IsNullOrWhiteSpace(column.TotalsRowFunction) ? null : new XAttribute("totalsRowFunction", column.TotalsRowFunction),
             string.IsNullOrWhiteSpace(column.CalculatedColumnFormula)
                 ? null
-                : new XElement(workbookNs + "calculatedColumnFormula", column.CalculatedColumnFormula),
+                : new XElement(
+                    workbookNs + "calculatedColumnFormula",
+                    column.IsCalculatedColumnFormulaArray ? new XAttribute("array", "1") : null,
+                    column.CalculatedColumnFormula),
             string.IsNullOrWhiteSpace(column.TotalsRowFormula)
                 ? null
-                : new XElement(workbookNs + "totalsRowFormula", column.TotalsRowFormula));
+                : new XElement(
+                    workbookNs + "totalsRowFormula",
+                    column.IsTotalsRowFormulaArray ? new XAttribute("array", "1") : null,
+                    column.TotalsRowFormula));
 
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, column.NativeAttributes);
 

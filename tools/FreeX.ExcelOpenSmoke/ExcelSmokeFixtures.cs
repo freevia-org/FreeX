@@ -136,6 +136,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_table_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeTableCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -3061,4 +3067,287 @@ internal static class ExcelSmokeFixtures
         }
         Console.WriteLine($"Generated: {outputPath}");
     }
+
+    // =========================================================================
+    // Structured Table (ListObject) corpus fixtures
+    // =========================================================================
+
+    // XlTotalsCalculation enum values
+    private const int XlTotalsCalculationNone = 0;
+    private const int XlTotalsCalculationSum = 2;
+
+    /// <summary>Returns the output paths for all eight table corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelTableCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_table_medium2_rowstripes_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_light1_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_totals_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_colstripes_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_firstlast_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_dark1_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_light8_007.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_table_allfeatures_008.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for structured-table corpus fixtures.</summary>
+    private static void GenerateExcelNativeTableCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("medium2_rowstripes_001", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_Medium2RowStripes(workbooks, outputPath);
+        else if (fileName.Contains("light1_002", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_Light1(workbooks, outputPath);
+        else if (fileName.Contains("totals_003", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_Totals(workbooks, outputPath);
+        else if (fileName.Contains("colstripes_004", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_ColStripes(workbooks, outputPath);
+        else if (fileName.Contains("firstlast_005", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_FirstLast(workbooks, outputPath);
+        else if (fileName.Contains("dark1_006", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_Dark1(workbooks, outputPath);
+        else if (fileName.Contains("light8_007", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_Light8(workbooks, outputPath);
+        else if (fileName.Contains("allfeatures_008", StringComparison.OrdinalIgnoreCase))
+            GenerateTableFixture_AllFeatures(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown table corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared helpers for table fixtures
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Populates a header row + 8 data rows across 4 columns (A:D).
+    /// Layout:  Product | Q1 | Q2 | Q3
+    ///          rows 2-9 with product labels and numeric sales data.
+    /// </summary>
+    private static void PopulateTableData(object worksheet)
+    {
+        // Header row
+        SetExcelCellValue(worksheet, 1, 1, "Product");
+        SetExcelCellValue(worksheet, 1, 2, "Q1");
+        SetExcelCellValue(worksheet, 1, 3, "Q2");
+        SetExcelCellValue(worksheet, 1, 4, "Q3");
+
+        // Data rows
+        string[] products = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta"];
+        double[] q1 = [1200, 850, 2300, 470, 3100, 620, 1800, 940];
+        double[] q2 = [1450, 920, 2100, 510, 2900, 680, 1950, 870];
+        double[] q3 = [1380, 990, 2450, 490, 3200, 750, 2050, 1010];
+
+        for (var i = 0; i < 8; i++)
+        {
+            SetExcelCellValue(worksheet, i + 2, 1, products[i]);
+            SetExcelCellValue(worksheet, i + 2, 2, q1[i]);
+            SetExcelCellValue(worksheet, i + 2, 3, q2[i]);
+            SetExcelCellValue(worksheet, i + 2, 4, q3[i]);
+        }
+    }
+
+    /// <summary>
+    /// Creates a ListObject over A1:D9, applies the given style and flags,
+    /// saves, and releases all COM objects.
+    /// </summary>
+    private static void GenerateTableFixtureCore(
+        dynamic workbooks,
+        string outputPath,
+        string sheetName,
+        string tableName,
+        string tableStyle,
+        bool showRowStripes,
+        bool showColumnStripes,
+        bool showFirstColumn,
+        bool showLastColumn,
+        bool showTotals,
+        bool addSumOnNumericColumns)
+    {
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? listObjects = null;
+        object? table = null;
+        object? listColumns = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = sheetName;
+
+            PopulateTableData(worksheet);
+
+            range = ((dynamic)worksheet).Range("A1:D9");
+            listObjects = ((dynamic)worksheet).ListObjects;
+            table = ((dynamic)listObjects).Add(XlSrcRange, range, Missing.Value, XlYes);
+
+            ((dynamic)table).Name = tableName;
+            ((dynamic)table).TableStyle = tableStyle;
+            ((dynamic)table).ShowTableStyleRowStripes = showRowStripes;
+            ((dynamic)table).ShowTableStyleColumnStripes = showColumnStripes;
+            ((dynamic)table).ShowTableStyleFirstColumn = showFirstColumn;
+            ((dynamic)table).ShowTableStyleLastColumn = showLastColumn;
+
+            if (showTotals)
+            {
+                ((dynamic)table).ShowTotals = true;
+
+                if (addSumOnNumericColumns)
+                {
+                    listColumns = ((dynamic)table).ListColumns;
+                    // Columns 2, 3, 4 are Q1/Q2/Q3 — apply Sum totals calculation
+                    for (var colIdx = 2; colIdx <= 4; colIdx++)
+                    {
+                        object? col = null;
+                        try
+                        {
+                            col = ((dynamic)listColumns)[colIdx];
+                            ((dynamic)col).TotalsCalculation = XlTotalsCalculationSum;
+                        }
+                        finally
+                        {
+                            ReleaseComObject(col);
+                        }
+                    }
+                }
+            }
+
+            AutoFitExcelColumns(worksheet, "A:D");
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(listColumns);
+            ReleaseComObject(table);
+            ReleaseComObject(listObjects);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — TableStyleMedium2, row stripes ON (most-common; Office-theme accent color bug)
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_Medium2RowStripes(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_Medium2_RowStripes",
+            tableStyle: "TableStyleMedium2",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 002 — TableStyleLight1 (grey), row stripes
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_Light1(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_Light1",
+            tableStyle: "TableStyleLight1",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 003 — TableStyleMedium2, ShowTotals=true with Sum on Q1/Q2/Q3
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_Totals(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_Totals",
+            tableStyle: "TableStyleMedium2",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: true,
+            addSumOnNumericColumns: true);
+
+    // -------------------------------------------------------------------------
+    // case 004 — TableStyleMedium2, row stripes OFF, column stripes ON
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_ColStripes(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_ColStripes",
+            tableStyle: "TableStyleMedium2",
+            showRowStripes: false,
+            showColumnStripes: true,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 005 — TableStyleMedium2, row stripes + first column + last column emphasis
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_FirstLast(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_FirstLast",
+            tableStyle: "TableStyleMedium2",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: true,
+            showLastColumn: true,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 006 — TableStyleDark1
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_Dark1(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_Dark1",
+            tableStyle: "TableStyleDark1",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 007 — TableStyleLight8 (black-header light style)
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_Light8(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_Light8",
+            tableStyle: "TableStyleLight8",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: false,
+            showLastColumn: false,
+            showTotals: false,
+            addSumOnNumericColumns: false);
+
+    // -------------------------------------------------------------------------
+    // case 008 — TableStyleMedium4 (green), ShowTotals + row stripes + first + last column
+    // -------------------------------------------------------------------------
+    private static void GenerateTableFixture_AllFeatures(dynamic workbooks, string outputPath) =>
+        GenerateTableFixtureCore(workbooks, outputPath,
+            sheetName: "TableData",
+            tableName: "Table_AllFeatures",
+            tableStyle: "TableStyleMedium4",
+            showRowStripes: true,
+            showColumnStripes: false,
+            showFirstColumn: true,
+            showLastColumn: true,
+            showTotals: true,
+            addSumOnNumericColumns: true);
 }

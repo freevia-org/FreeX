@@ -63,9 +63,10 @@ public sealed partial class StructuredTableCommandTests
         stripedColumnStyle.Bold.Should().BeFalse();
         wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 2, 3))!.StyleId)
             .Bold.Should().BeTrue();
+        // Totals row: bold + effective body fill (white when BodyFill is null), NOT the header fill.
+        // This matches both the load path (StructuredTableStyleService) and Excel's real render.
         var totalsStyle = wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 5, 2))!.StyleId);
-        totalsStyle.FillColor.Should().Be(new CellColor(31, 78, 121));
-        totalsStyle.FontColor.Should().Be(CellColor.White);
+        totalsStyle.FillColor.Should().Be(CellColor.White, "totals row gets effective body fill, not header fill");
         totalsStyle.Bold.Should().BeTrue();
 
         command.Revert(ctx);

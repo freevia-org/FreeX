@@ -87,6 +87,217 @@ public sealed class StructuredTableStyleServiceTests
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeFalse();
     }
 
+    // ── Column-stripe tests ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// When ShowColumnStripes=true (and ShowRowStripes=false) the load-time materializer must paint
+    /// vertical column bands, mirroring StructuredTableCommand.BuildStyleCommands.  Column 1 (offset 0)
+    /// gets the even fill, column 2 (offset 1) gets the odd fill.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_PaintsColumnStripesWhenShowColumnStripesTrue()
+    {
+        var workbook = new Workbook("ColumnStripes");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = false,
+            ShowColumnStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        // Seed a third column of data
+        for (var r = 1u; r <= 4u; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 3), new NumberValue(r));
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+
+        // Data rows: col 1 (offset 0) → even fill; col 2 (offset 1) → odd fill; col 3 (offset 2) → even fill
+        for (var row = 2u; row <= 4u; row++)
+        {
+            StyleAt(workbook, sheet, row, 1).FillColor.Should().Be(banding.EvenRowFill, $"col 1 row {row} should be even (offset 0)");
+            StyleAt(workbook, sheet, row, 2).FillColor.Should().Be(banding.OddRowFill,  $"col 2 row {row} should be odd (offset 1)");
+            StyleAt(workbook, sheet, row, 3).FillColor.Should().Be(banding.EvenRowFill, $"col 3 row {row} should be even (offset 2)");
+        }
+    }
+
+    // ── First/last column bold tests ────────────────────────────────────────
+
+    [Fact]
+    public void ApplyLoadedTableStyles_BoldsFirstAndLastColumnWhenFlagsSet()
+    {
+        var workbook = new Workbook("FirstLastCol");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        // Seed a third column
+        for (var r = 1u; r <= 4u; r++)
+            sheet.SetCell(new CellAddress(sheet.Id, r, 3), new NumberValue(r));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            ShowFirstColumn = true,
+            ShowLastColumn = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        // Every row of the first column must be bold.
+        for (var row = 1u; row <= 4u; row++)
+            StyleAt(workbook, sheet, row, 1).Bold.Should().BeTrue($"first column row {row} must be bold");
+
+        // Every row of the last column must be bold.
+        for (var row = 1u; row <= 4u; row++)
+            StyleAt(workbook, sheet, row, 3).Bold.Should().BeTrue($"last column row {row} must be bold");
+
+        // The middle column must NOT have bold added by first/last emphasis.
+        StyleAt(workbook, sheet, 2, 2).Bold.Should().NotBe(true, "middle column must not be bolded by first/last emphasis");
+    }
+
+    // ── Border tests ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// TableStyleMedium2 (and other medium-family styles) include interior thin borders on every cell
+    /// in the data body, a bottom border on the header row, and a top border on the totals row.  This
+    /// mirrors Excel's built-in table border rendering and the Wave B borders requirement.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_Medium2_AppliesBodyBordersHeaderBottomAndTotalsTop()
+    {
+        var workbook = new Workbook("Borders");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+        // Row 5 is the totals row.
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(60));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
+            HeaderRowCount = 1,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+        banding.Border.Should().NotBeNull("TableStyleMedium2 is a medium-family style and must supply a border color");
+
+        // Header row: bottom border is set (separator between header and data body).
+        var headerStyle = StyleAt(workbook, sheet, 1, 1);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin, "header must have a thin bottom border");
+        headerStyle.BorderBottom.Color.Should().Be(banding.Border!.Value, "header bottom border color must match resolved border color");
+        headerStyle.BorderTop.Style.Should().Be(BorderStyle.None, "header must NOT have a top border");
+
+        // Data body cells: all four sides are bordered.
+        var bodyStyle = StyleAt(workbook, sheet, 2, 1);
+        bodyStyle.BorderTop.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin top border");
+        bodyStyle.BorderBottom.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin bottom border");
+        bodyStyle.BorderLeft.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin left border");
+        bodyStyle.BorderRight.Style.Should().Be(BorderStyle.Thin, "body cell must have a thin right border");
+        bodyStyle.BorderTop.Color.Should().Be(banding.Border!.Value, "body border color must match resolved border color");
+
+        // Totals row: top border only (separator above totals, distinct from header bottom).
+        var totalsStyle = StyleAt(workbook, sheet, 5, 1);
+        totalsStyle.BorderTop.Style.Should().Be(BorderStyle.Thin, "totals row must have a thin top border");
+        totalsStyle.BorderTop.Color.Should().Be(banding.Border!.Value, "totals top border color must match resolved border color");
+        totalsStyle.BorderBottom.Style.Should().Be(BorderStyle.None, "totals row must NOT have a bottom border");
+    }
+
+    /// <summary>
+    /// Light-family table styles (e.g. TableStyleLight1) do not draw interior borders in Excel.
+    /// The resolver returns Border=null for these styles, and no borders should be applied.
+    /// </summary>
+    [Fact]
+    public void ApplyLoadedTableStyles_Light1_DoesNotApplyBorders()
+    {
+        var workbook = new Workbook("NoBorders");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 2);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1,
+            StyleName = "TableStyleLight1",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleLight1", workbook.Theme);
+        banding.Border.Should().BeNull("TableStyleLight1 is a light-family style with no interior borders");
+
+        // No borders should be applied on any cell.
+        var headerStyle = StyleAt(workbook, sheet, 1, 1);
+        headerStyle.BorderBottom.Style.Should().Be(BorderStyle.None, "light style must have no header bottom border");
+        var bodyStyle = StyleAt(workbook, sheet, 2, 1);
+        bodyStyle.BorderTop.Style.Should().Be(BorderStyle.None, "light style must have no body border");
+    }
+
+    // ── Totals-row regression: must not use header fill ─────────────────────
+
+    [Fact]
+    public void ApplyLoadedTableStyles_TotalsRowGetsBodyFillNotHeaderFill()
+    {
+        var workbook = new Workbook("TotalsRow");
+        var sheet = workbook.AddSheet("Data");
+        SeedTable(sheet, rowCount: 3);
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
+            HeaderRowCount = 1,
+            TotalsRowShown = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        sheet.StructuredTables.Add(table);
+
+        StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
+
+        var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
+
+        // The totals row (row 5) must NOT carry the header fill.
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().NotBe(banding.HeaderFill,
+            "totals row must not be painted with the header fill");
+
+        // The header row (row 1) must still have the header fill.
+        StyleAt(workbook, sheet, 1, 1).FillColor.Should().Be(banding.HeaderFill,
+            "header row must still carry the header fill");
+    }
+
     private static bool AnyHeaderFill(Workbook workbook, Sheet sheet)
     {
         for (var col = 1u; col <= 2u; col++)
