@@ -82,7 +82,7 @@ public sealed class TimelineLayoutBuilderTests
 
     [Theory]
     [InlineData(TimelineGranularity.Day, "2024-03-15", "2024-03-15")]
-    [InlineData(TimelineGranularity.Month, "2024-03-15", "2024-03")]
+    [InlineData(TimelineGranularity.Month, "2024-03-15", "Mar 2024")]
     [InlineData(TimelineGranularity.Quarter, "2024-03-15", "2024-Q1")]
     [InlineData(TimelineGranularity.Quarter, "2024-11-15", "2024-Q4")]
     [InlineData(TimelineGranularity.Year, "2024-03-15", "2024")]
@@ -104,8 +104,9 @@ public sealed class TimelineLayoutBuilderTests
     {
         var timeline = Timeline(selStart: "2024-01-01", selEnd: "2024-06-30");
 
+        // Month granularity uses Excel's abbreviated format: "Jan – Jun 2024" (same year).
         TimelineLayoutBuilder.FormatDateLabel(timeline, TimelineGranularity.Month)
-            .Should().Be("2024-01 - 2024-06");
+            .Should().Be("Jan – Jun 2024");
     }
 
     [Fact]
@@ -205,5 +206,100 @@ public sealed class TimelineLayoutBuilderTests
 
         var shapeOnly = new TimelineModel { DrawingShapeName = "Shape 7" };
         TimelineLayoutBuilder.Build(shapeOnly, Bounds).Caption.Should().Be("Shape 7");
+    }
+
+    // --- Structural rows (year banner, tick labels, scrollbar) ---
+
+    // Tall bounds trigger the structural layout: year banner, tick labels, scrollbar all appear.
+    private static readonly LayoutRect TallBounds = new(40, 20, 200, 110);
+
+    [Fact]
+    public void Build_TallBounds_StructuralRowsArePresent()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), TallBounds);
+
+        // Year banner at top+34, height=13
+        layout.YearBannerRect.Top.Should().Be(TallBounds.Top + 34);
+        layout.YearBannerRect.Height.Should().Be(13);
+
+        // Tick labels at top+48, height=12
+        layout.TickLabelRect.Top.Should().Be(TallBounds.Top + 48);
+        layout.TickLabelRect.Height.Should().Be(12);
+
+        // Track at top+62
+        layout.TrackRect.Top.Should().Be(TallBounds.Top + 62);
+        layout.TrackRect.Height.Should().BeGreaterThanOrEqualTo(6);
+
+        // Scrollbar at the very bottom (height=13)
+        layout.ScrollbarRect.Height.Should().Be(13);
+        layout.ScrollbarRect.Bottom.Should().BeApproximately(TallBounds.Bottom, 1e-9);
+    }
+
+    [Fact]
+    public void Build_ShortBounds_StructuralRowsCollapse()
+    {
+        // 80px is below the 85px structural threshold → compact fallback
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        layout.YearBannerRect.Height.Should().Be(0);
+        layout.TickLabelRect.Height.Should().Be(0);
+        layout.ScrollbarRect.Height.Should().Be(0);
+        // Track falls back to old compact position (top+34)
+        layout.TrackRect.Top.Should().Be(Bounds.Top + 34);
+    }
+
+    [Fact]
+    public void GetTickLabels_Month_EnumeratesAllMonthsInRange()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), TallBounds);
+        var ticks = TimelineLayoutBuilder.GetTickLabels(layout);
+
+        // Full year 2024-01-01 to 2024-12-31 = 12 months
+        ticks.Should().HaveCount(12);
+        ticks[0].Label.Should().Be("JAN");
+        ticks[11].Label.Should().Be("DEC");
+    }
+
+    [Fact]
+    public void GetTickLabels_CenterXAlignedWithDateMapping()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), TallBounds);
+        var ticks = TimelineLayoutBuilder.GetTickLabels(layout);
+
+        // January's center should be near the track's left quarter
+        var janCenter = ticks[0].CenterX;
+        janCenter.Should().BeGreaterThan(layout.TrackRect.Left);
+        janCenter.Should().BeLessThan(layout.TrackRect.Left + layout.TrackRect.Width * 0.25);
+    }
+
+    [Fact]
+    public void GetYearBannerSpans_SingleYear_CoversFullTrack()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), TallBounds);
+        var spans = TimelineLayoutBuilder.GetYearBannerSpans(layout);
+
+        spans.Should().HaveCount(1);
+        spans[0].Year.Should().Be(2024);
+        spans[0].StartX.Should().BeApproximately(layout.TrackRect.Left, 1e-6);
+        spans[0].SpanWidth.Should().BeApproximately(layout.TrackRect.Width, 1e-3);
+    }
+
+    [Fact]
+    public void GetYearBannerSpans_MultiYear_SplitsAtYearBoundary()
+    {
+        var multiYear = new TimelineModel
+        {
+            Name = "T",
+            StartDate = "2023-07-01",
+            EndDate = "2024-06-30"
+        };
+        var layout = TimelineLayoutBuilder.Build(multiYear, TallBounds);
+        var spans = TimelineLayoutBuilder.GetYearBannerSpans(layout);
+
+        spans.Should().HaveCount(2);
+        spans[0].Year.Should().Be(2023);
+        spans[1].Year.Should().Be(2024);
+        // The two spans should together span the full track width.
+        (spans[0].SpanWidth + spans[1].SpanWidth).Should().BeApproximately(layout.TrackRect.Width, 1.0);
     }
 }

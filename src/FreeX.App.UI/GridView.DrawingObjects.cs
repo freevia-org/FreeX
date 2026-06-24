@@ -718,6 +718,12 @@ public partial class GridView
         var headerBrush = GetDrawingObjectBrush(255, style.Header);
         var headerTextBrush = GetDrawingObjectBrush(255, style.HeaderText);
 
+        // Muted dark brush for year banner and tick labels (Excel uses a dark-grey, ~RGB 64,64,64).
+        var tickLabelBrush = GetDrawingObjectBrush(255, new CellColor(64, 64, 64));
+        // Scrollbar colors: light grey fill with darker arrow boxes, matching Excel.
+        var scrollbarFillBrush = GetDrawingObjectBrush(255, new CellColor(230, 230, 230));
+        var scrollbarArrowBrush = GetDrawingObjectBrush(255, new CellColor(198, 198, 198));
+
         // Light2–6 use a white header with a bold dark caption; Light1 uses the grey-filled header.
         var isAccentStyle = style.Header == CellColor.White;
 
@@ -738,6 +744,9 @@ public partial class GridView
             hasHeader: true,
             boldHeader: isAccentStyle);
 
+        // Granularity label in the header top-right area (e.g. "MONTHS ▾"), left of the clear icon.
+        DrawTimelineGranularityLabel(dc, rect, layout, headerTextBrush, pixelsPerDip);
+
         // Draw the clear-filter (×) glyph top-right of the header when an active filter exists.
         if (layout.HasActiveFilter)
         {
@@ -754,10 +763,119 @@ public partial class GridView
 
         // Summary date label — accent color and bold so it reads clearly against the white body.
         DrawClippedText(dc, layout.DateLabel, ToRect(layout.DateLabelRect), summaryLabelBrush, 9, verticalPadding: 0, pixelsPerDip, isBold: isAccentStyle);
+
+        // Year banner — show year label(s) above the tick row, left-aligned at each year's start x.
+        if (layout.YearBannerRect.Height > 0)
+            DrawTimelineYearBanner(dc, layout, tickLabelBrush, pixelsPerDip);
+
+        // Period tick labels — one per period (month/year/quarter/day) across the track.
+        if (layout.TickLabelRect.Height > 0)
+            DrawTimelineTickLabels(dc, layout, tickLabelBrush, pixelsPerDip);
+
         dc.DrawRoundedRectangle(trackBrush, null, ToRect(layout.TrackRect), 3, 3);
         dc.DrawRoundedRectangle(selectionBandBrush, null, ToRect(layout.SelectionRect), 3, 3);
         DrawTimelineHandle(dc, layout.StartHandle);
         DrawTimelineHandle(dc, layout.EndHandle);
+
+        // Scrollbar strip at the bottom.
+        if (layout.ScrollbarRect.Height > 0)
+            DrawTimelineScrollbar(dc, layout, scrollbarFillBrush, scrollbarArrowBrush);
+    }
+
+    // Renders the "MONTHS ▾" granularity label in the header top-right, to the left of the clear icon.
+    private void DrawTimelineGranularityLabel(
+        DrawingContext dc,
+        Rect rect,
+        TimelineLayoutModel layout,
+        Brush brush,
+        double pixelsPerDip)
+    {
+        var granLabel = layout.Granularity switch
+        {
+            TimelineGranularity.Year => "YEARS ▾",
+            TimelineGranularity.Quarter => "QUARTERS ▾",
+            TimelineGranularity.Month => "MONTHS ▾",
+            _ => "DAYS ▾"
+        };
+
+        var headerHeight = Math.Min(22, rect.Height);
+        // Reserve space for the clear icon (~18px) and place the label to its left.
+        const double clearIconReserve = 18;
+        const double labelWidth = 72;
+        const double rightMargin = 4;
+        var labelRect = new Rect(
+            rect.Right - clearIconReserve - labelWidth - rightMargin,
+            rect.Top + (headerHeight - 10) / 2,
+            labelWidth,
+            10);
+        if (labelRect.Left < rect.Left + 5 || labelRect.Width < 20)
+            return;
+
+        DrawClippedText(dc, granLabel, labelRect, brush, 7.5, verticalPadding: 0, pixelsPerDip);
+    }
+
+    // Renders the year banner row — "2026" left-aligned at the start of each year's track span.
+    private void DrawTimelineYearBanner(
+        DrawingContext dc,
+        TimelineLayoutModel layout,
+        Brush brush,
+        double pixelsPerDip)
+    {
+        var spans = TimelineLayoutBuilder.GetYearBannerSpans(layout);
+        foreach (var (year, startX, spanWidth) in spans)
+        {
+            if (spanWidth < 4)
+                continue;
+            var labelRect = new Rect(startX, layout.YearBannerRect.Top, spanWidth, layout.YearBannerRect.Height);
+            DrawClippedText(dc, year.ToString(CultureInfo.InvariantCulture), labelRect, brush, 9, verticalPadding: 0, pixelsPerDip, isBold: true);
+        }
+    }
+
+    // Renders period tick labels (JAN, FEB, … or Q1, Q2, … or year numbers) centered at each period.
+    private void DrawTimelineTickLabels(
+        DrawingContext dc,
+        TimelineLayoutModel layout,
+        Brush brush,
+        double pixelsPerDip)
+    {
+        var ticks = TimelineLayoutBuilder.GetTickLabels(layout);
+        // Estimate label width to avoid overdrawing when ticks are dense.
+        // Each tick label gets at most (trackWidth / tickCount) px, capped to 40px.
+        var maxLabelWidth = ticks.Count > 0
+            ? Math.Min(40, layout.TrackRect.Width / ticks.Count)
+            : 40;
+        if (maxLabelWidth < 6)
+            return;
+
+        foreach (var (label, centerX) in ticks)
+        {
+            var labelLeft = centerX - maxLabelWidth / 2;
+            var labelRect = new Rect(labelLeft, layout.TickLabelRect.Top, maxLabelWidth, layout.TickLabelRect.Height);
+            DrawClippedText(dc, label, labelRect, brush, 8, verticalPadding: 0, pixelsPerDip);
+        }
+    }
+
+    // Renders a static horizontal scrollbar strip at the bottom of the timeline widget.
+    private static void DrawTimelineScrollbar(
+        DrawingContext dc,
+        TimelineLayoutModel layout,
+        Brush fillBrush,
+        Brush arrowBrush)
+    {
+        var sbRect = ToRect(layout.ScrollbarRect);
+        // Full strip background
+        dc.DrawRectangle(fillBrush, null, sbRect);
+
+        // Left ◄ arrow box
+        const double arrowBoxWidth = 14;
+        if (sbRect.Width > arrowBoxWidth * 2 + 4)
+        {
+            var leftArrowRect = new Rect(sbRect.Left, sbRect.Top, arrowBoxWidth, sbRect.Height);
+            dc.DrawRectangle(arrowBrush, null, leftArrowRect);
+
+            var rightArrowRect = new Rect(sbRect.Right - arrowBoxWidth, sbRect.Top, arrowBoxWidth, sbRect.Height);
+            dc.DrawRectangle(arrowBrush, null, rightArrowRect);
+        }
     }
 
     private void DrawTimelineHandle(DrawingContext dc, TimelineHandleLayout handle)

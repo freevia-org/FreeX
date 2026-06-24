@@ -44,10 +44,11 @@ public readonly record struct TimelineHitResult(TimelineHitKind Kind, DateOnly? 
 
 /// <summary>
 /// The portable, framework-free layout of a timeline filter inside a bounds rectangle. Carries the
-/// header bar, the date label rectangle and text, the range-bar (track) rectangle, the selection
-/// overlay rectangle, the drag handles, the selection ratios, and the granularity. The geometry is
-/// faithful to the source desktop renderer: a header capped at 22px, a date label band at +22px, a
-/// range bar at +34px, and a selection overlay derived from the selected sub-range.
+/// header bar, the date label rectangle and text, the year banner rectangle, the period tick-label
+/// rectangle, the range-bar (track) rectangle, the selection overlay rectangle, the drag handles,
+/// the scrollbar rectangle, the selection ratios, and the granularity. The geometry is faithful to
+/// Excel: a header capped at 22px, a date label band at +22px, a year banner at +34px, period tick
+/// labels at +48px, the track at +62px, and a scrollbar at the bottom of the widget.
 /// </summary>
 public sealed record TimelineLayoutModel(
     string Name,
@@ -59,8 +60,11 @@ public sealed record TimelineLayoutModel(
     LayoutRect Bounds,
     LayoutRect HeaderRect,
     LayoutRect DateLabelRect,
+    LayoutRect YearBannerRect,
+    LayoutRect TickLabelRect,
     LayoutRect TrackRect,
     LayoutRect SelectionRect,
+    LayoutRect ScrollbarRect,
     double SelectionLeftRatio,
     double SelectionWidthRatio,
     TimelineHandleLayout StartHandle,
@@ -78,14 +82,25 @@ public sealed record TimelineLayoutModel(
 /// </summary>
 public static class TimelineLayoutBuilder
 {
-    // Faithful to the source desktop renderer's timeline math.
+    // Faithful to the source desktop renderer's timeline math + new structural rows.
     private const double HeaderMaxHeight = 22;
     private const double DateLabelTopInset = 22;
     private const double DateLabelHeight = 12;
     private const double LabelHorizontalInset = 6;
-    private const double TrackTopInset = 34;
+    // Year banner sits below the date label (top+34) and is 13px tall.
+    private const double YearBannerTopInset = 34;
+    private const double YearBannerHeight = 13;
+    // Tick labels sit below the year banner (top+48) and are 12px tall.
+    private const double TickTopInset = 48;
+    private const double TickHeight = 12;
+    // Track sits below the tick labels (top+62).
+    private const double TrackTopInset = 62;
     private const double TrackHorizontalInset = 8;
-    private const double TrackBottomReserve = 42;
+    // Scrollbar is 13px at the very bottom; the track reserves space for it.
+    private const double ScrollbarHeight = 13;
+    private const double ScrollbarBottomInset = 0;
+    // Total space below the track needed: scrollbar + small gap.
+    private const double TrackBottomReserve = ScrollbarHeight + 4;
     private const double TrackMinHeight = 6;
     private const double TrackMaxHeight = 14;
     private const double PreviewSelectionLeftRatio = 0.18;
@@ -120,11 +135,37 @@ public static class TimelineLayoutBuilder
             Math.Max(1, bounds.Width - (LabelHorizontalInset * 2)),
             DateLabelHeight);
 
+        // Year banner and tick label rows — only present when the widget is tall enough.
+        var hasStructuralRows = bounds.Height >= TrackTopInset + TrackMinHeight + ScrollbarHeight + 4;
+        var yearBannerRect = hasStructuralRows
+            ? new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Top + YearBannerTopInset,
+                Math.Max(1, bounds.Width - (TrackHorizontalInset * 2)), YearBannerHeight)
+            : new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Top + YearBannerTopInset, 1, 0);
+        var tickLabelRect = hasStructuralRows
+            ? new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Top + TickTopInset,
+                Math.Max(1, bounds.Width - (TrackHorizontalInset * 2)), TickHeight)
+            : new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Top + TickTopInset, 1, 0);
+
+        // When widget is too short to show the new rows, fall back to the old compact layout
+        // (track at top+34 like the wave1b renderer) so the band is still visible.
+        // Track height = available space minus everything above and below the track.
+        // Structural: available = bounds.Height - TrackTopInset - ScrollbarHeight - 2px gap
+        // Compact:    available = bounds.Height - 42 (original reserve, matches wave1b)
+        var effectiveTrackTopInset = hasStructuralRows ? TrackTopInset : 34.0;
+        var effectiveTrackHeight = hasStructuralRows
+            ? Math.Max(TrackMinHeight, Math.Min(TrackMaxHeight, bounds.Height - TrackTopInset - ScrollbarHeight - 2))
+            : Math.Max(TrackMinHeight, Math.Min(TrackMaxHeight, bounds.Height - 42));
+
         var trackRect = new LayoutRect(
             bounds.Left + TrackHorizontalInset,
-            bounds.Top + TrackTopInset,
+            bounds.Top + effectiveTrackTopInset,
             Math.Max(1, bounds.Width - (TrackHorizontalInset * 2)),
-            Math.Max(TrackMinHeight, Math.Min(TrackMaxHeight, bounds.Height - TrackBottomReserve)));
+            effectiveTrackHeight);
+
+        var scrollbarRect = hasStructuralRows
+            ? new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Bottom - ScrollbarHeight,
+                Math.Max(1, bounds.Width - (TrackHorizontalInset * 2)), ScrollbarHeight)
+            : new LayoutRect(bounds.Left + TrackHorizontalInset, bounds.Bottom, 1, 0);
 
         var (leftRatio, widthRatio) = ComputeSelectionRatios(rangeStart, rangeEnd, selectedStart, selectedEnd);
         var selectionRect = new LayoutRect(
@@ -150,8 +191,11 @@ public static class TimelineLayoutBuilder
             Bounds: bounds,
             HeaderRect: headerRect,
             DateLabelRect: dateLabelRect,
+            YearBannerRect: yearBannerRect,
+            TickLabelRect: tickLabelRect,
             TrackRect: trackRect,
             SelectionRect: selectionRect,
+            ScrollbarRect: scrollbarRect,
             SelectionLeftRatio: leftRatio,
             SelectionWidthRatio: widthRatio,
             StartHandle: startHandle,
@@ -284,6 +328,128 @@ public static class TimelineLayoutBuilder
             TimelineGranularity.Month => parsed.ToString("MMM yyyy", CultureInfo.InvariantCulture),
             _ => parsed.ToString(DateFormat, CultureInfo.InvariantCulture)
         };
+    }
+
+    /// <summary>
+    /// Enumerates the period tick labels for the timeline's visible range at the given
+    /// <paramref name="granularity"/>. Each entry is (label, centerX) where centerX is the horizontal
+    /// pixel position of that period's midpoint within the track, using the same date→x mapping as the
+    /// selection band so ticks and band are aligned. Only periods whose center falls within the track
+    /// are returned.
+    /// </summary>
+    public static IReadOnlyList<(string Label, double CenterX)> GetTickLabels(TimelineLayoutModel layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        if (layout.RangeStart is not { } rangeStart || layout.RangeEnd is not { } rangeEnd)
+            return [];
+
+        var totalDays = rangeEnd.DayNumber - rangeStart.DayNumber;
+        if (totalDays <= 0 || layout.TrackRect.Width <= 0)
+            return [];
+
+        var result = new List<(string, double)>();
+
+        switch (layout.Granularity)
+        {
+            case TimelineGranularity.Month:
+                // One label per calendar month that has any day within [rangeStart, rangeEnd).
+                // rangeEnd is treated as exclusive (e.g. 2027-01-01 means "up to end of Dec 2026").
+                var current = new DateOnly(rangeStart.Year, rangeStart.Month, 1);
+                while (current < rangeEnd)
+                {
+                    var periodEnd = current.AddMonths(1);
+                    // midpoint of the visible part of this month
+                    var midDay = (current.DayNumber + Math.Min(periodEnd.DayNumber, rangeEnd.DayNumber)) / 2.0;
+                    var midRatio = Math.Clamp((midDay - rangeStart.DayNumber) / totalDays, 0, 1);
+                    var centerX = layout.TrackRect.Left + midRatio * layout.TrackRect.Width;
+                    result.Add((current.ToString("MMM", System.Globalization.CultureInfo.InvariantCulture).ToUpperInvariant(), centerX));
+                    current = current.AddMonths(1);
+                }
+                break;
+
+            case TimelineGranularity.Year:
+                // One label per year that has any day within [rangeStart, rangeEnd).
+                var yearCurrent = new DateOnly(rangeStart.Year, 1, 1);
+                while (yearCurrent < rangeEnd)
+                {
+                    var yearPeriodEnd = yearCurrent.AddYears(1);
+                    var midDay = (yearCurrent.DayNumber + Math.Min(yearPeriodEnd.DayNumber, rangeEnd.DayNumber)) / 2.0;
+                    var midRatio = Math.Clamp((midDay - rangeStart.DayNumber) / totalDays, 0, 1);
+                    var centerX = layout.TrackRect.Left + midRatio * layout.TrackRect.Width;
+                    result.Add((yearCurrent.Year.ToString(System.Globalization.CultureInfo.InvariantCulture), centerX));
+                    yearCurrent = yearCurrent.AddYears(1);
+                }
+                break;
+
+            case TimelineGranularity.Quarter:
+                // One label per calendar quarter that has any day within [rangeStart, rangeEnd).
+                var qMonth = ((rangeStart.Month - 1) / 3) * 3 + 1;
+                var qCurrent = new DateOnly(rangeStart.Year, qMonth, 1);
+                while (qCurrent < rangeEnd)
+                {
+                    var qNum = ((qCurrent.Month - 1) / 3) + 1;
+                    var qPeriodEnd = qCurrent.AddMonths(3);
+                    var midDay = (qCurrent.DayNumber + Math.Min(qPeriodEnd.DayNumber, rangeEnd.DayNumber)) / 2.0;
+                    var midRatio = Math.Clamp((midDay - rangeStart.DayNumber) / totalDays, 0, 1);
+                    var centerX = layout.TrackRect.Left + midRatio * layout.TrackRect.Width;
+                    result.Add(($"Q{qNum}", centerX));
+                    qCurrent = qCurrent.AddMonths(3);
+                }
+                break;
+
+            case TimelineGranularity.Day:
+                // Label every day but skip if too dense (more than 1 per 12px).
+                var dayStep = Math.Max(1, (int)Math.Ceiling(totalDays / (layout.TrackRect.Width / 12.0)));
+                var dayCurrent = rangeStart;
+                while (dayCurrent <= rangeEnd)
+                {
+                    var ratio = Math.Clamp((dayCurrent.DayNumber - rangeStart.DayNumber) / (double)totalDays, 0, 1);
+                    var centerX = layout.TrackRect.Left + ratio * layout.TrackRect.Width;
+                    result.Add((dayCurrent.Day.ToString(System.Globalization.CultureInfo.InvariantCulture), centerX));
+                    dayCurrent = dayCurrent.AddDays(dayStep);
+                }
+                break;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Enumerates the year spans for the year banner row. Each entry is (year, startX, width) giving
+    /// the left edge and pixel width of that year's span within the track. Uses the same date→x
+    /// mapping as <see cref="DateAt"/>.
+    /// </summary>
+    public static IReadOnlyList<(int Year, double StartX, double SpanWidth)> GetYearBannerSpans(TimelineLayoutModel layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+
+        if (layout.RangeStart is not { } rangeStart || layout.RangeEnd is not { } rangeEnd)
+            return [];
+
+        var totalDays = rangeEnd.DayNumber - rangeStart.DayNumber;
+        if (totalDays <= 0 || layout.TrackRect.Width <= 0)
+            return [];
+
+        var result = new List<(int, double, double)>();
+        var yearStart = new DateOnly(rangeStart.Year, 1, 1);
+        // Loop while the year period has at least one day before rangeEnd (exclusive).
+        while (yearStart < rangeEnd)
+        {
+            var yearEnd = yearStart.AddYears(1);
+            // Clamp to the visible range
+            var clampedStart = yearStart < rangeStart ? rangeStart : yearStart;
+            var clampedEnd = yearEnd > rangeEnd ? rangeEnd : yearEnd;
+            var leftRatio = Math.Clamp((clampedStart.DayNumber - rangeStart.DayNumber) / (double)totalDays, 0, 1);
+            var rightRatio = Math.Clamp((clampedEnd.DayNumber - rangeStart.DayNumber) / (double)totalDays, 0, 1);
+            var startX = layout.TrackRect.Left + leftRatio * layout.TrackRect.Width;
+            var spanWidth = (rightRatio - leftRatio) * layout.TrackRect.Width;
+            if (spanWidth > 0)
+                result.Add((yearStart.Year, startX, spanWidth));
+            yearStart = yearStart.AddYears(1);
+        }
+
+        return result;
     }
 
     private static (double Left, double Width) ComputeSelectionRatios(
