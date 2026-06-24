@@ -69,11 +69,32 @@ internal static class XlsxLegacyCommentPreserver
                 continue;
 
             var sourceCommentsXml = XlsxPackageXmlEditor.LoadXml(sourceCommentsEntry);
-            if (!CanRestoreLegacyCommentPart(sourceCommentsXml, sheet, workbookNs))
+
+            // GAP 5: build a reconciled comments XML rather than the all-or-nothing guard.
+            // When the note set is unchanged, the reconciled XML equals the source XML (same
+            // author/rich-text preservation as before).  When notes were added or deleted, we
+            // keep the source XML entries for every UNCHANGED note (preserving author and rich
+            // text) and fall back to ClosedXML-generated entries for ADDED notes.
+            var targetCommentsPath = GetLegacyCommentPartPath(targetArchive, targetWorksheetPath, packageRelNs);
+            var reconciledCommentsXml = TryBuildReconciledCommentsXml(
+                sourceCommentsXml,
+                sheet,
+                workbookNs,
+                targetArchive,
+                targetCommentsPath);
+            if (reconciledCommentsXml is null)
                 continue;
 
-            XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(sourceCommentsXml);
-            ReplacePackageXmlPart(targetArchive, sourceCommentsPath, sourceCommentsXml);
+            // When the note count changed the VML (box geometry) is taken from ClosedXML's
+            // output (it covers all current notes).  When the note set is identical we keep the
+            // source VML so box geometry of unchanged notes is preserved.
+            var noteCountChanged = sourceCommentsXml.Root?
+                .Element(workbookNs + "commentList")?
+                .Elements(workbookNs + "comment")
+                .Count() != sheet.Comments.Count;
+
+            XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(reconciledCommentsXml);
+            ReplacePackageXmlPart(targetArchive, sourceCommentsPath, reconciledCommentsXml);
 
             var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
             var targetWorksheetRelsXml = targetArchive.GetEntry(targetWorksheetRelsPath) is { } targetWorksheetRelsEntry
@@ -87,16 +108,21 @@ internal static class XlsxLegacyCommentPreserver
                 CommentsRelationshipType,
                 new HashSet<string>(StringComparer.Ordinal));
 
+            // When the note count changed, leave ClosedXML's VML in place (it has a shape for
+            // every current note, including the new ones).  Residual: box geometry of unchanged
+            // notes is not restored in this case — that is deferred to Wave 3.
             var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
-            var preservedVmlRelId = PreserveCommentVmlDrawing(
-                sourceArchive,
-                targetArchive,
-                sourceWorksheetPath,
-                targetWorksheetPath,
-                sourceLegacyDrawing,
-                packageRelNs,
-                relNs,
-                targetWorksheetRelsXml);
+            var preservedVmlRelId = noteCountChanged
+                ? null
+                : PreserveCommentVmlDrawing(
+                    sourceArchive,
+                    targetArchive,
+                    sourceWorksheetPath,
+                    targetWorksheetPath,
+                    sourceLegacyDrawing,
+                    packageRelNs,
+                    relNs,
+                    targetWorksheetRelsXml);
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
@@ -131,18 +157,186 @@ internal static class XlsxLegacyCommentPreserver
             : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
     }
 
-    private static bool CanRestoreLegacyCommentPart(
+    /// <summary>
+    /// GAP 5 fix: builds a reconciled comments XML that preserves source XML entries for
+    /// unchanged notes (keeping author and rich-text formatting) while removing deleted notes and
+    /// copying new-note entries from the ClosedXML-generated target XML.
+    /// Also applies author changes (GAP 2): if the model's <c>CommentAuthors</c> differs from
+    /// the source XML's author, the <c>&lt;authors&gt;</c> list and <c>authorId</c> attribute
+    /// are updated so the new author is written.
+    /// Returns <c>null</c> if the source XML has no entries that match any modeled note (genuine
+    /// no-match — fall through to ClosedXML output unchanged).
+    /// </summary>
+    private static XDocument? TryBuildReconciledCommentsXml(
         XDocument sourceCommentsXml,
         Sheet sheet,
-        XNamespace workbookNs)
+        XNamespace workbookNs,
+        ZipArchive targetArchive,
+        string? targetCommentsPath)
     {
-        var sourceComments = ReadLegacyCommentPlainTextByReference(sourceCommentsXml, workbookNs);
-        return sourceComments.Count > 0 &&
-               sourceComments.Count == sheet.Comments.Count &&
-               sourceComments.All(pair =>
-                   TryGetModeledCommentText(sheet, pair.Key, out var targetText) &&
-                   string.Equals(pair.Value, targetText, StringComparison.Ordinal));
+        var sourceCommentElements = ReadLegacyCommentElementsByReference(sourceCommentsXml, workbookNs);
+        if (sourceCommentElements.Count == 0)
+            return null;
+
+        // Read the source authors list (index → name).
+        var sourceAuthors = sourceCommentsXml.Root?
+            .Element(workbookNs + "authors")?
+            .Elements(workbookNs + "author")
+            .Select(a => a.Value)
+            .ToList() ?? [];
+
+        // We will build a new authors list that covers all reconciled entries.
+        // We start from source authors (to preserve existing authorIds) and add new ones as needed.
+        var reconciledAuthors = new List<string>(sourceAuthors);
+
+        // Classify each source comment as: matched, text-changed, or deleted.
+        // Also track which model notes are NEW (not in source).
+        var matchedCount = 0;
+        var reconciledEntries = new List<XElement>(sheet.Comments.Count);
+        var sourceRefsHandled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sourceRef, sourceElement) in sourceCommentElements)
+        {
+            sourceRefsHandled.Add(sourceRef);
+            if (!CellAddress.TryParse(sourceRef, sheet.Id, out var address))
+                continue; // ref unparseable — drop it
+
+            if (!sheet.Comments.TryGetValue(address, out var modelText))
+                continue; // note was deleted — drop it
+
+            var entryToAdd = new XElement(sourceElement); // deep-clone
+
+            // Text reconciliation: update if text changed.
+            if (!string.Equals(ReadCommentPlainText(entryToAdd, workbookNs), modelText, StringComparison.Ordinal))
+                entryToAdd = UpdateCommentText(entryToAdd, modelText, workbookNs);
+
+            // Author reconciliation (GAP 2): if the model's CommentAuthors has a different value
+            // than the source XML author, update the authorId to point to the new author.
+            var modelAuthor = sheet.CommentAuthors.TryGetValue(address, out var ma) ? ma : string.Empty;
+            var sourceAuthorIdStr = entryToAdd.Attribute("authorId")?.Value;
+            var sourceAuthorName = string.Empty;
+            if (int.TryParse(sourceAuthorIdStr, out var sourceAuthorIdx) &&
+                sourceAuthorIdx >= 0 && sourceAuthorIdx < sourceAuthors.Count)
+            {
+                sourceAuthorName = sourceAuthors[sourceAuthorIdx];
+            }
+
+            if (!string.Equals(modelAuthor, sourceAuthorName, StringComparison.Ordinal))
+            {
+                // Need to find or add the new author in the reconciled list.
+                var newAuthorIdx = reconciledAuthors.FindIndex(a =>
+                    string.Equals(a, modelAuthor, StringComparison.Ordinal));
+                if (newAuthorIdx < 0)
+                {
+                    newAuthorIdx = reconciledAuthors.Count;
+                    reconciledAuthors.Add(modelAuthor);
+                }
+                entryToAdd.SetAttributeValue("authorId", newAuthorIdx.ToString());
+            }
+
+            reconciledEntries.Add(entryToAdd);
+            matchedCount++;
+        }
+
+        // Require at least one source entry to be usable.
+        if (matchedCount == 0)
+            return null;
+
+        // For NEW notes (in model but not in source) try to copy from ClosedXML's target XML.
+        var newModelAddresses = sheet.Comments.Keys
+            .Where(addr => !sourceRefsHandled.Contains(addr.ToA1()))
+            .ToList();
+
+        if (newModelAddresses.Count > 0 && !string.IsNullOrEmpty(targetCommentsPath))
+        {
+            var targetCommentsEntry = targetArchive.GetEntry(targetCommentsPath);
+            if (targetCommentsEntry is not null)
+            {
+                var targetCommentsXml = XlsxPackageXmlEditor.LoadXml(targetCommentsEntry);
+                var targetAuthors = targetCommentsXml.Root?
+                    .Element(workbookNs + "authors")?
+                    .Elements(workbookNs + "author")
+                    .Select(a => a.Value)
+                    .ToList() ?? [];
+                var targetElements = ReadLegacyCommentElementsByReference(targetCommentsXml, workbookNs);
+                foreach (var addr in newModelAddresses)
+                {
+                    var cellRef = addr.ToA1();
+                    if (!targetElements.TryGetValue(cellRef, out var targetElement))
+                        continue;
+
+                    // Re-map the target element's authorId into the reconciled authors list.
+                    var clonedEntry = new XElement(targetElement);
+                    var targetAuthorIdStr = clonedEntry.Attribute("authorId")?.Value;
+                    if (int.TryParse(targetAuthorIdStr, out var targetAuthorIdx) &&
+                        targetAuthorIdx >= 0 && targetAuthorIdx < targetAuthors.Count)
+                    {
+                        var targetAuthorName = targetAuthors[targetAuthorIdx];
+                        var newIdx = reconciledAuthors.FindIndex(a =>
+                            string.Equals(a, targetAuthorName, StringComparison.Ordinal));
+                        if (newIdx < 0)
+                        {
+                            newIdx = reconciledAuthors.Count;
+                            reconciledAuthors.Add(targetAuthorName);
+                        }
+                        clonedEntry.SetAttributeValue("authorId", newIdx.ToString());
+                    }
+
+                    reconciledEntries.Add(clonedEntry);
+                }
+            }
+        }
+
+        // Build the reconciled document from the source document's structure.
+        var result = new XDocument(sourceCommentsXml); // deep-clone preserves namespace declarations
+        var resultRoot = result.Root!;
+
+        // Rebuild the <authors> list.
+        var authorsElement = resultRoot.Element(workbookNs + "authors");
+        if (authorsElement is null)
+        {
+            authorsElement = new XElement(workbookNs + "authors");
+            resultRoot.AddFirst(authorsElement);
+        }
+        authorsElement.RemoveNodes();
+        foreach (var authorName in reconciledAuthors)
+            authorsElement.Add(new XElement(workbookNs + "author", authorName));
+
+        // Rebuild the <commentList>.
+        var resultList = resultRoot.Element(workbookNs + "commentList");
+        if (resultList is null)
+        {
+            resultList = new XElement(workbookNs + "commentList");
+            resultRoot.Add(resultList);
+        }
+
+        resultList.RemoveNodes();
+        foreach (var entry in reconciledEntries)
+            resultList.Add(entry); // already deep-cloned above
+
+        return result;
     }
+
+    private static XElement UpdateCommentText(XElement commentElement, string newText, XNamespace workbookNs)
+    {
+        // Simplest safe approach: replace the entire <text> element with a single plain-text run.
+        // This loses rich-text formatting for this specific note, but preserves author and keeps
+        // the entry (so deletion detection still works).
+        var cloned = new XElement(commentElement);
+        var textElement = cloned.Element(workbookNs + "text");
+        if (textElement is not null)
+        {
+            textElement.RemoveNodes();
+            textElement.Add(new XElement(workbookNs + "r",
+                new XElement(workbookNs + "t", newText)));
+        }
+        return cloned;
+    }
+
+    private static string ReadCommentPlainText(XElement commentElement, XNamespace workbookNs) =>
+        string.Concat(commentElement.Element(workbookNs + "text")?
+            .Descendants(workbookNs + "t")
+            .Select(t => t.Value) ?? []);
 
     private static bool TryGetModeledCommentText(Sheet sheet, string reference, out string text)
     {
@@ -422,6 +616,20 @@ internal static class XlsxLegacyCommentPreserver
             .ToDictionary(
                 comment => comment.Attribute("ref")!.Value,
                 comment => string.Concat(comment.Element(workbookNs + "text")?.Descendants(workbookNs + "t").Select(text => text.Value) ?? []),
+                StringComparer.OrdinalIgnoreCase) ?? [];
+    }
+
+    private static Dictionary<string, XElement> ReadLegacyCommentElementsByReference(
+        XDocument commentsXml,
+        XNamespace workbookNs)
+    {
+        return commentsXml.Root?
+            .Element(workbookNs + "commentList")?
+            .Elements(workbookNs + "comment")
+            .Where(comment => !string.IsNullOrWhiteSpace(comment.Attribute("ref")?.Value))
+            .ToDictionary(
+                comment => comment.Attribute("ref")!.Value,
+                comment => comment,
                 StringComparer.OrdinalIgnoreCase) ?? [];
     }
 }

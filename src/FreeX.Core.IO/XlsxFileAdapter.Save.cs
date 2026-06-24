@@ -212,9 +212,20 @@ public sealed partial class XlsxFileAdapter
             {
                 try
                 {
-                    xlSheet.Cell((int)address.Row, (int)address.Col)
-                        .CreateComment()
-                        .AddText(commentText);
+                    var xlComment = xlSheet.Cell((int)address.Row, (int)address.Col)
+                        .CreateComment();
+                    // GAP 1: preserve the note author stored in CommentAuthors; fall back to
+                    // empty string so ClosedXML doesn't silently default to the OS username.
+                    if (sheet.CommentAuthors.TryGetValue(address, out var author) &&
+                        !string.IsNullOrEmpty(author))
+                    {
+                        xlComment.Author = author;
+                    }
+                    else
+                    {
+                        xlComment.Author = string.Empty;
+                    }
+                    xlComment.AddText(commentText);
                 }
                 catch (Exception ex)
                 {
