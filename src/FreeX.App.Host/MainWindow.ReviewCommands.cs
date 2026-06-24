@@ -416,6 +416,17 @@ public partial class MainWindow
         ExecuteShowAllNotes();
     }
 
+    private void ReviewConvertNotesToCommentsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var cmd = new ConvertNotesToCommentsCommand(_currentSheetId);
+        if (!TryExecuteCommand(cmd, "Convert to Comments"))
+            return;
+
+        UpdateViewport();
+        RefreshReviewCommentNoteCommandStates();
+        RefreshOpenReviewCommentNoteWindows();
+    }
+
     private CommentListWindow ShowOrRefreshCommentListWindow(
         CommentListWindow? window,
         string title,
@@ -515,6 +526,7 @@ public partial class MainWindow
         _ribbonState.SetEnabled("Delete Note", selectedHasNote);
         _ribbonState.SetEnabled("Previous Note", hasAnyNotes);
         _ribbonState.SetEnabled("Next Note", hasAnyNotes);
+        _ribbonState.SetEnabled("Convert to Comments", hasAnyNotes);
     }
 
     private static bool SheetHasThreadedCommentAtSelection(Sheet? sheet, CellAddress address) =>

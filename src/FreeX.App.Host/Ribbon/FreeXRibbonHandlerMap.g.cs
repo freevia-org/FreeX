@@ -138,6 +138,7 @@ public static class FreeXRibbonHandlerMap
             ["Conditional Formatting#FindConditionalFormattingMenuItem_Click"] = "FindConditionalFormattingMenuItem_Click",
             ["Consolidate"] = "ConsolidateBtn_Click",
             ["Constants"] = "FindConstantsMenuItem_Click",
+            ["Convert to Comments"] = "ReviewConvertNotesToCommentsBtn_Click",
             ["Convert to Range"] = "TableDesignConvertToRangeBtn_Click",
             ["Copy"] = "CopyBtn_Click",
             ["Count All"] = "AutoSumCountAllMenuItem_Click",

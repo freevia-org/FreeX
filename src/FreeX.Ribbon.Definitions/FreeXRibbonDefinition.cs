@@ -198,7 +198,8 @@ public static class FreeXRibbonDefinition
                 .Medium("Delete Note", "Delete Note", Ico.Comment, "D")
                 .Medium("Previous Note", "Previous Note", Ico.Comment, "PN")
                 .Medium("Next Note", "Next Note", Ico.Comment, "N")
-                .Medium("Show Notes", "Show Notes", Ico.Comment, "H"))
+                .Medium("Show Notes", "Show Notes", Ico.Comment, "H")
+                .Medium("Convert to Comments", "Convert to Comments", Ico.Comment, "CV"))
             .Group("ReviewProtectGroup", "Protect", null, priority: 70,
                 g => g
                 .Large("Protect Sheet#ProtectSheetBtn_Click", "Protect Sheet", Ico.Protect, "PS")
