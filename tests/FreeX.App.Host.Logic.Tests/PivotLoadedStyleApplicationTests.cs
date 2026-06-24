@@ -140,12 +140,13 @@ public sealed class PivotLoadedStyleApplicationTests
 
         var rowLabelStyle = workbook.GetStyle(sheet.GetCell(5, 1)!.StyleId);
         rowLabelStyle.Bold.Should().BeTrue();
-        rowLabelStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+        // Medium13 StripeFill is tint 0.85 (Excel pixel sample RGB 236,212,233 ≈ tint 0.85; updated in aaf62282b).
+        rowLabelStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         rowLabelStyle.BorderTop.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
         rowLabelStyle.BorderBottom.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
 
         var stripedDataStyle = workbook.GetStyle(sheet.GetCell(5, 3)!.StyleId);
-        stripedDataStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.9));
+        stripedDataStyle.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.85));
         stripedDataStyle.BorderTop.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
         stripedDataStyle.BorderBottom.Color.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent5, 0.5));
 

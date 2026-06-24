@@ -859,7 +859,9 @@ public sealed partial class MainWindowSourceHygieneTests
         xaml.Should().NotContain("<Image Source=\"Resources/FreeX.ico\"");
         xaml.Should().NotContain("<TextBlock Text=\"F\" Foreground=\"{StaticResource FreeXAccentBrush}\"");
         theme.Should().Contain("x:Key=\"FreeXTitleBarBrush\"");
-        xaml.Should().Contain("Background=\"{StaticResource FreeXTitleBarBrush}\"");
+        // WS-G round 2 made the title bar token-driven and runtime-swappable, so the brand
+        // background now binds via DynamicResource rather than StaticResource.
+        xaml.Should().Contain("Background=\"{DynamicResource FreeXTitleBarBrush}\"");
         project.Should().Contain("<ApplicationIcon>Resources\\FreeX.ico</ApplicationIcon>");
     }
 

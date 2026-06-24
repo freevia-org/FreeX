@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file summarizes third-party NuGet packages referenced by the FreeX
-solution after restore on 2026-06-06. Each package remains governed by its own
+solution after restore on 2026-06-24. Each package remains governed by its own
 license. This notice does not change those license terms.
 
 See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
@@ -10,7 +10,7 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 80 unique NuGet packages across 18
+- Restored package inventory: 92 unique NuGet packages across 29
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
@@ -106,7 +106,11 @@ replace this dependency or confirm the project has the required Xceed license.
 | System.Security.Cryptography.Xml | 10.0.9 | MIT | https://dot.net/ |
 | Tmds.DBus.Protocol | 0.92.0 | MIT |  |
 | UglyToad.PdfPig | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
+| UglyToad.PdfPig.Core | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | UglyToad.PdfPig.DocumentLayoutAnalysis | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
+| UglyToad.PdfPig.Fonts | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
+| UglyToad.PdfPig.Tokenization | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
+| UglyToad.PdfPig.Tokens | 1.7.0-custom-5 | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | Velopack | 1.2.0 | MIT | https://github.com/velopack/velopack |
 | ZString | 2.6.0 | MIT | https://github.com/Cysharp/ZString |
 

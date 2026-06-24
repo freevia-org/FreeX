@@ -6,7 +6,7 @@ FreeX is a free spreadsheet app for local workbook files. It opens and saves sta
 
 - Native Windows desktop app built with .NET 10 and WPF, with Avalonia app-preview lanes for macOS/Linux work.
 - Spreadsheet editing, formulas, charts, PivotTables, conditional formatting, data tools, printing, and export.
-- Workbook and interchange workflows for `.xlsx`, `.xltx`, `.xlsm`/`.xltm` open and save, `.xls/.xlsb/.xlt` open, `.ods`, SpreadsheetML `.xml`, CSV variants, tabular text, Formatted Text `.prn`, SYLK, DIF, DBF open, HTML tables, Single File Web Page `.mht`/`.mhtml`, PDF tabular-data import (open-only), and FreeX native `.fxl`.
+- Workbook and interchange workflows for `.xlsx`, `.xltx`, `.xlsm`/`.xltm` open and save (including macro-enabled package save), `.xls/.xlsb/.xlt` open, `.ods`, SpreadsheetML `.xml`, CSV variants, tabular text, Formatted Text `.prn` (space-delimited), SYLK, DIF, DBF open, HTML tables, Single File Web Page `.mht`/`.mhtml`, PDF tabular-data import (read-only), and FreeX native `.fxl`.
 - Local files by default; Microsoft 365 cloud services, account integration, and proprietary Microsoft runtimes are outside the app scope.
 
 ## Downloads
@@ -20,7 +20,7 @@ Latest verified tester release: [FreeX (Test Release) v0.8.127](https://github.c
 
 ## Documentation
 
-Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-06-21.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
+Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-06-24.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
 
 This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier. See [freew/README.md](freew/README.md).
 
