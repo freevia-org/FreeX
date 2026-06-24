@@ -60,6 +60,9 @@ public partial class GridView
     private CheckBox? _threadedResolveBox;
     private ThreadedComment? _threadedEditExisting;
 
+    // Pinned ("Show Comment") boxes — keyed by (Row, Col), always-visible in CommentOverlayHost.
+    private readonly Dictionary<(uint Row, uint Col), Border> _pinnedNoteBorders = [];
+
     public void HideCommentPreview() => DismissCommentPreview();
 
     public bool BeginNoteInlineEdit(CellAddress address, string cellReference, string initialText)
@@ -393,6 +396,113 @@ public partial class GridView
         if (newHost is not null)
             newHost.IsHitTestVisible = border.Visibility == Visibility.Visible;
         RefreshActiveCommentPopupPlacement();
+    }
+
+    /// <summary>
+    /// Rebuilds the always-on pinned note boxes based on <see cref="PinnedNoteAddresses"/> and
+    /// the current <see cref="Viewport"/>. Called when either property changes.
+    /// </summary>
+    internal void RefreshPinnedNoteBoxes()
+    {
+        if (CommentOverlayHost is not { } host)
+            return;
+
+        var pinned = PinnedNoteAddresses;
+        var viewport = Viewport;
+
+        // Remove borders for addresses that are no longer pinned or have scrolled off-screen.
+        var toRemove = new List<(uint Row, uint Col)>();
+        foreach (var key in _pinnedNoteBorders.Keys)
+        {
+            if (pinned is null || !pinned.Contains(key) ||
+                !TryGetCellRect(viewport, key.Row, key.Col, out _))
+            {
+                toRemove.Add(key);
+            }
+        }
+        foreach (var key in toRemove)
+        {
+            host.Children.Remove(_pinnedNoteBorders[key]);
+            _pinnedNoteBorders.Remove(key);
+        }
+
+        if (pinned is null || viewport is null)
+            return;
+
+        // Add/update borders for pinned addresses that are on-screen.
+        foreach (var (row, col) in pinned)
+        {
+            if (!TryGetCellRect(viewport, row, col, out var cellRect))
+                continue;
+
+            // Get display content — walk viewport cells for the comment text.
+            CellCommentDisplay? display = null;
+            foreach (var vcell in viewport.Cells)
+            {
+                if (vcell.Row == row && vcell.Col == col && vcell.CommentDisplay is not null)
+                {
+                    display = vcell.CommentDisplay;
+                    break;
+                }
+            }
+            if (display is null)
+                continue;
+
+            var desiredSize = GridCommentPreviewPlacementPlanner.EstimatePreviewSize(display);
+            var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+            var scaledCellRect = new Rect(
+                cellRect.Left * zoom, cellRect.Top * zoom,
+                cellRect.Width * zoom, cellRect.Height * zoom);
+            var placement = GridCommentPreviewPlacementPlanner.Calculate(
+                scaledCellRect,
+                new Size(Math.Max(0, ActualWidth), Math.Max(0, ActualHeight)),
+                desiredSize);
+
+            if (!_pinnedNoteBorders.TryGetValue((row, col), out var border))
+            {
+                var panel = new StackPanel();
+                border = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(8),
+                    Child = panel,
+                    Effect = new DropShadowEffect
+                    {
+                        BlurRadius = 8,
+                        Direction = 315,
+                        Opacity = 0.22,
+                        ShadowDepth = 2
+                    }
+                };
+                AutomationProperties.SetAutomationId(border, $"GridPinnedNoteBox_{row}_{col}");
+                AutomationProperties.SetName(border, "Pinned Note");
+                host.Children.Add(border);
+                _pinnedNoteBorders[(row, col)] = border;
+            }
+
+            // Rebuild content.
+            if (border.Child is StackPanel existingPanel)
+                existingPanel.Children.Clear();
+            var contentPanel = new StackPanel();
+            var titleBlock = CreateHeaderTextBlock(display.Title);
+            titleBlock.Foreground = Brushes.Black;
+            contentPanel.Children.Add(titleBlock);
+            contentPanel.Children.Add(new TextBlock
+            {
+                FontSize = 12,
+                Foreground = Brushes.Black,
+                TextWrapping = TextWrapping.Wrap,
+                Text = string.IsNullOrEmpty(display.Body) ? " " : display.Body
+            });
+            border.Child = contentPanel;
+
+            border.Width = placement.Width;
+            border.MaxHeight = placement.MaxHeight;
+            Canvas.SetLeft(border, placement.HorizontalOffset);
+            Canvas.SetTop(border, placement.VerticalOffset);
+        }
     }
 
     private void BuildCommentPreviewContent(CellCommentDisplay display)

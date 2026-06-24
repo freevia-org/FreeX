@@ -45,6 +45,20 @@ public partial class GridView
         set => SetValue(CommentOverlayHostProperty, value);
     }
 
+    /// <summary>
+    /// Row/column addresses (no sheet ID — sheet-local) of legacy notes whose comment box is
+    /// pinned open ("Show Comment"). The GridView keeps a matching set of always-visible
+    /// overlay borders in <see cref="CommentOverlayHost"/>.
+    /// </summary>
+    public static readonly DependencyProperty PinnedNoteAddressesProperty =
+        DependencyProperty.Register(nameof(PinnedNoteAddresses), typeof(IReadOnlySet<(uint Row, uint Col)>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, OnPinnedNoteAddressesChanged));
+    public IReadOnlySet<(uint Row, uint Col)>? PinnedNoteAddresses
+    {
+        get => (IReadOnlySet<(uint Row, uint Col)>?)GetValue(PinnedNoteAddressesProperty);
+        set => SetValue(PinnedNoteAddressesProperty, value);
+    }
+
     public static readonly DependencyProperty ViewportProperty =
         DependencyProperty.Register(nameof(Viewport), typeof(ViewportModel), typeof(GridView),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnViewportChanged));
@@ -538,6 +552,12 @@ public partial class GridView
             grid.MoveCommentPreviewToOverlay(e.OldValue as Canvas, e.NewValue as Canvas);
     }
 
+    private static void OnPinnedNoteAddressesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.RefreshPinnedNoteBoxes();
+    }
+
     private static void OnWorkbookThemeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is GridView grid)
@@ -592,6 +612,7 @@ public partial class GridView
         grid.ClearFormulaTraceArrowHeadGeometryCache();
         grid.ClearDrawingObjectLayerCache();
         grid.RefreshCommentPreviewAfterViewportChanged();
+        grid.RefreshPinnedNoteBoxes();
     }
 
     private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

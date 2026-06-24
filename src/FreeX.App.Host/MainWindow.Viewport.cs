@@ -411,6 +411,13 @@ public partial class MainWindow
         var viewport = CreateViewport(sheet, topRow, leftCol, rowHeaderWidth);
 
         SheetGrid.Viewport = viewport;
+        SheetGrid.PinnedNoteAddresses = sheet is null
+            ? null
+            : sheet.ShownComments.Count == 0
+                ? null
+                : sheet.ShownComments
+                    .Select(a => (a.Row, a.Col))
+                    .ToHashSet<(uint Row, uint Col)>();
         SheetGrid.HiddenRows = sheet?.HiddenRows;
         SheetGrid.HiddenColumns = sheet?.HiddenCols;
         SheetGrid.AutoFilterRange = sheet is not null &&

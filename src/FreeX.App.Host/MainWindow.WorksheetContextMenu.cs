@@ -303,6 +303,12 @@ public partial class MainWindow
             case WorksheetContextMenuAction.ShowNotes:
                 ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
                 break;
+            case WorksheetContextMenuAction.ShowHideNote:
+                ExecuteShowHideNote(address);
+                break;
+            case WorksheetContextMenuAction.ShowAllNotes:
+                ExecuteShowAllNotes();
+                break;
             case WorksheetContextMenuAction.OpenHyperlink:
                 TryOpenHyperlink(address);
                 break;
@@ -519,6 +525,7 @@ public partial class MainWindow
             HasHyperlink: sheet.Hyperlinks.ContainsKey(address),
             HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
             HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
-            HasPivotTableTarget: hasPivotTableTarget);
+            HasPivotTableTarget: hasPivotTableTarget,
+            NoteIsShown: sheet.ShownComments.Contains(address));
     }
 }

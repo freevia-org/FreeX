@@ -2,7 +2,7 @@ namespace FreeX.App.Services.Ribbon;
 
 public static class WorksheetContextMenuPlanner
 {
-    private const int WorksheetStateCacheSize = 1 << 7;
+    private const int WorksheetStateCacheSize = 1 << 8;
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
         BuildPictureCommands();
@@ -77,7 +77,8 @@ public static class WorksheetContextMenuPlanner
             HasHyperlink: (index & (1 << 3)) != 0,
             HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
             HasDropdownTarget: (index & (1 << 5)) != 0,
-            HasPivotTableTarget: (index & (1 << 6)) != 0);
+            HasPivotTableTarget: (index & (1 << 6)) != 0,
+            NoteIsShown: (index & (1 << 7)) != 0);
 
     private static int GetStateCacheIndex(WorksheetContextMenuState state)
     {
@@ -96,6 +97,8 @@ public static class WorksheetContextMenuPlanner
             index |= 1 << 5;
         if (state.HasPivotTableTarget)
             index |= 1 << 6;
+        if (state.NoteIsShown)
+            index |= 1 << 7;
 
         return index;
     }
@@ -171,7 +174,8 @@ public static class WorksheetContextMenuPlanner
             new WorksheetContextMenuCommand("New Note", WorksheetContextMenuAction.NewNote, AccessHeader: "New No_te"),
             new WorksheetContextMenuCommand("Edit Note...", WorksheetContextMenuAction.EditNote, AccessHeader: "_Edit Note...", IsEnabled: state.HasNote),
             new WorksheetContextMenuCommand("Delete Note", WorksheetContextMenuAction.DeleteNote, AccessHeader: "De_lete Note", IsEnabled: state.HasNote),
-            new WorksheetContextMenuCommand("Show Notes", WorksheetContextMenuAction.ShowNotes, AccessHeader: "_Show Notes", IsEnabled: state.HasNote)),
+            new WorksheetContextMenuCommand(state.NoteIsShown ? "Hide Note" : "Show Note", WorksheetContextMenuAction.ShowHideNote, AccessHeader: state.NoteIsShown ? "_Hide Note" : "S_how Note", IsEnabled: state.HasNote),
+            new WorksheetContextMenuCommand("Show Notes", WorksheetContextMenuAction.ShowAllNotes, AccessHeader: "_Show Notes")),
         .. BuildHyperlinkCommands(state),
         .. BuildPivotTableCommands(state),
         WorksheetContextMenuCommand.Separator,
@@ -358,7 +362,8 @@ public sealed record WorksheetContextMenuState(
     bool HasHyperlink = false,
     bool HasAutoFilterHeaderTarget = false,
     bool HasDropdownTarget = false,
-    bool HasPivotTableTarget = false)
+    bool HasPivotTableTarget = false,
+    bool NoteIsShown = false)
 {
     public static WorksheetContextMenuState Default { get; } = new();
 }
@@ -412,6 +417,8 @@ public enum WorksheetContextMenuAction
     EditNote,
     DeleteNote,
     ShowNotes,
+    ShowHideNote,
+    ShowAllNotes,
     OpenHyperlink,
     Hyperlink,
     PivotTableOptions,

@@ -247,16 +247,18 @@ public sealed partial class XlsxFileAdapter
             XlsxSlicerTimelineWriter.SaveSlicerTimelines(packageStream, workbook);
         }
 
+        // Normalize VML <x:Visible/> for fresh (no source package) workbooks so that
+        // ClosedXML's generated VML correctly reflects the ShownComments model state.
+        // Must run before the early-return path below; has no effect when hasSourcePackage is true
+        // because the Preserve() path handles that case via ApplyVisibleFlag.
+        if (!hasSourcePackage && featurePlan.HasLegacyNotes)
+        {
+            packageStream.Position = 0;
+            XlsxLegacyCommentVisibilityNormalizer.NormalizePackage(packageStream, workbook);
+        }
+
         if (!hasSourcePackage)
         {
-            // Normalize VML <x:Visible/> for fresh (no source package) workbooks so that
-            // ClosedXML's generated VML correctly reflects the ShownComments model state.
-            if (featurePlan.HasLegacyNotes)
-            {
-                packageStream.Position = 0;
-                XlsxLegacyCommentVisibilityNormalizer.NormalizePackage(packageStream, workbook);
-            }
-
             SaveSourcePackageIndependentPostProcessingMetadata();
             NormalizeStylesheetForSchema();
             NormalizeDocumentPropertiesPackageGraph();

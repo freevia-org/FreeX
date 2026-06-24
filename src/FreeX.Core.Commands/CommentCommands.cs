@@ -79,6 +79,100 @@ public sealed class DeleteCommentCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Toggle the "Show Comment" pinned-box state for a single cell's legacy note.
+/// Has no effect if the cell does not have a legacy note.
+/// </summary>
+public sealed class ShowHideCommentCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly CellAddress _address;
+    private bool _wasShown;
+
+    public string Label => "Show/Hide Comment";
+
+    public ShowHideCommentCommand(SheetId sheetId, CellAddress address)
+    {
+        _sheetId = sheetId;
+        _address = address;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (!sheet.Comments.ContainsKey(_address))
+            return new CommandOutcome(false, "No note exists at the selected cell.");
+
+        _wasShown = sheet.ShownComments.Contains(_address);
+        if (_wasShown)
+            sheet.ShownComments.Remove(_address);
+        else
+            sheet.ShownComments.Add(_address);
+
+        return new CommandOutcome(true, AffectedCells: [_address]);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (_wasShown)
+            sheet.ShownComments.Add(_address);
+        else
+            sheet.ShownComments.Remove(_address);
+    }
+}
+
+/// <summary>
+/// Show all legacy notes on the sheet (adds every note address to <see cref="Sheet.ShownComments"/>),
+/// or hide all if every note is already pinned (toggles all off).
+/// </summary>
+public sealed class ShowAllNotesCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private HashSet<CellAddress>? _snapshot;
+
+    public string Label => "Show All Notes";
+
+    public ShowAllNotesCommand(SheetId sheetId)
+    {
+        _sheetId = sheetId;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+
+        // Snapshot current state for undo.
+        _snapshot = new HashSet<CellAddress>(sheet.ShownComments);
+
+        var allAddresses = sheet.Comments.Keys.ToList();
+        if (allAddresses.Count == 0)
+            return new CommandOutcome(false, "There are no notes on this sheet.");
+
+        // If every note is already shown, hide all; otherwise show all.
+        var allShown = allAddresses.All(a => sheet.ShownComments.Contains(a));
+        sheet.ShownComments.Clear();
+        if (!allShown)
+        {
+            foreach (var addr in allAddresses)
+                sheet.ShownComments.Add(addr);
+        }
+
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (_snapshot is null)
+            return;
+
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.ShownComments.Clear();
+        foreach (var addr in _snapshot)
+            sheet.ShownComments.Add(addr);
+    }
+}
+
 /// <summary>Clear all comments in a range with undo support.</summary>
 public sealed class ClearCommentsCommand : IWorkbookCommand
 {

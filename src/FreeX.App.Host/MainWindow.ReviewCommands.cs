@@ -412,21 +412,8 @@ public partial class MainWindow
 
     private void ReviewShowNotesBtn_Click(object sender, RoutedEventArgs e)
     {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || sheet.Comments.Count == 0)
-        {
-            _messageService.ShowInfo(
-                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
-                UiText.Get("MainWindow_Text_Notes"));
-            return;
-        }
-
-        var items = CommentListWindow.CreateNoteItems(sheet.Comments);
-        _reviewNotesWindow = ShowOrRefreshCommentListWindow(
-            _reviewNotesWindow,
-            UiText.Get("MainWindow_Text_Notes"),
-            items,
-            window => _reviewNotesWindow = window);
+        // Review tab "Show Notes" — pin/unpin all notes on the sheet (toggle-all).
+        ExecuteShowAllNotes();
     }
 
     private CommentListWindow ShowOrRefreshCommentListWindow(
@@ -448,6 +435,20 @@ public partial class MainWindow
             window.WindowState = WindowState.Normal;
         window.Activate();
         return window;
+    }
+
+    private void ExecuteShowHideNote(CellAddress address)
+    {
+        var cmd = new ShowHideCommentCommand(_currentSheetId, address);
+        if (TryExecuteCommand(cmd, "Show/Hide Note"))
+            UpdateViewport();
+    }
+
+    private void ExecuteShowAllNotes()
+    {
+        var cmd = new ShowAllNotesCommand(_currentSheetId);
+        if (TryExecuteCommand(cmd, "Show All Notes"))
+            UpdateViewport();
     }
 
     private void NavigateThreadedComment(bool previous)
