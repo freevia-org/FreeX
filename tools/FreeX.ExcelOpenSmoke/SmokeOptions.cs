@@ -9,6 +9,7 @@ internal sealed record SmokeOptions(
     bool GenerateExcelPivotCorpusFixtures,
     bool GenerateExcelCommentCorpusFixtures,
     bool GenerateExcelCfCorpusFixtures,
+    bool GenerateExcelTableCorpusFixtures,
     bool FreeXResaveBeforeExcel,
     string? CorpusManifestPath,
     IReadOnlyList<string> CorpusSources,
@@ -26,7 +27,8 @@ internal sealed record SmokeOptions(
         GenerateExcelFixture ||
         GenerateExcelPivotCorpusFixtures ||
         GenerateExcelCommentCorpusFixtures ||
-        GenerateExcelCfCorpusFixtures;
+        GenerateExcelCfCorpusFixtures ||
+        GenerateExcelTableCorpusFixtures;
 
     public bool HasCorpusManifest => !string.IsNullOrWhiteSpace(CorpusManifestPath);
 
@@ -43,6 +45,7 @@ internal sealed record SmokeOptions(
         var generateExcelPivotCorpusFixtures = false;
         var generateExcelCommentCorpusFixtures = false;
         var generateExcelCfCorpusFixtures = false;
+        var generateExcelTableCorpusFixtures = false;
         var freeXResaveBeforeExcel = false;
         string? corpusManifestPath = null;
         var corpusSources = new List<string>();
@@ -59,7 +62,7 @@ internal sealed record SmokeOptions(
             {
                 case "--help":
                 case "-h":
-                    return new SmokeOptions(true, false, false, false, false, false, false, false, false, false, false, null, [], [], [], null, pattern, []);
+                    return new SmokeOptions(true, false, false, false, false, false, false, false, false, false, false, false, null, [], [], [], null, pattern, []);
                 case "--save-reopen":
                     saveReopen = true;
                     break;
@@ -86,6 +89,9 @@ internal sealed record SmokeOptions(
                     break;
                 case "--generate-excel-cf-corpus-fixtures":
                     generateExcelCfCorpusFixtures = true;
+                    break;
+                case "--generate-excel-table-corpus-fixtures":
+                    generateExcelTableCorpusFixtures = true;
                     break;
                 case "--freex-resave-before-excel":
                     freeXResaveBeforeExcel = true;
@@ -127,6 +133,7 @@ internal sealed record SmokeOptions(
             generateExcelPivotCorpusFixtures,
             generateExcelCommentCorpusFixtures,
             generateExcelCfCorpusFixtures,
+            generateExcelTableCorpusFixtures,
             freeXResaveBeforeExcel,
             corpusManifestPath,
             corpusSources,
