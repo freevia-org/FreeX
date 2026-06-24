@@ -17,18 +17,24 @@ internal static class FreeWRibbon
         {
             foreach (var theme in DocumentTheme.Catalog)
                 menu.Item(commandId, theme.Name, theme.Name[0].ToString());
+            menu.Separator();
+            menu.Item("freew.customize-colors", "Customize Colors…", "Z");
         }
 
         static void FontSetMenu(string commandId, RibbonMenuBuilder menu)
         {
             foreach (var fontSet in DocumentFontSet.Catalog)
                 menu.Item(commandId, fontSet.Name, fontSet.Name[0].ToString());
+            menu.Separator();
+            menu.Item("freew.customize-fonts", "Customize Fonts…", "Z");
         }
 
         static void ParagraphSpacingMenu(string commandId, RibbonMenuBuilder menu)
         {
             foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
                 menu.Item(commandId, spacingSet.Name, spacingSet.Name[0].ToString());
+            menu.Separator();
+            menu.Item("freew.custom-paragraph-spacing", "Custom Paragraph Spacing…", "U");
         }
 
         static void EffectsMenu(string commandId, RibbonMenuBuilder menu)
@@ -451,6 +457,7 @@ internal static class FreeWRibbon
                         Icon = new RibbonCommandIcon(RibbonCommandIconKind.Font, RibbonCommandIconAccent.Theme),
                         Width = 140
                     });
+                    g.Icon("freew.reset-style-set", "Reset to Default Style Set", RibbonCommandIconKind.Refresh);
                     g.Medium("freew.theme-colors", "Colors", RibbonCommandIconKind.Color, "C", menu: m => ThemeMenu("freew.theme-colors", m), accent: RibbonCommandIconAccent.Color);
                     g.Medium("freew.theme-fonts", "Fonts", RibbonCommandIconKind.Font, "F", menu: m => FontSetMenu("freew.theme-fonts", m), accent: RibbonCommandIconAccent.Theme);
                     g.Medium("freew.paragraph-spacing", "Paragraph Spacing", RibbonCommandIconKind.LineSpacing, "P", menu: m => ParagraphSpacingMenu("freew.paragraph-spacing", m), accent: RibbonCommandIconAccent.Theme);

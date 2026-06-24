@@ -168,6 +168,18 @@ internal static class Ooxml
     public const string WatermarkOpacityPropertyName = "FreeWWatermarkOpacity";
 
     /// <summary>
+    /// Custom-property name for image-watermark bytes (base-64 encoded, vt:lpwstr). Non-null when the
+    /// watermark is a picture rather than text. Persisted alongside the other WatermarkOptions properties.
+    /// </summary>
+    public const string WatermarkImagePropertyName = "FreeWWatermarkImage";
+
+    /// <summary>
+    /// Custom-property name for the picture-watermark scale percentage (vt:lpwstr, integer string).
+    /// 0 means Auto. Only meaningful when WatermarkImage is set.
+    /// </summary>
+    public const string WatermarkScalePropertyName = "FreeWWatermarkScale";
+
+    /// <summary>
     /// The custom-property name under which Word's "Mark as Final" flag is persisted (a boolean
     /// <c>vt:bool</c> custom document property). This is the Word convention.
     /// </summary>

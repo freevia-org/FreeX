@@ -3787,11 +3787,17 @@ public static class DocxReader
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
         var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
 
+        // Read the optional @w:art attribute (Word's decorative art border id 1-166).
+        var artStr = edge.Attribute(W + "art")?.Value;
+        var artId = int.TryParse(artStr, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),
             width > 0 ? width : 1.0)
         {
             LineStyle = lineStyle,
+            ArtId = artId,
         };
     }
 
@@ -4052,7 +4058,9 @@ public static class DocxReader
         }
 
         var text = PropStr(properties, WatermarkPropertyName);
-        if (!string.IsNullOrEmpty(text))
+        // Accept empty text for picture watermarks: check for any WatermarkOptions property presence.
+        var imageBase64Check = PropStr(properties, WatermarkImagePropertyName);
+        if (!string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(imageBase64Check))
         {
             // Check if full WatermarkOptions properties are present (written by the new writer).
             var font = PropStr(properties, WatermarkFontFamilyPropertyName);
@@ -4061,17 +4069,32 @@ public static class DocxReader
             var opacityStr = properties.FirstOrDefault(p => p.Attribute("name")?.Value == WatermarkOpacityPropertyName)
                 ?.Element(VtVariant + "r8")?.Value;
 
-            if (font is not null || color is not null || layoutStr is not null || opacityStr is not null)
+            if (font is not null || color is not null || layoutStr is not null || opacityStr is not null
+                || !string.IsNullOrEmpty(imageBase64Check))
             {
                 var layout = layoutStr is "Horizontal" ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;
                 var opacity = double.TryParse(opacityStr, System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var op) ? op : 0.3;
-                document.Page.WatermarkOptions = new WatermarkOptions(text)
+
+                // Picture watermark: image bytes encoded as base-64 (pre-read above).
+                byte[]? imageBytes = null;
+                if (!string.IsNullOrEmpty(imageBase64Check))
+                {
+                    try { imageBytes = Convert.FromBase64String(imageBase64Check); }
+                    catch { /* corrupt base-64 → treat as no image */ }
+                }
+                var scaleStr = PropStr(properties, WatermarkScalePropertyName);
+                int.TryParse(scaleStr, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var scalePct);
+
+                document.Page.WatermarkOptions = new WatermarkOptions(text ?? string.Empty)
                 {
                     FontFamily = font ?? "Calibri",
                     FontColorHex = color ?? "#808080",
                     Layout = layout,
-                    Opacity = System.Math.Clamp(opacity, 0.0, 1.0)
+                    Opacity = System.Math.Clamp(opacity, 0.0, 1.0),
+                    ImageBytes = imageBytes,
+                    ScalePct = scalePct,
                 };
             }
             else

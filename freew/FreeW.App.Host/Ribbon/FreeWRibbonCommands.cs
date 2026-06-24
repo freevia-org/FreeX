@@ -1156,9 +1156,13 @@ internal static class FreeWRibbonCommands
         // heading/body font pair. All are backed document-wide style changes.
         registry.Register("freew.theme", new ApplyThemeCommand(editor));
         registry.Register("freew.style-set", new ApplyStyleSetCommand(editor));
+        registry.Register("freew.reset-style-set", new ResetStyleSetCommand(editor));
         registry.Register("freew.theme-colors", new ApplyThemeColorsCommand(editor));
+        registry.Register("freew.customize-colors", new CustomizeColorsCommand(editor));
         registry.Register("freew.theme-fonts", new ApplyFontSetCommand(editor));
+        registry.Register("freew.customize-fonts", new CustomizeFontsCommand(editor));
         registry.Register("freew.paragraph-spacing", new ApplyParagraphSpacingSetCommand(editor));
+        registry.Register("freew.custom-paragraph-spacing", new CustomParagraphSpacingCommand(editor));
         registry.Register("freew.theme-effects", new ApplyEffectSetCommand(editor));
 
         // Layout tab — page settings (applied to the model; honoured by docx save + print).
@@ -1995,6 +1999,61 @@ internal static class FreeWRibbonCommands
             && sender is System.Windows.Controls.MenuItem { Tag: string header }
                 ? header
                 : null;
+    }
+
+    // Design > Reset to Default Style Set: applies the catalog default (Office) to the document.
+    private sealed class ResetStyleSetCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.ApplyStyleSet(DocumentStyleSet.Default);
+        }
+    }
+
+    // Design > Colors > Customize Colors…: author a 12-slot custom theme color scheme.
+    private sealed class CustomizeColorsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var theme = CustomizeThemeColorsDialog.Prompt(owner, editor.Model.Theme);
+            if (theme is null)
+                return;
+            editor.Focus();
+            editor.ApplyThemeColors(theme);
+        }
+    }
+
+    // Design > Fonts > Customize Fonts…: pick heading/body font pair and apply as a custom font set.
+    private sealed class CustomizeFontsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var currentTheme = editor.Model.Theme;
+            var current = DocumentFontSet.FindByName(currentTheme.HeadingFont)
+                ?? new DocumentFontSet("Custom", currentTheme.HeadingFont, currentTheme.BodyFont);
+            var fontSet = CustomizeThemeFontsDialog.Prompt(owner, current);
+            if (fontSet is null)
+                return;
+            editor.Focus();
+            editor.ApplyFontSet(fontSet);
+        }
+    }
+
+    // Design > Paragraph Spacing > Custom Paragraph Spacing…: open dialog for explicit spacing values.
+    private sealed class CustomParagraphSpacingCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var spacingSet = CustomParagraphSpacingDialog.Prompt(owner, DocumentParagraphSpacingSet.Default);
+            if (spacingSet is null)
+                return;
+            editor.Focus();
+            editor.ApplyParagraphSpacingSet(spacingSet);
+        }
     }
 
     // Home > Font: pick a colour from a small fixed palette and apply it to the selection. When

@@ -1703,6 +1703,27 @@ public sealed record WatermarkOptions(string Text)
     /// </summary>
     public double Opacity { get; init; } = 0.3;
 
+    // ── Picture watermark ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When non-null the watermark is a picture (image) rather than text. This field carries the raw
+    /// image bytes (PNG, JPEG, etc.). Persisted as a custom property (<c>FreeWWatermarkImage</c>, base-64)
+    /// in docProps/custom.xml so the image survives save/load cycles. When set, the text watermark fields
+    /// (<see cref="Text"/>, <see cref="FontFamily"/>, <see cref="FontColorHex"/>) are ignored for
+    /// rendering; <see cref="Layout"/>, <see cref="Opacity"/>, and <see cref="ScalePct"/> apply.
+    /// </summary>
+    public byte[]? ImageBytes { get; init; }
+
+    /// <summary>
+    /// Scale of the picture watermark as a percentage of the page size (0 = Auto, 1–500). Defaults to 0
+    /// (Auto) so the image is centred at its natural size. Mirrors Word's "Picture watermark / Scale"
+    /// field. Only meaningful when <see cref="ImageBytes"/> is non-null.
+    /// </summary>
+    public int ScalePct { get; init; }
+
+    /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
+    public bool IsPicture => ImageBytes is { Length: > 0 };
+
     /// <summary>
     /// Migrate a bare legacy watermark text string to a <see cref="WatermarkOptions"/> with sensible
     /// defaults — the same visual the legacy rendering produced.
@@ -1720,8 +1741,19 @@ public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.
     /// <summary>
     /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
     /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
+    /// When <see cref="ArtId"/> is non-zero this field is ignored (art borders use a fixed @w:val="apples"
+    /// placeholder so Word readers understand the element, but the visual is entirely driven by the art id).
     /// </summary>
     public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
+
+    /// <summary>
+    /// Optional decorative art border id (the <c>@w:art</c> attribute on each <c>w:pgBorders</c> edge).
+    /// Zero (the default) means a plain line border (no <c>@w:art</c> is emitted so existing documents
+    /// are unaffected). Non-zero values correspond to Word's built-in art border ids (1-166) and are
+    /// written as <c>@w:art</c> and read back verbatim. FreeW renders a curated subset of art borders as
+    /// a repeating pattern or a distinct styled stroke; unrecognised ids fall back to a dashed stroke.
+    /// </summary>
+    public int ArtId { get; init; }
 }
 
 /// <summary>

@@ -49,6 +49,30 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private static readonly ShadingPattern[] PatternValues =
         [ShadingPattern.Clear, ShadingPattern.Solid, ShadingPattern.Pct10, ShadingPattern.Pct25, ShadingPattern.Pct50];
 
+    // Curated subset of Word's decorative art borders. Key = art id, Value = display label.
+    // Art ids correspond to @w:art values in w:pgBorders.
+    private static readonly (string Label, int ArtId)[] ArtBorders =
+    [
+        ("(none)",               0),
+        ("Apple (1)",            1),
+        ("Stars (38)",          38),
+        ("Hearts (84)",         84),
+        ("Stars (stars) (35)",  35),
+        ("Flowers (66)",        66),
+        ("Tornados (89)",       89),
+        ("Holly (83)",          83),
+        ("Snowflakes (92)",     92),
+        ("Moons (57)",          57),
+        ("Stars Black (37)",    37),
+        ("Trees (95)",          95),
+        ("Clover (47)",         47),
+        ("Diagonal Stripes (160)", 160),
+        ("Double Wave (2)",      2),
+        ("Wave (3)",             3),
+        ("Dash Dot (4)",         4),
+        ("Dash Dot Stroked (5)", 5),
+    ];
+
     // A small swatch palette shared by the border-colour and shading-colour pickers.
     private static readonly string[] Palette =
     [
@@ -71,6 +95,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private readonly ComboBox _pageLineStyle;
     private readonly ComboBox _pageColor;
     private readonly TextBox _pageWidth;
+    private readonly ComboBox _pageArtStyle;
 
     // Shading tab.
     private readonly ComboBox _shadingColor;
@@ -104,6 +129,15 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _pageLineStyle = Combo(LineStyleNames, IndexOf(LineStyleValues, pageBorder?.LineStyle ?? BorderLineStyle.Single));
         _pageColor = ColorCombo(pageBorder?.ColorHex ?? "#000000");
         _pageWidth = NumberBox(pageBorder?.WidthPt ?? 1.0);
+
+        // Art border: select the matching art id, defaulting to "(none)".
+        var currentArtId = pageBorder?.ArtId ?? 0;
+        var artIndex = 0;
+        for (var i = 0; i < ArtBorders.Length; i++)
+        {
+            if (ArtBorders[i].ArtId == currentArtId) { artIndex = i; break; }
+        }
+        _pageArtStyle = Combo(System.Array.ConvertAll(ArtBorders, a => a.Label), artIndex);
 
         _shadingColor = ColorCombo(paragraph.ShadingColorHex ?? "#FFFFFF", includeNone: true,
             selectNone: string.IsNullOrEmpty(paragraph.ShadingColorHex));
@@ -141,11 +175,12 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private Grid BuildPageBorderTab()
     {
-        var grid = TwoColumnGrid(4);
+        var grid = TwoColumnGrid(5);
         AddRow(grid, 0, "Setting:", _pageSetting);
         AddRow(grid, 1, "Style:", _pageLineStyle);
-        AddRow(grid, 2, "Colour:", _pageColor);
-        AddRow(grid, 3, "Width (pt):", _pageWidth);
+        AddRow(grid, 2, "Art border:", _pageArtStyle);
+        AddRow(grid, 3, "Colour:", _pageColor);
+        AddRow(grid, 4, "Width (pt):", _pageWidth);
         return grid;
     }
 
@@ -353,9 +388,12 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     {
         if (_pageSetting.SelectedIndex == 0) // None
             return null;
+        var artIndex = System.Math.Clamp(_pageArtStyle.SelectedIndex, 0, ArtBorders.Length - 1);
+        var artId = ArtBorders[artIndex].ArtId;
         return new PageBorder(SelectedColor(_pageColor) ?? "#000000", pageWidth)
         {
             LineStyle = LineStyleValues[System.Math.Clamp(_pageLineStyle.SelectedIndex, 0, LineStyleValues.Length - 1)],
+            ArtId = artId,
         };
     }
 
