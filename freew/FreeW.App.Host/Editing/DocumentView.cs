@@ -2343,6 +2343,20 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set the Picture Format > Adjust parameters on the currently selected image. Undoable.
+    /// Brightness/contrast in percent offset (-100..100, 0=neutral); saturation in percent (100=normal);
+    /// transparency in percent (0=opaque). No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageAdjust(double brightnessPct, double contrastPct, double saturationPct, double transparencyPct)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageAdjustCommand(blockIndex, runIndex, brightnessPct, contrastPct, saturationPct, transparencyPct));
+        Render();
+    }
+
+    /// <summary>
     /// Set picture border (colorHex = 6-digit RGB hex, widthPt, dash token) on the currently
     /// selected image. Pass null colorHex to remove the border. Undoable. No-op without an image selection.
     /// </summary>
@@ -4185,7 +4199,10 @@ public sealed class DocumentView : RichTextBox
     {
         var widthPx = image.WidthPt * PxPerPoint;
         var heightPx = image.HeightPt * PxPerPoint;
-        var source = DecodeImage(image) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+        // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
+        var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency).
+        var source = image.HasAdjustments ? ImageAdjustHelper.Apply(decodedBitmap, image) : (ImageSource)decodedBitmap;
 
         var element = new Image
         {
@@ -6718,7 +6735,11 @@ public sealed class DocumentView : RichTextBox
         var widthPx = image.WidthPt * PxPerPoint;
         var heightPx = image.HeightPt * PxPerPoint;
 
-        var source = DecodeImage(image) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+        // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
+        var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
+        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency).
+        // The alpha bake in ImageAdjustHelper covers static bitmap consumers; Opacity covers the live element.
+        var source = image.HasAdjustments ? ImageAdjustHelper.Apply(decodedBitmap, image) : (ImageSource)decodedBitmap;
 
         var element = new Image
         {

@@ -1303,6 +1303,10 @@ public sealed class FreeWRibbonParityTests
         CommandIds(picture.FindGroup("picture-adjust")!)
             .Should()
             .Equal(
+                // W20: Adjust group — Corrections / Color / Transparency (new).
+                "freew.image-corrections",
+                "freew.image-color",
+                "freew.image-transparency",
                 "freew.image-crop",
                 "freew.image-reset",
                 "freew.image-border");
@@ -1337,7 +1341,9 @@ public sealed class FreeWRibbonParityTests
 
         foreach (var commandId in MenuCommandIds(wrap).Concat(MenuCommandIds(rotate)).Concat(CommandIds(picture)))
         {
-            if (commandId is "freew.image-wrap" or "freew.image-rotate")
+            // Pure menu-opener dropdowns with no direct command action — they only open the sub-menu.
+            if (commandId is "freew.image-wrap" or "freew.image-rotate"
+                or "freew.image-corrections" or "freew.image-color" or "freew.image-transparency")
                 continue;
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Picture Format");
         }

@@ -2838,9 +2838,31 @@ public static class DocxWriter
         xfrm.Add(new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)));
         xfrm.Add(new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
 
-        // a:blipFill: blip + stretch/fillRect; crop appended as a:srcRect when any fraction is non-zero.
+        // a:blipFill: blip (with optional lum/satMod/alphaModFix children) + stretch/fillRect.
+        // Brightness/contrast emit as a:lum @bright / @contrast (per-mille: value × 1000).
+        // Saturation emits as a:satMod @val (per-mille: satPct × 1000; 100 % = 100000 = omitted).
+        // Transparency emits as a:alphaModFix @amt (per-mille of opacity: (100-transPct) × 1000).
+        var blip = new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId));
+        if (image.BrightnessPct != 0 || image.ContrastPct != 0)
+        {
+            blip.Add(new XElement(A + "lum",
+                new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
+                new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+        }
+        if (image.SaturationPct != 100)
+        {
+            blip.Add(new XElement(A + "satMod",
+                new XAttribute("val", (long)Math.Round(image.SaturationPct * 1000))));
+        }
+        if (image.TransparencyPct != 0)
+        {
+            // alphaModFix amt = opacity per-mille = (100 - transparencyPct) × 1000.
+            var opacityPermille = (long)Math.Round((100 - image.TransparencyPct) * 1000);
+            blip.Add(new XElement(A + "alphaModFix",
+                new XAttribute("amt", opacityPermille)));
+        }
         var blipFill = new XElement(Pic + "blipFill",
-            new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId)),
+            blip,
             new XElement(A + "stretch", new XElement(A + "fillRect")));
         if (image.HasCrop)
         {

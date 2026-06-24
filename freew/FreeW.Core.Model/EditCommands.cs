@@ -701,6 +701,7 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
     private double _pw, _ph, _prevAngle;
     private bool _prevFlipH, _prevFlipV;
     private double _pl, _pr, _pt, _pb;
+    private double _prevBrightness, _prevContrast, _prevSaturation, _prevTransparency;
     private bool _applied;
 
     public string Label => "Reset Picture";
@@ -711,9 +712,18 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         _pw = image.WidthPt; _ph = image.HeightPt;
         _prevAngle = image.RotationAngle; _prevFlipH = image.FlipH; _prevFlipV = image.FlipV;
         _pl = image.CropLeft; _pr = image.CropRight; _pt = image.CropTop; _pb = image.CropBottom;
+        _prevBrightness   = image.BrightnessPct;
+        _prevContrast     = image.ContrastPct;
+        _prevSaturation   = image.SaturationPct;
+        _prevTransparency = image.TransparencyPct;
         image.WidthPt = naturalWidthPt; image.HeightPt = naturalHeightPt;
         image.RotationAngle = 0; image.FlipH = false; image.FlipV = false;
         image.CropLeft = image.CropRight = image.CropTop = image.CropBottom = 0;
+        // Reset adjustments to neutral.
+        image.BrightnessPct   = 0;
+        image.ContrastPct     = 0;
+        image.SaturationPct   = 100;
+        image.TransparencyPct = 0;
         _applied = true;
     }
 
@@ -723,6 +733,56 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         image.WidthPt = _pw; image.HeightPt = _ph;
         image.RotationAngle = _prevAngle; image.FlipH = _prevFlipH; image.FlipV = _prevFlipV;
         image.CropLeft = _pl; image.CropRight = _pr; image.CropTop = _pt; image.CropBottom = _pb;
+        image.BrightnessPct   = _prevBrightness;
+        image.ContrastPct     = _prevContrast;
+        image.SaturationPct   = _prevSaturation;
+        image.TransparencyPct = _prevTransparency;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set the Picture Format > Adjust parameters (brightness, contrast, saturation, transparency) on the
+/// inline image at the given paragraph/run indices, snapshotting prior values for undo.
+/// Brightness and contrast are in percent offset (-100..100, 0=neutral).
+/// Saturation is in percent (0=grey, 100=normal, 400=max).
+/// Transparency is in percent (0=opaque, 100=transparent).
+/// </summary>
+public sealed class SetImageAdjustCommand(
+    int paragraphIndex, int runIndex,
+    double brightnessPct, double contrastPct, double saturationPct, double transparencyPct)
+    : IDocumentCommand
+{
+    private double _prevBrightness, _prevContrast, _prevSaturation, _prevTransparency;
+    private bool _applied;
+
+    public string Label => "Picture Adjust";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevBrightness   = image.BrightnessPct;
+        _prevContrast     = image.ContrastPct;
+        _prevSaturation   = image.SaturationPct;
+        _prevTransparency = image.TransparencyPct;
+        image.BrightnessPct   = brightnessPct;
+        image.ContrastPct     = contrastPct;
+        image.SaturationPct   = saturationPct;
+        image.TransparencyPct = transparencyPct;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.BrightnessPct   = _prevBrightness;
+        image.ContrastPct     = _prevContrast;
+        image.SaturationPct   = _prevSaturation;
+        image.TransparencyPct = _prevTransparency;
         _applied = false;
     }
 

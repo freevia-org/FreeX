@@ -325,6 +325,24 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-flip-horizontal",new ImageFlipCommand(editor, vertical: false));
         // Picture Format tab — Arrange > Position.
         registry.Register("freew.image-position", new ImagePositionCommand(editor));
+        // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
+        registry.Register("freew.image-brightness-plus20",  new ImageBrightnessPresetCommand(editor, +20));
+        registry.Register("freew.image-brightness-plus40",  new ImageBrightnessPresetCommand(editor, +40));
+        registry.Register("freew.image-brightness-minus20", new ImageBrightnessPresetCommand(editor, -20));
+        registry.Register("freew.image-brightness-minus40", new ImageBrightnessPresetCommand(editor, -40));
+        registry.Register("freew.image-contrast-plus20",    new ImageContrastPresetCommand(editor, +20));
+        registry.Register("freew.image-contrast-minus20",   new ImageContrastPresetCommand(editor, -20));
+        registry.Register("freew.image-adjust-dialog",      new ImageAdjustDialogCommand(editor));
+        // Picture Format tab — Adjust > Color (saturation presets + dialog).
+        registry.Register("freew.image-saturation-0",       new ImageSaturationPresetCommand(editor, 0));
+        registry.Register("freew.image-saturation-50",      new ImageSaturationPresetCommand(editor, 50));
+        registry.Register("freew.image-saturation-200",     new ImageSaturationPresetCommand(editor, 200));
+        registry.Register("freew.image-color-dialog",       new ImageColorDialogCommand(editor));
+        // Picture Format tab — Adjust > Transparency (presets + dialog).
+        registry.Register("freew.image-transparency-25",    new ImageTransparencyPresetCommand(editor, 25));
+        registry.Register("freew.image-transparency-50",    new ImageTransparencyPresetCommand(editor, 50));
+        registry.Register("freew.image-transparency-75",    new ImageTransparencyPresetCommand(editor, 75));
+        registry.Register("freew.image-transparency-dialog",new ImageTransparencyDialogCommand(editor));
         // Picture Format tab — Adjust > Crop / Reset / Border.
         registry.Register("freew.image-crop",   new ImageCropCommand(editor));
         registry.Register("freew.image-reset",  new ImageResetCommand(editor));
@@ -2880,6 +2898,130 @@ internal static class FreeWRibbonCommands
                 image.BorderColorHex, image.BorderWidthPt, image.BorderDash);
             if (result is { } r)
                 editor.SetSelectedImageBorder(r.Color, r.Width, r.Dash);
+        }
+    }
+
+    // Picture Format > Adjust > Corrections: set absolute brightness (keeps current contrast/saturation/transparency).
+    private sealed class ImageBrightnessPresetCommand(DocumentView editor, double brightnessPct) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Corrections");
+                return;
+            }
+            editor.SetSelectedImageAdjust(brightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
+        }
+    }
+
+    // Picture Format > Adjust > Corrections: set absolute contrast (keeps current brightness/saturation/transparency).
+    private sealed class ImageContrastPresetCommand(DocumentView editor, double contrastPct) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Corrections");
+                return;
+            }
+            editor.SetSelectedImageAdjust(image.BrightnessPct, contrastPct, image.SaturationPct, image.TransparencyPct);
+        }
+    }
+
+    // Picture Format > Adjust > Corrections: open the full Corrections+Color dialog.
+    private sealed class ImageAdjustDialogCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Corrections");
+                return;
+            }
+            var result = ImageAdjustDialog.Prompt(
+                Window.GetWindow(editor),
+                image.BrightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
+            if (result is { } r)
+                editor.SetSelectedImageAdjust(r.Brightness, r.Contrast, r.Saturation, r.Transparency);
+        }
+    }
+
+    // Picture Format > Adjust > Color: set absolute saturation (keeps current brightness/contrast/transparency).
+    private sealed class ImageSaturationPresetCommand(DocumentView editor, double saturationPct) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color");
+                return;
+            }
+            editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, saturationPct, image.TransparencyPct);
+        }
+    }
+
+    // Picture Format > Adjust > Color: open the Color dialog (saturation + full adjust).
+    private sealed class ImageColorDialogCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color");
+                return;
+            }
+            var result = ImageAdjustDialog.Prompt(
+                Window.GetWindow(editor),
+                image.BrightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
+            if (result is { } r)
+                editor.SetSelectedImageAdjust(r.Brightness, r.Contrast, r.Saturation, r.Transparency);
+        }
+    }
+
+    // Picture Format > Adjust > Transparency: set absolute transparency (keeps current brightness/contrast/saturation).
+    private sealed class ImageTransparencyPresetCommand(DocumentView editor, double transparencyPct) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Transparency");
+                return;
+            }
+            editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, transparencyPct);
+        }
+    }
+
+    // Picture Format > Adjust > Transparency: open the Transparency dialog.
+    private sealed class ImageTransparencyDialogCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Transparency");
+                return;
+            }
+            var result = ImageAdjustDialog.Prompt(
+                Window.GetWindow(editor),
+                image.BrightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
+            if (result is { } r)
+                editor.SetSelectedImageAdjust(r.Brightness, r.Contrast, r.Saturation, r.Transparency);
         }
     }
 
