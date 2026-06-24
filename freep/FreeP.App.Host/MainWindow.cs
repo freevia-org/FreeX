@@ -18,13 +18,41 @@ namespace FreeP.App.Host;
 public sealed class MainWindow : Window
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
-    private static readonly ShellChromeOptions ChromeOptions = new()
+    // Colors are resolved from the active theme tokens (FreePTitleBarBrush / FreePAccentDarkBrush)
+    // registered by WpfThemeApplier at startup, with literal fallbacks so tests that construct
+    // MainWindow without a running Application still work.
+    // Values are BYTE-IDENTICAL to the previous literals when the default FreeP theme is active.
+    private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = "P",
-        TitleBarColor = Color.FromRgb(0xB7, 0x47, 0x2A),
-        BadgeColor = Color.FromRgb(0x8F, 0x37, 0x21),
+        TitleBarColor = ResolveTokenColor("FreePTitleBarBrush",   Color.FromRgb(0xB7, 0x47, 0x2A)),
+        BadgeColor    = ResolveTokenColor("FreePAccentDarkBrush", Color.FromRgb(0x8F, 0x37, 0x21)),
         CaptionHeight = 34
     };
+
+    /// <summary>
+    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
+    /// <see cref="Application.Current"/> and returns its <see cref="SolidColorBrush.Color"/>.
+    /// Falls back to <paramref name="fallback"/> when no Application is running (e.g. unit tests) or the
+    /// key is absent.
+    /// </summary>
+    private static Color ResolveTokenColor(string key, Color fallback)
+    {
+        if (System.Windows.Application.Current?.Resources[key] is SolidColorBrush brush)
+            return brush.Color;
+        return fallback;
+    }
+
+    /// <summary>
+    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
+    /// <see cref="Application.Current"/> and returns it, or <see langword="null"/> when absent/no Application.
+    /// </summary>
+    private static Brush? ResolveTokenBrush(string key)
+    {
+        if (System.Windows.Application.Current?.Resources[key] is Brush brush)
+            return brush;
+        return null;
+    }
 
     private readonly FreePOptions _options;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
@@ -60,10 +88,12 @@ public sealed class MainWindow : Window
         Width = 1280;
         Height = 760;
         WindowState = WindowState.Maximized;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = ResolveTokenBrush("FreePSheetSurfaceBrush")
+            ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // Borderless shared WindowChrome shell (custom title bar, window buttons, rounded corners).
-        ShellChrome.ConfigureWindow(this, ChromeOptions);
+        var chromeOptions = BuildChromeOptions();
+        ShellChrome.ConfigureWindow(this, chromeOptions);
 
         _commandBus = new PresentationCommandBus(_presentation);
         _commandBus.Changed += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
@@ -72,7 +102,7 @@ public sealed class MainWindow : Window
         _file = new FileCommands(this, () => _presentation, LoadModel, UpdateTitle, _options);
 
         // Title bar (shared shell): occupies its own OUTER-grid row above the Backstage overlay.
-        var titleBar = ShellChrome.BuildTitleBar(this, ChromeOptions);
+        var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
         _titleText = titleBar.TitleText;
         AddQuickAccessButtons(titleBar.QatHost);
@@ -189,7 +219,9 @@ public sealed class MainWindow : Window
         _slideCountText = SisterAppStatusBarChrome.CreateInfoText();
 
         return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            // Status bar surface routed through FreePStatusSurfaceBrush token (#B7472A default).
+            ResolveTokenBrush("FreePStatusSurfaceBrush")
+                ?? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             _slideCountText,
             LeftMargin: new Thickness(12, 0, 0, 0))).Root;
     }
