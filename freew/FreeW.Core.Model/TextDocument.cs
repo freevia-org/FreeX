@@ -683,6 +683,22 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public static Run NumPagesField(string cached = "", RunFormatting? formatting = null) =>
         new(cached, formatting) { FieldKind = RunFieldKind.NumPages };
 
+    /// <summary>Creates a Title document-property field run (renders as <see cref="DocumentProperties.Title"/>).</summary>
+    public static Run TitleField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Title };
+
+    /// <summary>Creates a Subject document-property field run (renders as <see cref="DocumentProperties.Subject"/>).</summary>
+    public static Run SubjectField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Subject };
+
+    /// <summary>Creates a Keywords document-property field run (renders as <see cref="DocumentProperties.Keywords"/>).</summary>
+    public static Run KeywordsField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.Keywords };
+
+    /// <summary>Creates a Comments/Description document-property field run (renders as <see cref="DocumentProperties.Comments"/>).</summary>
+    public static Run DocCommentsField(string cached = "", RunFormatting? formatting = null) =>
+        new(cached, formatting) { FieldKind = RunFieldKind.DocComments };
+
     /// <summary>
     /// Creates a footnote-reference run for the footnote with id <paramref name="footnoteId"/>. The
     /// run renders as a superscript marker; its <see cref="Text"/> mirrors the id for field-unaware
@@ -1158,7 +1174,15 @@ public enum RunFieldKind
     Time,
     FileName,
     Author,
-    NumPages
+    NumPages,
+    /// <summary>dc:title document property (Insert &gt; Quick Parts &gt; Document Property &gt; Title).</summary>
+    Title,
+    /// <summary>dc:subject document property (Insert &gt; Quick Parts &gt; Document Property &gt; Subject).</summary>
+    Subject,
+    /// <summary>cp:keywords document property (Insert &gt; Quick Parts &gt; Document Property &gt; Keywords).</summary>
+    Keywords,
+    /// <summary>dc:description/comments document property (Insert &gt; Quick Parts &gt; Document Property &gt; Comments).</summary>
+    DocComments
 }
 
 /// <summary>

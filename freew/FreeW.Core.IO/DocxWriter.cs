@@ -2294,12 +2294,16 @@ public static class DocxWriter
     /// </summary>
     private static string? FieldInstruction(RunFieldKind kind) => kind switch
     {
-        RunFieldKind.PageNumber => " PAGE ",
-        RunFieldKind.Date => " DATE ",
-        RunFieldKind.Time => " TIME ",
-        RunFieldKind.FileName => " FILENAME ",
-        RunFieldKind.Author => " AUTHOR ",
-        RunFieldKind.NumPages => " NUMPAGES ",
+        RunFieldKind.PageNumber  => " PAGE ",
+        RunFieldKind.Date        => " DATE ",
+        RunFieldKind.Time        => " TIME ",
+        RunFieldKind.FileName    => " FILENAME ",
+        RunFieldKind.Author      => " AUTHOR ",
+        RunFieldKind.NumPages    => " NUMPAGES ",
+        RunFieldKind.Title       => " TITLE ",
+        RunFieldKind.Subject     => " SUBJECT ",
+        RunFieldKind.Keywords    => " KEYWORDS ",
+        RunFieldKind.DocComments => " COMMENTS ",
         _ => null
     };
 

@@ -1667,12 +1667,16 @@ public static class DocxReader
         var keyword = instruction.Trim().Split(' ', '\t', '\\')[0];
         return keyword.ToUpperInvariant() switch
         {
-            "PAGE" => RunFieldKind.PageNumber,
-            "DATE" => RunFieldKind.Date,
-            "TIME" => RunFieldKind.Time,
+            "PAGE"     => RunFieldKind.PageNumber,
+            "DATE"     => RunFieldKind.Date,
+            "TIME"     => RunFieldKind.Time,
             "FILENAME" => RunFieldKind.FileName,
-            "AUTHOR" => RunFieldKind.Author,
+            "AUTHOR"   => RunFieldKind.Author,
             "NUMPAGES" => RunFieldKind.NumPages,
+            "TITLE"    => RunFieldKind.Title,
+            "SUBJECT"  => RunFieldKind.Subject,
+            "KEYWORDS" => RunFieldKind.Keywords,
+            "COMMENTS" => RunFieldKind.DocComments,
             _ => null
         };
     }

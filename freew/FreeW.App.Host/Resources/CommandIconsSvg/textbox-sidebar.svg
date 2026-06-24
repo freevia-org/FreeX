@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Sidebar Text Box">
+  <rect width="32" height="32" fill="none"/>
+  <!-- sidebar panel: dark accent -->
+  <rect x="4" y="5" width="10" height="22" rx="1" fill="#243F60"/>
+  <!-- main content area -->
+  <rect x="16" y="5" width="12" height="22" rx="1" fill="#ffffff" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M18 10h8M18 14h8M18 18h6" fill="none" stroke="#8a8a8a" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M6 10h6M6 14h6M6 18h6" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

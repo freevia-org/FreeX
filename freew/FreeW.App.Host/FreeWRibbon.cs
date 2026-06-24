@@ -218,12 +218,41 @@ internal static class FreeWRibbon
                 });
                 tab.Group("text", "Text", "X", 74, g =>
                 {
-                    g.Icon("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox);
-                    g.Icon("freew.insert-quickpart", "Quick Parts", RibbonCommandIconKind.QuickParts);
+                    // Text Box gallery: Simple (plain), Sidebar/Banded (accent fill), and Quote (indented
+                    // italic) presets — each inserts a pre-styled Shape.TextBox at the caret. The top-level
+                    // id falls through to Simple (same as the existing plain text-box insert).
+                    g.Icon("freew.shape-textbox", "Text Box", RibbonCommandIconKind.TextBox, menu: m =>
+                    {
+                        m.Item("freew.textbox-simple",  "Simple Text Box",         "S");
+                        m.Item("freew.textbox-sidebar",  "Sidebar (Banded)",        "B");
+                        m.Item("freew.textbox-quote",    "Quote",                   "Q");
+                    });
+                    // Quick Parts: a dropdown with Document Property sub-items + the existing AutoText entry.
+                    g.Icon("freew.insert-quickpart", "Quick Parts", RibbonCommandIconKind.QuickParts, menu: m =>
+                    {
+                        m.Item("freew.docprop-title",    "Document Property: Title",    "T");
+                        m.Item("freew.docprop-subject",  "Document Property: Subject",  "S");
+                        m.Item("freew.docprop-author",   "Document Property: Author",   "A");
+                        m.Item("freew.docprop-keywords", "Document Property: Keywords", "K");
+                        m.Item("freew.docprop-comments", "Document Property: Comments", "C");
+                        m.Separator();
+                        m.Item("freew.field",             "Field…",                     "F");
+                        m.Separator();
+                        m.Item("freew.save-quickpart",    "Save Selection to Quick Part Gallery…", "V");
+                        m.Item("freew.building-blocks-organizer", "Building Blocks Organizer…", "B");
+                    });
                     g.Icon("freew.insert-file", "Text from File", RibbonCommandIconKind.TextFromFile);
                     g.Icon("freew.wordart", "WordArt", RibbonCommandIconKind.WordArt);
                     g.RowBreak();
-                    g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap);
+                    // Drop Cap: top-level applies the default drop cap; dropdown opens the options dialog.
+                    g.Icon("freew.drop-cap", "Drop Cap", RibbonCommandIconKind.DropCap, menu: m =>
+                    {
+                        m.Item("freew.drop-cap-dropped",   "Dropped",         "D");
+                        m.Item("freew.drop-cap-in-margin", "In Margin",       "M");
+                        m.Item("freew.drop-cap-none",      "None (Remove)",   "N");
+                        m.Separator();
+                        m.Item("freew.drop-cap-options",   "Drop Cap Options…", "O");
+                    });
                     g.Icon("freew.datetime", "Date & Time", RibbonCommandIconKind.Date);
                     g.Icon("freew.field", "Field", RibbonCommandIconKind.Field);
                     g.Icon("freew.update-fields", "Update Fields", RibbonCommandIconKind.Refresh);
