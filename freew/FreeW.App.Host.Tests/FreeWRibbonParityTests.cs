@@ -510,13 +510,17 @@ public sealed class FreeWRibbonParityTests
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
 
-        multilevel.Menu.Items
+        var menuIds = multilevel.Menu.Items
             .Where(item => item.Kind == RibbonMenuItemKind.Command)
-            .Select(item => (item.CommandId!.Value, item.Header))
-            .Should()
-            .Equal(
-                ("freew.multilevel-promote", "Decrease List Level"),
-                ("freew.multilevel-demote", "Increase List Level"));
+            .Select(item => item.CommandId!.Value)
+            .ToList();
+        // The dropdown exposes the level commands plus predefined presets and Define New Multilevel List.
+        menuIds.Should().Contain("freew.multilevel-promote");
+        menuIds.Should().Contain("freew.multilevel-demote");
+        menuIds.Should().Contain("freew.multilevel-define");
+        // Every command surfaced in the menu must be backed by a registered command.
+        foreach (var id in menuIds)
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be backed before it appears on the Multilevel List menu");
 
         registry.TryGet("freew.multilevel-list", out _).Should().BeTrue("the top-level Multilevel List command applies backed outline numbering");
         registry.TryGet("freew.multilevel-promote", out _).Should().BeTrue("Word exposes list-level decrease from the Multilevel List menu");
