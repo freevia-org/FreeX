@@ -7,5 +7,11 @@
          Every existing csproj already sets these; centralizing only guards future additions. -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Always bundle / roll forward to the latest installed runtime servicing patch. The SDK's
+         default self-contained runtime (10.0.8) shipped a broken Linux apphost that throws
+         "BadImageFormatException: Bad IL format" on launch; the 10.0.9 patch fixes it. Floating to
+         the latest patch keeps self-contained Linux/macOS (Avalonia) and Windows (WPF) publishes on
+         a healthy, security-serviced runtime instead of pinning to whatever the SDK defaults to. -->
+    <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
   </PropertyGroup>
 </Project>
