@@ -122,7 +122,11 @@ internal static class FreeWRibbonCommands
         Action? onCopyDiagnostics = null,
         Action? onCheckForUpdates = null,
         Action? onAbout = null,
-        Action? onLegalNotices = null)
+        Action? onLegalNotices = null,
+        Action? onToggleNotesPane = null,
+        Func<bool>? isNotesPaneVisible = null,
+        Action<string>? onOpenHeaderFooterPane = null,
+        Action? onCloseHeaderFooterPane = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -697,7 +701,16 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.previous-footnote", new NavigateNoteCommand(editor, footnote: true, previous: true));
         registry.Register("freew.next-endnote", new NavigateNoteCommand(editor, footnote: false, previous: false));
         registry.Register("freew.previous-endnote", new NavigateNoteCommand(editor, footnote: false, previous: true));
-        registry.Register("freew.show-notes", new ShowNotesCommand(editor));
+        if (onToggleNotesPane is not null && isNotesPaneVisible is not null)
+        {
+            var notesPaneCmd = new ToggleNotesPaneCommand(editor, onToggleNotesPane, isNotesPaneVisible);
+            registry.Register("freew.show-notes", notesPaneCmd);
+            stateful.Add(("freew.show-notes", notesPaneCmd));
+        }
+        else
+        {
+            registry.Register("freew.show-notes", new ShowNotesCommand(editor));
+        }
         // Insert tab — References: open the Footnote and Endnote numbering options dialog (number format,
         // start-at, restart mode). Applies to w:footnotePr / w:endnotePr in settings.xml.
         registry.Register("freew.footnote-endnote-options", new FootnoteEndnoteOptionsCommand(editor));
@@ -924,12 +937,18 @@ internal static class FreeWRibbonCommands
         // Header & Footer Design contextual tab — per-slot editors.
         // Slot naming: "header"/"footer" = default; "even-header"/"even-footer" = even pages;
         // "first-header"/"first-footer" = first page. Each writes FinalSectionHeadersFooters directly.
-        registry.Register("freew.hf-edit-header",       new EditHeaderSlotCommand(editor, "header"));
-        registry.Register("freew.hf-edit-footer",       new EditHeaderSlotCommand(editor, "footer"));
-        registry.Register("freew.hf-edit-even-header",  new EditHeaderSlotCommand(editor, "even-header"));
-        registry.Register("freew.hf-edit-even-footer",  new EditHeaderSlotCommand(editor, "even-footer"));
-        registry.Register("freew.hf-edit-first-header", new EditHeaderSlotCommand(editor, "first-header"));
-        registry.Register("freew.hf-edit-first-footer", new EditHeaderSlotCommand(editor, "first-footer"));
+        // When the host supplies onOpenHeaderFooterPane, the commands open the docked pane (which
+        // preserves run formatting). Otherwise they fall back to the plain-text dialog.
+        IRibbonCommand HfEditCmd(string slot) =>
+            onOpenHeaderFooterPane is not null
+                ? new OpenHeaderFooterPaneCommand(editor, slot, onOpenHeaderFooterPane)
+                : new EditHeaderSlotCommand(editor, slot);
+        registry.Register("freew.hf-edit-header",       HfEditCmd("header"));
+        registry.Register("freew.hf-edit-footer",       HfEditCmd("footer"));
+        registry.Register("freew.hf-edit-even-header",  HfEditCmd("even-header"));
+        registry.Register("freew.hf-edit-even-footer",  HfEditCmd("even-footer"));
+        registry.Register("freew.hf-edit-first-header", HfEditCmd("first-header"));
+        registry.Register("freew.hf-edit-first-footer", HfEditCmd("first-footer"));
 
         // Header & Footer Design contextual tab — options toggles (stateful so IsChecked reflects model).
         var diffFirstPage = new DifferentFirstPageToggleCommand(editor);
@@ -950,9 +969,20 @@ internal static class FreeWRibbonCommands
         stateful.Add(("freew.hf-footer-from-bottom", footerFromBottom));
 
         // Header & Footer Design contextual tab — navigation + close.
-        registry.Register("freew.hf-go-to-header", new GoToHeaderCommand(editor));
-        registry.Register("freew.hf-go-to-footer", new GoToFooterCommand(editor));
-        registry.Register("freew.hf-close",         new CloseHeaderFooterCommand(editor));
+        // Go-to-header / go-to-footer open the pane (when available) for the default slots.
+        registry.Register("freew.hf-go-to-header",
+            onOpenHeaderFooterPane is not null
+                ? new OpenHeaderFooterPaneCommand(editor, "header", onOpenHeaderFooterPane)
+                : new GoToHeaderCommand(editor));
+        registry.Register("freew.hf-go-to-footer",
+            onOpenHeaderFooterPane is not null
+                ? new OpenHeaderFooterPaneCommand(editor, "footer", onOpenHeaderFooterPane)
+                : new GoToFooterCommand(editor));
+        // Close Header and Footer: hides the pane (when available) and returns focus to the body.
+        registry.Register("freew.hf-close",
+            onCloseHeaderFooterPane is not null
+                ? new ActionCommand(onCloseHeaderFooterPane)
+                : new CloseHeaderFooterCommand(editor));
 
         // Header & Footer Design contextual tab — insert into default header/footer slot.
         registry.Register("freew.hf-insert-page-number",  new InsertIntoHeaderSlotCommand(editor, isFooter: false, InsertSlotKind.PageNumber));
@@ -3033,6 +3063,23 @@ internal static class FreeWRibbonCommands
 
             dialog.ShowDialog();
         }
+    }
+
+    // References > Footnotes > Show Notes (backed toggle variant): shows or hides the docked Notes pane.
+    // Replaces the read-only NotesListDialog when the host passes toggle callbacks through Build().
+    private sealed class ToggleNotesPaneCommand(
+        DocumentView editor,
+        Action onToggle,
+        Func<bool> isVisible) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            onToggle();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: true, IsChecked: isVisible());
     }
 
     // Insert > References > Footnote/Endnote Options: open the Footnote and Endnote numbering options
@@ -5490,11 +5537,57 @@ internal static class FreeWRibbonCommands
     }
 
     // ── Header & Footer Design contextual tab commands ───────────────────────────────────────────────
-    // Activation model: DIALOG approach (approach b). FreeW's FlowDocument is a single continuous
-    // stream — there is no genuine in-document editable header region. Every command below routes
-    // through the backed SectionHeadersFooters / PageSettings model and round-trips through DocxWriter.
-    // The "edit mode" concept is surfaced via Go to Header / Go to Footer which open the per-slot
-    // dialog directly; Close Header and Footer is a contextual-tab-exit helper.
+    // Activation model: DOCKED PANE (when host wires onOpenHeaderFooterPane) or fallback DIALOG approach.
+    // FreeW's FlowDocument is a single continuous stream — there is no genuine in-document editable header
+    // region. Every command routes through the backed SectionHeadersFooters / PageSettings model and
+    // round-trips through DocxWriter. The docked pane sub-editor preserves run formatting (bold/italic/
+    // colour) that the legacy plain-text dialog lost. Close Header and Footer commits the pane and
+    // returns focus to the body.
+
+    // Header & Footer Design: open the docked pane (formatted sub-editor) for a named slot.
+    // Used when the host passes onOpenHeaderFooterPane through Build().
+    private sealed class OpenHeaderFooterPaneCommand(
+        DocumentView editor,
+        string slotName,
+        Action<string> openPane) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var hf = editor.Model.FinalSectionHeadersFooters;
+            var page = editor.Model.Page;
+
+            // Warn if the slot requires a toggle that is currently off (same guard as EditHeaderSlotCommand).
+            var label = slotName switch
+            {
+                "header"       => "Default Header",
+                "footer"       => "Default Footer",
+                "even-header"  => "Even-Page Header",
+                "even-footer"  => "Even-Page Footer",
+                "first-header" => "First-Page Header",
+                "first-footer" => "First-Page Footer",
+                _              => slotName
+            };
+
+            if (slotName is "even-header" or "even-footer" && !page.DifferentOddEvenPages)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    $"'{label}' is only active when 'Different Odd & Even Pages' is turned on.\n" +
+                    "Enable that option in Header & Footer Design, then try again.",
+                    "Edit Header / Footer");
+                return;
+            }
+            if (slotName is "first-header" or "first-footer" && !page.DifferentFirstPage)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    $"'{label}' is only active when 'Different First Page' is turned on.\n" +
+                    "Enable that option in Header & Footer Design, then try again.",
+                    "Edit Header / Footer");
+                return;
+            }
+
+            openPane(slotName);
+        }
+    }
 
     // Header & Footer Design > Header/Footer: open the per-slot editor for each named slot.
     // The slot name controls which of the 6 SectionHeadersFooters properties is read/written.

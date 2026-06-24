@@ -7326,6 +7326,47 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>
+    /// Removes a footnote from the model and strips its reference marker from the body. Re-renders so
+    /// the change is immediately visible. Mirrors <see cref="InsertFootnote"/> in reverse.
+    /// </summary>
+    public void DeleteFootnote(int id)
+    {
+        CommitToModel();
+        _model.Footnotes.Remove(id);
+        StripNoteMarker(id, footnote: true);
+        CommitToModel();
+        Render();
+    }
+
+    /// <summary>
+    /// Removes an endnote from the model and strips its reference marker from the body. Re-renders so
+    /// the change is immediately visible. Mirrors <see cref="InsertEndnote"/> in reverse.
+    /// </summary>
+    public void DeleteEndnote(int id)
+    {
+        CommitToModel();
+        _model.Endnotes.Remove(id);
+        StripNoteMarker(id, footnote: false);
+        CommitToModel();
+        Render();
+    }
+
+    private void StripNoteMarker(int id, bool footnote)
+    {
+        var toRemove = new List<WpfRun>();
+        foreach (var run in NoteMarkers(footnote))
+        {
+            var markerId = footnote
+                ? (run.Tag as FootnoteMarker)?.FootnoteId
+                : (run.Tag as EndnoteMarker)?.EndnoteId;
+            if (markerId == id)
+                toRemove.Add(run);
+        }
+        foreach (var run in toRemove)
+            run.ContentStart.Paragraph?.Inlines.Remove(run);
+    }
+
     /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>
     public bool MoveToNextFootnote() => MoveToAdjacentNote(footnote: true, previous: false);
 

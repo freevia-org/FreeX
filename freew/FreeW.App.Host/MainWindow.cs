@@ -70,6 +70,30 @@ public sealed class MainWindow : Window
     // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
     private RevisionSortOrder _reviewSortOrder = RevisionSortOrder.Sequence;
 
+    // Notes Pane (References > Show Notes): a docked right-side pane that lists every footnote and
+    // endnote as a stub (Kind + id + first line). Selecting a stub loads its paragraphs into a sub-editor
+    // (a second DocumentView) for rich editing; Apply copies the edited blocks back into the note's
+    // Content and re-renders the main editor. Delete removes the note from the model and strips its
+    // marker from the body. Mirrors the ReviewingPane dock/toggle shape.
+    private Border _notesPane = null!;
+    private ListBox _notesList = null!;
+    private DocumentView _notesSubEditor = null!;
+    private TextBlock _notesSelectedLabel = null!;
+    private Button _notesApplyButton = null!;
+    private Button _notesDeleteButton = null!;
+    private bool _notesPaneVisible;
+    // The note currently loaded in the sub-editor (null = nothing selected).
+    private (bool IsFootnote, int Id)? _activeNote;
+
+    // Header/Footer Pane (replaces plain-text HeaderFooterSlotDialog): a docked pane with a slot
+    // selector (header/footer/even/first × header/footer) and a DocumentView sub-editor so run
+    // formatting (bold/italic/colour/page-number fields) is preserved round-trip. Opening the pane
+    // loads the slot's Paragraphs via the wrapper pattern; Close copies them back and re-renders.
+    private Border _hfPane = null!;
+    private TextBlock _hfSlotLabel = null!;
+    private DocumentView _hfSubEditor = null!;
+    private string? _hfActiveSlot;   // "header" | "footer" | "even-header" | … | null
+
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
     // jumping each into view in the editor. The heading outline below is filtered to entries that either
@@ -239,7 +263,11 @@ public sealed class MainWindow : Window
             onCopyDiagnostics: CopyDiagnostics,
             onCheckForUpdates: () => OpenExternalHelpLink(FreeWAppInfo.LatestReleaseUrl, "Check for Updates"),
             onAbout: ShowAboutDialog,
-            onLegalNotices: ShowLegalNoticesDialog);
+            onLegalNotices: ShowLegalNoticesDialog,
+            onToggleNotesPane: ToggleNotesPane,
+            isNotesPaneVisible: () => _notesPaneVisible,
+            onOpenHeaderFooterPane: OpenHeaderFooterPane,
+            onCloseHeaderFooterPane: CloseHeaderFooterPane);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) =>
         {
@@ -248,6 +276,7 @@ public sealed class MainWindow : Window
             RefreshOutline();
             RefreshContextualTabs();
             RefreshReviewPane();
+            RefreshNotesPane();
             // Debounced refresh of the split-window snapshot pane (~300 ms), so rapid keystrokes
             // don't re-paginate on every character. No-op when the split pane is not open.
             ScheduleSplitPaneRefresh();
@@ -305,6 +334,18 @@ public sealed class MainWindow : Window
         var reviewPane = BuildReviewPane();
         DockPanel.SetDock(reviewPane, Dock.Right);
         body.Children.Add(reviewPane);
+
+        // Notes Pane docks on the BOTTOM (Word positions the notes pane below the body). Collapsed by
+        // default; ToggleNotesPane shows/hides it and RefreshNotesPane rebuilds the stub list.
+        var notesPane = BuildNotesPane();
+        DockPanel.SetDock(notesPane, Dock.Bottom);
+        body.Children.Add(notesPane);
+
+        // Header/Footer Pane docks on the BOTTOM (Word's in-document header region analogue). Collapsed
+        // by default; OpenHeaderFooterPane loads the slot into the sub-editor.
+        var hfPane = BuildHeaderFooterPane();
+        DockPanel.SetDock(hfPane, Dock.Bottom);
+        body.Children.Add(hfPane);
 
         // Grey "workspace" behind the editor so the Print-Layout page reads as a white sheet floating on a
         // desk. The editor sizes/centres itself to the page width in Print-Layout mode (see
@@ -1350,6 +1391,364 @@ public sealed class MainWindow : Window
             : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
         _reviewList.SelectedIndex = next;
         _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+    }
+
+    // ── Notes Pane (Feature 1A-1C) ──────────────────────────────────────────────────────────────────
+
+    // Build the Notes pane: header, a ListBox of note stubs (Kind + id + first line), a small sub-editor
+    // for rich editing of the selected note, Apply and Delete buttons. Docked at the bottom; collapsed
+    // by default. Mirrors BuildReviewPane's pattern exactly: the pane never owns note logic; it reads
+    // and writes Footnotes/Endnotes via the model.
+    private UIElement BuildNotesPane()
+    {
+        var header = new TextBlock
+        {
+            Text = "Notes",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 8, 10, 4)
+        };
+
+        _notesList = new ListBox
+        {
+            MinHeight = 60,
+            MaxHeight = 100,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(8, 0, 8, 4)
+        };
+
+        _notesSelectedLabel = new TextBlock
+        {
+            Text = string.Empty,
+            FontStyle = FontStyles.Italic,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50)),
+            Margin = new Thickness(10, 0, 10, 2),
+            Visibility = Visibility.Collapsed
+        };
+
+        // Sub-editor: a second DocumentView with its own undo stack — editing here never pollutes the
+        // main editor's undo. It is sized small so it fits in the bottom pane without crowding.
+        _notesSubEditor = new DocumentView
+        {
+            MinHeight = 80,
+            MaxHeight = 160,
+            Margin = new Thickness(8, 0, 8, 4),
+            Visibility = Visibility.Collapsed
+        };
+
+        Button MakeButton(string text, string tip, System.Action onClick, bool isPrimary = false)
+        {
+            var btn = new Button
+            {
+                Content = text,
+                ToolTip = tip,
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(0, 0, 6, 0),
+                MinWidth = 60
+            };
+            if (isPrimary)
+                btn.FontWeight = FontWeights.SemiBold;
+            btn.Click += (_, _) => onClick();
+            return btn;
+        }
+
+        _notesApplyButton  = MakeButton("Apply",  "Commit edits back to this note",   ApplySelectedNote,  isPrimary: true);
+        _notesDeleteButton = MakeButton("Delete", "Delete this note and its marker",  DeleteSelectedNote);
+        _notesApplyButton.Visibility  = Visibility.Collapsed;
+        _notesDeleteButton.Visibility = Visibility.Collapsed;
+
+        var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
+        toolbar.Children.Add(_notesApplyButton);
+        toolbar.Children.Add(_notesDeleteButton);
+
+        // Selecting a stub loads the note's content into the sub-editor.
+        _notesList.SelectionChanged += (_, _) => LoadSelectedNote();
+
+        var layout = new DockPanel();
+        DockPanel.SetDock(header, Dock.Top);
+        DockPanel.SetDock(_notesList, Dock.Top);
+        DockPanel.SetDock(_notesSelectedLabel, Dock.Top);
+        DockPanel.SetDock(toolbar, Dock.Bottom);
+        layout.Children.Add(header);
+        layout.Children.Add(_notesList);
+        layout.Children.Add(_notesSelectedLabel);
+        layout.Children.Add(toolbar);
+        layout.Children.Add(_notesSubEditor);  // fill
+
+        _notesPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xFD)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _notesPane;
+    }
+
+    // Toggle the Notes pane, keeping freew.show-notes ribbon state in sync.
+    private void ToggleNotesPane()
+    {
+        _notesPaneVisible = !_notesPaneVisible;
+        _notesPane.Visibility = _notesPaneVisible ? Visibility.Visible : Visibility.Collapsed;
+        _stateStore.SetChecked("freew.show-notes", _notesPaneVisible);
+        if (_notesPaneVisible)
+            RefreshNotesPane();
+    }
+
+    // Rebuild the stub list from the model's Footnotes + Endnotes dicts.
+    // No-op when the pane is hidden. Tries to preserve the selected position.
+    private void RefreshNotesPane()
+    {
+        if (_notesList is null || !_notesPaneVisible)
+            return;
+
+        var prevIndex = _notesList.SelectedIndex;
+        _notesList.Items.Clear();
+        foreach (var note in _editor.Model.Footnotes.Values.OrderBy(n => n.Id))
+            _notesList.Items.Add(new NoteStub(IsFootnote: true,  Id: note.Id, Label: $"Footnote {note.Id}", Preview: note.PlainText));
+        foreach (var note in _editor.Model.Endnotes.Values.OrderBy(n => n.Id))
+            _notesList.Items.Add(new NoteStub(IsFootnote: false, Id: note.Id, Label: $"Endnote {note.Id}",  Preview: note.PlainText));
+
+        if (_notesList.Items.Count > 0)
+            _notesList.SelectedIndex = System.Math.Min(System.Math.Max(prevIndex, 0), _notesList.Items.Count - 1);
+    }
+
+    // Load the note selected in the stub list into the sub-editor.
+    private void LoadSelectedNote()
+    {
+        if (_notesList.SelectedItem is not NoteStub stub)
+        {
+            _notesSelectedLabel.Visibility = Visibility.Collapsed;
+            _notesSubEditor.Visibility     = Visibility.Collapsed;
+            _notesApplyButton.Visibility   = Visibility.Collapsed;
+            _notesDeleteButton.Visibility  = Visibility.Collapsed;
+            _activeNote = null;
+            return;
+        }
+
+        _activeNote = (stub.IsFootnote, stub.Id);
+        _notesSelectedLabel.Text       = stub.Label;
+        _notesSelectedLabel.Visibility = Visibility.Visible;
+        _notesApplyButton.Visibility   = Visibility.Visible;
+        _notesDeleteButton.Visibility  = Visibility.Visible;
+        _notesSubEditor.Visibility     = Visibility.Visible;
+
+        // Build a wrapper TextDocument seeded with the main doc's DefaultRun/Styles so fonts match.
+        var wrapper = TextDocument.CreateEmpty();
+        wrapper.DefaultRun       = _editor.Model.DefaultRun;
+        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
+        wrapper.Blocks.Clear();
+
+        var content = stub.IsFootnote
+            ? (_editor.Model.Footnotes.TryGetValue(stub.Id, out var fn) ? fn.Content : null)
+            : (_editor.Model.Endnotes.TryGetValue(stub.Id, out var en) ? en.Content : null);
+
+        if (content is not null)
+        {
+            foreach (var para in content)
+                wrapper.Blocks.Add(para);
+        }
+        if (wrapper.Blocks.Count == 0)
+            wrapper.Blocks.Add(new Paragraph());
+
+        _notesSubEditor.LoadModel(wrapper);
+    }
+
+    // Apply edits from the sub-editor back to the selected note's Content, then re-render the main editor
+    // so marker tooltips (which show the note's plain text) refresh.
+    private void ApplySelectedNote()
+    {
+        if (_activeNote is not { } active)
+            return;
+
+        _notesSubEditor.CommitToModel();
+
+        // Copy the edited blocks back into the note Content list.
+        if (active.IsFootnote && _editor.Model.Footnotes.TryGetValue(active.Id, out var fn))
+        {
+            fn.Content.Clear();
+            foreach (var block in _notesSubEditor.Model.Blocks.OfType<Paragraph>())
+                fn.Content.Add(block);
+        }
+        else if (!active.IsFootnote && _editor.Model.Endnotes.TryGetValue(active.Id, out var en))
+        {
+            en.Content.Clear();
+            foreach (var block in _notesSubEditor.Model.Blocks.OfType<Paragraph>())
+                en.Content.Add(block);
+        }
+
+        // Re-render the main editor so marker tooltips reflect the new text (no-op page-settings
+        // commit triggers CommitToModel + Render inside ApplyPageSettings).
+        _editor.ApplyPageSettings(_ => { });
+        _file.MarkDirty();
+        RefreshNotesPane();
+    }
+
+    // Delete the selected note from the model and strip its marker run from the body, then refresh.
+    private void DeleteSelectedNote()
+    {
+        if (_activeNote is not { } active)
+            return;
+
+        if (active.IsFootnote)
+            _editor.DeleteFootnote(active.Id);
+        else
+            _editor.DeleteEndnote(active.Id);
+
+        _activeNote = null;
+        _file.MarkDirty();
+        RefreshNotesPane();
+        // Clear the sub-editor so the deleted note's content is not accidentally re-applied.
+        _notesSubEditor.Visibility    = Visibility.Collapsed;
+        _notesApplyButton.Visibility  = Visibility.Collapsed;
+        _notesDeleteButton.Visibility = Visibility.Collapsed;
+        _notesSelectedLabel.Visibility = Visibility.Collapsed;
+    }
+
+    // Lightweight stub for the Notes pane's list. Carries enough for display + selection → load.
+    private sealed record NoteStub(bool IsFootnote, int Id, string Label, string Preview)
+    {
+        public override string ToString() =>
+            string.IsNullOrWhiteSpace(Preview)
+                ? Label
+                : $"{Label}: {(Preview.Length > 60 ? Preview[..57] + "…" : Preview)}";
+    }
+
+    // ── Header/Footer Pane (Feature 2A) ─────────────────────────────────────────────────────────────
+
+    // Build the Header/Footer pane: a slot-label, a DocumentView sub-editor for rich editing
+    // (preserving bold/italic/colour/page-number fields), and a "Close Header and Footer" button.
+    // Docked at the bottom; collapsed by default.
+    private UIElement BuildHeaderFooterPane()
+    {
+        _hfSlotLabel = new TextBlock
+        {
+            Text = string.Empty,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 6, 10, 4)
+        };
+
+        _hfSubEditor = new DocumentView
+        {
+            MinHeight = 80,
+            MaxHeight = 200,
+            Margin = new Thickness(8, 0, 8, 4)
+        };
+
+        var closeBtn = new Button
+        {
+            Content = "Close Header and Footer",
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(10, 4, 10, 6),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        closeBtn.Click += (_, _) => CloseHeaderFooterPane();
+
+        var layout = new DockPanel();
+        DockPanel.SetDock(_hfSlotLabel, Dock.Top);
+        DockPanel.SetDock(closeBtn,     Dock.Bottom);
+        layout.Children.Add(_hfSlotLabel);
+        layout.Children.Add(closeBtn);
+        layout.Children.Add(_hfSubEditor);   // fill
+
+        _hfPane = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF8, 0xFF)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xB8, 0xD8)),
+            BorderThickness = new Thickness(0, 2, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = layout
+        };
+        return _hfPane;
+    }
+
+    // Open the Header/Footer pane for the named slot, loading its Paragraphs into the sub-editor.
+    // Preserves run formatting (bold/italic/colour/field runs) that the old plain-text dialog lost.
+    private void OpenHeaderFooterPane(string slotName)
+    {
+        _hfActiveSlot = slotName;
+
+        var label = slotName switch
+        {
+            "header"       => "Default Header",
+            "footer"       => "Default Footer",
+            "even-header"  => "Even-Page Header",
+            "even-footer"  => "Even-Page Footer",
+            "first-header" => "First-Page Header",
+            "first-footer" => "First-Page Footer",
+            _              => slotName
+        };
+        _hfSlotLabel.Text = $"Editing: {label}";
+
+        var hf = _editor.Model.FinalSectionHeadersFooters;
+        var current = slotName switch
+        {
+            "header"       => hf.Header,
+            "footer"       => hf.Footer,
+            "even-header"  => hf.EvenHeader,
+            "even-footer"  => hf.EvenFooter,
+            "first-header" => hf.FirstHeader,
+            "first-footer" => hf.FirstFooter,
+            _              => null
+        };
+
+        // Wrapper document — seeded with the main doc's DefaultRun so fonts match.
+        var wrapper = TextDocument.CreateEmpty();
+        wrapper.DefaultRun       = _editor.Model.DefaultRun;
+        wrapper.DefaultParagraph = _editor.Model.DefaultParagraph;
+        wrapper.Blocks.Clear();
+
+        if (current is not null)
+        {
+            foreach (var para in current.Paragraphs)
+                wrapper.Blocks.Add(para);
+        }
+        if (wrapper.Blocks.Count == 0)
+            wrapper.Blocks.Add(new Paragraph());
+
+        _hfSubEditor.LoadModel(wrapper);
+
+        _hfPane.Visibility = Visibility.Visible;
+    }
+
+    // Close (commit) the Header/Footer pane: commit the sub-editor's edits back to the slot in the
+    // model, hide the pane, and re-render the main editor. Mirrors the "Close Header and Footer" button
+    // and the freew.hf-close command.
+    private void CloseHeaderFooterPane()
+    {
+        if (_hfActiveSlot is null)
+        {
+            _hfPane.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _hfSubEditor.CommitToModel();
+
+        // Build a new HeaderFooter from the sub-editor's blocks.
+        var hfOut = new HeaderFooter();
+        foreach (var block in _hfSubEditor.Model.Blocks.OfType<Paragraph>())
+            hfOut.Paragraphs.Add(block);
+
+        // Write back to the correct slot.
+        var hf = _editor.Model.FinalSectionHeadersFooters;
+        switch (_hfActiveSlot)
+        {
+            case "header":       hf.Header      = hfOut; break;
+            case "footer":       hf.Footer      = hfOut; break;
+            case "even-header":  hf.EvenHeader  = hfOut; break;
+            case "even-footer":  hf.EvenFooter  = hfOut; break;
+            case "first-header": hf.FirstHeader = hfOut; break;
+            case "first-footer": hf.FirstFooter = hfOut; break;
+        }
+
+        _hfActiveSlot  = null;
+        _hfPane.Visibility = Visibility.Collapsed;
+
+        // Re-render the main editor and return focus (no-op page-settings commit triggers
+        // CommitToModel + Render inside ApplyPageSettings without changing any setting).
+        _editor.ApplyPageSettings(_ => { });
+        _file.MarkDirty();
+        _editor.Focus();
     }
 
     // Read mode (distraction-free view): hide the ribbon, title bar, navigation pane, and the status
