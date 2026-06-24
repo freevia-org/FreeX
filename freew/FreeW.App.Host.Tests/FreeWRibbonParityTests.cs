@@ -1949,4 +1949,116 @@ public sealed class FreeWRibbonParityTests
             .Count(r => r.FieldKind == RunFieldKind.PageNumber);
         pageNumberCount.Should().Be(1, "inserting page number twice must not duplicate the field run");
     }
+
+    // ── Notes pane backing (Phase 1A) ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When the host passes onToggleNotesPane + isNotesPaneVisible callbacks, freew.show-notes must be
+    /// registered as a backed stateful command (IsChecked reflects isNotesPaneVisible), not the read-only
+    /// dialog. This is the parity discipline check: freew.show-notes is a backed toggle.
+    /// </summary>
+    [StaFact]
+    public void ShowNotes_WithPaneCallbacks_IsBackedStatefulToggle()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var paneVisible = false;
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onToggleNotesPane: () => { paneVisible = !paneVisible; },
+            isNotesPaneVisible: () => paneVisible);
+
+        registry.TryGet("freew.show-notes", out var cmd).Should().BeTrue("freew.show-notes must be registered");
+        var stateful = cmd as IRibbonStatefulCommand;
+        stateful.Should().NotBeNull("freew.show-notes must be a stateful toggle when pane callbacks are supplied");
+
+        stateful!.GetState().IsChecked.Should().BeFalse("pane starts hidden");
+        cmd!.Execute(RibbonCommandContext.Empty);
+        paneVisible.Should().BeTrue("Execute must invoke the toggle callback");
+        stateful.GetState().IsChecked.Should().BeTrue("IsChecked reflects the toggle state");
+    }
+
+    /// <summary>
+    /// Without pane callbacks, freew.show-notes must still be registered (as the read-only dialog command).
+    /// </summary>
+    [StaFact]
+    public void ShowNotes_WithoutPaneCallbacks_IsStillRegistered()
+    {
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+        registry.TryGet("freew.show-notes", out _).Should().BeTrue(
+            "freew.show-notes must be registered even without pane callbacks");
+    }
+
+    // ── Header/Footer pane backing (Phase 2A) ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When the host supplies onOpenHeaderFooterPane, hf-edit-* commands must delegate to the pane
+    /// callback instead of opening the plain-text dialog.
+    /// </summary>
+    [StaFact]
+    public void HeaderFooterDesign_WithPaneCallback_HfEditCommandsCallOpenPane()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        string? openedSlot = null;
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onOpenHeaderFooterPane: slot => { openedSlot = slot; },
+            onCloseHeaderFooterPane: () => { });
+
+        registry.TryGet("freew.hf-edit-header", out var cmd).Should().BeTrue();
+        cmd!.Execute(RibbonCommandContext.Empty);
+        openedSlot.Should().Be("header", "hf-edit-header must call openPane(\"header\")");
+    }
+
+    /// <summary>freew.hf-close must be registered and call the close callback when supplied.</summary>
+    [StaFact]
+    public void HeaderFooterDesign_WithPaneCallback_HfCloseCallsClosePane()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TextDocument.CreateEmpty());
+        var closeCalled = false;
+        var registry = FreeWRibbonCommands.Build(
+            editor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onOpenHeaderFooterPane: _ => { },
+            onCloseHeaderFooterPane: () => { closeCalled = true; });
+
+        registry.TryGet("freew.hf-close", out var cmd).Should().BeTrue();
+        cmd!.Execute(RibbonCommandContext.Empty);
+        closeCalled.Should().BeTrue("freew.hf-close must invoke the close callback");
+    }
 }
