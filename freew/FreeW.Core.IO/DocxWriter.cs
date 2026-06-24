@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeW.Core.Model;
@@ -2735,6 +2735,46 @@ public static class DocxWriter
                 BuildPicGraphic(part, cx, cy)));
     }
 
+    /// <summary>
+    /// Shared helper: wraps <paramref name="graphic"/> in a <c>w:drawing/wp:anchor</c> container, using
+    /// the floating-position state from <paramref name="placement"/>. Called by BuildShapeDrawing,
+    /// BuildWordArtDrawing, BuildChartDrawing and BuildSmartArtDrawing when their object is floating.
+    /// The <c>wp:anchor</c> attributes and position children mirror <see cref="BuildAnchorDrawing"/> exactly.
+    /// </summary>
+    private static XElement BuildAnchorContainer(
+        long cx, long cy,
+        XElement docPr,
+        XElement graphic,
+        FloatingPlacement placement)
+    {
+        var behindDoc = placement.Wrapping == ImageWrapping.Behind ? 1 : 0;
+        return new XElement(W + "drawing",
+            new XElement(Wp + "anchor",
+                new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute("distT", 0), new XAttribute("distB", 0),
+                new XAttribute("distL", 0), new XAttribute("distR", 0),
+                new XAttribute("simplePos", 0),
+                new XAttribute("relativeHeight", placement.ZOrderIndex),
+                new XAttribute("behindDoc", behindDoc),
+                new XAttribute("locked", 0),
+                new XAttribute("layoutInCell", 1),
+                new XAttribute("allowOverlap", 1),
+                new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
+                new XElement(Wp + "positionH",
+                    new XAttribute("relativeFrom", HorizontalAnchorToken(placement.HorizontalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(placement.HorizontalOffsetPt))),
+                new XElement(Wp + "positionV",
+                    new XAttribute("relativeFrom", VerticalAnchorToken(placement.VerticalAnchor)),
+                    new XElement(Wp + "posOffset", PointsToEmu(placement.VerticalOffsetPt))),
+                new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                new XElement(Wp + "effectExtent",
+                    new XAttribute("l", 0), new XAttribute("t", 0),
+                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                BuildWrap(placement.Wrapping),
+                docPr,
+                graphic));
+    }
+
     /// <summary>The wp:positionH/@relativeFrom token for a horizontal anchor.</summary>
     private static string HorizontalAnchorToken(HorizontalAnchor anchor) => anchor switch
     {
@@ -2919,6 +2959,14 @@ public static class DocxWriter
         if (shape.AltText is { Length: > 0 } altText)
             docPr.Add(new XAttribute("descr", altText));
 
+        var graphic = new XElement(A + "graphic",
+            new XElement(A + "graphicData",
+                new XAttribute("uri", Wps.NamespaceName),
+                wsp));
+
+        if (shape.IsFloating && shape.Placement is { } placement)
+            return BuildAnchorContainer(cx, cy, docPr, graphic, placement);
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute("distT", 0), new XAttribute("distB", 0),
@@ -2928,12 +2976,10 @@ public static class DocxWriter
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
                 docPr,
-                new XElement(A + "graphic",
-                    new XElement(A + "graphicData",
-                        new XAttribute("uri", Wps.NamespaceName),
-                        wsp))));
+                graphic));
     }
 
+    /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     private static readonly Dictionary<string, string> EmptyHyperlinks = new();
 
@@ -2984,6 +3030,14 @@ public static class DocxWriter
         if (wordArt.AltText is { Length: > 0 } wordArtAltText)
             wordArtDocPr.Add(new XAttribute("descr", wordArtAltText));
 
+        var wordArtGraphic = new XElement(A + "graphic",
+            new XElement(A + "graphicData",
+                new XAttribute("uri", Wps.NamespaceName),
+                wsp));
+
+        if (wordArt.IsFloating && wordArt.Placement is { } wordArtPlacement)
+            return BuildAnchorContainer(cx, cy, wordArtDocPr, wordArtGraphic, wordArtPlacement);
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute("distT", 0), new XAttribute("distB", 0),
@@ -2993,12 +3047,11 @@ public static class DocxWriter
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
                 wordArtDocPr,
-                new XElement(A + "graphic",
-                    new XElement(A + "graphicData",
-                        new XAttribute("uri", Wps.NamespaceName),
-                        wsp))));
+                wordArtGraphic));
     }
 
+    /// <summary>
+    /// Builds the single w:p inside a WordArt text box
     /// <summary>
     /// Builds the single w:p inside a WordArt text box: a w:r whose w:rPr carries the font size (w:sz, in
     /// half-points) plus the DrawingML text effects (a:solidFill/a:gradFill/a:ln/a:effectLst) selected by the
@@ -3079,6 +3132,18 @@ public static class DocxWriter
         var cy = PointsToEmu(part.Chart.HeightPt);
         var name = $"Chart {part.DrawingId}";
 
+        var chartDocPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name));
+        var chartGraphic = new XElement(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", ChartGraphicDataUri),
+                new XElement(C + "chart",
+                    new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
+                    new XAttribute(R + "id", part.RelationshipId))));
+
+        if (part.Chart.IsFloating && part.Chart.Placement is { } chartPlacement)
+            return BuildAnchorContainer(cx, cy, chartDocPr, chartGraphic, chartPlacement);
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
@@ -3088,14 +3153,8 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
-                new XElement(A + "graphic",
-                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                    new XElement(A + "graphicData",
-                        new XAttribute("uri", ChartGraphicDataUri),
-                        new XElement(C + "chart",
-                            new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
-                            new XAttribute(R + "id", part.RelationshipId))))));
+                chartDocPr,
+                chartGraphic));
     }
 
     /// <summary>
@@ -3179,6 +3238,22 @@ public static class DocxWriter
         var cy = PointsToEmu(part.SmartArt.HeightPt);
         var name = $"Diagram {part.DrawingId}";
 
+        var smartArtDocPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name));
+        var smartArtGraphic = new XElement(A + "graphic",
+            new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(A + "graphicData",
+                new XAttribute("uri", DiagramGraphicDataUri),
+                new XElement(Dgm + "relIds",
+                    new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                    new XAttribute(R + "dm", part.DataRelationshipId),
+                    new XAttribute(R + "lo", part.LayoutRelationshipId),
+                    new XAttribute(R + "qs", part.QuickStyleRelationshipId),
+                    new XAttribute(R + "cs", part.ColorsRelationshipId))));
+
+        if (part.SmartArt.IsFloating && part.SmartArt.Placement is { } smartArtPlacement)
+            return BuildAnchorContainer(cx, cy, smartArtDocPr, smartArtGraphic, smartArtPlacement);
+
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
@@ -3188,18 +3263,8 @@ public static class DocxWriter
                 new XElement(Wp + "effectExtent",
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
-                new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name)),
-                new XElement(A + "graphic",
-                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                    new XElement(A + "graphicData",
-                        new XAttribute("uri", DiagramGraphicDataUri),
-                        new XElement(Dgm + "relIds",
-                            new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
-                            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
-                            new XAttribute(R + "dm", part.DataRelationshipId),
-                            new XAttribute(R + "lo", part.LayoutRelationshipId),
-                            new XAttribute(R + "qs", part.QuickStyleRelationshipId),
-                            new XAttribute(R + "cs", part.ColorsRelationshipId))))));
+                smartArtDocPr,
+                smartArtGraphic));
     }
 
     /// <summary>

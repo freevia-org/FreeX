@@ -1,8 +1,8 @@
-namespace FreeW.Core.Model;
+﻿namespace FreeW.Core.Model;
 
 // MODEL-DESIGN CHOICE (roadmap item X2, WordArt / decorative text):
 // WordArt is modelled as an OPTIONAL INLINE RUN MARK (Run.WordArt) exactly like Run.Shape / Run.Equation /
-// Run.Image — the established FreeW pattern for every inline feature, so WordArt flows through the existing
+// Run.Image â€” the established FreeW pattern for every inline feature, so WordArt flows through the existing
 // run sequence (table cells, headers/footers, hyperlink/comment wrapping) with zero new plumbing.
 //
 // In modern Word, WordArt is a text box (wps:wsp) whose run text carries DrawingML *text effects* on its
@@ -19,10 +19,10 @@ namespace FreeW.Core.Model;
 /// applied to the WordArt run's <c>a:rPr</c> when written, and is inferred back from the presence of those
 /// effects when read:
 /// <list type="bullet">
-/// <item><see cref="FillBlue"/> — a solid blue text fill (<c>a:solidFill</c>), no outline/shadow.</item>
-/// <item><see cref="GradientFill"/> — a two-stop gradient text fill (<c>a:gradFill</c>).</item>
-/// <item><see cref="Outline"/> — a solid fill plus a coloured text outline (<c>a:ln</c>).</item>
-/// <item><see cref="Shadow"/> — a solid fill plus an outer shadow (<c>a:effectLst</c>/<c>a:outerShdw</c>).</item>
+/// <item><see cref="FillBlue"/> â€” a solid blue text fill (<c>a:solidFill</c>), no outline/shadow.</item>
+/// <item><see cref="GradientFill"/> â€” a two-stop gradient text fill (<c>a:gradFill</c>).</item>
+/// <item><see cref="Outline"/> â€” a solid fill plus a coloured text outline (<c>a:ln</c>).</item>
+/// <item><see cref="Shadow"/> â€” a solid fill plus an outer shadow (<c>a:effectLst</c>/<c>a:outerShdw</c>).</item>
 /// </list>
 /// </summary>
 public enum WordArtStyle
@@ -55,6 +55,15 @@ public sealed class WordArt
     /// Mirrors <see cref="InlineImage.AltText"/> and <see cref="Shape.AltText"/>.
     /// </summary>
     public string? AltText { get; set; }
+
+    /// <summary>
+    /// Floating-position state. Null (the default) means the WordArt is inline.
+    /// Set <see cref="FloatingPlacement.Wrapping"/> to any non-Inline value to make it float.
+    /// </summary>
+    public FloatingPlacement? Placement { get; set; }
+
+    /// <summary>True when this WordArt is floating (non-null Placement with Wrapping != Inline).</summary>
+    public bool IsFloating => Placement?.IsFloating ?? false;
 
     public WordArt() { }
 

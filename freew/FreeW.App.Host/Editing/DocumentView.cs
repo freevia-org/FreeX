@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -106,6 +106,10 @@ public sealed class DocumentView : RichTextBox
     // Null when no floating image is selected. Used by SelectedImage()/SelectedImageLocation() as
     // a fallback when no inline-image selection exists in the RichTextBox.
     private InlineImage? _selectedFloatingImage;
+    // The floating non-image object currently selected on the overlay canvas (Shape/Chart/SmartArt/WordArt).
+    // Null when the selected floating object is an InlineImage (use _selectedFloatingImage) or none.
+    private object? _selectedFloatingObject;
+
 
     private static DropShadowEffect CreatePageShadow()
     {
@@ -4037,18 +4041,46 @@ public sealed class DocumentView : RichTextBox
 
         canvas.Children.Clear();
 
-        // Gather all floating images from the model, sorted by z-order.
-        var floating = new List<InlineImage>();
+        // Gather all floating objects (images + shapes + charts + smartArt + wordArt) sorted by z-order.
+        var floating = new List<(int ZOrder, double HOffPt, double VOffPt, HorizontalAnchor HAnchor, VerticalAnchor VAnchor, Func<FrameworkElement> BuildVisual)>();
         foreach (var block in _model.Blocks)
         {
             if (block is not ModelParagraph para) continue;
             foreach (var run in para.Runs)
             {
                 if (run.Image is { IsFloating: true } img)
-                    floating.Add(img);
+                {
+                    floating.Add((img.ZOrderIndex, img.HorizontalOffsetPt, img.VerticalOffsetPt,
+                        img.HorizontalAnchor, img.VerticalAnchor,
+                        () => BuildFloatingImageVisual(img)));
+                }
+                else if (run.Shape is { IsFloating: true } shape && shape.Placement is { } sp)
+                {
+                    floating.Add((sp.ZOrderIndex, sp.HorizontalOffsetPt, sp.VerticalOffsetPt,
+                        sp.HorizontalAnchor, sp.VerticalAnchor,
+                        () => BuildFloatingObjectVisual(shape, shape.WidthPt, shape.HeightPt, sp)));
+                }
+                else if (run.Chart is { IsFloating: true } chart && chart.Placement is { } cp)
+                {
+                    floating.Add((cp.ZOrderIndex, cp.HorizontalOffsetPt, cp.VerticalOffsetPt,
+                        cp.HorizontalAnchor, cp.VerticalAnchor,
+                        () => BuildFloatingObjectVisual(chart, chart.WidthPt, chart.HeightPt, cp)));
+                }
+                else if (run.SmartArt is { IsFloating: true } smartArt && smartArt.Placement is { } sap)
+                {
+                    floating.Add((sap.ZOrderIndex, sap.HorizontalOffsetPt, sap.VerticalOffsetPt,
+                        sap.HorizontalAnchor, sap.VerticalAnchor,
+                        () => BuildFloatingObjectVisual(smartArt, smartArt.WidthPt, smartArt.HeightPt, sap)));
+                }
+                else if (run.WordArt is { IsFloating: true } wordArt && wordArt.Placement is { } wap)
+                {
+                    floating.Add((wap.ZOrderIndex, wap.HorizontalOffsetPt, wap.VerticalOffsetPt,
+                        wap.HorizontalAnchor, wap.VerticalAnchor,
+                        () => BuildFloatingObjectVisual(wordArt, EstimateWordArtWidth(wordArt), EstimateWordArtHeight(wordArt), wap)));
+                }
             }
         }
-        floating.Sort((a, b) => a.ZOrderIndex.CompareTo(b.ZOrderIndex));
+        floating.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
 
         // Page geometry for anchor-relative positioning.
         var page = _model.Page;
@@ -4063,26 +4095,25 @@ public sealed class DocumentView : RichTextBox
         var padLeft = PrintLayoutEnabled ? marginLeft : 48;
         var padTop = PrintLayoutEnabled ? marginTop : 48;
 
-        foreach (var img in floating)
+        foreach (var (_, hOffPt, vOffPt, hAnchor, vAnchor, buildVisual) in floating)
         {
-            var visual = BuildFloatingImageVisual(img);
-            // Compute Canvas.Left / Canvas.Top from anchor + offset.
-            var hOffDip = img.HorizontalOffsetPt * PageLayout.DipPerPoint;
-            var vOffDip = img.VerticalOffsetPt * PageLayout.DipPerPoint;
+            var visual = buildVisual();
+            var hOffDip = hOffPt * PageLayout.DipPerPoint;
+            var vOffDip = vOffPt * PageLayout.DipPerPoint;
             double left, top;
-            switch (img.HorizontalAnchor)
+            switch (hAnchor)
             {
                 case HorizontalAnchor.Page:
-                    left = hOffDip; // relative to page left edge
+                    left = hOffDip;
                     break;
                 case HorizontalAnchor.Margin:
                     left = padLeft + hOffDip;
                     break;
-                default: // Column — same as margin for a single-column document
+                default: // Column
                     left = padLeft + hOffDip;
                     break;
             }
-            switch (img.VerticalAnchor)
+            switch (vAnchor)
             {
                 case VerticalAnchor.Page:
                     top = vOffDip;
@@ -4090,7 +4121,7 @@ public sealed class DocumentView : RichTextBox
                 case VerticalAnchor.Margin:
                     top = padTop + vOffDip;
                     break;
-                default: // Paragraph — use margin top as fallback (exact paragraph position would require full layout)
+                default: // Paragraph
                     top = padTop + vOffDip;
                     break;
             }
@@ -4181,6 +4212,73 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Builds a simple placeholder visual for a floating non-image object (Shape, Chart, SmartArt,
+    /// WordArt) on the overlay canvas. Tagged with the model object for click-selection.
+    /// </summary>
+    private FrameworkElement BuildFloatingObjectVisual(object modelObject, double widthPt, double heightPt, FloatingPlacement placement)
+    {
+        var widthPx = widthPt * PxPerPoint;
+        var heightPx = heightPt * PxPerPoint;
+
+        var label = modelObject switch
+        {
+            Shape s => s.Kind.ToString(),
+            Chart c => c.Kind.ToString() + " Chart",
+            SmartArt _ => "SmartArt",
+            WordArt wa => "WordArt: " + wa.Text,
+            _ => "Object"
+        };
+
+        var textBlock = new TextBlock
+        {
+            Text = label,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = System.Windows.Media.Brushes.DimGray,
+            FontSize = Math.Max(9, Math.Min(14, widthPx / 10))
+        };
+
+        var root = new System.Windows.Controls.Border
+        {
+            Width = widthPx,
+            Height = heightPx,
+            BorderBrush = System.Windows.Media.Brushes.LightGray,
+            BorderThickness = new Thickness(1),
+            Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(20, 100, 100, 200)),
+            Child = textBlock,
+            Tag = modelObject
+        };
+
+        root.Cursor = Cursors.SizeAll;
+        root.MouseLeftButtonDown += (_, e) =>
+        {
+            SelectFloatingObject(modelObject);
+            e.Handled = true;
+        };
+        return root;
+    }
+
+    private static double EstimateWordArtWidth(WordArt wordArt) =>
+        Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
+
+    private static double EstimateWordArtHeight(WordArt wordArt) =>
+        wordArt.FontSizePt * 1.6;
+
+    /// <summary>
+    /// Select a floating non-image object. Mirrors SelectFloatingImage but clears the image selection.
+    /// </summary>
+    private void SelectFloatingObject(object obj)
+    {
+        _selectedFloatingObject = obj;
+        _selectedFloatingImage = null;
+        SyncFloatingObjectsCanvas();
+        Focus();
+        RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
+    }
+
+    /// <summary>
     /// Select a floating image: set <see cref="_selectedFloatingImage"/> and fire the selection-changed
     /// path so the Picture Format contextual tab activates. Clears the RichTextBox selection so the
     /// picture-format commands see no competing inline selection.
@@ -4202,9 +4300,38 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var (blockIndex, runIndex, image) = SelectedImageLocation();
-        if (image is null || !image.IsFloating) return;
-        _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
-        SyncFloatingObjectsCanvas();
+        if (image is { IsFloating: true })
+        {
+            _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
+            SyncFloatingObjectsCanvas();
+            return;
+        }
+        if (_selectedFloatingObject is not null)
+        {
+            var (bi, ri) = FindFloatingObjectLocation(_selectedFloatingObject);
+            if (bi >= 0)
+            {
+                _commands.Execute(new ChangeZOrderCommand(bi, ri, operation));
+                SyncFloatingObjectsCanvas();
+            }
+        }
+    }
+
+    /// <summary>Locates a floating non-image object in the model to get its (blockIndex, runIndex).</summary>
+    private (int BlockIndex, int RunIndex) FindFloatingObjectLocation(object obj)
+    {
+        for (var b = 0; b < _model.Blocks.Count; b++)
+        {
+            if (_model.Blocks[b] is not ModelParagraph para) continue;
+            for (var r = 0; r < para.Runs.Count; r++)
+            {
+                var run = para.Runs[r];
+                if (ReferenceEquals(run.Shape, obj) || ReferenceEquals(run.Chart, obj)
+                    || ReferenceEquals(run.SmartArt, obj) || ReferenceEquals(run.WordArt, obj))
+                    return (b, r);
+            }
+        }
+        return (-1, -1);
     }
 
     /// <summary>
@@ -4642,11 +4769,21 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
-            case WpfRun { Tag: AnchorMarker anchorMarker }:
-                // A floating image's placeholder run: emit the model image back into the run so the
-                // image object survives CommitToModel → Render cycles without any visible FlowDocument
-                // element. The image is rendered separately on the overlay canvas (SyncFloatingObjectsCanvas).
-                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = anchorMarker.Image });
+            case WpfRun { Tag: AnchorMarker { Image: { } anchorImage } }:
+                // A floating image placeholder — recover the model image object verbatim.
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Image = anchorImage });
+                break;
+            case WpfRun { Tag: AnchorMarker { Shape: { } anchorShape } }:
+                modelParagraph.Runs.Add(ModelRun.FromShape(anchorShape));
+                break;
+            case WpfRun { Tag: AnchorMarker { Chart: { } anchorChart } }:
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { Chart = anchorChart });
+                break;
+            case WpfRun { Tag: AnchorMarker { SmartArt: { } anchorSmartArt } }:
+                modelParagraph.Runs.Add(new ModelRun(string.Empty) { SmartArt = anchorSmartArt });
+                break;
+            case WpfRun { Tag: AnchorMarker { WordArt: { } anchorWordArt } }:
+                modelParagraph.Runs.Add(ModelRun.FromWordArt(anchorWordArt));
                 break;
             case WpfRun { Tag: CitationMarker citationMarker }:
                 // A hidden Mark Citation (TA) field round-trips as a textless citation-mark run.
@@ -5242,24 +5379,40 @@ public sealed class DocumentView : RichTextBox
             // FlowDocument. Emit a zero-width placeholder run tagged with AnchorMarker so CommitToModel
             // can recover the image object verbatim. Inline images continue to render as InlineUIContainers.
             if (image.IsFloating)
-                return new WpfRun(string.Empty) { Tag = new AnchorMarker(image) };
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Image: image) };
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
         }
 
         if (run.Shape is { } shape)
+        {
+            if (shape.IsFloating)
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Shape: shape) };
             return WrapHyperlinkIfNeeded(run, BuildShapeRun(shape, effectSet));
+        }
 
         if (run.Chart is { } chart)
+        {
+            if (chart.IsFloating)
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(Chart: chart) };
             return WrapHyperlinkIfNeeded(run, BuildChartRun(chart, effectSet));
+        }
 
         if (run.WordArt is { } wordArt)
+        {
+            if (wordArt.IsFloating)
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(WordArt: wordArt) };
             return WrapHyperlinkIfNeeded(run, BuildWordArtRun(wordArt, effectSet));
+        }
 
         if (run.Equation is { } equation)
             return WrapHyperlinkIfNeeded(run, BuildEquationRun(equation));
 
         if (run.SmartArt is { } smartArt)
+        {
+            if (smartArt.IsFloating)
+                return new WpfRun(string.Empty) { Tag = new AnchorMarker(SmartArt: smartArt) };
             return WrapHyperlinkIfNeeded(run, BuildSmartArtRun(smartArt, effectSet));
+        }
 
         if (run.EmbeddedObject is { } embedded)
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
@@ -5858,7 +6011,16 @@ public sealed class DocumentView : RichTextBox
     /// This mirrors the <see cref="PageBreakMarker"/> placeholder pattern: the run carries model state
     /// but contributes no visible glyph to the text flow.
     /// </summary>
-    private sealed record AnchorMarker(InlineImage Image);
+    /// <summary>
+    /// Carried on a zero-width WPF run for any floating drawing object so CommitToModel can
+    /// recover the model object verbatim. Exactly one of the five payload fields is non-null.
+    /// </summary>
+    private sealed record AnchorMarker(
+        InlineImage? Image = null,
+        Shape? Shape = null,
+        Chart? Chart = null,
+        SmartArt? SmartArt = null,
+        WordArt? WordArt = null);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
