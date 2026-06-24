@@ -250,6 +250,121 @@ public sealed class XlsxLegacyNoteRoundTripTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GAP 4 – box geometry + Visible preserved across add/delete
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Gap4_AddOneNote_ExistingNoteGeometryPreserved()
+    {
+        // Arrange: two-note package where C2 has CUSTOM box geometry (width=200pt, height=120pt)
+        // and <x:Visible/> (pinned open), D4 has default geometry.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(sourcePackage);
+        var sheet = workbook.GetSheetAt(0);
+
+        // Add a third note on E5.
+        var newAddr = new CellAddress(sheet.Id, 5, 5);
+        sheet.Comments[newAddr] = "New note on E5";
+        sheet.CommentAuthors[newAddr] = "Carol";
+
+        // Act: save.
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        // Assert: inspect the VML referenced by the saved worksheet (not just any VML in the package).
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var vmlXml = LoadWorksheetReferencedVml(archive, "xl/worksheets/sheet1.xml");
+        vmlXml.Should().NotBeNull("a VML drawing must be referenced by the worksheet in the saved package");
+
+        // C2 shape (row=1,col=2 in 0-based): custom geometry and <x:Visible/> must survive.
+        var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
+        c2Shape.Should().NotBeNull("shape for C2 must be in the reconciled VML");
+        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt",
+            "custom width of C2 shape must be preserved after adding a note (GAP 4)");
+        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt",
+            "custom height of C2 shape must be preserved after adding a note (GAP 4)");
+        HasVisible(c2Shape).Should().BeTrue(
+            "<x:Visible/> of C2 shape must be preserved after adding a note (GAP 4)");
+
+        // D4 shape (row=3,col=3 in 0-based) must also survive.
+        var d4Shape = FindNoteShape(vmlXml!, row0: 3, col0: 3);
+        d4Shape.Should().NotBeNull("shape for D4 must be in the reconciled VML after adding a note");
+
+        // E5 (row=4,col=4 in 0-based): new note must have a shape.
+        var e5Shape = FindNoteShape(vmlXml!, row0: 4, col0: 4);
+        e5Shape.Should().NotBeNull("new note E5 must have a shape in the reconciled VML (GAP 4)");
+    }
+
+    [Fact]
+    public void Gap4_DeleteOneNote_RemainingNoteGeometryPreserved()
+    {
+        // Arrange: two-note package with custom geometry on C2.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(sourcePackage);
+        var sheet = workbook.GetSheetAt(0);
+
+        // Delete the D4 note.
+        var d4 = sheet.Comments.Keys.Single(a => a.Row == 4 && a.Col == 4);
+        sheet.Comments.Remove(d4);
+        sheet.CommentAuthors.Remove(d4);
+
+        // Act.
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        // Assert: C2 shape geometry (including Visible) must survive.
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var vmlXml = LoadWorksheetReferencedVml(archive, "xl/worksheets/sheet1.xml");
+        vmlXml.Should().NotBeNull("a VML drawing must be referenced by the worksheet");
+
+        var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
+        c2Shape.Should().NotBeNull("shape for C2 must be preserved after deleting D4 (GAP 4)");
+        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt",
+            "custom width must survive deletion of another note (GAP 4)");
+        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt",
+            "custom height must survive deletion of another note (GAP 4)");
+        HasVisible(c2Shape).Should().BeTrue(
+            "<x:Visible/> must survive deletion of another note (GAP 4)");
+
+        // D4 shape must be gone.
+        var d4Shape = FindNoteShape(vmlXml!, row0: 3, col0: 3);
+        d4Shape.Should().BeNull("deleted note D4 must not have a shape in the reconciled VML");
+    }
+
+    [Fact]
+    public void Gap4_PureRoundTrip_GeometryPreserved()
+    {
+        // Arrange: two-note package with custom geometry — no edits.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(sourcePackage);
+
+        // Act: save without any changes.
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        // Assert: C2 shape geometry and Visible must survive unchanged.
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var vmlXml = LoadWorksheetReferencedVml(archive, "xl/worksheets/sheet1.xml");
+        vmlXml.Should().NotBeNull("a VML drawing must be referenced by the worksheet");
+
+        var c2Shape = FindNoteShape(vmlXml!, row0: 1, col0: 2);
+        c2Shape.Should().NotBeNull("C2 shape must survive a pure round-trip (regression guard)");
+        c2Shape!.Attribute("style")?.Value.Should().Contain("width:200pt");
+        c2Shape.Attribute("style")?.Value.Should().Contain("height:120pt");
+        HasVisible(c2Shape).Should().BeTrue(
+            "<x:Visible/> must survive a pure round-trip (regression guard)");
+
+        var d4Shape = FindNoteShape(vmlXml!, row0: 3, col0: 3);
+        d4Shape.Should().NotBeNull("D4 shape must also survive a pure round-trip");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -392,4 +507,170 @@ public sealed class XlsxLegacyNoteRoundTripTests
           </v:shape>
         </xml>
         """;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GAP 4 fixture: two notes with distinct custom geometry + Visible on C2
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates an XLSX package with two legacy notes:
+    ///   C2 (row=1,col=2 0-based) — CUSTOM box size (200pt × 120pt) + <x:Visible/> (pinned)
+    ///   D4 (row=3,col=3 0-based) — standard geometry
+    /// Both have named authors so GAP 1/2/5 tests still pass if reused.
+    /// </summary>
+    private static MemoryStream CreateTwoNoteGeometryPackage()
+    {
+        var commentsXml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <authors>
+                <author>Alice</author>
+                <author>Bob</author>
+              </authors>
+              <commentList>
+                <comment ref="C2" authorId="0">
+                  <text><r><t>Pinned note on C2</t></r></text>
+                </comment>
+                <comment ref="D4" authorId="1">
+                  <text><r><t>Standard note on D4</t></r></text>
+                </comment>
+              </commentList>
+            </comments>
+            """;
+
+        return XlsxPackageTestFixtures.CreatePackage(
+            ("[Content_Types].xml", TwoNoteContentTypesXml()),
+            ("_rels/.rels", MinimalRootRels()),
+            ("xl/workbook.xml", MinimalWorkbookXml()),
+            ("xl/_rels/workbook.xml.rels", WorkbookRelsWithStyles()),
+            ("xl/styles.xml", MinimalStylesXml()),
+            ("xl/worksheets/sheet1.xml", MinimalWorksheetXmlWithLegacyDrawing()),
+            ("xl/worksheets/_rels/sheet1.xml.rels", SheetRelsWithComments()),
+            ("xl/comments1.xml", commentsXml),
+            ("xl/drawings/vmlDrawing1.vml", TwoNoteGeometryVmlDrawing()));
+    }
+
+    /// <summary>
+    /// VML with two note shapes:
+    ///   Shape 1 → C2 (row=1,col=2) — custom 200pt×120pt, pinned visible
+    ///   Shape 2 → D4 (row=3,col=3) — standard 108pt×59.25pt, hidden
+    /// </summary>
+    private static string TwoNoteGeometryVmlDrawing() => """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <xml xmlns:v="urn:schemas-microsoft-com:vml"
+             xmlns:o="urn:schemas-microsoft-com:office:office"
+             xmlns:x="urn:schemas-microsoft-com:office:excel">
+          <v:shape id="_x0000_s1025" type="#_x0000_t202"
+                   style="position:absolute;margin-left:80pt;margin-top:6pt;width:200pt;height:120pt;z-index:1;visibility:visible"
+                   fillcolor="#ffffe1" o:insetmode="auto">
+            <v:fill color2="#ffffe1"/>
+            <v:shadow color="black" obscured="t"/>
+            <v:path o:connecttype="none"/>
+            <v:textbox style="mso-direction-alt:auto"><div style="text-align:left"/></v:textbox>
+            <x:ClientData ObjectType="Note">
+              <x:MoveWithCells/>
+              <x:SizeWithCells/>
+              <x:Anchor>2, 15, 1, 2, 6, 15, 7, 3</x:Anchor>
+              <x:AutoFill>False</x:AutoFill>
+              <x:Row>1</x:Row>
+              <x:Column>2</x:Column>
+              <x:Visible/>
+            </x:ClientData>
+          </v:shape>
+          <v:shape id="_x0000_s1026" type="#_x0000_t202"
+                   style="position:absolute;margin-left:120pt;margin-top:20pt;width:108pt;height:59.25pt;z-index:2;visibility:hidden"
+                   fillcolor="#ffffe1" o:insetmode="auto">
+            <v:fill color2="#ffffe1"/>
+            <v:shadow color="black" obscured="t"/>
+            <v:path o:connecttype="none"/>
+            <v:textbox style="mso-direction-alt:auto"><div style="text-align:left"/></v:textbox>
+            <x:ClientData ObjectType="Note">
+              <x:MoveWithCells/>
+              <x:SizeWithCells/>
+              <x:Anchor>3, 15, 3, 2, 5, 15, 6, 3</x:Anchor>
+              <x:AutoFill>False</x:AutoFill>
+              <x:Row>3</x:Row>
+              <x:Column>3</x:Column>
+            </x:ClientData>
+          </v:shape>
+        </xml>
+        """;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // VML inspection helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
+
+    /// <summary>
+    /// Finds the <c>&lt;v:shape&gt;</c> element whose ClientData has the given
+    /// 0-based row and column in the VML XML document.
+    /// </summary>
+    private static XElement? FindNoteShape(XDocument vmlXml, uint row0, uint col0)
+    {
+        if (vmlXml.Root is null) return null;
+        return vmlXml.Root.Elements(VmlNs + "shape")
+            .FirstOrDefault(shape =>
+            {
+                var cd = shape.Elements(ExcelVmlNs + "ClientData")
+                    .FirstOrDefault(c => string.Equals(
+                        c.Attribute("ObjectType")?.Value, "Note",
+                        StringComparison.OrdinalIgnoreCase));
+                if (cd is null) return false;
+                return uint.TryParse(cd.Element(ExcelVmlNs + "Row")?.Value, out var r) && r == row0 &&
+                       uint.TryParse(cd.Element(ExcelVmlNs + "Column")?.Value, out var c2) && c2 == col0;
+            });
+    }
+
+    /// <summary>Returns true when the shape's ClientData contains an <c>&lt;x:Visible/&gt;</c> element.</summary>
+    private static bool HasVisible(XElement shape) =>
+        shape.Elements(ExcelVmlNs + "ClientData")
+            .Any(cd => cd.Element(ExcelVmlNs + "Visible") is not null);
+
+    /// <summary>
+    /// Loads the VML drawing file referenced by the worksheet's <c>&lt;legacyDrawing r:id="..."/&gt;</c>
+    /// element via the worksheet's relationship file. Returns null if not found.
+    /// This avoids finding the wrong VML when multiple VML files exist in the archive.
+    /// </summary>
+    private static XDocument? LoadWorksheetReferencedVml(ZipArchive archive, string worksheetPath)
+    {
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace pkgRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace wsNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        const string vmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+        var wsEntry = archive.GetEntry(worksheetPath);
+        if (wsEntry is null) return null;
+
+        XDocument wsXml;
+        using (var s = wsEntry.Open()) wsXml = XDocument.Load(s);
+        var vmlRelId = wsXml.Root?.Element(wsNs + "legacyDrawing")?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(vmlRelId)) return null;
+
+        var relsPath = "xl/worksheets/_rels/" + System.IO.Path.GetFileName(worksheetPath) + ".rels";
+        var relsEntry = archive.GetEntry(relsPath);
+        if (relsEntry is null) return null;
+
+        XDocument relsXml;
+        using (var s = relsEntry.Open()) relsXml = XDocument.Load(s);
+        var vmlTarget = relsXml.Root?.Elements(pkgRelNs + "Relationship")
+            .Where(r => string.Equals(r.Attribute("Id")?.Value, vmlRelId, StringComparison.Ordinal) &&
+                        string.Equals(r.Attribute("Type")?.Value, vmlRelType, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.Attribute("Target")?.Value)
+            .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+        if (string.IsNullOrWhiteSpace(vmlTarget)) return null;
+
+        // Resolve relative target to absolute package path.
+        var vmlPath = vmlTarget!.StartsWith("..", StringComparison.Ordinal)
+            ? "xl/drawings/" + System.IO.Path.GetFileName(vmlTarget)
+            : vmlTarget.TrimStart('/');
+
+        var vmlEntry = archive.Entries.FirstOrDefault(e =>
+            string.Equals(e.FullName, vmlPath, StringComparison.OrdinalIgnoreCase));
+        if (vmlEntry is null) return null;
+
+        using var vs = vmlEntry.Open();
+        return XDocument.Load(vs);
+    }
 }

@@ -11,6 +11,11 @@ internal static class XlsxLegacyCommentPreserver
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 
+    // VML namespaces used in note shapes
+    private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
+    private static readonly XNamespace OfficeNs = "urn:schemas-microsoft-com:office:office";
+
     public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, Workbook workbook)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -85,14 +90,6 @@ internal static class XlsxLegacyCommentPreserver
             if (reconciledCommentsXml is null)
                 continue;
 
-            // When the note count changed the VML (box geometry) is taken from ClosedXML's
-            // output (it covers all current notes).  When the note set is identical we keep the
-            // source VML so box geometry of unchanged notes is preserved.
-            var noteCountChanged = sourceCommentsXml.Root?
-                .Element(workbookNs + "commentList")?
-                .Elements(workbookNs + "comment")
-                .Count() != sheet.Comments.Count;
-
             XlsxLegacyCommentFontNormalizer.SanitizeRunFontNames(reconciledCommentsXml);
             ReplacePackageXmlPart(targetArchive, sourceCommentsPath, reconciledCommentsXml);
 
@@ -108,21 +105,19 @@ internal static class XlsxLegacyCommentPreserver
                 CommentsRelationshipType,
                 new HashSet<string>(StringComparer.Ordinal));
 
-            // When the note count changed, leave ClosedXML's VML in place (it has a shape for
-            // every current note, including the new ones).  Residual: box geometry of unchanged
-            // notes is not restored in this case — that is deferred to Wave 3.
+            // GAP 4: reconcile VML drawing so unchanged notes keep source geometry + Visible
+            // even when notes were added or deleted. New notes get ClosedXML's default shape.
             var sourceLegacyDrawing = sourceWorksheetXml.Root?.Element(workbookNs + "legacyDrawing");
-            var preservedVmlRelId = noteCountChanged
-                ? null
-                : PreserveCommentVmlDrawing(
-                    sourceArchive,
-                    targetArchive,
-                    sourceWorksheetPath,
-                    targetWorksheetPath,
-                    sourceLegacyDrawing,
-                    packageRelNs,
-                    relNs,
-                    targetWorksheetRelsXml);
+            var preservedVmlRelId = PreserveReconciledVmlDrawing(
+                sourceArchive,
+                targetArchive,
+                sourceWorksheetPath,
+                targetWorksheetPath,
+                sourceLegacyDrawing,
+                packageRelNs,
+                relNs,
+                targetWorksheetRelsXml,
+                sheet);
 
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetRelsPath, targetWorksheetRelsXml);
 
@@ -381,6 +376,261 @@ internal static class XlsxLegacyCommentPreserver
             packageRelNs,
             targetWorksheetPath,
             sourceVmlPath,
+            VmlDrawingRelationshipType,
+            GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+    }
+
+    /// <summary>
+    /// GAP 4 fix: builds a reconciled VML drawing that preserves the source <c>&lt;v:shape&gt;</c>
+    /// (including style geometry and <c>&lt;x:Visible/&gt;</c>) for every unchanged note, drops
+    /// shapes for deleted notes, and takes ClosedXML's generated shape for new notes.
+    /// Matching is by <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c> (0-based) in ClientData.
+    /// Returns the relationship id of the VML part wired into the target worksheet rels, or
+    /// <c>null</c> if no source VML exists (leave ClosedXML's output untouched).
+    /// </summary>
+    private static string? PreserveReconciledVmlDrawing(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        XElement? sourceLegacyDrawing,
+        XNamespace packageRelNs,
+        XNamespace relNs,
+        XDocument targetWorksheetRelsXml,
+        Sheet sheet)
+    {
+        // Resolve source VML path.
+        var sourceVmlRelId = sourceLegacyDrawing?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceVmlRelId) ||
+            !TryGetInternalRelationshipTarget(
+                sourceArchive,
+                XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
+                sourceWorksheetPath,
+                sourceVmlRelId,
+                VmlDrawingRelationshipType,
+                packageRelNs,
+                out var sourceVmlPath))
+        {
+            // No source VML — leave ClosedXML's VML untouched, just wire the relationship.
+            return WireTargetVmlRelationship(
+                targetArchive, targetWorksheetPath, targetWorksheetRelsXml, packageRelNs, relNs);
+        }
+
+        var sourceVmlEntry = sourceArchive.GetEntry(sourceVmlPath);
+        if (sourceVmlEntry is null)
+        {
+            return WireTargetVmlRelationship(
+                targetArchive, targetWorksheetPath, targetWorksheetRelsXml, packageRelNs, relNs);
+        }
+
+        // Load source VML as text (VML is not well-formed XML in the XLINQ sense due to namespace
+        // prefix aliases, but in practice Excel writes it as parseable XML). We use XDocument with
+        // explicit namespace resolver. If it fails to parse, fall back to verbatim source copy.
+        XDocument sourceVml;
+        try
+        {
+            using var sourceVmlStream = sourceVmlEntry.Open();
+            sourceVml = XDocument.Load(sourceVmlStream);
+        }
+        catch
+        {
+            // Unparseable VML — fall back to verbatim source copy (old behavior).
+            ReplacePackagePart(targetArchive, sourceVmlEntry, sourceVmlPath);
+            return EnsureSingleRelationshipForPackagePart(
+                targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, sourceVmlPath,
+                VmlDrawingRelationshipType,
+                GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+        }
+
+        // Index source note shapes by 0-based (row, col).
+        var sourceShapesByCell = IndexNoteShapesByCell(sourceVml);
+
+        // Find ClosedXML's generated VML for new notes by scanning ALL VML entries in the target
+        // archive. We cannot rely on the target worksheet rels here because XlsxWorksheetVml
+        // ReferencePreserver may have already updated them to point to the source VML copy.
+        // Instead, collect every distinct VML part from the target archive and merge the shapes
+        // from any that are NOT the source path (i.e. ClosedXML's generated file).
+        var targetShapesByCell = IndexAllTargetNoteShapes(targetArchive, sourceVmlPath);
+
+        // Build reconciled shape list: for each current note address, prefer source shape;
+        // fall back to target shape for new notes (not in source).
+        var reconciledShapes = new List<XElement>(sheet.Comments.Count);
+        foreach (var address in sheet.Comments.Keys)
+        {
+            // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
+            var key = (Row: address.Row - 1, Col: address.Col - 1);
+            if (sourceShapesByCell.TryGetValue(key, out var sourceShape))
+            {
+                reconciledShapes.Add(new XElement(sourceShape)); // deep-clone; preserves geometry + Visible
+            }
+            else if (targetShapesByCell.TryGetValue(key, out var targetShape))
+            {
+                reconciledShapes.Add(new XElement(targetShape)); // deep-clone; new note default geometry
+            }
+            // If neither source nor target has a shape for this address, skip (ClosedXML may not
+            // have generated one yet — the package will still be valid, just missing a box).
+        }
+
+        // Build the reconciled VML document: keep source header boilerplate (shapelayout,
+        // shapetype) and replace note shapes with the reconciled set.
+        var reconciledVml = BuildReconciledVml(sourceVml, reconciledShapes);
+
+        // Write reconciled VML to the target package at the source path.
+        ReplacePackageXmlPart(targetArchive, sourceVmlPath, reconciledVml);
+        return EnsureSingleRelationshipForPackagePart(
+            targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, sourceVmlPath,
+            VmlDrawingRelationshipType,
+            GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+    }
+
+    /// <summary>
+    /// Indexes VML note shapes by their 0-based (row, col) ClientData anchor.
+    /// Only shapes with <c>ObjectType="Note"</c> ClientData are indexed.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), XElement> IndexNoteShapesByCell(XDocument vml)
+    {
+        var result = new Dictionary<(uint Row, uint Col), XElement>();
+        if (vml.Root is null)
+            return result;
+
+        foreach (var shape in vml.Root.Elements(VmlNs + "shape"))
+        {
+            var clientData = shape.Elements(ExcelVmlNs + "ClientData")
+                .FirstOrDefault(cd => string.Equals(
+                    cd.Attribute("ObjectType")?.Value, "Note",
+                    StringComparison.OrdinalIgnoreCase));
+            if (clientData is null)
+                continue;
+
+            var rowText = clientData.Element(ExcelVmlNs + "Row")?.Value;
+            var colText = clientData.Element(ExcelVmlNs + "Column")?.Value;
+            if (!uint.TryParse(rowText, out var row0) || !uint.TryParse(colText, out var col0))
+                continue;
+
+            result[(row0, col0)] = shape;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Scans ALL VML entries in the target archive (except <paramref name="excludeVmlPath"/>, which
+    /// is the source VML already indexed separately) and merges the note shapes found into a single
+    /// lookup. This finds ClosedXML's generated VML regardless of what path it was written to,
+    /// without relying on the worksheet relationship that may have already been updated to point
+    /// to the source VML copy.
+    /// </summary>
+    private static Dictionary<(uint Row, uint Col), XElement> IndexAllTargetNoteShapes(
+        ZipArchive targetArchive,
+        string excludeVmlPath)
+    {
+        var result = new Dictionary<(uint Row, uint Col), XElement>();
+        foreach (var entry in targetArchive.Entries)
+        {
+            var fullName = XlsxPackagePath.NormalizeEntryPath(entry);
+            if (!fullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase) ||
+                !fullName.EndsWith(".vml", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Skip the source VML we already indexed.
+            if (string.Equals(fullName, excludeVmlPath, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            try
+            {
+                XDocument vml;
+                using (var stream = entry.Open())
+                    vml = XDocument.Load(stream);
+
+                foreach (var (key, shape) in IndexNoteShapesByCell(vml))
+                {
+                    // Do not overwrite a shape already found in an earlier VML entry.
+                    if (!result.ContainsKey(key))
+                        result[key] = shape;
+                }
+            }
+            catch
+            {
+                // Unparseable VML — skip.
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a reconciled VML document: copies the source header elements (everything that is
+    /// not a note <c>&lt;v:shape&gt;</c>: the <c>&lt;o:shapelayout&gt;</c> and
+    /// <c>&lt;v:shapetype&gt;</c>) then appends the reconciled note shapes.
+    /// </summary>
+    private static XDocument BuildReconciledVml(XDocument sourceVml, IReadOnlyList<XElement> reconciledShapes)
+    {
+        // Deep-clone the source document to preserve namespace declarations on the root.
+        var result = new XDocument(sourceVml);
+        var root = result.Root!;
+
+        // Remove all existing note shapes (keep non-shape boilerplate: shapelayout, shapetype).
+        foreach (var shape in root.Elements(VmlNs + "shape").ToList())
+        {
+            var hasNoteClientData = shape.Elements(ExcelVmlNs + "ClientData")
+                .Any(cd => string.Equals(
+                    cd.Attribute("ObjectType")?.Value, "Note",
+                    StringComparison.OrdinalIgnoreCase));
+            if (hasNoteClientData)
+                shape.Remove();
+        }
+
+        // Append the reconciled note shapes (already deep-cloned by the caller).
+        foreach (var shape in reconciledShapes)
+            root.Add(shape);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the VML drawing path already present in the target worksheet's relationships,
+    /// returning it if found, or null if the target has no VML part.
+    /// </summary>
+    private static string? GetTargetVmlPath(
+        ZipArchive targetArchive,
+        string targetWorksheetPath,
+        XNamespace packageRelNs,
+        XNamespace relNs)
+    {
+        var relsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var relsEntry = targetArchive.GetEntry(relsPath);
+        if (relsEntry is null)
+            return null;
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        var vmlRel = relsXml.Root?.Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(r => string.Equals(
+                r.Attribute("Type")?.Value, VmlDrawingRelationshipType,
+                StringComparison.OrdinalIgnoreCase));
+        var target = vmlRel?.Attribute("Target")?.Value;
+        return string.IsNullOrWhiteSpace(target)
+            ? null
+            : XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target);
+    }
+
+    /// <summary>
+    /// Wires the target worksheet's existing VML relationship into <paramref name="targetWorksheetRelsXml"/>
+    /// (ensuring a single relationship entry) and returns the relationship id.
+    /// Used when there is no source VML — we simply ensure ClosedXML's VML stays wired correctly.
+    /// </summary>
+    private static string? WireTargetVmlRelationship(
+        ZipArchive targetArchive,
+        string targetWorksheetPath,
+        XDocument targetWorksheetRelsXml,
+        XNamespace packageRelNs,
+        XNamespace relNs)
+    {
+        var targetVmlPath = GetTargetVmlPath(targetArchive, targetWorksheetPath, packageRelNs, relNs);
+        if (targetVmlPath is null)
+            return null;
+
+        return EnsureSingleRelationshipForPackagePart(
+            targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, targetVmlPath,
             VmlDrawingRelationshipType,
             GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
     }
