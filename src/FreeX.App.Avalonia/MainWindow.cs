@@ -13432,7 +13432,8 @@ public sealed partial class MainWindow : Window
         (AvaloniaGrid Row, Button PickerButton, TextBlock Label) CreateReferenceRow(
             string label,
             TextBox textBox,
-            string pickerAutomationId)
+            string pickerAutomationId,
+            bool isFirstRow = false)
         {
             var labelBlock = new TextBlock
             {
@@ -13454,8 +13455,8 @@ public sealed partial class MainWindow : Window
                 textBox.SelectAll();
             };
 
-            var row = new AvaloniaGrid { Margin = new Thickness(0, 8, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(82) });
+            var row = new AvaloniaGrid { Margin = new Thickness(0, isFirstRow ? 0 : 8, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             Grid.SetColumn(labelBlock, 0);
@@ -13467,7 +13468,7 @@ public sealed partial class MainWindow : Window
             return (row, pickerButton, labelBlock);
         }
 
-        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton");
+        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton", isFirstRow: true);
         var criteriaRangeRow = CreateReferenceRow("Criteria range:", criteriaRangeBox, "AdvancedFilterSelectCriteriaRangeButton");
         var copyToRow = CreateReferenceRow("Copy to:", copyToBox, "AdvancedFilterSelectCopyToButton");
         var copyToHint = new TextBlock
@@ -20200,13 +20201,9 @@ public sealed partial class MainWindow : Window
         {
             Text = AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary),
             IsReadOnly = true,
-            AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
             Padding = new Thickness(8),
             BorderThickness = new Thickness(1),
-            Background = Brushes.White,
             MinHeight = 220,
         };
         AutomationProperties.SetName(aboutTextBox, title);
