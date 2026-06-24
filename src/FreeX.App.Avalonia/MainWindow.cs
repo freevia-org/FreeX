@@ -3288,11 +3288,15 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetName(_statusZoomSlider, "Zoom slider");
         AutomationProperties.SetHelpText(_statusZoomSlider, "Adjusts the worksheet zoom from 10 to 400 percent.");
-        _statusText.FontSize = 12;
+        // Resolve status-bar text font-size from the token (FreeXStatusBarTextFontSize = 12).
+        // Falls back to the captured literal (12) so tests and unstyled environments are safe.
+        // Token and fallback are byte-identical for the default theme.
+        var statusBarTextFontSize = ResolveTokenDouble("FreeXStatusBarTextFontSize", 12.0);
+        _statusText.FontSize = statusBarTextFontSize;
         _statusText.Foreground = StatusBarForeground;
-        _selectionStatsText.FontSize = 12;
+        _selectionStatsText.FontSize = statusBarTextFontSize;
         _selectionStatsText.Foreground = StatusBarForeground;
-        _zoomText.FontSize = 12;
+        _zoomText.FontSize = statusBarTextFontSize;
         _zoomText.Foreground = StatusBarForeground;
 
         var leftPanel = new StackPanel
@@ -3381,11 +3385,13 @@ public sealed partial class MainWindow : Window
         // When FREEX_THEME=midnight the token brush carries the midnight StatusSurface value;
         // for the default theme the token and the hardcoded value are byte-identical (#17324D).
         var statusBarBackground = ResolveTokenBrush("FreeXStatusSurfaceBrush") ?? StatusBarSurface;
+        // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
+        var statusBarHeight = ResolveTokenDouble("FreeXStatusBarHeight", 28.0);
         return new Border
         {
             Background = statusBarBackground,
             BorderThickness = new Thickness(0),
-            Height = 28,
+            Height = statusBarHeight,
             Padding = new Thickness(8, 3),
             Child = grid,
         };
@@ -3406,6 +3412,22 @@ public sealed partial class MainWindow : Window
                value is IBrush brush
             ? brush
             : null;
+    }
+
+    /// <summary>
+    /// Looks up a named <see cref="double"/> metric from the Application's resource registry
+    /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
+    /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
+    /// </summary>
+    private static double ResolveTokenDouble(string key, double fallback)
+    {
+        var app = global::Avalonia.Application.Current;
+        if (app is null)
+            return fallback;
+        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+               value is double d
+            ? d
+            : fallback;
     }
 
     private Control BuildStatusZoomSliderHost()

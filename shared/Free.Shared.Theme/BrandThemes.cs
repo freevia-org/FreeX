@@ -18,19 +18,29 @@ public static class BrandThemes
     private static readonly ThemeColor s_danger       = ThemeColor.FromHex("#C42B1C");
     private static readonly ThemeColor s_white        = ThemeColor.FromHex("#FFFFFF");
 
-    // ── Default typography (not wired to rendering in round 1) ──
+    // ── Default typography ──
+    // StatusBarText: FontSize=12, no FontFamily (inherits system default on both WPF and Avalonia —
+    // MATCHED baseline captured 2026-06-24 from MainWindow.xaml:1133 + MainWindow.cs:3291).
     private static readonly ThemeTypography s_defaultTypography = new(
-        Body:        new ThemeTypeToken("Segoe UI",  9.0,  ThemeFontWeight.Normal),
-        Caption:     new ThemeTypeToken("Segoe UI",  8.0,  ThemeFontWeight.Normal),
-        RibbonLabel: new ThemeTypeToken("Segoe UI",  9.0,  ThemeFontWeight.Normal),
-        Heading:     new ThemeTypeToken("Segoe UI", 14.0,  ThemeFontWeight.SemiBold));
+        Body:          new ThemeTypeToken("Segoe UI",  9.0,  ThemeFontWeight.Normal),
+        Caption:       new ThemeTypeToken("Segoe UI",  8.0,  ThemeFontWeight.Normal),
+        RibbonLabel:   new ThemeTypeToken("Segoe UI",  9.0,  ThemeFontWeight.Normal),
+        Heading:       new ThemeTypeToken("Segoe UI", 14.0,  ThemeFontWeight.SemiBold),
+        StatusBarText: new ThemeTypeToken("",         12.0,  ThemeFontWeight.Normal));
 
-    // ── Default metrics (not wired to rendering in round 1) ──
+    // ── Default metrics ──
+    // StatusBarHeight=28 px: MATCHED baseline 2026-06-24
+    //   WPF  — Border Padding="8,3", FontSize=12, auto-height → renders as 28px (MainWindow.xaml:1119)
+    //   Avalonia — Border Height=28 (MainWindow.cs:3388)
+    // TitleBarCaptionHeight=34 px: WPF WindowChrome.CaptionHeight (MainWindow.xaml:25).
+    //   Avalonia uses native OS title bar — value carried for documentation, not applied by Avalonia applier.
     private static readonly ThemeMetrics s_defaultMetrics = new(
-        RibbonRowHeight: 22.0,
-        ControlHeight:   24.0,
-        IconSize:        16.0,
-        CornerRadius:     2.0);
+        RibbonRowHeight:      22.0,
+        ControlHeight:        24.0,
+        IconSize:             16.0,
+        CornerRadius:          2.0,
+        StatusBarHeight:      28.0,
+        TitleBarCaptionHeight: 34.0);
 
     /// <summary>
     /// FreeX (spreadsheet) brand theme.

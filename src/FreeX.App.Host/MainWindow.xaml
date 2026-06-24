@@ -1117,6 +1117,7 @@
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
         <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
+                Height="{DynamicResource FreeXStatusBarHeight}"
                 AutomationProperties.AutomationId="StatusBarRoot"
                 Loaded="StatusBarRoot_Loaded"
                 ClipToBounds="True">
@@ -1131,9 +1132,9 @@
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
                     <TextBlock x:Name="StatusReadyText" Text="{local:Loc Key=MainWindow_Text_Ready}" Foreground="White"
-                               FontSize="12" VerticalAlignment="Center"/>
+                               FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"/>
                     <TextBlock x:Name="StatusPageNumberText" Text="" Foreground="White"
-                               FontSize="12" VerticalAlignment="Center" Margin="16,0,0,0"
+                               FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center" Margin="16,0,0,0"
                                Visibility="Collapsed"/>
                 </StackPanel>
 
@@ -1156,7 +1157,7 @@
                                          BorderThickness="0"
                                          AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_SavingProgress}"/>
                             <TextBlock x:Name="StatusSaveProgressText"
-                                       Foreground="White" FontSize="12"
+                                       Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        Margin="8,0,0,0"
                                        MaxWidth="280"
                                        TextTrimming="CharacterEllipsis"
@@ -1180,32 +1181,32 @@
                                     HorizontalAlignment="Right" VerticalAlignment="Center"
                                     Visibility="Collapsed"
                                     ClipToBounds="True">
-                            <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusAvgText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusAvgText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Average}"
                                        AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusCountText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusCountText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Count}"
                                        AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="110" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusNumericalCountText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusNumericalCountText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_NumericalCount}"
                                        AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="160" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusSumText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusSumText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Sum}"
                                        AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusMinText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusMinText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Minimum}"
                                        AutomationProperties.LiveSetting="Polite"
                                        Margin="0,0,16,0" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="12"
+                            <TextBlock x:Name="StatusMaxText" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                        AutomationProperties.AutomationId="StatusMaxText"
                                        AutomationProperties.Name="{local:Loc Key=StatusBar_Maximum}"
                                        AutomationProperties.LiveSetting="Polite"
@@ -1346,7 +1347,7 @@
                                 </Grid>
                             </Button>
                         </Grid>
-                        <TextBlock x:Name="StatusZoomText" Grid.Column="1" Text="100%" Foreground="White" FontSize="12"
+                        <TextBlock x:Name="StatusZoomText" Grid.Column="1" Text="100%" Foreground="White" FontSize="{DynamicResource FreeXStatusBarTextFontSize}"
                                    VerticalAlignment="Center" Width="38" Focusable="True" Cursor="Hand"
                                    Margin="8,0,0,0"
                                    ToolTip="{local:Loc Key=MainWindow_ToolTip_Zoom}"

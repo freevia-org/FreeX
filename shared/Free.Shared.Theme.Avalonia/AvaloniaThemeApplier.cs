@@ -15,6 +15,14 @@ public static class AvaloniaThemeApplier
     public static global::Avalonia.Media.Color ToColor(ThemeColor c) =>
         global::Avalonia.Media.Color.FromArgb(c.A, c.R, c.G, c.B);
 
+    /// <summary>Converts a portable <see cref="ThemeFontWeight"/> to an Avalonia <see cref="FontWeight"/>.</summary>
+    public static FontWeight ToFontWeight(ThemeFontWeight w) => w switch
+    {
+        ThemeFontWeight.Bold     => FontWeight.Bold,
+        ThemeFontWeight.SemiBold => FontWeight.SemiBold,
+        _                        => FontWeight.Normal,
+    };
+
     /// <summary>
     /// Builds an Avalonia <see cref="ResourceDictionary"/> containing an
     /// <see cref="ImmutableSolidColorBrush"/> for each of the 21 color roles under
@@ -61,12 +69,37 @@ public static class AvaloniaThemeApplier
         AddBrush("Danger",               c.Danger);
         AddBrush("White",                c.White);
 
-        // ── Metrics (4 doubles) ───────────────────────────────────────────────────
+        // ── Metrics (6 doubles) ───────────────────────────────────────────────────
         var m = theme.Metrics;
-        dict[$"{keyPrefix}RibbonRowHeight"] = m.RibbonRowHeight;
-        dict[$"{keyPrefix}ControlHeight"]   = m.ControlHeight;
-        dict[$"{keyPrefix}IconSize"]         = m.IconSize;
-        dict[$"{keyPrefix}CornerRadius"]     = m.CornerRadius;
+        dict[$"{keyPrefix}RibbonRowHeight"]       = m.RibbonRowHeight;
+        dict[$"{keyPrefix}ControlHeight"]          = m.ControlHeight;
+        dict[$"{keyPrefix}IconSize"]               = m.IconSize;
+        dict[$"{keyPrefix}CornerRadius"]           = m.CornerRadius;
+        dict[$"{keyPrefix}StatusBarHeight"]        = m.StatusBarHeight;
+        // TitleBarCaptionHeight is a WPF-only metric (Avalonia uses the native OS title bar).
+        // The resource is still emitted so both appliers have a symmetric key set, but the Avalonia
+        // MainWindow does not consume it — any consumer can safely ignore it.
+        dict[$"{keyPrefix}TitleBarCaptionHeight"]  = m.TitleBarCaptionHeight;
+
+        // ── Typography: FontFamily, FontSize (double), FontWeight ─────────────────
+        // Emits {prefix}{Role}FontFamily, {prefix}{Role}FontSize, {prefix}{Role}FontWeight.
+        // When FontFamily is empty, emits FontFamily.Default (the Avalonia system-default family).
+        void AddTypo(string role, ThemeTypeToken tok)
+        {
+            var ff = string.IsNullOrEmpty(tok.FontFamily)
+                ? FontFamily.Default
+                : new FontFamily(tok.FontFamily);
+            dict[$"{keyPrefix}{role}FontFamily"] = ff;
+            dict[$"{keyPrefix}{role}FontSize"]   = tok.SizePt;
+            dict[$"{keyPrefix}{role}FontWeight"] = ToFontWeight(tok.Weight);
+        }
+
+        var t = theme.Typography;
+        AddTypo("Body",          t.Body);
+        AddTypo("Caption",       t.Caption);
+        AddTypo("RibbonLabel",   t.RibbonLabel);
+        AddTypo("Heading",       t.Heading);
+        AddTypo("StatusBarText", t.StatusBarText);
 
         return dict;
     }

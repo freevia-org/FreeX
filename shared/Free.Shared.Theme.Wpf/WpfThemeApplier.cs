@@ -14,6 +14,14 @@ public static class WpfThemeApplier
     public static Color ToColor(ThemeColor c) =>
         Color.FromArgb(c.A, c.R, c.G, c.B);
 
+    /// <summary>Converts a portable <see cref="ThemeFontWeight"/> to a WPF <see cref="FontWeight"/>.</summary>
+    public static FontWeight ToFontWeight(ThemeFontWeight w) => w switch
+    {
+        ThemeFontWeight.Bold     => FontWeights.Bold,
+        ThemeFontWeight.SemiBold => FontWeights.SemiBold,
+        _                        => FontWeights.Normal,
+    };
+
     /// <summary>
     /// Builds a <see cref="ResourceDictionary"/> containing a frozen
     /// <see cref="SolidColorBrush"/> for each of the 21 color roles, double values for
@@ -60,19 +68,37 @@ public static class WpfThemeApplier
         AddBrush("Danger",               c.Danger);
         AddBrush("White",                c.White);
 
-        // ── Metrics (4 doubles) ───────────────────────────────────────────────────
+        // ── Metrics (6 doubles) ───────────────────────────────────────────────────
         var m = theme.Metrics;
-        dict[$"{keyPrefix}RibbonRowHeight"] = m.RibbonRowHeight;
-        dict[$"{keyPrefix}ControlHeight"]   = m.ControlHeight;
-        dict[$"{keyPrefix}IconSize"]         = m.IconSize;
-        dict[$"{keyPrefix}CornerRadius"]     = m.CornerRadius;
+        dict[$"{keyPrefix}RibbonRowHeight"]       = m.RibbonRowHeight;
+        dict[$"{keyPrefix}ControlHeight"]          = m.ControlHeight;
+        dict[$"{keyPrefix}IconSize"]               = m.IconSize;
+        dict[$"{keyPrefix}CornerRadius"]           = m.CornerRadius;
+        dict[$"{keyPrefix}StatusBarHeight"]        = m.StatusBarHeight;
+        dict[$"{keyPrefix}TitleBarCaptionHeight"]  = m.TitleBarCaptionHeight;
 
-        // ── Typography (4 FontFamily resources) ───────────────────────────────────
+        // ── Typography: FontFamily, FontSize (double), FontWeight ─────────────────
+        // Emits {prefix}{Role}FontFamily, {prefix}{Role}FontSize, {prefix}{Role}FontWeight
+        // for every typography role.  When FontFamily is empty the resource is new FontFamily()
+        // (runtime inherited font) so XAML DynamicResource bindings always resolve.
+        void AddTypo(string role, ThemeTypeToken tok)
+        {
+            // WPF FontFamily: when the token family is empty, use new FontFamily() which resolves
+            // to the window/element's inherited font family at runtime (same as omitting FontFamily).
+            var ff = string.IsNullOrEmpty(tok.FontFamily)
+                ? new FontFamily()
+                : new FontFamily(tok.FontFamily);
+            dict[$"{keyPrefix}{role}FontFamily"] = ff;
+            dict[$"{keyPrefix}{role}FontSize"]   = tok.SizePt;
+            dict[$"{keyPrefix}{role}FontWeight"] = ToFontWeight(tok.Weight);
+        }
+
         var t = theme.Typography;
-        dict[$"{keyPrefix}BodyFontFamily"]        = new FontFamily(t.Body.FontFamily);
-        dict[$"{keyPrefix}CaptionFontFamily"]     = new FontFamily(t.Caption.FontFamily);
-        dict[$"{keyPrefix}RibbonLabelFontFamily"] = new FontFamily(t.RibbonLabel.FontFamily);
-        dict[$"{keyPrefix}HeadingFontFamily"]     = new FontFamily(t.Heading.FontFamily);
+        AddTypo("Body",          t.Body);
+        AddTypo("Caption",       t.Caption);
+        AddTypo("RibbonLabel",   t.RibbonLabel);
+        AddTypo("Heading",       t.Heading);
+        AddTypo("StatusBarText", t.StatusBarText);
 
         return dict;
     }
