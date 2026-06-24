@@ -3451,7 +3451,10 @@ internal static class ExcelSmokeFixtures
         if (File.Exists(outputPath)) File.Delete(outputPath);
         var workbook = workbooks.Add();
         worksheet = ((dynamic)workbook).Worksheets[1];
-        ((dynamic)worksheet).Name = sheetName;
+        // Keep the default sheet name "Sheet1" so that source-data addresses
+        // (which all reference "Sheet1!…") remain valid.
+        // The sheetName parameter is kept for API compatibility but not applied.
+        _ = sheetName;
         return workbook;
     }
 
@@ -3477,7 +3480,7 @@ internal static class ExcelSmokeFixtures
             SetExcelCellValue(worksheet, 1, ColLetterToIndex(sparkCell[..^1]) , "Sparkline");
 
             range = ((dynamic)worksheet).Range(sparkCell);
-            groups = ((dynamic)worksheet).SparklineGroups;
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
             points = ((dynamic)group).Points;
             ((dynamic)points).Markers.Visible = true;
@@ -3516,6 +3519,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         object? points = null;
@@ -3528,7 +3532,8 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkColumn, $"Sheet1!{dataRange}");
             points = ((dynamic)group).Points;
             ((dynamic)points).Highpoint.Visible = true;
@@ -3546,6 +3551,7 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(points);
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3560,6 +3566,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         object? points = null;
@@ -3572,7 +3579,8 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkColumnStacked100, $"Sheet1!{dataRange}");
             points = ((dynamic)group).Points;
             ((dynamic)points).Negative.Visible = true;
@@ -3586,6 +3594,7 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(points);
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3600,6 +3609,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         object? axes = null;
@@ -3614,7 +3624,8 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
             axes = ((dynamic)group).Axes;
             hAxis = ((dynamic)axes).Horizontal;
@@ -3632,6 +3643,7 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(axes);
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3646,6 +3658,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         object? axes = null;
@@ -3659,14 +3672,15 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
             axes = ((dynamic)group).Axes;
             vAxis = ((dynamic)axes).Vertical;
             ((dynamic)vAxis).MinScaleType = XlSparkScaleCustom;
             ((dynamic)vAxis).MaxScaleType = XlSparkScaleCustom;
-            ((dynamic)vAxis).MinScaleValue = 0;
-            ((dynamic)vAxis).MaxScaleValue = 10;
+            ((dynamic)vAxis).CustomMinScaleValue = 0.0;
+            ((dynamic)vAxis).CustomMaxScaleValue = 10.0;
 
             SaveExcelWorkbook(workbook, outputPath);
             workbook = null;
@@ -3677,6 +3691,7 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(axes);
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3691,7 +3706,10 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
-        object? groups = null;
+        object? rangeA = null;
+        object? rangeB = null;
+        object? groupsA = null;
+        object? groupsB = null;
         object? group1 = null;
         object? group2 = null;
         object? axes1 = null;
@@ -3703,27 +3721,28 @@ internal static class ExcelSmokeFixtures
             workbook = OpenSparklineWorkbook(workbooks, outputPath, "GroupScaling", out object ws);
             worksheet = ws;
 
-            // Group A: small values
+            // Group A: small values (sparkline at C2)
             double[] dataA = [1, 2, 3, 2, 1];
             SetExcelCellValue(worksheet, 1, 1, "Group A data");
             for (var i = 0; i < dataA.Length; i++)
                 SetExcelCellValue(worksheet, 2 + i, 1, dataA[i]);
             SetExcelCellValue(worksheet, 1, 3, "Spark A");
 
-            // Group B: large values (same group → shared scale)
+            // Group B: large values (sparkline at G2)
             double[] dataB = [5, 10, 7, 9, 6];
             SetExcelCellValue(worksheet, 1, 5, "Group B data");
             for (var i = 0; i < dataB.Length; i++)
                 SetExcelCellValue(worksheet, 2 + i, 5, dataB[i]);
             SetExcelCellValue(worksheet, 1, 7, "Spark B");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
-            group1 = ((dynamic)groups).Add(XlSparkColumn, "Sheet1!A2:A6");
-            // Move group1 to C2
-            ((dynamic)group1).Location = ((dynamic)worksheet).Range("C2");
+            // SparklineGroups must be accessed on the destination Range, not the Worksheet
+            rangeA = ((dynamic)worksheet).Range("C2");
+            groupsA = ((dynamic)rangeA).SparklineGroups;
+            group1 = ((dynamic)groupsA).Add(XlSparkColumn, "Sheet1!A2:A6");
 
-            group2 = ((dynamic)groups).Add(XlSparkColumn, "Sheet1!E2:E6");
-            ((dynamic)group2).Location = ((dynamic)worksheet).Range("G2");
+            rangeB = ((dynamic)worksheet).Range("G2");
+            groupsB = ((dynamic)rangeB).SparklineGroups;
+            group2 = ((dynamic)groupsB).Add(XlSparkColumn, "Sheet1!E2:E6");
 
             // Apply Group scaling to both
             axes1 = ((dynamic)group1).Axes;
@@ -3747,7 +3766,10 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(axes1);
             ReleaseComObject(group2);
             ReleaseComObject(group1);
-            ReleaseComObject(groups);
+            ReleaseComObject(groupsB);
+            ReleaseComObject(groupsA);
+            ReleaseComObject(rangeB);
+            ReleaseComObject(rangeA);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3762,6 +3784,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         object? seriesColor = null;
@@ -3774,7 +3797,8 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
             seriesColor = ((dynamic)group).SeriesColor;
             ((dynamic)seriesColor).Color = ToOleColor(148, 0, 211);  // purple
@@ -3787,6 +3811,7 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(seriesColor);
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
@@ -3801,6 +3826,7 @@ internal static class ExcelSmokeFixtures
     {
         object? workbook = null;
         object? worksheet = null;
+        object? range = null;
         object? groups = null;
         object? group = null;
         try
@@ -3812,7 +3838,8 @@ internal static class ExcelSmokeFixtures
             var (dataRange, sparkCell) = WriteSparklineData(worksheet, 2, 1, data);
             SetExcelCellValue(worksheet, 1, 1, "Data");
 
-            groups = ((dynamic)worksheet).SparklineGroups;
+            range = ((dynamic)worksheet).Range(sparkCell);
+            groups = ((dynamic)range).SparklineGroups;
             group = ((dynamic)groups).Add(XlSparkLine, $"Sheet1!{dataRange}");
             ((dynamic)group).LineWeight = 2.25;  // thick line — distinctly visible vs default 0.75
 
@@ -3823,6 +3850,7 @@ internal static class ExcelSmokeFixtures
         {
             ReleaseComObject(group);
             ReleaseComObject(groups);
+            ReleaseComObject(range);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
