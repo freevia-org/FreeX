@@ -113,6 +113,12 @@ internal sealed class PageBox : Border
     /// pattern.  Pass null slots to suppress the sub-editor for that region (the old placeholder strip
     /// is shown instead).
     /// </para>
+    ///
+    /// <para>
+    /// <strong>Live page numbers (W18):</strong> <paramref name="pageCount"/> is passed to the sub-editor
+    /// so PAGE field runs in the header/footer render as the actual 1-based page number for this box, and
+    /// NUMPAGES renders the real total.  The underlying model field run is unchanged (round-trip lossless).
+    /// </para>
     /// </summary>
     internal PageBox(
         int pageNumber,
@@ -122,7 +128,8 @@ internal sealed class PageBox : Border
         HeaderFooter? headerSlot = null,
         string? headerSlotName = null,
         HeaderFooter? footerSlot = null,
-        string? footerSlotName = null)
+        string? footerSlotName = null,
+        int pageCount = 1)
     {
         PageNumber = pageNumber;
         HeaderSlotName = headerSlotName;
@@ -149,7 +156,8 @@ internal sealed class PageBox : Border
         if (sourceModel is not null && headerSlotName is not null)
         {
             HeaderSubEditor = BuildHfSubEditor(
-                sourceModel, headerSlot, marginLeft, marginRight, isActivated: false);
+                sourceModel, headerSlot, marginLeft, marginRight, isActivated: false,
+                hfPageNumber: pageNumber, hfPageCount: pageCount);
             Grid.SetRow(HeaderSubEditor, 0);
             stack.Children.Add(HeaderSubEditor);
         }
@@ -195,7 +203,8 @@ internal sealed class PageBox : Border
         if (sourceModel is not null && footerSlotName is not null)
         {
             FooterSubEditor = BuildHfSubEditor(
-                sourceModel, footerSlot, marginLeft, marginRight, isActivated: false);
+                sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
+                hfPageNumber: pageNumber, hfPageCount: pageCount);
             Grid.SetRow(FooterSubEditor, 2);
             stack.Children.Add(FooterSubEditor);
         }
@@ -222,13 +231,22 @@ internal sealed class PageBox : Border
     /// <c>GotFocus</c> handler removes the dim and a <c>LostFocus</c> handler restores it, so only
     /// the active region is fully opaque.
     /// </para>
+    ///
+    /// <para>
+    /// <strong>Live page numbers (W18):</strong> when <paramref name="hfPageNumber"/> is non-zero,
+    /// it is injected into <see cref="DocumentView._renderHfPageNumber"/> / <see cref="DocumentView._renderHfPageCount"/>
+    /// immediately before <c>LoadModel</c> and cleared immediately after.  This makes PAGE/NUMPAGES fields
+    /// in the slot render as the correct page number without mutating the model's field runs.
+    /// </para>
     /// </summary>
     private static DocumentView BuildHfSubEditor(
         TextDocument sourceModel,
         HeaderFooter? slot,
         double marginLeft,
         double marginRight,
-        bool isActivated)
+        bool isActivated,
+        int hfPageNumber = 0,
+        int hfPageCount = 0)
     {
         // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
         var wrapper = TextDocument.CreateEmpty();
@@ -259,7 +277,24 @@ internal sealed class PageBox : Border
             Opacity = isActivated ? 1.0 : 0.45,
         };
 
-        sub.LoadModel(wrapper);
+        // ── Live page-number injection (W18) ──────────────────────────────────────────────────────
+        // Set the thread-static context fields so that PAGE/NUMPAGES field runs in this slot render
+        // as the actual page number for this box.  Cleared immediately after LoadModel so the context
+        // cannot leak into any subsequent render pass on this thread.
+        if (hfPageNumber > 0)
+        {
+            DocumentView._renderHfPageNumber = hfPageNumber;
+            DocumentView._renderHfPageCount  = hfPageCount > 0 ? hfPageCount : 1;
+        }
+        try
+        {
+            sub.LoadModel(wrapper);
+        }
+        finally
+        {
+            DocumentView._renderHfPageNumber = 0;
+            DocumentView._renderHfPageCount  = 0;
+        }
 
         // Dim/undim on focus changes (Word-style activation).
         sub.GotFocus  += (_, _) => sub.Opacity = 1.0;

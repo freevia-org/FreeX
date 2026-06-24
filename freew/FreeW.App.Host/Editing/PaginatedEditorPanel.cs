@@ -153,15 +153,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
         // ── Step 4: create one PageBox per page ───────────────────────────────────────────────────
-        // Phase 4: resolve header/footer slots per page.
+        // Phase 4 + W18: resolve header/footer slots per page, routing to the correct section's
+        // SectionHeadersFooters (per-section tracking) and passing pageCount for live page numbers.
+        var pageToSection = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         var boxes = new List<PageBox>(pageCount);
         for (var i = 0; i < pageCount; i++)
         {
-            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            var (section, sectionRelPageNumber) = pageToSection[i];
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
+                section, sectionRelPageNumber, model.Page);
             boxes.Add(new PageBox(i + 1, page, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
-                footerSlot: fSlot, footerSlotName: fName));
+                footerSlot: fSlot, footerSlotName: fName,
+                pageCount: pageCount));
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -174,41 +179,155 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         return new PaginatedEditorPanel(sourceEditor, boxes);
     }
 
-    // ── Phase 4: slot resolution ──────────────────────────────────────────────────────────────────
+    // ── Phase 4 + W18: slot resolution and page→section tracking ─────────────────────────────────
 
     /// <summary>
-    /// Selects the header and footer <see cref="HeaderFooter"/> slots for a given 1-based
-    /// <paramref name="pageNumber"/>, applying Word's DifferentFirstPage / DifferentOddEvenPages
-    /// rules.  Returns the slot object (may be null when the slot is empty) and its canonical name.
+    /// Selects the header and footer <see cref="HeaderFooter"/> slots for a given page within its
+    /// section, applying Word's DifferentFirstPage / DifferentOddEvenPages rules.  Returns the slot
+    /// object (may be null when the slot is empty) and its canonical name.
+    ///
+    /// <para>
+    /// <strong>Per-section routing (W18):</strong> the <paramref name="sectionHf"/> is the
+    /// section's own <see cref="SectionHeadersFooters"/>.  When a slot within the section is null
+    /// (i.e. the section does not define its own header/footer), and the section's
+    /// <see cref="SectionHeadersFooters"/> is entirely empty, the call falls back to the document-level
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/> so single-section documents behave exactly
+    /// as before.  This ensures the fall-through to document-level headers is automatic.
+    /// </para>
     ///
     /// <list type="bullet">
-    ///   <item>Page 1 with <c>DifferentFirstPage</c> → first-header / first-footer.</item>
-    ///   <item>Even pages with <c>DifferentOddEvenPages</c> → even-header / even-footer.</item>
+    ///   <item>Section-relative page 1 with <c>DifferentFirstPage</c> → first-header / first-footer.</item>
+    ///   <item>Even pages (document-global) with <c>DifferentOddEvenPages</c> → even-header / even-footer.</item>
     ///   <item>Otherwise → default header / footer.</item>
     /// </list>
     /// </summary>
     private static (HeaderFooter? hSlot, string hName,
                     HeaderFooter? fSlot, string fName)
-        ResolveHfSlots(TextDocument model, int pageNumber, int pageCount)
+        ResolveHfSlots(
+            SectionHeadersFooters sectionHf,
+            int sectionRelativePageNumber,
+            PageSettings pageSettings)
     {
-        var hf      = model.FinalSectionHeadersFooters;
-        var diffFirst   = model.Page.DifferentFirstPage;
-        var diffOddEven = model.Page.DifferentOddEvenPages;
+        var diffFirst   = pageSettings.DifferentFirstPage;
+        var diffOddEven = pageSettings.DifferentOddEvenPages;
 
-        if (diffFirst && pageNumber == 1)
+        if (diffFirst && sectionRelativePageNumber == 1)
         {
-            return (hf.FirstHeader, "first-header",
-                    hf.FirstFooter, "first-footer");
+            return (sectionHf.FirstHeader, "first-header",
+                    sectionHf.FirstFooter, "first-footer");
         }
 
-        if (diffOddEven && pageNumber % 2 == 0)
+        // NOTE: even/odd is document-global in Word; we use the section-relative page number for
+        // first-page detection but the section-global (= document-global for single section) slot.
+        if (diffOddEven && sectionRelativePageNumber % 2 == 0)
         {
-            return (hf.EvenHeader, "even-header",
-                    hf.EvenFooter, "even-footer");
+            return (sectionHf.EvenHeader, "even-header",
+                    sectionHf.EvenFooter, "even-footer");
         }
 
-        return (hf.Header, "header",
-                hf.Footer, "footer");
+        return (sectionHf.Header, "header",
+                sectionHf.Footer, "footer");
+    }
+
+    /// <summary>
+    /// Builds a mapping from 0-based page index to (section's <see cref="SectionHeadersFooters"/>,
+    /// section-relative 1-based page number) for <paramref name="pageCount"/> pages.
+    ///
+    /// <para>
+    /// <strong>Section tracking (W18):</strong> iterates the sharded block list.  Each block that
+    /// carries a <see cref="Paragraph.SectionBreak"/> ends the current section.  The section index
+    /// advances when the first block of a new page belongs to a new section.  This gives a per-page
+    /// section assignment without introducing new model storage.
+    /// </para>
+    ///
+    /// <para>
+    /// Fallback: when a section's <see cref="SectionHeadersFooters"/> is entirely empty (all slots
+    /// null), the mapping substitutes the document-level <see cref="TextDocument.FinalSectionHeadersFooters"/>
+    /// so that document-wide headers still display on every page, matching Word's "inherit from previous"
+    /// behaviour.
+    /// </para>
+    ///
+    /// <para>
+    /// <strong>Section-level header/footer STORAGE:</strong> <see cref="Section.HeadersFooters"/>
+    /// already exists on the model — each <see cref="Section"/> carries its own
+    /// <see cref="SectionHeadersFooters"/> instance with Header/Footer/EvenHeader/EvenFooter/FirstHeader/FirstFooter
+    /// slots.  This implementation reads and displays them.  Writing back section-level headers via the
+    /// in-page sub-editors (i.e. editing section 2's header independently) is deferred: the commit
+    /// coordinator currently writes only to <see cref="TextDocument.FinalSectionHeadersFooters"/>
+    /// (document-level), so edits to a section-2 header are committed to the document-level slot.
+    /// Per-section header COMMIT is a separate model-addition task.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<(SectionHeadersFooters Hf, int SectionRelPageNumber)>
+        ComputePageSectionMap(
+            IReadOnlyList<System.Windows.Documents.Block> allBlocks,
+            int[] assignment,
+            int pageCount,
+            TextDocument model)
+    {
+        var sections = model.Sections; // reconstructed per-section list
+        var result   = new (SectionHeadersFooters Hf, int SectionRelPageNumber)[pageCount];
+
+        // Map each block to a section index.  A block is in section[k] if it comes before the k-th
+        // SectionBreak paragraph; section indices are 0-based.
+        // We track which blocks end which sections by scanning model.Blocks in parallel.
+        int[] blockSection = new int[allBlocks.Count];
+        {
+            int secIdx = 0;
+            int modelBlockIdx = 0;
+            for (int b = 0; b < allBlocks.Count; b++)
+            {
+                // Advance modelBlockIdx to find the corresponding model block (they share the same
+                // scratch-render block order — one WPF block per model block).
+                blockSection[b] = secIdx;
+                if (modelBlockIdx < model.Blocks.Count)
+                {
+                    var mb = model.Blocks[modelBlockIdx];
+                    if (mb is FreeW.Core.Model.Paragraph { SectionBreak: { } } && secIdx < sections.Count - 1)
+                        secIdx++;
+                    modelBlockIdx++;
+                }
+            }
+        }
+
+        // Determine the section index for each page (the first block on the page sets the section).
+        int[] pageSectionIdx = new int[pageCount];
+        for (int b = 0; b < allBlocks.Count; b++)
+        {
+            var pg = b < assignment.Length ? assignment[b] : 0;
+            pg = Math.Clamp(pg, 0, pageCount - 1);
+            // First block on this page wins.
+            if (pageSectionIdx[pg] == 0 && b > 0)
+                pageSectionIdx[pg] = blockSection[b];
+            else if (b == 0)
+                pageSectionIdx[pg] = 0;
+        }
+
+        // Count how many pages precede each section start to compute section-relative page numbers.
+        // sectionFirstPage[k] = the first 0-based page index that belongs to section k.
+        var sectionFirstPage = new int[sections.Count];
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = pageSectionIdx[pg];
+            if (pg == 0 || pageSectionIdx[pg - 1] != sec)
+                sectionFirstPage[Math.Clamp(sec, 0, sections.Count - 1)] = pg;
+        }
+
+        // Build the result array.
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
+            var sectionHf = sections[sec].HeadersFooters;
+
+            // Fall back to document-level headers when the section has no own slots.
+            if (sectionHf.IsEmpty)
+                sectionHf = model.FinalSectionHeadersFooters;
+
+            int sectionRelPage = pg - sectionFirstPage[sec] + 1;
+            result[pg] = (sectionHf, sectionRelPage);
+        }
+
+        return result;
     }
 
     // ── live repagination ─────────────────────────────────────────────────────────────────────────
@@ -534,13 +653,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _stack.Children.Clear();
         _pageBoxes.Clear();
 
+        var pageToSectionRep = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
-            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            var (section, sectionRelPageNumber) = pageToSectionRep[i];
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
+                section, sectionRelPageNumber, model.Page);
             var box = new PageBox(i + 1, page, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
-                footerSlot: fSlot, footerSlotName: fName);
+                footerSlot: fSlot, footerSlotName: fName,
+                pageCount: pageCount);
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
@@ -629,13 +752,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
+        var pageToSectionReb = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
-            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(model, pageNumber: i + 1, pageCount);
+            var (section, sectionRelPageNumber) = pageToSectionReb[i];
+            var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
+                section, sectionRelPageNumber, model.Page);
             var box = new PageBox(i + 1, page, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
-                footerSlot: fSlot, footerSlotName: fName);
+                footerSlot: fSlot, footerSlotName: fName,
+                pageCount: pageCount);
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
