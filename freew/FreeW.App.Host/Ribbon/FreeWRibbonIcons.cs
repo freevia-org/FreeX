@@ -288,6 +288,25 @@ internal static class FreeWRibbonIcons
             ["freew.footer"] = RibbonCommandIconKind.Footer,
             ["freew.page-number"] = RibbonCommandIconKind.PageNumber,
 
+            // Header & Footer Design contextual tab
+            ["freew.hf-edit-header"]            = RibbonCommandIconKind.Header,
+            ["freew.hf-edit-footer"]            = RibbonCommandIconKind.Footer,
+            ["freew.hf-edit-even-header"]       = RibbonCommandIconKind.Header,
+            ["freew.hf-edit-even-footer"]       = RibbonCommandIconKind.Footer,
+            ["freew.hf-edit-first-header"]      = RibbonCommandIconKind.Header,
+            ["freew.hf-edit-first-footer"]      = RibbonCommandIconKind.Footer,
+            ["freew.hf-different-first-page"]   = RibbonCommandIconKind.CoverPage,
+            ["freew.hf-different-odd-even"]     = RibbonCommandIconKind.OnePage,
+            ["freew.hf-header-from-top"]        = RibbonCommandIconKind.Margins,
+            ["freew.hf-footer-from-bottom"]     = RibbonCommandIconKind.Margins,
+            ["freew.hf-go-to-header"]           = RibbonCommandIconKind.Header,
+            ["freew.hf-go-to-footer"]           = RibbonCommandIconKind.Footer,
+            ["freew.hf-close"]                  = RibbonCommandIconKind.WindowClose,
+            ["freew.hf-insert-page-number"]     = RibbonCommandIconKind.PageNumber,
+            ["freew.hf-insert-page-number-footer"] = RibbonCommandIconKind.PageNumber,
+            ["freew.hf-insert-datetime"]        = RibbonCommandIconKind.Date,
+            ["freew.hf-insert-field"]           = RibbonCommandIconKind.Field,
+
             // Insert: symbols
             ["freew.symbol"] = RibbonCommandIconKind.Symbol,
             ["freew.datetime"] = RibbonCommandIconKind.Date,
