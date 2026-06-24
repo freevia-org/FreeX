@@ -13914,6 +13914,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
+        // WPF order: [Remove All] [OK] [Cancel]
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,

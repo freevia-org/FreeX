@@ -218,12 +218,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(closeButton, "WatchWindowCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
+        // WPF order: Add Watch | Refresh | Delete Watch | Close
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Margin = new Thickness(0, 8, 0, 0),
-            Children = { addButton, deleteButton, refreshButton, closeButton },
+            Children = { addButton, refreshButton, deleteButton, closeButton },
         };
 
         dialog.Content = new StackPanel
