@@ -4,6 +4,8 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using FreeX.App.Services;
 using FreeX.App.Services.Updates;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
@@ -19,11 +21,31 @@ public sealed class App : Application
 
     internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
 
+    /// <summary>
+    /// The active brand theme selected at startup (default: <see cref="BrandThemes.FreeX"/>).
+    /// Stored so that tests and diagnostics can verify the selected palette.
+    /// </summary>
+    internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeX;
+
     public override void OnFrameworkInitializationCompleted()
     {
         Name = ApplicationTitle;
         RequestedThemeVariant = ThemeVariant.Light;
         Styles.Add(new FluentTheme());
+
+        // Select the active brand theme and register token brushes into Application.Resources
+        // so that chrome surfaces can look them up by key.  FREEX_THEME=midnight swaps in the
+        // alternate palette; otherwise the default FreeX palette applies (values are identical
+        // to the existing inline colors so the default appearance is unchanged).
+        var theme = string.Equals(
+            System.Environment.GetEnvironmentVariable("FREEX_THEME"),
+            "midnight",
+            StringComparison.OrdinalIgnoreCase)
+            ? BrandThemes.FreeXMidnight
+            : BrandThemes.FreeX;
+        ActiveTheme = theme;
+        var themeResources = AvaloniaThemeApplier.BuildResources(theme, "FreeX");
+        Resources.MergedDictionaries.Add(themeResources);
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

@@ -25,6 +25,12 @@ public partial class App : Application
 
     private static ServiceProvider? _services;
 
+    /// <summary>
+    /// The active brand theme selected at startup (default: <see cref="BrandThemes.FreeX"/>).
+    /// Stored so that new windows can apply it to their own resource dictionaries.
+    /// </summary>
+    internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeX;
+
     public static ServiceProvider Services =>
         _services ?? throw new InvalidOperationException("Application services are not initialized.");
 
@@ -36,14 +42,18 @@ public partial class App : Application
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
-        // Flag-guarded theme swap: unset / "default" → no-op (ThemeResources.xaml fully controls
-        // appearance; the default look is byte-identical to what it was before this line).
-        // "midnight" → merge FreeXMidnight token-overrides as the last ResourceDictionary so they
-        // override the 21 brush keys from ThemeResources.xaml.  Any value other than "midnight"
-        // is silently ignored, leaving the default unchanged.
-        var themeEnv = System.Environment.GetEnvironmentVariable("FREEX_THEME");
-        if (string.Equals(themeEnv, "midnight", StringComparison.OrdinalIgnoreCase))
-            WpfThemeApplier.Apply(this, BrandThemes.FreeXMidnight, "FreeX");
+        // Always apply the active brand theme early — before the main window loads — so that
+        // DynamicResource references in the title-bar chrome pick up the correct brushes.
+        // For the DEFAULT (FreeX) theme the values are BYTE-IDENTICAL to ThemeResources.xaml,
+        // so the visual result is unchanged.  FREEX_THEME=midnight swaps in the alternate palette.
+        var theme = string.Equals(
+            System.Environment.GetEnvironmentVariable("FREEX_THEME"),
+            "midnight",
+            StringComparison.OrdinalIgnoreCase)
+            ? BrandThemes.FreeXMidnight
+            : BrandThemes.FreeX;
+        ActiveTheme = theme;
+        WpfThemeApplier.Apply(this, theme, "FreeX");
 
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.

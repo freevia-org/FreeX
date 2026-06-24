@@ -3376,14 +3376,36 @@ public sealed partial class MainWindow : Window
         AddGridChild(grid, statsViewport, 0, 1);
         AddGridChild(grid, rightPanel, 0, 2);
 
+        // Resolve the status-bar background from the registered token brush (FreeXStatusSurfaceBrush),
+        // falling back to the hardcoded surface color so tests and unstyled environments are safe.
+        // When FREEX_THEME=midnight the token brush carries the midnight StatusSurface value;
+        // for the default theme the token and the hardcoded value are byte-identical (#17324D).
+        var statusBarBackground = ResolveTokenBrush("FreeXStatusSurfaceBrush") ?? StatusBarSurface;
         return new Border
         {
-            Background = StatusBarSurface,
+            Background = statusBarBackground,
             BorderThickness = new Thickness(0),
             Height = 28,
             Padding = new Thickness(8, 3),
             Child = grid,
         };
+    }
+
+    /// <summary>
+    /// Looks up a named brush from the Application's resource registry (populated by
+    /// <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
+    /// Returns <c>null</c> when no Application is available (e.g. unit-test environments that
+    /// do not boot the full Avalonia application).
+    /// </summary>
+    private static IBrush? ResolveTokenBrush(string key)
+    {
+        var app = global::Avalonia.Application.Current;
+        if (app is null)
+            return null;
+        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
+               value is IBrush brush
+            ? brush
+            : null;
     }
 
     private Control BuildStatusZoomSliderHost()

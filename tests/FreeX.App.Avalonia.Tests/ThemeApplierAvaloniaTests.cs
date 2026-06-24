@@ -44,4 +44,30 @@ public sealed class ThemeApplierAvaloniaTests
         avColor.G.Should().Be(0xFF);
         avColor.B.Should().Be(0xFF);
     }
+
+    // ── Status surface / Avalonia registration tests ───────────────────────────
+
+    [Fact]
+    public void AvaloniaApplier_FreeXStatusSurfaceBrush_FreeX_IsCorrectColor()
+    {
+        // FreeX default: StatusSurface = #17324D (same navy as the title bar)
+        var dict = AvaloniaThemeApplier.BuildResources(BrandThemes.FreeX, "FreeX");
+        var brush = (ImmutableSolidColorBrush)dict["FreeXStatusSurfaceBrush"]!;
+        brush.Color.A.Should().Be(255);
+        brush.Color.R.Should().Be(0x17);
+        brush.Color.G.Should().Be(0x32);
+        brush.Color.B.Should().Be(0x4D);
+    }
+
+    [Fact]
+    public void AvaloniaApplier_FreeXStatusSurfaceBrush_Midnight_DiffersFromDefault()
+    {
+        var defaultDict  = AvaloniaThemeApplier.BuildResources(BrandThemes.FreeX,         "FreeX");
+        var midnightDict = AvaloniaThemeApplier.BuildResources(BrandThemes.FreeXMidnight, "FreeX");
+
+        var defaultColor  = ((ImmutableSolidColorBrush)defaultDict["FreeXStatusSurfaceBrush"]!).Color;
+        var midnightColor = ((ImmutableSolidColorBrush)midnightDict["FreeXStatusSurfaceBrush"]!).Color;
+        midnightColor.Should().NotBe(defaultColor,
+            because: "FreeXMidnight has a near-black status surface, not the default navy");
+    }
 }

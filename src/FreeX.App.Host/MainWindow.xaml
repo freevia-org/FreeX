@@ -50,7 +50,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 0  Title bar / Quick Access Toolbar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{StaticResource FreeXTitleBarBrush}" BorderBrush="{StaticResource FreeXAccentDarkBrush}"
+        <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{DynamicResource FreeXTitleBarBrush}" BorderBrush="{DynamicResource FreeXTitleBarBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
@@ -59,7 +59,7 @@
                         Width="22" Height="22"
                         Margin="0,0,8,0"
                         VerticalAlignment="Center"
-                        Background="{StaticResource FreeXAccentDarkBrush}"
+                        Background="{DynamicResource FreeXTitleBarBrush}"
                         BorderBrush="#66FFFFFF"
                         BorderThickness="1"
                         CornerRadius="2"

@@ -88,4 +88,17 @@ public static class WpfThemeApplier
         var dict = BuildResources(theme, keyPrefix);
         app.Resources.MergedDictionaries.Add(dict);
     }
+
+    /// <summary>
+    /// Merges the theme resources into an arbitrary <see cref="ResourceDictionary"/> as the
+    /// <em>last</em> entry so it overrides any same-keyed brushes already present (e.g. from
+    /// <c>ThemeResources.xaml</c> when called on a <c>Window.Resources</c> that already
+    /// has ThemeResources merged in).
+    /// </summary>
+    public static void Apply(ResourceDictionary target, Theme theme, string keyPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var dict = BuildResources(theme, keyPrefix);
+        target.MergedDictionaries.Add(dict);
+    }
 }

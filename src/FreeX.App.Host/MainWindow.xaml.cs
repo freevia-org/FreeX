@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using FreeX.App.Services;
 using FreeX.App.UI;
+using Free.Shared.Theme.Wpf;
 
 namespace FreeX.App.Host;
 
@@ -291,6 +292,13 @@ public partial class MainWindow : Window, IWorkbookWindow
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
+        // Merge the active brand theme into this window's own resources (as the last entry so it
+        // overrides same-keyed brushes from ThemeResources.xaml merged earlier in this dict).
+        // DynamicResource references in the title-bar chrome then resolve to these token brushes,
+        // making the title bar runtime-swappable.  For the default theme the values are
+        // byte-identical to ThemeResources.xaml, so the visual result is unchanged.
+        if (App.TryGetServices(out _))
+            WpfThemeApplier.Apply(Resources, App.ActiveTheme, "FreeX");
         InitializeInsertShapeGalleryContextMenu();
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
