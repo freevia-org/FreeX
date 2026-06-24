@@ -203,9 +203,10 @@ public sealed partial class MainWindow
         };
 
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, ApplySelection);
+        // Right details column: 210px to comfortably fit "Inverted Exclamation Mark" in SemiBold on Linux/Skia.
         var contentGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,190"),
+            ColumnDefinitions = new ColumnDefinitions("*,210"),
         };
         Grid.SetColumn(details, 1);
         contentGrid.Children.Add(tabs);

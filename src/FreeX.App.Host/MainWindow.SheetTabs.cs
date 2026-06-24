@@ -493,8 +493,10 @@ public partial class MainWindow
 
         SheetNavLeftBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
         SheetNavRightBtn.Visibility = canScroll ? Visibility.Visible : Visibility.Hidden;
-        var activeNavigationBrush = (Brush)FindResource("FreeXAccentDarkBrush");
-        var inactiveNavigationBrush = (Brush)FindResource("FreeXBorderStrongBrush");
+        var activeNavigationBrush = TryFindResource("FreeXAccentDarkBrush") as Brush
+            ?? new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D));
+        var inactiveNavigationBrush = TryFindResource("FreeXBorderStrongBrush") as Brush
+            ?? new SolidColorBrush(Color.FromRgb(0xC8, 0xCC, 0xD0));
         SheetNavLeftBtn.Foreground = canScrollLeft ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavRightBtn.Foreground = canScrollRight ? activeNavigationBrush : inactiveNavigationBrush;
         SheetNavLeftBtn.IsHitTestVisible = canScroll;
@@ -702,7 +704,8 @@ public partial class MainWindow
             return;
 
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
-        var accentBrush = (Brush)FindResource("FreeXAccentBrush");
+        var accentBrush = TryFindResource("FreeXAccentBrush") as Brush
+            ?? new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
         var separatorBrush = SheetTabSeparatorBrush;
 
         Rect? addRect = null;
@@ -771,7 +774,8 @@ public partial class MainWindow
             {
                 var fillBrush = tab.TabColor is { } tabColor
                     ? CreatePastelTabBrush(tabColor)
-                    : (Brush)FindResource("FreeXAccentSoftBrush");
+                    : (TryFindResource("FreeXAccentSoftBrush") as Brush
+                        ?? new SolidColorBrush(Color.FromRgb(0xE6, 0xF6, 0xFA)));
                 SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
                     CreateInactiveSheetTabFillGeometry(tabRect),
                     fillBrush,
@@ -810,7 +814,7 @@ public partial class MainWindow
         {
             var activeFillBrush = activeTab?.TabColor is { } activeTabColor
                 ? CreatePastelTabBrush(activeTabColor)
-                : (Brush)FindResource("FreeXRibbonSurfaceBrush");
+                : (TryFindResource("FreeXRibbonSurfaceBrush") as Brush ?? Brushes.White);
             SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
                 CreateActiveSheetTabFillGeometry(active),
                 activeFillBrush,

@@ -569,6 +569,13 @@ public sealed partial class MainWindow
         new()
         {
             Width = width,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(5, 0, 4, 0),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             ItemsSource = new[] { selectedText },
             SelectedIndex = 0,
         };
