@@ -660,6 +660,64 @@ internal static class FreeWRibbon
             // while their selection context is active: "picture" when an image is selected, "table" when the
             // caret is in a table. Contextual tabs reuse the same command ids but group them by active selection,
             // exactly like Word's Picture Format / Table Design tabs.
+            // ── Drawing Format contextual tab — Shape Tools (shown when a shape/text-box/WordArt is selected) ──
+            .ContextualTab("drawing-format", "Drawing Format",
+                new RibbonTabContext("drawing", "Drawing Tools", RibbonContextColor.Purple), tab =>
+            {
+                tab.Group("drawing-insert", "Insert Shapes", "I", 110, g =>
+                {
+                    g.Medium("freew.shape-change", "Change Shape", RibbonCommandIconKind.Shapes, menu: m =>
+                    {
+                        m.Item("freew.shape-change-rectangle", "Rectangle", "R");
+                        m.Item("freew.shape-change-rounded", "Rounded Rectangle", "U");
+                        m.Item("freew.shape-change-ellipse", "Oval", "O");
+                    });
+                });
+                tab.Group("drawing-styles", "Shape Styles", "H", 100, g =>
+                {
+                    g.Medium("freew.shape-fill", "Shape Fill", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, menu: m =>
+                    {
+                        m.Item("freew.shape-fill-no-fill", "No Fill", "N");
+                    });
+                    g.Medium("freew.shape-outline", "Shape Outline", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border, menu: m =>
+                    {
+                        m.Item("freew.shape-outline-no-outline", "No Outline", "N");
+                        m.Item("freew.shape-outline-solid", "Solid", "S");
+                        m.Item("freew.shape-outline-dash", "Dash", "D");
+                        m.Item("freew.shape-outline-dot", "Dot", "O");
+                    });
+                });
+                tab.Group("drawing-text", "Text", "X", 90, g =>
+                {
+                    g.Medium("freew.shape-text-direction", "Text Direction", RibbonCommandIconKind.TextBox, menu: m =>
+                    {
+                        m.Item("freew.shape-text-horizontal", "Horizontal", "H");
+                        m.Item("freew.shape-text-rotate90", "Rotate 90°", "R");
+                        m.Item("freew.shape-text-rotate270", "Rotate 270°", "T");
+                    });
+                });
+                tab.Group("drawing-wordart", "WordArt Styles", "W", 85, g =>
+                {
+                    g.Medium("freew.wordart-style", "WordArt Style", RibbonCommandIconKind.WordArt, menu: m =>
+                    {
+                        m.Item("freew.wordart-style-fill-blue", "Fill: Blue", "B");
+                        m.Item("freew.wordart-style-gradient", "Gradient Fill", "G");
+                        m.Item("freew.wordart-style-outline", "Outline", "O");
+                        m.Item("freew.wordart-style-shadow", "Shadow", "S");
+                    });
+                });
+                tab.Group("drawing-arrange", "Arrange", "A", 80, g =>
+                {
+                    g.Medium("freew.shape-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.shape-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.shape-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                });
+                tab.Group("drawing-size", "Size", "S", 70, g =>
+                {
+                    g.Medium("freew.shape-size", "Size", RibbonCommandIconKind.Size);
+                    g.Medium("freew.shape-alt-text", "Alt Text", RibbonCommandIconKind.Info);
+                });
+            })
             .ContextualTab("picture-format", "Picture Format",
                 new RibbonTabContext("picture", "Picture Tools", RibbonContextColor.Orange), tab =>
             {

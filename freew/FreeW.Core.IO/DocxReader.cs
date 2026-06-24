@@ -2540,7 +2540,14 @@ public static class DocxReader
         var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
         var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
-        return new WordArt(text, style, fontSizePt);
+        var wordArt = new WordArt(text, style, fontSizePt);
+
+        // Alt text: wp:docPr/@descr on the inline drawing.
+        var waDocPrDescr = inline!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        if (!string.IsNullOrEmpty(waDocPrDescr))
+            wordArt.AltText = waDocPrDescr;
+
+        return wordArt;
     }
 
     /// <summary>
@@ -2590,6 +2597,25 @@ public static class DocxReader
         if (!string.IsNullOrEmpty(fill) && !string.Equals(fill, "auto", StringComparison.Ordinal))
             shape.FillColorHex = "#" + fill.TrimStart('#');
 
+        // Outline: a:ln/@w (EMU) + a:solidFill/a:srgbClr/@val + optional a:prstDash/@val.
+        var ln = spPr?.Element(A + "ln");
+        if (ln is not null)
+        {
+            var outlineFill = ln.Element(A + "solidFill")?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(outlineFill))
+            {
+                shape.OutlineColorHex = "#" + outlineFill.TrimStart('#');
+                if (long.TryParse(ln.Attribute("w")?.Value, out var widthEmu) && widthEmu > 0)
+                    shape.OutlineWidthPt = widthEmu / 12700.0;
+                shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
+            }
+        }
+
+        // Alt text: wp:docPr/@descr on the inline drawing.
+        var docPrDescr = inline!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
+        if (!string.IsNullOrEmpty(docPrDescr))
+            shape.AltText = docPrDescr;
+
         // Text-box body: parse each w:p inside w:txbxContent with the ordinary paragraph reader. Bodies do
         // not carry hyperlink relationships or list numbering, so build them against empty maps (mirrors the
         // writer, which emits txbx paragraphs without those).
@@ -2600,6 +2626,15 @@ public static class DocxReader
             var noNumbering = new Dictionary<int, ListKind>();
             foreach (var p in txbxContent.Elements(W + "p"))
                 shape.TextParagraphs.Add(ReadParagraph(p, archive, imageRelationships, noHyperlinks, noNumbering));
+        }
+
+        // Text direction: wps:bodyPr/@vert + @rot.
+        var bodyPr = wsp.Element(Wps + "bodyPr");
+        var vert = bodyPr?.Attribute("vert")?.Value;
+        if (string.Equals(vert, "eaVert", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(bodyPr?.Attribute("rot")?.Value, out var rotVal))
+        {
+            shape.TextDirection = rotVal > 0 ? ShapeTextDirection.Rotate90 : ShapeTextDirection.Rotate270;
         }
 
         return shape;

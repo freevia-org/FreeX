@@ -167,6 +167,19 @@ public class WordArtRoundTripTests
         runs.Count(r => r.WordArt is not null).Should().Be(1);
     }
 
+    [Fact]
+    public void WordArt_WithAltText_SurvivesRoundTrip()
+    {
+        var wordArt = WordArt.Create("FreeW", WordArtStyle.Shadow);
+        wordArt.AltText = "FreeW logo WordArt";
+
+        var read = RoundTrip(DocumentWith(wordArt)).Paragraphs.Single()
+            .Runs.Single(r => r.WordArt is not null).WordArt!;
+
+        read.AltText.Should().Be("FreeW logo WordArt");
+        read.Style.Should().Be(WordArtStyle.Shadow);
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside WordArt.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
