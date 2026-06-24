@@ -5,8 +5,12 @@ public class DocumentStyleSetTests
     [Fact]
     public void Catalog_ContainsTheExpectedBuiltInStyleSets_InOrder()
     {
+        // Original four presets, plus six added for Word parity, in order.
         DocumentStyleSet.Catalog.Select(s => s.Name)
-            .Should().Equal("Office", "Simple", "Elegant", "Formal");
+            .Should().Equal(
+                "Office", "Simple", "Elegant", "Formal",
+                "Lines (Simple)", "Minimalist", "Shadow", "Shaded",
+                "Word 2003", "Word 2010");
         DocumentStyleSet.Default.Name.Should().Be("Office");
     }
 

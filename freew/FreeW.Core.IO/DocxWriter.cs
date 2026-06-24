@@ -874,6 +874,8 @@ public static class DocxWriter
                     || name == WatermarkColorPropertyName
                     || name == WatermarkLayoutPropertyName
                     || name == WatermarkOpacityPropertyName
+                    || name == WatermarkImagePropertyName
+                    || name == WatermarkScalePropertyName
                     || name == MarkAsFinalPropertyName;
             })
             .Remove();
@@ -903,6 +905,14 @@ public static class DocxWriter
                 new XAttribute("pid", (pid++).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new XAttribute("name", WatermarkOpacityPropertyName),
                 new XElement(VtVariant + "r8", watermarkOptions.Opacity.ToString("G", System.Globalization.CultureInfo.InvariantCulture))));
+            // Picture watermark: persist image bytes as base-64 and scale.
+            if (watermarkOptions.IsPicture)
+            {
+                properties.Add(StringProp(WatermarkImagePropertyName, pid++,
+                    Convert.ToBase64String(watermarkOptions.ImageBytes!)));
+                properties.Add(StringProp(WatermarkScalePropertyName, pid++,
+                    watermarkOptions.ScalePct.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            }
         }
         else if (!string.IsNullOrEmpty(legacyWatermark))
         {
@@ -4359,6 +4369,21 @@ public static class DocxWriter
     {
         if (border is null)
             return null;
+
+        if (border.ArtId > 0)
+        {
+            // Art border: @w:val must be a valid border-style token so conformant readers don't reject the
+            // element; "single" is the safest placeholder. The visual is entirely driven by @w:art.
+            XElement ArtEdge(string name) => new(W + name,
+                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+                new XAttribute(W + "space", 24),
+                new XAttribute(W + "color", border.ColorHex.TrimStart('#')),
+                new XAttribute(W + "art", border.ArtId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            return new XElement(W + "pgBorders",
+                new XAttribute(W + "offsetFrom", "page"),
+                ArtEdge("top"), ArtEdge("left"), ArtEdge("bottom"), ArtEdge("right"));
+        }
 
         var styleToken = BorderLineStyles.ToToken(border.LineStyle);
         XElement Edge(string name) => new(W + name,

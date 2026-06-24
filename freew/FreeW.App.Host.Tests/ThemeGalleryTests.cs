@@ -26,7 +26,11 @@ public sealed class ThemeGalleryTests
         AutomationProperties.GetName(paragraphSpacing).Should().Be("Paragraph Spacing");
         AutomationProperties.GetName(effects).Should().Be("Effects");
         Captions(themes).Should().Equal("Themes", "Office", "Slate", "Berlin", "Ion");
-        Captions(styleSets).Where(c => c != "Aa").Should().Equal("Style Sets", "Office", "Simple", "Elegant", "Formal");
+        Captions(styleSets).Where(c => c != "Aa").Should().Equal(
+            "Style Sets",
+            "Office", "Simple", "Elegant", "Formal",
+            "Lines (Simple)", "Minimalist", "Shadow", "Shaded",
+            "Word 2003", "Word 2010");
         Captions(colors).Should().Equal("Colors", "Office", "Slate", "Berlin", "Ion");
         Captions(fonts).Where(c => c is not "Heading" and not "Body").Should().Equal("Fonts", "Office", "Cambria", "Georgia", "Trebuchet");
         Captions(paragraphSpacing).Should().Equal("Paragraph Spacing", "No Paragraph Space", "Compact", "Tight", "Open", "Relaxed", "Double");

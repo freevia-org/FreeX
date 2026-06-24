@@ -9,10 +9,16 @@ public sealed record DocumentStyleSet(string Name, string BodyFont, string Headi
 {
     public static readonly IReadOnlyList<DocumentStyleSet> Catalog =
     [
-        new("Office", "Calibri", "Calibri", "#2F5496"),
-        new("Simple", "Calibri", "Calibri Light", "#1F4E79"),
-        new("Elegant", "Georgia", "Cambria", "#5B3A29"),
-        new("Formal", "Times New Roman", "Cambria", "#365F91"),
+        new("Office",        "Calibri",          "Calibri",           "#2F5496"),
+        new("Simple",        "Calibri",          "Calibri Light",     "#1F4E79"),
+        new("Elegant",       "Georgia",          "Cambria",           "#5B3A29"),
+        new("Formal",        "Times New Roman",  "Cambria",           "#365F91"),
+        new("Lines (Simple)","Calibri",          "Calibri",           "#4472C4"),
+        new("Minimalist",    "Arial",            "Arial",             "#404040"),
+        new("Shadow",        "Century Gothic",   "Century Gothic",    "#4BACC6"),
+        new("Shaded",        "Garamond",         "Garamond",          "#C0504D"),
+        new("Word 2003",     "Times New Roman",  "Times New Roman",   "#000080"),
+        new("Word 2010",     "Calibri",          "Cambria",           "#17375E"),
     ];
 
     public static DocumentStyleSet Default => Catalog[0];
@@ -75,6 +81,12 @@ public sealed record DocumentStyleSet(string Name, string BodyFont, string Headi
         "#1F4E79" => "#17365D",
         "#5B3A29" => "#3F2A1F",
         "#365F91" => "#244061",
+        "#4472C4" => "#2F4C8A",
+        "#404040" => "#1A1A1A",
+        "#4BACC6" => "#2E7A91",
+        "#C0504D" => "#833533",
+        "#000080" => "#000040",
+        "#17375E" => "#0D2240",
         _ => hex,
     };
 }
