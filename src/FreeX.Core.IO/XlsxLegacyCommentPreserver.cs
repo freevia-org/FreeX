@@ -459,16 +459,25 @@ internal static class XlsxLegacyCommentPreserver
         {
             // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
             var key = (Row: address.Row - 1, Col: address.Col - 1);
+            XElement? shape;
             if (sourceShapesByCell.TryGetValue(key, out var sourceShape))
             {
-                reconciledShapes.Add(new XElement(sourceShape)); // deep-clone; preserves geometry + Visible
+                shape = new XElement(sourceShape); // deep-clone; preserves geometry
             }
             else if (targetShapesByCell.TryGetValue(key, out var targetShape))
             {
-                reconciledShapes.Add(new XElement(targetShape)); // deep-clone; new note default geometry
+                shape = new XElement(targetShape); // deep-clone; new note default geometry
             }
-            // If neither source nor target has a shape for this address, skip (ClosedXML may not
-            // have generated one yet — the package will still be valid, just missing a box).
+            else
+            {
+                // If neither source nor target has a shape for this address, skip (ClosedXML may not
+                // have generated one yet — the package will still be valid, just missing a box).
+                continue;
+            }
+
+            // Apply ShownComments model state: set or clear the <x:Visible/> element.
+            ApplyVisibleFlag(shape, sheet.ShownComments.Contains(address));
+            reconciledShapes.Add(shape);
         }
 
         // Build the reconciled VML document: keep source header boilerplate (shapelayout,
@@ -481,6 +490,26 @@ internal static class XlsxLegacyCommentPreserver
             targetWorksheetRelsXml, packageRelNs, targetWorksheetPath, sourceVmlPath,
             VmlDrawingRelationshipType,
             GetHeaderFooterLegacyDrawingRelationshipIds(targetArchive, targetWorksheetPath, packageRelNs, relNs));
+    }
+
+    /// <summary>
+    /// Sets or clears the <c>&lt;x:Visible/&gt;</c> element within the first
+    /// <c>ObjectType="Note"</c> ClientData child of the given VML shape.
+    /// </summary>
+    private static void ApplyVisibleFlag(XElement shape, bool isPinned)
+    {
+        var clientData = shape.Elements(ExcelVmlNs + "ClientData")
+            .FirstOrDefault(cd => string.Equals(
+                cd.Attribute("ObjectType")?.Value, "Note",
+                StringComparison.OrdinalIgnoreCase));
+        if (clientData is null)
+            return;
+
+        var visibleElement = clientData.Element(ExcelVmlNs + "Visible");
+        if (isPinned && visibleElement is null)
+            clientData.Add(new XElement(ExcelVmlNs + "Visible"));
+        else if (!isPinned && visibleElement is not null)
+            visibleElement.Remove();
     }
 
     /// <summary>

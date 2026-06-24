@@ -48,6 +48,8 @@ public sealed partial class XlsxFileAdapter
             if (!string.IsNullOrEmpty(author))
                 sheet.CommentAuthors[address] = author;
         }
+        foreach (var (row, col) in layout.ShownCommentAddresses)
+            sheet.ShownComments.Add(new CellAddress(sheet.Id, row, col));
         foreach (var (row, col, comment) in layout.ThreadedComments)
             sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = comment;
         sheet.BackgroundImage = layout.BackgroundImage;

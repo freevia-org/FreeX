@@ -249,6 +249,14 @@ public sealed partial class XlsxFileAdapter
 
         if (!hasSourcePackage)
         {
+            // Normalize VML <x:Visible/> for fresh (no source package) workbooks so that
+            // ClosedXML's generated VML correctly reflects the ShownComments model state.
+            if (featurePlan.HasLegacyNotes)
+            {
+                packageStream.Position = 0;
+                XlsxLegacyCommentVisibilityNormalizer.NormalizePackage(packageStream, workbook);
+            }
+
             SaveSourcePackageIndependentPostProcessingMetadata();
             NormalizeStylesheetForSchema();
             NormalizeDocumentPropertiesPackageGraph();
@@ -517,6 +525,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasStyleOnlyCells;
         public bool HasCustomViews;
         public bool HasCellFormulas;
+        public bool HasLegacyNotes;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
@@ -557,6 +566,7 @@ public sealed partial class XlsxFileAdapter
                 HasPivotCustomNumberFormats = HasPivotCustomNumberFormats(sheet);
             HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
+            HasLegacyNotes |= sheet.Comments.Count > 0;
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
         }
 

@@ -250,6 +250,109 @@ public sealed class XlsxLegacyNoteRoundTripTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // ShownComments – pinned-state model surfacing and round-trip
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ShownComments_Load_PinsOnlyNotesWithVmlVisible()
+    {
+        // Arrange: geometry package where C2 has <x:Visible/> and D4 does not.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+
+        // Act: load.
+        var workbook = adapter.Load(sourcePackage);
+        var sheet = workbook.GetSheetAt(0);
+
+        // Assert: only C2 (row=2, col=3) should be in ShownComments.
+        var c2 = sheet.Comments.Keys.Single(a => a.Row == 2 && a.Col == 3);
+        var d4 = sheet.Comments.Keys.Single(a => a.Row == 4 && a.Col == 4);
+
+        sheet.ShownComments.Should().Contain(c2,
+            "C2 has <x:Visible/> in VML and must be surfaced into ShownComments on load");
+        sheet.ShownComments.Should().NotContain(d4,
+            "D4 does not have <x:Visible/> in VML and must NOT appear in ShownComments");
+    }
+
+    [Fact]
+    public void ShownComments_RoundTrip_PinnedStateSurvivesSaveAndReload()
+    {
+        // Arrange: load a package where C2 is pinned.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(sourcePackage);
+        var sheet = workbook.GetSheetAt(0);
+
+        // Act: save and reload.
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        // Assert: C2 is still pinned, D4 still not.
+        var rs = reloaded.GetSheetAt(0);
+        var rc2 = rs.Comments.Keys.Single(a => a.Row == 2 && a.Col == 3);
+        var rd4 = rs.Comments.Keys.Single(a => a.Row == 4 && a.Col == 4);
+
+        rs.ShownComments.Should().Contain(rc2,
+            "<x:Visible/> must survive a save+reload cycle (pinned state round-trip)");
+        rs.ShownComments.Should().NotContain(rd4,
+            "non-pinned note must remain non-pinned after save+reload");
+    }
+
+    [Fact]
+    public void ShownComments_TogglePin_SurvivesSaveAndReload()
+    {
+        // Arrange: load with C2 pinned, D4 not.
+        using var sourcePackage = CreateTwoNoteGeometryPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(sourcePackage);
+        var sheet = workbook.GetSheetAt(0);
+
+        var c2 = sheet.Comments.Keys.Single(a => a.Row == 2 && a.Col == 3);
+        var d4 = sheet.Comments.Keys.Single(a => a.Row == 4 && a.Col == 4);
+
+        // Toggle: unpin C2, pin D4.
+        sheet.ShownComments.Remove(c2);
+        sheet.ShownComments.Add(d4);
+
+        // Act: save and reload.
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        // Assert: pins are flipped.
+        var rs = reloaded.GetSheetAt(0);
+        var rc2 = rs.Comments.Keys.Single(a => a.Row == 2 && a.Col == 3);
+        var rd4 = rs.Comments.Keys.Single(a => a.Row == 4 && a.Col == 4);
+
+        rs.ShownComments.Should().NotContain(rc2,
+            "C2 was unpinned so ShownComments must not contain it after reload");
+        rs.ShownComments.Should().Contain(rd4,
+            "D4 was pinned so ShownComments must contain it after reload");
+    }
+
+    [Fact]
+    public void ShownComments_FreshWorkbook_NoPinnedNotes()
+    {
+        // A fresh workbook with a manually-added note must have no ShownComments.
+        var workbook = new Workbook("FreshTest");
+        var sheet = workbook.AddSheet("S1");
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        sheet.Comments[addr] = "Hello";
+
+        var adapter = new XlsxFileAdapter();
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        var reloaded = adapter.Load(saved);
+
+        var rs = reloaded.GetSheetAt(0);
+        rs.ShownComments.Should().BeEmpty("a freshly-created note must not be pinned by default");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // GAP 4 – box geometry + Visible preserved across add/delete
     // ─────────────────────────────────────────────────────────────────────────
 

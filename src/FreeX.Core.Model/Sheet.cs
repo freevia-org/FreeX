@@ -454,6 +454,14 @@ public sealed partial class Sheet
     /// <summary>Threaded cell comments keyed by address.</summary>
     public Dictionary<CellAddress, ThreadedComment> ThreadedComments { get; } = [];
 
+    /// <summary>
+    /// Addresses of legacy notes (Comments) whose comment box is pinned open ("Show Comment"
+    /// in Excel's VML <c>&lt;x:Visible/&gt;</c> sense). Only addresses that also appear in
+    /// <see cref="Comments"/> are meaningful; the set is kept tidy by the commands but is not
+    /// validated on every access for performance.
+    /// </summary>
+    public HashSet<CellAddress> ShownComments { get; } = [];
+
     /// <summary>Cell hyperlinks keyed by address. Value is the target URL/location.</summary>
     public Dictionary<CellAddress, string> Hyperlinks { get; } = [];
 

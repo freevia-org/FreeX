@@ -62,6 +62,7 @@ public sealed partial class XlsxFileAdapter
         Dictionary<uint, double> RowHeights,
         Dictionary<uint, double> ColumnWidths,
         IReadOnlyList<(uint Row, uint Col, string Text, string Author)> Comments,
+        IReadOnlyList<(uint Row, uint Col)> ShownCommentAddresses,
         IReadOnlyList<(uint Row, uint Col, ThreadedComment Comment)> ThreadedComments,
         IReadOnlyList<XlsxChartPackagePart> ChartParts,
         IReadOnlyList<XlsxPicturePackagePart> PictureParts,
@@ -296,6 +297,7 @@ public sealed partial class XlsxFileAdapter
         var autoFilter = ReadWorksheetAutoFilter(worksheetXml.Root?.Element(worksheetNs + "autoFilter"));
         var hasWorksheetDynamicFilters = HasDynamicFilter(autoFilter);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
+        var shownCommentAddresses = XlsxWorksheetCommentVisibilityReader.Read(archive, worksheetPath, worksheetXml, worksheetNs);
         var threadedComments = XlsxWorksheetThreadedCommentMapper.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
         var hasPreservableSourceWorksheetMetadata = HasRetainedWorksheetMetadataElement(worksheetXml.Root, worksheetNs) ||
@@ -384,6 +386,7 @@ public sealed partial class XlsxFileAdapter
             rowColumnLayout.RowHeights,
             rowColumnLayout.ColumnWidths,
             comments,
+            shownCommentAddresses,
             threadedComments,
             drawingParts.ChartParts,
             drawingParts.PictureParts,

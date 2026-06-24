@@ -276,6 +276,9 @@ public sealed partial class XlsxFileAdapter
         // fingerprint comparison and the source-copy path is NOT taken (which would silently
         // preserve the old author).
         WriteLegacyCommentAuthorFingerprint(workbook, stream);
+        // Include ShownComments (pinned note state) so that a pin/unpin toggles the fingerprint,
+        // forcing a full save rather than a source-copy that would silently preserve stale VML.
+        WriteShownCommentsFingerprint(workbook, stream);
         stream.Flush();
         cryptoStream.FlushFinalBlock();
         return Convert.ToHexString(hash.Hash ?? []);
@@ -298,6 +301,26 @@ public sealed partial class XlsxFileAdapter
                 WriteFingerprintNumber(stream, address.Col);
                 WriteFingerprintToken(stream, ":");
                 WriteFingerprintString(stream, author);
+            }
+        }
+    }
+
+    private static void WriteShownCommentsFingerprint(Workbook workbook, Stream stream)
+    {
+        WriteFingerprintToken(stream, "\nfreex-shown-comments-fingerprint-v1\n");
+        WriteFingerprintNumber(stream, workbook.Sheets.Count);
+        foreach (var sheet in workbook.Sheets)
+        {
+            WriteFingerprintToken(stream, "\nsheet:");
+            WriteFingerprintString(stream, sheet.Name);
+            WriteFingerprintNumber(stream, sheet.ShownComments.Count);
+            // Sort by address for a deterministic hash regardless of insertion order.
+            foreach (var address in sheet.ShownComments.OrderBy(a => a))
+            {
+                WriteFingerprintNumber(stream, address.Row);
+                WriteFingerprintToken(stream, ",");
+                WriteFingerprintNumber(stream, address.Col);
+                WriteFingerprintToken(stream, ";");
             }
         }
     }
