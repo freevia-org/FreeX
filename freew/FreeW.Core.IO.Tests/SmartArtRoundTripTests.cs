@@ -340,4 +340,101 @@ public class SmartArtRoundTripTests
         diagram.Kind.Should().Be(SmartArtKind.List);
         diagram.Nodes.Select(n => n.Text).Should().Equal("X", "Y", "Z");
     }
+
+    // ── Gallery id round-trip tests ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void LayoutId_RoundTrips_ViaLayoutPart()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["A", "B"]);
+        smartArt.LayoutId = "cycle1";
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.LayoutId.Should().Be("cycle1");
+    }
+
+    [Fact]
+    public void ColorSchemeId_RoundTrips_ViaColorsPart()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["X", "Y"]);
+        smartArt.ColorSchemeId = "colorful2";
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.ColorSchemeId.Should().Be("colorful2");
+    }
+
+    [Fact]
+    public void StyleId_RoundTrips_ViaQuickStylePart()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["P", "Q"]);
+        smartArt.StyleId = "intense1";
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.StyleId.Should().Be("intense1");
+    }
+
+    [Fact]
+    public void AllThreeGalleryIds_RoundTripTogether()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root"]);
+        smartArt.LayoutId = "hierarchy1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "subtle2";
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.LayoutId.Should().Be("hierarchy1");
+        diagram.ColorSchemeId.Should().Be("accent1");
+        diagram.StyleId.Should().Be("subtle2");
+    }
+
+    [Fact]
+    public void GalleryIds_PresentInDiagramParts_AsUniqueIdSuffixAndFreewExtension()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["A"]);
+        smartArt.LayoutId = "radial1";
+        smartArt.ColorSchemeId = "mono1";
+        smartArt.StyleId = "flat1";
+
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+
+        // Layout part: uniqueId ends with layout id; freewLayoutId attribute is set.
+        var layoutXml = EntryXml(bytes, "word/diagrams/layout1.xml");
+        var layoutRoot = layoutXml.Root!;
+        layoutRoot.Attribute("uniqueId")!.Value.Should().EndWith("radial1");
+        layoutRoot.Attribute("freewLayoutId")!.Value.Should().Be("radial1");
+
+        // Colors part: freewColorId is set.
+        var colorsXml = EntryXml(bytes, "word/diagrams/colors1.xml");
+        colorsXml.Root!.Attribute("freewColorId")!.Value.Should().Be("mono1");
+
+        // QuickStyle part: freewStyleId is set.
+        var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
+        qsXml.Root!.Attribute("freewStyleId")!.Value.Should().Be("flat1");
+    }
+
+    [Fact]
+    public void NullGalleryIds_DoNotWriteFreewExtensionAttributes()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["A"]);
+        // LayoutId / ColorSchemeId / StyleId left null (default).
+
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+
+        var layoutXml = EntryXml(bytes, "word/diagrams/layout1.xml");
+        layoutXml.Root!.Attribute("freewLayoutId").Should().BeNull();
+
+        var colorsXml = EntryXml(bytes, "word/diagrams/colors1.xml");
+        colorsXml.Root!.Attribute("freewColorId").Should().BeNull();
+
+        var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
+        qsXml.Root!.Attribute("freewStyleId").Should().BeNull();
+    }
 }

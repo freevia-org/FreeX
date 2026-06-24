@@ -235,6 +235,9 @@ internal static class FreeWRibbonIcons
             ["freew.smartart-move-up"] = RibbonCommandIconKind.ArrowUp,
             ["freew.smartart-move-down"] = RibbonCommandIconKind.ArrowDown,
             ["freew.smartart-edit-text"] = RibbonCommandIconKind.TextFunction,
+            ["freew.smartart-change-layout"] = RibbonCommandIconKind.SmartArt,
+            ["freew.smartart-change-colors"] = RibbonCommandIconKind.Fill,
+            ["freew.smartart-change-style"] = RibbonCommandIconKind.Font,
 
             // Insert: links
             ["freew.hyperlink"] = RibbonCommandIconKind.Link,

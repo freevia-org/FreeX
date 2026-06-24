@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Change Colors">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="3" y="10" width="6" height="12" rx="1" fill="#4E81BD" stroke="#3B628F" stroke-width="1"/>
+  <rect x="11" y="10" width="6" height="12" rx="1" fill="#C0504D" stroke="#8B3B39" stroke-width="1"/>
+  <rect x="19" y="10" width="6" height="12" rx="1" fill="#9BBB59" stroke="#6B883E" stroke-width="1"/>
+  <circle cx="26" cy="24" r="4.5" fill="#FFE135" stroke="#D4AF00" stroke-width="1"/>
+  <path d="M24.5 24h3M26 22.5v3" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

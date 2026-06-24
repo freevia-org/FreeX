@@ -749,6 +749,12 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             editor.ReplaceSelectedSmartArt(result);
         }));
+        // SmartArt Design contextual tab — gallery placeholder commands (no-ops; galleries are injected
+        // as live-preview custom content via InjectGallery; these ids must be registered so the ribbon
+        // renderer does not log "unknown command" warnings for the stub buttons).
+        registry.Register("freew.smartart-change-layout", new ActionCommand(() => { }));
+        registry.Register("freew.smartart-change-colors", new ActionCommand(() => { }));
+        registry.Register("freew.smartart-change-style", new ActionCommand(() => { }));
         registry.Register("freew.object", new ActionCommand(() =>
         {
             editor.Focus();

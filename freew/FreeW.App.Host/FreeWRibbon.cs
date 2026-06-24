@@ -892,6 +892,14 @@ internal static class FreeWRibbon
                 });
                 tab.Group("smartart-edit", "Edit", "E", 90, g =>
                     g.Medium("freew.smartart-edit-text", "Edit Text", RibbonCommandIconKind.TextFunction));
+                // Galleries: placeholder commands — galleries are injected by MainWindow via InjectGallery.
+                tab.Group("smartart-layouts", "Layouts", "L", 80, g =>
+                    g.Medium("freew.smartart-change-layout", "Change Layout", RibbonCommandIconKind.SmartArt));
+                tab.Group("smartart-colors", "SmartArt Styles", "C", 70, g =>
+                {
+                    g.Medium("freew.smartart-change-colors", "Change Colors", RibbonCommandIconKind.Fill);
+                    g.Medium("freew.smartart-change-style", "Styles", RibbonCommandIconKind.Font);
+                });
             })
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>

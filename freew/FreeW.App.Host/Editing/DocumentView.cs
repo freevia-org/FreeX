@@ -2325,6 +2325,49 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a layout preset to the selected SmartArt: sets <see cref="SmartArt.LayoutId"/> and
+    /// updates <see cref="SmartArt.Kind"/> to match the preset's target kind, then re-renders.
+    /// No-op without a SmartArt selection.
+    /// </summary>
+    public void ApplySmartArtLayout(SmartArtLayoutPreset preset)
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null) return;
+        smartArt.LayoutId = preset.Id;
+        smartArt.Kind = preset.Kind;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a color-scheme preset to the selected SmartArt: sets <see cref="SmartArt.ColorSchemeId"/>
+    /// and re-renders so node colors update immediately.
+    /// No-op without a SmartArt selection.
+    /// </summary>
+    public void ApplySmartArtColorScheme(SmartArtColorScheme scheme)
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null) return;
+        smartArt.ColorSchemeId = scheme.Id;
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a style preset to the selected SmartArt: sets <see cref="SmartArt.StyleId"/> and re-renders
+    /// so shadow/corner/fill treatment updates immediately.
+    /// No-op without a SmartArt selection.
+    /// </summary>
+    public void ApplySmartArtStyle(SmartArtStyle style)
+    {
+        CommitToModel();
+        var smartArt = SelectedSmartArtLocation().SmartArt;
+        if (smartArt is null) return;
+        smartArt.StyleId = style.Id;
+        Render();
+    }
+
+    /// <summary>
     /// Set (or clear, when null/empty) the accessibility alt text on the currently selected inline image.
 
     /// Mutates the model image in place — the alt text is carried by the image instance, so it survives
@@ -7885,41 +7928,33 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Renders an inline SmartArt diagram as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="SmartArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes/charts). The
-    /// border sketches the diagram's top-level node texts as a simple labelled stack (a lightweight visual
-    /// stand-in — the diagram's real layout is recomputed by Word on open).
+    /// renderer honours the diagram's <see cref="SmartArt.LayoutId"/>, <see cref="SmartArt.ColorSchemeId"/>
+    /// and <see cref="SmartArt.StyleId"/> to produce distinct layout geometries, node colours and
+    /// fill/shadow treatments. Hierarchy children are rendered as indented sub-boxes.
     /// </summary>
     private static InlineUIContainer BuildSmartArtRun(SmartArt smartArt, DocumentEffectSet effectSet)
     {
         var widthPx = smartArt.WidthPt * PxPerPoint;
         var heightPx = smartArt.HeightPt * PxPerPoint;
         var strokeThickness = EffectLineThickness(effectSet);
-        var nodeEffect = CreateObjectEffect(effectSet);
 
-        // Lay top-level nodes out left-to-right for Process, top-to-bottom otherwise, as labelled boxes.
-        var horizontal = smartArt.Kind == SmartArtKind.Process;
-        var nodes = new StackPanel
+        // Resolve gallery presets (fall back to catalog defaults when ids are null).
+        var colorScheme = (smartArt.ColorSchemeId is not null
+            ? SmartArtColorScheme.FindById(smartArt.ColorSchemeId)
+            : null) ?? SmartArtColorScheme.Default;
+        var style = (smartArt.StyleId is not null
+            ? SmartArtStyle.FindById(smartArt.StyleId)
+            : null) ?? SmartArtStyle.Default;
+
+        // Determine effective layout id: explicit LayoutId overrides Kind-derived default.
+        var layoutId = smartArt.LayoutId ?? smartArt.Kind switch
         {
-            Orientation = horizontal ? Orientation.Horizontal : Orientation.Vertical,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            SmartArtKind.Process => "process1",
+            SmartArtKind.Hierarchy => "hierarchy1",
+            _ => "list1"
         };
-        foreach (var node in smartArt.Nodes)
-            nodes.Children.Add(new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x4E, 0x81, 0xBD)),
-                CornerRadius = new CornerRadius(3),
-                Margin = new Thickness(4),
-                Padding = new Thickness(8, 4, 8, 4),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3B, 0x62, 0x8F)),
-                BorderThickness = new Thickness(strokeThickness),
-                Effect = nodeEffect,
-                Child = new TextBlock
-                {
-                    Text = node.Text,
-                    Foreground = System.Windows.Media.Brushes.White,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                }
-            });
+
+        var content = SmartArtRenderer.Build(smartArt.Nodes, layoutId, colorScheme, style, strokeThickness);
 
         var element = new Border
         {
@@ -7928,7 +7963,7 @@ public sealed class DocumentView : RichTextBox
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(strokeThickness),
-            Child = nodes,
+            Child = content,
             Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
         };
         ApplyObjectEffect(element, effectSet);

@@ -2855,6 +2855,13 @@ public sealed class MainWindow : Window
                 InjectGallery(content, "chart-colors", ChartDesignGallery.BuildChangeColors(_editor), removeKind: RemoveKind.All);
             }
 
+            if (tab.Id == "smartart-design")
+            {
+                // Inject the three SmartArt gallery strips: Layouts, Change Colors, Styles.
+                InjectGallery(content, "smartart-layouts", SmartArtGallery.BuildLayouts(_editor), removeKind: RemoveKind.All);
+                InjectGallery(content, "smartart-colors", SmartArtGallery.BuildColors(_editor), removeKind: RemoveKind.All, extra: SmartArtGallery.BuildStyles(_editor));
+            }
+
             }
         });
 

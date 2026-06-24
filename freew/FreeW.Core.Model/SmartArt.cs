@@ -97,6 +97,24 @@ public sealed class SmartArt
     /// <summary>True when this SmartArt diagram is floating (non-null Placement with Wrapping != Inline).</summary>
     public bool IsFloating => Placement?.IsFloating ?? false;
 
+    /// <summary>
+    /// Layout preset id (e.g. "list1", "process1", "hierarchy1", "cycle1"). Null means the diagram uses
+    /// the stock layout for its <see cref="Kind"/>. Maps to the layout part's <c>uniqueId</c> suffix.
+    /// </summary>
+    public string? LayoutId { get; set; }
+
+    /// <summary>
+    /// Color-scheme preset id (e.g. "colorful1", "accent1", "mono1"). Null means the stock accent-1
+    /// palette. Maps to the colors part's <c>uniqueId</c> suffix via a FreeW extension attribute.
+    /// </summary>
+    public string? ColorSchemeId { get; set; }
+
+    /// <summary>
+    /// Style preset id (e.g. "flat1", "subtle1", "intense1"). Null means the flat default.
+    /// Maps to the quickStyle part's <c>uniqueId</c> suffix via a FreeW extension attribute.
+    /// </summary>
+    public string? StyleId { get; set; }
+
     public SmartArt() { }
 
     /// <summary>
