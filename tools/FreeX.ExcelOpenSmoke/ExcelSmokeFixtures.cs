@@ -124,6 +124,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_comment_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeCommentCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -2125,4 +2131,367 @@ internal static class ExcelSmokeFixtures
 
     private static int ToOleColor(byte red, byte green, byte blue) =>
         red | (green << 8) | (blue << 16);
+
+    // =========================================================================
+    // Comment / Note corpus fixtures
+    // =========================================================================
+
+    /// <summary>
+    /// Returns the output paths for all six comment corpus fixtures.
+    /// The files that contain only legacy (COM-authored) notes are generated
+    /// via Excel COM; the files that require threaded comments are authored via
+    /// the FreeX model API and saved through <see cref="XlsxFileAdapter"/>.
+    /// </summary>
+    public static IReadOnlyList<string> GetExcelCommentCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_comment_single_note_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_comment_single_note_shown_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_comment_multiple_notes_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_comment_threaded_single_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_comment_threaded_replies_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_comment_mixed_006.xlsx"),
+        ];
+    }
+
+    /// <summary>
+    /// Per-file dispatch called from <see cref="GenerateExcelAuthoredFixture"/> for filenames
+    /// that start with <c>Excel_native_comment_</c>.
+    /// </summary>
+    private static void GenerateExcelNativeCommentCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.StartsWith("Excel_native_comment_single_note_001", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_SingleNote(workbooks, outputPath);
+        else if (fileName.StartsWith("Excel_native_comment_single_note_shown_002", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_SingleNoteShown(workbooks, outputPath);
+        else if (fileName.StartsWith("Excel_native_comment_multiple_notes_003", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_MultipleNotes(workbooks, outputPath);
+        else if (fileName.StartsWith("Excel_native_comment_threaded_single_004", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_ThreadedSingle(outputPath);
+        else if (fileName.StartsWith("Excel_native_comment_threaded_replies_005", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_ThreadedReplies(outputPath);
+        else if (fileName.StartsWith("Excel_native_comment_mixed_006", StringComparison.OrdinalIgnoreCase))
+            GenerateCommentFixture_Mixed(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown comment corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — single legacy note, hidden box (default)
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_SingleNote(dynamic workbooks, string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        object? workbook = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "Notes";
+
+            // Anchor data so the note cell is visible
+            SetExcelCellValue(worksheet, 1, 1, "Item");
+            SetExcelCellValue(worksheet, 1, 2, "Value");
+            SetExcelCellValue(worksheet, 2, 1, "Alpha");
+            SetExcelCellValue(worksheet, 2, 2, 42.0);
+            SetExcelCellValue(worksheet, 3, 1, "Beta");
+            SetExcelCellValue(worksheet, 3, 2, 88.0);
+
+            // Legacy note on C3 (hidden box — default)
+            AddExcelComment(worksheet, "C3", "Single hidden note on C3.");
+
+            SaveExcelWorkbook(workbook, outputPath);
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 002 — single legacy note with box pinned visible
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_SingleNoteShown(dynamic workbooks, string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? comment = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "Notes";
+
+            SetExcelCellValue(worksheet, 1, 1, "Item");
+            SetExcelCellValue(worksheet, 1, 2, "Value");
+            SetExcelCellValue(worksheet, 2, 1, "Alpha");
+            SetExcelCellValue(worksheet, 2, 2, 42.0);
+            SetExcelCellValue(worksheet, 3, 1, "Beta");
+            SetExcelCellValue(worksheet, 3, 2, 88.0);
+
+            // Author note on C3 with Visible = true (pinned open)
+            range = ((dynamic)worksheet).Range("C3");
+            comment = ((dynamic)range).AddComment("Pinned note — bold header\nBody text on second line.");
+            // Make the box visible (pinned)
+            ((dynamic)comment).Visible = true;
+            // Apply bold to first 17 chars ("Pinned note — bold")
+            try
+            {
+                var chars = ((dynamic)comment).Text();
+                ((dynamic)comment).Shape.TextFrame.Characters(1, 11).Font.Bold = true;
+            }
+            catch { /* formatting is best-effort */ }
+
+            SaveExcelWorkbook(workbook, outputPath);
+        }
+        finally
+        {
+            ReleaseComObject(comment);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 003 — multiple notes on scattered cells
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_MultipleNotes(dynamic workbooks, string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        object? workbook = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "Notes";
+
+            SetExcelCellValue(worksheet, 1, 1, "Region");
+            SetExcelCellValue(worksheet, 1, 2, "Q1");
+            SetExcelCellValue(worksheet, 1, 3, "Q2");
+            SetExcelCellValue(worksheet, 1, 4, "Total");
+
+            SetExcelCellValue(worksheet, 2, 1, "North");
+            SetExcelCellValue(worksheet, 2, 2, 100.0);
+            SetExcelCellValue(worksheet, 2, 3, 120.0);
+            SetExcelCellValue(worksheet, 2, 4, 220.0);
+
+            SetExcelCellValue(worksheet, 4, 1, "South");
+            SetExcelCellValue(worksheet, 4, 2, 90.0);
+            SetExcelCellValue(worksheet, 4, 3, 85.0);
+            SetExcelCellValue(worksheet, 4, 4, 175.0);
+
+            SetExcelCellValue(worksheet, 6, 1, "East");
+            SetExcelCellValue(worksheet, 7, 1, "West");
+
+            // Notes on four scattered cells
+            AddExcelComment(worksheet, "B2", "Note on B2: Q1 North figure.");
+            AddExcelComment(worksheet, "D2", "Note on D2: Total row check needed.");
+            AddExcelComment(worksheet, "B4", "Note on B4: Q1 South — verify source.");
+            AddExcelComment(worksheet, "A6", "Note on A6: East data pending.");
+
+            SaveExcelWorkbook(workbook, outputPath);
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 004 — single threaded comment (FreeX model API)
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_ThreadedSingle(string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Threaded");
+
+        // Populate a small visible grid
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell { Value = new TextValue("Item") });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new Cell { Value = new TextValue("Value") });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell { Value = new TextValue("Alpha") });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new Cell { Value = new NumberValue(42) });
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new Cell { Value = new TextValue("Beta") });
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new Cell { Value = new NumberValue(88) });
+
+        // Threaded comment on C3
+        var address = new CellAddress(sheet.Id, 3, 3);
+        sheet.ThreadedComments[address] = new ThreadedComment("Please review this value.", "FreeX")
+        {
+            CreatedAtUtc = new DateTimeOffset(2026, 6, 24, 9, 0, 0, TimeSpan.Zero),
+        };
+
+        SaveFreeXWorkbook(workbook, outputPath);
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 005 — threaded comment with replies (FreeX model API)
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_ThreadedReplies(string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Threaded");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell { Value = new TextValue("Category") });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new Cell { Value = new TextValue("Amount") });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell { Value = new TextValue("Alpha") });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new Cell { Value = new NumberValue(500) });
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new Cell { Value = new TextValue("Beta") });
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new Cell { Value = new NumberValue(300) });
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new Cell { Value = new TextValue("Gamma") });
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new Cell { Value = new NumberValue(200) });
+
+        var t0 = new DateTimeOffset(2026, 6, 24, 8, 0, 0, TimeSpan.Zero);
+
+        // Threaded comment with two replies on B3
+        var address = new CellAddress(sheet.Id, 3, 2);
+        sheet.ThreadedComments[address] = new ThreadedComment("Is this figure correct?", "Quinn")
+        {
+            CreatedAtUtc = t0,
+            ModifiedAtUtc = t0,
+            Replies =
+            [
+                new CommentReply("Looks right to me.", "FreeX")
+                {
+                    CreatedAtUtc = t0.AddMinutes(10),
+                    ModifiedAtUtc = t0.AddMinutes(10),
+                },
+                new CommentReply("Confirmed — resolving.", "Quinn")
+                {
+                    CreatedAtUtc = t0.AddMinutes(25),
+                    ModifiedAtUtc = t0.AddMinutes(25),
+                },
+            ],
+            IsResolved = true,
+        };
+
+        // Second unresolved thread on D5
+        var address2 = new CellAddress(sheet.Id, 5, 4);
+        sheet.ThreadedComments[address2] = new ThreadedComment("Double-check data source.", "FreeX")
+        {
+            CreatedAtUtc = t0.AddHours(1),
+            Replies =
+            [
+                new CommentReply("Checked — source is correct.", "Quinn")
+                {
+                    CreatedAtUtc = t0.AddHours(1).AddMinutes(5),
+                },
+            ],
+        };
+
+        SaveFreeXWorkbook(workbook, outputPath);
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 006 — mixed: one legacy note + one threaded comment
+    // -------------------------------------------------------------------------
+    private static void GenerateCommentFixture_Mixed(dynamic workbooks, string outputPath)
+    {
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        // Step 1 — author the legacy note via Excel COM and save an intermediate file.
+        var tempPath = outputPath + ".tmp.xlsx";
+        object? workbook = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "Mixed";
+
+            SetExcelCellValue(worksheet, 1, 1, "Label");
+            SetExcelCellValue(worksheet, 1, 2, "Score");
+            SetExcelCellValue(worksheet, 2, 1, "Alpha");
+            SetExcelCellValue(worksheet, 2, 2, 75.0);
+            SetExcelCellValue(worksheet, 3, 1, "Beta");
+            SetExcelCellValue(worksheet, 3, 2, 90.0);
+            SetExcelCellValue(worksheet, 5, 1, "Delta");
+            SetExcelCellValue(worksheet, 5, 2, 60.0);
+
+            // Legacy note on B2
+            AddExcelComment(worksheet, "B2", "Legacy note on B2: verify score.");
+
+            SaveExcelWorkbook(workbook, tempPath);
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+
+        // Step 2 — load through FreeX, add a threaded comment, save to final path.
+        Workbook freeXWorkbook;
+        using (var fs = File.OpenRead(tempPath))
+            freeXWorkbook = new XlsxFileAdapter().LoadWithWarnings(fs, inspectFeatures: false).Workbook;
+
+        var mixedSheet = freeXWorkbook.Sheets[0];
+        var threadAddress = new CellAddress(mixedSheet.Id, 5, 4);
+        mixedSheet.ThreadedComments[threadAddress] = new ThreadedComment("Threaded comment on D5.", "FreeX")
+        {
+            CreatedAtUtc = new DateTimeOffset(2026, 6, 24, 10, 0, 0, TimeSpan.Zero),
+        };
+
+        SaveFreeXWorkbook(freeXWorkbook, outputPath);
+        File.Delete(tempPath);
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers shared by comment fixture generators
+    // -------------------------------------------------------------------------
+
+    private static void SaveExcelWorkbook(object workbook, string outputPath)
+    {
+        // COM requires Windows-style backslash paths; forward-slash paths get mangled.
+        var windowsPath = Path.GetFullPath(outputPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(windowsPath)!);
+        ((dynamic)workbook).SaveAs(
+            windowsPath,
+            XlOpenXmlWorkbook,
+            Missing.Value,
+            Missing.Value,
+            false,
+            false,
+            XlNoChange,
+            XlLocalSessionChanges,
+            false,
+            Missing.Value,
+            Missing.Value,
+            true);
+        ((dynamic)workbook).Close(false);
+    }
+
+    private static void SafeCloseWorkbook(object? workbook)
+    {
+        if (workbook is null) return;
+        try { ((dynamic)workbook).Close(false); } catch { }
+    }
+
+    private static void SaveFreeXWorkbook(Workbook workbook, string outputPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        using var fs = File.Create(outputPath);
+        new XlsxFileAdapter().Save(workbook, fs);
+    }
 }
