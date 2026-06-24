@@ -4,13 +4,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Dialogs;
 
-/// <summary>The direction a rule moves in the priority order.</summary>
-public enum ConditionalFormatRuleMoveDirection
-{
-    Up,
-    Down
-}
-
 /// <summary>One row in the Manage Rules list: a rule plus a human-readable description.</summary>
 public sealed record ConditionalFormatRuleListItem(ConditionalFormat Rule, string Description)
 {
@@ -231,67 +224,6 @@ public static class ConditionalFormatManageModel
             rules[i].Priority = i + 1;
     }
 
-    private static ConditionalFormat CloneRule(ConditionalFormat source, Guid? id = null)
-    {
-        var clone = new ConditionalFormat
-        {
-            Id = id ?? source.Id,
-            AppliesTo = source.AppliesTo,
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            UseThreeColorScale = source.UseThreeColorScale,
-            MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = source.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
-            MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = source.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = source.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
-            DataBarColor = source.DataBarColor,
-            DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
-            DataBarShowValue = source.DataBarShowValue,
-            DataBarMinLength = source.DataBarMinLength,
-            DataBarMaxLength = source.DataBarMaxLength,
-            DataBarGradient = source.DataBarGradient,
-            DataBarBorder = source.DataBarBorder,
-            DataBarAxisPosition = source.DataBarAxisPosition,
-            DataBarAxisColor = source.DataBarAxisColor,
-            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
-            AboveAverage = source.AboveAverage,
-            FormulaText = source.FormulaText,
-            IconSetStyle = source.IconSetStyle,
-            IconSetShowValue = source.IconSetShowValue,
-            IconSetReverse = source.IconSetReverse,
-            TopBottomRank = source.TopBottomRank,
-            TopBottomPercent = source.TopBottomPercent,
-            TextRuleText = source.TextRuleText,
-            DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = id.HasValue && id.Value != source.Id
-                ? ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(source.NativeChildXmls)
-                : source.NativeChildXmls,
-            NativePayloadAttributes = source.NativePayloadAttributes,
-            NativePayloadChildXmls = source.NativePayloadChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls,
-        };
-
-        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
-        clone.IconOverrides.AddRange(source.IconOverrides);
-        return clone;
-    }
+    private static ConditionalFormat CloneRule(ConditionalFormat source, Guid? id = null) =>
+        source.Clone(id);
 }

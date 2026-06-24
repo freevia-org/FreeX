@@ -180,4 +180,78 @@ public sealed class ConditionalFormat
 
     /// <summary>Native conditionalFormatting child elements not modeled by FreeX, retained for XLSX round-trip fidelity.</summary>
     public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
+
+    /// <summary>
+    /// Returns a deep copy of this rule. All fields are copied; mutable collections
+    /// (<see cref="IconSetThresholds"/>, <see cref="IconOverrides"/>) are given new independent
+    /// instances so mutating the clone never affects the original.
+    /// <para>
+    /// When <paramref name="newId"/> is supplied the clone receives that id (and the
+    /// X14 extended-id native metadata is stripped so it is not duplicated). When it is
+    /// omitted the clone keeps the same id as the source.
+    /// </para>
+    /// </summary>
+    public ConditionalFormat Clone(Guid? newId = null)
+    {
+        var clone = new ConditionalFormat
+        {
+            Id = newId ?? Id,
+            AppliesTo = AppliesTo,
+            Priority = Priority,
+            RuleType = RuleType,
+            Operator = Operator,
+            Value1 = Value1,
+            Value2 = Value2,
+            FormatIfTrue = FormatIfTrue?.Clone(),
+            MinColor = MinColor,
+            MidColor = MidColor,
+            MaxColor = MaxColor,
+            UseThreeColorScale = UseThreeColorScale,
+            MinThresholdType = MinThresholdType,
+            MinThresholdValue = MinThresholdValue,
+            MinThresholdGreaterThanOrEqual = MinThresholdGreaterThanOrEqual,
+            MidThresholdType = MidThresholdType,
+            MidThresholdValue = MidThresholdValue,
+            MidThresholdGreaterThanOrEqual = MidThresholdGreaterThanOrEqual,
+            MaxThresholdType = MaxThresholdType,
+            MaxThresholdValue = MaxThresholdValue,
+            MaxThresholdGreaterThanOrEqual = MaxThresholdGreaterThanOrEqual,
+            DataBarColor = DataBarColor,
+            DataBarMinThresholdType = DataBarMinThresholdType,
+            DataBarMinThresholdValue = DataBarMinThresholdValue,
+            DataBarMaxThresholdType = DataBarMaxThresholdType,
+            DataBarMaxThresholdValue = DataBarMaxThresholdValue,
+            DataBarShowValue = DataBarShowValue,
+            DataBarMinLength = DataBarMinLength,
+            DataBarMaxLength = DataBarMaxLength,
+            DataBarGradient = DataBarGradient,
+            DataBarBorder = DataBarBorder,
+            DataBarAxisPosition = DataBarAxisPosition,
+            DataBarAxisColor = DataBarAxisColor,
+            DataBarNegativeFillColor = DataBarNegativeFillColor,
+            DataBarNegativeBorderColor = DataBarNegativeBorderColor,
+            AboveAverage = AboveAverage,
+            FormulaText = FormulaText,
+            IconSetStyle = IconSetStyle,
+            IconSetShowValue = IconSetShowValue,
+            IconSetReverse = IconSetReverse,
+            TopBottomRank = TopBottomRank,
+            TopBottomPercent = TopBottomPercent,
+            TextRuleText = TextRuleText,
+            DateOccurringPeriod = DateOccurringPeriod,
+            StopIfTrue = StopIfTrue,
+            NativeAttributes = NativeAttributes,
+            NativeChildXmls = newId.HasValue && newId.Value != Id
+                ? ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(NativeChildXmls)
+                : NativeChildXmls,
+            NativePayloadAttributes = NativePayloadAttributes,
+            NativePayloadChildXmls = NativePayloadChildXmls,
+            NativeContainerAttributes = NativeContainerAttributes,
+            NativeContainerChildXmls = NativeContainerChildXmls,
+        };
+
+        clone.IconSetThresholds.AddRange(IconSetThresholds);
+        clone.IconOverrides.AddRange(IconOverrides);
+        return clone;
+    }
 }
