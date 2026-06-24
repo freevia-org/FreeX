@@ -440,7 +440,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
-            if (cf.RuleType != CfRuleType.DataBar || !cf.AppliesTo.Contains(addr))
+            if (cf.RuleType != CfRuleType.DataBar || !cf.AllRanges.Any(r => r.Contains(addr)))
                 continue;
 
             if (!TryGetDouble(value, out var cellValue) ||

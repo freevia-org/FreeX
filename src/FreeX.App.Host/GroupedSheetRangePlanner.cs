@@ -11,9 +11,14 @@ public static class GroupedSheetRangePlanner
 
     public static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId)
     {
+        IReadOnlyList<GridRange>? remappedAdditional = source.AdditionalRanges is null
+            ? null
+            : source.AdditionalRanges.Select(r => RemapRangeToSheet(r, sheetId)).ToList();
+
         var clone = new ConditionalFormat
         {
             AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
+            AdditionalRanges = remappedAdditional,
             Priority = source.Priority,
             RuleType = source.RuleType,
             Operator = source.Operator,

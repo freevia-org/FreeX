@@ -273,7 +273,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
-            if (!cf.AppliesTo.Contains(addr))
+            if (!cf.AllRanges.Any(r => r.Contains(addr)))
                 continue;
 
             CfStyleResult? matchedStyle = null;

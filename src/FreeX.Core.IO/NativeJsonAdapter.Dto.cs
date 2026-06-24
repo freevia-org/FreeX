@@ -717,6 +717,8 @@ public sealed partial class NativeJsonAdapter
     private class ConditionalFormatDto
     {
         public string? AppliesTo { get; set; }
+        /// <summary>Additional non-contiguous ranges beyond the first, preserved from the original sqref list.</summary>
+        public List<string>? AdditionalRanges { get; set; }
         public int Priority { get; set; } = 1;
         public CfRuleType RuleType { get; set; }
         public CfOperator Operator { get; set; }

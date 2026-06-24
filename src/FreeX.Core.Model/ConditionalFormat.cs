@@ -77,6 +77,22 @@ public sealed class ConditionalFormat
     /// <summary>The range on the sheet this rule covers.</summary>
     public GridRange AppliesTo { get; set; }
 
+    /// <summary>
+    /// Additional non-contiguous ranges from the same Excel <c>sqref</c> token list,
+    /// beyond the first range stored in <see cref="AppliesTo"/>.
+    /// When the original sqref contains a single range this is <see langword="null"/>.
+    /// </summary>
+    public IReadOnlyList<GridRange>? AdditionalRanges { get; set; }
+
+    /// <summary>
+    /// Returns all ranges covered by this rule: <see cref="AppliesTo"/> followed by any
+    /// <see cref="AdditionalRanges"/>. Use this when testing whether a cell falls within the rule.
+    /// </summary>
+    public IEnumerable<GridRange> AllRanges =>
+        AdditionalRanges is null
+            ? [AppliesTo]
+            : [AppliesTo, .. AdditionalRanges];
+
     /// <summary>Lower priority number = higher precedence (Excel convention).</summary>
     public int Priority { get; set; } = 1;
 
@@ -199,6 +215,7 @@ public sealed class ConditionalFormat
         {
             Id = newId ?? Id,
             AppliesTo = AppliesTo,
+            AdditionalRanges = AdditionalRanges,
             Priority = Priority,
             RuleType = RuleType,
             Operator = Operator,

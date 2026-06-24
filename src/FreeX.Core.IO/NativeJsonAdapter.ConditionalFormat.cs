@@ -37,9 +37,23 @@ public sealed partial class NativeJsonAdapter
 
     private static ConditionalFormat ToConditionalFormat(ConditionalFormatDto formatDto, SheetId sheetId)
     {
+        IReadOnlyList<GridRange>? additionalRanges = null;
+        if (formatDto.AdditionalRanges is { Count: > 0 })
+        {
+            var parsed = new List<GridRange>(formatDto.AdditionalRanges.Count);
+            foreach (var rangeStr in formatDto.AdditionalRanges)
+            {
+                if (!string.IsNullOrWhiteSpace(rangeStr))
+                    parsed.Add(GridRange.Parse(rangeStr, sheetId));
+            }
+            if (parsed.Count > 0)
+                additionalRanges = parsed;
+        }
+
         var format = new ConditionalFormat
         {
             AppliesTo = GridRange.Parse(formatDto.AppliesTo!, sheetId),
+            AdditionalRanges = additionalRanges,
             Priority = formatDto.Priority < 1 ? 1 : formatDto.Priority,
             RuleType = formatDto.RuleType,
             Operator = formatDto.Operator,
@@ -105,6 +119,9 @@ public sealed partial class NativeJsonAdapter
         new()
         {
             AppliesTo = format.AppliesTo.ToString(),
+            AdditionalRanges = format.AdditionalRanges is null
+                ? null
+                : format.AdditionalRanges.Select(r => r.ToString()).ToList(),
             Priority = format.Priority < 1 ? 1 : format.Priority,
             RuleType = format.RuleType,
             Operator = format.Operator,

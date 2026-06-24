@@ -22,7 +22,7 @@ internal static partial class ViewportConditionalFormatEvaluator
                     ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
                     : null;
             List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null;
-            foreach (var (a, v) in EnumerateAggregateValues(sheet, cf.AppliesTo))
+            foreach (var (a, v) in EnumerateAllAggregateValues(sheet, cf))
             {
                 if (valueCounts is not null && !IsBlankValue(v))
                 {
@@ -156,6 +156,17 @@ internal static partial class ViewportConditionalFormatEvaluator
             result.Add(rankedValues[i].Address);
 
         return result;
+    }
+
+    private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAllAggregateValues(
+        Sheet sheet,
+        ConditionalFormat cf)
+    {
+        foreach (var range in cf.AllRanges)
+        {
+            foreach (var item in EnumerateAggregateValues(sheet, range))
+                yield return item;
+        }
     }
 
     private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues(

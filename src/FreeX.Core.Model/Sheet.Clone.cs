@@ -322,9 +322,14 @@ public sealed partial class Sheet
 
     private static ConditionalFormat CloneConditionalFormat(ConditionalFormat cf, SheetId newId)
     {
+        IReadOnlyList<GridRange>? remappedAdditional = cf.AdditionalRanges is null
+            ? null
+            : cf.AdditionalRanges.Select(r => RemapRange(r, newId)).ToList();
+
         var clonedFormat = new ConditionalFormat
         {
             AppliesTo            = RemapRange(cf.AppliesTo, newId),
+            AdditionalRanges     = remappedAdditional,
             Priority             = cf.Priority,
             RuleType             = cf.RuleType,
             Operator             = cf.Operator,

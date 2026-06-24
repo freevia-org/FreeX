@@ -23,12 +23,10 @@ public sealed partial class XlsxFileAdapter
                 continue;
 
             GridRange appliesTo;
+            IReadOnlyList<GridRange>? additionalRanges;
             try
             {
-                var firstRef = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).First();
-                appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
-                    ? GridRange.Parse(firstRef, tempSheet)
-                    : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
+                (appliesTo, additionalRanges) = ParseSqrefRanges(sqref, tempSheet);
             }
             catch
             {
@@ -48,6 +46,7 @@ public sealed partial class XlsxFileAdapter
                     rule.Element(worksheetNs + "colorScale") is { } colorScale)
                 {
                     var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs, workbookTheme, indexedColors);
+                    format.AdditionalRanges = additionalRanges;
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
@@ -57,6 +56,7 @@ public sealed partial class XlsxFileAdapter
                          rule.Element(worksheetNs + "dataBar") is { } dataBar)
                 {
                     var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs);
+                    format.AdditionalRanges = additionalRanges;
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
@@ -71,6 +71,7 @@ public sealed partial class XlsxFileAdapter
                     var format = new ConditionalFormat
                     {
                         AppliesTo = appliesTo,
+                        AdditionalRanges = additionalRanges,
                         Priority = priority,
                         RuleType = CfRuleType.IconSet,
                         IconSetStyle = NormalizeOptionalText(iconSet.Attribute("iconSet")?.Value),
@@ -90,6 +91,7 @@ public sealed partial class XlsxFileAdapter
                     var format = new ConditionalFormat
                     {
                         AppliesTo = appliesTo,
+                        AdditionalRanges = additionalRanges,
                         Priority = priority,
                         RuleType = mappedType,
                         AboveAverage = mappedType == CfRuleType.Top10
@@ -248,12 +250,10 @@ public sealed partial class XlsxFileAdapter
                             continue;
 
                         GridRange appliesTo;
+                        IReadOnlyList<GridRange>? additionalRanges;
                         try
                         {
-                            var firstRef = sqref!.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).First();
-                            appliesTo = firstRef.Contains(':', StringComparison.Ordinal)
-                                ? GridRange.Parse(firstRef, tempSheet)
-                                : new GridRange(CellAddress.Parse(firstRef, tempSheet), CellAddress.Parse(firstRef, tempSheet));
+                            (appliesTo, additionalRanges) = ParseSqrefRanges(sqref!, tempSheet);
                         }
                         catch
                         {
@@ -274,6 +274,7 @@ public sealed partial class XlsxFileAdapter
                             var format = new ConditionalFormat
                             {
                                 AppliesTo = appliesTo,
+                                AdditionalRanges = additionalRanges,
                                 Priority = priority,
                                 RuleType = CfRuleType.IconSet,
                                 IconSetStyle = NormalizeOptionalText(x14IconSet.Attribute("iconSet")?.Value),
@@ -467,13 +468,47 @@ public sealed partial class XlsxFileAdapter
     private static string? NormalizeOptionalText(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>
+    /// Parses a space-separated sqref string into a primary <see cref="GridRange"/> and an optional
+    /// list of additional ranges. The first token becomes <c>AppliesTo</c>; any remaining tokens are
+    /// returned as <c>AdditionalRanges</c> (null when there is only one range).
+    /// </summary>
+    private static (GridRange AppliesTo, IReadOnlyList<GridRange>? AdditionalRanges) ParseSqrefRanges(
+        string sqref,
+        SheetId sheetId)
+    {
+        var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var appliesTo = ParseSqrefToken(tokens[0], sheetId);
+        if (tokens.Length == 1)
+            return (appliesTo, null);
+
+        var additional = new List<GridRange>(tokens.Length - 1);
+        for (var i = 1; i < tokens.Length; i++)
+            additional.Add(ParseSqrefToken(tokens[i], sheetId));
+        return (appliesTo, additional);
+    }
+
+    private static GridRange ParseSqrefToken(string token, SheetId sheetId) =>
+        token.Contains(':', StringComparison.Ordinal)
+            ? GridRange.Parse(token, sheetId)
+            : new GridRange(CellAddress.Parse(token, sheetId), CellAddress.Parse(token, sheetId));
+
     private static ConditionalFormat RemapConditionalFormat(ConditionalFormat source, SheetId sheetId)
     {
+        IReadOnlyList<GridRange>? remappedAdditional = source.AdditionalRanges is null
+            ? null
+            : source.AdditionalRanges
+                .Select(r => new GridRange(
+                    new CellAddress(sheetId, r.Start.Row, r.Start.Col),
+                    new CellAddress(sheetId, r.End.Row, r.End.Col)))
+                .ToList();
+
         var format = new ConditionalFormat
         {
             AppliesTo = new GridRange(
                 new CellAddress(sheetId, source.AppliesTo.Start.Row, source.AppliesTo.Start.Col),
                 new CellAddress(sheetId, source.AppliesTo.End.Row, source.AppliesTo.End.Col)),
+            AdditionalRanges = remappedAdditional,
             Priority = source.Priority,
             RuleType = source.RuleType,
             Operator = source.Operator,

@@ -105,10 +105,15 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         AddAdvancedConditionalFormattingNativeMetadata(
             new XElement(
                 worksheetNs + "conditionalFormatting",
-                new XAttribute("sqref", cf.AppliesTo.ToString()),
+                new XAttribute("sqref", BuildSqref(cf)),
                 ToAdvancedCfRuleXml(cf, worksheetNs, differentialStyleIds)),
             cf,
             worksheetNs);
+
+    private static string BuildSqref(ConditionalFormat cf) =>
+        cf.AdditionalRanges is null
+            ? cf.AppliesTo.ToString()
+            : string.Join(' ', [cf.AppliesTo, .. cf.AdditionalRanges]);
 
     private static XElement AddAdvancedConditionalFormattingNativeMetadata(
         XElement element,
@@ -424,7 +429,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     new XAttribute("type", "dataBar"),
                     new XAttribute("id", GetX14DataBarId(cf)),
                     dataBar),
-                new XElement(xmNs + "sqref", cf.AppliesTo.ToString())));
+                new XElement(xmNs + "sqref", BuildSqref(cf))));
         }
 
         worksheetRoot.Add(new XElement(
