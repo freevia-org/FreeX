@@ -1114,6 +1114,26 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Replace the paragraphs in a specific table cell identified by
+    /// (<paramref name="blockIndex"/>, <paramref name="rowIndex"/>, <paramref name="colIndex"/>)
+    /// with <paramref name="paragraphs"/>.  Routed through the undo/redo bus so the change is
+    /// reversible.  Table structure (merge state, widths, shading) is preserved.  Out-of-range
+    /// coordinates are silently ignored.
+    ///
+    /// <para>Used by the Mailings Labels command to populate each grid cell with per-record
+    /// merged content after the blank label grid has been inserted.</para>
+    /// </summary>
+    public void SetTableCellContent(
+        int blockIndex,
+        int rowIndex,
+        int colIndex,
+        IReadOnlyList<ModelParagraph> paragraphs)
+    {
+        CommitToModel();
+        _commands.Execute(new SetTableCellContentCommand(blockIndex, rowIndex, colIndex, paragraphs));
+    }
+
+    /// <summary>
     /// Insert the body content of another document (<paramref name="source"/>, typically a just-opened
     /// .docx) at the caret. The source's blocks are deep-cloned via <see cref="DocumentMerge.CloneBlocks"/>
     /// (so the source is never aliased), then each clone is inserted after the caret's block — one

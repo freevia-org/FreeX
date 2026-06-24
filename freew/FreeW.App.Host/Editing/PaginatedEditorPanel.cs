@@ -176,11 +176,15 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             var (section, sectionRelPageNumber) = pageToSection[i];
             var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
                 section, sectionRelPageNumber, model.Page);
-            boxes.Add(new PageBox(i + 1, page, shards[i],
+            var box = new PageBox(i + 1, page, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
-                pageCount: pageCount));
+                pageCount: pageCount);
+            // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
+            // edits back to the correct section's HeadersFooters rather than always the document-level.
+            box.OwnerSectionHf = section;
+            boxes.Add(box);
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -716,6 +720,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
                 pageCount: pageCount);
+            box.OwnerSectionHf = section; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
@@ -820,6 +825,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
                 pageCount: pageCount);
+            box.OwnerSectionHf = section; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
@@ -857,21 +863,41 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Render pass picks them up.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Commits the in-page header/footer sub-editors back to the model slots they own.
+    ///
+    /// <para>
+    /// <strong>W21 — section-aware:</strong> each page box now carries an
+    /// <see cref="PageBox.OwnerSectionHf"/> reference (set by <c>ComputePageSectionMap</c> during
+    /// Build/Repaginate) that identifies the <see cref="SectionHeadersFooters"/> the box's header
+    /// and footer sub-editors should write back to.  For single-section documents this is always the
+    /// document-level <see cref="TextDocument.FinalSectionHeadersFooters"/>; for multi-section
+    /// documents pages in section 2 write to <c>Section[1].HeadersFooters</c>, etc.
+    /// </para>
+    ///
+    /// <para>Deduplication key is <c>(OwnerSectionHf identity, slot name)</c> so that each distinct
+    /// section+slot pair is committed exactly once even if multiple page boxes share the same slot
+    /// (e.g. all non-first pages of section 2 share the "header" slot for that section).</para>
+    /// </summary>
     internal void CommitHeaderFooterSlots(DocumentView helperEditor)
     {
-        var hf          = _sourceEditor.Model.FinalSectionHeadersFooters;
-        var committedSlots = new HashSet<string>(StringComparer.Ordinal);
+        // Fallback HF used when a box has no OwnerSectionHf set (should not happen after Build/Repaginate).
+        var docLevelHf = _sourceEditor.Model.FinalSectionHeadersFooters;
+
+        // Deduplication key: (section HF instance identity, slot name).
+        var committedSlots = new HashSet<(SectionHeadersFooters hf, string slot)>();
 
         foreach (var box in _pageBoxes)
         {
-            // Commit header slot (once per distinct slot name).
-            if (box.HeaderSlotName is { } hName && committedSlots.Add(hName))
+            var hf = box.OwnerSectionHf ?? docLevelHf;
+
+            // Commit header slot (once per section+slot pair).
+            if (box.HeaderSlotName is { } hName && committedSlots.Add((hf, hName)))
                 box.CommitHfSlots(helperEditor, hf);
-            // CommitHfSlots commits BOTH header AND footer for this box in one call.
-            // If the footer has a different slot name from the header (shouldn't happen normally)
-            // record it too so we don't commit it again from another box.
+            // CommitHfSlots writes BOTH header AND footer sub-editors in one call.
+            // Record the footer slot so we don't commit it again from another box in the same section.
             if (box.FooterSlotName is { } fName)
-                committedSlots.Add(fName);
+                committedSlots.Add((hf, fName));
         }
     }
 

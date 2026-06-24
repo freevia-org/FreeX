@@ -556,6 +556,70 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
 }
 
 /// <summary>
+/// Replace the content (paragraphs) of a specific table cell identified by
+/// <paramref name="blockIndex"/> / <paramref name="rowIndex"/> / <paramref name="colIndex"/> with
+/// <paramref name="replacement"/> paragraphs.  Snapshots the prior paragraphs so undo restores the
+/// original content exactly.  Table structure (row/column counts, cell widths, merge state, shading)
+/// is preserved; only the cell's <see cref="TableCell.Paragraphs"/> list is replaced.
+/// Out-of-range indices are silently clamped / ignored so the command is a no-op when the
+/// coordinates do not exist.
+/// </summary>
+public sealed class SetTableCellContentCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    IReadOnlyList<Paragraph> replacement) : IDocumentCommand
+{
+    private Paragraph[]? _previous;
+
+    public string Label => "Edit Cell";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count)
+            return;
+        var cell = cells[colIndex];
+
+        // Snapshot previous content for undo.
+        _previous = [.. cell.Paragraphs];
+
+        // Replace with new content (ensure at least one paragraph so the cell is never empty).
+        cell.Paragraphs.Clear();
+        if (replacement.Count > 0)
+        {
+            foreach (var p in replacement)
+                cell.Paragraphs.Add(p);
+        }
+        else
+        {
+            cell.Paragraphs.Add(new Paragraph());
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null)
+            return;
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count)
+            return;
+        var cell = cells[colIndex];
+
+        cell.Paragraphs.Clear();
+        foreach (var p in _previous)
+            cell.Paragraphs.Add(p);
+        _previous = null;
+    }
+}
+
+/// <summary>
 /// Set the size (points) of the inline image carried by run <paramref name="runIndex"/> of the
 /// paragraph at <paramref name="paragraphIndex"/>, snapshotting the prior size for undo.
 /// </summary>

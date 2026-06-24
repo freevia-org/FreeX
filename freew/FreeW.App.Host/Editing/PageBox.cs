@@ -84,6 +84,15 @@ internal sealed class PageBox : Border
     /// </summary>
     internal string? FooterSlotName { get; }
 
+    /// <summary>
+    /// The <see cref="SectionHeadersFooters"/> that this page box's header and footer sub-editors
+    /// should commit back to.  Set by <see cref="PaginatedEditorPanel.Build"/> from
+    /// <c>ComputePageSectionMap</c> so the commit coordinator writes to the correct section's slot
+    /// rather than always writing to the document-level
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/>.
+    /// </summary>
+    internal SectionHeadersFooters? OwnerSectionHf { get; set; }
+
     // ── neighbour references (set by PaginatedEditorPanel after all boxes are created) ────────────
     internal PageBox? PreviousBox { get; set; }
     internal PageBox? NextBox { get; set; }
