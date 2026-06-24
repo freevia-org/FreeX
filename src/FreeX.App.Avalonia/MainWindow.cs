@@ -7793,11 +7793,11 @@ public sealed partial class MainWindow : Window
         {
             Title = "Zoom",
             Width = 300,
-            Height = 380,
+            Height = 420,
             MinWidth = 300,
-            MinHeight = 380,
+            MinHeight = 420,
             MaxWidth = 300,
-            MaxHeight = 380,
+            MaxHeight = 420,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -7806,7 +7806,7 @@ public sealed partial class MainWindow : Window
 
         var presetButtons = new List<RadioButton>();
         var presetPanel = new StackPanel { Spacing = 6 };
-        foreach (var zoom in new[] { 200, 100, 75, 50, 25 })
+        foreach (var zoom in new[] { 400, 200, 100, 75, 50, 25 })
         {
             var button = new RadioButton
             {
@@ -7871,7 +7871,7 @@ public sealed partial class MainWindow : Window
 
         void Accept()
         {
-            foreach (var (button, zoom) in presetButtons.Zip(new[] { 200, 100, 75, 50, 25 }))
+            foreach (var (button, zoom) in presetButtons.Zip(new[] { 400, 200, 100, 75, 50, 25 }))
             {
                 if (button.IsChecked == true)
                 {
@@ -8445,9 +8445,9 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
-                findNextButton,
                 findAllButton,
+                findNextButton,
+                cancelButton,
             },
         };
 
@@ -8756,9 +8756,9 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
-                replaceButton,
                 replaceAllButton,
+                replaceButton,
+                cancelButton,
             },
         };
 
@@ -9580,8 +9580,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -9681,6 +9681,24 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
         AutomationProperties.SetHelpText(okButton, "Close workbook statistics.");
 
+        var copyToClipboardButton = new Button
+        {
+            Content = "Copy to Clipboard",
+            MinWidth = 120,
+            Padding = new Thickness(10, 4),
+        };
+        AutomationProperties.SetName(copyToClipboardButton, "Copy to Clipboard");
+        AutomationProperties.SetAutomationId(copyToClipboardButton, "WorkbookStatisticsCopyButton");
+        AutomationProperties.SetHelpText(copyToClipboardButton, "Copy workbook statistics to the clipboard.");
+        ApplyDialogButtonChrome(copyToClipboardButton);
+
+        var statsText = FormatWorkbookStatistics(statistics);
+        copyToClipboardButton.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(dialog)?.Clipboard is { } clipboard)
+                await clipboard.SetTextAsync(statsText);
+        };
+
         okButton.Click += (_, _) => dialog.Close();
         dialog.KeyDown += (_, e) =>
         {
@@ -9691,12 +9709,12 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        dialog.Content = CreateWorkbookStatisticsDialogContent(statistics, okButton);
+        dialog.Content = CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton);
         dialog.Opened += (_, _) => okButton.Focus();
         await dialog.ShowDialog(this);
     }
 
-    private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton)
+    private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
     {
         var statisticsBlock = new TextBlock
         {
@@ -9708,12 +9726,22 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
         AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
 
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+        };
+        if (copyToClipboardButton is not null)
+            buttonRow.Children.Add(copyToClipboardButton);
+        buttonRow.Children.Add(okButton);
+
         var root = new DockPanel
         {
             Margin = new Thickness(16),
         };
-        DockPanel.SetDock(okButton, Dock.Bottom);
-        root.Children.Add(okButton);
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(buttonRow);
         root.Children.Add(new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
@@ -10153,15 +10181,15 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
         ApplyDialogComboBoxChrome(numberSymbolBox);
 
-        var numberNegativeBox = new ComboBox
+        var numberNegativeBox = new ListBox
         {
             ItemsSource = FormatCellsNumberFormatPlanner.NegativeOptions,
             SelectedIndex = 0,
             MinWidth = 200,
+            Height = 96,
         };
         AutomationProperties.SetName(numberNegativeBox, "Negative numbers");
         AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
-        ApplyDialogComboBoxChrome(numberNegativeBox);
 
         var numberPreview = new TextBlock
         {
@@ -10778,6 +10806,21 @@ public sealed partial class MainWindow : Window
                                 Spacing = 10,
                                 Children =
                                 {
+                                    new Border
+                                    {
+                                        BorderBrush = Brushes.Gray,
+                                        BorderThickness = new Thickness(1),
+                                        Padding = new Thickness(6, 4),
+                                        Child = new StackPanel
+                                        {
+                                            Spacing = 2,
+                                            Children =
+                                            {
+                                                new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
+                                                numberPreview,
+                                            },
+                                        },
+                                    },
                                     CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
                                     CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
                                     CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
@@ -10786,7 +10829,6 @@ public sealed partial class MainWindow : Window
                             },
                         },
                     },
-                    CreateFormatCellsField(UiText.Get("FormatCells_Sample"), numberPreview),
                 },
             });
         var alignmentTab = CreateFormatCellsTab(
@@ -10934,8 +10976,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -13880,8 +13922,8 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 removeAllButton,
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -14572,7 +14614,7 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var buttonRow = new StackPanel
+        var closeButtonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
@@ -14583,12 +14625,13 @@ public sealed partial class MainWindow : Window
                 closeButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        DockPanel.SetDock(closeButtonRow, Dock.Bottom);
 
-        var actionRow = new StackPanel
+        var actionColumn = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = 6,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
                 saveButton,
@@ -14598,6 +14641,15 @@ public sealed partial class MainWindow : Window
             },
         };
 
+        var listWithButtons = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+        };
+        listWithButtons.Children.Add(scenarioList);
+        AvaloniaGrid.SetColumn(scenarioList, 0);
+        listWithButtons.Children.Add(actionColumn);
+        AvaloniaGrid.SetColumn(actionColumn, 1);
+
         RefreshDialogPlan(selectedScenarioName);
         nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
         dialog.Content = new DockPanel
@@ -14605,7 +14657,7 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(16),
             Children =
             {
-                buttonRow,
+                closeButtonRow,
                 new StackPanel
                 {
                     Spacing = 10,
@@ -14613,11 +14665,10 @@ public sealed partial class MainWindow : Window
                     {
                         statusText,
                         selectionText,
-                        scenarioList,
+                        listWithButtons,
                         scenarioDetailsText,
                         CreateScenarioManagerField("Name", nameBox),
                         CreateScenarioManagerField("Comment", commentBox),
-                        actionRow,
                         errorText,
                     },
                 },
@@ -15371,7 +15422,7 @@ public sealed partial class MainWindow : Window
 
         var applyButton = new Button
         {
-            Content = "Apply",
+            Content = "OK",
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15380,8 +15431,8 @@ public sealed partial class MainWindow : Window
 
         var clearButton = new Button
         {
-            Content = "Clear Validation",
-            MinWidth = 112,
+            Content = "Clear All",
+            MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(clearButton, "DataValidationClearButton");
@@ -15590,8 +15641,8 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 clearButton,
-                cancelButton,
                 applyButton,
+                cancelButton,
             },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);

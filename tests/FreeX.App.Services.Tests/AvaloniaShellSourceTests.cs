@@ -4882,7 +4882,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("MinHeight = 280");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
-        source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton)");
+        source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton)");
         source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
         source.Should().Contain("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
         source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
