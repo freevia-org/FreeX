@@ -67,6 +67,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private readonly CrossPageSelection _crossPageSelection = new();
     private readonly CrossPageUndoCoordinator _undoCoordinator = new();
 
+    // ── W18: drag-drop state for cross-page selection drag ────────────────────────────────────────
+    //
+    // WPF drag-drop for cross-page selection is implemented as a manual mouse-tracking state
+    // machine (identical in spirit to the approach Word-WPF editors use): on MouseDown inside an
+    // active cross-page selection we record the origin; on MouseMove we detect the drag threshold;
+    // on MouseUp we perform the move-or-copy.  Native within-box drag-drop is unaffected: we only
+    // intercept when _crossPageSelection.IsActive and the down-point is inside the selection.
+    //
+    private bool _dragPending;        // down inside cross-page selection; waiting for threshold
+    private bool _dragActive;         // threshold exceeded; drag is in flight
+    private Point _dragStartPoint;    // screen-space point where the left button went down
+    private PageBox? _dragSourceBox;  // box that received the MouseDown event
+
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
     private PaginatedEditorPanel(DocumentView sourceEditor, List<PageBox> boxes)
@@ -85,6 +98,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _stack.Children.Add(box);
             HookTextChanged(box);
             HookShiftArrow(box);
+            HookDragDrop(box);
         }
 
         Background = WorkspaceBrush;
@@ -97,6 +111,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         // Panel-level Ctrl+C / Ctrl+X / Ctrl+V for cross-page clipboard.
         PreviewKeyDown += OnPanelPreviewKeyDown;
+
+        // Panel-level drag-drop hooks wired per-box below; see HookDragDrop.
     }
 
     // ── factory ───────────────────────────────────────────────────────────────────────────────────
@@ -520,16 +536,20 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Notify undo coordinator that a repagination is starting (resets burst flag).
         _undoCoordinator.OnRepaginationStarting();
 
-        // Unhook TextChanged and ShiftArrow from old boxes before discarding them.
+        // Unhook TextChanged, ShiftArrow, and DragDrop from old boxes before discarding them.
         foreach (var old in _pageBoxes)
         {
             UnhookTextChanged(old);
             _undoCoordinator.UnhookBox(old);
             UnhookShiftArrow(old);
+            UnhookDragDrop(old);
         }
 
         // Clear any cross-page selection since page boxes are being rebuilt.
         _crossPageSelection.Clear(_pageBoxes);
+        _dragPending = false;
+        _dragActive = false;
+        _dragSourceBox = null;
 
         _stack.Children.Clear();
         _pageBoxes.Clear();
@@ -545,6 +565,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _stack.Children.Add(box);
             HookTextChanged(box);
             HookShiftArrow(box);
+            HookDragDrop(box);
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -600,8 +621,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             UnhookTextChanged(old);
             _undoCoordinator.UnhookBox(old);
             UnhookShiftArrow(old);
+            UnhookDragDrop(old);
         }
         _crossPageSelection.Clear(_pageBoxes);
+        _dragPending = false;
+        _dragActive = false;
+        _dragSourceBox = null;
         _stack.Children.Clear();
         _pageBoxes.Clear();
 
@@ -640,6 +665,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _stack.Children.Add(box);
             HookTextChanged(box);
             HookShiftArrow(box);
+            HookDragDrop(box);
         }
 
         for (var i = 0; i < _pageBoxes.Count; i++)
@@ -715,6 +741,250 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             }
         }
         return false;
+    }
+
+    // ── W18: drag-drop of cross-page selection ───────────────────────────────────────────────────
+    //
+    // Approach: manual mouse-tracking state machine.
+    //   MouseDown  → if cross-page selection is active and hit-test says the down-point is inside
+    //                the selection range, record a pending drag.
+    //   MouseMove  → if pending and past the system drag threshold, set dragActive, capture mouse.
+    //   MouseUp    → if dragActive, compute drop TextPointer, check it is outside the selection
+    //                (no-op if inside), then move (or ctrl-copy) the content.
+    //
+    // Within-box native drag-drop is unaffected: we only intercept when both
+    // _crossPageSelection.IsActive AND the down-point is inside the cross-page selection range.
+
+    private void HookDragDrop(PageBox box)
+    {
+        box.Body.PreviewMouseLeftButtonDown += OnBodyMouseDown;
+        box.Body.PreviewMouseMove           += OnBodyMouseMove;
+        box.Body.PreviewMouseLeftButtonUp   += OnBodyMouseUp;
+    }
+
+    private void UnhookDragDrop(PageBox box)
+    {
+        box.Body.PreviewMouseLeftButtonDown -= OnBodyMouseDown;
+        box.Body.PreviewMouseMove           -= OnBodyMouseMove;
+        box.Body.PreviewMouseLeftButtonUp   -= OnBodyMouseUp;
+    }
+
+    private void OnBodyMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Only intercept when a cross-page selection exists.
+        if (!_crossPageSelection.IsActive)
+            return;
+
+        // Find which box received the event.
+        var box = _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, sender));
+        if (box is null)
+            return;
+
+        // Check whether the click position is inside the selection range.
+        if (!IsPointInsideCrossPageSelection(box, e.GetPosition(box.Body)))
+            return;
+
+        // Record pending drag; do NOT suppress the event (let the native RTB handle mouse-down
+        // for click-to-place-caret; if the user actually drags we intercept at MouseMove).
+        _dragPending = true;
+        _dragActive = false;
+        _dragStartPoint = e.GetPosition(this);
+        _dragSourceBox = box;
+    }
+
+    private void OnBodyMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragPending || e.LeftButton != MouseButtonState.Pressed)
+        {
+            if (_dragActive)
+            {
+                // Drag is live — suppress native text selection in the body boxes.
+                e.Handled = true;
+            }
+            return;
+        }
+
+        // Check system drag threshold.
+        var current = e.GetPosition(this);
+        var dx = current.X - _dragStartPoint.X;
+        var dy = current.Y - _dragStartPoint.Y;
+        var threshold = SystemParameters.MinimumHorizontalDragDistance;
+        if (Math.Abs(dx) < threshold && Math.Abs(dy) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        // Threshold exceeded — start drag.
+        _dragPending = false;
+        _dragActive = true;
+
+        // Suppress the native RichTextBox mouse-move so it doesn't change the selection.
+        e.Handled = true;
+    }
+
+    private void OnBodyMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_dragActive)
+        {
+            // Not dragging — just clear pending state.
+            _dragPending = false;
+            return;
+        }
+
+        _dragActive = false;
+        _dragPending = false;
+
+        // Determine whether this is a copy (Ctrl held) or move.
+        bool isCopy = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+
+        // Find the box under the mouse for the drop target.
+        var dropBox = _pageBoxes.FirstOrDefault(b => ReferenceEquals(b.Body, sender));
+        if (dropBox is null)
+        {
+            // Mouse up outside a known box — cancel.
+            return;
+        }
+
+        // Compute the drop TextPointer at the mouse-up position.
+        var dropPoint = e.GetPosition(dropBox.Body);
+        TextPointer? dropPtr = GetTextPointerAtPoint(dropBox, dropPoint);
+        if (dropPtr is null)
+            return;
+
+        // Determine the drop box index.
+        int dropBoxIdx = CrossPageSelection.IndexOfBox(_pageBoxes, dropBox);
+        if (dropBoxIdx < 0)
+            return;
+
+        // No-op: drop inside the selection range.
+        if (IsDropInsideSelection(dropBoxIdx, dropPtr))
+            return;
+
+        // Obtain the text content of the cross-page selection.
+        var selectedText = _crossPageSelection.GetSelectedText(_pageBoxes);
+        if (selectedText.Length == 0)
+            return;
+
+        // Snapshot the drop pointer before a move-cut so the TextPointer remains valid.
+        // WPF TextPointer objects track the document tree; after DeleteCrossPageSelection
+        // removes content from different boxes the pointer in the target box (a different box)
+        // stays valid.  dropPtr is held as dropPtrRef through the cut.
+        TextPointer dropPtrRef = dropPtr;
+
+        if (!isCopy)
+        {
+            // Cut (delete) the selection — reuses the existing DeleteCrossPageSelection path.
+            // The IsDropInsideSelection guard above ensures the drop target is outside the
+            // selection, so dropPtrRef (pointing into a different box or past the selection end)
+            // remains valid after the cut.
+            CutSelection();
+        }
+
+        // Insert the text at the drop position.
+        try
+        {
+            dropPtrRef.InsertTextInRun(selectedText);
+        }
+        catch
+        {
+            // InsertTextInRun fails if not inside a Run — fall back to creating a new paragraph.
+            try
+            {
+                var range = new TextRange(dropPtrRef, dropPtrRef);
+                range.Text = selectedText;
+            }
+            catch { /* ignore — best-effort */ }
+        }
+
+        ScheduleRepaginate();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="dropPtr"/> in <paramref name="dropBoxIdx"/> falls inside
+    /// the current cross-page selection (i.e. drop is a no-op).
+    /// </summary>
+    private bool IsDropInsideSelection(int dropBoxIdx, TextPointer dropPtr)
+    {
+        if (!_crossPageSelection.IsActive)
+            return false;
+
+        int startBox = Math.Min(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+        int endBox   = Math.Max(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+        var startPtr = _crossPageSelection.AnchorBoxIndex <= _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.AnchorPointer!
+            : _crossPageSelection.ActivePointer!;
+        var endPtr = _crossPageSelection.AnchorBoxIndex <= _crossPageSelection.ActiveBoxIndex
+            ? _crossPageSelection.ActivePointer!
+            : _crossPageSelection.AnchorPointer!;
+
+        // Drop is before the selection start box or after the selection end box — not inside.
+        if (dropBoxIdx < startBox || dropBoxIdx > endBox)
+            return false;
+
+        // Drop is in the start box: check pointer is after startPtr.
+        if (dropBoxIdx == startBox)
+        {
+            try { return dropPtr.CompareTo(startPtr) >= 0; } catch { return false; }
+        }
+
+        // Drop is in the end box: check pointer is before endPtr.
+        if (dropBoxIdx == endBox)
+        {
+            try { return dropPtr.CompareTo(endPtr) <= 0; } catch { return false; }
+        }
+
+        // Drop is in a fully-covered intermediate box.
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="point"/> (in box-local coordinates) lies within the
+    /// current cross-page selection in <paramref name="box"/>.
+    /// </summary>
+    private bool IsPointInsideCrossPageSelection(PageBox box, Point point)
+    {
+        if (!_crossPageSelection.IsActive)
+            return false;
+
+        int boxIdx = CrossPageSelection.IndexOfBox(_pageBoxes, box);
+        if (boxIdx < 0)
+            return false;
+
+        int startBox = Math.Min(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+        int endBox   = Math.Max(_crossPageSelection.AnchorBoxIndex, _crossPageSelection.ActiveBoxIndex);
+
+        // Box is outside the selected range entirely.
+        if (boxIdx < startBox || boxIdx > endBox)
+            return false;
+
+        // For intermediate boxes the entire box is selected — any point is inside.
+        if (boxIdx > startBox && boxIdx < endBox)
+            return true;
+
+        // For the start/end box, hit-test the point against the selection bounds.
+        // Use GetPositionFromPoint to get the TextPointer at the mouse position and then
+        // delegate to IsDropInsideSelection for the boundary check.
+        try
+        {
+            var hitPtr = box.Body.GetPositionFromPoint(point, snapToText: true);
+            if (hitPtr is null)
+                return false;
+
+            return IsDropInsideSelection(boxIdx, hitPtr);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Returns the <see cref="TextPointer"/> closest to <paramref name="point"/> (box-local
+    /// coordinates) inside <paramref name="box"/>'s body RichTextBox.
+    /// </summary>
+    private static TextPointer? GetTextPointerAtPoint(PageBox box, Point point)
+    {
+        try
+        {
+            return box.Body.GetPositionFromPoint(point, snapToText: true);
+        }
+        catch { return null; }
     }
 
     // ── sharding ──────────────────────────────────────────────────────────────────────────────────

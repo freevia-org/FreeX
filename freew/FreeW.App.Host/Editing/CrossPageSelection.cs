@@ -243,6 +243,14 @@ internal sealed class CrossPageSelection
 
     // IReadOnlyList<T> has no IndexOf; provide a linear search helper.
     private static int IndexOf(IReadOnlyList<PageBox> list, PageBox item)
+        => IndexOfBox(list, item);
+
+    /// <summary>
+    /// Returns the 0-based index of <paramref name="item"/> in <paramref name="list"/>, or -1 if
+    /// not found.  Exposed internally so <see cref="PaginatedEditorPanel"/> can use the same
+    /// reference-equality search without duplicating it.
+    /// </summary>
+    internal static int IndexOfBox(IReadOnlyList<PageBox> list, PageBox item)
     {
         for (int i = 0; i < list.Count; i++)
             if (ReferenceEquals(list[i], item))

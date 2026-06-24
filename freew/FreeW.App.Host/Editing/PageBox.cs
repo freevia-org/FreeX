@@ -166,6 +166,13 @@ internal sealed class PageBox : Border
         if (contentWidth > 0)
             bodyFlow.PageWidth = contentWidth;
 
+        // W18: Apply multi-column layout to the body FlowDocument so that pages using
+        // PageSettings.ColumnCount > 1 render columns inside the page box correctly.
+        // DocumentView.ApplyColumnLayout computes the per-column width from contentWidth and the
+        // column spacing — the same calculation used by the continuous editor.
+        // Single-column pages (the default) are a no-op (ColumnWidth stays +Infinity).
+        DocumentView.ApplyColumnLayout(bodyFlow, page);
+
         // Move the pre-rendered blocks into the body FlowDocument.  Moving preserves Tags because
         // the block objects themselves are not recreated — only their parent pointer changes.
         foreach (var block in pageBlocks)
