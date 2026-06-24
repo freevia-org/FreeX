@@ -2588,6 +2588,51 @@ public sealed class WorkbookSession
         return result;
     }
 
+    /// <summary>
+    /// Applies "Draw Border" (outline edges only) to the currently selected range, using the same
+    /// per-cell outline diff that <c>BorderDrawPlanner</c> uses in the WPF shell: each cell in the
+    /// range gets only the edges that lie on the range boundary.
+    /// </summary>
+    public WorkbookCellEditResult SetSelectedRangeDrawBorder(
+        BorderStyle borderStyle = BorderStyle.Thin,
+        CellColor? borderColor = null)
+    {
+        const string label = "Draw Border";
+        var range = SelectedRange;
+        var color = borderColor ?? CellColor.Black;
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+
+        var commands = new List<IWorkbookCommand>();
+        foreach (var address in range.AllCells())
+        {
+            var diff = BorderShortcutService.GetOutlineBorderDiff(range, address, borderStyle, color);
+            if (!BorderShortcutService.HasBorderChanges(diff))
+                continue;
+
+            var cellRange = new GridRange(address, address);
+            commands.Add(targetSheetIds.Count > 1
+                ? new GroupedApplyStyleCommand(targetSheetIds, cellRange, diff)
+                : new ApplyStyleCommand(
+                    ActiveSheet.Id,
+                    RemapRangeToSheet(cellRange, ActiveSheet.Id),
+                    diff));
+        }
+
+        if (commands.Count == 0)
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
+
+        var command = commands.Count == 1
+            ? commands[0]
+            : (IWorkbookCommand)new CompositeWorkbookCommand(label, commands);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, range);
+        return result;
+    }
+
     public WorkbookCellEditResult MergeAndCenterSelectedRange(
         MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {

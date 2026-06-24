@@ -22,7 +22,7 @@ internal static class AvaloniaExtraCommandIds
         // ── Number / Fill / Borders quick-format menu items ───────────────────────────────────────────
         "Bottom Border", "Bottom Double Border", "Inside Borders", "Left Border", "Right Border",
         "Top Border", "Top and Bottom Border", "Top and Double Bottom Border", "Top and Thick Bottom Border",
-        "Thick Bottom Border", "Thick Outside Borders", "More Borders", "Draw Border Grid", "Erase Border",
+        "Thick Bottom Border", "Thick Outside Borders", "More Borders", "Draw Border", "Draw Border Grid", "Erase Border",
         "Accounting Number Format US Dollar", "Accounting Number Format Euro",
         "Accounting Number Format British Pound", "Accounting Number Format Japanese Yen",
         "More Accounting Formats",

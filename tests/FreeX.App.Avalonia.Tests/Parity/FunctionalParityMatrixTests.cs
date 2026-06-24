@@ -43,12 +43,6 @@ public sealed class FunctionalParityMatrixTests
         // Win32 PaperKind names with no Linux equivalent.
         "B4 (JIS)", "B5 (JIS)",
 
-        // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // (2) NOT YET IMPLEMENTED IN THE AVALONIA SHELL
-        // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // Draw ▸ Format ▸ Border draw mode: WPF's pen-based interactive border drawing is a Windows-only
-        // interaction model (mouse-drag across cells in draw mode); no equivalent handler exists in Avalonia.
-        "Draw Border",
     };
 
     [Fact]

@@ -1106,7 +1106,9 @@ public sealed partial class MainWindow : Window
                     ["Top and Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndBottom),
                     ["Top and Thick Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndThickBottom),
                     ["Top and Double Bottom Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.TopAndDoubleBottom),
-                    // Draw-Border-Grid / Erase Border are selection-apply equivalents of All / No Border.
+                    // Draw Border pen mode: activates interactive click/drag border drawing.
+                    // Draw Border Grid / Erase Border are selection-apply equivalents of All / No Border.
+                    ["Draw Border"] = () => BeginBorderDrawMode(),
                     ["Draw Border Grid"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
                     ["Erase Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
 
@@ -5152,6 +5154,11 @@ public sealed partial class MainWindow : Window
         _selectionMoveDragging = false;
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
+
+        // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
+        if (_borderDrawModeActive)
+            ApplyBorderDrawMode();
+
         args.Handled = true;
     }
 
@@ -5802,7 +5809,9 @@ public sealed partial class MainWindow : Window
         if (address == _session.SelectedRange.End)
             AddAutofillHandleAdorner(border, zoomFactor);
 
-        border.Cursor = new Cursor(StandardCursorType.Hand);
+        border.Cursor = _borderDrawModeActive
+            ? new Cursor(StandardCursorType.Cross)
+            : new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(border);
@@ -5816,13 +5825,15 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (TryBeginAutofillDrag(args, border, address) ||
-                TryBeginSelectionMoveDrag(args, border, address))
+            // In Draw Border mode skip autofill / move-drag detection and go straight to
+            // selection-drag so the drag extent becomes the range that gets bordered.
+            if (!_borderDrawModeActive &&
+                (TryBeginAutofillDrag(args, border, address) ||
+                 TryBeginSelectionMoveDrag(args, border, address)))
             {
                 args.Handled = true;
                 return;
             }
-
 
             if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
@@ -18419,6 +18430,13 @@ public sealed partial class MainWindow : Window
             {
                 e.Handled = true;
                 CancelFormatPainter();
+                return;
+            }
+
+            if (e.Key == Key.Escape && _borderDrawModeActive)
+            {
+                e.Handled = true;
+                CancelBorderDrawMode();
                 return;
             }
 
