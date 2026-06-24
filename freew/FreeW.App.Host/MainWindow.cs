@@ -106,16 +106,42 @@ public sealed class MainWindow : Window
     private readonly List<int> _navSearchHits = new(); // model block indices with a match, in order
     private int _navSearchHitIndex = -1;                // current position within _navSearchHits
 
-    // Identity/palette for the shared window shell (FreeX navy title bar; the real FreeW app icon as the
-    // title-bar badge + window/taskbar icon).
-    private static readonly ShellChromeOptions ChromeOptions = new()
+    // Identity/palette for the shared window shell.  Colors are resolved from the active theme tokens
+    // (FreeWTitleBarBrush / FreeWAccentBrush) registered by WpfThemeApplier at startup, with literal
+    // fallbacks so tests that construct MainWindow without a running Application still work.
+    // Values are BYTE-IDENTICAL to the previous literals when the default FreeW theme is active.
+    private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = "W",
-        TitleBarColor = Color.FromRgb(0x17, 0x32, 0x4D),
-        BadgeColor = Color.FromRgb(0x0F, 0x6D, 0x8C),
+        TitleBarColor = ResolveTokenColor("FreeWTitleBarBrush", Color.FromRgb(0x17, 0x32, 0x4D)),
+        BadgeColor    = ResolveTokenColor("FreeWAccentBrush",   Color.FromRgb(0x0F, 0x6D, 0x8C)),
         CaptionHeight = 34,
         IconUri = "pack://application:,,,/Resources/FreeW.ico"
     };
+
+    /// <summary>
+    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
+    /// <see cref="Application.Current"/> and returns its <see cref="SolidColorBrush.Color"/>.
+    /// Falls back to <paramref name="fallback"/> when no Application is running (e.g. unit tests) or the
+    /// key is absent.
+    /// </summary>
+    private static Color ResolveTokenColor(string key, Color fallback)
+    {
+        if (System.Windows.Application.Current?.Resources[key] is SolidColorBrush brush)
+            return brush.Color;
+        return fallback;
+    }
+
+    /// <summary>
+    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
+    /// <see cref="Application.Current"/> and returns it, or <see langword="null"/> when absent/no Application.
+    /// </summary>
+    private static Brush? ResolveTokenBrush(string key)
+    {
+        if (System.Windows.Application.Current?.Resources[key] is Brush brush)
+            return brush;
+        return null;
+    }
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
@@ -218,13 +244,15 @@ public sealed class MainWindow : Window
         // Open maximized like FreeX, so the ribbon shows its groups in full rather than collapsing the
         // dense tabs to overflow dropdowns at a small default size.
         WindowState = WindowState.Maximized;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = ResolveTokenBrush("FreeWSheetSurfaceBrush")
+            ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
         // buttons, Win11 rounded corners, the maximized inset, and the shared chrome styles — from the
         // shared tier, so FreeW assembles its window from shared parts instead of re-coding the chrome.
         // App-specific ribbon brushes/styles still come from FreeWRibbonResources (merged at the ribbon).
-        ShellChrome.ConfigureWindow(this, ChromeOptions);
+        var chromeOptions = BuildChromeOptions();
+        ShellChrome.ConfigureWindow(this, chromeOptions);
 
         var chromeStack = new StackPanel { Orientation = Orientation.Vertical };
 
@@ -312,7 +340,7 @@ public sealed class MainWindow : Window
         // It is composed into the OUTER grid (below), in its own top row ABOVE the Backstage overlay, so
         // opening the File screen never hides the caption / QAT / window buttons. Only the ribbon goes into
         // the chrome stack here.
-        var titleBar = ShellChrome.BuildTitleBar(this, ChromeOptions);
+        var titleBar = ShellChrome.BuildTitleBar(this, chromeOptions);
         _titleBar = titleBar.Root;
         _titleText = titleBar.TitleText;
         AddQuickAccessButtons(titleBar.QatHost);
@@ -772,8 +800,9 @@ public sealed class MainWindow : Window
         _zoomItem.Margin = new Thickness(6, 0, 10, 0);
 
         _status = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            // FreeX status-bar surface (#17324D), matching the title bar (FreeXStatusSurfaceBrush).
-            new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
+            // Status bar surface routed through FreeWStatusSurfaceBrush token (#17324D default).
+            ResolveTokenBrush("FreeWStatusSurfaceBrush")
+                ?? new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
             left,
             [_viewSwitchItem, _zoomItem])).Root;
         return _status;
