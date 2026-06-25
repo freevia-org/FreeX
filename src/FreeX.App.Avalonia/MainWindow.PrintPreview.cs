@@ -649,9 +649,12 @@ public sealed partial class MainWindow
     private static string PrintPreviewText(string key, string fallback)
     {
         var text = UiText.Get(key);
-        return text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal)
+        var resolved = text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal)
             ? fallback
             : text;
+        // Strip mnemonic markers ("_Print...", "C_ollated", "_All pages") so the print-preview
+        // toolbar/labels never render a literal underscore — Windows doesn't show them here either.
+        return StripDisplayMnemonic(resolved);
     }
 
     private static Control BuildPreviewDocumentViewerSurface(PrintPreviewPaginationContext context, int pageIndex)

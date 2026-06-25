@@ -7185,6 +7185,72 @@ public sealed class DocumentView : RichTextBox
     private sealed record FootnoteMarker(int FootnoteId);
 
     /// <summary>
+    /// Scans <paramref name="blocks"/> (recursively through paragraphs, lists, tables) and returns
+    /// the ordered distinct footnote and endnote IDs that appear in them.  Used by
+    /// <see cref="FreeW.App.Host.Editing.PageBox"/> and <see cref="PaginatedEditorPanel"/> to
+    /// determine which footnote/endnote entries belong on each page box.
+    /// </summary>
+    internal static (IReadOnlyList<int> FootnoteIds, IReadOnlyList<int> EndnoteIds)
+        CollectNoteIds(IEnumerable<System.Windows.Documents.Block> blocks)
+    {
+        var fnIds = new List<int>();
+        var enIds = new List<int>();
+        var fnSeen = new HashSet<int>();
+        var enSeen = new HashSet<int>();
+
+        foreach (var block in blocks)
+            CollectNoteIdsFromBlock(block, fnIds, enIds, fnSeen, enSeen);
+
+        return (fnIds, enIds);
+    }
+
+    private static void CollectNoteIdsFromBlock(
+        System.Windows.Documents.Block block,
+        List<int> fnIds, List<int> enIds,
+        HashSet<int> fnSeen, HashSet<int> enSeen)
+    {
+        switch (block)
+        {
+            case WpfParagraph paragraph:
+                CollectNoteIdsFromInlines(paragraph.Inlines, fnIds, enIds, fnSeen, enSeen);
+                break;
+            case WpfList list:
+                foreach (var item in list.ListItems)
+                    foreach (var itemBlock in item.Blocks)
+                        CollectNoteIdsFromBlock(itemBlock, fnIds, enIds, fnSeen, enSeen);
+                break;
+            case System.Windows.Documents.Table table:
+                foreach (var rg in table.RowGroups)
+                    foreach (var row in rg.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellBlock in cell.Blocks)
+                                CollectNoteIdsFromBlock(cellBlock, fnIds, enIds, fnSeen, enSeen);
+                break;
+        }
+    }
+
+    private static void CollectNoteIdsFromInlines(
+        InlineCollection inlines,
+        List<int> fnIds, List<int> enIds,
+        HashSet<int> fnSeen, HashSet<int> enSeen)
+    {
+        foreach (var inline in inlines)
+        {
+            if (inline is WpfRun run)
+            {
+                if (run.Tag is FootnoteMarker fm && fnSeen.Add(fm.FootnoteId))
+                    fnIds.Add(fm.FootnoteId);
+                else if (run.Tag is EndnoteMarker em && enSeen.Add(em.EndnoteId))
+                    enIds.Add(em.EndnoteId);
+            }
+            else if (inline is Span span)
+            {
+                CollectNoteIdsFromInlines(span.Inlines, fnIds, enIds, fnSeen, enSeen);
+            }
+        }
+    }
+
+    /// <summary>
     /// Carried on a hidden Mark Citation (TA) marker WPF run's Tag so CommitToModel can round-trip the
     /// citation it records. Mirrors how <see cref="FootnoteMarker"/>/<see cref="PageBreakMarker"/> preserve
     /// their marks across an edit/commit cycle.

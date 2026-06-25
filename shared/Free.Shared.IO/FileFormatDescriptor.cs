@@ -14,9 +14,15 @@ namespace Free.Shared.IO;
 /// (templates: <c>.dotx</c>/<c>.dotm</c>). The single observable effect is that the current file path is
 /// cleared after load, so the next Save becomes Save-As.
 /// </param>
+/// <param name="IsLegacy">
+/// Whether this is a legacy or compatibility format (e.g. Word 97-2003 .doc). Legacy formats are
+/// suppressed from the primary Save-As and Change-File-Type menus; they remain accessible via the
+/// file-open/save dialog's "All supported formats" filter and the resolver.
+/// </param>
 public sealed record FileFormatDescriptor(
     string Extension,
     string FormatName,
     bool CanOpen = true,
     bool CanSave = true,
-    bool OpensAsTemplate = false);
+    bool OpensAsTemplate = false,
+    bool IsLegacy = false);

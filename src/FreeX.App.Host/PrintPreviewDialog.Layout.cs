@@ -183,7 +183,8 @@ public sealed partial class PrintPreviewDialog : Window
 
         var collatedBox = new CheckBox
         {
-            Content = UiText.Get("PrintPreview_CollatedLabel"),
+            // Strip the mnemonic marker so the toolbar shows "Collated" not "C_ollated".
+            Content = UiText.Get("PrintPreview_CollatedLabel").Replace("_", string.Empty, StringComparison.Ordinal),
             IsChecked = true,
             Margin = new Thickness(0, 0, 8, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -218,7 +219,8 @@ public sealed partial class PrintPreviewDialog : Window
 
         var printButton = new Button
         {
-            Content = UiText.Get("PrintPreview_PrintButton"),
+            // Strip the mnemonic marker so the toolbar shows "Print..." not "_Print...".
+            Content = UiText.Get("PrintPreview_PrintButton").Replace("_", string.Empty, StringComparison.Ordinal),
             Padding = new Thickness(12, 4, 12, 4),
             ToolTip = UiText.Get("PrintPreview_PrintToolTip")
         };
@@ -335,7 +337,8 @@ public sealed partial class PrintPreviewDialog : Window
     {
         var allPagesButton = new RadioButton
         {
-            Content = UiText.Get("PrintPreview_AllPagesLabel"),
+            // Strip the mnemonic marker so the toolbar shows "All pages" not "_All pages".
+            Content = UiText.Get("PrintPreview_AllPagesLabel").Replace("_", string.Empty, StringComparison.Ordinal),
             IsChecked = true,
             GroupName = "PrintPageRange",
             Margin = new Thickness(0, 0, 8, 0),

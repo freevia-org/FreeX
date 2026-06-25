@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -166,11 +167,24 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // ── Step 3: shard blocks by assignment ────────────────────────────────────────────────────
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
+        // ── Step 3b: collect footnote IDs per page shard ─────────────────────────────────────────
+        // Scan each page's body blocks for FootnoteMarker / EndnoteMarker tags (via DocumentView
+        // helper) to determine which footnote entries belong at the bottom of each page.
+        var pageFootnoteIds = new IReadOnlyList<int>[pageCount];
+        for (var i = 0; i < pageCount; i++)
+        {
+            var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
+            pageFootnoteIds[i] = fnIds;
+        }
+
         // ── Step 4: create one PageBox per page ───────────────────────────────────────────────────
         // Phase 4 + W18: resolve header/footer slots per page, routing to the correct section's
         // SectionHeadersFooters (per-section tracking) and passing pageCount for live page numbers.
         var pageToSection = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
-        var boxes = new List<PageBox>(pageCount);
+        // Endnotes page is appended after body pages when the document has endnotes.
+        var hasEndnotes = model.Endnotes.Count > 0;
+        var totalBoxCount = hasEndnotes ? pageCount + 1 : pageCount;
+        var boxes = new List<PageBox>(totalBoxCount);
         for (var i = 0; i < pageCount; i++)
         {
             var (section, sectionRelPageNumber) = pageToSection[i];
@@ -180,11 +194,24 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
-                pageCount: pageCount);
+                pageCount: totalBoxCount,
+                footnoteIds: pageFootnoteIds[i]);
             // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
             // edits back to the correct section's HeadersFooters rather than always the document-level.
             box.OwnerSectionHf = section;
             boxes.Add(box);
+        }
+
+        // ── Endnotes page (synthetic last page) ───────────────────────────────────────────────────
+        // All endnote entries are collected into one page at the end of the document, mirroring
+        // Word's behaviour. The synthetic page has no body blocks and no header/footer.
+        if (hasEndnotes)
+        {
+            var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
+            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+                sourceModel: model,
+                endnoteIds: endnoteIds);
+            boxes.Add(endnotePage);
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -687,6 +714,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
+        // Collect footnote IDs per page shard for the repaginated layout.
+        var pageFootnoteIdsRep = new IReadOnlyList<int>[pageCount];
+        for (var i = 0; i < pageCount; i++)
+        {
+            var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
+            pageFootnoteIdsRep[i] = fnIds;
+        }
+
         // ── Rebuild page boxes ────────────────────────────────────────────────────────────────────
         // Notify undo coordinator that a repagination is starting (resets burst flag).
         _undoCoordinator.OnRepaginationStarting();
@@ -709,6 +744,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _stack.Children.Clear();
         _pageBoxes.Clear();
 
+        var hasEndnotesRep = model.Endnotes.Count > 0;
+        var totalBoxCountRep = hasEndnotesRep ? pageCount + 1 : pageCount;
         var pageToSectionRep = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
@@ -719,13 +756,27 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
-                pageCount: pageCount);
+                pageCount: totalBoxCountRep,
+                footnoteIds: pageFootnoteIdsRep[i]);
             box.OwnerSectionHf = section; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
             HookShiftArrow(box);
             HookDragDrop(box);
+        }
+
+        if (hasEndnotesRep)
+        {
+            var endnoteIdsRep = model.Endnotes.Keys.OrderBy(k => k).ToList();
+            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+                sourceModel: model,
+                endnoteIds: endnoteIdsRep);
+            _pageBoxes.Add(endnotePage);
+            _stack.Children.Add(endnotePage);
+            HookTextChanged(endnotePage);
+            HookShiftArrow(endnotePage);
+            HookDragDrop(endnotePage);
         }
 
         // Wire neighbour links for cross-page caret routing.
@@ -814,6 +865,15 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         var shards = ShardByPageAssignment(allBlocks, assignment, pageCount);
 
+        var pageFootnoteIdsReb = new IReadOnlyList<int>[pageCount];
+        for (var i = 0; i < pageCount; i++)
+        {
+            var (fnIds, _) = DocumentView.CollectNoteIds(shards[i]);
+            pageFootnoteIdsReb[i] = fnIds;
+        }
+
+        var hasEndnotesReb = model.Endnotes.Count > 0;
+        var totalBoxCountReb = hasEndnotesReb ? pageCount + 1 : pageCount;
         var pageToSectionReb = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
@@ -824,13 +884,27 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
-                pageCount: pageCount);
+                pageCount: totalBoxCountReb,
+                footnoteIds: pageFootnoteIdsReb[i]);
             box.OwnerSectionHf = section; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
             HookTextChanged(box);
             HookShiftArrow(box);
             HookDragDrop(box);
+        }
+
+        if (hasEndnotesReb)
+        {
+            var endnoteIdsReb = model.Endnotes.Keys.OrderBy(k => k).ToList();
+            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+                sourceModel: model,
+                endnoteIds: endnoteIdsReb);
+            _pageBoxes.Add(endnotePage);
+            _stack.Children.Add(endnotePage);
+            HookTextChanged(endnotePage);
+            HookShiftArrow(endnotePage);
+            HookDragDrop(endnotePage);
         }
 
         for (var i = 0; i < _pageBoxes.Count; i++)

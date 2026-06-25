@@ -315,9 +315,9 @@ public sealed partial class MainWindow
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_SearchLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
+        AddGridChild(searchRow, new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SelectionPane_SearchLabel")), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
         AddGridChild(searchRow, searchBox, 1);
-        AddGridChild(searchRow, new TextBlock { Text = UiText.Get("SelectionPane_FilterLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 2);
+        AddGridChild(searchRow, new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SelectionPane_FilterLabel")), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 2);
         AddGridChild(searchRow, filterBox, 3);
 
         var renameRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
@@ -325,7 +325,7 @@ public sealed partial class MainWindow
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 160 });
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         renameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        AddGridChild(renameRow, new TextBlock { Text = UiText.Get("SelectionPane_NameLabel"), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
+        AddGridChild(renameRow, new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SelectionPane_NameLabel")), FontSize = 12, VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, 0);
         AddGridChild(renameRow, renameBox, 1);
         AddGridChild(renameRow, renameButton, 2);
         AddGridChild(renameRow, toggleVisibilityButton, 3);

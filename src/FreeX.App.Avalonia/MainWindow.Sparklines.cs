@@ -140,11 +140,11 @@ public sealed partial class MainWindow
         };
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_DataRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_DataRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(BuildSparklineRangeRow(dataRangeBox, selectDataRangeButton));
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_LocationRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_LocationRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(BuildSparklineRangeRow(locationBox, selectLocationRangeButton));
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_SparklineType")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
         content.Children.Add(new StackPanel
         {
@@ -273,7 +273,7 @@ public sealed partial class MainWindow
         clear.Click += (_, _) => dialog.Close("clear");
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_SparklineType")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
         content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_ShowHeader"), Foreground = HeaderForeground, Margin = new Thickness(0, 6, 0, 0), FontSize = 12, FontFamily = FormulaBarFontFamily });
         foreach (var toggle in SparklinePlanner.PointToggles)

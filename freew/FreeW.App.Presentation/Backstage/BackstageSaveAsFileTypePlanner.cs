@@ -15,7 +15,7 @@ public static class BackstageSaveAsFileTypePlanner
         ArgumentNullException.ThrowIfNull(formats);
         ArgumentNullException.ThrowIfNull(saveAsExtension);
 
-        var rows = Collapse(formats.Where(format => format.CanSave)).ToList();
+        var rows = Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToList();
 
         return
         [
@@ -32,7 +32,7 @@ public static class BackstageSaveAsFileTypePlanner
     {
         ArgumentNullException.ThrowIfNull(formats);
 
-        var rows = Collapse(formats.Where(format => format.CanSave)).ToList();
+        var rows = Collapse(formats.Where(format => format.CanSave && !format.IsLegacy)).ToList();
         var choices = rows
             .Select(row => new BackstageSaveAsFileTypeChoice(row.Label, row.PrimaryExtension))
             .ToArray();
