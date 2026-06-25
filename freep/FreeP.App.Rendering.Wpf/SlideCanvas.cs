@@ -234,6 +234,14 @@ public sealed class SlideCanvas : FrameworkElement
 
         dc.DrawImage(bitmap, dest);
 
+        // P3: draw the picture frame outline if present.
+        if (pic.Outline is ResolvedOutline.Visible visOutline)
+        {
+            var pen = MakePen(visOutline);
+            if (pen is not null)
+                dc.DrawRectangle(null, pen, dest);
+        }
+
         if (hasRotation) dc.Pop();
     }
 
@@ -314,6 +322,9 @@ public sealed class SlideCanvas : FrameworkElement
             Color.FromRgb(firstRun.Color.R, firstRun.Color.G, firstRun.Color.B));
         if (brush.CanFreeze) brush.Freeze();
 
+        // P1: Use Display formatting mode for GDI-compatible metrics (matches PowerPoint's
+        // pixel-grid-snapped text rendering at 96 DPI). pixelsPerDip = 1.0 is correct for
+        // RenderTargetBitmap at 96 DPI.
         var ft = new FormattedText(
             text,
             System.Globalization.CultureInfo.CurrentUICulture,
@@ -321,6 +332,8 @@ public sealed class SlideCanvas : FrameworkElement
             typeface,
             emSizePx,
             brush,
+            numberSubstitution: null,
+            textFormattingMode: TextFormattingMode.Display,
             pixelsPerDip: 1.0);
 
         if (wrap && maxWidth > 0)
