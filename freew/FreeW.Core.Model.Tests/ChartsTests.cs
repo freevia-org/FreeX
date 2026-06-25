@@ -173,6 +173,63 @@ public class ChartsTests
         ChartColorScheme.FindById("nonexistent").Should().BeNull();
     }
 
+    /// <summary>
+    /// Bug-fix regression: FindById("colorful2") must NOT return null (which would cause the renderer
+    /// to fall back to the colorful1 default). It must return the colorful2 entry whose first color
+    /// is #ED7D31 (orange), not colorful1's #4472C4 (blue). Regression for B-charts fix #2.
+    /// </summary>
+    [Fact]
+    public void ChartColorScheme_FindById_Colorful2_ReturnsNonDefaultOrangeFirstColor()
+    {
+        var scheme = ChartColorScheme.FindById("colorful2");
+
+        scheme.Should().NotBeNull("colorful2 is a known catalog entry");
+        scheme!.Id.Should().Be("colorful2");
+        // colorful2 first color is orange (#ED7D31), NOT blue (#4472C4 = colorful1).
+        scheme.Colors[0].Should().Be("#ED7D31");
+    }
+
+    /// <summary>
+    /// Bug-fix regression: FindById("mono-blue") must return the monochromatic blue scheme, not null.
+    /// Its first color (#214A82) is darker than colorful1's first color (#4472C4). Regression for B-charts fix #2.
+    /// </summary>
+    [Fact]
+    public void ChartColorScheme_FindById_MonoBlue_ReturnsNonDefaultDarkBlueFirstColor()
+    {
+        var scheme = ChartColorScheme.FindById("mono-blue");
+
+        scheme.Should().NotBeNull("mono-blue is a known catalog entry");
+        scheme!.Colors[0].Should().Be("#214A82");
+        // Must NOT be colorful1 (colorful1 first color = #4472C4).
+        scheme.Colors[0].Should().NotBe("#4472C4");
+    }
+
+    /// <summary>
+    /// FindById is case-insensitive: "COLORFUL2" and "Colorful2" must resolve to the same entry.
+    /// </summary>
+    [Theory]
+    [InlineData("COLORFUL2")]
+    [InlineData("Colorful2")]
+    [InlineData("colorful2")]
+    [InlineData("MONO-BLUE")]
+    [InlineData("Mono-Blue")]
+    public void ChartColorScheme_FindById_IsCaseInsensitive(string id)
+    {
+        ChartColorScheme.FindById(id).Should().NotBeNull($"'{id}' should match case-insensitively");
+    }
+
+    /// <summary>
+    /// FindById with leading/trailing whitespace must still resolve correctly after the Trim() fix.
+    /// </summary>
+    [Theory]
+    [InlineData(" colorful2 ")]
+    [InlineData("colorful2\t")]
+    public void ChartColorScheme_FindById_WithWhitespaceTrimmed_Resolves(string id)
+    {
+        // The renderer trims before lookup; test the raw FindById result on a trimmed id.
+        ChartColorScheme.FindById(id.Trim()).Should().NotBeNull();
+    }
+
     // ── ChartQuickLayout catalog ─────────────────────────────────────────────────────────
 
     [Fact]

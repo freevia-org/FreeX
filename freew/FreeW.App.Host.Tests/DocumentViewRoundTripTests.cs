@@ -502,6 +502,106 @@ public sealed class DocumentViewRoundTripTests
         result.Sections[1].BreakKind.Should().Be(SectionBreakKind.Continuous);
     }
 
+    // ── Table render fixes (FreeW fidelity pass, 2026-06-25) ─────────────────────────────────────
+
+    /// <summary>
+    /// Banded-rows off-by-one fix: Word's Band 1 = first data row (bodyIndex 0). After the fix,
+    /// <c>IsBandedBodyRow</c> returns true for bodyIndex 0 (even) so the first body row gets the
+    /// grey BandedRowFill, and the second body row (bodyIndex 1, odd) is white.
+    /// </summary>
+    [StaFact]
+    public void BandedRows_FirstBodyRow_IsBanded()
+    {
+        // 3-row table: header + 2 body rows. BandedRows=true, HeaderRow=true.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedRows = true };
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Header");
+        table.Rows[1].Cells[0].Paragraphs[0] = new Paragraph("Body1");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        // Inspect the rendered WPF table cells: body row 0 (rowIndex=1) must have a non-null
+        // Background (the grey banded fill); body row 1 (rowIndex=2) must be null/transparent.
+        var wpfTable = (System.Windows.Documents.Table)view.Document.Blocks.First();
+        var bodyRow0 = wpfTable.RowGroups[0].Rows[1]; // first body row (after header)
+        var bodyRow1 = wpfTable.RowGroups[0].Rows.Count > 2 ? wpfTable.RowGroups[0].Rows[2] : null;
+
+        bodyRow0.Cells[0].Background.Should().NotBeNull(
+            "first data row (bodyIndex 0) must receive the banded fill");
+        bodyRow0.Cells[0].Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>(
+            "banded fill is always a SolidColorBrush");
+
+        if (bodyRow1 is not null)
+        {
+            var brush = bodyRow1.Cells[0].Background as System.Windows.Media.SolidColorBrush;
+            var hasNoFill = brush is null || brush.Color.A == 0;
+            hasNoFill.Should().BeTrue("second data row (bodyIndex 1) must be white / no fill");
+        }
+    }
+
+    /// <summary>
+    /// Row height fix: a row with <c>HeightPt=60, HeightRule=AtLeast</c> must produce a
+    /// <see cref="BlockUIContainer"/> spacer (a <see cref="System.Windows.Controls.Border"/>
+    /// with <c>MinHeight = 60 × PxPerPoint</c>) in every non-Continue cell so the WPF
+    /// FlowDocument row is at least that tall.
+    /// </summary>
+    [StaFact]
+    public void TableRow_ExplicitHeight_SpacerInjected()
+    {
+        const double heightPt = 60.0;
+        const double pxPerPt = 96.0 / 72.0;
+
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.Rows[0].HeightPt = heightPt;
+        table.Rows[0].HeightRule = TableRowHeightRule.AtLeast;
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Content");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfTable = (System.Windows.Documents.Table)view.Document.Blocks.First();
+        var wpfCell = wpfTable.RowGroups[0].Rows[0].Cells[0];
+
+        // A BlockUIContainer containing a Border with MinHeight must be present.
+        var spacerContainer = wpfCell.Blocks.OfType<BlockUIContainer>()
+            .FirstOrDefault(b => b.Child is System.Windows.Controls.Border);
+        spacerContainer.Should().NotBeNull("height-enforcer spacer must be injected into the cell");
+
+        var border = (System.Windows.Controls.Border)spacerContainer!.Child;
+        border.MinHeight.Should().BeApproximately(heightPt * pxPerPt, 0.01,
+            "spacer MinHeight must equal HeightPt × PxPerPoint");
+    }
+
+    /// <summary>
+    /// Cell vertical alignment fix: <see cref="TableCellVerticalAlignment"/> survives the
+    /// Build→Commit round-trip (stashed in <c>TableCellTag</c> and recovered by <c>ReadTable</c>).
+    /// </summary>
+    [StaFact]
+    public void TableCell_VerticalAlignment_RoundTrips()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].VerticalAlignment = TableCellVerticalAlignment.Top;
+        table.Rows[0].Cells[1].VerticalAlignment = TableCellVerticalAlignment.Center;
+        table.Rows[0].Cells[2].VerticalAlignment = TableCellVerticalAlignment.Bottom;
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var resultTable = result.Blocks.OfType<Table>().Single();
+        resultTable.Rows[0].Cells[0].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
+        resultTable.Rows[0].Cells[1].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        resultTable.Rows[0].Cells[2].VerticalAlignment.Should().Be(TableCellVerticalAlignment.Bottom);
+    }
+
     // A valid 1x1 PNG so the WPF image decoder in BuildImageRun succeeds under test.
     private static byte[] OnePixelPng() => System.Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

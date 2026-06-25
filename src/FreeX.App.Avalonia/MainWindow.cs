@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -4497,41 +4498,159 @@ public sealed partial class MainWindow : Window
         double height)
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
-        var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        // When OutlineHasNoFill is set the shape explicitly has no border stroke.
+        IBrush? strokeBrush = drawingObject.OutlineHasNoFill
+            ? null
+            : Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        // pt → Avalonia DIPs at 96 dpi: 1 pt = 96/72 DIP. Fall back to 1.5 when unset.
+        const double PtToDip = 96.0 / 72.0;
+        var strokeThickness = drawingObject.OutlineWidthPoints > 0
+            ? drawingObject.OutlineWidthPoints * PtToDip
+            : 1.5;
+        var dashArray = GetShapeOutlineDashArray(drawingObject.OutlineDash);
+
         var w = Math.Max(1, width);
         var h = Math.Max(1, height);
-        Control visual = drawingObject.ShapeKind switch
+
+        // Line now flows through CreateDrawingShapeGeometryVisual → ShapeGeometryBuilder (LinePath)
+        // so it renders at the correct angle and length. The old stub Border is removed.
+        Control shapeControl = drawingObject.ShapeKind switch
         {
-            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            DrawingShapeKind.Ellipse => CreateEllipseShapeVisual(fill, strokeBrush, strokeThickness, dashArray, w, h),
+            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, strokeBrush, strokeThickness, dashArray, w, h),
+        };
+
+        ApplyDrawingObjectEffect(shapeControl, drawingObject.Effect);
+
+        // Overlay shape text inside the same rotation envelope (text is added as a sibling in a
+        // Grid so that ApplyDrawingObjectTransform, called by the caller, rotates both together).
+        if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+        {
+            var grid = new AvaloniaGrid
             {
                 Width = w,
                 Height = h,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            },
-            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, stroke, w, h),
-        };
+            };
+            grid.Children.Add(shapeControl);
+            grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
+            return grid;
+        }
 
-        ApplyDrawingObjectEffect(visual, drawingObject.Effect);
-        return visual;
+        return shapeControl;
     }
 
-    // Non-ellipse/line shapes: render the true preset outline via the geometry factory when available,
+    private static AvaloniaEllipse CreateEllipseShapeVisual(
+        IBrush fill,
+        IBrush? stroke,
+        double strokeThickness,
+        double[]? dashArray,
+        double w,
+        double h)
+    {
+        var ellipse = new AvaloniaEllipse
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = strokeThickness,
+            IsHitTestVisible = false,
+        };
+        if (dashArray is not null)
+            ellipse.StrokeDashArray = new AvaloniaList<double>(dashArray);
+        return ellipse;
+    }
+
+    // Renders shape text as a TextBlock overlay that sits inside the shape's bounding box.
+    // Padding, alignment, font, and wrap mirror WPF DrawShapeText.
+    private static TextBlock CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
+    {
+        const double HPad = 4;
+        const double VPad = 2;
+        const double DefaultFontSizePt = 11.0;
+        const double PtToDip = 96.0 / 72.0;
+
+        var fontSizeDip = (d.ShapeTextFontSizePoints > 0 ? d.ShapeTextFontSizePoints : DefaultFontSizePt) * PtToDip;
+
+        IBrush textBrush;
+        if (d.ShapeTextColor is { } tc)
+        {
+            textBrush = Brush(tc);
+        }
+        else
+        {
+            // Default: white on dark fill, black on light fill.
+            var fc = d.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5);
+            var luminance = 0.299 * fc.R + 0.587 * fc.G + 0.114 * fc.B;
+            textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
+        }
+
+        var hAlign = d.ShapeTextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => TextAlignment.Center,
+            DrawingShapeTextHAlign.Right  => TextAlignment.Right,
+            _                             => TextAlignment.Left,
+        };
+
+        var vAlign = d.ShapeTextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Top    => AvaloniaVerticalAlignment.Top,
+            DrawingShapeTextVAnchor.Bottom => AvaloniaVerticalAlignment.Bottom,
+            _                             => AvaloniaVerticalAlignment.Center,
+        };
+
+        var decorations = d.ShapeTextUnderline
+            ? TextDecorations.Underline
+            : null;
+
+        return new TextBlock
+        {
+            Text = d.ShapeText,
+            FontSize = fontSizeDip,
+            FontWeight = d.ShapeTextBold ? FontWeight.Bold : FontWeight.Normal,
+            FontStyle = d.ShapeTextItalic ? FontStyle.Italic : FontStyle.Normal,
+            TextDecorations = decorations,
+            Foreground = textBrush,
+            TextAlignment = hAlign,
+            VerticalAlignment = vAlign,
+            TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(HPad, VPad, HPad, VPad),
+            IsHitTestVisible = false,
+        };
+    }
+
+    // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.
+    // Arrays are dash/gap lengths in units of stroke thickness, matching WPF DashStyles.
+    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) => dash switch
+    {
+        DrawingShapeOutlineDash.Dash or DrawingShapeOutlineDash.LongDash
+            or DrawingShapeOutlineDash.SystemDash                       => [2, 2],
+        DrawingShapeOutlineDash.Dot or DrawingShapeOutlineDash.SystemDot => [1, 2],
+        DrawingShapeOutlineDash.DashDot or DrawingShapeOutlineDash.SystemDashDot => [2, 2, 1, 2],
+        DrawingShapeOutlineDash.LongDashDot                             => [2, 2, 1, 2],
+        DrawingShapeOutlineDash.LongDashDotDot                          => [2, 2, 1, 2, 1, 2],
+        _                                                               => null,
+    };
+
+    // Non-ellipse shapes: render the true preset outline via the geometry factory when available,
     // falling back to a plain rectangle for kinds the factory does not cover.
+    // Line now flows through here too (the factory opt-out was removed) so LinePath renders
+    // at the correct angle and length authored by ShapeGeometryBuilder.
     private static Control CreateDrawingShapeGeometryVisual(
         DrawingShapeKind? shapeKind,
         IBrush fill,
-        IBrush stroke,
+        IBrush? stroke,
+        double strokeThickness,
+        double[]? dashArray,
         double w,
         double h)
     {
         if (shapeKind is { } kind &&
             AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, w, h) is { } geometry)
         {
-            return new global::Avalonia.Controls.Shapes.Path
+            var path = new global::Avalonia.Controls.Shapes.Path
             {
                 Data = geometry,
                 // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
@@ -4540,20 +4659,26 @@ public sealed partial class MainWindow : Window
                 Height = h,
                 Fill = fill,
                 Stroke = stroke,
-                StrokeThickness = 1.5,
+                StrokeThickness = strokeThickness,
                 IsHitTestVisible = false,
             };
+            if (dashArray is not null)
+                path.StrokeDashArray = new AvaloniaList<double>(dashArray);
+            return path;
         }
 
-        return new AvaloniaRectangle
+        var rect = new AvaloniaRectangle
         {
             Width = w,
             Height = h,
             Fill = fill,
             Stroke = stroke,
-            StrokeThickness = 1.5,
+            StrokeThickness = strokeThickness,
             IsHitTestVisible = false,
         };
+        if (dashArray is not null)
+            rect.StrokeDashArray = new AvaloniaList<double>(dashArray);
+        return rect;
     }
 
     // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)
@@ -4585,15 +4710,6 @@ public sealed partial class MainWindow : Window
             Opacity = effect.Opacity,
         };
     }
-
-    private static Border CreateDrawingLineVisual(IBrush stroke, double width) =>
-        new()
-        {
-            Width = Math.Max(1, width),
-            Height = 2,
-            Background = stroke,
-            IsHitTestVisible = false,
-        };
 
     private static Control CreateDrawingImageVisual(
         DrawingObjectRenderPlan renderPlan,
@@ -5854,9 +5970,17 @@ public sealed partial class MainWindow : Window
                 cellHeight: cellHeight);
 
         var style = cell.Style;
-        var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor
-            ? Brush(fillColor)
-            : Brushes.White;
+        IBrush background;
+        if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
+            background = gradientBrush;
+        else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
+            background = Brush(fillColor);
+        else
+            background = Brushes.White;
+
+        // Pattern fills (Gray0625…DarkTrellis) layer on top of the solid/gradient background.
+        var patternBrush = CellPatternFill.Build(style, _session.Workbook.Theme);
+
         var foreground = style is null
             ? Brushes.Black
             : Brush(style.ResolveFontColor(_session.Workbook.Theme));
@@ -5910,7 +6034,8 @@ public sealed partial class MainWindow : Window
             isNumeric,
             dataBar,
             icon,
-            sparklineLayer);
+            sparklineLayer,
+            patternBrush: patternBrush);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -5937,7 +6062,8 @@ public sealed partial class MainWindow : Window
         bool isNumeric = false,
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
-        Control? sparklineLayer = null)
+        Control? sparklineLayer = null,
+        IBrush? patternBrush = null)
     {
         var border = CreateCellBorder(
             text,
@@ -5963,7 +6089,8 @@ public sealed partial class MainWindow : Window
             isNumeric,
             conditionalDataBar,
             conditionalIcon,
-            sparklineLayer);
+            sparklineLayer,
+            patternBrush: patternBrush);
         if (address == _session.SelectedRange.End)
             AddAutofillHandleAdorner(border, zoomFactor);
 
@@ -6673,28 +6800,49 @@ public sealed partial class MainWindow : Window
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
-        double horizontalPadding = 8)
+        double horizontalPadding = 8,
+        IBrush? patternBrush = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
         var scaledFontSize = Math.Max(1, fontSize * zoomFactor);
         var scaledHorizontalPadding = horizontalPadding * zoomFactor;
         var scaledIndentPadding = indentPadding * zoomFactor;
+
+        // Cell-level super/subscript: shrink font and shift baseline vertically.
+        CellSuperSubScript.Resolve(style, scaledFontSize, out var adjustedFontSize, out var superSubOffsetDip);
+
+        // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
+        // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
+        // so the text reaches the cell edge regardless of proportional font widths.
+        var isFillAlign = horizontalAlignment == CellHAlign.Fill;
+        if (isFillAlign && effectiveText.Length > 0 && cellWidth > 0)
+        {
+            var approxCharWidth = adjustedFontSize * 0.6 * zoomFactor;
+            var approxTextWidth = effectiveText.Length * approxCharWidth;
+            if (approxTextWidth < cellWidth)
+            {
+                var repeatCount = (int)Math.Ceiling(cellWidth / approxTextWidth) + 1;
+                effectiveText = string.Concat(Enumerable.Repeat(effectiveText, repeatCount));
+            }
+        }
+
+        var textMarginTop = superSubOffsetDip;  // negative = up (superscript), positive = down (subscript)
         var textBlock = new TextBlock
         {
             Text = effectiveText,
-            FontSize = scaledFontSize,
+            FontSize = adjustedFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             TextDecorations = textDecorations,
             Foreground = foreground,
-            TextAlignment = textRotation == 255 ? TextAlignment.Center : textAlignment,
-            TextWrapping = effectiveTextWrapping,
-            TextTrimming = effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255
+            TextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment,
+            TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
+            TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)
                 ? TextTrimming.None
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
-            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),
+            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
         };
 
         var content = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)
@@ -6709,7 +6857,7 @@ public sealed partial class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style)
-            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer);
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush);
 
         return new Border
         {
@@ -6732,7 +6880,8 @@ public sealed partial class MainWindow : Window
         CfIconRenderInstruction? conditionalIcon = null,
         double zoomFactor = 1,
         double scaledIndentPadding = 0,
-        Control? sparklineLayer = null)
+        Control? sparklineLayer = null,
+        IBrush? patternBrush = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
 
@@ -6744,6 +6893,12 @@ public sealed partial class MainWindow : Window
         // Data bars render behind the text; add them first so they sit at the bottom of the z-order.
         if (conditionalDataBar is { } bar)
             content.Children.Add(CreateConditionalDataBarLayer(bar, zoomFactor));
+
+        // Pattern fill overlay: rendered on top of the Border background (solid/gradient) but below
+        // the cell text.  A full-cell Rectangle with a DrawingBrush or semi-transparent SolidBrush
+        // produces the hatch/dot pattern.  Mirrors WPF DrawFillPattern compositing order.
+        if (patternBrush is not null)
+            content.Children.Add(new AvaloniaRectangle { Fill = patternBrush });
 
         // Icon-set glyphs occupy a left gutter and push the cell text right by the gutter width.
         if (conditionalIcon is { } icon)

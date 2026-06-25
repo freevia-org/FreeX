@@ -142,7 +142,21 @@ public sealed record DrawingObjectBounds(
     uint SourceRowCount = 0,
     uint SourceColumnCount = 0,
     IReadOnlyList<PictureCellSnapshot> PictureCells = null!,
-    DrawingObjectEffect? Effect = null);
+    DrawingObjectEffect? Effect = null,
+    // Shape outline — populated only for shapes; defaults preserve the legacy 1.5 px solid stroke.
+    double OutlineWidthPoints = 0,
+    DrawingShapeOutlineDash OutlineDash = DrawingShapeOutlineDash.Solid,
+    bool OutlineHasNoFill = false,
+    // Shape text — populated only for shapes that carry authored text.
+    string? ShapeText = null,
+    double ShapeTextFontSizePoints = 0,
+    bool ShapeTextBold = false,
+    bool ShapeTextItalic = false,
+    bool ShapeTextUnderline = false,
+    CellColor? ShapeTextColor = null,
+    DrawingShapeTextHAlign ShapeTextHAlign = DrawingShapeTextHAlign.Left,
+    DrawingShapeTextVAnchor ShapeTextVAnchor = DrawingShapeTextVAnchor.Middle,
+    bool ShapeTextWrap = true);
 
 /// <summary>
 /// Render-plan projection of a drawing object's authored visual effect (shadow / glow /

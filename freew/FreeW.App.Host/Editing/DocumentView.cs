@@ -5886,14 +5886,17 @@ public sealed class DocumentView : RichTextBox
                     {
                         cellShading = null;
                     }
+                    var cellTag = wpfCell.Tag as TableCellTag;
                     var cell = new ModelTableCell
                     {
                         ShadingColorHex = cellShading,
                         GridSpan = span,
-                        // Recover per-cell borders and text direction from the stashed Tag (the WPF
-                        // FlowDocument has no representation for these; they survive only via the Tag).
-                        Borders = (wpfCell.Tag as TableCellTag)?.Borders,
-                        TextDirection = (wpfCell.Tag as TableCellTag)?.TextDirection ?? CellTextDirection.Horizontal
+                        // Recover per-cell borders, text direction and vertical alignment from the stashed
+                        // Tag (WPF FlowDocument has no native representation for any of these; they survive
+                        // the view→model round-trip only via the Tag).
+                        Borders = cellTag?.Borders,
+                        TextDirection = cellTag?.TextDirection ?? CellTextDirection.Horizontal,
+                        VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
@@ -5988,7 +5991,8 @@ public sealed class DocumentView : RichTextBox
     private sealed record TableCellTag(
         string? ShadingColorHex,
         CellBorders? Borders = null,
-        CellTextDirection TextDirection = CellTextDirection.Horizontal);
+        CellTextDirection TextDirection = CellTextDirection.Horizontal,
+        TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -6043,6 +6047,15 @@ public sealed class DocumentView : RichTextBox
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
             var isBandedRow = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow();
+            // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
+            // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
+            // height-enforcer into every non-Continue cell: a BlockUIContainer holding a Border whose
+            // MinHeight matches the requested row height. For both AtLeast and Exact rules, MinHeight is
+            // the closest WPF mapping. Exact cannot clip cell content (content overflows rather than being
+            // clipped) — that is a documented WPF FlowDocument limitation.
+            var rowHeightPx = modelRow.HeightPt is { } heightPt && heightPt > 0
+                ? (double?)(heightPt * PxPerPoint)
+                : null;
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
@@ -6077,11 +6090,13 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
-                // Stash the model's author-set shading, per-cell borders and text direction on the cell
-                // Tag so ReadTable can recover them on commit. A colour-equality heuristic alone can't
-                // distinguish author shading from style fills; borders and text direction have no WPF
-                // equivalent, so they are recovered verbatim from the stashed Tag.
-                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders, modelCell.TextDirection);
+                // Stash the model's author-set shading, per-cell borders, text direction and vertical
+                // alignment on the cell Tag so ReadTable can recover them on commit. A colour-equality
+                // heuristic alone can't distinguish author shading from style fills; borders, text
+                // direction and vertical alignment have no WPF FlowDocument equivalent, so they survive
+                // only through the stashed Tag.
+                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
+                    modelCell.TextDirection, modelCell.VerticalAlignment);
 
                 // Per-cell border override: when the cell carries its own explicit borders, apply them to
                 // the WPF cell individually so they override the table-level border brush. The WPF
@@ -6122,6 +6137,15 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.Background = new SolidColorBrush(BandedRowFill);
                 if (cellBold)
                     wpfCell.FontWeight = FontWeights.Bold;
+                // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
+                // everything in a BlockUIContainer so we can position the content via WPF layout. WPF
+                // FlowDocument's TableCell has no VerticalAlignment property, so the Grid wrapper is the
+                // closest faithful mapping: it stretches to fill the cell height (given by MinHeight) and
+                // positions the inner content at the requested vertical position. Top is rendered as plain
+                // Paragraph blocks (the default FlowDocument path) for editing efficiency; Center and
+                // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
+                // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
+                var vAlign = modelCell.VerticalAlignment;
                 if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
                     // Rotated cell: wrap all paragraphs in a StackPanel with a LayoutTransform so the
@@ -6153,6 +6177,43 @@ public sealed class DocumentView : RichTextBox
                     }
                     wpfCell.Blocks.Add(new BlockUIContainer(stack));
                 }
+                else if (vAlign != TableCellVerticalAlignment.Top)
+                {
+                    // Center or Bottom vertical alignment: wrap all paragraphs in a Grid that stretches
+                    // to fill the row height and positions the inner StackPanel accordingly. The Grid's
+                    // own VerticalAlignment=Stretch (the WPF default) fills the cell; the StackPanel's
+                    // VerticalAlignment positions the content block within the cell.
+                    var wpfVAlign = vAlign == TableCellVerticalAlignment.Center
+                        ? VerticalAlignment.Center
+                        : VerticalAlignment.Bottom;
+                    var contentStack = new System.Windows.Controls.StackPanel
+                    {
+                        VerticalAlignment = wpfVAlign
+                    };
+                    var cellParas = modelCell.Paragraphs.Count > 0
+                        ? modelCell.Paragraphs
+                        : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
+                    foreach (var cellParagraph in cellParas)
+                    {
+                        var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
+                        var nestedRtb = new System.Windows.Controls.RichTextBox
+                        {
+                            Document = new System.Windows.Documents.FlowDocument(paraBlock),
+                            IsReadOnly = true,
+                            BorderThickness = new Thickness(0),
+                            Padding = new Thickness(0),
+                            Background = System.Windows.Media.Brushes.Transparent
+                        };
+                        contentStack.Children.Add(nestedRtb);
+                    }
+                    var grid = new System.Windows.Controls.Grid();
+                    grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition
+                    {
+                        Height = new GridLength(1, GridUnitType.Star)
+                    });
+                    grid.Children.Add(contentStack);
+                    wpfCell.Blocks.Add(new BlockUIContainer(grid));
+                }
                 else if (modelCell.Paragraphs.Count == 0)
                 {
                     wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document, inTableCell: true));
@@ -6161,6 +6222,17 @@ public sealed class DocumentView : RichTextBox
                 {
                     foreach (var cellParagraph in modelCell.Paragraphs)
                         wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document, inTableCell: true));
+                }
+                // Row height enforcement: inject a zero-width Border spacer as the first block in the
+                // cell so WPF is forced to allocate at least the requested height. WPF TableRow is a
+                // TextElement, not a FrameworkElement, so it has no MinHeight property of its own.
+                // Placing the spacer in every cell in the row ensures the tallest-cell measurement
+                // (which drives the row) respects the minimum. The Border has zero Padding and is
+                // not visible; it simply prevents the row from collapsing below the authored height.
+                if (rowHeightPx is { } minH && modelCell.VerticalMerge != VerticalMergeState.Continue)
+                {
+                    var spacer = new System.Windows.Controls.Border { MinHeight = minH };
+                    wpfCell.Blocks.Add(new BlockUIContainer(spacer));
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;
@@ -6204,11 +6276,16 @@ public sealed class DocumentView : RichTextBox
         return null;
     }
 
-    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) is shaded.</summary>
+    /// <summary>
+    /// Returns true for the body rows that should receive the banded fill (1st, 3rd, 5th, …).
+    /// Word's convention is that Band 1 = the FIRST data row (bodyIndex 0), so even bodyIndexes
+    /// are banded. Both <see cref="BuildTable"/> and <see cref="ReadTable"/> must use the same
+    /// rule so the colour-equality heuristic in ReadTable recognises the same rows as banded.
+    /// </summary>
     private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
     {
         var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
-        return bodyIndex >= 0 && bodyIndex % 2 == 1;
+        return bodyIndex >= 0 && bodyIndex % 2 == 0;
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)
@@ -6332,8 +6409,47 @@ public sealed class DocumentView : RichTextBox
                 paraFmt.SuppressAutoHyphens,
                 paragraph.SectionBreak);
 
-        foreach (var run in paragraph.Runs)
-            wpf.Inlines.Add(BuildRun(run, paragraph, document));
+        // Drop-cap detection: the first text run whose FontSizePt is at or above the drop-cap
+        // threshold (42 pt by default) is treated as a drop cap. WPF's Floater (inline-level
+        // float) is used to sink the large letter into the left margin so subsequent inline
+        // content wraps to its right — the standard FlowDocument drop-cap pattern.
+        // Limitation: the Floater reserves a column-width proportional to its content; pixel-
+        // perfect N-line depth matching Word's exact line wrapping is not achievable without a
+        // custom panel, but the visual result is correct (letter is dropped and body wraps).
+        var runs = paragraph.Runs;
+        var firstTextIdx = runs.FindIndex(r => r.Text.Length > 0);
+        var hasDropCap = !inTableCell
+            && firstTextIdx >= 0
+            && (runs[firstTextIdx].Formatting.FontSizePt ?? 0) >= DropCap.DefaultSizePt
+            && runs.Count > firstTextIdx + 1;
+
+        if (hasDropCap)
+        {
+            // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
+            for (var i = 0; i < firstTextIdx; i++)
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+
+            // Build the cap run and host it in a Floater so body text wraps around it.
+            var capInline = BuildRun(runs[firstTextIdx], paragraph, document);
+            var capPara = new WpfParagraph(capInline) { Margin = new Thickness(0, 0, 4, 0) };
+            var floater = new System.Windows.Documents.Floater(capPara)
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+                // Width is sized to the cap's em: FontSizePt * PxPerPoint * 1.1 gives a little
+                // breathing room. NaN lets WPF size it to the content, which works correctly.
+                Width = double.NaN,
+            };
+            wpf.Inlines.Add(floater);
+
+            // Emit the remaining runs after the cap.
+            for (var i = firstTextIdx + 1; i < runs.Count; i++)
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+        }
+        else
+        {
+            foreach (var run in runs)
+                wpf.Inlines.Add(BuildRun(run, paragraph, document));
+        }
 
         return wpf;
     }
@@ -7771,8 +7887,11 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Build a StackPanel containing the image element on top and a vertically-flipped semi-transparent
-    /// reflection copy below it (separated by <paramref name="distPx"/> pixels).
+    /// Build a StackPanel containing the image element on top and a vertically-flipped fading
+    /// reflection copy below it (separated by <paramref name="distPx"/> pixels). The reflection
+    /// fades from opaque near the object to fully transparent at the bottom, matching Word's look,
+    /// via a vertical <see cref="System.Windows.Media.LinearGradientBrush"/> applied as an
+    /// <see cref="System.Windows.UIElement.OpacityMask"/>.
     /// </summary>
     private static System.Windows.Controls.StackPanel BuildReflectionContainer(
         FrameworkElement imageRoot, double widthPx, double heightPx,
@@ -7789,14 +7908,25 @@ public sealed class DocumentView : RichTextBox
             AlignmentY = System.Windows.Media.AlignmentY.Top
         };
 
+        // Fade gradient: opaque at the top of the reflection (near the image) → transparent at
+        // the bottom. Applied as an OpacityMask so the reflection fades rather than sitting at
+        // a flat half-opacity — this matches Word's "reflection" visual appearance.
+        var fadeMask = new System.Windows.Media.LinearGradientBrush(
+            new System.Windows.Media.GradientStopCollection
+            {
+                new(Color.FromArgb((byte)(reflOpacity * 255), 0, 0, 0), 0.0),
+                new(Color.FromArgb(0, 0, 0, 0), 1.0),
+            },
+            new System.Windows.Point(0, 0), new System.Windows.Point(0, 1));
+
         var reflRect = new System.Windows.Shapes.Rectangle
         {
             Width  = totalW,
             Height = totalH,
             Fill   = vBrush,
-            Opacity = reflOpacity,
-            // Vertical flip via RenderTransform.
+            // Vertical flip via RenderTransform; Opacity removed — the OpacityMask handles fade.
             RenderTransform = new System.Windows.Media.ScaleTransform(1, -1, totalW / 2, totalH / 2),
+            OpacityMask = fadeMask,
             Margin = new Thickness(0, distPx, 0, 0)
         };
 
@@ -8210,27 +8340,131 @@ public sealed class DocumentView : RichTextBox
         return brush;
     }
 
-    /// <summary>Renders a pattern fill as a hatched DrawingBrush (best-effort; only "diagCross" patterned distinctly).</summary>
+    /// <summary>
+    /// Renders a DrawingML preset pattern fill as a tiled <see cref="System.Windows.Media.DrawingBrush"/>.
+    /// Each distinct preset group (horizontal, vertical, diagonal, cross, dot, etc.) maps to a visually
+    /// distinct tile so patterns are distinguishable from each other and from solid fills. The previous
+    /// implementation used a single diagCross tile for all presets.
+    /// </summary>
     private static System.Windows.Media.DrawingBrush BuildPatternBrush(ShapeFill fill)
     {
         TryParseColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
         TryParseColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
-        // Simple cross-hatch tile regardless of exact preset — renders distinctly from solid fills.
-        var drawing = new System.Windows.Media.DrawingGroup();
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(
-            new SolidColorBrush(bg), null,
-            new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, 8, 8))));
-        var linePen = new System.Windows.Media.Pen(new SolidColorBrush(fg), 1);
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
-            new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
-            new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
-        return new System.Windows.Media.DrawingBrush(drawing)
+
+        var preset = fill.PatternPreset ?? string.Empty;
+        var fgBrush = new SolidColorBrush(fg);
+        var pen = new System.Windows.Media.Pen(fgBrush, 1);
+
+        // Build a tile drawing based on the preset family.
+        // Tile is 8×8 device-independent pixels; complex patterns use 12×12.
+        System.Windows.Media.Drawing tile;
+
+        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
         {
-            TileMode   = System.Windows.Media.TileMode.Tile,
-            Viewport   = new System.Windows.Rect(0, 0, 8, 8),
+            // Horizontal lines
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
+            tile = g;
+        }
+        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
+        {
+            // Vertical lines
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
+            tile = g;
+        }
+        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
+        {
+            // Diagonal top-left to bottom-right
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
+            tile = g;
+        }
+        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
+        {
+            // Diagonal bottom-left to top-right
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 8), new System.Windows.Point(8, 0))));
+            tile = g;
+        }
+        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
+        {
+            // Cross (horizontal + vertical grid)
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
+            tile = g;
+        }
+        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "pct90")
+        {
+            // Dotted / dot grid — single dot per cell
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(fgBrush, null,
+                new System.Windows.Media.EllipseGeometry(new System.Windows.Point(4, 4), 1, 1)));
+            tile = g;
+        }
+        else if (preset is "horzBrick" or "divot" or "weave")
+        {
+            // Brick — alternating horizontal dashes
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 12, 8));
+            var thinPen = new System.Windows.Media.Pen(fgBrush, 0.5);
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(12, 0))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 4), new System.Windows.Point(12, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(3, 4))));
+            // Vertical grout lines at offsets
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 0), new System.Windows.Point(6, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(0, 8))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(12, 4), new System.Windows.Point(12, 8))));
+            tile = g;
+            // 12-wide tile — return early with custom viewport
+            return new System.Windows.Media.DrawingBrush(tile)
+            {
+                TileMode      = System.Windows.Media.TileMode.Tile,
+                Viewport      = new System.Windows.Rect(0, 0, 12, 8),
+                ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
+            };
+        }
+        else
+        {
+            // Default / diagCross — covers "diagCross", "ltDiagCross", "dkDiagCross", and unknowns.
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
+            tile = g;
+        }
+
+        return new System.Windows.Media.DrawingBrush(tile)
+        {
+            TileMode      = System.Windows.Media.TileMode.Tile,
+            Viewport      = new System.Windows.Rect(0, 0, 8, 8),
             ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
         };
+
+        static System.Windows.Media.GeometryDrawing BgRect(Color c, double w, double h) =>
+            new(new SolidColorBrush(c), null,
+                new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, w, h)));
     }
 
     /// <summary>
@@ -8317,7 +8551,16 @@ public sealed class DocumentView : RichTextBox
                                                  new(Color.FromRgb(0xC0, 0x00, 0x00), 0.5),
                                                  new(Color.FromRgb(0x70, 0x30, 0xA0), 1),
                                              }, 90), null),
-            WordArtStyle.ChromeOne   => (System.Windows.Media.Brushes.Transparent, null),
+            // ChromeOne: Word renders a metallic silver-to-white gradient. Brushes.Transparent
+            // produced a zero-height invisible TextBlock; use a visible chrome gradient instead.
+            WordArtStyle.ChromeOne   => (new System.Windows.Media.LinearGradientBrush(
+                                            new System.Windows.Media.GradientStopCollection
+                                            {
+                                                new(Color.FromRgb(0xC0, 0xC0, 0xC0), 0),
+                                                new(Color.FromRgb(0xFF, 0xFF, 0xFF), 0.35),
+                                                new(Color.FromRgb(0xA0, 0xA8, 0xB0), 0.65),
+                                                new(Color.FromRgb(0xE8, 0xE8, 0xE8), 1),
+                                            }, 90), null),
             WordArtStyle.ChromeTwo   => (System.Windows.Media.Brushes.White,
                                             Shadow(Color.FromRgb(0x1F, 0x4E, 0x79))),
             WordArtStyle.ShadowOrange=> (new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
@@ -8364,13 +8607,16 @@ public sealed class DocumentView : RichTextBox
         bool PlotAreaFill,
         bool ShowMarkers,
         bool ShowDataLabels,
+        bool ShowAxisTitles,
         Color[] Palette);
 
     /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
     private static ChartRenderSettings ResolveChartRenderSettings(Chart chart)
     {
-        // Color scheme → palette
-        var scheme = (chart.ColorSchemeId is not null ? ChartColorScheme.FindById(chart.ColorSchemeId) : null)
+        // Color scheme → palette.
+        // Trim the id before lookup so trailing whitespace from XML parsing never causes a miss.
+        var schemeId = chart.ColorSchemeId?.Trim();
+        var scheme = (!string.IsNullOrEmpty(schemeId) ? ChartColorScheme.FindById(schemeId) : null)
                      ?? ChartColorScheme.Default;
         var palette = scheme.Colors.Select(hex => ParseHexColor(hex)).ToArray();
 
@@ -8379,7 +8625,7 @@ public sealed class DocumentView : RichTextBox
                     ?? ChartStyle.Default;
 
         // Quick layout → element visibility (overrides model toggles when set)
-        bool showTitle, showLegend;
+        bool showTitle, showLegend, showAxisTitles;
         bool showGridlines = style.ShowGridlines;
         bool showDataLabels = style.ShowDataLabels;
         if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
@@ -8388,11 +8634,15 @@ public sealed class DocumentView : RichTextBox
             showLegend = ql.ShowLegend && chart.Series.Count > 0;
             showGridlines = ql.ShowGridlines;
             showDataLabels = ql.ShowDataLabels;
+            showAxisTitles = ql.ShowAxisTitles;
         }
         else
         {
             showTitle = !string.IsNullOrEmpty(chart.Title);
             showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
+            // Show axis titles whenever the chart model carries them (regardless of quick layout).
+            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle)
+                          || !string.IsNullOrEmpty(chart.ValueAxisTitle);
         }
 
         return new ChartRenderSettings(
@@ -8402,6 +8652,7 @@ public sealed class DocumentView : RichTextBox
             PlotAreaFill: style.PlotAreaFill,
             ShowMarkers: style.ShowMarkers,
             ShowDataLabels: showDataLabels,
+            ShowAxisTitles: showAxisTitles,
             Palette: palette);
     }
 
@@ -8452,6 +8703,38 @@ public sealed class DocumentView : RichTextBox
             ? new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3))
             : System.Windows.Media.Brushes.Transparent;
 
+        // Axis titles (for non-pie charts): value-axis title on the left (rotated), category-axis title at the bottom.
+        // These are added to the root DockPanel before the plot so they dock outside the plot area.
+        var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var showAxisTitles = !isPie && settings.ShowAxisTitles;
+        if (showAxisTitles && !string.IsNullOrEmpty(chart.ValueAxisTitle))
+        {
+            var valueLabel = new TextBlock
+            {
+                Text = chart.ValueAxisTitle,
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                LayoutTransform = new RotateTransform(-90)
+            };
+            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2) };
+            DockPanel.SetDock(valueHost, Dock.Left);
+            root.Children.Add(valueHost);
+        }
+        if (showAxisTitles && !string.IsNullOrEmpty(chart.CategoryAxisTitle))
+        {
+            var catLabel = new TextBlock
+            {
+                Text = chart.CategoryAxisTitle,
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            DockPanel.SetDock(catLabel, Dock.Bottom);
+            root.Children.Add(catLabel);
+        }
+
         var plot = new Canvas { Width = plotW, Height = plotH, Background = plotBg };
         switch (chart.Kind)
         {
@@ -8461,8 +8744,10 @@ public sealed class DocumentView : RichTextBox
                 break;
             case ChartKind.Line:
             case ChartKind.Area:
-            case ChartKind.Scatter:
                 DrawLineChart(plot, chart, plotW, plotH, settings: settings);
+                break;
+            case ChartKind.Scatter:
+                DrawScatterChart(plot, chart, plotW, plotH, settings: settings);
                 break;
             case ChartKind.Bar:
                 DrawBarChart(plot, chart, plotW, plotH, horizontal: true, settings: settings);
@@ -8694,6 +8979,82 @@ public sealed class DocumentView : RichTextBox
 
         for (var c = 0; c < cats; c++)
             AddCategoryLabel(plot, chart, c, X(c) - (w / cats) / 2, plotH + 1, w / cats, System.Windows.TextAlignment.Center);
+    }
+
+    /// <summary>
+    /// XY scatter chart: discrete point markers at each (x, y) coordinate with NO connecting line.
+    /// X values come from <see cref="Chart.Categories"/> (parsed as numbers; index used as fallback).
+    /// Each series gets distinct coloured markers (Ellipse). Data labels are placed to the upper-right.
+    /// </summary>
+    private static void DrawScatterChart(Canvas plot, Chart chart, double w, double h, ChartRenderSettings settings)
+    {
+        if (chart.Series.Count == 0)
+            return;
+
+        const double labelStrip = 14;
+        var plotH = Math.Max(8, h - labelStrip);
+        if (settings.ShowGridlines)
+            DrawChartGridlines(plot, plotH, w);
+        plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+
+        // Determine X range from categories (numeric) or fall back to 1..N.
+        var xVals = chart.Categories
+            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
+                                         System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
+            .ToList();
+        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
+        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
+        if (xMax <= xMin) xMax = xMin + 1;
+
+        var yMax = chart.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max();
+        yMax = Math.Max(1.0, yMax);
+
+        double Px(int c)
+        {
+            var xv = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
+            return (xv - xMin) / (xMax - xMin) * w;
+        }
+        double Py(double val) => plotH - plotH * (Math.Max(0, val) / yMax);
+
+        const double markerR = 4; // radius in pixels
+
+        for (var s = 0; s < chart.Series.Count; s++)
+        {
+            var vals = chart.Series[s].Values;
+            var color = new SolidColorBrush(settings.Palette[s % settings.Palette.Length]);
+
+            for (var c = 0; c < vals.Count; c++)
+            {
+                var px = Px(c);
+                var py = Py(vals[c]);
+
+                // Filled circle marker — no connecting line.
+                var dot = new System.Windows.Shapes.Ellipse
+                {
+                    Width = markerR * 2,
+                    Height = markerR * 2,
+                    Fill = color,
+                    Stroke = System.Windows.Media.Brushes.White,
+                    StrokeThickness = 0.5
+                };
+                Canvas.SetLeft(dot, px - markerR);
+                Canvas.SetTop(dot, py - markerR);
+                plot.Children.Add(dot);
+
+                if (settings.ShowDataLabels)
+                    AddDataLabel(plot, vals[c], px + markerR + 2, py - 10);
+            }
+        }
+
+        // X-axis category labels at bottom.
+        for (var c = 0; c < chart.Categories.Count; c++)
+        {
+            if (string.IsNullOrEmpty(chart.Categories[c]))
+                continue;
+            var px = Px(c);
+            var catW = w / Math.Max(1, chart.Categories.Count);
+            AddCategoryLabel(plot, chart, c, px - catW / 2, plotH + 1, catW, System.Windows.TextAlignment.Center);
+        }
     }
 
     /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>

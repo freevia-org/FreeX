@@ -138,9 +138,14 @@ internal static class WpfTestWarmUp
     /// </summary>
     internal static void EnsureReady()
     {
-        if (!_ready.Wait(TimeSpan.FromSeconds(60)))
+        // 180 s, not 60 s: the cold WinRT spell-checker COM init can take well over a minute on a
+        // heavily-loaded / contended machine (many concurrent build+test processes). The keeper
+        // thread is not deadlocked in that case, just slow — a too-tight timeout fails only the
+        // first test of the run while the keeper finishes initialising for the rest. The generous
+        // bound keeps a genuine deadlock detectable without flaking healthy-but-slow cold starts.
+        if (!_ready.Wait(TimeSpan.FromSeconds(180)))
             throw new TimeoutException(
-                "WpfTestWarmUp: timed out (60 s) waiting for the WPF keeper thread to initialise. " +
+                "WpfTestWarmUp: timed out (180 s) waiting for the WPF keeper thread to initialise. " +
                 "The DocumentView construction or WinRT spell-checker warm-up may be deadlocked.");
 
         if (_warmUpException is not null)

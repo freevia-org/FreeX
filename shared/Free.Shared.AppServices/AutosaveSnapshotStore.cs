@@ -194,6 +194,57 @@ public sealed class AutosaveSnapshotStore
     }
 
     /// <summary>
+    /// Moves a recovery snapshot + sidecar aside into a <c>Quarantine</c> subfolder of the recovery
+    /// directory, so a structurally-corrupt snapshot (e.g. a truncated ZIP from a crashed write) is
+    /// NOT re-offered on every launch — which otherwise produces an endless "Could not recover the
+    /// document" loop. The bytes are preserved (moved, not deleted) for diagnostics. Best-effort: if
+    /// the move fails the snapshot is deleted instead so the loop still ends. Ignores errors.
+    /// </summary>
+    public static void QuarantineCandidate(AutosaveRecoveryCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        var dir = Path.GetDirectoryName(candidate.SnapshotPath);
+        if (string.IsNullOrEmpty(dir))
+        {
+            DeleteCandidate(candidate);
+            return;
+        }
+
+        string? quarantine = null;
+        try
+        {
+            quarantine = Path.Combine(dir, "Quarantine");
+            Directory.CreateDirectory(quarantine);
+        }
+        catch { /* fall back to delete below */ }
+
+        MoveAsideOrDelete(candidate.SnapshotPath, quarantine);
+        MoveAsideOrDelete(candidate.SidecarPath, quarantine);
+    }
+
+    private static void MoveAsideOrDelete(string path, string? quarantineDir)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return;
+            if (quarantineDir is not null)
+            {
+                var dest = Path.Combine(quarantineDir, Path.GetFileName(path));
+                if (File.Exists(dest))
+                    dest = Path.Combine(quarantineDir,
+                        Path.GetFileNameWithoutExtension(path) + "." + LaunchId.ToString("N")[..8] + Path.GetExtension(path));
+                File.Move(path, dest);
+                return;
+            }
+        }
+        catch { /* fall through to delete */ }
+
+        try { File.Delete(path); } catch { /* best-effort */ }
+    }
+
+    /// <summary>
     /// Deletes the snapshot and sidecar for a specific session ID. Ignores errors (best-effort cleanup).
     /// </summary>
     public void DeleteSnapshot(string snapshotId)
