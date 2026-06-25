@@ -67,6 +67,8 @@ internal static class CorpusGenerator
                 ("04-picture",      GeneratePicture),
                 ("05-table",        GenerateTable),
                 ("06-charts",       GenerateCharts),
+                ("07-customgeom",   GenerateCustomGeom),
+                ("08-effects",      GenerateEffects),
             };
 
             var errors = 0;
@@ -760,6 +762,140 @@ internal static class CorpusGenerator
         };
 
         return ((byte)(r * 255), (byte)(g * 255), (byte)(b * 255));
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 07: Custom geometry — freeform triangle + curved arrow via freeform
+    // -----------------------------------------------------------------------
+    private static void GenerateCustomGeom(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Freeform #1: isosceles triangle (3 vertices)
+            // BuildFreeform(msoEditingAuto, startX, startY)
+            dynamic ff1 = slide.Shapes.BuildFreeform(0 /*msoEditingAuto*/, 100f, 280f);
+            ff1.AddNodes(0 /*msoSegmentLine*/, 0 /*msoEditingAuto*/, 190f, 80f);
+            ff1.AddNodes(0, 0, 280f, 280f);
+            dynamic shape1 = ff1.ConvertToShape();
+            shape1.Name = "Triangle";
+            shape1.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
+            shape1.Fill.Solid();
+            shape1.Line.Weight = 2.0f;
+            shape1.Line.ForeColor.ObjectThemeColor = 1; // Dark1
+
+            // Freeform #2: simple curved arrow path with cubicBezTo equivalent via smooth nodes
+            dynamic ff2 = slide.Shapes.BuildFreeform(0, 400f, 200f);
+            ff2.AddNodes(1 /*msoSegmentCurve*/, 1 /*msoEditingSmooth*/, 460f, 100f);
+            ff2.AddNodes(1, 1, 560f, 300f);
+            ff2.AddNodes(1, 1, 620f, 200f);
+            dynamic shape2 = ff2.ConvertToShape();
+            shape2.Name = "CurvedLine";
+            shape2.Line.Weight = 3.0f;
+            shape2.Line.ForeColor.ObjectThemeColor = MsoThemeColorAccent3;
+            shape2.Fill.Visible = MsoFalse;
+
+            // Freeform #3: closed diamond
+            dynamic ff3 = slide.Shapes.BuildFreeform(0, 750f, 150f);
+            ff3.AddNodes(0, 0, 850f, 80f);
+            ff3.AddNodes(0, 0, 950f, 150f);
+            ff3.AddNodes(0, 0, 850f, 220f);
+            dynamic shape3 = ff3.ConvertToShape();
+            shape3.Name = "Diamond";
+            shape3.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent2;
+            shape3.Fill.Solid();
+            shape3.Line.Weight = 1.5f;
+
+            // Title label
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 10f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "Custom Geometry (a:custGeom): freeform paths";
+            tb.TextFrame.TextRange.Font.Size = 18;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 08: Shape effects — drop shadow + glow
+    // -----------------------------------------------------------------------
+    private static void GenerateEffects(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Shape 1: Rectangle with outer drop shadow
+            dynamic sh1 = slide.Shapes.AddShape(MsoShapeRectangle, 80f, 80f, 260f, 160f);
+            sh1.Name = "ShadowRect";
+            sh1.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
+            sh1.Fill.Solid();
+            sh1.TextFrame.TextRange.Text = "Outer Shadow";
+            sh1.TextFrame.TextRange.Font.Size = 16;
+            sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            // Apply outer shadow via ShadowFormat
+            try
+            {
+                sh1.Shadow.Visible  = MsoTrue;
+                sh1.Shadow.OffsetX  = 6f;
+                sh1.Shadow.OffsetY  = 6f;
+                sh1.Shadow.Blur     = 6f;
+                sh1.Shadow.ForeColor.RGB = 0x404040;
+                sh1.Shadow.Transparency = 0.4f;
+            }
+            catch { /* older PPTX shadow API may vary */ }
+
+            // Shape 2: Ellipse with glow
+            dynamic sh2 = slide.Shapes.AddShape(MsoShapeOval, 430f, 80f, 240f, 160f);
+            sh2.Name = "GlowEllipse";
+            sh2.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent3;
+            sh2.Fill.Solid();
+            sh2.TextFrame.TextRange.Text = "Glow";
+            sh2.TextFrame.TextRange.Font.Size = 16;
+            sh2.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh2.Glow.Radius = 12f;
+                sh2.Glow.Color.ObjectThemeColor = MsoThemeColorAccent3;
+                sh2.Glow.Transparency = 0.4f;
+            }
+            catch { /* glow API may vary */ }
+
+            // Shape 3: Rounded rectangle with both shadow + soft edges
+            dynamic sh3 = slide.Shapes.AddShape(MsoShapeRoundedRectangle, 720f, 80f, 200f, 160f);
+            sh3.Name = "SoftRect";
+            sh3.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent4;
+            sh3.Fill.Solid();
+            sh3.TextFrame.TextRange.Text = "Soft Edge";
+            sh3.TextFrame.TextRange.Font.Size = 16;
+            sh3.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh3.SoftEdge.Radius = 8f;
+            }
+            catch { /* soft edge API may vary */ }
+
+            // Title label
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 10f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "Shape Effects: outer shadow, glow, soft edge";
+            tb.TextFrame.TextRange.Font.Size = 18;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
     }
 
     // -----------------------------------------------------------------------
