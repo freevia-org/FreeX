@@ -266,6 +266,14 @@ public sealed class Slide
     /// </summary>
     public List<ShapeAnimation> Animations { get; } = new();
 
+    // ── Speaker notes ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The speaker-notes text body for this slide, or null if no notes have been set.
+    /// Corresponds to the body placeholder (p:ph type="body") in the ppt/notesSlides/notesSlideN.xml part.
+    /// </summary>
+    public TextBody? Notes { get; set; }
+
     // ── Legacy title accessor ─────────────────────────────────────────────────────
 
     /// <summary>

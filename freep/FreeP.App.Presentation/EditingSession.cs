@@ -420,6 +420,44 @@ public sealed class EditingSession
         }
     }
 
+    // ── Notes operations ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The speaker-notes text body for the current slide, or null if no notes have been set.
+    /// </summary>
+    public TextBody? CurrentSlideNotes => CurrentSlide?.Notes;
+
+    /// <summary>
+    /// Replaces the speaker notes on the current slide with a plain-text string.
+    /// Wraps the text in a single-paragraph, single-run TextBody. Pass null or empty to clear notes.
+    /// This operation is undoable.
+    /// </summary>
+    public void SetCurrentSlideNotesText(string? text)
+    {
+        if (CurrentSlide is null) return;
+
+        TextBody? body = null;
+        if (!string.IsNullOrEmpty(text))
+        {
+            body = new TextBody();
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(para);
+        }
+
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, body));
+    }
+
+    /// <summary>
+    /// Replaces the speaker notes on the current slide with a structured <see cref="TextBody"/>.
+    /// Pass null to clear notes. This operation is undoable.
+    /// </summary>
+    public void SetCurrentSlideNotes(TextBody? notes)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, notes));
+    }
+
     // ── Default shape factories (used by ribbon insert commands) ──────────────────
 
     /// <summary>

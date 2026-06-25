@@ -30,6 +30,7 @@ public static class PptxPackageReader
     private const string CorePropsRelType     = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -407,7 +408,62 @@ public static class PptxPackageReader
         if (timingEl is not null)
             ReadAnimations(timingEl, slide);
 
+        // Speaker notes — follow notesSlide relationship if present
+        var notesTarget = GetRelTarget(slideRels, NotesSlideRelType);
+        if (notesTarget is not null)
+        {
+            var notesPath = ResolvePath(GetDirectory(slidePath), notesTarget);
+            slide.Notes = ReadNotesSlide(archive, notesPath, scheme);
+        }
+
         return slide;
+    }
+
+    // ── Notes slide ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the body placeholder txBody from a ppt/notesSlides/notesSlideN.xml part.
+    /// Returns null when the part is missing or contains no body placeholder.
+    /// Tolerates slides with no notes by returning null without throwing.
+    /// </summary>
+    private static TextBody? ReadNotesSlide(ZipArchive archive, string notesPath, PresentationColorScheme scheme)
+    {
+        var xml = LoadXml(archive, notesPath);
+        if (xml?.Root is null) return null;
+
+        // p:notes/p:cSld/p:spTree contains shape elements.
+        // The body placeholder (p:ph type="body") holds the notes text.
+        var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
+        if (spTree is null) return null;
+
+        foreach (var spEl in spTree.Elements(P + "sp"))
+        {
+            var ph = spEl.Element(P + "nvSpPr")?.Element(P + "nvPr")?.Element(P + "ph");
+            if (ph is null) continue;
+
+            var phType = ph.Attribute("type")?.Value;
+            // body placeholder: type="body" or omitted (idx defaults to body placeholder when idx > 0 is absent)
+            // We match explicitly on "body" or absent-type with idx != 0 (slide-image is usually idx=0).
+            if (phType is null or "body")
+            {
+                // Skip the slide-image placeholder (idx="0" without type or type="sldImg").
+                var idxStr = ph.Attribute("idx")?.Value;
+                if (string.IsNullOrEmpty(idxStr) && phType is null) continue; // slide-image: no type, no idx or idx=0
+
+                var txBody = spEl.Element(P + "txBody");
+                if (txBody is null) continue;
+
+                var body = ReadTxBody(txBody, scheme);
+                // Only treat as notes if there is actual text (ignore fully empty bodies).
+                if (body.Paragraphs.Count == 0 ||
+                    body.Paragraphs.All(para => para.Runs.Count == 0 || para.Runs.All(r => string.IsNullOrEmpty(r.Text))))
+                    return null;
+
+                return body;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
