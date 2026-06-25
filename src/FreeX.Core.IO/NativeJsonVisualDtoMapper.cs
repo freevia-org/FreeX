@@ -181,7 +181,10 @@ internal static class NativeJsonVisualDtoMapper
         HasShadowEffect = shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.Shadow,
         EffectPreset = ValidEnumOrDefault(shape.GetEffectiveEffectPreset(), DrawingShapeEffectPreset.None),
         Title = shape.Title,
-        AltText = shape.AltText
+        AltText = shape.AltText,
+        OutlineWidthPoints = shape.OutlineWidthPoints,
+        OutlineHasNoFill = shape.OutlineHasNoFill,
+        OutlineDash = ValidEnumOrDefault(shape.OutlineDash, DrawingShapeOutlineDash.Solid)
     };
 
     public static bool IsDrawingShapeOnSheet(DrawingShapeModel shape, SheetId sheetId) =>
@@ -222,7 +225,10 @@ internal static class NativeJsonVisualDtoMapper
                 HasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow,
                 EffectPreset = effectPreset,
                 Title = shapeDto.Title,
-                AltText = shapeDto.AltText
+                AltText = shapeDto.AltText,
+                OutlineWidthPoints = shapeDto.OutlineWidthPoints,
+                OutlineHasNoFill = shapeDto.OutlineHasNoFill,
+                OutlineDash = ValidEnumOrDefault(shapeDto.OutlineDash, DrawingShapeOutlineDash.Solid)
             };
         }
         catch (FormatException)
@@ -356,6 +362,9 @@ internal class DrawingShapeDto
     public DrawingShapeEffectPreset EffectPreset { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
+    public double OutlineWidthPoints { get; set; }
+    public bool OutlineHasNoFill { get; set; }
+    public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
 }
 
 internal class ThemeColorReferenceDto

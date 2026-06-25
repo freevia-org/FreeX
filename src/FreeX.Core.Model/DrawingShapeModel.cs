@@ -66,6 +66,23 @@ public enum DrawingShapeGradientDirection
     DiagonalUp
 }
 
+/// <summary>
+/// Dash style for a shape outline, matching OOXML <c>&lt;a:prstDash val="..."/&gt;</c> presets.
+/// </summary>
+public enum DrawingShapeOutlineDash
+{
+    Solid = 0,
+    Dash = 1,
+    Dot = 2,
+    DashDot = 3,
+    LongDash = 4,
+    LongDashDot = 5,
+    LongDashDotDot = 6,
+    SystemDash = 7,
+    SystemDot = 8,
+    SystemDashDot = 9,
+}
+
 public sealed class DrawingShapeModel
 {
     public static readonly CellColor DefaultFillColor = new(0x5B, 0x9B, 0xD5);
@@ -108,6 +125,23 @@ public sealed class DrawingShapeModel
     public DrawingShapeEffectPreset EffectPreset { get; set; }
     public bool UsesThemeEffects { get; set; }
     public bool IsSourceLoaded { get; set; }
+
+    /// <summary>
+    /// Outline stroke width in points (1 pt = 12700 EMU).  Zero means "use the renderer default".
+    /// Null/negative is treated as zero.  Set from <c>&lt;a:ln w="..."/&gt;</c>.
+    /// </summary>
+    public double OutlineWidthPoints { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/> the outline element was present with <c>&lt;a:noFill/&gt;</c>
+    /// which means the shape explicitly has NO border, regardless of <see cref="OutlineColor"/>.
+    /// </summary>
+    public bool OutlineHasNoFill { get; set; }
+
+    /// <summary>
+    /// Dash style for the outline stroke, sourced from <c>&lt;a:prstDash val="..."/&gt;</c>.
+    /// </summary>
+    public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;

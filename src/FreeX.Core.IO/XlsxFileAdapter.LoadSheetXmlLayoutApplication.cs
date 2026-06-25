@@ -188,9 +188,13 @@ public sealed partial class XlsxFileAdapter
                 OutlineThemeColor = shapePart.OutlineThemeColor,
                 HasShadowEffect = shapePart.HasShadowEffect,
                 EffectPreset = shapePart.EffectPreset,
-                UsesThemeEffects = shapePart.UsesThemeEffects
+                UsesThemeEffects = shapePart.UsesThemeEffects,
+                OutlineWidthPoints = shapePart.OutlineWidthPoints,
+                OutlineHasNoFill = shapePart.OutlineHasNoFill,
+                OutlineDash = shapePart.OutlineDash
             };
-            XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet);
+            XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet,
+                shapePart.XfrmWidthPixels, shapePart.XfrmHeightPixels);
             shape.IsSourceLoaded = true;
             sheet.DrawingShapes.Add(shape);
             AddLoadedDrawingObjectOrder(

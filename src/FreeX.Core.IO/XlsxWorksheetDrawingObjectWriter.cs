@@ -360,7 +360,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     drawingNs,
                     shape.GradientFillEndColor,
                     shape.GetEffectiveGradientFillDirection(),
-                    shape.GetEffectiveEffectPreset())),
+                    shape.GetEffectiveEffectPreset(),
+                    shape.Width,
+                    shape.Height,
+                    shape.OutlineWidthPoints,
+                    shape.OutlineHasNoFill,
+                    shape.OutlineDash)),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
@@ -384,10 +389,16 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace drawingNs,
         CellColor? gradientFillEndColor = null,
         DrawingShapeGradientDirection gradientFillDirection = DrawingShapeGradientDirection.DiagonalDown,
-        DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
+        DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None,
+        double shapeWidthPixels = 0,
+        double shapeHeightPixels = 0,
+        double outlineWidthPoints = 0,
+        bool outlineHasNoFill = false,
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
-            ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs),
+            ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs,
+                shapeWidthPixels, shapeHeightPixels),
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
@@ -396,7 +407,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 : gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
                 ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
-            ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
+            ToLineProperties(outlineThemeColor, outlineColor, drawingNs,
+                outlineWidthPoints, outlineHasNoFill, outlineDash),
             ToEffectList(effectPreset, drawingNs),
             ToScene3dProperties(effectPreset, drawingNs),
             ToShape3dProperties(effectPreset, drawingNs));
@@ -406,13 +418,26 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double rotationDegrees,
         bool flipHorizontal,
         bool flipVertical,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        double shapeWidthPixels = 0,
+        double shapeHeightPixels = 0)
     {
         var rotation = NormalizeRotation(rotationDegrees);
+        // Include <a:ext cx cy> when pre-rotation dimensions are known; readers use these to
+        // recover the unrotated size rather than the bounding-box span from the outer anchor.
+        XElement? extElement = null;
+        if (shapeWidthPixels > 0 && shapeHeightPixels > 0)
+        {
+            extElement = new XElement(drawingNs + "ext",
+                new XAttribute("cx", PixelsToEmus(shapeWidthPixels)),
+                new XAttribute("cy", PixelsToEmus(shapeHeightPixels)));
+        }
+
         return new XElement(drawingNs + "xfrm",
             rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)),
             flipHorizontal ? new XAttribute("flipH", "1") : null,
-            flipVertical ? new XAttribute("flipV", "1") : null);
+            flipVertical ? new XAttribute("flipV", "1") : null,
+            extElement);
     }
 
     private static XElement ToGradientFill(
@@ -508,10 +533,40 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement? ToLineProperties(
         WorkbookThemeColorReference? outlineThemeColor,
         CellColor? outlineColor,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        double outlineWidthPoints = 0,
+        bool outlineHasNoFill = false,
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
     {
+        // Explicitly no border: write <a:ln><a:noFill/></a:ln>
+        if (outlineHasNoFill)
+            return new XElement(drawingNs + "ln", new XElement(drawingNs + "noFill"));
+
         var fill = ToSolidFill(outlineThemeColor, outlineColor, drawingNs);
-        return fill is null ? null : new XElement(drawingNs + "ln", fill);
+        if (fill is null)
+            return null;
+
+        // w attribute: 12700 EMU per point; omit if zero/default to keep output compact
+        var wEmu = outlineWidthPoints > 0 ? (long)Math.Round(outlineWidthPoints * 12700) : 0;
+        var prstDashVal = outlineDash switch
+        {
+            DrawingShapeOutlineDash.Dash => "dash",
+            DrawingShapeOutlineDash.Dot => "dot",
+            DrawingShapeOutlineDash.DashDot => "dashDot",
+            DrawingShapeOutlineDash.LongDash => "lgDash",
+            DrawingShapeOutlineDash.LongDashDot => "lgDashDot",
+            DrawingShapeOutlineDash.LongDashDotDot => "lgDashDotDot",
+            DrawingShapeOutlineDash.SystemDash => "sysDash",
+            DrawingShapeOutlineDash.SystemDot => "sysDot",
+            DrawingShapeOutlineDash.SystemDashDot => "sysDashDot",
+            _ => null // Solid: omit prstDash element (solid is default)
+        };
+        return new XElement(drawingNs + "ln",
+            wEmu > 0 ? new XAttribute("w", wEmu) : null,
+            fill,
+            prstDashVal is not null
+                ? new XElement(drawingNs + "prstDash", new XAttribute("val", prstDashVal))
+                : null);
     }
 
     private static XElement? ToSolidFill(

@@ -58,7 +58,17 @@ internal sealed record XlsxShapePackagePart(
     bool HasShadowEffect,
     DrawingShapeEffectPreset EffectPreset,
     bool UsesThemeEffects,
-    int DrawingOrderIndex);
+    int DrawingOrderIndex,
+    /// <summary>Pre-rotation width in DIP pixels from &lt;a:xfrm&gt;&lt;a:ext cx&gt;, or null if absent.</summary>
+    double? XfrmWidthPixels,
+    /// <summary>Pre-rotation height in DIP pixels from &lt;a:xfrm&gt;&lt;a:ext cy&gt;, or null if absent.</summary>
+    double? XfrmHeightPixels,
+    /// <summary>Outline width in points (12700 EMU = 1 pt); 0 = use default.</summary>
+    double OutlineWidthPoints,
+    /// <summary>True when &lt;a:ln&gt;&lt;a:noFill/&gt; is present — explicitly no border.</summary>
+    bool OutlineHasNoFill,
+    /// <summary>Outline dash style from &lt;a:prstDash val="..."/&gt;.</summary>
+    DrawingShapeOutlineDash OutlineDash);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -277,10 +287,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             var rotation = ReadDrawingRotation(transform);
             var flipHorizontal = ReadDrawingFlipHorizontal(transform);
             var flipVertical = ReadDrawingFlipVertical(transform);
+            var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
             var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
             var solidFill = spPr?.Element(drawingNs + "solidFill");
             var hasFill = spPr?.Element(drawingNs + "noFill") is null;
-            var outlineFill = spPr?.Element(drawingNs + "ln")?.Element(drawingNs + "solidFill");
+            var lnElement = spPr?.Element(drawingNs + "ln");
+            var outlineFill = lnElement?.Element(drawingNs + "solidFill");
             var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
             var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
             var fillThemeColor = solidFill is not null &&
@@ -291,6 +303,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
                                     XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
                 ? readOutlineThemeColor
                 : (WorkbookThemeColorReference?)null;
+            var outlineWidthPoints = ReadDrawingOutlineWidthPoints(lnElement);
+            var outlineHasNoFill = lnElement is not null && lnElement.Element(drawingNs + "noFill") is not null;
+            var outlineDash = ReadDrawingOutlineDash(lnElement, drawingNs);
             var effectPreset = ReadDrawingShapeEffectPreset(spPr, drawingNs);
             var hasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow;
             var text = string.Concat(shapeElement
@@ -342,7 +357,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     hasShadowEffect,
                     effectPreset,
                     ReadUsesThemeEffectStyle(shapeElement, drawingNs, spreadsheetDrawingNs),
-                    ReadNearestAnchorOrderIndex(shapeElement)));
+                    ReadNearestAnchorOrderIndex(shapeElement),
+                    xfrmWidthPixels,
+                    xfrmHeightPixels,
+                    outlineWidthPoints,
+                    outlineHasNoFill,
+                    outlineDash));
         }
 
         return (textBoxes, shapes);
@@ -459,6 +479,60 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
     private static bool ReadDrawingFlipVertical(XElement? transform) =>
         XlsxWorksheetXmlValueParser.IsTruthy(transform?.Attribute("flipV")?.Value);
+
+    /// <summary>
+    /// Reads the pre-rotation shape size from <c>&lt;a:xfrm&gt;&lt;a:ext cx cy/&gt;</c>.
+    /// Returns (null, null) when the element is absent.
+    /// </summary>
+    private static (double? WidthPixels, double? HeightPixels) ReadDrawingXfrmExtent(XElement? transform, XNamespace drawingNs)
+    {
+        var ext = transform?.Element(drawingNs + "ext");
+        if (ext is null)
+            return (null, null);
+
+        var cx = ext.Attribute("cx")?.Value;
+        var cy = ext.Attribute("cy")?.Value;
+        if (!double.TryParse(cx, NumberStyles.Float, CultureInfo.InvariantCulture, out var cxEmu) ||
+            !double.TryParse(cy, NumberStyles.Float, CultureInfo.InvariantCulture, out var cyEmu) ||
+            cxEmu <= 0 || cyEmu <= 0)
+            return (null, null);
+
+        // 9525 EMU per DIP pixel (96 DPI)
+        return (cxEmu / 9525.0, cyEmu / 9525.0);
+    }
+
+    /// <summary>
+    /// Reads the outline width in points from <c>&lt;a:ln w="..."/&gt;</c>.
+    /// The <c>w</c> attribute is in EMU (1 pt = 12700 EMU).  Returns 0 when absent.
+    /// </summary>
+    private static double ReadDrawingOutlineWidthPoints(XElement? lnElement)
+    {
+        var wValue = lnElement?.Attribute("w")?.Value;
+        if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu) || emu <= 0)
+            return 0;
+        return emu / 12700.0;
+    }
+
+    /// <summary>
+    /// Reads the outline dash style from <c>&lt;a:ln&gt;&lt;a:prstDash val="..."/&gt;</c>.
+    /// </summary>
+    private static DrawingShapeOutlineDash ReadDrawingOutlineDash(XElement? lnElement, XNamespace drawingNs)
+    {
+        var val = lnElement?.Element(drawingNs + "prstDash")?.Attribute("val")?.Value;
+        return val switch
+        {
+            "dash" => DrawingShapeOutlineDash.Dash,
+            "dot" => DrawingShapeOutlineDash.Dot,
+            "dashDot" => DrawingShapeOutlineDash.DashDot,
+            "lgDash" => DrawingShapeOutlineDash.LongDash,
+            "lgDashDot" => DrawingShapeOutlineDash.LongDashDot,
+            "lgDashDotDot" => DrawingShapeOutlineDash.LongDashDotDot,
+            "sysDash" => DrawingShapeOutlineDash.SystemDash,
+            "sysDot" => DrawingShapeOutlineDash.SystemDot,
+            "sysDashDot" => DrawingShapeOutlineDash.SystemDashDot,
+            _ => DrawingShapeOutlineDash.Solid
+        };
+    }
 
     private static CellColor? ReadDrawingSolidFillColor(XElement? solidFill, XNamespace drawingNs)
     {

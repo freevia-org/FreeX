@@ -245,6 +245,9 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNullableThemeColor(stream, shape.FillThemeColor);
         WriteFingerprintNullableThemeColor(stream, shape.OutlineThemeColor);
         WriteFingerprintNumber(stream, (int)shape.GetEffectiveEffectPreset());
+        WriteFingerprintNumber(stream, shape.OutlineWidthPoints);
+        WriteFingerprintBoolean(stream, shape.OutlineHasNoFill);
+        WriteFingerprintNumber(stream, (int)shape.OutlineDash);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -3894,7 +3897,10 @@ public sealed partial class XlsxFileAdapter
                     source.GradientFillDirection != current.GetEffectiveGradientFillDirection() ||
                     source.FillThemeColor != current.FillThemeColor ||
                     source.OutlineThemeColor != current.OutlineThemeColor ||
-                    source.EffectPreset != current.GetEffectiveEffectPreset())
+                    source.EffectPreset != current.GetEffectiveEffectPreset() ||
+                    !ApproximatelyEquals(source.OutlineWidthPoints, current.OutlineWidthPoints) ||
+                    source.OutlineHasNoFill != current.OutlineHasNoFill ||
+                    source.OutlineDash != current.OutlineDash)
                 {
                     return false;
                 }

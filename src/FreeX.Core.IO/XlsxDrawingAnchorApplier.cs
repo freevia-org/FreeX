@@ -55,12 +55,30 @@ internal static class XlsxDrawingAnchorApplier
         textBox.AnchorOffsetY = anchor.FromRowOffset;
     }
 
-    public static void ApplyToShape(DrawingShapeModel shape, XlsxDrawingAnchor? anchor, Sheet sheet)
+    public static void ApplyToShape(
+        DrawingShapeModel shape,
+        XlsxDrawingAnchor? anchor,
+        Sheet sheet,
+        double? xfrmWidthPixels = null,
+        double? xfrmHeightPixels = null)
     {
         if (anchor is null)
             return;
 
-        var (width, height) = GetAnchorSize(anchor, sheet);
+        // Prefer the pre-rotation size from <a:xfrm><a:ext cx cy> when available.
+        // For rotated shapes the outer anchor extent is the bounding box of the rotated shape,
+        // not the shape's own unrotated dimensions, so we must use the xfrm extent instead.
+        double width, height;
+        if (xfrmWidthPixels is > 0 && xfrmHeightPixels is > 0)
+        {
+            width = xfrmWidthPixels.Value;
+            height = xfrmHeightPixels.Value;
+        }
+        else
+        {
+            (width, height) = GetAnchorSize(anchor, sheet);
+        }
+
         if (width > 0)
             shape.Width = width;
         if (height > 0)
