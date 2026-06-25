@@ -1,0 +1,6 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Color Tone Warm">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="14" rx="1" fill="#FFE0C0" stroke="#E06020" stroke-width="1.5"/>
+  <circle cx="24" cy="10" r="5" fill="#FF9000" opacity=".6"/>
+  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#E06020" font-family="sans-serif">Warm</text>
+</svg>

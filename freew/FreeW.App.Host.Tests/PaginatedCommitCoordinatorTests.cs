@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows.Documents;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
+using ModelSection = FreeW.Core.Model.Section;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -142,7 +143,7 @@ public sealed class PaginatedCommitCoordinatorTests
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var sec1Para = new Paragraph("Section 1 end");
-        sec1Para.SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage);
+        sec1Para.SectionBreak = new ModelSection(new PageSettings(), SectionBreakKind.NextPage);
         doc.Blocks.Add(sec1Para);
         doc.Blocks.Add(new Paragraph("Section 2 content"));
 
@@ -175,7 +176,7 @@ public sealed class PaginatedCommitCoordinatorTests
             var doc = TextDocument.CreateEmpty();
             doc.Blocks.Clear();
             var sectionPara = new Paragraph("Break para");
-            sectionPara.SectionBreak = new Section(new PageSettings(), kind);
+            sectionPara.SectionBreak = new ModelSection(new PageSettings(), kind);
             doc.Blocks.Add(sectionPara);
             doc.Blocks.Add(new Paragraph("Body"));
 

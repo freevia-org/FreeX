@@ -766,6 +766,11 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
     private bool _prevFlipH, _prevFlipV;
     private double _pl, _pr, _pt, _pb;
     private double _prevBrightness, _prevContrast, _prevSaturation, _prevTransparency;
+    private int _prevShadow, _prevReflection, _prevBevel;
+    private double _prevGlow, _prevSoftEdge;
+    private string? _prevGlowColor;
+    private ImageRecolorMode _prevRecolor;
+    private double _prevColorTemp;
     private bool _applied;
 
     public string Label => "Reset Picture";
@@ -780,6 +785,15 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         _prevContrast     = image.ContrastPct;
         _prevSaturation   = image.SaturationPct;
         _prevTransparency = image.TransparencyPct;
+        // Snapshot effects and recolor.
+        _prevShadow     = image.ShadowPreset;
+        _prevGlow       = image.GlowSizePt;
+        _prevGlowColor  = image.GlowColorHex;
+        _prevReflection = image.ReflectionPreset;
+        _prevSoftEdge   = image.SoftEdgePt;
+        _prevBevel      = image.BevelPreset;
+        _prevRecolor    = image.RecolorMode;
+        _prevColorTemp  = image.ColorTemperature;
         image.WidthPt = naturalWidthPt; image.HeightPt = naturalHeightPt;
         image.RotationAngle = 0; image.FlipH = false; image.FlipV = false;
         image.CropLeft = image.CropRight = image.CropTop = image.CropBottom = 0;
@@ -788,6 +802,16 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         image.ContrastPct     = 0;
         image.SaturationPct   = 100;
         image.TransparencyPct = 0;
+        // Reset effects.
+        image.ShadowPreset     = 0;
+        image.GlowSizePt       = 0;
+        image.GlowColorHex     = null;
+        image.ReflectionPreset = 0;
+        image.SoftEdgePt       = 0;
+        image.BevelPreset      = 0;
+        // Reset recolor.
+        image.RecolorMode      = ImageRecolorMode.None;
+        image.ColorTemperature = 0;
         _applied = true;
     }
 
@@ -801,6 +825,14 @@ public sealed class ResetImageSizeCommand(int paragraphIndex, int runIndex, doub
         image.ContrastPct     = _prevContrast;
         image.SaturationPct   = _prevSaturation;
         image.TransparencyPct = _prevTransparency;
+        image.ShadowPreset     = _prevShadow;
+        image.GlowSizePt       = _prevGlow;
+        image.GlowColorHex     = _prevGlowColor;
+        image.ReflectionPreset = _prevReflection;
+        image.SoftEdgePt       = _prevSoftEdge;
+        image.BevelPreset      = _prevBevel;
+        image.RecolorMode      = _prevRecolor;
+        image.ColorTemperature = _prevColorTemp;
         _applied = false;
     }
 
@@ -847,6 +879,153 @@ public sealed class SetImageAdjustCommand(
         image.ContrastPct     = _prevContrast;
         image.SaturationPct   = _prevSaturation;
         image.TransparencyPct = _prevTransparency;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set the picture-effects parameters (shadow, glow, reflection, soft-edge, bevel) on the inline image
+/// at the given paragraph/run indices, snapshotting prior values for undo. 0/0.0 clears each effect.
+/// </summary>
+public sealed class SetImageEffectCommand(
+    int paragraphIndex, int runIndex,
+    int shadowPreset, double glowSizePt, string? glowColorHex,
+    int reflectionPreset, double softEdgePt, int bevelPreset)
+    : IDocumentCommand
+{
+    private int _prevShadow, _prevReflection, _prevBevel;
+    private double _prevGlow, _prevSoftEdge;
+    private string? _prevGlowColor;
+    private bool _applied;
+
+    public string Label => "Picture Effect";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevShadow     = image.ShadowPreset;
+        _prevGlow       = image.GlowSizePt;
+        _prevGlowColor  = image.GlowColorHex;
+        _prevReflection = image.ReflectionPreset;
+        _prevSoftEdge   = image.SoftEdgePt;
+        _prevBevel      = image.BevelPreset;
+        image.ShadowPreset     = shadowPreset;
+        image.GlowSizePt       = glowSizePt;
+        image.GlowColorHex     = glowColorHex;
+        image.ReflectionPreset = reflectionPreset;
+        image.SoftEdgePt       = softEdgePt;
+        image.BevelPreset      = bevelPreset;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.ShadowPreset     = _prevShadow;
+        image.GlowSizePt       = _prevGlow;
+        image.GlowColorHex     = _prevGlowColor;
+        image.ReflectionPreset = _prevReflection;
+        image.SoftEdgePt       = _prevSoftEdge;
+        image.BevelPreset      = _prevBevel;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set the recolor mode and/or color temperature on the inline image at the given paragraph/run indices,
+/// snapshotting prior values for undo. Non-destructive: original bytes are never modified.
+/// </summary>
+public sealed class SetImageRecolorCommand(
+    int paragraphIndex, int runIndex,
+    ImageRecolorMode recolorMode, double colorTemperature)
+    : IDocumentCommand
+{
+    private ImageRecolorMode _prevMode;
+    private double _prevTemp;
+    private bool _applied;
+
+    public string Label => "Picture Recolor";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevMode = image.RecolorMode;
+        _prevTemp = image.ColorTemperature;
+        image.RecolorMode      = recolorMode;
+        image.ColorTemperature = colorTemperature;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.RecolorMode      = _prevMode;
+        image.ColorTemperature = _prevTemp;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Apply a Picture Style preset: bundles border + effect settings. Snaps prior border/effect fields for undo.
+/// </summary>
+public sealed class SetImageStyleCommand(
+    int paragraphIndex, int runIndex,
+    int stylePreset,
+    string? borderColorHex, double borderWidthPt, string? borderDash,
+    int shadowPreset, int reflectionPreset, double softEdgePt)
+    : IDocumentCommand
+{
+    private string? _prevBorderColor;
+    private double _prevBorderWidth;
+    private string? _prevBorderDash;
+    private int _prevShadow, _prevReflection, _prevStyle;
+    private double _prevSoftEdge;
+    private bool _applied;
+
+    public string Label => "Apply Picture Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _prevBorderColor  = image.BorderColorHex;
+        _prevBorderWidth  = image.BorderWidthPt;
+        _prevBorderDash   = image.BorderDash;
+        _prevShadow       = image.ShadowPreset;
+        _prevReflection   = image.ReflectionPreset;
+        _prevSoftEdge     = image.SoftEdgePt;
+        _prevStyle        = image.PictureStylePreset;
+        image.BorderColorHex    = borderColorHex;
+        image.BorderWidthPt     = borderWidthPt;
+        image.BorderDash        = borderDash;
+        image.ShadowPreset      = shadowPreset;
+        image.ReflectionPreset  = reflectionPreset;
+        image.SoftEdgePt        = softEdgePt;
+        image.PictureStylePreset = stylePreset;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.BorderColorHex    = _prevBorderColor;
+        image.BorderWidthPt     = _prevBorderWidth;
+        image.BorderDash        = _prevBorderDash;
+        image.ShadowPreset      = _prevShadow;
+        image.ReflectionPreset  = _prevReflection;
+        image.SoftEdgePt        = _prevSoftEdge;
+        image.PictureStylePreset = _prevStyle;
         _applied = false;
     }
 

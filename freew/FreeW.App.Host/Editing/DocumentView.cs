@@ -2494,6 +2494,55 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set picture effects (shadow/glow/reflection/softEdge/bevel) on the currently selected image.
+    /// Pass 0/0.0 for each to clear the corresponding effect. Undoable. No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageEffect(
+        int shadowPreset, double glowSizePt, string? glowColorHex,
+        int reflectionPreset, double softEdgePt, int bevelPreset)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageEffectCommand(
+            blockIndex, runIndex,
+            shadowPreset, glowSizePt, glowColorHex,
+            reflectionPreset, softEdgePt, bevelPreset));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the recolor mode and/or color temperature on the currently selected image. Undoable.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageRecolor(ImageRecolorMode mode, double colorTemperature = 0)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageRecolorCommand(blockIndex, runIndex, mode, colorTemperature));
+        Render();
+    }
+
+    /// <summary>
+    /// Apply a Picture Style preset (bundles border + effects). Undoable. No-op without an image selection.
+    /// </summary>
+    public void ApplySelectedImageStyle(
+        int stylePreset,
+        string? borderColorHex, double borderWidthPt, string? borderDash,
+        int shadowPreset, int reflectionPreset, double softEdgePt)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageStyleCommand(
+            blockIndex, runIndex,
+            stylePreset, borderColorHex, borderWidthPt, borderDash,
+            shadowPreset, reflectionPreset, softEdgePt));
+        Render();
+    }
+
+    /// <summary>
     /// Restore the currently selected image to its natural size (from OriginalPixelWidth/Height), clearing
     /// any rotation, flip, and crop. Uses the current screen DPI for the pt→px conversion. Undoable.
     /// No-op without an image selection, or when OriginalPixelWidth is 0 (not recorded at insert time).
@@ -4479,8 +4528,10 @@ public sealed class DocumentView : RichTextBox
         var heightPx = image.HeightPt * PxPerPoint;
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
-        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency).
-        var source = image.HasAdjustments ? ImageAdjustHelper.Apply(decodedBitmap, image) : (ImageSource)decodedBitmap;
+        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
+        var source = (image.HasAdjustments || image.HasRecolor)
+            ? ImageAdjustHelper.Apply(decodedBitmap, image)
+            : (ImageSource)decodedBitmap;
 
         var element = new Image
         {
@@ -4539,6 +4590,9 @@ public sealed class DocumentView : RichTextBox
         {
             root = element;
         }
+
+        // Apply WPF visual effects (shadow/glow/soft-edge/bevel) on the root element.
+        ApplyImageWpfEffects(root, image);
 
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
         root.Cursor = Cursors.SizeAll;
@@ -7189,9 +7243,11 @@ public sealed class DocumentView : RichTextBox
 
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
-        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency).
+        // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
         // The alpha bake in ImageAdjustHelper covers static bitmap consumers; Opacity covers the live element.
-        var source = image.HasAdjustments ? ImageAdjustHelper.Apply(decodedBitmap, image) : (ImageSource)decodedBitmap;
+        var source = (image.HasAdjustments || image.HasRecolor)
+            ? ImageAdjustHelper.Apply(decodedBitmap, image)
+            : (ImageSource)decodedBitmap;
 
         var element = new Image
         {
@@ -7234,6 +7290,7 @@ public sealed class DocumentView : RichTextBox
         }
 
         // Apply picture border as WPF border around the image.
+        FrameworkElement inlineRoot;
         if (image.HasBorder)
         {
             var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
@@ -7256,7 +7313,7 @@ public sealed class DocumentView : RichTextBox
                 strokeBrush = borderBrush; // keep solid brush; WPF Border doesn't do dash natively, we use a simpler style
             }
 
-            var border = new System.Windows.Controls.Border
+            inlineRoot = new System.Windows.Controls.Border
             {
                 BorderBrush = strokeBrush,
                 BorderThickness = new Thickness(borderWidthPx),
@@ -7264,10 +7321,138 @@ public sealed class DocumentView : RichTextBox
                 Width = widthPx + borderWidthPx * 2,
                 Height = heightPx + borderWidthPx * 2,
             };
-            return new InlineUIContainer(border) { BaselineAlignment = BaselineAlignment.Bottom };
+        }
+        else
+        {
+            inlineRoot = element;
         }
 
-        return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+        // Apply WPF effects (shadow / glow / soft-edge / bevel) on the root element.
+        // Reflection is handled separately as a visual child below.
+        ApplyImageWpfEffects(inlineRoot, image);
+
+        // Reflection: render a mirrored low-opacity copy below the image using a VisualBrush.
+        if (image.ReflectionPreset > 0)
+        {
+            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
+            var reflDistPx  = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
+            var reflContainer = BuildReflectionContainer(inlineRoot, widthPx, heightPx, reflOpacity, reflDistPx,
+                borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
+            return new InlineUIContainer(reflContainer) { BaselineAlignment = BaselineAlignment.Bottom };
+        }
+
+        return new InlineUIContainer(inlineRoot) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Apply WPF visual effects (DropShadowEffect, BlurEffect for soft-edge / bevel approximation)
+    /// to the given image root element based on the model's effect presets.
+    /// </summary>
+    private static void ApplyImageWpfEffects(FrameworkElement root, InlineImage image)
+    {
+        if (!image.HasEffects) return;
+
+        // Shadow overrides glow if both are set; WPF Effect is a single Effect per element.
+        if (image.ShadowPreset > 0)
+        {
+            var (blur, dist, opacity) = image.ShadowPreset switch
+            {
+                1 => (4.0, 3.0, 0.50),
+                2 => (6.0, 5.0, 0.55),
+                3 => (8.0, 7.0, 0.60),
+                4 => (4.0, 4.0, 0.50),
+                _ => (10.0, 10.0, 0.65)
+            };
+            root.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius   = blur,
+                ShadowDepth  = dist,
+                Direction    = 315,
+                Opacity      = opacity,
+                Color        = System.Windows.Media.Colors.Black
+            };
+        }
+        else if (image.GlowSizePt > 0)
+        {
+            // Glow: use DropShadowEffect with 0 distance and colored output.
+            System.Windows.Media.Color glowColor;
+            try
+            {
+                var hex = !string.IsNullOrEmpty(image.GlowColorHex)
+                    ? image.GlowColorHex.TrimStart('#') : "4472C4";
+                glowColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + hex);
+            }
+            catch { glowColor = System.Windows.Media.Color.FromRgb(0x44, 0x72, 0xC4); }
+
+            root.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius  = image.GlowSizePt * PxPerPoint,
+                ShadowDepth = 0,
+                Opacity     = 0.6,
+                Color       = glowColor
+            };
+        }
+        else if (image.SoftEdgePt > 0)
+        {
+            // Soft edge: a BlurEffect on the element (approximate — true soft edge clips are more complex).
+            root.Effect = new System.Windows.Media.Effects.BlurEffect
+            {
+                Radius      = image.SoftEdgePt * PxPerPoint * 0.5,
+                KernelType  = System.Windows.Media.Effects.KernelType.Gaussian
+            };
+        }
+        else if (image.BevelPreset > 0)
+        {
+            // Bevel: inner-highlight approximation via very short white DropShadow at 45°.
+            root.Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius  = image.BevelPreset switch { 1 => 3.0, 2 => 5.0, 3 => 3.0, _ => 6.0 },
+                ShadowDepth = 1.0,
+                Direction   = 135,
+                Opacity     = 0.40,
+                Color       = System.Windows.Media.Colors.White
+            };
+        }
+    }
+
+    /// <summary>
+    /// Build a StackPanel containing the image element on top and a vertically-flipped semi-transparent
+    /// reflection copy below it (separated by <paramref name="distPx"/> pixels).
+    /// </summary>
+    private static System.Windows.Controls.StackPanel BuildReflectionContainer(
+        FrameworkElement imageRoot, double widthPx, double heightPx,
+        double reflOpacity, double distPx, double borderWidthPx)
+    {
+        var totalW = widthPx + borderWidthPx * 2;
+        var totalH = heightPx + borderWidthPx * 2;
+
+        // Create a visual brush from the image root for the reflection copy.
+        var vBrush = new System.Windows.Media.VisualBrush(imageRoot)
+        {
+            Stretch  = System.Windows.Media.Stretch.None,
+            AlignmentX = System.Windows.Media.AlignmentX.Left,
+            AlignmentY = System.Windows.Media.AlignmentY.Top
+        };
+
+        var reflRect = new System.Windows.Shapes.Rectangle
+        {
+            Width  = totalW,
+            Height = totalH,
+            Fill   = vBrush,
+            Opacity = reflOpacity,
+            // Vertical flip via RenderTransform.
+            RenderTransform = new System.Windows.Media.ScaleTransform(1, -1, totalW / 2, totalH / 2),
+            Margin = new Thickness(0, distPx, 0, 0)
+        };
+
+        var panel = new System.Windows.Controls.StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Vertical,
+            Width  = totalW
+        };
+        panel.Children.Add(imageRoot);
+        panel.Children.Add(reflRect);
+        return panel;
     }
 
     /// <summary>

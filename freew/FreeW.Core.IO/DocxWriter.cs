@@ -2858,23 +2858,66 @@ public static class DocxWriter
         xfrm.Add(new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)));
         xfrm.Add(new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
 
-        // a:blipFill: blip (with optional lum/satMod/alphaModFix children) + stretch/fillRect.
+        // a:blipFill: blip (with optional lum/satMod/alphaModFix/grayscl/duotone children) + stretch/fillRect.
         // Brightness/contrast emit as a:lum @bright / @contrast (per-mille: value × 1000).
         // Saturation emits as a:satMod @val (per-mille: satPct × 1000; 100 % = 100000 = omitted).
         // Transparency emits as a:alphaModFix @amt (per-mille of opacity: (100-transPct) × 1000).
+        // Recolor:
+        //   Grayscale  → a:grayscl (empty element)
+        //   Sepia      → a:duotone with fixed brown (#7B4012) + white tones
+        //   Washout    → a:lum @bright=40000 + a:alphaModFix @amt=50000
+        //   BlackWhite → a:grayscl + a:lum @contrast=100000
+        //   ColorTemperature → freew:colorTemp attribute on a:blip (extension)
+        var FreeWExt = XNamespace.Get("http://schemas.freew.app/2024/ext");
         var blip = new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId));
-        if (image.BrightnessPct != 0 || image.ContrastPct != 0)
+
+        // Recolor — emitted before other blip children so processors see it first.
+        switch (image.RecolorMode)
         {
-            blip.Add(new XElement(A + "lum",
-                new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
-                new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+            case ImageRecolorMode.Grayscale:
+                blip.Add(new XElement(A + "grayscl"));
+                break;
+            case ImageRecolorMode.Sepia:
+                // a:duotone with dark brown (#7B4012) and near-white (#FDF0E0) fixed tones.
+                blip.Add(new XElement(A + "duotone",
+                    new XElement(A + "srgbClr", new XAttribute("val", "7B4012")),
+                    new XElement(A + "srgbClr", new XAttribute("val", "FDF0E0"))));
+                break;
+            case ImageRecolorMode.Washout:
+                // Washout: high brightness + semi-transparency. Combine with existing adjustments below.
+                blip.Add(new XElement(A + "lum",
+                    new XAttribute("bright", 40000 + (long)Math.Round(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+                blip.Add(new XElement(A + "alphaModFix", new XAttribute("amt", 50000)));
+                break;
+            case ImageRecolorMode.BlackWhite:
+                blip.Add(new XElement(A + "grayscl"));
+                blip.Add(new XElement(A + "lum",
+                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", 100000 + (long)Math.Round(image.ContrastPct * 1000))));
+                break;
+        }
+
+        // Color temperature extension attribute (only when non-zero and not washed out by recolor mode).
+        if (image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None)
+            blip.Add(new XAttribute(FreeWExt + "colorTemp", (long)Math.Round(image.ColorTemperature * 1000)));
+
+        // Standard blip adjustments — omitted when Washout/BlackWhite recolor has already emitted lum.
+        if (image.RecolorMode is not (ImageRecolorMode.Washout or ImageRecolorMode.BlackWhite))
+        {
+            if (image.BrightnessPct != 0 || image.ContrastPct != 0)
+            {
+                blip.Add(new XElement(A + "lum",
+                    new XAttribute("bright", (long)Math.Round(image.BrightnessPct * 1000)),
+                    new XAttribute("contrast", (long)Math.Round(image.ContrastPct * 1000))));
+            }
         }
         if (image.SaturationPct != 100)
         {
             blip.Add(new XElement(A + "satMod",
                 new XAttribute("val", (long)Math.Round(image.SaturationPct * 1000))));
         }
-        if (image.TransparencyPct != 0)
+        if (image.TransparencyPct != 0 && image.RecolorMode != ImageRecolorMode.Washout)
         {
             // alphaModFix amt = opacity per-mille = (100 - transparencyPct) × 1000.
             var opacityPermille = (long)Math.Round((100 - image.TransparencyPct) * 1000);
@@ -2895,7 +2938,7 @@ public static class DocxWriter
                 new XAttribute("b", ToPerMille(image.CropBottom))));
         }
 
-        // pic:spPr: xfrm + preset geometry + optional a:ln border.
+        // pic:spPr: xfrm + preset geometry + optional a:ln border + optional a:effectLst.
         var spPr = new XElement(Pic + "spPr",
             xfrm,
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"), new XElement(A + "avLst")));
@@ -2909,6 +2952,103 @@ public static class DocxWriter
             var dash = string.IsNullOrEmpty(image.BorderDash) ? "solid" : image.BorderDash;
             ln.Add(new XElement(A + "prstDash", new XAttribute("val", dash)));
             spPr.Add(ln);
+        }
+
+        // a:effectLst: shadow / glow / reflection / softEdge / bevel (innerShdw approximation).
+        // Emitted as direct child of pic:spPr per DrawingML spec (CT_ShapeProperties).
+        if (image.HasEffects)
+        {
+            var effectLst = new XElement(A + "effectLst");
+
+            // Shadow: outer shadow presets 1-5. EMU units for blurRad and dist.
+            if (image.ShadowPreset > 0)
+            {
+                // Preset parameters: [blurRad(pt), dist(pt), dir(degrees), opacity(0-100)]
+                var shadowParams = image.ShadowPreset switch
+                {
+                    1 => (blur: 4.0, dist: 3.0, dir: 315, opacity: 50),   // Offset Diagonal Bottom Right
+                    2 => (blur: 6.0, dist: 5.0, dir: 315, opacity: 55),   // Offset Diagonal (medium)
+                    3 => (blur: 8.0, dist: 7.0, dir: 315, opacity: 60),   // Perspective Diagonal (large)
+                    4 => (blur: 4.0, dist: 4.0, dir: 270, opacity: 50),   // Offset Bottom
+                    _ => (blur: 10.0, dist: 10.0, dir: 315, opacity: 65), // Large shadow
+                };
+                var outerShdw = new XElement(A + "outerShdw",
+                    new XAttribute("blurRad", (long)(shadowParams.blur * 12700)),
+                    new XAttribute("dist",    (long)(shadowParams.dist * 12700)),
+                    new XAttribute("dir",     (long)(shadowParams.dir * 60000)), // degrees to 1/60000 deg
+                    new XAttribute("algn",    "tl"),
+                    new XAttribute("rotWithShape", 0),
+                    new XElement(A + "srgbClr", new XAttribute("val", "000000"),
+                        new XElement(A + "alpha", new XAttribute("val", (long)(shadowParams.opacity * 1000)))));
+                effectLst.Add(outerShdw);
+            }
+
+            // Glow: color + radius in pts.
+            if (image.GlowSizePt > 0)
+            {
+                var glowColor = !string.IsNullOrEmpty(image.GlowColorHex)
+                    ? image.GlowColorHex.TrimStart('#').ToUpperInvariant()
+                    : "4472C4"; // default blue accent
+                var glow = new XElement(A + "glow",
+                    new XAttribute("rad", (long)(image.GlowSizePt * 12700)),
+                    new XElement(A + "srgbClr", new XAttribute("val", glowColor),
+                        new XElement(A + "alpha", new XAttribute("val", 60000)))); // 60% opacity
+                effectLst.Add(glow);
+            }
+
+            // Reflection presets 1-5.
+            if (image.ReflectionPreset > 0)
+            {
+                // Presets: [blurRad(pt), stA(opacity%), endA(opacity%), dist(pt)]
+                var refParams = image.ReflectionPreset switch
+                {
+                    1 => (blur: 0.5, stA: 50, endA: 0, dist: 0.0),   // Tight reflection, touching
+                    2 => (blur: 0.5, stA: 50, endA: 0, dist: 4.0),   // Tight reflection, 4pt offset
+                    3 => (blur: 0.5, stA: 50, endA: 0, dist: 8.0),   // Tight reflection, 8pt offset
+                    4 => (blur: 0.5, stA: 100, endA: 0, dist: 0.0),  // Half reflection, touching
+                    _ => (blur: 0.5, stA: 100, endA: 0, dist: 4.0),  // Half reflection, 4pt offset
+                };
+                var reflection = new XElement(A + "reflection",
+                    new XAttribute("blurRad",  (long)(refParams.blur * 12700)),
+                    new XAttribute("stA",      (long)(refParams.stA  * 1000)),
+                    new XAttribute("stPos",    0),
+                    new XAttribute("endA",     (long)(refParams.endA * 1000)),
+                    new XAttribute("endPos",   100000),
+                    new XAttribute("dist",     (long)(refParams.dist * 12700)),
+                    new XAttribute("dir",      5400000), // 90 degrees (flip downward)
+                    new XAttribute("fadeDir",  5400000),
+                    new XAttribute("sx",       100000),
+                    new XAttribute("sy",       -100000), // vertical flip
+                    new XAttribute("kx",       0),
+                    new XAttribute("ky",       0),
+                    new XAttribute("algn",     "bl"),
+                    new XAttribute("rotWithShape", 0));
+                effectLst.Add(reflection);
+            }
+
+            // Soft edge: radius in pts.
+            if (image.SoftEdgePt > 0)
+            {
+                effectLst.Add(new XElement(A + "softEdge",
+                    new XAttribute("rad", (long)(image.SoftEdgePt * 12700))));
+            }
+
+            // Bevel: approximated as inner shadow with a distinguishing @dir encoding the preset.
+            // dir values 0-3 represent bevel presets 1-4 (circle, relaxed, cross, cool slant).
+            if (image.BevelPreset > 0)
+            {
+                // Encode bevel as innerShdw with distinguishing @dir: preset 1→0°, 2→90°, 3→180°, 4→270°.
+                var bevelDir = (image.BevelPreset - 1) * 90 * 60000; // degrees to 1/60000 deg
+                var bevelBlur = image.BevelPreset switch { 1 => 3.0, 2 => 5.0, 3 => 3.0, _ => 6.0 };
+                effectLst.Add(new XElement(A + "innerShdw",
+                    new XAttribute("blurRad", (long)(bevelBlur * 12700)),
+                    new XAttribute("dist",    0),
+                    new XAttribute("dir",     bevelDir),
+                    new XElement(A + "srgbClr", new XAttribute("val", "FFFFFF"),
+                        new XElement(A + "alpha", new XAttribute("val", 40000)))));
+            }
+
+            spPr.Add(effectLst);
         }
 
         return new XElement(A + "graphic",

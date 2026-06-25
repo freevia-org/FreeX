@@ -2531,29 +2531,138 @@ public static class DocxReader
             image.CropBottom = PerMille(srcRect.Attribute("b")?.Value);
         }
 
-        // a:lum: brightness and contrast (per-mille integers, value / 1000 = percent).
-        // Located as a direct child of a:blip (inside pic:blipFill).
+        // a:blip children: lum/satMod/alphaModFix (adjustments) + grayscl/duotone (recolor) + colorTemp ext.
         var blip = picPic.Descendants(A + "blip").FirstOrDefault();
         if (blip is not null)
         {
-            var lum = blip.Element(A + "lum");
-            if (lum is not null)
+            var FreeWExt = XNamespace.Get("http://schemas.freew.app/2024/ext");
+
+            // Recolor detection (checked before lum/satMod since recolor modes override some adjustments).
+            var hasGrayscl = blip.Element(A + "grayscl") is not null;
+            var duotone    = blip.Element(A + "duotone");
+            // Duotone with brown first srgbClr → Sepia preset; other duotones are unknown/passthrough.
+            var firstDuotoneHex = duotone?.Elements(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+            if (hasGrayscl)
             {
-                static double PerMillePct(string? val) =>
-                    long.TryParse(val, out var v) ? v / 1000.0 : 0;
-                image.BrightnessPct = PerMillePct(lum.Attribute("bright")?.Value);
-                image.ContrastPct   = PerMillePct(lum.Attribute("contrast")?.Value);
+                // BlackWhite: grayscl + lum with large positive contrast.
+                var lumEl = blip.Element(A + "lum");
+                if (lumEl is not null
+                    && long.TryParse(lumEl.Attribute("contrast")?.Value, out var bwContrast)
+                    && bwContrast >= 90000)
+                {
+                    image.RecolorMode = ImageRecolorMode.BlackWhite;
+                    // BrightnessPct from the lum @bright attr.
+                    if (long.TryParse(lumEl.Attribute("bright")?.Value, out var bwBright))
+                        image.BrightnessPct = bwBright / 1000.0;
+                }
+                else
+                {
+                    image.RecolorMode = ImageRecolorMode.Grayscale;
+                }
+            }
+            else if (firstDuotoneHex is not null
+                     && firstDuotoneHex.Equals("7B4012", StringComparison.OrdinalIgnoreCase))
+            {
+                image.RecolorMode = ImageRecolorMode.Sepia;
+            }
+            else
+            {
+                // Washout: alphaModFix @amt=50000 combined with lum @bright>=40000 (and no other recolor).
+                var alphaFixEl = blip.Element(A + "alphaModFix");
+                var lumWashEl  = blip.Element(A + "lum");
+                if (alphaFixEl is not null
+                    && long.TryParse(alphaFixEl.Attribute("amt")?.Value, out var washAmt) && washAmt == 50000
+                    && lumWashEl is not null
+                    && long.TryParse(lumWashEl.Attribute("bright")?.Value, out var washBright) && washBright >= 40000)
+                {
+                    image.RecolorMode = ImageRecolorMode.Washout;
+                    image.BrightnessPct = (washBright - 40000) / 1000.0;
+                    long.TryParse(lumWashEl.Attribute("contrast")?.Value, out var washContrast);
+                    image.ContrastPct = washContrast / 1000.0;
+                }
             }
 
-            // a:satMod: saturation modifier per-mille (100 % = 100000; 100000 / 1000 = 100 → neutral).
+            // Color temperature extension attribute.
+            var tempAttr = blip.Attribute(FreeWExt + "colorTemp");
+            if (tempAttr is not null && long.TryParse(tempAttr.Value, out var tempVal))
+                image.ColorTemperature = tempVal / 1000.0;
+
+            // Standard adjustments — only when no recolor mode already consumed lum/alphaModFix.
+            if (image.RecolorMode == ImageRecolorMode.None)
+            {
+                var lum = blip.Element(A + "lum");
+                if (lum is not null)
+                {
+                    static double PerMillePct(string? val) =>
+                        long.TryParse(val, out var v) ? v / 1000.0 : 0;
+                    image.BrightnessPct = PerMillePct(lum.Attribute("bright")?.Value);
+                    image.ContrastPct   = PerMillePct(lum.Attribute("contrast")?.Value);
+                }
+
+                // a:alphaModFix: opacity per-mille = (100 - transparencyPct) × 1000.
+                var alphaFix = blip.Element(A + "alphaModFix");
+                if (alphaFix is not null && long.TryParse(alphaFix.Attribute("amt")?.Value, out var amt))
+                    image.TransparencyPct = 100.0 - amt / 1000.0;
+            }
+
+            // a:satMod: saturation modifier per-mille (100 % = 100000; neutral = omitted).
             var satMod = blip.Element(A + "satMod");
             if (satMod is not null && long.TryParse(satMod.Attribute("val")?.Value, out var satVal))
                 image.SaturationPct = satVal / 1000.0;
+        }
 
-            // a:alphaModFix: opacity per-mille = (100 - transparencyPct) × 1000.
-            var alphaFix = blip.Element(A + "alphaModFix");
-            if (alphaFix is not null && long.TryParse(alphaFix.Attribute("amt")?.Value, out var amt))
-                image.TransparencyPct = 100.0 - amt / 1000.0;
+        // a:effectLst (inside pic:spPr): shadow / glow / reflection / softEdge / bevel.
+        var spPr = picPic.Descendants(Pic + "spPr").FirstOrDefault();
+        var effectLst = spPr?.Element(A + "effectLst");
+        if (effectLst is not null)
+        {
+            // a:outerShdw → ShadowPreset. Map by blurRad: ≤4pt→1, ≤6pt→2, ≤8pt→3, dir=270→4, else→5.
+            var outerShdw = effectLst.Element(A + "outerShdw");
+            if (outerShdw is not null)
+            {
+                if (long.TryParse(outerShdw.Attribute("dir")?.Value, out var shdwDir)
+                    && shdwDir == 270 * 60000)
+                    image.ShadowPreset = 4;
+                else if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var shdwBlur))
+                    image.ShadowPreset = shdwBlur <= 4 * 12700 ? 1
+                                        : shdwBlur <= 6 * 12700 ? 2
+                                        : shdwBlur <= 8 * 12700 ? 3 : 5;
+                else
+                    image.ShadowPreset = 1;
+            }
+
+            // a:glow → GlowSizePt + GlowColorHex.
+            var glow = effectLst.Element(A + "glow");
+            if (glow is not null)
+            {
+                if (long.TryParse(glow.Attribute("rad")?.Value, out var glowRad))
+                    image.GlowSizePt = glowRad / 12700.0;
+                image.GlowColorHex = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+            }
+
+            // a:reflection → ReflectionPreset. Distinguish by dist and stA.
+            var reflection = effectLst.Element(A + "reflection");
+            if (reflection is not null)
+            {
+                long.TryParse(reflection.Attribute("dist")?.Value, out var refDist);
+                long.TryParse(reflection.Attribute("stA")?.Value,  out var refStA);
+                image.ReflectionPreset =
+                    refStA < 60000 && refDist < 1000 ? 1   // tight, touching
+                    : refStA < 60000 && refDist < 6 * 12700 ? 2  // tight, 4pt
+                    : refStA < 60000 ? 3                         // tight, 8pt
+                    : refDist < 1000 ? 4                         // half, touching
+                    : 5;                                          // half, 4pt
+            }
+
+            // a:softEdge → SoftEdgePt.
+            var softEdge = effectLst.Element(A + "softEdge");
+            if (softEdge is not null && long.TryParse(softEdge.Attribute("rad")?.Value, out var seRad))
+                image.SoftEdgePt = seRad / 12700.0;
+
+            // a:innerShdw → BevelPreset (approximation; @dir encodes preset 1-4).
+            var innerShdw = effectLst.Element(A + "innerShdw");
+            if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, out var bevelDir))
+                image.BevelPreset = (int)(bevelDir / (90 * 60000)) + 1;
         }
 
         // a:ln (inside pic:spPr): border width, solid-fill color, dash.

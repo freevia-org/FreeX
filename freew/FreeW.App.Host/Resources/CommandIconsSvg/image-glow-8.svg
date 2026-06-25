@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Glow 8pt">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="14" rx="1" fill="#dcecff" stroke="#4472C4" stroke-width="1.5" filter="url(#g)"/>
+  <defs><filter id="g"><feGaussianBlur stdDeviation="4.4"/></filter></defs>
+  <rect x="6" y="7" width="20" height="14" rx="1" fill="#dcecff" stroke="#4472C4" stroke-width="1.5"/>
+  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#4472C4" font-family="sans-serif">8pt</text>
+</svg>

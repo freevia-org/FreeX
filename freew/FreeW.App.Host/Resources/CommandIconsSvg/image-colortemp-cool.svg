@@ -1,0 +1,6 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Color Tone Cool">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="14" rx="1" fill="#C0D8FF" stroke="#2040A0" stroke-width="1.5"/>
+  <circle cx="24" cy="10" r="5" fill="#4080FF" opacity=".6"/>
+  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#2040A0" font-family="sans-serif">Cool</text>
+</svg>
