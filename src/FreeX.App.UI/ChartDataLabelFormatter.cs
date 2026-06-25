@@ -38,10 +38,14 @@ public static class ChartDataLabelFormatter
     public static string GetPieLabelFormat(ChartModel chart, string seriesName)
     {
         var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
+        // The result is consumed by OxyPlot as a composite format string ({1}=label, {2}=percentage,
+        // {0}=value), so literal braces in the user-controlled series name must be escaped or OxyPlot
+        // would parse them as placeholders (malformed label or FormatException).
+        var safeSeriesName = seriesName.Replace("{", "{{").Replace("}", "}}");
         var nameParts = (chart.ShowDataLabelSeriesName, chart.ShowDataLabelCategoryName) switch
         {
-            (true, true) => $"{seriesName}{separator}{{1}}",
-            (true, false) => seriesName,
+            (true, true) => $"{safeSeriesName}{separator}{{1}}",
+            (true, false) => safeSeriesName,
             (false, true) => "{1}",
             _ => ""
         };

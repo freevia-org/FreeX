@@ -1,0 +1,68 @@
+using Free.Shared.AppServices;
+using FreeW.Core.IO;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Avalonia.Backstage;
+
+/// <summary>
+/// The set of panes available in the FreeW backstage (File screen).
+/// </summary>
+internal enum BackstagePane
+{
+    Home,
+    Open,
+    SaveAs,
+    Print,
+    Share,
+    Export,
+    Info,
+    Account,
+}
+
+/// <summary>
+/// All the shell-level callbacks the backstage view needs to act on — collected into one record
+/// so the view does not take a direct reference to <see cref="FreeW.App.Avalonia.MainWindow"/>.
+/// The callbacks are set up by <c>MainWindow.cs</c> and are safe to call from the UI thread after
+/// the backstage dialog closes.
+/// </summary>
+internal sealed record BackstageCallbacks(
+    /// <summary>Human-readable document name (file name or "Untitled").</summary>
+    string DisplayName,
+
+    /// <summary>Current file path, or <c>null</c> if unsaved.</summary>
+    string? CurrentPath,
+
+    /// <summary>Snapshot of recent entries for this session.</summary>
+    Func<IEnumerable<RecentFileEntry>> GetRecentEntries,
+
+    /// <summary>All file formats the app can handle (used by Save As / Export planners).</summary>
+    Func<IEnumerable<FileFormatDescriptor>> GetFileFormats,
+
+    /// <summary>Current page settings for the Print pane.</summary>
+    Func<PageSettings> GetPageSettings,
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
+    /// <summary>Create a new empty document.</summary>
+    Action NewDocument,
+
+    /// <summary>Open the document at <paramref name="path"/> directly (no picker).</summary>
+    Action<string> OpenRecent,
+
+    /// <summary>Open the file picker to browse for a document.</summary>
+    Action Browse,
+
+    /// <summary>Offer recovery from the latest autosave snapshot.</summary>
+    Action RecoverUnsaved,
+
+    /// <summary>Trigger a Save-As dialog (format chosen by the user).</summary>
+    Action SaveAs,
+
+    /// <summary>Trigger a Save-As targeting a specific file extension (from the planner choice).</summary>
+    Action<string> SaveAsExtension,
+
+    /// <summary>Open the folder containing the current file.</summary>
+    Action<string> OpenContainingFolder,
+
+    /// <summary>Export the document as PDF via the existing PDF path.</summary>
+    Action ExportPdf);

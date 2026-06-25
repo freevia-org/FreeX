@@ -657,7 +657,7 @@ public sealed partial class FormulaEvaluator
     private static string ValueToString(ScalarValue v) => v switch
     {
         TextValue t => t.Value,
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        NumberValue n => BuiltInFunctions.NumberToExcelText(n.Value),
         DateTimeValue dt => dt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",

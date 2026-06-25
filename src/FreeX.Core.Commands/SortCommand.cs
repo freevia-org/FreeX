@@ -135,6 +135,19 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyColIndexes)
             {
+                // Excel always places blank (and error) cells last regardless of sort direction.
+                // Guard this BEFORE the ascending/descending negation so the blank-last ordering
+                // is never inverted.
+                if (sortOn == SortOn.CellValues)
+                {
+                    bool aBlank = IsBlankOrError(a.Payloads[index].Cell);
+                    bool bBlank = IsBlankOrError(b.Payloads[index].Cell);
+                    if (aBlank != bBlank)
+                        return aBlank ? 1 : -1; // blank always goes last
+                    if (aBlank) // both blank — equal on this key, try next
+                        continue;
+                }
+
                 var cmp = CompareKey(ctx.Workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
@@ -476,6 +489,13 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
         return aMatches ? -1 : 1;
     }
+
+    /// <summary>
+    /// Returns true if the cell is blank (null or BlankValue) or contains an error.
+    /// Excel places both blank and error cells at the bottom regardless of sort direction.
+    /// </summary>
+    private static bool IsBlankOrError(Cell? cell) =>
+        cell is null || cell.Value is BlankValue or ErrorValue;
 
     /// <summary>
     /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.

@@ -21,6 +21,26 @@ public sealed class ChartDataLabelFormatterTests
     }
 
     [Fact]
+    public void GetPieLabelFormat_EscapesBracesInSeriesName()
+    {
+        // The series name is user-controlled and the result is an OxyPlot format string; literal braces
+        // must be doubled so OxyPlot renders them verbatim instead of parsing them as placeholders.
+        var chart = new ChartModel
+        {
+            ShowDataLabelSeriesName = true,
+            ShowDataLabelCategoryName = false,
+            ShowDataLabelValue = false,
+            ShowDataLabelPercentage = false
+        };
+
+        var format = ChartDataLabelFormatter.GetPieLabelFormat(chart, "Region {A}");
+
+        format.Should().Be("Region {{A}}");
+        // Formatting it through string.Format (as OxyPlot does) must not throw and must render the braces.
+        string.Format(format, 0.0, "label", 0.5).Should().Be("Region {A}");
+    }
+
+    [Fact]
     public void FormatDataLabel_UsesInvariantNumberCulture()
     {
         using var cultureScope = TestCultureScope.CurrentCulture("de-DE");
