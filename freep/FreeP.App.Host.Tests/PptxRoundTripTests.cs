@@ -760,4 +760,247 @@ public sealed class PptxRoundTripTests : IDisposable
         body.Paragraphs.Add(para);
         return body;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Bug-fix regression tests (Q1–Q7)
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    // Q1: p:bg must be the FIRST child of p:cSld, not a sibling of it.
+    [Fact]
+    public void Q1_SlideBackground_IsInsideCsld()
+    {
+        var pres = new Presentation();
+        var slide = new Slide
+        {
+            Background = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56)))
+        };
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        // Read the raw XML from the zip to verify structure, not just the round-tripped model.
+        using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+        var entry = archive.GetEntry("ppt/slides/slide1.xml");
+        entry.Should().NotBeNull("slide1.xml must exist");
+        using var stream = entry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+
+        var p = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var sld  = doc.Root!;
+        var cSld = sld.Element(p + "cSld");
+        cSld.Should().NotBeNull("p:cSld must be present");
+
+        var bgInsideCsld = cSld!.Element(p + "bg");
+        bgInsideCsld.Should().NotBeNull("p:bg must be the first child of p:cSld (Q1)");
+
+        // Confirm p:bg is NOT a direct child of p:sld (the old wrong placement).
+        var bgAtSldLevel = sld.Elements(p + "bg").FirstOrDefault();
+        bgAtSldLevel.Should().BeNull("p:bg must NOT be a direct child of p:sld (Q1)");
+    }
+
+    // Q2: Content-type Default entries must cover every media extension written.
+    [Fact]
+    public void Q2_GifContentType_HasDefaultEntry()
+    {
+        // Build a minimal GIF (1x1 pixel) to exercise a non-png/jpg media type
+        // that has no Default in the old code.
+        var gifBytes = Convert.FromBase64String(
+            "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAEALAAAAAABAAEAAAICTAEAOw==");
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "GifPic",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = gifBytes, ContentType = "image/gif" },
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+        var ctEntry = archive.GetEntry("[Content_Types].xml");
+        ctEntry.Should().NotBeNull();
+        using var stream = ctEntry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+
+        var ct = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        var gifDefault = doc.Root!
+            .Elements(ct + "Default")
+            .FirstOrDefault(e => (string?)e.Attribute("Extension") == "gif");
+
+        gifDefault.Should().NotBeNull("a Default entry for 'gif' must exist (Q2)");
+        gifDefault!.Attribute("ContentType")?.Value.Should().Be("image/gif");
+
+        // Also verify there is no Override pointing at the wrong /ppt/media/media_{id}.gif path.
+        var wrongOverride = doc.Root!
+            .Elements(ct + "Override")
+            .FirstOrDefault(e => ((string?)e.Attribute("PartName") ?? "").Contains("/media/media_"));
+        wrongOverride.Should().BeNull("wrong per-shape media Override must not exist (Q2)");
+    }
+
+    // Q3+Q4: Two pictures with the same (empty) Name must not throw and must keep distinct images.
+    [Fact]
+    public void Q3Q4_TwoSameNamedPictures_DoNotThrowAndKeepDistinctImages()
+    {
+        var png1 = CreateMinimalPng();
+        // Build a second slightly different PNG (2x1) so we can distinguish them.
+        var png2 = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVQI12P4z8BQDwAEgAF/QualIQAAAABJRU5ErkJggg==");
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        // Both shapes have empty Name — the old code would throw ArgumentException here.
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = png1, ContentType = "image/png" },
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, Name = "",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = png2, ContentType = "image/png" },
+            OffsetXEmu = 914400,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);  // Must not throw (Q3).
+        var reloaded = PptxPackageReader.Read(path);
+
+        var pics = reloaded.Slides[0].Shapes.Where(s => s.Kind == SlideShapeKind.Picture).ToList();
+        pics.Should().HaveCount(2, "both picture shapes must survive round-trip (Q4)");
+
+        // Verify each picture has its own bytes and they are not identical
+        // (the old code would have both pointing at the first shape's rId, yielding identical bytes).
+        var bytes0 = pics[0].Picture!.Bytes!;
+        var bytes1 = pics[1].Picture!.Bytes!;
+        bytes0.Should().BeEquivalentTo(png1, "shape Id=1 must round-trip its own image (Q4)");
+        bytes1.Should().BeEquivalentTo(png2, "shape Id=2 must round-trip its own image (Q4)");
+        bytes0.Should().NotBeEquivalentTo(bytes1, "the two pictures must not share the same embedded image (Q4)");
+    }
+
+    // Q5: Scheme-color tint/shade must survive round-trip.
+    [Fact]
+    public void Q5_SchemeColorTintShade_RoundTrips()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var schemeRef = new SchemeColorRef
+        {
+            Slot = ThemeColorSlot.Accent2,
+            LumMod = 1.0,
+            LumOff = 0.0,
+            Tint  = 0.5,   // non-default → must be emitted
+            Shade = 0.75   // non-default → must be emitted
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Name = "TintShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0), schemeRef)),
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var s = reloaded.Slides[0].Shapes.First(x => x.Name == "TintShape");
+        var sc = ((ShapeFill.Solid)s.Fill!).Color.SchemeColor;
+        sc.Should().NotBeNull();
+        sc!.Tint .Should().BeApproximately(0.5,  0.001, "tint must round-trip (Q5)");
+        sc .Shade.Should().BeApproximately(0.75, 0.001, "shade must round-trip (Q5)");
+    }
+
+    // Q6: Group shape must emit p:grpSpPr (not p:spPr) with chOff/chExt.
+    [Fact]
+    public void Q6_GroupShape_EmitsGrpSpPr_WithChOffChExt()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var group = new SlideShape
+        {
+            Id = 10, Name = "Grp1",
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 457200, OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200, ExtentCyEmu = 1828800
+        };
+        group.Children.Add(new SlideShape
+        {
+            Id = 11, Name = "Inner",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 457200,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400
+        });
+        slide.Shapes.Add(group);
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+        var entry = archive.GetEntry("ppt/slides/slide1.xml");
+        entry.Should().NotBeNull();
+        using var stream = entry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+
+        var p = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var a = System.Xml.Linq.XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var grpSp = doc.Descendants(p + "grpSp").FirstOrDefault();
+        grpSp.Should().NotBeNull("a p:grpSp must be present");
+
+        var grpSpPr = grpSp!.Element(p + "grpSpPr");
+        grpSpPr.Should().NotBeNull("p:grpSp must have p:grpSpPr, not p:spPr (Q6)");
+
+        // Must NOT have p:spPr (wrong element name).
+        grpSp.Element(p + "spPr").Should().BeNull("p:grpSp must NOT have p:spPr (Q6)");
+
+        // Must NOT have a prstGeom inside grpSpPr.
+        var prstGeom = grpSpPr!.Descendants(a + "prstGeom").FirstOrDefault();
+        prstGeom.Should().BeNull("grpSpPr must not contain prstGeom (Q6)");
+
+        // Must have chOff and chExt inside the xfrm.
+        var xfrm = grpSpPr.Element(a + "xfrm");
+        xfrm.Should().NotBeNull("grpSpPr must have a:xfrm (Q6)");
+        xfrm!.Element(a + "chOff").Should().NotBeNull("a:xfrm must have a:chOff (Q6)");
+        xfrm .Element(a + "chExt").Should().NotBeNull("a:xfrm must have a:chExt (Q6)");
+    }
+
+    // Q7: Absent bandRow attribute must default to false, not true.
+    [Fact]
+    public void Q7_AbsentBandRowAttribute_DefaultsFalse()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        // Table with NO BandRow flag set → writer omits the attribute → reader must read false.
+        var table = new TableShape();
+        table.Flags.BandRow = false;  // explicit false; writer will omit the attribute
+        table.ColumnWidthsEmu.Add(2000000L);
+        var row = new TableRow { HeightEmu = 685800L };
+        row.Cells.Add(new TableCell());
+        table.Rows.Add(row);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 20, Name = "NoBandTable",
+            Kind = SlideShapeKind.Table,
+            ExtentCxEmu = 2000000, ExtentCyEmu = 685800,
+            Table = table
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var rt = reloaded.Slides[0].Shapes.Single(s => s.Kind == SlideShapeKind.Table).Table!;
+        rt.Flags.BandRow.Should().BeFalse("absent bandRow attribute must default to false (Q7)");
+    }
 }

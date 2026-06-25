@@ -79,8 +79,22 @@ public static class PptxPackageWriter
                 new SlideLayout { Id = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank, MasterId = masters[0].Id }
             };
 
+        // Collect media extensions used across all slides (for Q2 content-type Defaults).
+        var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
+                {
+                    var ct = shape.Picture.ContentType ?? "image/png";
+                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+            }
+        }
+
         // --- 1. [Content_Types].xml ---
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts);
+        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -179,7 +193,7 @@ public static class PptxPackageWriter
             // Slide rels: rId1=layout, rIdMedia1..=images
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
-            foreach (var (shapeName, mediaRelId, mediaPath) in mediaRelIds)
+            foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             WriteRels(archive, slidePath, slideRels);
 
@@ -213,10 +227,41 @@ public static class PptxPackageWriter
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
 
+    // Maps a file extension to its IANA media type for [Content_Types].xml Default entries.
+    private static readonly Dictionary<string, string> ExtensionToContentType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["png"]  = "image/png",
+            ["jpg"]  = "image/jpeg",
+            ["jpeg"] = "image/jpeg",
+            ["gif"]  = "image/gif",
+            ["bmp"]  = "image/bmp",
+            ["tiff"] = "image/tiff",
+            ["svg"]  = "image/svg+xml",
+            ["wmf"]  = "image/x-wmf",
+            ["emf"]  = "image/x-emf",
+        };
+
     private static XDocument BuildContentTypesXml(
-        Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts)
+        Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
+        HashSet<string> mediaExtensions)
     {
         var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+
+        var defaults = new List<XElement>
+        {
+            new XElement(CT + "Default", new XAttribute("Extension", "rels"), new XAttribute("ContentType", RelsCT)),
+            new XElement(CT + "Default", new XAttribute("Extension", "xml"),  new XAttribute("ContentType", "application/xml")),
+        };
+
+        // Emit a Default entry for every media extension actually written (covers all paths correctly).
+        foreach (var ext in mediaExtensions.OrderBy(e => e))
+        {
+            if (ExtensionToContentType.TryGetValue(ext, out var imgCt))
+                defaults.Add(new XElement(CT + "Default",
+                    new XAttribute("Extension", ext),
+                    new XAttribute("ContentType", imgCt)));
+        }
 
         var overrides = new List<XElement>
         {
@@ -237,29 +282,10 @@ public static class PptxPackageWriter
         for (int si = 0; si < p.Slides.Count; si++)
             overrides.Add(Override(CT, $"/ppt/slides/slide{si + 1}.xml", SlideCT));
 
-        // Collect image content types
-        foreach (var slide in p.Slides)
-        {
-            foreach (var shape in AllShapes(slide.Shapes))
-            {
-                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
-                {
-                    var ext = ContentTypeToExtension(shape.Picture.ContentType ?? "image/png");
-                    var ct = shape.Picture.ContentType ?? "image/png";
-                    // add defaults as needed
-                    overrides.Add(Override(CT, $"/ppt/media/media_{GetShapeId(shape)}.{ext}", ct));
-                }
-            }
-        }
-
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(CT + "Types",
-                new XElement(CT + "Default", new XAttribute("Extension", "rels"), new XAttribute("ContentType", RelsCT)),
-                new XElement(CT + "Default", new XAttribute("Extension", "xml"), new XAttribute("ContentType", "application/xml")),
-                new XElement(CT + "Default", new XAttribute("Extension", "png"), new XAttribute("ContentType", "image/png")),
-                new XElement(CT + "Default", new XAttribute("Extension", "jpg"), new XAttribute("ContentType", "image/jpeg")),
-                new XElement(CT + "Default", new XAttribute("Extension", "jpeg"), new XAttribute("ContentType", "image/jpeg")),
+                defaults,
                 overrides));
     }
 
@@ -297,23 +323,24 @@ public static class PptxPackageWriter
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
-        List<(string shapeName, string relId, string mediaPath)> mediaRelIds)
+        List<(uint shapeId, string relId, string mediaPath)> mediaRelIds)
     {
-        var mediaByName = mediaRelIds.ToDictionary(m => m.shapeName, m => m.relId);
+        // Key by shape Id (stable uint), not Name, to avoid collisions when two shapes share a name.
+        var mediaById = mediaRelIds.ToDictionary(m => m.shapeId, m => m.relId);
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sld",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
-                slide.Background is not null
-                    ? new XElement(P + "bg",
-                        new XElement(P + "bgPr",
-                            BuildFillEl(slide.Background, scheme),
-                            new XElement(A + "effectLst")))
-                    : null,
                 new XElement(P + "cSld",
+                    slide.Background is not null
+                        ? new XElement(P + "bg",
+                            new XElement(P + "bgPr",
+                                BuildFillEl(slide.Background, scheme),
+                                new XElement(A + "effectLst")))
+                        : null,
                     new XElement(P + "spTree",
                         GrpSpHeader(),
-                        slide.Shapes.Select(s => BuildShapeEl(s, scheme, mediaByName))))));
+                        slide.Shapes.Select(s => BuildShapeEl(s, scheme, mediaById))))));
     }
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
@@ -455,11 +482,11 @@ public static class PptxPackageWriter
     // ── Shape elements ────────────────────────────────────────────────────────────
 
     private static XElement BuildShapeEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<string, string> mediaByName) =>
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
         shape.Kind switch
         {
-            SlideShapeKind.Picture => BuildPicEl(shape, mediaByName),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaByName),
+            SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             _ => BuildSpEl(shape, scheme)
@@ -483,10 +510,11 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme));
 
-    private static XElement BuildPicEl(SlideShape shape, Dictionary<string, string> mediaByName)
+    private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
     {
-        mediaByName.TryGetValue(shape.Name, out var embedRelId);
-        embedRelId ??= mediaByName.Values.FirstOrDefault() ?? "rIdMedia1";
+        // Look up by shape Id (collision-safe); fall back to a placeholder only if somehow missing.
+        mediaById.TryGetValue(shape.Id, out var embedRelId);
+        embedRelId ??= "rIdMedia1";
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
@@ -500,14 +528,34 @@ public static class PptxPackageWriter
     }
 
     private static XElement BuildGrpSpEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<string, string> mediaByName) =>
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
-            BuildSpPrEl(shape, scheme),
-            shape.Children.Select(c => BuildShapeEl(c, scheme, mediaByName)));
+            BuildGrpSpPrEl(shape),
+            shape.Children.Select(c => BuildShapeEl(c, scheme, mediaById)));
+
+    /// <summary>
+    /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
+    /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
+    /// </summary>
+    private static XElement BuildGrpSpPrEl(SlideShape shape)
+    {
+        var xfrm = new XElement(A + "xfrm");
+        if (shape.RotationDeg != 0)
+            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+        if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
+        if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+        xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        // Child coordinate space: use the group's own extent as the identity child space.
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "grpSpPr", xfrm);
+    }
 
     private static XElement BuildSpPrEl(SlideShape shape, PresentationColorScheme scheme, string? forcePrst = null)
     {
@@ -713,6 +761,11 @@ public static class PptxPackageWriter
                 el.Add(new XElement(A + "lumMod", new XAttribute("val", (long)Math.Round(sc.LumMod * 100000))));
             if (Math.Abs(sc.LumOff) > 1e-9)
                 el.Add(new XElement(A + "lumOff", new XAttribute("val", (long)Math.Round(sc.LumOff * 100000))));
+            // Tint and shade default to 1.0 (= no modifier); only emit when a modifier is present.
+            if (Math.Abs(sc.Tint - 1.0) > 1e-9)
+                el.Add(new XElement(A + "tint",  new XAttribute("val", (long)Math.Round(sc.Tint  * 100000))));
+            if (Math.Abs(sc.Shade - 1.0) > 1e-9)
+                el.Add(new XElement(A + "shade", new XAttribute("val", (long)Math.Round(sc.Shade * 100000))));
             return el;
         }
         return new XElement(A + "srgbClr", new XAttribute("val", FmtColor(color.Resolved)));
@@ -863,10 +916,10 @@ public static class PptxPackageWriter
 
     // ── Media writing ─────────────────────────────────────────────────────────────
 
-    private static List<(string shapeName, string relId, string mediaPath)> WriteSlideMedia(
+    private static List<(uint shapeId, string relId, string mediaPath)> WriteSlideMedia(
         ZipArchive archive, Slide slide, int slideIndex)
     {
-        var result = new List<(string, string, string)>();
+        var result = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
         foreach (var shape in AllShapes(slide.Shapes))
@@ -883,7 +936,7 @@ public static class PptxPackageWriter
                 es.Write(bytes);
 
             var relId = $"rIdMedia{mediaIdx}";
-            result.Add((shape.Name, relId, mediaPath));
+            result.Add((shape.Id, relId, mediaPath));
             mediaIdx++;
         }
 

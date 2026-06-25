@@ -410,7 +410,8 @@ public static class PptxPackageReader
             table.Flags.LastRow  = tblPr.Attribute("lastRow")?.Value  is "1" or "true";
             table.Flags.FirstCol = tblPr.Attribute("firstCol")?.Value is "1" or "true";
             table.Flags.LastCol  = tblPr.Attribute("lastCol")?.Value  is "1" or "true";
-            table.Flags.BandRow  = tblPr.Attribute("bandRow")?.Value  is not "0" and not "false";
+            // OOXML default for bandRow/bandCol is false; treat absent attribute as false.
+            table.Flags.BandRow  = tblPr.Attribute("bandRow")?.Value  is "1" or "true";
             table.Flags.BandCol  = tblPr.Attribute("bandCol")?.Value  is "1" or "true";
 
             var styleId = tblPr.Element(A + "tableStyleId")?.Value?.Trim();
