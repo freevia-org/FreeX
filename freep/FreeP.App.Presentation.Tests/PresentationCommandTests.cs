@@ -1,0 +1,604 @@
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
+
+/// <summary>
+/// Unit tests for every <see cref="IPresentationCommand"/> implementation and
+/// <see cref="PresentationCommandBus"/> mechanics.
+/// </summary>
+public sealed class PresentationCommandTests
+{
+    // ── Helpers ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Creates a presentation with <paramref name="slideCount"/> blank slides (no pre-existing shapes).</summary>
+    private static (Presentation p, PresentationCommandBus bus) Make(int slideCount = 1)
+    {
+        var p = new Presentation();
+        for (int i = 0; i < slideCount; i++)
+            p.Slides.Add(new Slide { Title = $"S{i + 1}" });
+        var bus = new PresentationCommandBus(p);
+        // Clear any shapes added by the Title setter.
+        foreach (var s in p.Slides) s.Shapes.Clear();
+        return (p, bus);
+    }
+
+    private static SlideShape MakeShape(uint id = 1) => new()
+    {
+        Id          = id,
+        Name        = $"Shape{id}",
+        Kind        = SlideShapeKind.AutoShape,
+        OffsetXEmu  = 100,
+        OffsetYEmu  = 200,
+        ExtentCxEmu = 300,
+        ExtentCyEmu = 400,
+        RotationDeg = 0,
+    };
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // SLIDE COMMANDS
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void InsertSlideCommand_Apply_InsertsAtCorrectIndex()
+    {
+        var (p, bus) = Make();
+        var newSlide = new Slide { Title = "New" };
+        bus.Execute(new InsertSlideCommand(0, newSlide));
+        p.Slides.Should().HaveCount(2);
+        p.Slides[0].Should().BeSameAs(newSlide);
+    }
+
+    [Fact]
+    public void InsertSlideCommand_Revert_RemovesInsertedSlide()
+    {
+        var (p, bus) = Make();
+        var original = p.Slides[0];
+        var newSlide = new Slide { Title = "New" };
+        bus.Execute(new InsertSlideCommand(0, newSlide));
+        bus.Undo();
+        p.Slides.Should().HaveCount(1);
+        p.Slides[0].Should().BeSameAs(original);
+    }
+
+    [Fact]
+    public void InsertSlideCommand_Redo_ReappliesInsert()
+    {
+        var (p, bus) = Make();
+        var newSlide = new Slide { Title = "New" };
+        bus.Execute(new InsertSlideCommand(1, newSlide));
+        bus.Undo();
+        bus.Redo();
+        p.Slides.Should().HaveCount(2);
+        p.Slides[1].Should().BeSameAs(newSlide);
+    }
+
+    [Fact]
+    public void AddSlideCommand_Apply_AppendsSlide()
+    {
+        var (p, bus) = Make();
+        var s = new Slide { Title = "Appended" };
+        bus.Execute(new AddSlideCommand(s));
+        p.Slides.Should().HaveCount(2);
+        p.Slides[1].Should().BeSameAs(s);
+    }
+
+    [Fact]
+    public void AddSlideCommand_Revert_RemovesSlide()
+    {
+        var (p, bus) = Make();
+        var s = new Slide { Title = "Appended" };
+        bus.Execute(new AddSlideCommand(s));
+        bus.Undo();
+        p.Slides.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void DeleteSlideCommand_Apply_RemovesSlide()
+    {
+        var (p, bus) = Make(2);
+        var second = p.Slides[1];
+        bus.Execute(new DeleteSlideCommand(1));
+        p.Slides.Should().HaveCount(1);
+        p.Slides.Should().NotContain(second);
+    }
+
+    [Fact]
+    public void DeleteSlideCommand_Revert_RestoresAtOriginalIndex()
+    {
+        var (p, bus) = Make(3);
+        var middle = p.Slides[1];
+        bus.Execute(new DeleteSlideCommand(1));
+        bus.Undo();
+        p.Slides.Should().HaveCount(3);
+        p.Slides[1].Should().BeSameAs(middle);
+    }
+
+    [Fact]
+    public void DuplicateSlideCommand_Apply_InsertsDeepCloneAfterSource()
+    {
+        var (p, bus) = Make(1);
+        p.Slides[0].Shapes.Clear(); // ensure clean
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new DuplicateSlideCommand(0));
+
+        p.Slides.Should().HaveCount(2);
+        // Clone has 1 shape (the one we added) but is a different object.
+        p.Slides[1].Shapes.Should().HaveCount(1);
+        p.Slides[1].Shapes[0].Should().NotBeSameAs(shape);
+        p.Slides[1].Should().NotBeSameAs(p.Slides[0]);
+    }
+
+    [Fact]
+    public void DuplicateSlideCommand_DeepClone_MutatingDuplicateDoesNotTouchOriginal()
+    {
+        var (p, bus) = Make(1);
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new DuplicateSlideCommand(0));
+        p.Slides[1].Shapes[0].OffsetXEmu = 99999;
+        shape.OffsetXEmu.Should().Be(100, "original must not be affected");
+    }
+
+    [Fact]
+    public void DuplicateSlideCommand_Revert_RemovesDuplicate()
+    {
+        var (p, bus) = Make(1);
+        bus.Execute(new DuplicateSlideCommand(0));
+        bus.Undo();
+        p.Slides.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_Apply_MovesSlideToNewPosition()
+    {
+        // 3 slides: [A, B, C] — move A (index 0) to index 2 => [B, C, A]
+        var (p, bus) = Make(3);
+        var first = p.Slides[0]; // A
+        bus.Execute(new MoveSlideCommand(0, 2));
+        // After removal of A, list is [B,C]; insert at 2 => [B,C,A]
+        p.Slides[2].Should().BeSameAs(first);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_Revert_RestoresOriginalOrder()
+    {
+        var (p, bus) = Make(3);
+        var originalOrder = p.Slides.ToList();
+        bus.Execute(new MoveSlideCommand(0, 2));
+        bus.Undo();
+        p.Slides.Should().Equal(originalOrder);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // SHAPE COMMANDS
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void AddShapeCommand_Apply_AddsShapeToSlide()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        bus.Execute(new AddShapeCommand(0, shape));
+        p.Slides[0].Shapes.Should().Contain(shape);
+    }
+
+    [Fact]
+    public void AddShapeCommand_Revert_RemovesShape()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        bus.Execute(new AddShapeCommand(0, shape));
+        bus.Undo();
+        p.Slides[0].Shapes.Should().NotContain(shape);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_Apply_RemovesShape()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new DeleteShapeCommand(0, 1));
+        p.Slides[0].Shapes.Should().NotContain(shape);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
+    {
+        var (p, bus) = Make();
+        var s1 = MakeShape(10);
+        var s2 = MakeShape(20);
+        p.Slides[0].Shapes.Add(s1);
+        p.Slides[0].Shapes.Add(s2);
+        bus.Execute(new DeleteShapeCommand(0, 10)); // delete s1 (index 0)
+        bus.Undo();
+        p.Slides[0].Shapes[0].Should().BeSameAs(s1);
+    }
+
+    [Fact]
+    public void MoveShapeCommand_Apply_TranslatesShape()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 300));
+        shape.OffsetXEmu.Should().Be(600);
+        shape.OffsetYEmu.Should().Be(500);
+    }
+
+    [Fact]
+    public void MoveShapeCommand_Revert_RestoresPosition()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 300));
+        bus.Undo();
+        shape.OffsetXEmu.Should().Be(100);
+        shape.OffsetYEmu.Should().Be(200);
+    }
+
+    [Fact]
+    public void ResizeShapeCommand_Apply_SetsNewGeometry()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new ResizeShapeCommand(0, 1, 10, 20, 500, 600));
+        shape.OffsetXEmu.Should().Be(10);
+        shape.OffsetYEmu.Should().Be(20);
+        shape.ExtentCxEmu.Should().Be(500);
+        shape.ExtentCyEmu.Should().Be(600);
+    }
+
+    [Fact]
+    public void ResizeShapeCommand_Revert_RestoresOldGeometry()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new ResizeShapeCommand(0, 1, 10, 20, 500, 600));
+        bus.Undo();
+        shape.OffsetXEmu.Should().Be(100);
+        shape.OffsetYEmu.Should().Be(200);
+        shape.ExtentCxEmu.Should().Be(300);
+        shape.ExtentCyEmu.Should().Be(400);
+    }
+
+    [Fact]
+    public void RotateShapeCommand_Apply_SetsRotation()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new RotateShapeCommand(0, 1, 45.0));
+        shape.RotationDeg.Should().Be(45.0);
+    }
+
+    [Fact]
+    public void RotateShapeCommand_Revert_RestoresOldRotation()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        shape.RotationDeg = 30;
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new RotateShapeCommand(0, 1, 90.0));
+        bus.Undo();
+        shape.RotationDeg.Should().Be(30.0);
+    }
+
+    [Fact]
+    public void SetShapeFillCommand_Apply_SetsFill()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        var fill = new ShapeFill.Solid(new SrgbColor(0xFF, 0, 0));
+        bus.Execute(new SetShapeFillCommand(0, 1, fill));
+        shape.Fill.Should().BeSameAs(fill);
+    }
+
+    [Fact]
+    public void SetShapeFillCommand_Revert_RestoresOldFill()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var oldFill = ShapeFill.None.Instance;
+        shape.Fill = oldFill;
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new SetShapeFillCommand(0, 1, new ShapeFill.Solid(new SrgbColor(0, 0xFF, 0))));
+        bus.Undo();
+        shape.Fill.Should().BeSameAs(oldFill);
+    }
+
+    [Fact]
+    public void SetShapeOutlineCommand_Apply_SetsOutline()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        var outline = new ShapeOutline.Visible(SrgbColor.Black, 2.0);
+        bus.Execute(new SetShapeOutlineCommand(0, 1, outline));
+        shape.Outline.Should().BeSameAs(outline);
+    }
+
+    [Fact]
+    public void SetShapeOutlineCommand_Revert_RestoresOldOutline()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        shape.Outline = ShapeOutline.None.Instance;
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new SetShapeOutlineCommand(0, 1, new ShapeOutline.Visible(SrgbColor.Black)));
+        bus.Undo();
+        shape.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
+    }
+
+    [Fact]
+    public void ReorderShapeCommand_Apply_MovesShapeToNewZIndex()
+    {
+        var (p, bus) = Make();
+        var s1 = MakeShape(1); var s2 = MakeShape(2); var s3 = MakeShape(3);
+        p.Slides[0].Shapes.AddRange([s1, s2, s3]);
+        // Move s1 from index 0 to index 2. After removal [s2,s3], insert at 2 => [s2,s3,s1]
+        bus.Execute(new ReorderShapeCommand(0, s1.Id, 2));
+        p.Slides[0].Shapes[2].Should().BeSameAs(s1);
+    }
+
+    [Fact]
+    public void ReorderShapeCommand_Revert_RestoresOriginalZOrder()
+    {
+        var (p, bus) = Make();
+        var s1 = MakeShape(1); var s2 = MakeShape(2); var s3 = MakeShape(3);
+        p.Slides[0].Shapes.AddRange([s1, s2, s3]);
+        bus.Execute(new ReorderShapeCommand(0, s1.Id, 2));
+        bus.Undo();
+        p.Slides[0].Shapes[0].Should().BeSameAs(s1);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // TEXT / RUN-FORMAT COMMANDS
+    // ════════════════════════════════════════════════════════════════════════════
+
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape, Run run) MakeShapeWithRun()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var tb = new TextBody();
+        var para = new Paragraph();
+        var run  = new Run { Text = "Hello", Bold = false };
+        para.Runs.Add(run);
+        tb.Paragraphs.Add(para);
+        shape.TextBody = tb;
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape, run);
+    }
+
+    [Fact]
+    public void SetShapeTextCommand_Apply_ReplacesTextBody()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        p.Slides[0].Shapes.Add(shape);
+        var newBody = new TextBody();
+        bus.Execute(new SetShapeTextCommand(0, 1, newBody));
+        shape.TextBody.Should().BeSameAs(newBody);
+    }
+
+    [Fact]
+    public void SetShapeTextCommand_Revert_RestoresOldBody()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(1);
+        var oldBody = new TextBody();
+        shape.TextBody = oldBody;
+        p.Slides[0].Shapes.Add(shape);
+        bus.Execute(new SetShapeTextCommand(0, 1, new TextBody()));
+        bus.Undo();
+        shape.TextBody.Should().BeSameAs(oldBody);
+    }
+
+    [Fact]
+    public void ToggleRunBoldCommand_Apply_TogglesBold()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 0));
+        run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToggleRunBoldCommand_Revert_RestoresBold()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new ToggleRunBoldCommand(0, 1, 0, 0));
+        bus.Undo();
+        run.Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ToggleRunItalicCommand_Apply_TogglesItalic()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new ToggleRunItalicCommand(0, 1, 0, 0));
+        run.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ToggleRunUnderlineCommand_Apply_TogglesUnderline()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new ToggleRunUnderlineCommand(0, 1, 0, 0));
+        run.Underline.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetRunFontCommand_Apply_SetsFont()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new SetRunFontCommand(0, 1, 0, 0, "Arial"));
+        run.FontFamily.Should().Be("Arial");
+    }
+
+    [Fact]
+    public void SetRunFontCommand_Revert_RestoresFont()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        run.FontFamily = "Calibri";
+        bus.Execute(new SetRunFontCommand(0, 1, 0, 0, "Arial"));
+        bus.Undo();
+        run.FontFamily.Should().Be("Calibri");
+    }
+
+    [Fact]
+    public void SetRunFontSizeCommand_Apply_SetsSize()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new SetRunFontSizeCommand(0, 1, 0, 0, 24.0));
+        run.FontSizePt.Should().Be(24.0);
+    }
+
+    [Fact]
+    public void SetRunFontSizeCommand_Revert_RestoresOldSize()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        run.FontSizePt = 18.0;
+        bus.Execute(new SetRunFontSizeCommand(0, 1, 0, 0, 24.0));
+        bus.Undo();
+        run.FontSizePt.Should().Be(18.0);
+    }
+
+    [Fact]
+    public void SetRunColorCommand_Apply_SetsColor()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        var color = ThemeAwareColor.Black;
+        bus.Execute(new SetRunColorCommand(0, 1, 0, 0, color));
+        run.Color.Should().Be(color);
+    }
+
+    [Fact]
+    public void SetRunColorCommand_Revert_RestoresOldColor()
+    {
+        var (p, bus, _, run) = MakeShapeWithRun();
+        bus.Execute(new SetRunColorCommand(0, 1, 0, 0, ThemeAwareColor.Black));
+        bus.Undo();
+        run.Color.Should().BeNull();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // BUS MECHANICS
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void Bus_CanUndo_IsTrueAfterExecute()
+    {
+        var (p, bus) = Make();
+        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Bus_CanRedo_IsTrueAfterUndo()
+    {
+        var (p, bus) = Make();
+        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Undo();
+        bus.CanRedo.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Bus_CanRedo_IsFalseAfterNewExecute()
+    {
+        var (p, bus) = Make();
+        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Undo();
+        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.CanRedo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Bus_Changed_FiresOnExecute()
+    {
+        var (p, bus) = Make();
+        int fired = 0;
+        bus.Changed += () => fired++;
+        bus.Execute(new AddSlideCommand(new Slide()));
+        fired.Should().Be(1);
+    }
+
+    [Fact]
+    public void Bus_Changed_FiresOnUndoAndRedo()
+    {
+        var (p, bus) = Make();
+        int fired = 0;
+        bus.Changed += () => fired++;
+        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Undo();
+        bus.Redo();
+        fired.Should().Be(3);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // DEEP-CLONE
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SlideCloner_CloneSlide_NewId()
+    {
+        var slide = new Slide { Title = "Orig" };
+        var clone = SlideCloner.CloneSlide(slide);
+        clone.Id.Should().NotBe(slide.Id);
+    }
+
+    [Fact]
+    public void SlideCloner_CloneSlide_SameTitle()
+    {
+        var slide = new Slide();
+        // Set title directly via shape so we don't accidentally pick up CreateEmpty shapes.
+        slide.Title = "Orig";
+        var clone = SlideCloner.CloneSlide(slide);
+        clone.Title.Should().Be("Orig");
+    }
+
+    [Fact]
+    public void SlideCloner_MutatingCloneDoesNotTouchOriginal()
+    {
+        var slide = new Slide();
+        var shape = MakeShape(1);
+        slide.Shapes.Add(shape);
+        var clone = SlideCloner.CloneSlide(slide);
+        clone.Shapes[0].OffsetXEmu = 99999;
+        shape.OffsetXEmu.Should().Be(100, "original must not be affected");
+    }
+
+    [Fact]
+    public void SlideCloner_CloneShape_ClonesTextBody()
+    {
+        var shape = MakeShape(1);
+        shape.TextBody = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "hello", Bold = true });
+        shape.TextBody.Paragraphs.Add(para);
+
+        var clone = SlideCloner.CloneShape(shape);
+        clone.TextBody.Should().NotBeNull();
+        clone.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("hello");
+        clone.TextBody.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+
+        // Mutating clone's run should not affect original.
+        clone.TextBody.Paragraphs[0].Runs[0].Bold = false;
+        para.Runs[0].Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SlideCloner_CloneShape_ClonesGroupChildren()
+    {
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(1));
+        var clone = SlideCloner.CloneShape(group);
+        clone.Children.Should().HaveCount(1);
+        clone.Children[0].Should().NotBeSameAs(group.Children[0]);
+    }
+}

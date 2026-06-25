@@ -1,0 +1,216 @@
+using System.Windows;
+using System.Windows.Controls;
+using FreeP.App.Compositor;
+using FreeP.App.Host;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Tests for <see cref="SlidePane"/> (Wave 3B).
+/// All tests run on an STA thread because SlidePane is a WPF control.
+/// </summary>
+public sealed class SlidePaneTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Navigates to the StackPanel inside SlidePane.
+    /// SlidePane.Child is a Grid (overlay grid for insert indicator).
+    /// Grid.Children[0] is the ScrollViewer; ScrollViewer.Content is the StackPanel.
+    /// </summary>
+    private static StackPanel GetStack(SlidePane pane)
+    {
+        var overlay = (Grid)pane.Child!;
+        var scroll  = (ScrollViewer)overlay.Children[0];
+        return (StackPanel)scroll.Content!;
+    }
+
+    /// <summary>
+    /// Counts the slide-item Borders in the pane's inner StackPanel.
+    /// The last child of the StackPanel is always the "New Slide" button — excluded.
+    /// </summary>
+    private static int CountThumbnailItems(SlidePane pane)
+    {
+        var stack = GetStack(pane);
+        // Last child is the "New Slide" button.
+        return Math.Max(0, stack.Children.Count - 1);
+    }
+
+    /// <summary>
+    /// Returns the slide-item Border at position <paramref name="index"/>.
+    /// </summary>
+    private static Border GetItem(SlidePane pane, int index)
+    {
+        var stack = GetStack(pane);
+        return (Border)stack.Children[index];
+    }
+
+    private static ScrollViewer GetScrollViewer(SlidePane pane)
+    {
+        var overlay = (Grid)pane.Child!;
+        return (ScrollViewer)overlay.Children[0];
+    }
+
+    private static (SlidePane pane, EditingSession editor) MakePaneWithSlides(int count)
+    {
+        var presentation = Presentation.CreateEmpty();
+        // CreateEmpty() adds 1 slide; add (count-1) more if needed.
+        for (int i = 1; i < count; i++)
+        {
+            var s = new Slide { Title = $"Slide {i + 1}" };
+            presentation.Slides.Add(s);
+        }
+        var bus    = new PresentationCommandBus(presentation);
+        var editor = new EditingSession(presentation, bus);
+        var pane   = new SlidePane(editor);
+        return (pane, editor);
+    }
+
+    // ── Construction ──────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void SlidePane_Constructs_WithOneSlide()
+    {
+        var (pane, _) = MakePaneWithSlides(1);
+        pane.Should().NotBeNull();
+        CountThumbnailItems(pane).Should().Be(1);
+    }
+
+    [StaFact]
+    public void SlidePane_Constructs_WithThreeSlides_ShowsThreeItems()
+    {
+        var (pane, _) = MakePaneWithSlides(3);
+        CountThumbnailItems(pane).Should().Be(3);
+    }
+
+    [StaFact]
+    public void SlidePane_HasNewSlideButtonAtBottom()
+    {
+        var (pane, _) = MakePaneWithSlides(2);
+        var stack = GetStack(pane);
+        // Last child must be the "New Slide" button.
+        stack.Children[^1].Should().BeOfType<Button>();
+    }
+
+    // ── Selection ─────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void ClickingItem_SelectsSlide()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+        // Editor starts on slide 0. Simulate clicking slide 2 by raising the event directly.
+        editor.SelectSlide(2);
+        editor.CurrentSlideIndex.Should().Be(2);
+    }
+
+    [StaFact]
+    public void SlidePane_Item_Tag_ReflectsSlideIndex()
+    {
+        var (pane, _) = MakePaneWithSlides(3);
+        for (int i = 0; i < 3; i++)
+        {
+            var item = GetItem(pane, i);
+            item.Tag.Should().Be(i, $"item {i} should carry tag {i}");
+        }
+    }
+
+    [StaFact]
+    public void SlidePane_HighlightedItem_IsCurrentSlideIndex()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+        editor.SelectSlide(1);
+
+        // After select, item at index 1 should have the accent border thickness (2).
+        var selected = GetItem(pane, 1);
+        selected.BorderThickness.Left.Should().Be(2,
+            "selected item must have the accent 2-px border");
+
+        var other = GetItem(pane, 0);
+        other.BorderThickness.Left.Should().Be(1,
+            "non-selected item must have the normal 1-px border");
+    }
+
+    // ── Structural changes ────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void AfterInsertSlide_PaneShowsNPlusOneItems()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.InsertSlide();
+        CountThumbnailItems(pane).Should().Be(3);
+    }
+
+    [StaFact]
+    public void AfterDuplicateCurrentSlide_PaneShowsNPlusOneItems()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.DuplicateCurrentSlide();
+        CountThumbnailItems(pane).Should().Be(3);
+    }
+
+    [StaFact]
+    public void AfterDeleteCurrentSlide_PaneShowsNMinusOneItems()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+        editor.DeleteCurrentSlide();
+        CountThumbnailItems(pane).Should().Be(2);
+    }
+
+    // ── Reorder ───────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void MoveSlide_Reorders_AndPaneReflectsNewOrder()
+    {
+        // Start with 3 slides: 0, 1, 2.
+        var (pane, editor) = MakePaneWithSlides(3);
+
+        // Give each slide a distinct title so we can verify reorder.
+        editor.Presentation.Slides[0].Title = "Alpha";
+        editor.Presentation.Slides[1].Title = "Beta";
+        editor.Presentation.Slides[2].Title = "Gamma";
+
+        // Move slide 0 (Alpha) to position 2.
+        // MoveSlide(from, to): removes item at `from`, then inserts at `to` of the shortened list.
+        // Remove Alpha → [Beta(0), Gamma(1)], then Insert at 2 → [Beta(0), Gamma(1), Alpha(2)].
+        editor.MoveSlide(0, 2);
+
+        // After move, pane still has 3 items.
+        CountThumbnailItems(pane).Should().Be(3);
+
+        // Tags should be re-assigned 0..2 in the new order.
+        for (int i = 0; i < 3; i++)
+            GetItem(pane, i).Tag.Should().Be(i);
+
+        // Actual model order after MoveSlide(0,2): Beta(0), Gamma(1), Alpha(2).
+        editor.Presentation.Slides[0].Title.Should().Be("Beta");
+        editor.Presentation.Slides[2].Title.Should().Be("Alpha");
+    }
+
+    // ── Undo ─────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void Undo_AfterInsert_PaneRestoresOriginalCount()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.InsertSlide();
+        editor.Undo();
+        CountThumbnailItems(pane).Should().Be(2);
+    }
+
+    // ── MainWindow seam ───────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void MainWindow_SlidePaneHost_HasSlidePaneChild()
+    {
+        var window = new MainWindow();
+        try
+        {
+            window.SlidePaneHost.Child.Should().BeOfType<SlidePane>(
+                "MainWindow must set SlidePaneHost.Child to a SlidePane at construction");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+}
