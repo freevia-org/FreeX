@@ -74,5 +74,8 @@ public enum SlideShapeKind
     Connector = 4,
 
     /// <summary>An embedded chart (p:graphicFrame with c:chart graphicData).</summary>
-    Chart = 5
+    Chart = 5,
+
+    /// <summary>A SmartArt graphic (p:graphicFrame with dgm: graphicData). Rendered via cached dsp:drawing fallback shapes.</summary>
+    SmartArt = 6
 }

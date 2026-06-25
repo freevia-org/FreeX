@@ -180,6 +180,11 @@ public sealed class SlideShape
     /// <summary>Chart data when Kind == Chart.</summary>
     public ChartShape? Chart { get; set; }
 
+    // ── SmartArt ───────────────────────────────────────────────────────────────────
+
+    /// <summary>SmartArt data when Kind == SmartArt.</summary>
+    public SmartArtShape? SmartArt { get; set; }
+
     // ── Group children ────────────────────────────────────────────────────────────
 
     /// <summary>Child shapes when Kind == Group.</summary>
