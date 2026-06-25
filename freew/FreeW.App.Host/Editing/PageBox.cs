@@ -115,6 +115,13 @@ internal sealed class PageBox : Border
     /// </summary>
     internal SectionHeadersFooters? OwnerSectionHf { get; set; }
 
+    /// <summary>
+    /// The <see cref="PageSettings"/> that governs this page's geometry (width, height, orientation,
+    /// margins).  Set from the section that owns this page so portrait and landscape sections can
+    /// render at different sizes inside the same panel.
+    /// </summary>
+    internal PageSettings PageGeometry { get; private set; } = null!;
+
     // ── neighbour references (set by PaginatedEditorPanel after all boxes are created) ────────────
     internal PageBox? PreviousBox { get; set; }
     internal PageBox? NextBox { get; set; }
@@ -170,6 +177,7 @@ internal sealed class PageBox : Border
         IReadOnlyList<int>? endnoteIds = null)
     {
         PageNumber = pageNumber;
+        PageGeometry = page;
         HeaderSlotName = headerSlotName;
         FooterSlotName = footerSlotName;
         if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
