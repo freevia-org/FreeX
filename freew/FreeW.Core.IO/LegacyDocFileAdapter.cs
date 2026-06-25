@@ -22,8 +22,8 @@ public sealed class LegacyDocFileAdapter : IDocumentFileAdapter
 
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
-        new(".doc", "Word 97-2003 Document", CanOpen: true, CanSave: true),
-        new(".dot", "Word 97-2003 Template", CanOpen: true, CanSave: true, OpensAsTemplate: true),
+        new(".doc", "Word 97-2003 Document", CanOpen: true, CanSave: true, IsLegacy: true),
+        new(".dot", "Word 97-2003 Template", CanOpen: true, CanSave: true, OpensAsTemplate: true, IsLegacy: true),
     ];
 
     public TextDocument Load(Stream stream)
