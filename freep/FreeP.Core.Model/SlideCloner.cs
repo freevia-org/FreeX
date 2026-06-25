@@ -25,7 +25,8 @@ public static class SlideCloner
         {
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
             LayoutId   = slide.LayoutId,
-            Background = slide.Background           // ShapeFill is immutable — share reference
+            Background = slide.Background,           // ShapeFill is immutable — share reference
+            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes)
         };
 
         foreach (var shape in slide.Shapes)

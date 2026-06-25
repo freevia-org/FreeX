@@ -883,6 +883,43 @@ public sealed class SetShapeAnimationCommand : IPresentationCommand
     }
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// NOTES COMMAND
+// ════════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Replaces the speaker-notes <see cref="TextBody"/> on the slide at <paramref name="slideIndex"/>.
+/// Captures the previous value for undo. Pass null to clear notes.
+/// </summary>
+public sealed class SetSlideNotesCommand : IPresentationCommand
+{
+    private readonly int       _slideIndex;
+    private readonly TextBody? _newNotes;
+    private TextBody?          _oldNotes;
+
+    public SetSlideNotesCommand(int slideIndex, TextBody? newNotes)
+    {
+        _slideIndex = slideIndex;
+        _newNotes   = newNotes;
+    }
+
+    public string Label => "Set Notes";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var slide  = p.Slides[_slideIndex];
+        _oldNotes  = slide.Notes;
+        slide.Notes = _newNotes;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        p.Slides[_slideIndex].Notes = _oldNotes;
+    }
+}
+
 /// <summary>Sets the color on a single run; captures old value for undo.</summary>
 public sealed class SetRunColorCommand : IPresentationCommand
 {
