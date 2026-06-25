@@ -239,7 +239,104 @@ public static class PptxPackageReader
                 master.Placeholders.Add(shape);
         }
 
+        // p:txStyles — master default text styles per placeholder category
+        var txStyles = xml.Root.Element(P + "txStyles");
+        if (txStyles is not null)
+        {
+            master.TextStyles = new MasterTextStyles();
+            ReadTextStyleLevels(txStyles.Element(P + "titleStyle"), master.TextStyles.TitleStyle, scheme);
+            ReadTextStyleLevels(txStyles.Element(P + "bodyStyle"),  master.TextStyles.BodyStyle,  scheme);
+            ReadTextStyleLevels(txStyles.Element(P + "otherStyle"), master.TextStyles.OtherStyle, scheme);
+        }
+
+        // p:clrMap — master color role mapping
+        var clrMap = xml.Root.Element(P + "clrMap");
+        if (clrMap is not null)
+        {
+            master.ColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var attr in clrMap.Attributes())
+            {
+                if (attr.IsNamespaceDeclaration) continue;
+                master.ColorMap[attr.Name.LocalName] = attr.Value;
+            }
+        }
+
         return (master, theme);
+    }
+
+    // ── p:txStyles parsing ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parses a p:titleStyle / p:bodyStyle / p:otherStyle element (or any element that holds
+    /// a:lvl1pPr .. a:lvl9pPr) into a <see cref="TextStyleLevels"/> instance.
+    /// </summary>
+    private static void ReadTextStyleLevels(XElement? styleEl, TextStyleLevels levels, PresentationColorScheme scheme)
+    {
+        if (styleEl is null) return;
+        for (int i = 1; i <= 9; i++)
+        {
+            var lvlEl = styleEl.Element(A + $"lvl{i}pPr");
+            if (lvlEl is null) continue;
+            levels[i - 1] = ReadTextStyleLevel(lvlEl, scheme);
+        }
+    }
+
+    private static TextStyleLevel ReadTextStyleLevel(XElement lvlEl, PresentationColorScheme scheme)
+    {
+        var level = new TextStyleLevel();
+
+        // Paragraph-level attributes
+        var algnStr = lvlEl.Attribute("algn")?.Value;
+        if (!string.IsNullOrWhiteSpace(algnStr))
+            level.Align = algnStr switch
+            {
+                "ctr"  => TextAlign.Center,
+                "r"    => TextAlign.Right,
+                "just" => TextAlign.Justify,
+                "dist" => TextAlign.Distributed,
+                "l"    => TextAlign.Left,
+                _      => (TextAlign?)null
+            };
+
+        if (ParseLongNullable(lvlEl.Attribute("marL")?.Value) is { } ml)  level.MarginLeftEmu = ml;
+        if (ParseLongNullable(lvlEl.Attribute("indent")?.Value) is { } ind) level.IndentEmu    = ind;
+
+        // Bullet
+        if (lvlEl.Element(A + "buNone") is not null)
+            level.BulletKind = BulletKind.None;
+        else if (lvlEl.Element(A + "buChar") is { } buChar)
+        {
+            level.BulletKind = BulletKind.Char;
+            level.BulletChar = buChar.Attribute("char")?.Value ?? "•";
+        }
+        else if (lvlEl.Element(A + "buAutoNum") is not null)
+            level.BulletKind = BulletKind.Auto;
+
+        // a:defRPr — default run properties
+        var defRPr = lvlEl.Element(A + "defRPr");
+        if (defRPr is not null)
+        {
+            if (int.TryParse(defRPr.Attribute("sz")?.Value,
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var sz) && sz > 0)
+                level.FontSizePt = sz / 100.0;
+
+            var bVal = defRPr.Attribute("b")?.Value;
+            if (bVal is "1" or "true")  level.Bold = true;
+            else if (bVal is "0" or "false") level.Bold = false;
+
+            var iVal = defRPr.Attribute("i")?.Value;
+            if (iVal is "1" or "true")  level.Italic = true;
+            else if (iVal is "0" or "false") level.Italic = false;
+
+            var solidFill = defRPr.Element(A + "solidFill");
+            if (solidFill is not null)
+                level.Color = PptxColorReader.TryReadColor(solidFill, scheme);
+
+            level.LatinFont = defRPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+        }
+
+        return level;
     }
 
     // ── Slide Layout ─────────────────────────────────────────────────────────────
@@ -729,11 +826,11 @@ public static class PptxPackageReader
             body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
         }
 
-        // Parse a:lstStyle/a:lvl1pPr algn — carries per-level paragraph alignment defaults
-        // (e.g. "ctr" on layout ctrTitle placeholder).
+        // Parse a:lstStyle — full per-level paragraph/run defaults.
         var lstStyle = txBody.Element(A + "lstStyle");
         if (lstStyle is not null)
         {
+            // Quick compat: keep existing DefaultParaAlign from lvl1pPr algn
             var lvl1Algn = lstStyle.Element(A + "lvl1pPr")?.Attribute("algn")?.Value;
             body.DefaultParaAlign = lvl1Algn switch
             {
@@ -744,6 +841,18 @@ public static class PptxPackageReader
                 "l" => TextAlign.Left,
                 _ => (TextAlign?)null
             };
+
+            // Full lstStyle — read all 9 levels if any are present
+            bool hasAny = false;
+            var levels = new TextStyleLevels();
+            for (int i = 1; i <= 9; i++)
+            {
+                var lvlEl = lstStyle.Element(A + $"lvl{i}pPr");
+                if (lvlEl is null) continue;
+                levels[i - 1] = ReadTextStyleLevel(lvlEl, scheme);
+                hasAny = true;
+            }
+            if (hasAny) body.LstStyle = levels;
         }
 
         foreach (var pEl in txBody.Elements(A + "p"))
