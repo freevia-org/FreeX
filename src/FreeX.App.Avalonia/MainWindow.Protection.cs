@@ -51,7 +51,7 @@ public sealed partial class MainWindow
         {
             Title = state.IsProtected ? UiText.Get("ShellLoc_UnprotectSheetTitle") : UiText.Get("ShellLoc_ProtectSheetTitle"),
             Width = state.IsProtected ? 380 : 430,
-            Height = state.IsProtected ? 200 : 560,
+            Height = state.IsProtected ? 240 : 580,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -92,19 +92,38 @@ public sealed partial class MainWindow
 
         if (state.IsProtected)
         {
-            contentChildren.Add(new TextBlock
+            var unprotectPanel = new StackPanel
             {
-                Text = state.HasPassword
-                    ? UiText.Get("ShellLoc_SheetProtectedEnterPassword")
-                    : UiText.Get("ShellLoc_SheetProtectedClickOk"),
-                Foreground = HeaderForeground,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
-            });
+                Spacing = 6,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = state.HasPassword
+                            ? UiText.Get("ShellLoc_SheetProtectedEnterPassword")
+                            : UiText.Get("ShellLoc_SheetProtectedClickOk"),
+                        Foreground = HeaderForeground,
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    },
+                },
+            };
 
             if (state.HasPassword)
-                contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+            {
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+                unprotectPanel.Children.Add(new TextBlock
+                {
+                    Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                    Foreground = Brush(110, 110, 110),
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 11,
+                    FontFamily = FormulaBarFontFamily,
+                });
+            }
+
+            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), unprotectPanel));
 
             okButton.Click += (_, _) =>
             {
@@ -142,17 +161,37 @@ public sealed partial class MainWindow
                 index++;
             }
 
-            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox));
-            contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox));
             contentChildren.Add(new TextBlock
             {
-                Text = UiText.Get("ShellLoc_AllowAllUsersToLabel"),
+                Text = ProtectText("ShellLoc_ProtectWorksheetContentsHeader", "Protect worksheet and contents of locked cells"),
                 Foreground = HeaderForeground,
-                Margin = new Thickness(0, 6, 0, 0),
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4),
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             });
-            contentChildren.Add(new ScrollViewer { Content = checklist, MaxHeight = 280 });
+
+            var passwordPanel = new StackPanel
+            {
+                Spacing = 6,
+                Children =
+                {
+                    ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox),
+                    ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox),
+                    new TextBlock
+                    {
+                        Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                        Foreground = Brush(110, 110, 110),
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 11,
+                        FontFamily = FormulaBarFontFamily,
+                    },
+                },
+            };
+            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), passwordPanel));
+            contentChildren.Add(ProtectionGroupBox(
+                UiText.Get("ShellLoc_AllowAllUsersToLabel"),
+                new ScrollViewer { Content = checklist, MaxHeight = 280 }));
 
             okButton.Click += (_, _) =>
             {
@@ -212,7 +251,7 @@ public sealed partial class MainWindow
         {
             Title = state.IsStructureProtected ? UiText.Get("ShellLoc_UnprotectWorkbookTitle") : UiText.Get("ShellLoc_ProtectWorkbookTitle"),
             Width = 380,
-            Height = state.IsStructureProtected ? 200 : 320,
+            Height = state.IsStructureProtected ? 240 : 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -260,19 +299,38 @@ public sealed partial class MainWindow
 
         if (state.IsStructureProtected)
         {
-            contentChildren.Add(new TextBlock
+            var unprotectPanel = new StackPanel
             {
-                Text = state.HasPassword
-                    ? UiText.Get("ShellLoc_WorkbookProtectedEnterPassword")
-                    : UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
-                Foreground = HeaderForeground,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
-            });
+                Spacing = 6,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = state.HasPassword
+                            ? UiText.Get("ShellLoc_WorkbookProtectedEnterPassword")
+                            : UiText.Get("ShellLoc_WorkbookProtectedClickOk"),
+                        Foreground = HeaderForeground,
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    },
+                },
+            };
 
             if (state.HasPassword)
-                contentChildren.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+            {
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox));
+                unprotectPanel.Children.Add(new TextBlock
+                {
+                    Text = ProtectText("ShellLoc_CautionPasswordsCannotBeRecovered", "Caution: lost or forgotten passwords cannot be recovered."),
+                    Foreground = Brush(110, 110, 110),
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 11,
+                    FontFamily = FormulaBarFontFamily,
+                });
+            }
+
+            contentChildren.Add(ProtectionGroupBox(ProtectText("ShellLoc_PasswordGroupHeader", "Password"), unprotectPanel));
 
             okButton.Click += (_, _) =>
             {
@@ -349,6 +407,47 @@ public sealed partial class MainWindow
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the localized string for <paramref name="key"/> when it exists in the catalog, otherwise the
+    /// supplied neutral-English <paramref name="fallback"/>. Used by the Protect dialogs so newly-introduced
+    /// group/header captions render correctly even before their <c>.resx</c> keys land (avoiding the visible
+    /// <c>[[Key]]</c> marker), while still picking up translations once the keys are added.
+    /// </summary>
+    private static string ProtectText(string key, string fallback) =>
+        UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback;
+
+    /// <summary>
+    /// A bordered group with a header label — the Avalonia equivalent of the WPF <c>GroupBox</c> used by the
+    /// Protect dialogs to frame the Password area and the "Allow all users of this worksheet to:" checklist.
+    /// Matches the Windows reference, which draws a thin grey border around each section with a caption.
+    /// </summary>
+    private static Border ProtectionGroupBox(string header, Control content)
+    {
+        content.Margin = new Thickness(8, 6, 8, 8);
+        return new Border
+        {
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(0),
+            Child = new StackPanel
+            {
+                Spacing = 0,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = header,
+                        Foreground = HeaderForeground,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        Margin = new Thickness(8, 4, 8, 0),
+                    },
+                    content,
+                },
+            },
+        };
+    }
 
     private static StackPanel ProtectionLabeledField(string label, Control field)
     {

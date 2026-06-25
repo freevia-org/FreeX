@@ -70,6 +70,24 @@ if (!opts.SkipCapture)
 var winManifest = LoadManifest(winDir, "windows", "wpf");
 var linManifest = LoadManifest(linDir, "linux", "avalonia");
 
+// H8: A capture side that was supposed to run but produced no surfaces (empty or absent manifest)
+// must fail the gate explicitly. Otherwise every surface would be classified as WindowsOnly/LinuxOnly,
+// IsHardRegression would find nothing, and the tool would vacuously report PASS when one shell
+// rendered absolutely nothing.
+if (!opts.SkipCapture)
+{
+    if (!opts.LinuxOnly && winManifest.Surfaces.Count == 0)
+    {
+        Console.Error.WriteLine("FATAL: Windows capture produced no surfaces — manifest is empty or absent. Parity gate cannot be evaluated.");
+        return 3;
+    }
+    if (!opts.WinOnly && linManifest.Surfaces.Count == 0)
+    {
+        Console.Error.WriteLine("FATAL: Linux capture produced no surfaces — manifest is empty or absent. Parity gate cannot be evaluated.");
+        return 3;
+    }
+}
+
 var engine = new ParityComparisonEngine();
 var comparison = engine.Compare(winManifest, linManifest, winDir, linDir, imagesDir, opts.Threshold);
 

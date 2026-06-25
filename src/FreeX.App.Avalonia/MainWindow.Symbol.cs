@@ -97,6 +97,18 @@ public sealed partial class MainWindow
             dialog.Close();
         }
 
+        var symbolCells = new List<Button>();
+        var selectedCellBrush = Brush(0, 120, 215);
+        void HighlightSelectedCell(string symbol)
+        {
+            foreach (var cell in symbolCells)
+            {
+                var isSelected = string.Equals(cell.Content as string, symbol, StringComparison.Ordinal);
+                cell.Background = isSelected ? Brush(204, 232, 255) : Brushes.Transparent;
+                cell.BorderBrush = isSelected ? selectedCellBrush : Brushes.Transparent;
+            }
+        }
+
         void ApplySelection(string symbol)
         {
             selectedSymbol = symbol;
@@ -107,6 +119,7 @@ public sealed partial class MainWindow
                 ? name
                 : $"Unicode U+{selection.CodeText}";
             selectedSubset.Text = "Latin-1 Supplement";
+            HighlightSelectedCell(symbol);
         }
 
         var fontBox = new ComboBox
@@ -139,7 +152,11 @@ public sealed partial class MainWindow
             Margin = new Thickness(3),
         };
         foreach (var symbol in symbols)
-            symbolGrid.Children.Add(CreateSymbolCell(symbol, ApplySelection, AcceptAndClose));
+        {
+            var cell = CreateSymbolCell(symbol, ApplySelection, AcceptAndClose);
+            symbolCells.Add(cell);
+            symbolGrid.Children.Add(cell);
+        }
 
         var symbolListHost = new Border
         {
@@ -335,6 +352,9 @@ public sealed partial class MainWindow
             Margin = new Thickness(0),
             FontSize = compact ? 16 : 18,
             FontFamily = new FontFamily("Segoe UI Symbol"),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
         };

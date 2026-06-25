@@ -273,10 +273,19 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return payload;
     }
 
-    private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf, string iconSetStyle) =>
-        cf.IconSetThresholds.Count >= GetIconSetCount(iconSetStyle)
-            ? cf.IconSetThresholds
-            : CreateDefaultIconSetThresholds(iconSetStyle);
+    private static IReadOnlyList<CfThresholdModel> GetIconSetThresholds(ConditionalFormat cf, string iconSetStyle)
+    {
+        var iconCount = GetIconSetCount(iconSetStyle);
+        if (cf.IconSetThresholds.Count < iconCount)
+            return CreateDefaultIconSetThresholds(iconSetStyle);
+
+        // OOXML CT_IconSet requires EXACTLY icon-count cfvo elements. A longer-than-icon-count
+        // list would emit excess <cfvo> elements that Excel repairs/strips. Take only what is needed.
+        if (cf.IconSetThresholds.Count > iconCount)
+            return cf.IconSetThresholds.Take(iconCount).ToList();
+
+        return cf.IconSetThresholds;
+    }
 
     private static IReadOnlyList<CfThresholdModel> CreateDefaultIconSetThresholds(string iconSetStyle)
     {
@@ -432,14 +441,24 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new XElement(xmNs + "sqref", BuildSqref(cf))));
         }
 
-        worksheetRoot.Add(new XElement(
-            worksheetNs + "extLst",
-            new XElement(
-                worksheetNs + "ext",
-                new XAttribute(XNamespace.Xmlns + "x14", x14Ns.NamespaceName),
-                new XAttribute(XNamespace.Xmlns + "xm", xmNs.NamespaceName),
-                new XAttribute("uri", x14CfUri),
-                new XElement(x14Ns + "conditionalFormattings", x14CfElements))));
+        // Reuse the last existing worksheet-root extLst rather than appending a new one.
+        // The schema normalizer keeps only the FIRST extLst and silently drops later ones,
+        // which would discard the x14 CF ext if another extLst (e.g. from x14 data-validations)
+        // already exists. Mirror the FindOrCreateExtLst pattern from XlsxX14DataValidationWriter.
+        var existingExtLst = worksheetRoot.Elements()
+            .LastOrDefault(e => e.Name.LocalName == "extLst");
+        if (existingExtLst is null)
+        {
+            existingExtLst = new XElement(worksheetNs + "extLst");
+            worksheetRoot.Add(existingExtLst);
+        }
+
+        existingExtLst.Add(new XElement(
+            worksheetNs + "ext",
+            new XAttribute(XNamespace.Xmlns + "x14", x14Ns.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xm", xmNs.NamespaceName),
+            new XAttribute("uri", x14CfUri),
+            new XElement(x14Ns + "conditionalFormattings", x14CfElements)));
     }
 
     private static XElement ToX14DataBarCfvoXml(

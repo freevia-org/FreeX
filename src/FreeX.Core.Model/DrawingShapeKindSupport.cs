@@ -46,7 +46,9 @@ public static class DrawingShapeKindSupport
             DrawingShapeKind.RectangularCallout or
             DrawingShapeKind.RoundedRectangularCallout or
             DrawingShapeKind.OvalCallout or
-            DrawingShapeKind.LineCallout => true,
+            DrawingShapeKind.LineCallout or
+            DrawingShapeKind.Chevron or
+            DrawingShapeKind.HomePlate => true,
             _ => false
         };
 

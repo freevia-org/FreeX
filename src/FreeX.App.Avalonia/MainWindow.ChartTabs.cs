@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -109,35 +110,72 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Small combo-box chart-type picker. Lists the authorable, non-deferred chart families from the
-    /// shared <see cref="ChartTypeChangePlanner.GetSupportedChoices"/> (which filters out families like
-    /// Map that Core renders but cannot author/convert to) with their English labels. Returns the chosen
-    /// <see cref="ChartType"/> or null on cancel.
+    /// "Change Chart Type" picker matching the WPF <c>ChangeChartTypeDialog</c> ("All Charts" panel):
+    /// a left category list (Column, Line, Pie, Bar, Area, X Y (Scatter), …) and a right area whose top
+    /// shows a subtype gallery for the selected category and whose side carries a preview panel. Both the
+    /// category grouping and the authorable subtype set come from the shared
+    /// <see cref="ChartTypeChangePlanner"/> so the surface stays in lock-step with the renderer's
+    /// authorable families. Returns the chosen <see cref="ChartType"/> or null on cancel.
     /// </summary>
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
-        var choices = ChartTypeChangePlanner.GetSupportedChoices();
+        var categories = ChartTypeChangePlanner.GetCategories();
 
-        var combo = new ComboBox
+        // ---- Category list (left) ------------------------------------------------------------------
+        var categoryList = new ListBox
         {
-            Width = 260,
-            ItemsSource = choices,
+            Width = 160,
+            Height = 230,
+            SelectionMode = SelectionMode.Single,
+            ItemsSource = categories,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(string.Empty)
+            {
+                Converter = new FuncValueConverter<ChartTypeCategory, string>(c => c is null ? string.Empty : UiText.Get(c.NameKey)),
+            },
+        };
+        AutomationProperties.SetName(categoryList, UiText.Get("ChartTypePicker_CategoriesAutomationName"));
+        AutomationProperties.SetAutomationId(categoryList, "ChangeChartTypeCategoryList");
+
+        // ---- Subtype gallery (right top) -----------------------------------------------------------
+        var subtypeGallery = new ListBox
+        {
+            Width = 200,
+            Height = 230,
+            SelectionMode = SelectionMode.Single,
             DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartTypeChoice.DisplayName)),
         };
-        AutomationProperties.SetName(combo, "Chart type");
-        AutomationProperties.SetAutomationId(combo, "ChangeChartTypeCombo");
-        ApplyChartComboBoxChrome(combo);
-        combo.SelectedItem =
-            choices.FirstOrDefault(c => c.Type == currentType)
-            ?? (choices.Count > 0 ? choices[0] : null);
+        AutomationProperties.SetName(subtypeGallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
+        AutomationProperties.SetAutomationId(subtypeGallery, "ChangeChartTypeSubtypeGallery");
+
+        categoryList.SelectionChanged += (_, _) =>
+        {
+            if (categoryList.SelectedItem is not ChartTypeCategory category)
+                return;
+            subtypeGallery.ItemsSource = category.Choices;
+            subtypeGallery.SelectedIndex = category.Choices.Count > 0 ? 0 : -1;
+        };
+
+        // Select the category/subtype that owns the chart's current type (fall back to the first).
+        var initialCategory =
+            categories.FirstOrDefault(c => c.Choices.Any(o => o.Type == currentType))
+            ?? (categories.Count > 0 ? categories[0] : null);
+        categoryList.SelectedItem = initialCategory;
+        if (initialCategory is not null)
+        {
+            subtypeGallery.ItemsSource = initialCategory.Choices;
+            subtypeGallery.SelectedItem =
+                initialCategory.Choices.FirstOrDefault(o => o.Type == currentType)
+                ?? (initialCategory.Choices.Count > 0 ? initialCategory.Choices[0] : null);
+        }
+
+        // ---- Preview panel (right side) ------------------------------------------------------------
+        var preview = BuildChartTypePreviewPanel();
 
         var dialog = new Window
         {
-            Title = UiText.Get("ChartLoc_ChangeChartTypeTitle"),
-            Width = 380,
-            SizeToContent = SizeToContent.Height,
-            MinWidth = 340,
-            MinHeight = 200,
+            Title = UiText.Get("ChangeChartType_Title"),
+            SizeToContent = SizeToContent.WidthAndHeight,
+            MinWidth = 600,
             Background = Brushes.White,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -148,27 +186,51 @@ public sealed partial class MainWindow
         var okButton = new Button { Content = UiText.Get("Common_Ok"), Width = 80, IsDefault = true };
         AutomationProperties.SetAutomationId(okButton, "ChangeChartTypeOkButton");
         ApplyChartButtonChrome(okButton, 80, isDefault: true);
-        okButton.Click += (_, _) => dialog.Close(combo.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
+        okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypeChoice picked ? (ChartType?)picked.Type : null);
 
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ChangeChartTypeCancelButton");
         ApplyChartButtonChrome(cancelButton, 80);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
 
+        // Body grid: category list | subtype gallery | preview.
+        var bodyGrid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bodyGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+
+        categoryList.Margin = new Thickness(0, 0, 12, 0);
+        Grid.SetColumn(categoryList, 0);
+        bodyGrid.Children.Add(categoryList);
+
+        subtypeGallery.Margin = new Thickness(0, 0, 12, 0);
+        Grid.SetColumn(subtypeGallery, 1);
+        bodyGrid.Children.Add(subtypeGallery);
+
+        Grid.SetColumn(preview, 2);
+        bodyGrid.Children.Add(preview);
+
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
-            MinWidth = 292,
+            Spacing = 4,
             Children =
             {
-                // WPF "All Charts" section header + help text
+                // WPF "Choose a chart type" heading + "All Charts" subheading and help text.
+                new TextBlock
+                {
+                    Text = UiText.Get("ChartTypePicker_ChooseChartTypeHeading"),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    FontWeight = FontWeight.SemiBold,
+                },
                 new TextBlock
                 {
                     Text = UiText.Get("ChartTypePicker_AllChartsHeading"),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 4, 0, 0),
                 },
                 new TextBlock
                 {
@@ -179,20 +241,90 @@ public sealed partial class MainWindow
                     Foreground = Brush(96, 96, 96),
                     Margin = new Thickness(0, 0, 0, 4),
                 },
-                new TextBlock { Text = UiText.Get("ChartLoc_ChooseChartType"), FontSize = 12, FontFamily = FormulaBarFontFamily },
-                combo,
+                bodyGrid,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 4, 0, 0),
+                    Margin = new Thickness(0, 8, 0, 0),
                     Children = { okButton, cancelButton },
                 },
             },
         };
 
         return await dialog.ShowDialog<ChartType?>(this);
+    }
+
+    /// <summary>
+    /// The "Preview" side panel for the Change Chart Type dialog: a bordered box with the preview
+    /// title/body text and a small bar-chart sample, mirroring WPF's <c>CreatePreviewPanel</c>.
+    /// </summary>
+    private Border BuildChartTypePreviewPanel()
+    {
+        var sampleBars = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+            Spacing = 8,
+        };
+        foreach (var height in new double[] { 26, 54, 38, 72 })
+        {
+            sampleBars.Children.Add(new Border
+            {
+                Width = 22,
+                Height = height,
+                Background = Brush(0, 120, 215),
+            });
+        }
+
+        var sampleArea = new Grid { Height = 92 };
+        sampleArea.Children.Add(new Border
+        {
+            BorderBrush = Brush(150, 150, 150),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+        });
+        sampleArea.Children.Add(sampleBars);
+
+        return new Border
+        {
+            BorderBrush = Brush(150, 150, 150),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Child = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = UiText.Get("ChartTypePicker_PreviewTitle"),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        FontWeight = FontWeight.SemiBold,
+                    },
+                    new TextBlock
+                    {
+                        Text = UiText.Get("ChartTypePicker_ChartPreviewBody"),
+                        FontSize = 11,
+                        FontFamily = FormulaBarFontFamily,
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = Brush(96, 96, 96),
+                    },
+                    new TextBlock
+                    {
+                        Text = UiText.Get("ChartTypePicker_PreviewSampleLabel"),
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                        FontWeight = FontWeight.SemiBold,
+                    },
+                    sampleArea,
+                },
+            },
+        };
     }
 
     // ---- Chart Design: Select Data Source (real, ChangeChartSourceCommand) ----------------------------
@@ -250,6 +382,22 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(rangeBox, "Chart data range");
         AutomationProperties.SetAutomationId(rangeBox, "SelectChartDataRangeBox");
         ApplyChartTextBoxChrome(rangeBox);
+
+        // Reference-picker ("...") button to the left of the range box, matching the WPF
+        // DialogReferencePicker editor. In this in-dialog shell it focuses the range box for editing
+        // rather than driving a collapse-to-grid pick, but keeps the layout at parity with Windows.
+        var rangePickButton = new Button { Content = "...", Width = 30 };
+        ApplyChartButtonChrome(rangePickButton, 30);
+        AutomationProperties.SetName(rangePickButton, UiText.Get("ChartLoc_ChartDataRangeLabel"));
+        AutomationProperties.SetAutomationId(rangePickButton, "SelectChartDataRangePickButton");
+        rangePickButton.Click += (_, _) => rangeBox.Focus();
+
+        var rangeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children = { rangePickButton, rangeBox },
+        };
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
         var switchRowColumnCheck = new CheckBox
@@ -519,9 +667,9 @@ public sealed partial class MainWindow
             MinWidth = 420,
             Children =
             {
-                // Range label + text box
+                // Range label + ("...") picker button + text box
                 new TextBlock { Text = UiText.Get("ChartLoc_ChartDataRangeLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily },
-                rangeBox,
+                rangeRow,
                 switchRowColumnCheck,
                 // Legend Entries (Series) panel
                 MakeListPanel(

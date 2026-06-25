@@ -140,7 +140,10 @@ internal static class XlsxX14DataValidationReader
                     Operator = ParseDvOperator(metadata.OperatorStr),
                     Formula1 = string.IsNullOrEmpty(metadata.Formula1) ? null : metadata.Formula1,
                     Formula2 = string.IsNullOrEmpty(metadata.Formula2) ? null : metadata.Formula2,
-                    AllowBlank = ParseBool(metadata.AllowBlankStr, defaultValue: true),
+                    // OOXML default for allowBlank is FALSE; emit "1" only when true.
+                    // The old default of true silently enabled "ignore blank" for every x14-only rule
+                    // that had no allowBlank attribute, inverting the intended Excel behaviour.
+                    AllowBlank = ParseBool(metadata.AllowBlankStr, defaultValue: false),
                     // showDropDown="1" means the dropdown is HIDDEN (inverted flag in OOXML).
                     ShowDropdown = !ParseBool(metadata.ShowDropDownStr, defaultValue: false),
                     AlertStyle = ParseAlertStyle(metadata.ErrorStyleStr),

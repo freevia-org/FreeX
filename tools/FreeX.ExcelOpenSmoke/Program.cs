@@ -400,6 +400,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelShapesCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelShapesCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-shapes")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored drawing-objects baseline corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))

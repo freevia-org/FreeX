@@ -104,4 +104,57 @@ public sealed class DataTableCommandTests
         sheet.GetValue(2, 5).Should().Be(new TextValue("old"));
         sheet.GetCell(3, 6).Should().BeNull();
     }
+
+    [Fact]
+    public void OneVariableDataTableCommand_CrossSheetReferenceIsNotSubstituted()
+    {
+        // K6 regression: a formula referencing the same A1 coordinates on a DIFFERENT sheet
+        // must not have those coordinates rewritten — only the local unqualified input cell
+        // should be substituted.
+        //
+        // Table layout (Column orientation):
+        //   formulaCell = B1, formula = "A1+Sheet2!A1"
+        //   inputCell   = A1
+        //   tableRange  = A1:B3   (body rows = 2..3, body cols = 2)
+        //   trial input for row 2 = A2 (tableRange.Start.Col=1, row=2)
+        //   expected rewrite of body cell (2,2) = "A2+Sheet2!A1"
+        //     - local A1 → A2  (substituted)
+        //     - Sheet2!A1 unchanged  (cross-sheet ref must NOT be touched)
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(workbook);
+
+        // Input cell A1 (col=1, row=1)
+        var inputCell = new CellAddress(sheet1.Id, 1, 1);
+        // Formula cell B1 (col=2, row=1)
+        var formulaCell = new CellAddress(sheet1.Id, 1, 2);
+        sheet1.SetCell(inputCell, new NumberValue(5));
+
+        // Formula references BOTH the local A1 (input cell) and the cross-sheet Sheet2!A1
+        sheet1.SetFormula(formulaCell, "A1+Sheet2!A1");
+
+        // Table occupies A1:B3 (Column orientation).
+        //   - trial values: A2=1, A3=2
+        //   - body cells: B2, B3
+        // For row 2, trialInputAddress = A2 → formula becomes "A2+Sheet2!A1"
+        sheet1.SetCell(new CellAddress(sheet1.Id, 2, 1), new NumberValue(1));
+        sheet1.SetCell(new CellAddress(sheet1.Id, 3, 1), new NumberValue(2));
+
+        var command = new OneVariableDataTableCommand(
+            new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 3, 2)),
+            formulaCell,
+            inputCell);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // Body cell B2 should have the local A1 replaced by A2, Sheet2!A1 unchanged
+        var rewritten = sheet1.GetCell(2, 2)!.FormulaText!;
+        rewritten.Should().Contain("Sheet2!A1",
+            because: "the cross-sheet reference must never be rewritten by the table rewriter");
+        rewritten.Should().NotContain("Sheet2!A2",
+            because: "the cross-sheet ref row number must not change");
+        rewritten.Should().Contain("A2",
+            because: "the local input cell A1 must be substituted with the trial input A2");
+    }
 }

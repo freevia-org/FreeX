@@ -76,10 +76,14 @@ public static class FindReplaceService
         bool matchEntireCell = false)
     {
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        // Pre-compute once: skip NumberValue cells when the search text cannot possibly match
-        // any invariant numeric rendering (no wildcards, no digit/sign/decimal/exponent chars).
-        var skipNumbers = options.LookIn != FindLookIn.Formulas
-            && !CanSearchTextMatchNumber(searchText);
+        // The number-skip optimisation is no longer applied:
+        //  - Values mode: numbers are now rendered through their applied number format
+        //    (e.g. "50%", "$1,000.00"), so any pattern may potentially match.
+        //  - Formulas mode: formula cells are searched by formula text, not by the cached
+        //    NumberValue — skipping by value type would silently drop formula matches.
+        //  - Notes/Comments: those branches in EnumerateSearchTexts return before the cell loop
+        //    so skipNumberValues has no effect there anyway.
+        const bool skipNumbers = false;
         var results = new List<FindResult>();
 
         foreach (var sheet in FindReplaceSearchPlanner.SheetsForScope(workbook, options))
@@ -87,6 +91,7 @@ public static class FindReplaceService
             var sheetResults = new List<FindResult>();
 
             foreach (var candidate in FindReplaceSearchPlanner.EnumerateSearchTexts(sheet, options.LookIn,
+                workbook: workbook,
                 skipNumberValues: skipNumbers))
             {
                 bool isMatch = matchEntireCell

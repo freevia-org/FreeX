@@ -245,6 +245,9 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintNullableThemeColor(stream, shape.FillThemeColor);
         WriteFingerprintNullableThemeColor(stream, shape.OutlineThemeColor);
         WriteFingerprintNumber(stream, (int)shape.GetEffectiveEffectPreset());
+        WriteFingerprintNumber(stream, shape.OutlineWidthPoints);
+        WriteFingerprintBoolean(stream, shape.OutlineHasNoFill);
+        WriteFingerprintNumber(stream, (int)shape.OutlineDash);
         WriteFingerprintToken(stream, "\n");
     }
 
@@ -3065,7 +3068,6 @@ public sealed partial class XlsxFileAdapter
             const string diagramGraphicDataUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
             XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
             if (drawingRoot.Name != spreadsheetDrawingNs + "wsDr" ||
-                drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp").Any() ||
                 drawingXml.Descendants(spreadsheetDrawingNs + "grpSp").Any())
             {
                 return false;
@@ -3118,7 +3120,10 @@ public sealed partial class XlsxFileAdapter
                 var shapeCount = anchor
                     .Descendants(spreadsheetDrawingNs + "sp")
                     .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
-                if (chartCount + diagramCount + pictureCount + shapeCount == 0 ||
+                var connectorCount = anchor
+                    .Descendants(spreadsheetDrawingNs + "cxnSp")
+                    .Count(element => !element.Ancestors(markupCompatNs + "Fallback").Any());
+                if (chartCount + diagramCount + pictureCount + shapeCount + connectorCount == 0 ||
                     anchor.Descendants(spreadsheetDrawingNs + "graphicFrame").Count() != chartCount + diagramCount)
                 {
                     return false;
@@ -3894,7 +3899,10 @@ public sealed partial class XlsxFileAdapter
                     source.GradientFillDirection != current.GetEffectiveGradientFillDirection() ||
                     source.FillThemeColor != current.FillThemeColor ||
                     source.OutlineThemeColor != current.OutlineThemeColor ||
-                    source.EffectPreset != current.GetEffectiveEffectPreset())
+                    source.EffectPreset != current.GetEffectiveEffectPreset() ||
+                    !ApproximatelyEquals(source.OutlineWidthPoints, current.OutlineWidthPoints) ||
+                    source.OutlineHasNoFill != current.OutlineHasNoFill ||
+                    source.OutlineDash != current.OutlineDash)
                 {
                     return false;
                 }

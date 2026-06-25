@@ -3585,4 +3585,195 @@ public class DocxRoundTripTests
         using var writer = new System.IO.StreamWriter(entry.Open());
         writer.Write(content);
     }
+
+    // ── H4 tblGrid gridCol count reconciliation test ─────────────────────────────────────────────
+
+    [Fact]
+    public void Table_WithColumnWidthsMismatch_TblGridReconcilesWithActualGridColumns()
+    {
+        // A table where ColumnWidthsPt has 2 entries but the rows have 3 grid columns (due to a
+        // GridSpan=2 cell leaving widths under-counted after a prior edit). The saved tblGrid must
+        // emit exactly 3 gridCol elements, not 2 (which would cause Word to repair the file).
+        var doc = new TextDocument();
+        var table = new Table();
+        // Row 0: cell spanning 2 grid cols + one single cell = 3 grid cols total.
+        var row0 = new TableRow();
+        row0.Cells.Add(new TableCell("wide") { GridSpan = 2 });
+        row0.Cells.Add(new TableCell("narrow"));
+        table.Rows.Add(row0);
+        // ColumnWidthsPt only has 2 entries — simulates the drift described in H4.
+        table.ColumnWidthsPt.AddRange([120.0, 60.0]);
+        doc.Blocks.Add(table);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var gridCols = WriteDocumentXml(doc).Descendants(ns + "tblGrid").Single()
+            .Elements(ns + "gridCol").Count();
+
+        // Must be 3 (actual grid columns), not 2 (drifted ColumnWidthsPt.Count).
+        gridCols.Should().Be(3, "tblGrid must be reconciled to the actual grid-column total");
+    }
+
+    // ── H3 Hanging-indent regression tests ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void HangingIndent_RoundTrips_WithNegativeFirstLineIndentPt()
+    {
+        // A paragraph with a hanging indent (modelled as negative FirstLineIndentPt) must survive
+        // a full write→read cycle and come back with the same negative value.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hanging")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                IndentLeftPt = 36,        // 0.5 in left indent
+                FirstLineIndentPt = -18   // 0.25 in hanging (first-line pulls left of body indent)
+            }
+        });
+
+        var formatting = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        formatting.IndentLeftPt.Should().BeApproximately(36, 0.5);   // dxa round-trip tolerance
+        formatting.FirstLineIndentPt.Should().BeApproximately(-18, 0.5);
+    }
+
+    [Fact]
+    public void HangingIndent_WrittenAs_WHanging_NotNegativeFirstLine()
+    {
+        // The XML saved to disk must use w:hanging (positive), never a negative w:firstLine value
+        // (which OOXML forbids — w:firstLine is an unsigned twips measure).
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("hanging")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                IndentLeftPt = 36,
+                FirstLineIndentPt = -36
+            }
+        });
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var ind = WriteDocumentXml(doc).Descendants(ns + "ind").First();
+
+        ind.Attribute(ns + "hanging").Should().NotBeNull("w:hanging must be present for a hanging indent");
+        ind.Attribute(ns + "firstLine").Should().BeNull("w:firstLine must NOT be emitted for a hanging indent");
+        // The hanging value must be positive (unsigned dxa).
+        int.Parse(ind.Attribute(ns + "hanging")!.Value).Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void HangingIndent_ReadFromWordAuthored_WHanging()
+    {
+        // A Word-authored paragraph with w:hanging must be read as a negative FirstLineIndentPt.
+        var doc = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+              <w:r><w:t>hanging text</w:t></w:r>
+            </w:p>
+            """);
+
+        var f = doc.Paragraphs.First().Formatting;
+        f.IndentLeftPt.Should().BeApproximately(36, 0.5);   // 720 dxa = 36 pt
+        f.FirstLineIndentPt.Should().BeApproximately(-18, 0.5); // 360 dxa → -18 pt
+    }
+
+    // ── H5 Hyperlink-in-field result regression test ─────────────────────────────────────────────
+
+    [Fact]
+    public void ComplexField_WithHyperlinkWrappedResult_StaysInsideField()
+    {
+        // A complex field whose cached result runs are inside a w:hyperlink element (as TOC/INDEX/
+        // HYPERLINK fields emit) must round-trip with the result text INSIDE the ComplexField run,
+        // not leaked out as bare text paragraph runs.
+        var doc = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+              <w:r><w:instrText xml:space="preserve"> HYPERLINK "https://example.com" </w:instrText></w:r>
+              <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+              <w:hyperlink r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                <w:r><w:t>Example Link</w:t></w:r>
+              </w:hyperlink>
+              <w:r><w:fldChar w:fldCharType="end"/></w:r>
+            </w:p>
+            """);
+
+        var runs = doc.Paragraphs.First().Runs;
+        // Exactly one ComplexField run — no spurious plain-text run containing "Example Link"
+        var fieldRun = runs.Should().ContainSingle(r => r.ComplexField != null).Subject;
+        fieldRun.ComplexField!.Instruction.Should().Contain("HYPERLINK");
+        // Run.Text holds the cached result text for a ComplexField run.
+        fieldRun.Text.Should().Contain("Example Link");
+        runs.Where(r => r.ComplexField is null).Should().NotContain(r => r.Text.Contains("Example Link"),
+            "result text must not leak outside the ComplexField run");
+    }
+
+    // ── H7 Style-type (table/numbering) regression test ─────────────────────────────────────────
+
+    [Fact]
+    public void TableStyle_RoundTrips_WithCorrectWType()
+    {
+        // A w:style w:type="table" read from a hand-authored docx must be stored as StyleType.Table
+        // and written back as w:type="table", not w:type="paragraph".
+        var doc = ReadHandAuthoredDocxWithStyles(
+            bodyXml: """<w:p><w:r><w:t>body</w:t></w:r></w:p>""",
+            stylesXml:
+            """
+            <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+              <w:style w:type="table" w:styleId="TableGrid">
+                <w:name w:val="Table Grid"/>
+              </w:style>
+            </w:styles>
+            """);
+
+        // Model layer: the style is read as StyleType.Table, not Paragraph.
+        doc.Styles.Should().ContainKey("TableGrid");
+        doc.Styles["TableGrid"].Type.Should().Be(StyleType.Table);
+
+        // Writer layer: writing and re-reading preserves the table type.
+        var roundTripped = RoundTrip(doc);
+        roundTripped.Styles.Should().ContainKey("TableGrid");
+        roundTripped.Styles["TableGrid"].Type.Should().Be(StyleType.Table);
+
+        // XML layer: the emitted XML must say w:type="table".
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var stylesEntry = zip.GetEntry("word/styles.xml")!.Open();
+        var stylesDoc = XDocument.Load(stylesEntry);
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tableStyleEl = stylesDoc.Descendants(ns + "style")
+            .FirstOrDefault(s => s.Attribute(ns + "styleId")?.Value == "TableGrid");
+        tableStyleEl.Should().NotBeNull();
+        tableStyleEl!.Attribute(ns + "type")!.Value.Should().Be("table");
+    }
+
+    /// <summary>
+    /// Reads a hand-authored docx that has both a custom body and a styles.xml part.
+    /// </summary>
+    private static TextDocument ReadHandAuthoredDocxWithStyles(string bodyXml, string stylesXml)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string xml)
+            {
+                var entry = zip.CreateEntry(path);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(xml);
+            }
+
+            Add("word/document.xml",
+                $"""
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                  <w:body>{bodyXml}</w:body>
+                </w:document>
+                """);
+            Add("word/styles.xml", stylesXml);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
 }

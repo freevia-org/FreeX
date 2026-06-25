@@ -37,9 +37,8 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("TableLoc_ConsolidateDialogTitle"),
             Width = 420,
-            Height = 480,
             MinWidth = 400,
-            MinHeight = 440,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -58,6 +57,18 @@ public sealed partial class MainWindow
         ApplyDataOpsTextBoxChrome(referenceBox);
         AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
 
+        // Windows places an ellipsis ("...") range-picker next to the Reference field (matches the WPF host's
+        // DialogReferencePicker which uses a literal "..." button, width 28, docked left of the text box).
+        var browseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
+        ApplyDataOpsButtonChrome(browseButton);
+        AutomationProperties.SetAutomationId(browseButton, "ConsolidateBrowseReferenceButton");
+        browseButton.Click += (_, _) =>
+        {
+            // The picker pre-fills the reference field with the current selection.
+            if (string.IsNullOrWhiteSpace(referenceBox.Text))
+                referenceBox.Text = FormatRangeReference(_session.SelectedRange);
+        };
+
         var referencesList = new ListBox { MinHeight = 96 };
         AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
 
@@ -75,6 +86,12 @@ public sealed partial class MainWindow
         };
         ApplyDataOpsTextBoxChrome(destinationBox);
         AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
+
+        var destinationBrowseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
+        ApplyDataOpsButtonChrome(destinationBrowseButton);
+        AutomationProperties.SetAutomationId(destinationBrowseButton, "ConsolidateBrowseDestinationButton");
+        destinationBrowseButton.Click += (_, _) =>
+            destinationBox.Text = FormatRangeReference(_session.SelectedRange);
 
         var topRowBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateTopRow") };
         ApplyDataOpsCheckBoxChrome(topRowBox);
@@ -227,12 +244,30 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var referenceRow = new StackPanel
+        // Windows: "[...] <Reference textbox>" — Browse (ellipsis) sits left of the reference field.
+        var referenceRow = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(browseButton, Dock.Left);
+        browseButton.Margin = new Thickness(0, 0, 8, 0);
+        referenceRow.Children.Add(browseButton);
+        referenceRow.Children.Add(referenceBox);
+
+        // Windows: Add / Delete buttons sit between the Reference field and the "All references" list,
+        // right-aligned side by side (matches the WPF ConsolidateDialog layout / win.png ground truth).
+        addButton.Margin = new Thickness(0, 0, 8, 0);
+        var addRemoveRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { referenceBox, addButton, removeButton },
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 6, 0, 2),
+            Children = { addButton, removeButton },
         };
+
+        // Windows: "[...] <Destination textbox>" — Browse (ellipsis) sits left of the destination field.
+        var destinationRow = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(destinationBrowseButton, Dock.Left);
+        destinationBrowseButton.Margin = new Thickness(0, 0, 8, 0);
+        destinationRow.Children.Add(destinationBrowseButton);
+        destinationRow.Children.Add(destinationBox);
 
         var labelRow = new StackPanel
         {
@@ -274,10 +309,11 @@ public sealed partial class MainWindow
                             functionBox,
                             new TextBlock { Text = UiText.Get("TableLoc_ConsolidateReferenceLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referenceRow,
+                            addRemoveRow,
                             new TextBlock { Text = UiText.Get("TableLoc_ConsolidateAllReferencesLabel"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily },
                             referencesList,
                             new TextBlock { Text = UiText.Get("TableLoc_ConsolidateDestinationLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                            destinationBox,
+                            destinationRow,
                             labelRow,
                             createLinksBox,
                             warningText,

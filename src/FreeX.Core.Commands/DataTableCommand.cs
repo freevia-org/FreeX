@@ -258,7 +258,9 @@ internal static class DataTableFormulaRewriter
 {
     public static string ReplaceCellReference(string formula, CellAddress from, CellAddress to)
     {
-        var pattern = $@"(?<![A-Za-z0-9_])\$?{Regex.Escape(CellAddress.NumberToColumnName(from.Col))}\$?{from.Row}(?![A-Za-z0-9_])";
+        // The negative lookbehind excludes '!', '\'' and ']' so that a sheet-qualified reference
+        // such as Sheet2!A1 is never matched: only a bare (local) cell reference is substituted.
+        var pattern = $@"(?<![A-Za-z0-9_!'\]])\$?{Regex.Escape(CellAddress.NumberToColumnName(from.Col))}\$?{from.Row}(?![A-Za-z0-9_])";
         return Regex.Replace(formula, pattern, to.ToA1(), RegexOptions.IgnoreCase);
     }
 }

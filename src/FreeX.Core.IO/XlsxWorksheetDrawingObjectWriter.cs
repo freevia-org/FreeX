@@ -360,8 +360,70 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     drawingNs,
                     shape.GradientFillEndColor,
                     shape.GetEffectiveGradientFillDirection(),
-                    shape.GetEffectiveEffectPreset())),
+                    shape.GetEffectiveEffectPreset(),
+                    shape.Width,
+                    shape.Height,
+                    shape.OutlineWidthPoints,
+                    shape.OutlineHasNoFill,
+                    shape.OutlineDash),
+                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    /// <summary>
+    /// Builds a minimal <c>&lt;xdr:txBody&gt;</c> element that round-trips shape text with
+    /// font properties.  Multi-run rich text is not supported — a single run is emitted.
+    /// </summary>
+    private static XElement ToShapeTxBody(
+        DrawingShapeModel shape,
+        XNamespace drawingNs,
+        XNamespace spreadsheetDrawingNs)
+    {
+        var anchorValue = shape.ShapeTextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Top => "t",
+            DrawingShapeTextVAnchor.Bottom => "b",
+            _ => "ctr",
+        };
+        var wrapValue = shape.ShapeTextWrap ? "square" : "none";
+
+        // Run properties
+        var rPr = new XElement(drawingNs + "rPr",
+            new XAttribute("lang", "en-US"),
+            new XAttribute("dirty", "0"));
+        if (shape.ShapeTextFontSizePoints > 0)
+            rPr.Add(new XAttribute("sz", ((int)Math.Round(shape.ShapeTextFontSizePoints * 100)).ToString(CultureInfo.InvariantCulture)));
+        if (shape.ShapeTextBold)
+            rPr.Add(new XAttribute("b", "1"));
+        if (shape.ShapeTextItalic)
+            rPr.Add(new XAttribute("i", "1"));
+        if (shape.ShapeTextUnderline)
+            rPr.Add(new XAttribute("u", "sng"));
+
+        // Text color
+        var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
+        if (textFill is not null)
+            rPr.Add(textFill);
+
+        // Paragraph alignment
+        var algnValue = shape.ShapeTextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => "ctr",
+            DrawingShapeTextHAlign.Right => "r",
+            _ => "l",
+        };
+
+        return new XElement(spreadsheetDrawingNs + "txBody",
+            new XElement(drawingNs + "bodyPr",
+                new XAttribute("anchor", anchorValue),
+                new XAttribute("wrap", wrapValue)),
+            new XElement(drawingNs + "lstStyle"),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XAttribute("algn", algnValue)),
+                new XElement(drawingNs + "r",
+                    rPr,
+                    new XElement(drawingNs + "t", shape.ShapeText ?? ""))));
+    }
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + "from",
@@ -384,10 +446,16 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace drawingNs,
         CellColor? gradientFillEndColor = null,
         DrawingShapeGradientDirection gradientFillDirection = DrawingShapeGradientDirection.DiagonalDown,
-        DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
+        DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None,
+        double shapeWidthPixels = 0,
+        double shapeHeightPixels = 0,
+        double outlineWidthPoints = 0,
+        bool outlineHasNoFill = false,
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
-            ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs),
+            ToDrawingTransform(rotationDegrees, flipHorizontal, flipVertical, drawingNs,
+                shapeWidthPixels, shapeHeightPixels),
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
@@ -396,7 +464,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 : gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
                 ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
-            ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
+            ToLineProperties(outlineThemeColor, outlineColor, drawingNs,
+                outlineWidthPoints, outlineHasNoFill, outlineDash),
             ToEffectList(effectPreset, drawingNs),
             ToScene3dProperties(effectPreset, drawingNs),
             ToShape3dProperties(effectPreset, drawingNs));
@@ -406,13 +475,26 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double rotationDegrees,
         bool flipHorizontal,
         bool flipVertical,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        double shapeWidthPixels = 0,
+        double shapeHeightPixels = 0)
     {
         var rotation = NormalizeRotation(rotationDegrees);
+        // Include <a:ext cx cy> when pre-rotation dimensions are known; readers use these to
+        // recover the unrotated size rather than the bounding-box span from the outer anchor.
+        XElement? extElement = null;
+        if (shapeWidthPixels > 0 && shapeHeightPixels > 0)
+        {
+            extElement = new XElement(drawingNs + "ext",
+                new XAttribute("cx", PixelsToEmus(shapeWidthPixels)),
+                new XAttribute("cy", PixelsToEmus(shapeHeightPixels)));
+        }
+
         return new XElement(drawingNs + "xfrm",
             rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)),
             flipHorizontal ? new XAttribute("flipH", "1") : null,
-            flipVertical ? new XAttribute("flipV", "1") : null);
+            flipVertical ? new XAttribute("flipV", "1") : null,
+            extElement);
     }
 
     private static XElement ToGradientFill(
@@ -508,10 +590,40 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement? ToLineProperties(
         WorkbookThemeColorReference? outlineThemeColor,
         CellColor? outlineColor,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        double outlineWidthPoints = 0,
+        bool outlineHasNoFill = false,
+        DrawingShapeOutlineDash outlineDash = DrawingShapeOutlineDash.Solid)
     {
+        // Explicitly no border: write <a:ln><a:noFill/></a:ln>
+        if (outlineHasNoFill)
+            return new XElement(drawingNs + "ln", new XElement(drawingNs + "noFill"));
+
         var fill = ToSolidFill(outlineThemeColor, outlineColor, drawingNs);
-        return fill is null ? null : new XElement(drawingNs + "ln", fill);
+        if (fill is null)
+            return null;
+
+        // w attribute: 12700 EMU per point; omit if zero/default to keep output compact
+        var wEmu = outlineWidthPoints > 0 ? (long)Math.Round(outlineWidthPoints * 12700) : 0;
+        var prstDashVal = outlineDash switch
+        {
+            DrawingShapeOutlineDash.Dash => "dash",
+            DrawingShapeOutlineDash.Dot => "dot",
+            DrawingShapeOutlineDash.DashDot => "dashDot",
+            DrawingShapeOutlineDash.LongDash => "lgDash",
+            DrawingShapeOutlineDash.LongDashDot => "lgDashDot",
+            DrawingShapeOutlineDash.LongDashDotDot => "lgDashDotDot",
+            DrawingShapeOutlineDash.SystemDash => "sysDash",
+            DrawingShapeOutlineDash.SystemDot => "sysDot",
+            DrawingShapeOutlineDash.SystemDashDot => "sysDashDot",
+            _ => null // Solid: omit prstDash element (solid is default)
+        };
+        return new XElement(drawingNs + "ln",
+            wEmu > 0 ? new XAttribute("w", wEmu) : null,
+            fill,
+            prstDashVal is not null
+                ? new XElement(drawingNs + "prstDash", new XAttribute("val", prstDashVal))
+                : null);
     }
 
     private static XElement? ToSolidFill(
@@ -596,6 +708,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeKind.RoundedRectangularCallout => "wedgeRoundRectCallout",
             DrawingShapeKind.OvalCallout => "wedgeEllipseCallout",
             DrawingShapeKind.LineCallout => "lineCallout1",
+            DrawingShapeKind.Chevron => "chevron",
+            DrawingShapeKind.HomePlate => "homePlate",
             _ => "rect"
         };
 

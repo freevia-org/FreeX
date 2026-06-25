@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Navigation Pane">
+  <rect width="32" height="32" fill="none"/>
+  <!-- outer document chrome -->
+  <rect x="3" y="4" width="26" height="24" rx="2" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
+  <!-- left panel divider -->
+  <line x1="12" y1="5" x2="12" y2="27" stroke="#d0d0d0" stroke-width="1"/>
+  <!-- left panel heading-list lines -->
+  <line x1="5" y1="10" x2="10" y2="10" stroke="#2B5797" stroke-width="1.6" stroke-linecap="round"/>
+  <line x1="5" y1="14" x2="10" y2="14" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="17" x2="10" y2="17" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="5" y1="20" x2="10" y2="20" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="6" y1="23" x2="10" y2="23" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- right content lines (document body) -->
+  <line x1="14" y1="10" x2="27" y2="10" stroke="#c0c0c0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="14" y1="14" x2="27" y2="14" stroke="#c0c0c0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="14" y1="17" x2="24" y2="17" stroke="#c0c0c0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="14" y1="20" x2="27" y2="20" stroke="#c0c0c0" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="14" y1="23" x2="22" y2="23" stroke="#c0c0c0" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

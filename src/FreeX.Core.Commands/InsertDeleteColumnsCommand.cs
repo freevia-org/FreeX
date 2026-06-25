@@ -26,6 +26,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Column(s)";
 
@@ -88,6 +89,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _formulaSnapshot);
+        _namedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _namedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -102,6 +105,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row, snapshot.Col + _count);
@@ -238,6 +242,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Column(s)";
 
@@ -301,6 +306,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _formulaSnapshot);
+        _namedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _namedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -315,6 +322,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row, snapshot.Col - _count);

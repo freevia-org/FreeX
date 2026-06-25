@@ -64,6 +64,7 @@ public sealed class GoToSpecialDialog : Window
         RefreshValueTypeOptions();
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72);
+        buttons.VerticalAlignment = VerticalAlignment.Bottom;
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 

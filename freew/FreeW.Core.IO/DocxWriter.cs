@@ -1574,11 +1574,22 @@ public static class DocxWriter
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
         // The table grid (one w:gridCol per column) follows w:tblPr when explicit widths are known.
+        // Reconcile against the actual grid-column total (max over rows of summed GridSpans) to keep the
+        // file valid even when ColumnWidthsPt has drifted out of sync with the row contents (H4 fix):
+        // pad with the last known width when the model has fewer entries, truncate when it has more.
         if (table.ColumnWidthsPt.Count > 0)
         {
+            var actualGridCols = table.Rows.Count == 0 ? table.ColumnWidthsPt.Count
+                : table.Rows.Max(r => r.Cells.Sum(c => Math.Max(1, c.GridSpan)));
+            var widths = table.ColumnWidthsPt;
             var grid = new XElement(W + "tblGrid");
-            foreach (var widthPt in table.ColumnWidthsPt)
-                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(widthPt))));
+            for (var col = 0; col < actualGridCols; col++)
+            {
+                // Use the stored width for this column; if widths are shorter, repeat the last entry
+                // so Word at least has a plausible grid rather than zero-width phantom columns.
+                var w = col < widths.Count ? widths[col] : widths[^1];
+                grid.Add(new XElement(W + "gridCol", new XAttribute(W + "w", PointsToDxa(w))));
+            }
             tbl.Add(grid);
         }
 
@@ -2276,11 +2287,20 @@ public static class DocxWriter
             pPr.Add(spacingEl);
         }
         // w:ind (indents) — CT_PPrBase order: after spacing, before contextualSpacing/jc.
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
-            pPr.Add(new XElement(W + "ind",
+        // Negative FirstLineIndentPt models a hanging indent; emit w:hanging (unsigned) in that case.
+        // w:hanging and w:firstLine are mutually exclusive in OOXML; w:firstLine is unsigned, so a
+        // negative value (as Word would see it) is clamped/ignored — we must use w:hanging instead.
+        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        {
+            var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
-                new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            if (f.FirstLineIndentPt < 0)
+                indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
+            else if (f.FirstLineIndentPt > 0)
+                indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
+            pPr.Add(indEl);
+        }
         // w:jc (alignment) — CT_PPrBase order: after ind, before textDirection.
         if (f.Alignment != TextAlignment.Left)
             pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
@@ -5574,7 +5594,13 @@ public static class DocxWriter
         foreach (var style in document.Styles.Values)
         {
             var element = new XElement(W + "style",
-                new XAttribute(W + "type", style.Type == StyleType.Character ? "character" : "paragraph"),
+                new XAttribute(W + "type", style.Type switch
+                {
+                    StyleType.Character => "character",
+                    StyleType.Table => "table",
+                    StyleType.Numbering => "numbering",
+                    _ => "paragraph"
+                }),
                 new XAttribute(W + "styleId", style.Id),
                 new XElement(W + "name", new XAttribute(W + "val", style.Name)));
             if (!string.IsNullOrEmpty(style.BasedOnStyleId))
@@ -5767,12 +5793,18 @@ public static class DocxWriter
         }
 
         // Indents (w:ind), in dxa; emitted as a group only when any edge is non-zero, exactly like the
-        // per-paragraph writer.
-        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
-            pPr.Add(new XElement(W + "ind",
+        // per-paragraph writer. Negative FirstLineIndentPt is a hanging indent → emit w:hanging (unsigned).
+        if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt != 0)
+        {
+            var indEl = new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
-                new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
+                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            if (f.FirstLineIndentPt < 0)
+                indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
+            else if (f.FirstLineIndentPt > 0)
+                indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
+            pPr.Add(indEl);
+        }
 
         return pPr.HasElements ? pPr : null;
     }

@@ -395,10 +395,11 @@ public partial class GridView
             !IntersectsDrawingViewport(rect, rotationDegrees, visibleRight, visibleBottom))
             return;
 
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
-        var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
+        var pen = GetDrawingShapeOutlinePen(colors.Outline, shape);
         var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
         DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
@@ -407,6 +408,8 @@ public partial class GridView
         DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
         DrawShapeThemeInnerShadow(dc, shape.Kind, rect, shapeThemeEffect);
+        if (shape.HasShapeText)
+            DrawShapeText(dc, shape, rect, pixelsPerDip);
         PopDrawingObjectTransform(dc, transformDepth);
     }
 
@@ -1626,6 +1629,47 @@ public partial class GridView
         return pen;
     }
 
+    /// <summary>
+    /// Builds the outline <see cref="Pen"/> for a drawing shape, honouring the model's
+    /// <see cref="DrawingShapeModel.OutlineWidthPoints"/>, <see cref="DrawingShapeModel.OutlineHasNoFill"/>,
+    /// and <see cref="DrawingShapeModel.OutlineDash"/> properties.
+    /// Returns <see langword="null"/> when the shape explicitly has no border.
+    /// </summary>
+    private Pen? GetDrawingShapeOutlinePen(CellColor outlineColor, DrawingShapeModel shape)
+    {
+        if (shape.OutlineHasNoFill)
+            return null;
+
+        // Convert points → WPF DIPs (96 DPI screen): 1 pt = 96/72 DIP
+        const double PtToDip = 96.0 / 72.0;
+        var thicknessDip = shape.OutlineWidthPoints > 0
+            ? shape.OutlineWidthPoints * PtToDip
+            : 1.5; // preserve legacy default when width not stored
+
+        // For solid outlines use the cached pen path (fast path).
+        if (shape.OutlineDash == DrawingShapeOutlineDash.Solid)
+            return GetDrawingObjectPen(255, outlineColor, thicknessDip);
+
+        // Dashed pens are rare; build without caching to keep cache key simple.
+        var brush = GetDrawingObjectBrush(255, outlineColor);
+        var dashStyle = shape.OutlineDash switch
+        {
+            DrawingShapeOutlineDash.Dash => DashStyles.Dash,
+            DrawingShapeOutlineDash.Dot => DashStyles.Dot,
+            DrawingShapeOutlineDash.DashDot => DashStyles.DashDot,
+            DrawingShapeOutlineDash.LongDash => DashStyles.DashDot, // closest WPF built-in
+            DrawingShapeOutlineDash.LongDashDot => DashStyles.DashDotDot,
+            DrawingShapeOutlineDash.LongDashDotDot => DashStyles.DashDotDot,
+            DrawingShapeOutlineDash.SystemDash => DashStyles.Dash,
+            DrawingShapeOutlineDash.SystemDot => DashStyles.Dot,
+            DrawingShapeOutlineDash.SystemDashDot => DashStyles.DashDot,
+            _ => DashStyles.Solid
+        };
+        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle };
+        pen.Freeze();
+        return pen;
+    }
+
     private Brush GetDrawingObjectGradientBrush(
         CellColor startColor,
         CellColor endColor,
@@ -1683,7 +1727,9 @@ public partial class GridView
         double maxTextHeight,
         double pixelsPerDip,
         TextTrimming trimming = TextTrimming.None,
-        bool isBold = false)
+        bool isBold = false,
+        bool isItalic = false,
+        bool isUnderline = false)
     {
         var key = new DrawingObjectTextLayoutKey(
             textValue,
@@ -1694,18 +1740,28 @@ public partial class GridView
             maxTextHeight,
             pixelsPerDip,
             trimming,
-            isBold);
+            isBold,
+            isItalic,
+            isUnderline);
         if (_drawingObjectTextLayoutCache.TryGetValue(key, out var cached))
             return cached;
 
         if (_drawingObjectTextLayoutCache.Count >= DrawingObjectTextLayoutCacheLimit)
             _drawingObjectTextLayoutCache.Clear();
 
+        var typeface = (isBold || isItalic)
+            ? new Typeface(
+                DefaultTypeface.FontFamily,
+                isItalic ? FontStyles.Italic : FontStyles.Normal,
+                isBold ? FontWeights.Bold : FontWeights.Normal,
+                FontStretches.Normal)
+            : DefaultTypeface;
+
         var formatted = new FormattedText(
             textValue,
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            DefaultTypeface,
+            typeface,
             fontSize,
             brush,
             pixelsPerDip)
@@ -1714,10 +1770,95 @@ public partial class GridView
             MaxTextHeight = maxTextHeight,
             Trimming = trimming
         };
-        if (isBold)
-            formatted.SetFontWeight(FontWeights.Bold);
+        if (isUnderline)
+            formatted.SetTextDecorations(TextDecorations.Underline);
         _drawingObjectTextLayoutCache.Add(key, formatted);
         return formatted;
+    }
+
+    /// <summary>
+    /// Draws the shape's <see cref="DrawingShapeModel.ShapeText"/> inside <paramref name="rect"/>
+    /// using the font/alignment/anchor stored in the model.  Text is clipped to the rect and
+    /// positioned according to the vertical anchor (top / middle / bottom).
+    /// </summary>
+    private void DrawShapeText(DrawingContext dc, DrawingShapeModel shape, Rect rect, double pixelsPerDip)
+    {
+        const double ShapeTextHPad = 4;
+        const double ShapeTextVPad = 2;
+        const double DefaultShapeTextFontSize = 11.0; // pt → matches Excel fallback
+
+        var text = shape.ShapeText;
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var textWidth = Math.Max(1, rect.Width - ShapeTextHPad * 2);
+        var textHeight = Math.Max(1, rect.Height - ShapeTextVPad * 2);
+
+        // Resolve text color: theme → explicit → white-on-dark heuristic.
+        var resolvedColor = shape.ResolveShapeTextColor(WorkbookTheme);
+        Brush textBrush;
+        if (resolvedColor is { } c)
+        {
+            textBrush = GetDrawingObjectBrush(255, c);
+        }
+        else
+        {
+            // Default: white on dark fill, black on light fill.
+            var fillColor = shape.ResolveFillColor(WorkbookTheme, DrawingShapeModel.DefaultFillColor)
+                            ?? DrawingShapeModel.DefaultFillColor;
+            var luminance = 0.299 * fillColor.R + 0.587 * fillColor.G + 0.114 * fillColor.B;
+            textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
+        }
+
+        var fontSize = shape.ShapeTextFontSizePoints > 0
+            ? shape.ShapeTextFontSizePoints
+            : DefaultShapeTextFontSize;
+        // pt → WPF DIPs at 96 dpi: 1 pt = 96/72 DIP
+        const double PtToDip = 96.0 / 72.0;
+        var fontSizeDip = fontSize * PtToDip;
+
+        var trimming = shape.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis;
+        var hAlign = shape.ShapeTextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => TextAlignment.Center,
+            DrawingShapeTextHAlign.Right => TextAlignment.Right,
+            _ => TextAlignment.Left,
+        };
+        var formatted = GetDrawingObjectText(
+            text,
+            textBrush,
+            fontSizeDip,
+            textWidth,
+            textHeight,
+            pixelsPerDip,
+            trimming,
+            shape.ShapeTextBold,
+            shape.ShapeTextItalic,
+            shape.ShapeTextUnderline);
+
+        // TextAlignment must be set after creation — it is not part of the typeface.
+        formatted.TextAlignment = hAlign;
+
+        // Vertical anchor: position the text block within rect.
+        var textBlockHeight = formatted.Height;
+        var textTop = shape.ShapeTextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Top => rect.Top + ShapeTextVPad,
+            DrawingShapeTextVAnchor.Bottom => Math.Max(rect.Top + ShapeTextVPad,
+                rect.Bottom - ShapeTextVPad - textBlockHeight),
+            _ => // Middle
+                rect.Top + ShapeTextVPad + Math.Max(0, (textHeight - textBlockHeight) / 2),
+        };
+
+        // Horizontal origin: for Left alignment start at left+pad; Center/Right anchors are
+        // expressed from the left edge of the max-width box.
+        var textLeft = rect.Left + ShapeTextHPad;
+
+        // Clip to the shape's bounding rectangle so text doesn't bleed outside.
+        var clipRect = new Rect(rect.Left, rect.Top, rect.Width, rect.Height);
+        dc.PushClip(GetDrawingObjectClipGeometry(clipRect));
+        dc.DrawText(formatted, new Point(textLeft, textTop));
+        dc.Pop();
     }
 
     private readonly record struct DrawingObjectBrushKey(byte Alpha, byte R, byte G, byte B);
@@ -1738,7 +1879,9 @@ public partial class GridView
         double MaxTextHeight,
         double PixelsPerDip,
         TextTrimming Trimming,
-        bool IsBold);
+        bool IsBold,
+        bool IsItalic,
+        bool IsUnderline);
 
 }
 

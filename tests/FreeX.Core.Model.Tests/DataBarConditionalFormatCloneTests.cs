@@ -107,6 +107,33 @@ public sealed class DataBarConditionalFormatCloneTests
         pasted.NativePayloadChildXmls.Should().BeEquivalentTo(source.NativePayloadChildXmls);
     }
 
+    [Fact]
+    public void PasteConditionalFormatsCommand_ClipsRuleStartingBeforeSourceRange_NoUnderflow()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        // Rule spans A1:C10, but the copied source range is only B2:C3 — the rule starts ABOVE/LEFT of it.
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 10, 3)),
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0"
+        });
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
+
+        new PasteConditionalFormatsCommand(sheet.Id, sourceRange, new CellAddress(sheet.Id, 10, 5), transpose: false)
+            .Apply(new TestCommandContext(workbook));
+
+        // The rule is clipped to the source range (B2:C3) before mapping, so the pasted range is the small
+        // mapped block — NOT a uint-underflow multi-billion-row garbage range.
+        var pasted = sheet.ConditionalFormats.Should().HaveCount(2).And.Subject.Last();
+        pasted.AppliesTo.Start.Row.Should().Be(10);
+        pasted.AppliesTo.Start.Col.Should().Be(5);
+        pasted.AppliesTo.End.Row.Should().Be(11);
+        pasted.AppliesTo.End.Col.Should().Be(6);
+    }
+
     private static ConditionalFormat CreateAdvancedDataBar(SheetId sheetId) =>
         new()
         {

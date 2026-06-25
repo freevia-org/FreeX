@@ -1183,6 +1183,53 @@ public static class DocxReader
                     fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
                 }
             }
+            else if (fieldDepth > 0 && child.Name == W + "hyperlink")
+            {
+                // Inside a complex field, a w:hyperlink wraps the RESULT runs (TOC/INDEX/HYPERLINK fields
+                // always put their cached result text in a hyperlink element). Route all w:r descendants
+                // through the same field-accumulation path instead of emitting them as content outside the
+                // field (which would leave the field's result empty and break TOC rendering).
+                foreach (var hlRun in child.Elements(W + "r"))
+                {
+                    var fldChar = hlRun.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
+                    if (fldChar == "begin")
+                    {
+                        fieldDepth++;
+                    }
+                    else if (fldChar == "separate")
+                    {
+                        fieldPastSeparate = true;
+                    }
+                    else if (fldChar == "end")
+                    {
+                        fieldDepth--;
+                        if (fieldDepth == 0)
+                        {
+                            var instruction = fieldInstr.ToString();
+                            var result = fieldResult.ToString();
+                            var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
+                            var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                            complexField.CommentId = activeCommentId;
+                            complexField.Control = inheritedControl;
+                            paragraph.Runs.Add(complexField);
+                            fieldInstr.Clear();
+                            fieldResult.Clear();
+                            fieldPastSeparate = false;
+                            fieldFormattingSource = null;
+                        }
+                    }
+                    else if (!fieldPastSeparate)
+                    {
+                        fieldInstr.Append(string.Concat(hlRun.Elements(W + "instrText").Select(t => t.Value)));
+                        fieldInstr.Append(string.Concat(hlRun.Elements(W + "t").Select(t => t.Value)));
+                    }
+                    else
+                    {
+                        fieldFormattingSource ??= hlRun;
+                        fieldResult.Append(string.Concat(hlRun.Elements(W + "t").Select(t => t.Value)));
+                    }
+                }
+            }
             else if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
                 && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
             {
@@ -4078,7 +4125,11 @@ public static class DocxReader
             },
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
-            FirstLineIndentPt = DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
+            // w:hanging (a positive twips value) is mutually exclusive with w:firstLine in OOXML; the model
+            // represents a hanging indent as a NEGATIVE FirstLineIndentPt so callers can distinguish the two.
+            FirstLineIndentPt = indent?.Attribute(W + "hanging") is { } hangAttr
+                ? -DxaToPoints(hangAttr.Value)
+                : DxaToPoints(indent?.Attribute(W + "firstLine")?.Value),
             ListKind = listKind,
             ListLevel = listLevel,
             ListStartOverride = listStartOverride,
@@ -4542,7 +4593,13 @@ public static class DocxReader
             {
                 Id = id,
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
-                Type = s.Attribute(W + "type")?.Value == "character" ? StyleType.Character : StyleType.Paragraph,
+                Type = s.Attribute(W + "type")?.Value switch
+                {
+                    "character" => StyleType.Character,
+                    "table" => StyleType.Table,
+                    "numbering" => StyleType.Numbering,
+                    _ => StyleType.Paragraph
+                },
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).

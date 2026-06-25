@@ -389,7 +389,7 @@ public static partial class ChartRenderer
             accumulatedAngle += sweep;
 
             var value = ChartDataLabelFormatter.ShouldRenderPercentageLabels(chart)
-                ? point.Value / total
+                ? positiveValue / total
                 : point.Value;
             var position = GetPieDataLabelPosition(chart.DataLabelPosition, midAngle);
             model.Annotations.Add(new TextAnnotation

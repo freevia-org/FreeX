@@ -507,15 +507,29 @@ internal static class PdfTableReader
         foreach (var letter in sorted)
         {
             var y = letter.GlyphRectangle.BottomLeft.Y;
-            var matched = rows.FirstOrDefault(r => Math.Abs(r.BaselineY - y) <= yTolerance);
+            // Match the NEAREST existing row whose running-mean baseline is within tolerance, not just the
+            // first one found: when two rows are both in range, FirstOrDefault would pick an arbitrary
+            // (earlier-Y) row and mis-assign the glyph.
+            TextRow? matched = null;
+            var bestDelta = double.MaxValue;
+            foreach (var row in rows)
+            {
+                var delta = Math.Abs(row.BaselineY - y);
+                if (delta <= yTolerance && delta < bestDelta)
+                {
+                    bestDelta = delta;
+                    matched = row;
+                }
+            }
+
             if (matched != null)
             {
-                matched.Letters.Add(letter);
+                matched.AddLetter(letter);
             }
             else
             {
-                var row = new TextRow(y);
-                row.Letters.Add(letter);
+                var row = new TextRow();
+                row.AddLetter(letter);
                 rows.Add(row);
             }
         }
@@ -778,11 +792,22 @@ internal static class PdfTableReader
     // ── Internal model ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Working representation of a single visual row of glyphs during extraction.</summary>
-    private sealed class TextRow(double baselineY)
+    private sealed class TextRow
     {
-        public double BaselineY { get; } = baselineY;
+        private double _baselineSum;
+
+        /// <summary>Running mean baseline Y of the glyphs in this row — a stable cluster anchor as the row
+        /// grows, so a row whose glyph baselines drift slightly is not split or mis-matched.</summary>
+        public double BaselineY => Letters.Count == 0 ? 0 : _baselineSum / Letters.Count;
         public List<Letter> Letters { get; } = [];
         public List<Token> Tokens { get; } = [];
+
+        /// <summary>Adds a glyph to the row and updates the running-mean baseline.</summary>
+        public void AddLetter(Letter letter)
+        {
+            Letters.Add(letter);
+            _baselineSum += letter.GlyphRectangle.BottomLeft.Y;
+        }
 
         /// <summary>
         /// Splits <see cref="Letters"/> (already sorted left-to-right) into <see cref="Token"/> objects.

@@ -81,14 +81,14 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return null;
         }
 
-        // A two-cell anchor is valid as long as the to-marker is not before the from-marker. When the
-        // from/to share a column (or row) the span is expressed purely through the sub-cell EMU offsets
-        // (e.g. a shape narrower than one column), so equal indices are legitimate — reject only a
-        // genuinely inverted anchor (later cell before earlier, or same cell with a smaller offset),
-        // which would yield zero/negative extent. Rejecting the equal-index case here drops the
-        // anchor and snaps the object to A1.
-        if (toCol < fromCol || (toCol == fromCol && toColOffset <= fromColOffset) ||
-            toRow < fromRow || (toRow == fromRow && toRowOffset <= fromRowOffset))
+        // A two-cell anchor is valid as long as the to-marker is not before the from-marker in at
+        // least one axis.  Reject only when the anchor is inverted (or degenerate) in BOTH the
+        // column direction AND the row direction simultaneously.  A flat horizontal line has cy=0 so
+        // its from/to share the same row and rowOffset — that's fine as long as toCol > fromCol.
+        // Conversely, a vertical line is fine when toRow > fromRow even if the columns are equal.
+        var colInvalid = toCol < fromCol || (toCol == fromCol && toColOffset <= fromColOffset);
+        var rowInvalid = toRow < fromRow || (toRow == fromRow && toRowOffset <= fromRowOffset);
+        if (colInvalid && rowInvalid)
             return null;
 
         return new XlsxDrawingAnchor(

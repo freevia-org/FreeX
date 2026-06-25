@@ -81,7 +81,7 @@ public class SurfaceComparerTests
     }
 
     [Fact]
-    public void IsHardRegression_only_fires_for_hard_both_over_threshold()
+    public void IsHardRegression_fires_for_hard_both_over_threshold()
     {
         var hardOver = new SurfaceComparison
         {
@@ -102,5 +102,57 @@ public class SurfaceComparerTests
         hardOver.IsHardRegression(2.0).Should().BeTrue();
         hardUnder.IsHardRegression(2.0).Should().BeFalse();
         chromeOver.IsHardRegression(2.0).Should().BeFalse();
+    }
+
+    // H9: a Hard surface present on only one shell is always a hard regression —
+    // the grid failed to render on one platform, which is a more severe defect than a pixel diff.
+    [Fact]
+    public void IsHardRegression_fires_for_hard_surface_present_on_one_shell_only()
+    {
+        var winOnly = new SurfaceComparison
+        {
+            Id = "grid.main", Kind = "grid", Severity = DiffSeverity.Hard,
+            Presence = SurfacePresence.WindowsOnly, DiffPercent = null,
+        };
+        var linOnly = new SurfaceComparison
+        {
+            Id = "grid.main", Kind = "grid", Severity = DiffSeverity.Hard,
+            Presence = SurfacePresence.LinuxOnly, DiffPercent = null,
+        };
+        // Chrome-only-on-one-side is NOT a hard regression (chrome is informational).
+        var chromeWinOnly = new SurfaceComparison
+        {
+            Id = "tab.Home", Kind = "tab", Severity = DiffSeverity.Chrome,
+            Presence = SurfacePresence.WindowsOnly, DiffPercent = null,
+        };
+
+        winOnly.IsHardRegression(2.0).Should().BeTrue("a hard surface missing on Linux fails the gate");
+        linOnly.IsHardRegression(2.0).Should().BeTrue("a hard surface missing on Windows fails the gate");
+        chromeWinOnly.IsHardRegression(2.0).Should().BeFalse("chrome one-sided is informational, not a gate failure");
+    }
+
+    // H9: Parity verdict fails when a hard surface is missing on one platform.
+    [Fact]
+    public void Parity_verdict_fails_when_hard_surface_missing_on_one_platform()
+    {
+        // Windows has grid.main; Linux does not.
+        var win = new CaptureManifest
+        {
+            Platform = "windows", Shell = "wpf",
+            Surfaces = { S("grid.main", kind: "grid") },
+        };
+        var lin = new CaptureManifest
+        {
+            Platform = "linux", Shell = "avalonia",
+            Surfaces = { S("tab.Home", kind: "tab") }, // grid.main is missing entirely
+        };
+
+        var engine = new ParityComparisonEngine(
+            decode: _ => throw new InvalidOperationException("no PNGs in this test"),
+            exists: _ => false);
+        var result = engine.Compare(win, lin, winDir: null, linDir: null, imagesDir: null, hardThreshold: 2.0);
+
+        result.Passed.Should().BeFalse("grid.main is present on Windows but absent on Linux");
+        result.HardRegressions.Should().ContainSingle(r => r.Id == "grid.main");
     }
 }

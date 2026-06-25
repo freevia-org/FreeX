@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
+using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
@@ -20,6 +21,13 @@ namespace FreeW.App.Avalonia;
 public sealed class MainWindow : Window
 {
     private const string DefaultSaveExtension = ".docx";
+
+    /// <summary>
+    /// Number of entries kept in the recent-files store for this session.
+    /// A FreeWOptions-driven cap comes in a later round; this constant is the
+    /// interim default (matches the WPF host's <c>FreeWOptions.DefaultRecentFilesCap</c>).
+    /// </summary>
+    private const int DefaultRecentFilesCap = 10;
 
     private static readonly FilePickerFileType PdfFileType = new("PDF document")
     {
@@ -35,10 +43,16 @@ public sealed class MainWindow : Window
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
     private readonly FileCommandWorkflow _fileWorkflow;
+    private readonly AutosaveAdapter _autosave;
+    private readonly NavigationPane _navPane;
+    private readonly ReviewingPane _reviewingPane;
+    private readonly RevealFormattingPane _revealPane;
     private Border? _findBar;
+    private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
     private bool _suppressEditorDirty;
+    private bool _closingConfirmed;
 
     public MainWindow()
         : this(Array.Empty<string>())
@@ -54,10 +68,14 @@ public sealed class MainWindow : Window
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         _fileWorkflow = new FileCommandWorkflow(
-            maxRecentEntries: () => 0,
+            maxRecentEntries: () => DefaultRecentFilesCap,
             onChanged: UpdateStatus,
-            promptSaveChanges: _ => SaveChangesPrompt.DontSave,
-            save: () => true);
+            promptSaveChanges: action => PromptSaveChangesSync(action),
+            save: () => SaveAsync().GetAwaiter().GetResult());
+        _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
+        _navPane = new NavigationPane(_editor);
+        _reviewingPane = new ReviewingPane(_editor);
+        _revealPane = new RevealFormattingPane(_editor);
 
         var root = new DockPanel();
 
@@ -87,10 +105,25 @@ public sealed class MainWindow : Window
             Padding = new Thickness(48, 24),
             Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = _editor },
         };
+        _navPane.ScrollerRef = _scroller;
+
+        // Nav pane docked left; reviewing pane docked right; workspace fills the remainder.
+        DockPanel.SetDock(_navPane, Dock.Left);
+        root.Children.Add(_navPane);
+
+        DockPanel.SetDock(_reviewingPane, Dock.Right);
+        root.Children.Add(_reviewingPane);
+
+        DockPanel.SetDock(_revealPane, Dock.Right);
+        root.Children.Add(_revealPane);
+
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
+        _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CellEditRequested += async req =>
         {
@@ -100,12 +133,92 @@ public sealed class MainWindow : Window
         };
         LoadDocumentAsSaved(LoadStartupDocument(startupArguments), path: null);
         KeyDown += MainWindow_KeyDown;
+
+        // Start autosave once the window is shown; offer recovery on first open.
+        Opened += async (_, _) =>
+        {
+            _autosave.Start();
+            await _autosave.OfferRecoveryAsync(this);
+        };
+
+        // Dirty-gate on close: run async dirty-check; cancel the close synchronously
+        // and let the async flow re-close if the user saves or discards.
+        Closing += OnWindowClosing;
+
         Content = root;
         UpdateStatus();
     }
 
     public DocumentView Editor => _editor;
     public bool HasToolbar { get; private set; }
+
+    /// <summary>
+    /// Exposes the navigation pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal NavigationPane NavPane => _navPane;
+
+    /// <summary>
+    /// Exposes the reviewing pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal ReviewingPane ReviewingPane => _reviewingPane;
+
+    /// <summary>
+    /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal RevealFormattingPane RevealPane => _revealPane;
+
+    /// <summary>
+    /// Show or hide the navigation pane and refresh its heading list when making it visible.
+    /// Wired to <c>freew.navigationpane</c> ribbon toggle.
+    /// </summary>
+    internal void ToggleNavigationPane()
+    {
+        _navPane.IsVisible = !_navPane.IsVisible;
+        if (_navPane.IsVisible)
+            _navPane.Refresh();
+    }
+
+    /// <summary>
+    /// Show or hide the reviewing pane and refresh its tracked-changes list when making it visible.
+    /// Wired to <c>freew.reviewingpane</c> ribbon toggle.
+    /// </summary>
+    internal void ToggleReviewingPane()
+    {
+        _reviewingPane.IsVisible = !_reviewingPane.IsVisible;
+        if (_reviewingPane.IsVisible)
+            _reviewingPane.Refresh();
+    }
+
+    /// <summary>
+    /// Show or hide the Reveal Formatting pane and refresh its content when making it visible.
+    /// Wired to <c>freew.reveal-formatting</c> ribbon toggle (View → Show group) and Shift+F1.
+    /// </summary>
+    internal void ToggleRevealFormatting()
+    {
+        _revealPane.IsVisible = !_revealPane.IsVisible;
+        if (_revealPane.IsVisible)
+            _revealPane.Refresh();
+    }
+
+    /// <summary>
+    /// Opens the Find &amp; Replace dialog (modeless). If an instance is already open it is
+    /// brought to the front. Wired to <c>freew.find-replace-dialog</c> ribbon command and Ctrl+H.
+    /// </summary>
+    internal void OpenFindReplaceDialog()
+    {
+        if (_findReplaceDialog is not null)
+        {
+            _findReplaceDialog.Activate();
+            return;
+        }
+
+        _findReplaceDialog = new FindReplaceDialog(_editor)
+        {
+            ScrollerRef = _scroller,
+        };
+        _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
+        _findReplaceDialog.Show(this);
+    }
 
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
     {
@@ -129,7 +242,12 @@ public sealed class MainWindow : Window
             Save: () => _ = SaveAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
-            Paste: () => _ = PasteAsync());
+            Paste: () => _ = PasteAsync(),
+            Backstage: () => _ = ShowBackstageAsync(),
+            ToggleNavigationPane: ToggleNavigationPane,
+            ToggleReviewingPane: ToggleReviewingPane,
+            ToggleRevealFormatting: ToggleRevealFormatting,
+            OpenFindReplaceDialog: OpenFindReplaceDialog);
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
@@ -216,6 +334,7 @@ public sealed class MainWindow : Window
         switch (e.Key)
         {
             case Key.F: ToggleFindBar(show: true); e.Handled = true; break;
+            case Key.H: OpenFindReplaceDialog(); e.Handled = true; break;
             case Key.N: NewDocument(); e.Handled = true; break;
             case Key.O: _ = OpenAsync(); e.Handled = true; break;
             case Key.S: _ = SaveAsync(); e.Handled = true; break;
@@ -224,6 +343,55 @@ public sealed class MainWindow : Window
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
         }
+
+        // Shift+F1 (no Ctrl required) = Reveal Formatting — matches Word's shortcut.
+        if (e.Key == Key.F1 && (e.KeyModifiers & KeyModifiers.Shift) != 0)
+        {
+            ToggleRevealFormatting();
+            e.Handled = true;
+        }
+    }
+
+    // ── Closing gate ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Synchronous bridge called by <see cref="FileCommandWorkflow"/> when it needs a save-changes
+    /// answer. Because the workflow's dirty-gate is synchronous, we block the UI thread here by
+    /// getting the async dialog result via GetAwaiter().GetResult(). This is safe because
+    /// <see cref="OnWindowClosing"/> always cancels the OS close first and then re-invokes
+    /// the async path — the sync call here only happens from the New/Open dirty-gate paths
+    /// which already run synchronously on the UI thread.
+    /// </summary>
+    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
+        SaveChangesDialog.ShowAsync(this, _fileWorkflow.DisplayName, action)
+            .GetAwaiter().GetResult();
+
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // If we already ran the async gate and decided it's OK to close, let it through.
+        if (_closingConfirmed)
+        {
+            _ = _autosave.StopAsync(); // fire-and-forget — cleanup is best-effort on close
+            return;
+        }
+
+        // Cancel this synchronous close event and run the gate asynchronously.
+        e.Cancel = true;
+        _ = ConfirmAndCloseAsync();
+    }
+
+    private async Task ConfirmAndCloseAsync()
+    {
+        // ConfirmCloseAllowed runs on the UI thread because PromptSaveChangesSync shows
+        // an Avalonia dialog. It blocks the UI thread briefly via GetAwaiter().GetResult()
+        // on the dialog task — acceptable for a synchronous dirty-gate path.
+        var allowed = _fileWorkflow.ConfirmCloseAllowed("closing");
+        if (!allowed)
+            return;
+
+        await _autosave.StopAsync();
+        _closingConfirmed = true;
+        Close();
     }
 
     private void ApplyZoom(double scale)
@@ -488,7 +656,7 @@ public sealed class MainWindow : Window
 
     private void MarkDocumentSavedWithPath(string path)
     {
-        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: true);
+        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
     }
 
     private void UpdateStatus()
@@ -498,5 +666,98 @@ public sealed class MainWindow : Window
         var chars = text.Length;
         _status.Text = $"{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
             + (_editor.CanUndo ? "   • edited" : "");
+    }
+
+    // ── Backstage (File screen) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens the FreeW backstage (File screen) as a modal full-window overlay.
+    /// The backstage renders its panes from the portable Presentation-tier planners and
+    /// dispatches user actions back through this shell's file workflow and open/save paths.
+    /// </summary>
+    private Task ShowBackstageAsync()
+    {
+        var callbacks = BuildBackstageCallbacks();
+        return BackstageView.ShowAsync(this, callbacks);
+    }
+
+    internal BackstageCallbacks BuildBackstageCallbacks() =>
+        new BackstageCallbacks(
+            DisplayName: _fileWorkflow.DisplayName,
+            CurrentPath: _fileWorkflow.CurrentPath,
+            GetRecentEntries: () => _fileWorkflow.RecentEntries,
+            GetFileFormats: () => _adapters.SelectMany(a => a.Formats),
+            GetPageSettings: () => _editor.Document.Page,
+
+            NewDocument: NewDocument,
+            OpenRecent: path =>
+            {
+                // Run the dirty-gate synchronously (ConfirmDiscardOrSave calls PromptSaveChangesSync
+                // which is safe because we block the UI thread only briefly for the dialog).
+                if (_fileWorkflow.Open("opening another document", () => path, p =>
+                    {
+                        _ = OpenPathAsync(p);
+                        return true;
+                    }))
+                {
+                    // success — OpenPathAsync was already fired
+                }
+            },
+            Browse: () => _ = OpenAsync(),
+            RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
+            SaveAs: () => _ = SaveAsAsync(),
+            SaveAsExtension: ext => _ = SaveAsWithExtensionAsync(ext),
+            OpenContainingFolder: path =>
+            {
+                try
+                {
+                    var folder = System.IO.Path.GetDirectoryName(path);
+                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = folder,
+                            UseShellExecute = true,
+                        });
+                }
+                catch (Exception ex)
+                {
+                    _status.Text = $"Could not open folder: {ex.Message}";
+                }
+            },
+            ExportPdf: () => _ = ExportPdfAsync());
+
+    /// <summary>
+    /// Save As targeting a specific file extension chosen from the backstage planner.
+    /// Builds a save-picker pre-filtered to the requested extension and lets the user
+    /// confirm the filename before saving.
+    /// </summary>
+    private async Task SaveAsWithExtensionAsync(string extension)
+    {
+        var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
+        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, normalizedExt, out var format);
+        if (adapter is null)
+        {
+            _status.Text = $"Save failed: unsupported extension \"{extension}\".";
+            return;
+        }
+
+        var suggestedName = (_fileWorkflow.CurrentPath is null
+            ? "Document"
+            : System.IO.Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + normalizedExt;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = $"Save as {format?.FormatName ?? extension}",
+            DefaultExtension = normalizedExt.TrimStart('.'),
+            SuggestedFileName = suggestedName,
+            FileTypeChoices = [DocumentFilePickerTypes.ToFileType(
+                new Free.Shared.IO.FileDialogPickerTypeDescriptor(
+                    format?.FormatName ?? extension,
+                    [$"*{normalizedExt}"]))],
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (path is not null)
+            await SaveToPathAsync(path);
     }
 }
