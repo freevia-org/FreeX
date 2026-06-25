@@ -21,6 +21,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -697,6 +698,10 @@ public sealed partial class MainWindow : Window
     private CellAddress _selectionMoveStartCell;
     private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
         new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
+    // Pivot overlay adornments rebuilt on each sheet-grid refresh.
+    // Maps (row, col) → the portable target model used to open the pivot header dropdown menu.
+    private Dictionary<(uint Row, uint Col), PivotHeaderDropdownTargetModel> _pivotHeaderDropdownTargets = [];
+    private IReadOnlyList<PivotRowLabelAdornment> _pivotRowLabelAdornments = [];
     private string? _formulaBoxEditOriginalText;
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
@@ -4191,6 +4196,7 @@ public sealed partial class MainWindow : Window
         var headerOffset = showHeadings ? 1 : 0;
         var cellsByAddress = viewport.Cells.ToDictionary(cell => (cell.Row, cell.Col));
         _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
+        BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
         var grid = new AvaloniaGrid
         {
             Background = Brushes.White,
@@ -6098,7 +6104,7 @@ public sealed partial class MainWindow : Window
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;
         var textDecorations = BuildTextDecorations(style);
-        var indentPadding = GetCellIndentPadding(style);
+        var indentPadding = GetCellIndentPadding(style) + GetPivotRowLabelTextPadding(address.Row, address.Col);
         var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
 
         // Highlight and color-scale rules are already baked into cell.Style (fill/font) by the
@@ -6265,7 +6271,7 @@ public sealed partial class MainWindow : Window
                 zoomFactor,
                 cellHeight);
         }
-        return DecorateAutoFilterHeaderCell(border, address);
+        return DecoratePivotHeaderCell(DecorateAutoFilterHeaderCell(border, address), address);
     }
 
     private TextBox CreateInlineCellEditor(
