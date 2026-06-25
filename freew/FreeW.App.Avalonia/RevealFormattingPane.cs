@@ -21,26 +21,22 @@ namespace FreeW.App.Avalonia;
 /// <see cref="IsVisible"/> via the View ribbon command (<c>freew.reveal-formatting</c>);
 /// defaults to hidden.
 /// </summary>
-public sealed class RevealFormattingPane : UserControl
+public sealed class RevealFormattingPane : SidePaneBase
 {
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private readonly DocumentView _editor;
     private readonly StackPanel _content;
 
-    // ── Style constants (mirror NavigationPane / ReviewingPane chrome) ────────
+    // ── Per-pane style constants ──────────────────────────────────────────────
 
-    private static readonly Color PaneBg = Color.FromRgb(0xF3, 0xF3, 0xF3);
-    private static readonly Color PaneBorder = Color.FromRgb(0xDD, 0xDD, 0xDD);
     private static readonly Color SectionHeadingColor = Color.FromRgb(0x17, 0x32, 0x4D);
     private static readonly Color LabelColor = Color.FromRgb(0x60, 0x60, 0x60);
 
     // ── Construction ──────────────────────────────────────────────────────────
 
     public RevealFormattingPane(DocumentView editor)
+        : base(editor, "Reveal Formatting", width: 260, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-
         // --- Scrollable content area -------------------------------------------
         _content = new StackPanel { Margin = new Thickness(8, 0, 8, 8) };
 
@@ -51,43 +47,9 @@ public sealed class RevealFormattingPane : UserControl
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
 
-        // --- Header -------------------------------------------------------------
-        var header = new TextBlock
-        {
-            Text = "Reveal Formatting",
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            Padding = new Thickness(8, 6),
-        };
-
-        // --- Separator below header --------------------------------------------
-        var separator = new Border
-        {
-            Height = 1,
-            Background = new SolidColorBrush(PaneBorder),
-            Margin = new Thickness(0, 0, 0, 2),
-        };
-
-        // --- Root layout (DockPanel, right-docked, 260px wide) ----------------
-        //   [header]      Dock.Top
-        //   [separator]   Dock.Top
-        //   [scroll]      fill
-        var layout = new DockPanel { Width = 260 };
-        DockPanel.SetDock(header, Dock.Top);
-        DockPanel.SetDock(separator, Dock.Top);
-        layout.Children.Add(header);
-        layout.Children.Add(separator);
-        layout.Children.Add(scroll);
-
-        Content = new Border
-        {
-            Background = new SolidColorBrush(PaneBg),
-            BorderBrush = new SolidColorBrush(PaneBorder),
-            BorderThickness = new Thickness(1, 0, 0, 0),   // left border (right-docked)
-            Child = layout,
-        };
-
-        IsVisible = false; // hidden by default; toggled by View ribbon command
+        // Dock the scroll viewer into InnerLayout (base added header + separator already).
+        // The scroll viewer fills remaining space (last child = fill).
+        InnerLayout.Children.Add(scroll);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -97,7 +59,7 @@ public sealed class RevealFormattingPane : UserControl
     /// the document changes or the caret moves (wire to
     /// <see cref="DocumentView.DocumentChanged"/>).
     /// </summary>
-    public void Refresh()
+    public override void Refresh()
     {
         _content.Children.Clear();
 
