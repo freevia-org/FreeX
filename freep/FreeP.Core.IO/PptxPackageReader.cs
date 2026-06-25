@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -1498,7 +1500,8 @@ public static class PptxPackageReader
         try
         {
             using var stream = entry.Open();
-            var doc = XDocument.Load(stream);
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            var doc = XDocument.Load(reader);
             return doc.Root?
                 .Elements(Pkgr + "Relationship")
                 .Select(r => (
@@ -1521,7 +1524,8 @@ public static class PptxPackageReader
         try
         {
             using var stream = entry.Open();
-            return XDocument.Load(stream);
+            using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create());
+            return XDocument.Load(reader);
         }
         catch { return null; }
     }
