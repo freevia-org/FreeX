@@ -5977,6 +5977,10 @@ public sealed partial class MainWindow : Window
             background = Brush(fillColor);
         else
             background = Brushes.White;
+
+        // Pattern fills (Gray0625…DarkTrellis) layer on top of the solid/gradient background.
+        var patternBrush = CellPatternFill.Build(style, _session.Workbook.Theme);
+
         var foreground = style is null
             ? Brushes.Black
             : Brush(style.ResolveFontColor(_session.Workbook.Theme));
@@ -6030,7 +6034,8 @@ public sealed partial class MainWindow : Window
             isNumeric,
             dataBar,
             icon,
-            sparklineLayer);
+            sparklineLayer,
+            patternBrush: patternBrush);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6057,7 +6062,8 @@ public sealed partial class MainWindow : Window
         bool isNumeric = false,
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
-        Control? sparklineLayer = null)
+        Control? sparklineLayer = null,
+        IBrush? patternBrush = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6083,7 +6089,8 @@ public sealed partial class MainWindow : Window
             isNumeric,
             conditionalDataBar,
             conditionalIcon,
-            sparklineLayer);
+            sparklineLayer,
+            patternBrush: patternBrush);
         if (address == _session.SelectedRange.End)
             AddAutofillHandleAdorner(border, zoomFactor);
 
@@ -6793,28 +6800,49 @@ public sealed partial class MainWindow : Window
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
-        double horizontalPadding = 8)
+        double horizontalPadding = 8,
+        IBrush? patternBrush = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
         var scaledFontSize = Math.Max(1, fontSize * zoomFactor);
         var scaledHorizontalPadding = horizontalPadding * zoomFactor;
         var scaledIndentPadding = indentPadding * zoomFactor;
+
+        // Cell-level super/subscript: shrink font and shift baseline vertically.
+        CellSuperSubScript.Resolve(style, scaledFontSize, out var adjustedFontSize, out var superSubOffsetDip);
+
+        // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
+        // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
+        // so the text reaches the cell edge regardless of proportional font widths.
+        var isFillAlign = horizontalAlignment == CellHAlign.Fill;
+        if (isFillAlign && effectiveText.Length > 0 && cellWidth > 0)
+        {
+            var approxCharWidth = adjustedFontSize * 0.6 * zoomFactor;
+            var approxTextWidth = effectiveText.Length * approxCharWidth;
+            if (approxTextWidth < cellWidth)
+            {
+                var repeatCount = (int)Math.Ceiling(cellWidth / approxTextWidth) + 1;
+                effectiveText = string.Concat(Enumerable.Repeat(effectiveText, repeatCount));
+            }
+        }
+
+        var textMarginTop = superSubOffsetDip;  // negative = up (superscript), positive = down (subscript)
         var textBlock = new TextBlock
         {
             Text = effectiveText,
-            FontSize = scaledFontSize,
+            FontSize = adjustedFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             TextDecorations = textDecorations,
             Foreground = foreground,
-            TextAlignment = textRotation == 255 ? TextAlignment.Center : textAlignment,
-            TextWrapping = effectiveTextWrapping,
-            TextTrimming = effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255
+            TextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment,
+            TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
+            TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)
                 ? TextTrimming.None
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
-            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),
+            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
         };
 
         var content = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)
@@ -6829,7 +6857,7 @@ public sealed partial class MainWindow : Window
                 textRotation,
                 effectiveTextWrapping,
                 style)
-            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer);
+            : CreateDefaultCellContent(textBlock, style, conditionalDataBar, conditionalIcon, zoomFactor, scaledIndentPadding, sparklineLayer, patternBrush);
 
         return new Border
         {
@@ -6852,7 +6880,8 @@ public sealed partial class MainWindow : Window
         CfIconRenderInstruction? conditionalIcon = null,
         double zoomFactor = 1,
         double scaledIndentPadding = 0,
-        Control? sparklineLayer = null)
+        Control? sparklineLayer = null,
+        IBrush? patternBrush = null)
     {
         var content = new AvaloniaGrid { ClipToBounds = true };
 
@@ -6864,6 +6893,12 @@ public sealed partial class MainWindow : Window
         // Data bars render behind the text; add them first so they sit at the bottom of the z-order.
         if (conditionalDataBar is { } bar)
             content.Children.Add(CreateConditionalDataBarLayer(bar, zoomFactor));
+
+        // Pattern fill overlay: rendered on top of the Border background (solid/gradient) but below
+        // the cell text.  A full-cell Rectangle with a DrawingBrush or semi-transparent SolidBrush
+        // produces the hatch/dot pattern.  Mirrors WPF DrawFillPattern compositing order.
+        if (patternBrush is not null)
+            content.Children.Add(new AvaloniaRectangle { Fill = patternBrush });
 
         // Icon-set glyphs occupy a left gutter and push the cell text right by the gutter width.
         if (conditionalIcon is { } icon)
