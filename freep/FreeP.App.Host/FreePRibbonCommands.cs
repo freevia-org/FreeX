@@ -12,9 +12,11 @@ namespace FreeP.App.Host;
 /// Wave 3A: most ids are now real commands routed through <see cref="EditingSession"/>.
 /// Wave 4C: Transitions tab + Animations tab + Slide Show buttons wired here.
 ///           Build() gains two extra parameters for the slideshow start Actions supplied by MainWindow.
+/// Wave 5B: clipboard (copy/cut/paste) wired; font-family ComboBox wired; Design tab (themes +
+///           slide-size) wired; Insert tables + charts wired; Format Painter wired.
 ///
-/// Still stubbed (noted below): freep.paste, freep.cut, freep.copy, freep.layout, freep.font-family,
-///   freep.anim.trigger / .duration / .delay combo-box live-change, freep.anim.pane toggle.
+/// Still stubbed (noted below): freep.layout, freep.anim.trigger / .duration / .delay combo-box
+///   live-change, freep.anim.pane toggle.
 /// </summary>
 internal static class FreePRibbonCommands
 {
@@ -98,16 +100,43 @@ internal static class FreePRibbonCommands
         registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline",
             () => editor.ToggleUnderlineOnSelection()));
 
-        // ── Clipboard / layout / font-family: STUBBED ────────────────────────────
-        foreach (var id in new[]
-        {
-            "freep.paste", "freep.cut", "freep.copy",
-            "freep.layout",
-            "freep.font-family",
-        })
-        {
-            registry.Register(id, new ActionCommand(() => { /* STUB: wave 3B/3C */ }));
-        }
+        // ── Clipboard — Wave 5B ───────────────────────────────────────────────────
+
+        registry.Register("freep.copy",
+            new ActionCommand(() => editor.CopySelectedShapes()));
+
+        registry.Register("freep.cut",
+            new ActionCommand(() => editor.CutSelectedShapes()));
+
+        registry.Register("freep.paste",
+            new ActionCommand(() => editor.Paste()));
+
+        // ── Format Painter — Wave 5B ─────────────────────────────────────────────
+        // Single-click mode: copies formatting from the first selected shape, then immediately
+        // applies it to the rest of the multi-selection.
+        // NOTE: full "click source → click target" canvas mode is deferred (requires a
+        // modal interaction state in the gesture handler).
+        registry.Register("freep.format-painter",
+            new ActionCommand(() =>
+            {
+                editor.CopyFormatting();
+                editor.ApplyFormattingToSelection();
+            }));
+
+        // ── Layout — STUBBED (no layout model yet) ────────────────────────────────
+        registry.Register("freep.layout", new ActionCommand(() => { /* STUB: layout picker deferred */ }));
+
+        // ── Font family — Wave 5B ─────────────────────────────────────────────────
+        // The shared ComboBox fires Execute on every selection change; the chosen item is
+        // provided via RibbonCommandContext.SelectedValue (a string). When the context value
+        // is absent (e.g. tests that call Execute(Empty)), the command is a no-op.
+        registry.Register("freep.font-family",
+            new ContextAwareCommand(ctx =>
+            {
+                var family = ctx.SelectedValue;
+                if (!string.IsNullOrEmpty(family))
+                    editor.SetFontFamilyOnSelection(family);
+            }));
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
@@ -252,6 +281,56 @@ internal static class FreePRibbonCommands
                 /* STUB: Wave 5 will open the animation pane panel */
             }));
 
+        // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
+
+        registry.Register("freep.insert-table-3x3",
+            new ActionCommand(() => editor.InsertTable(3, 3)));
+
+        registry.Register("freep.insert-table-2x2",
+            new ActionCommand(() => editor.InsertTable(2, 2)));
+
+        registry.Register("freep.insert-table-4x4",
+            new ActionCommand(() => editor.InsertTable(4, 4)));
+
+        // ── Wave 5B: Insert — Charts ─────────────────────────────────────────────
+
+        registry.Register("freep.insert-chart-column",
+            new ActionCommand(() => editor.InsertChart(ChartType.ColumnClustered)));
+
+        registry.Register("freep.insert-chart-bar",
+            new ActionCommand(() => editor.InsertChart(ChartType.BarClustered)));
+
+        registry.Register("freep.insert-chart-line",
+            new ActionCommand(() => editor.InsertChart(ChartType.Line)));
+
+        registry.Register("freep.insert-chart-pie",
+            new ActionCommand(() => editor.InsertChart(ChartType.Pie)));
+
+        // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
+
+        registry.Register("freep.theme.office",
+            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Office)));
+
+        registry.Register("freep.theme.berlin",
+            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Berlin)));
+
+        registry.Register("freep.theme.facet",
+            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Facet)));
+
+        registry.Register("freep.theme.ion",
+            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Ion)));
+
+        registry.Register("freep.theme.slice",
+            new ActionCommand(() => editor.SetTheme(BuiltInThemes.Id.Slice)));
+
+        // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
+
+        registry.Register("freep.slide-size-16x9",
+            new ActionCommand(() => editor.SetSlideSize16x9()));
+
+        registry.Register("freep.slide-size-4x3",
+            new ActionCommand(() => editor.SetSlideSize4x3()));
+
         return registry;
     }
 
@@ -356,6 +435,17 @@ internal static class FreePRibbonCommands
         private readonly Action _action;
         public ActionCommand(Action action) => _action = action;
         public void Execute(RibbonCommandContext context) => _action();
+    }
+
+    /// <summary>
+    /// A command that receives the full <see cref="RibbonCommandContext"/> so it can inspect
+    /// e.g. <see cref="RibbonCommandContext.SelectedValue"/> from a ComboBox.
+    /// </summary>
+    private sealed class ContextAwareCommand : IRibbonCommand
+    {
+        private readonly Action<RibbonCommandContext> _action;
+        public ContextAwareCommand(Action<RibbonCommandContext> action) => _action = action;
+        public void Execute(RibbonCommandContext context) => _action(context);
     }
 
     /// <summary>

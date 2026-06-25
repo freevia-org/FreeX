@@ -375,6 +375,20 @@ public sealed class MainWindow : Window
         var slideShowFromCurrent = new RoutedCommand("SlideShowFromCurrent", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(slideShowFromCurrent, (_, _) => StartSlideShow(fromStart: false)));
         InputBindings.Add(new KeyBinding(slideShowFromCurrent, new KeyGesture(Key.F5, ModifierKeys.Shift)));
+
+        // Wave 5B: Clipboard keyboard shortcuts (Ctrl+C / Ctrl+X / Ctrl+V).
+        // Routed through editor so they participate in the same undo bus as the ribbon buttons.
+        var copyCommand = new RoutedCommand("CopyShapes", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(copyCommand, (_, _) => Editor.CopySelectedShapes()));
+        InputBindings.Add(new KeyBinding(copyCommand, new KeyGesture(Key.C, ModifierKeys.Control)));
+
+        var cutCommand = new RoutedCommand("CutShapes", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(cutCommand, (_, _) => Editor.CutSelectedShapes()));
+        InputBindings.Add(new KeyBinding(cutCommand, new KeyGesture(Key.X, ModifierKeys.Control)));
+
+        var pasteCommand = new RoutedCommand("PasteShapes", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(pasteCommand, (_, _) => Editor.Paste()));
+        InputBindings.Add(new KeyBinding(pasteCommand, new KeyGesture(Key.V, ModifierKeys.Control)));
     }
 
     // ── Slide show (Wave 4B) ──────────────────────────────────────────────────────

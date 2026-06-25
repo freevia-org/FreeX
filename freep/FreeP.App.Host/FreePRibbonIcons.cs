@@ -9,6 +9,7 @@ namespace FreeP.App.Host;
 /// the scaffold's small ribbon.
 ///
 /// Wave 4C additions: Transitions, Animations, and Slide Show command ids.
+/// Wave 5B additions: Format Painter, Insert Tables/Charts, Design tab (Themes + Slide Size).
 /// </summary>
 internal static class FreePRibbonIcons
 {
@@ -38,11 +39,36 @@ internal static class FreePRibbonIcons
             ["freep.italic"] = RibbonCommandIconKind.Italic,
             ["freep.underline"] = RibbonCommandIconKind.Underline,
 
+            // Clipboard (Wave 5B)
+            ["freep.format-painter"] = RibbonCommandIconKind.FormatPainter,
+
             // Insert
             ["freep.text-box"] = RibbonCommandIconKind.TextBox,
             ["freep.picture"] = RibbonCommandIconKind.Picture,
             ["freep.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freep.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
+
+            // ── Wave 5B: Insert — Tables ──────────────────────────────────────────────
+            ["freep.insert-table-3x3"] = RibbonCommandIconKind.Table,
+            ["freep.insert-table-2x2"] = RibbonCommandIconKind.Table,
+            ["freep.insert-table-4x4"] = RibbonCommandIconKind.Table,
+
+            // ── Wave 5B: Insert — Charts ──────────────────────────────────────────────
+            ["freep.insert-chart-column"] = RibbonCommandIconKind.ChartColumn,
+            ["freep.insert-chart-bar"]    = RibbonCommandIconKind.ChartColumn,
+            ["freep.insert-chart-line"]   = RibbonCommandIconKind.ChartLine,
+            ["freep.insert-chart-pie"]    = RibbonCommandIconKind.ChartPie,
+
+            // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
+            ["freep.theme.office"] = RibbonCommandIconKind.Color,
+            ["freep.theme.berlin"] = RibbonCommandIconKind.Color,
+            ["freep.theme.facet"]  = RibbonCommandIconKind.Color,
+            ["freep.theme.ion"]    = RibbonCommandIconKind.Color,
+            ["freep.theme.slice"]  = RibbonCommandIconKind.Color,
+
+            // ── Wave 5B: Design tab — Slide Size ─────────────────────────────────────
+            ["freep.slide-size-16x9"] = RibbonCommandIconKind.Page,
+            ["freep.slide-size-4x3"]  = RibbonCommandIconKind.Page,
 
             // ── Wave 4C: Transition gallery ───────────────────────────────────────────
             ["freep.transition.none"]     = RibbonCommandIconKind.Clear,

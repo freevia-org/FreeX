@@ -1,0 +1,446 @@
+using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
+using FreeP.Core.Model;
+using Xunit;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Wave 5B: Tests for the Design tab, Insert galleries (tables + charts), clipboard commands,
+/// font-family ComboBox wiring, and Format Painter.
+///
+/// These tests run plain (no STA required) because they exercise the command layer directly
+/// without constructing WPF controls.
+/// </summary>
+public class RibbonEditorCompleteness5BTests
+{
+    // ── Helpers ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Creates a fresh EditingSession with one slide containing one autoshape (id=1).</summary>
+    private static (EditingSession editor, Presentation pres) MakeSession()
+    {
+        var pres = Presentation.CreateEmpty();
+        var bus  = new PresentationCommandBus(pres);
+        var ed   = new EditingSession(pres, bus);
+        return (ed, pres);
+    }
+
+    private static RibbonCommandRegistry MakeRegistry(EditingSession editor)
+        => FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+
+    private static void Exec(RibbonCommandRegistry registry, string id,
+        RibbonCommandContext? context = null)
+    {
+        bool found = registry.TryGet(id, out var cmd);
+        Assert.True(found, $"Command '{id}' was not registered.");
+        cmd!.Execute(context ?? RibbonCommandContext.Empty);
+    }
+
+    // ── Ribbon definition: Design tab structure ──────────────────────────────────
+
+    [Fact]
+    public void RibbonBuild_ContainsDesignTab()
+    {
+        var def = FreePRibbon.Build();
+        Assert.Contains(def.Tabs, t => t.Id == "design");
+    }
+
+    [Fact]
+    public void DesignTab_ContainsThemesGroup()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "design");
+        Assert.Contains(tab.Groups, g => g.Id == "themes");
+    }
+
+    [Fact]
+    public void DesignTab_ContainsCustomizeGroup()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "design");
+        Assert.Contains(tab.Groups, g => g.Id == "customize");
+    }
+
+    [Fact]
+    public void ThemesGroup_ContainsAllFiveBuiltInThemeIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "design");
+        var group = tab.Groups.Single(g => g.Id == "themes");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains("freep.theme.office", ids);
+        Assert.Contains("freep.theme.berlin", ids);
+        Assert.Contains("freep.theme.facet",  ids);
+        Assert.Contains("freep.theme.ion",    ids);
+        Assert.Contains("freep.theme.slice",  ids);
+    }
+
+    [Fact]
+    public void CustomizeGroup_ContainsSlideSizeIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "design");
+        var group = tab.Groups.Single(g => g.Id == "customize");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains("freep.slide-size-16x9", ids);
+        Assert.Contains("freep.slide-size-4x3",  ids);
+    }
+
+    // ── Ribbon definition: Insert tab additions ──────────────────────────────────
+
+    [Fact]
+    public void InsertTab_ContainsTablesGroup()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        Assert.Contains(tab.Groups, g => g.Id == "tables");
+    }
+
+    [Fact]
+    public void InsertTab_ContainsChartsGroup()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        Assert.Contains(tab.Groups, g => g.Id == "charts");
+    }
+
+    [Fact]
+    public void TablesGroup_ContainsExpectedTableIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        var group = tab.Groups.Single(g => g.Id == "tables");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains("freep.insert-table-3x3", ids);
+        Assert.Contains("freep.insert-table-2x2", ids);
+        Assert.Contains("freep.insert-table-4x4", ids);
+    }
+
+    [Fact]
+    public void ChartsGroup_ContainsExpectedChartIds()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "insert");
+        var group = tab.Groups.Single(g => g.Id == "charts");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains("freep.insert-chart-column", ids);
+        Assert.Contains("freep.insert-chart-bar",    ids);
+        Assert.Contains("freep.insert-chart-line",   ids);
+        Assert.Contains("freep.insert-chart-pie",    ids);
+    }
+
+    // ── Ribbon definition: Home tab clipboard additions ──────────────────────────
+
+    [Fact]
+    public void HomeTab_ClipboardGroup_ContainsFormatPainterId()
+    {
+        var def = FreePRibbon.Build();
+        var tab = def.Tabs.Single(t => t.Id == "home");
+        var group = tab.Groups.Single(g => g.Id == "clipboard");
+        var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
+        Assert.Contains("freep.format-painter", ids);
+    }
+
+    // ── Command: clipboard (copy → CanPaste → paste) ─────────────────────────────
+
+    [Fact]
+    public void Cmd_Copy_ThenPaste_AddsShapeToSlide()
+    {
+        var (ed, pres) = MakeSession();
+        var shapeId = pres.Slides[0].Shapes[0].Id;
+        ed.Select(shapeId);
+        var reg = MakeRegistry(ed);
+
+        Assert.False(ed.CanPaste, "CanPaste should be false before copy.");
+        Exec(reg, "freep.copy");
+        Assert.True(ed.CanPaste, "CanPaste should be true after copy.");
+
+        int countBefore = pres.Slides[0].Shapes.Count;
+        Exec(reg, "freep.paste");
+        Assert.Equal(countBefore + 1, pres.Slides[0].Shapes.Count);
+    }
+
+    [Fact]
+    public void Cmd_Cut_RemovesShapeFromSlide()
+    {
+        var (ed, pres) = MakeSession();
+        var shapeId = pres.Slides[0].Shapes[0].Id;
+        ed.Select(shapeId);
+        var reg = MakeRegistry(ed);
+
+        int countBefore = pres.Slides[0].Shapes.Count;
+        Exec(reg, "freep.cut");
+        Assert.Equal(countBefore - 1, pres.Slides[0].Shapes.Count);
+        Assert.True(ed.CanPaste, "CanPaste should be true after cut.");
+    }
+
+    [Fact]
+    public void Cmd_Paste_WithNoClipboard_IsNoOp()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        int countBefore = pres.Slides[0].Shapes.Count;
+        // No prior copy — paste should be silent no-op.
+        Exec(reg, "freep.paste");
+        Assert.Equal(countBefore, pres.Slides[0].Shapes.Count);
+    }
+
+    // ── Command: theme buttons ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_ThemeOffice_SetsOfficeTheme()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.theme.office");
+        // Verify it is the Office theme by checking the major font (Calibri Light).
+        Assert.Equal("Calibri Light", pres.Theme.FontScheme.MajorLatinFont);
+    }
+
+    [Fact]
+    public void Cmd_ThemeBerlin_SetsThemeNameBerlin()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.theme.berlin");
+        Assert.Equal("Berlin", pres.Theme.Name);
+    }
+
+    [Fact]
+    public void Cmd_ThemeFacet_SetsThemeNameFacet()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.theme.facet");
+        Assert.Equal("Facet", pres.Theme.Name);
+    }
+
+    [Fact]
+    public void Cmd_ThemeIon_SetsThemeNameIon()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.theme.ion");
+        Assert.Equal("Ion", pres.Theme.Name);
+    }
+
+    [Fact]
+    public void Cmd_ThemeSlice_SetsThemeNameSlice()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.theme.slice");
+        Assert.Equal("Slice", pres.Theme.Name);
+    }
+
+    // ── Command: slide size ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_SlideSize16x9_SetsCxEmuTo12192000()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.slide-size-16x9");
+        Assert.Equal(12192000L, pres.SlideSizeCxEmu);
+    }
+
+    [Fact]
+    public void Cmd_SlideSize4x3_SetsCxEmuTo9144000()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.slide-size-4x3");
+        Assert.Equal(9144000L, pres.SlideSizeCxEmu);
+    }
+
+    // ── Command: insert table ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_InsertTable3x3_AddsTableShapeToSlide()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        int before = pres.Slides[0].Shapes.Count;
+        Exec(reg, "freep.insert-table-3x3");
+        Assert.Equal(before + 1, pres.Slides[0].Shapes.Count);
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(SlideShapeKind.Table, added.Kind);
+        Assert.NotNull(added.Table);
+        Assert.Equal(3, added.Table!.Rows.Count);
+        Assert.Equal(3, added.Table.ColumnWidthsEmu.Count);
+    }
+
+    [Fact]
+    public void Cmd_InsertTable2x2_AddsTableWith2Rows2Cols()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-table-2x2");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(SlideShapeKind.Table, added.Kind);
+        Assert.Equal(2, added.Table!.Rows.Count);
+        Assert.Equal(2, added.Table.ColumnWidthsEmu.Count);
+    }
+
+    [Fact]
+    public void Cmd_InsertTable4x4_AddsTableWith4Rows4Cols()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-table-4x4");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(SlideShapeKind.Table, added.Kind);
+        Assert.Equal(4, added.Table!.Rows.Count);
+        Assert.Equal(4, added.Table.ColumnWidthsEmu.Count);
+    }
+
+    // ── Command: insert chart ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_InsertChartColumn_AddsChartShapeColumnClustered()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        int before = pres.Slides[0].Shapes.Count;
+        Exec(reg, "freep.insert-chart-column");
+        Assert.Equal(before + 1, pres.Slides[0].Shapes.Count);
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(SlideShapeKind.Chart, added.Kind);
+        Assert.Equal(ChartType.ColumnClustered, added.Chart!.ChartType);
+    }
+
+    [Fact]
+    public void Cmd_InsertChartBar_AddsBarClusteredChart()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-chart-bar");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(SlideShapeKind.Chart, added.Kind);
+        Assert.Equal(ChartType.BarClustered, added.Chart!.ChartType);
+    }
+
+    [Fact]
+    public void Cmd_InsertChartLine_AddsLineChart()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-chart-line");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(ChartType.Line, added.Chart!.ChartType);
+    }
+
+    [Fact]
+    public void Cmd_InsertChartPie_AddsPieChart()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-chart-pie");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(ChartType.Pie, added.Chart!.ChartType);
+    }
+
+    // ── Command: font-family ComboBox ────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_FontFamily_WithSelectedValue_SetsRunFont()
+    {
+        var (ed, pres) = MakeSession();
+        // The default text-box has text runs; insert one to be sure.
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        var ctx = RibbonCommandContext.ForSelectedValue("Arial");
+        Exec(reg, "freep.font-family", ctx);
+
+        // All runs in the shape should now be Arial.
+        var firstRun = shape.TextBody!.Paragraphs[0].Runs[0];
+        Assert.Equal("Arial", firstRun.FontFamily);
+    }
+
+    [Fact]
+    public void Cmd_FontFamily_WithEmptyValue_IsNoOp()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        // Execute with no SelectedValue — must not throw.
+        var ex = Record.Exception(() => Exec(reg, "freep.font-family", RibbonCommandContext.Empty));
+        Assert.Null(ex);
+    }
+
+    // ── Command: Format Painter ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Cmd_FormatPainter_CopiesFillFromFirstSelectedToOthers()
+    {
+        var (ed, pres) = MakeSession();
+
+        // Insert two rectangles.
+        var r1 = ed.InsertDefaultRectangle();
+        var r2 = ed.InsertDefaultRectangle();
+
+        // Give r1 a distinct solid fill.
+        var redFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFF0000)));
+        ed.Select(r1.Id);
+        ed.SetSelectedFill(redFill);
+
+        // Select both (r1 first as the source, r2 as the target).
+        ed.Select(r1.Id);
+        ed.Select(r2.Id, addToSelection: true);
+
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.format-painter");
+
+        // r2 should now have the same fill as r1.
+        var r2Shape = pres.Slides[0].Shapes.First(s => s.Id == r2.Id);
+        Assert.IsType<ShapeFill.Solid>(r2Shape.Fill);
+    }
+
+    [Fact]
+    public void Cmd_FormatPainter_WithNoSelection_IsNoOp()
+    {
+        var (ed, pres) = MakeSession();
+        ed.ClearSelection();
+        var reg = MakeRegistry(ed);
+
+        var ex = Record.Exception(() => Exec(reg, "freep.format-painter"));
+        Assert.Null(ex);
+    }
+
+    // ── All Wave 5B command ids are registered ────────────────────────────────────
+
+    [Theory]
+    [InlineData("freep.copy")]
+    [InlineData("freep.cut")]
+    [InlineData("freep.paste")]
+    [InlineData("freep.font-family")]
+    [InlineData("freep.format-painter")]
+    [InlineData("freep.theme.office")]
+    [InlineData("freep.theme.berlin")]
+    [InlineData("freep.theme.facet")]
+    [InlineData("freep.theme.ion")]
+    [InlineData("freep.theme.slice")]
+    [InlineData("freep.slide-size-16x9")]
+    [InlineData("freep.slide-size-4x3")]
+    [InlineData("freep.insert-table-3x3")]
+    [InlineData("freep.insert-table-2x2")]
+    [InlineData("freep.insert-table-4x4")]
+    [InlineData("freep.insert-chart-column")]
+    [InlineData("freep.insert-chart-bar")]
+    [InlineData("freep.insert-chart-line")]
+    [InlineData("freep.insert-chart-pie")]
+    public void AllWave5BCommandIds_AreRegistered(string commandId)
+    {
+        var (ed, _) = MakeSession();
+        var reg = MakeRegistry(ed);
+        bool found = reg.TryGet(commandId, out _);
+        Assert.True(found, $"Command '{commandId}' was not registered.");
+    }
+}

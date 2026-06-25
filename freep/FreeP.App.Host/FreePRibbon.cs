@@ -4,7 +4,7 @@ namespace FreeP.App.Host;
 /// FreeP's minimal PowerPoint-style ribbon, authored with the shared <see cref="RibbonDefinitionBuilder"/> —
 /// the same model that drives FreeX and FreeW, proving the ribbon library is app-neutral.
 ///
-/// Tabs: Home, Insert (Wave 3), Transitions, Animations, Slide Show (Wave 4C).
+/// Tabs: Home, Insert (Wave 3 + 5B), Design (Wave 5B), Transitions, Animations, Slide Show (Wave 4C).
 /// </summary>
 internal static class FreePRibbon
 {
@@ -26,6 +26,8 @@ internal static class FreePRibbon
                     g.Large("freep.paste", "Paste", RibbonCommandIconKind.Paste, "V");
                     g.Medium("freep.cut", "Cut", RibbonCommandIconKind.Cut, "T");
                     g.Medium("freep.copy", "Copy", RibbonCommandIconKind.Copy, "C");
+                    // Wave 5B: Format Painter — copies formatting from first selected shape to rest of selection.
+                    g.Medium("freep.format-painter", "Format Painter", RibbonCommandIconKind.FormatPainter, "F");
                 });
                 tab.Group("font", "Font", "F", 80, g =>
                 {
@@ -46,11 +48,46 @@ internal static class FreePRibbon
                 {
                     g.Large("freep.text-box", "Text Box", RibbonCommandIconKind.TextBox, "X");
                 });
+                // Wave 5B: Tables group — default 3×3; picker deferral noted.
+                tab.Group("tables", "Tables", "A", 95, g =>
+                {
+                    g.Large("freep.insert-table-3x3", "Table", RibbonCommandIconKind.Table, "T");
+                    g.Medium("freep.insert-table-2x2", "2×2", RibbonCommandIconKind.Table, "2");
+                    g.Medium("freep.insert-table-4x4", "4×4", RibbonCommandIconKind.Table, "4");
+                    // NOTE: interactive row/col picker (hover-grid) is deferred to a later wave.
+                });
+                // Wave 5B: Charts group.
+                tab.Group("charts", "Charts", "H", 93, g =>
+                {
+                    g.Medium("freep.insert-chart-column", "Column", RibbonCommandIconKind.ChartColumn, "C");
+                    g.Medium("freep.insert-chart-bar",    "Bar",    RibbonCommandIconKind.ChartColumn, "B");
+                    g.Medium("freep.insert-chart-line",   "Line",   RibbonCommandIconKind.ChartLine,   "L");
+                    g.Medium("freep.insert-chart-pie",    "Pie",    RibbonCommandIconKind.ChartPie,    "P");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 90, g =>
                 {
                     g.Large("freep.picture", "Picture", RibbonCommandIconKind.Picture, "P");
                     g.Medium("freep.shape-rectangle", "Rectangle", RibbonCommandIconKind.Rectangle, "R");
                     g.Medium("freep.shape-ellipse", "Ellipse", RibbonCommandIconKind.Ellipse, "E");
+                });
+            })
+            // ── Wave 5B: Design tab ───────────────────────────────────────────────────
+            .Tab("design", "Design", "G", tab =>
+            {
+                // Themes group — one button per built-in theme.
+                tab.Group("themes", "Themes", "T", 100, g =>
+                {
+                    g.Large("freep.theme.office",  "Office",  RibbonCommandIconKind.Color, "O");
+                    g.Medium("freep.theme.berlin",  "Berlin",  RibbonCommandIconKind.Color, "B");
+                    g.Medium("freep.theme.facet",   "Facet",   RibbonCommandIconKind.Color, "F");
+                    g.Medium("freep.theme.ion",     "Ion",     RibbonCommandIconKind.Color, "I");
+                    g.Medium("freep.theme.slice",   "Slice",   RibbonCommandIconKind.Color, "S");
+                });
+                // Customize group — slide size options.
+                tab.Group("customize", "Customize", "Z", 90, g =>
+                {
+                    g.Large("freep.slide-size-16x9", "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
+                    g.Large("freep.slide-size-4x3",  "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
                 });
             })
             // ── Wave 4C: Transitions tab ───────────────────────────────────────────────
