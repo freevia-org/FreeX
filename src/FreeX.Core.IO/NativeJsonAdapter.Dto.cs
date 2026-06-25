@@ -520,6 +520,7 @@ public sealed partial class NativeJsonAdapter
         public string? PrintArea { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
+        public int? PaperSizeCode { get; set; }
         public PageMarginsDto? PageMargins { get; set; }
         public double? HeaderMargin { get; set; }
         public double? FooterMargin { get; set; }

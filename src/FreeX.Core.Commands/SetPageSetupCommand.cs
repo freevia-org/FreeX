@@ -27,6 +27,7 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
 
     private WorksheetPageOrientation _previousOrientation;
     private WorksheetPaperSize _previousPaperSize;
+    private int _previousPaperSizeCode;
     private WorksheetPageMargins _previousMargins;
     private double _previousHeaderMargin;
     private double _previousFooterMargin;
@@ -122,6 +123,7 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         _previousOrientation = sheet.PageOrientation;
         _previousPaperSize = sheet.PaperSize;
+        _previousPaperSizeCode = sheet.PaperSizeCode;
         _previousMargins = sheet.PageMargins;
         _previousHeaderMargin = sheet.HeaderMargin;
         _previousFooterMargin = sheet.FooterMargin;
@@ -142,6 +144,7 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
 
         sheet.PageOrientation = _orientation;
         sheet.PaperSize = _paperSize;
+        sheet.PaperSizeCode = PaperSizeCodes.GetCode(_paperSize);
         sheet.PageMargins = _margins;
         sheet.HeaderMargin = _headerMargin;
         sheet.FooterMargin = _footerMargin;
@@ -169,6 +172,7 @@ public sealed class SetPageSetupCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         sheet.PageOrientation = _previousOrientation;
         sheet.PaperSize = _previousPaperSize;
+        sheet.PaperSizeCode = _previousPaperSizeCode;
         sheet.PageMargins = _previousMargins;
         sheet.HeaderMargin = _previousHeaderMargin;
         sheet.FooterMargin = _previousFooterMargin;

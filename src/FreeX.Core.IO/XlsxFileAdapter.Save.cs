@@ -287,12 +287,15 @@ public sealed partial class XlsxFileAdapter
             xlSheet.PageSetup.PageOrientation = pageOrientation == WorksheetPageOrientation.Landscape
                 ? XLPageOrientation.Landscape
                 : XLPageOrientation.Portrait;
-            xlSheet.PageSetup.PaperSize = paperSize switch
-            {
-                WorksheetPaperSize.Letter => XLPaperSize.LetterPaper,
-                WorksheetPaperSize.Legal => XLPaperSize.LegalPaper,
-                _ => XLPaperSize.A4Paper
-            };
+            // Emit the raw OOXML paper-size code to preserve non-Letter/A4/Legal sizes.
+            // When PaperSizeCode is a known OOXML code (Letter/A4/Legal/A3/etc.), the enum
+            // is authoritative so dialog changes always take effect.  When PaperSizeCode is
+            // an exotic/unknown code not in the enum map, preserve it verbatim.
+            var paperSizeCode = sheet.PaperSizeCode > 0
+                                && !PaperSizeCodes.TryGetEnum(sheet.PaperSizeCode, out _)
+                ? sheet.PaperSizeCode                   // exotic code: preserve as-is
+                : PaperSizeCodes.GetCode(paperSize);    // known code: derive from enum
+            xlSheet.PageSetup.PaperSize = (XLPaperSize)paperSizeCode;
             xlSheet.PageSetup.Margins.Left = pageMargins.Left;
             xlSheet.PageSetup.Margins.Right = pageMargins.Right;
             xlSheet.PageSetup.Margins.Top = pageMargins.Top;

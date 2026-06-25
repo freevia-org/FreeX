@@ -43,6 +43,7 @@ public sealed partial class Sheet
             PrimaryViewMetadata           = PrimaryViewMetadata?.Clone(),
             PageOrientation               = PageOrientation,
             PaperSize                     = PaperSize,
+            PaperSizeCode                 = PaperSizeCode,
             PageMargins                   = PageMargins,
             HeaderMargin                  = HeaderMargin,
             FooterMargin                  = FooterMargin,

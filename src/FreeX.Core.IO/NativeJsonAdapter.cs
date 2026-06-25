@@ -173,8 +173,20 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
             if (sDto.PageOrientation is { } orientation && Enum.IsDefined(orientation))
                 sheet.PageOrientation = orientation;
-            if (sDto.PaperSize is { } paperSize && Enum.IsDefined(paperSize))
+            if (sDto.PaperSizeCode is { } rawCode && rawCode > 0)
+            {
+                // Exotic code preserved in JSON: restore it and derive the enum best-effort.
+                sheet.PaperSizeCode = rawCode;
+                sheet.PaperSize = PaperSizeCodes.TryGetEnum(rawCode, out var mappedSize)
+                    ? mappedSize
+                    : WorksheetPaperSize.A4;
+            }
+            else if (sDto.PaperSize is { } paperSize && Enum.IsDefined(paperSize))
+            {
+                // Known size: enum is authoritative; derive code from it.
                 sheet.PaperSize = paperSize;
+                sheet.PaperSizeCode = PaperSizeCodes.GetCode(paperSize);
+            }
             if (sDto.PageMargins is { } margins)
                 sheet.PageMargins = NativeJsonValueSanitizer.ValidPageMarginsOrDefault(
                     new WorksheetPageMargins(margins.Left, margins.Right, margins.Top, margins.Bottom),

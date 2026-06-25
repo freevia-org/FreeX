@@ -179,6 +179,16 @@ public sealed partial class Sheet
     /// <summary>Worksheet paper size used for print preview/export.</summary>
     public WorksheetPaperSize PaperSize { get; set; } = WorksheetPaperSize.A4;
 
+    /// <summary>
+    /// Raw OOXML <c>pageSetup/@paperSize</c> integer code (1=Letter, 9=A4, 5=Legal, 8=A3, …).
+    /// Preserved so arbitrary paper sizes round-trip through XLSX without coercion.
+    /// Defaults to 9 (A4) matching <see cref="PaperSize"/> default.
+    /// On load this is set from the raw XML attribute; on save it is emitted verbatim.
+    /// The <see cref="PaperSize"/> enum is kept for the dialog (common sizes only) and is
+    /// kept in sync with this code via <see cref="PaperSizeCodes"/>.
+    /// </summary>
+    public int PaperSizeCode { get; set; } = PaperSizeCodes.DefaultCode;
+
     /// <summary>Worksheet page margins in inches.</summary>
     public WorksheetPageMargins PageMargins { get; set; } = WorksheetPageMargins.Narrow;
 

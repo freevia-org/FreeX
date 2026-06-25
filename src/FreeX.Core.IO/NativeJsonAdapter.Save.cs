@@ -198,6 +198,12 @@ public sealed partial class NativeJsonAdapter
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),
+                // Only persist PaperSizeCode for exotic/unknown codes not in the standard map.
+                // Known sizes (Letter/A4/Legal/A3/etc.) are reconstructed from PaperSize on load.
+                PaperSizeCode = (s.PaperSizeCode > 0
+                                 && !PaperSizeCodes.TryGetEnum(s.PaperSizeCode, out _))
+                    ? s.PaperSizeCode
+                    : null,
                 PageMargins = FromPageMargins(NativeJsonValueSanitizer.ValidPageMarginsOrDefault(s.PageMargins, WorksheetPageMargins.Narrow)),
                 HeaderMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.HeaderMargin, 0.3),
                 FooterMargin = NativeJsonValueSanitizer.NonNegativeFiniteOrDefault(s.FooterMargin, 0.3),

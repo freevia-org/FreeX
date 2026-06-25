@@ -610,12 +610,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.PageOrientation = xlSheet.PageSetup.PageOrientation == XLPageOrientation.Landscape
                 ? WorksheetPageOrientation.Landscape
                 : WorksheetPageOrientation.Portrait;
-            sheet.PaperSize = xlSheet.PageSetup.PaperSize switch
-            {
-                XLPaperSize.LetterPaper => WorksheetPaperSize.Letter,
-                XLPaperSize.LegalPaper => WorksheetPaperSize.Legal,
-                _ => WorksheetPaperSize.A4
-            };
+            // Preserve the raw OOXML paper-size code so non-Letter/A4/Legal sizes round-trip.
+            var rawPaperCode = (int)xlSheet.PageSetup.PaperSize;
+            sheet.PaperSizeCode = rawPaperCode > 0 ? rawPaperCode : PaperSizeCodes.DefaultCode;
+            sheet.PaperSize = PaperSizeCodes.TryGetEnum(sheet.PaperSizeCode, out var mappedPaperSize)
+                ? mappedPaperSize
+                : WorksheetPaperSize.A4;
             sheet.PageMargins = new WorksheetPageMargins(
                 xlSheet.PageSetup.Margins.Left,
                 xlSheet.PageSetup.Margins.Right,

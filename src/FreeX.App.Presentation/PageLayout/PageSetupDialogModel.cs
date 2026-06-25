@@ -191,9 +191,14 @@ public static class PageSetupDialogModel
 
     public static IReadOnlyList<PageSetupChoice<WorksheetPaperSize>> PaperSizeChoices { get; } =
     [
-        new(WorksheetPaperSize.Letter, "PageSetup_Letter85X11"),
-        new(WorksheetPaperSize.A4, "PageSetup_A4210X297Mm"),
-        new(WorksheetPaperSize.Legal, "PageSetup_Legal85X14"),
+        new(WorksheetPaperSize.Letter,    "PageSetup_Letter85X11"),
+        new(WorksheetPaperSize.A4,        "PageSetup_A4210X297Mm"),
+        new(WorksheetPaperSize.Legal,     "PageSetup_Legal85X14"),
+        new(WorksheetPaperSize.Tabloid,   "PageSetup_Tabloid11X17"),
+        new(WorksheetPaperSize.Executive, "PageSetup_Executive725X105"),
+        new(WorksheetPaperSize.A3,        "PageSetup_A3297X420Mm"),
+        new(WorksheetPaperSize.A5,        "PageSetup_A5148X210Mm"),
+        new(WorksheetPaperSize.B5,        "PageSetup_B5176X250Mm"),
     ];
 
     /// <summary>The paper sizes the dialog offers, in display order.</summary>
@@ -293,9 +298,18 @@ public static class PageSetupDialogModel
     public static string DescribePaperSize(WorksheetPaperSize paperSize) =>
         paperSize switch
         {
-            WorksheetPaperSize.Letter => "Letter (8.5\" x 11\")",
-            WorksheetPaperSize.Legal => "Legal (8.5\" x 14\")",
-            _ => "A4 (210mm x 297mm)"
+            WorksheetPaperSize.Letter    => "Letter (8.5\" x 11\")",
+            WorksheetPaperSize.Legal     => "Legal (8.5\" x 14\")",
+            WorksheetPaperSize.Tabloid   => "Tabloid (11\" x 17\")",
+            WorksheetPaperSize.Executive => "Executive (7.25\" x 10.5\")",
+            WorksheetPaperSize.A3        => "A3 (297mm x 420mm)",
+            WorksheetPaperSize.A5        => "A5 (148mm x 210mm)",
+            WorksheetPaperSize.B5        => "B5 (176mm x 250mm)",
+            WorksheetPaperSize.Ledger    => "Ledger (17\" x 11\")",
+            WorksheetPaperSize.Statement => "Statement (5.5\" x 8.5\")",
+            WorksheetPaperSize.B4        => "B4 (257mm x 364mm)",
+            WorksheetPaperSize.Folio     => "Folio (8.5\" x 13\")",
+            _                            => "A4 (210mm x 297mm)"
         };
 
     public static int ChoiceIndex<T>(IReadOnlyList<PageSetupChoice<T>> choices, T value, T fallback)
