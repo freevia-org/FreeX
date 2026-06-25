@@ -733,8 +733,35 @@ public static partial class BuiltInFunctions
         // negative value — without this swap the loop is empty and we'd
         // divide by zero, yielding ±infinity instead of a finite result).
         if (start > end) (start, end) = (end, start);
-        if (start.Year == end.Year)
-            return DateTime.IsLeapYear(start.Year) ? 366.0 : 365.0;
+
+        // Excel basis 1 special case: for a span of at most one year, the
+        // denominator is 366 only if Feb 29 falls within [start, end), OR both
+        // endpoints are in the same leap year; otherwise 365.  The average-of-
+        // spanned-years formula applies only when end > start.AddYears(1).
+        if (end <= start.AddYears(1))
+        {
+            // Same-year fast path: leap year iff Feb 29 is in that year.
+            if (start.Year == end.Year)
+                return DateTime.IsLeapYear(start.Year) ? 366.0 : 365.0;
+            // Cross-year span ≤1 year: check whether Feb 29 lies in [start, end).
+            // Feb 29 in start.Year: only possible when start.Year is a leap year.
+            if (DateTime.IsLeapYear(start.Year))
+            {
+                var feb29Start = new DateTime(start.Year, 2, 29);
+                if (start <= feb29Start && feb29Start < end)
+                    return 366.0;
+            }
+            // Feb 29 in end.Year: only possible when end.Year is a leap year.
+            if (DateTime.IsLeapYear(end.Year))
+            {
+                var feb29End = new DateTime(end.Year, 2, 29);
+                if (feb29End >= start && feb29End < end)
+                    return 366.0;
+            }
+            return 365.0;
+        }
+
+        // True multi-year span: average the length of each spanned calendar year.
         double total = 0;
         for (int y = start.Year; y <= end.Year; y++)
             total += DateTime.IsLeapYear(y) ? 366.0 : 365.0;

@@ -72,6 +72,10 @@ public sealed partial class FormulaEvaluator
                     var value = GetFastRangeCellValue(context, range, row, col);
                     if (value is ErrorValue error)
                     {
+                        // COUNT (2) ignores error cells; COUNTA (3) counts them as non-blank.
+                        // All other aggregating functions propagate the error immediately.
+                        if (baseFunc == 2) continue;
+                        if (baseFunc == 3) { countA++; continue; }
                         result = error;
                         return true;
                     }
@@ -620,7 +624,13 @@ public sealed partial class FormulaEvaluator
                     {
                         if (IsFastNestedSubtotalOrAggregateCell(context, rangeArg, row, col)) continue;
                         var v = GetFastRangeCellValue(context, rangeArg, row, col);
-                        if (v is ErrorValue ev) { errorSeen = true; errorVal = ev; break; }
+                        if (v is ErrorValue ev)
+                        {
+                            // COUNT (2) ignores error cells; COUNTA (3) counts them as non-blank.
+                            if (baseFunc == 2) continue;
+                            if (baseFunc == 3) { countA++; continue; }
+                            errorSeen = true; errorVal = ev; break;
+                        }
                         if (TryDirectRangeNumber(v, out var num, out _))
                         {
                             numeric.Add(num, baseFunc);

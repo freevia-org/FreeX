@@ -1063,13 +1063,88 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Subtotal_CountaRangeError_PropagatesError()
+    public void Subtotal_CountaRangeError_CountsErrorAsNonBlank()
     {
+        // Excel COUNTA counts error cells as non-blank; it does not propagate them.
         var sheet = MakeSheet(
             (1, 1, new TextValue("hello")),
             (2, 1, ErrorValue.NA));
 
-        _eval.Evaluate("=SUBTOTAL(3,A1:A2)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=SUBTOTAL(3,A1:A2)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    // Q11 regression: SUBTOTAL COUNT/COUNTA must not propagate error cells
+
+    [Fact]
+    public void Subtotal_Count_IgnoresErrorCells_Excel()
+    {
+        // Excel: SUBTOTAL(2,{1,#DIV/0!,3}) = 2  (COUNT skips the error; counts numeric cells)
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(2,A1:A3)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Subtotal_CountHidden_IgnoresErrorCells_Excel()
+    {
+        // Same as above but with the 1xx hide-filtered variant (102).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(102,A1:A3)", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void Subtotal_Counta_CountsErrorCellsAsNonBlank_Excel()
+    {
+        // Excel: SUBTOTAL(3,{1,#DIV/0!,3}) = 3  (COUNTA treats error as non-blank)
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(3,A1:A3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Subtotal_CountaHidden_CountsErrorCellsAsNonBlank_Excel()
+    {
+        // Same as above but with the 1xx variant (103).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(103,A1:A3)", sheet).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Subtotal_Sum_StillPropagatesErrorCells_Excel()
+    {
+        // Excel: SUBTOTAL(9,{1,#DIV/0!,3}) = #DIV/0!  (SUM propagates errors, unchanged)
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(9,A1:A3)", sheet).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Fact]
+    public void Subtotal_Average_StillPropagatesErrorCells_Excel()
+    {
+        // Excel: SUBTOTAL(1,{1,#DIV/0!,3}) = #DIV/0!  (AVERAGE propagates errors, unchanged)
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),
+            (2, 1, ErrorValue.DivByZero),
+            (3, 1, new NumberValue(3)));
+
+        _eval.Evaluate("=SUBTOTAL(1,A1:A3)", sheet).Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]

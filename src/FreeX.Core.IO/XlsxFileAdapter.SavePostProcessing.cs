@@ -208,7 +208,11 @@ public sealed partial class XlsxFileAdapter
         if (featurePlan.HasSupportedDrawingObjects)
         {
             packageStream.Position = 0;
-            XlsxWorksheetDrawingObjectWriter.Save(packageStream, workbook);
+            XlsxWorksheetDrawingObjectWriter.Save(
+                packageStream,
+                workbook,
+                GetSourceDrawingPathsBySheet(workbook),
+                startPictureIndex: GetSourceMaxPictureIndex(workbook) + 1);
         }
 
         if (featurePlan.HasStructuredTables)
@@ -472,6 +476,48 @@ public sealed partial class XlsxFileAdapter
 
     private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    // Returns the highest N found in xl/media/freexPictureN.* entries in the source package, or 0
+    // if there is no source package or no such entries. The caller adds 1 to get the first safe
+    // starting index for newly authored picture media, preventing the drawing object writer from
+    // claiming a media path that is already reserved by the source package. Without this, the
+    // authored-picture media would shadow the source media name in the generated archive, causing
+    // MergeRelationshipParts to refuse to copy the source drawing .rels (it skips relationships whose
+    // targets were produced by the current save pass).
+    private static int GetSourceMaxPictureIndex(Workbook workbook)
+    {
+        if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
+            return 0;
+
+        try
+        {
+            using var sourceStream = sourcePackage.OpenRead();
+            using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read);
+
+            const string prefix = "xl/media/freexPicture";
+            var max = 0;
+            foreach (var entry in sourceArchive.Entries)
+            {
+                var name = entry.FullName;
+                if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var afterPrefix = name.AsSpan(prefix.Length);
+                var dotIndex = afterPrefix.IndexOf('.');
+                if (dotIndex <= 0)
+                    continue;
+
+                if (int.TryParse(afterPrefix[..dotIndex], out var index) && index > max)
+                    max = index;
+            }
+
+            return max;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
 
     private static bool HasIgnoredFormulaErrors(Sheet sheet)
     {
