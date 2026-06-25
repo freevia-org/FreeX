@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
@@ -78,15 +79,18 @@ internal static class FreeWAvaloniaRibbonCommands
                     System.Globalization.CultureInfo.InvariantCulture, out var pts) && pts > 0)
                 editor.SetSelectionFontSize(pts);
         }));
-        r.Register("freew.bold",         new RelayCommand(editor.ToggleBold));
-        r.Register("freew.italic",        new RelayCommand(editor.ToggleItalic));
-        r.Register("freew.underline",     new RelayCommand(editor.ToggleUnderline));
-        r.Register("freew.strikethrough", new RelayCommand(editor.ToggleStrikethrough));
-        r.Register("freew.grow-font",     new RelayCommand(editor.GrowFont));
-        r.Register("freew.shrink-font",   new RelayCommand(editor.ShrinkFont));
+        r.Register("freew.bold",            new RelayCommand(editor.ToggleBold));
+        r.Register("freew.italic",           new RelayCommand(editor.ToggleItalic));
+        r.Register("freew.underline",        new RelayCommand(editor.ToggleUnderline));
+        r.Register("freew.strikethrough",    new RelayCommand(editor.ToggleStrikethrough));
+        r.Register("freew.superscript",      new RelayCommand(editor.ToggleSuperscript));
+        r.Register("freew.subscript",        new RelayCommand(editor.ToggleSubscript));
+        r.Register("freew.highlight",        new RelayValueCommand(value => editor.SetHighlightColor(value)));
+        r.Register("freew.grow-font",        new RelayCommand(editor.GrowFont));
+        r.Register("freew.shrink-font",      new RelayCommand(editor.ShrinkFont));
         r.Register("freew.clear-formatting", new RelayCommand(editor.ClearFormatting));
-        r.Register("freew.font-color",    new RelayValueCommand(value => editor.SetFontColor(value)));
-        r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
+        r.Register("freew.font-color",       new RelayValueCommand(value => editor.SetFontColor(value)));
+        r.Register("freew.change-case",      new RelayCommand(editor.ChangeCase));
 
         // ── Paragraph ────────────────────────────────────────────────────────
         r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
@@ -94,9 +98,26 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.align-left",       new RelayCommand(() => editor.SetAlignment(TextAlignment.Left)));
         r.Register("freew.align-center",     new RelayCommand(() => editor.SetAlignment(TextAlignment.Center)));
         r.Register("freew.align-right",      new RelayCommand(() => editor.SetAlignment(TextAlignment.Right)));
+        r.Register("freew.align-justify",    new RelayCommand(() => editor.SetAlignment(TextAlignment.Justify)));
         r.Register("freew.increase-indent",  new RelayCommand(editor.IncreaseIndent));
         r.Register("freew.decrease-indent",  new RelayCommand(editor.DecreaseIndent));
         r.Register("freew.show-hide-para",   new RelayCommand(() => editor.ShowParagraphMarks = !editor.ShowParagraphMarks));
+        // Paragraph spacing commands (value = points as an invariant-culture decimal string).
+        r.Register("freew.space-before",     new RelayValueCommand(value =>
+        {
+            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
+                editor.SetSpaceBefore(pt);
+        }));
+        r.Register("freew.space-after",      new RelayValueCommand(value =>
+        {
+            if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt))
+                editor.SetSpaceAfter(pt);
+        }));
+        // Line-spacing commands — value = multiplier for Multiple, pt for Exact/AtLeast.
+        r.Register("freew.line-spacing-1",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.0)));
+        r.Register("freew.line-spacing-115",  new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
+        r.Register("freew.line-spacing-15",   new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
+        r.Register("freew.line-spacing-2",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
 
         // ── Styles ───────────────────────────────────────────────────────────
         r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
