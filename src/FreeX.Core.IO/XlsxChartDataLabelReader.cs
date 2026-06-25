@@ -208,7 +208,7 @@ internal static class XlsxChartDataLabelReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.DataLabelBorderThickness = Math.Clamp(emus / 12700.0, 0, 10);
+            chart.DataLabelBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)
@@ -289,7 +289,7 @@ internal static class XlsxChartDataLabelReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            chart.DataLabelLeaderLineThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
+            chart.DataLabelLeaderLineThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
 
         chart.DataLabelLeaderLineDashStyle = XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(
             line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value);
@@ -369,7 +369,7 @@ internal static class XlsxChartDataLabelReader
         if (line is not null)
         {
             if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-                borderThickness = Math.Clamp(emus / 12700.0, 0, 10);
+                borderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
 
             var lineFill = line.Element(DrawingNs + "solidFill");
             if (lineFill is not null)

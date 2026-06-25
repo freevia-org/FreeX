@@ -450,7 +450,7 @@ internal static class XlsxChartAxisReader
             .Element(ChartNs + "spPr")?
             .Element(DrawingNs + "ln");
         var thickness = int.TryParse(line?.Attribute("w")?.Value, out var emus)
-            ? Math.Clamp(emus / 12700.0, 0.25, 10)
+            ? Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.25, 10)
             : (double?)null;
         CellColor? color = null;
         var fill = line?.Element(DrawingNs + "solidFill");
@@ -500,7 +500,7 @@ internal static class XlsxChartAxisReader
             return new AxisLineProperties(null, null);
 
         var thickness = int.TryParse(line.Attribute("w")?.Value, out var emus)
-            ? Math.Clamp(emus / 12700.0, 0.5, 10)
+            ? Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10)
             : (double?)null;
         CellColor? color = null;
         var fill = line.Element(DrawingNs + "solidFill");

@@ -41,7 +41,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? strokeThickness = null;
         if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
+            strokeThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
@@ -91,7 +91,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? strokeThickness = null;
         if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / 12700.0, 0.5, 10);
+            strokeThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)

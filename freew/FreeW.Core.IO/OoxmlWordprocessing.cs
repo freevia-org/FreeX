@@ -341,31 +341,31 @@ internal static class Ooxml
 
     public static DateTimeOffset? ParseW3CDtf(string? value) => OpcPackageProperties.ParseW3CDtf(value);
 
+    // ── Unit conversions — delegates to the shared tier (Free.Shared.Opc.DrawingMlUnits) ───────────
+
     /// <summary>DrawingML "EMU" = English Metric Units; 914400 per inch, 12700 per point.</summary>
-    public const long EmuPerPoint = 12700;
+    public const long EmuPerPoint = DrawingMlUnits.EmuPerPoint;
 
-    public static long PointsToEmu(double points) => (long)Math.Round(points * EmuPerPoint);
+    public static long PointsToEmu(double points) => DrawingMlUnits.PointsToEmu(points);
 
-    public static double EmuToPoints(string? value) =>
-        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v / (double)EmuPerPoint : 0;
+    public static double EmuToPoints(string? value) => DrawingMlUnits.EmuToPoints(value);
 
     /// <summary>OOXML "dxa" = twentieths of a point.</summary>
-    public static double DxaToPoints(string? value) => ParseInt(value) / 20.0;
+    public static double DxaToPoints(string? value) => DrawingMlUnits.DxaToPoints(value);
 
-    public static int PointsToDxa(double points) => (int)Math.Round(points * 20.0);
+    public static int PointsToDxa(double points) => DrawingMlUnits.PointsToDxa(points);
 
     /// <summary>Run font size is in half-points.</summary>
-    public static double? HalfPointsToPoints(string? value) => ParseInt(value) is var v && v != 0 ? v / 2.0 : null;
+    public static double? HalfPointsToPoints(string? value) => DrawingMlUnits.HalfPointsToPoints(value);
 
-    public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
+    public static int PointsToHalfPoints(double points) => DrawingMlUnits.PointsToHalfPoints(points);
 
     /// <summary>Border widths (w:sz on w:pBdr / w:tblBorders edges) are in eighths of a point.</summary>
-    public static double EighthPointsToPoints(string? value) => ParseInt(value) / 8.0;
+    public static double EighthPointsToPoints(string? value) => DrawingMlUnits.EighthPointsToPoints(value);
 
-    public static int PointsToEighthPoints(double points) => Math.Max(1, (int)Math.Round(points * 8.0));
+    public static int PointsToEighthPoints(double points) => DrawingMlUnits.PointsToEighthPoints(points);
 
-    public static int ParseInt(string? value) =>
-        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+    public static int ParseInt(string? value) => DrawingMlUnits.ParseInt(value);
 
     /// <summary>
     /// Maps a <see cref="ProtectionMode"/> to the w:documentProtection/@w:edit token, or null for
