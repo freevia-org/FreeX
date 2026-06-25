@@ -184,7 +184,17 @@ internal static class NativeJsonVisualDtoMapper
         AltText = shape.AltText,
         OutlineWidthPoints = shape.OutlineWidthPoints,
         OutlineHasNoFill = shape.OutlineHasNoFill,
-        OutlineDash = ValidEnumOrDefault(shape.OutlineDash, DrawingShapeOutlineDash.Solid)
+        OutlineDash = ValidEnumOrDefault(shape.OutlineDash, DrawingShapeOutlineDash.Solid),
+        ShapeText = shape.ShapeText,
+        ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
+        ShapeTextBold = shape.ShapeTextBold,
+        ShapeTextItalic = shape.ShapeTextItalic,
+        ShapeTextUnderline = shape.ShapeTextUnderline,
+        ShapeTextColor = shape.ShapeTextColor is { } tc ? FormatColor(tc) : null,
+        ShapeTextThemeColor = FromThemeColorReference(shape.ShapeTextThemeColor),
+        ShapeTextHAlign = ValidEnumOrDefault(shape.ShapeTextHAlign, DrawingShapeTextHAlign.Left),
+        ShapeTextVAnchor = ValidEnumOrDefault(shape.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
+        ShapeTextWrap = shape.ShapeTextWrap
     };
 
     public static bool IsDrawingShapeOnSheet(DrawingShapeModel shape, SheetId sheetId) =>
@@ -228,7 +238,17 @@ internal static class NativeJsonVisualDtoMapper
                 AltText = shapeDto.AltText,
                 OutlineWidthPoints = shapeDto.OutlineWidthPoints,
                 OutlineHasNoFill = shapeDto.OutlineHasNoFill,
-                OutlineDash = ValidEnumOrDefault(shapeDto.OutlineDash, DrawingShapeOutlineDash.Solid)
+                OutlineDash = ValidEnumOrDefault(shapeDto.OutlineDash, DrawingShapeOutlineDash.Solid),
+                ShapeText = shapeDto.ShapeText,
+                ShapeTextFontSizePoints = shapeDto.ShapeTextFontSizePoints,
+                ShapeTextBold = shapeDto.ShapeTextBold,
+                ShapeTextItalic = shapeDto.ShapeTextItalic,
+                ShapeTextUnderline = shapeDto.ShapeTextUnderline,
+                ShapeTextColor = shapeDto.ShapeTextColor is { } stc ? ParseColor(stc) : null,
+                ShapeTextThemeColor = ToThemeColorReference(shapeDto.ShapeTextThemeColor),
+                ShapeTextHAlign = ValidEnumOrDefault(shapeDto.ShapeTextHAlign, DrawingShapeTextHAlign.Left),
+                ShapeTextVAnchor = ValidEnumOrDefault(shapeDto.ShapeTextVAnchor, DrawingShapeTextVAnchor.Middle),
+                ShapeTextWrap = shapeDto.ShapeTextWrap
             };
         }
         catch (FormatException)
@@ -365,6 +385,17 @@ internal class DrawingShapeDto
     public double OutlineWidthPoints { get; set; }
     public bool OutlineHasNoFill { get; set; }
     public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
+    // ── Shape text ────────────────────────────────────────────────────────
+    public string? ShapeText { get; set; }
+    public double ShapeTextFontSizePoints { get; set; }
+    public bool ShapeTextBold { get; set; }
+    public bool ShapeTextItalic { get; set; }
+    public bool ShapeTextUnderline { get; set; }
+    public string? ShapeTextColor { get; set; }
+    public ThemeColorReferenceDto? ShapeTextThemeColor { get; set; }
+    public DrawingShapeTextHAlign ShapeTextHAlign { get; set; } = DrawingShapeTextHAlign.Left;
+    public DrawingShapeTextVAnchor ShapeTextVAnchor { get; set; } = DrawingShapeTextVAnchor.Middle;
+    public bool ShapeTextWrap { get; set; } = true;
 }
 
 internal class ThemeColorReferenceDto

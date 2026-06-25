@@ -365,8 +365,65 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     shape.Height,
                     shape.OutlineWidthPoints,
                     shape.OutlineHasNoFill,
-                    shape.OutlineDash)),
+                    shape.OutlineDash),
+                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null),
             new XElement(spreadsheetDrawingNs + "clientData"));
+
+    /// <summary>
+    /// Builds a minimal <c>&lt;xdr:txBody&gt;</c> element that round-trips shape text with
+    /// font properties.  Multi-run rich text is not supported — a single run is emitted.
+    /// </summary>
+    private static XElement ToShapeTxBody(
+        DrawingShapeModel shape,
+        XNamespace drawingNs,
+        XNamespace spreadsheetDrawingNs)
+    {
+        var anchorValue = shape.ShapeTextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Top => "t",
+            DrawingShapeTextVAnchor.Bottom => "b",
+            _ => "ctr",
+        };
+        var wrapValue = shape.ShapeTextWrap ? "square" : "none";
+
+        // Run properties
+        var rPr = new XElement(drawingNs + "rPr",
+            new XAttribute("lang", "en-US"),
+            new XAttribute("dirty", "0"));
+        if (shape.ShapeTextFontSizePoints > 0)
+            rPr.Add(new XAttribute("sz", ((int)Math.Round(shape.ShapeTextFontSizePoints * 100)).ToString(CultureInfo.InvariantCulture)));
+        if (shape.ShapeTextBold)
+            rPr.Add(new XAttribute("b", "1"));
+        if (shape.ShapeTextItalic)
+            rPr.Add(new XAttribute("i", "1"));
+        if (shape.ShapeTextUnderline)
+            rPr.Add(new XAttribute("u", "sng"));
+
+        // Text color
+        var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
+        if (textFill is not null)
+            rPr.Add(textFill);
+
+        // Paragraph alignment
+        var algnValue = shape.ShapeTextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => "ctr",
+            DrawingShapeTextHAlign.Right => "r",
+            _ => "l",
+        };
+
+        return new XElement(spreadsheetDrawingNs + "txBody",
+            new XElement(drawingNs + "bodyPr",
+                new XAttribute("anchor", anchorValue),
+                new XAttribute("wrap", wrapValue)),
+            new XElement(drawingNs + "lstStyle"),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XAttribute("algn", algnValue)),
+                new XElement(drawingNs + "r",
+                    rPr,
+                    new XElement(drawingNs + "t", shape.ShapeText ?? ""))));
+    }
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + "from",

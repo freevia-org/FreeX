@@ -85,6 +85,26 @@ public enum DrawingShapeOutlineDash
     SystemDashDot = 9,
 }
 
+/// <summary>
+/// Horizontal text alignment within a shape's text body, matching OOXML <c>&lt;a:pPr algn="..."/&gt;</c>.
+/// </summary>
+public enum DrawingShapeTextHAlign
+{
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
+/// <summary>
+/// Vertical anchor for text within a shape's text body, matching OOXML <c>&lt;a:bodyPr anchor="..."/&gt;</c>.
+/// </summary>
+public enum DrawingShapeTextVAnchor
+{
+    Top = 0,
+    Middle = 1,
+    Bottom = 2,
+}
+
 public sealed class DrawingShapeModel
 {
     public static readonly CellColor DefaultFillColor = new(0x5B, 0x9B, 0xD5);
@@ -144,6 +164,71 @@ public sealed class DrawingShapeModel
     /// Dash style for the outline stroke, sourced from <c>&lt;a:prstDash val="..."/&gt;</c>.
     /// </summary>
     public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
+
+    // ── Shape text (txBody) properties ─────────────────────────────────────
+
+    /// <summary>
+    /// Concatenated plain text from all runs in the shape's <c>&lt;xdr:txBody&gt;</c>, or
+    /// <see langword="null"/> / empty when the shape carries no text.
+    /// </summary>
+    public string? ShapeText { get; set; }
+
+    /// <summary>
+    /// Font size for the first run's <c>&lt;a:rPr sz&gt;</c>, in points (OOXML stores
+    /// hundredths of a point; divide by 100 when reading).  Zero or negative means "inherit
+    /// default" (renderer uses 11 pt).
+    /// </summary>
+    public double ShapeTextFontSizePoints { get; set; }
+
+    /// <summary>Bold (<c>&lt;a:rPr b="1"/&gt;</c>).</summary>
+    public bool ShapeTextBold { get; set; }
+
+    /// <summary>Italic (<c>&lt;a:rPr i="1"/&gt;</c>).</summary>
+    public bool ShapeTextItalic { get; set; }
+
+    /// <summary>Underline (<c>&lt;a:rPr u="sng"/&gt;</c> or any non-"none" value).</summary>
+    public bool ShapeTextUnderline { get; set; }
+
+    /// <summary>
+    /// Explicit font color from <c>&lt;a:rPr&gt;&lt;a:solidFill&gt;&lt;a:srgbClr&gt;</c>.
+    /// <see langword="null"/> means "no explicit color" — renderer uses white or a theme default.
+    /// </summary>
+    public CellColor? ShapeTextColor { get; set; }
+
+    /// <summary>
+    /// Theme-based font color (from <c>&lt;a:rPr&gt;&lt;a:solidFill&gt;&lt;a:schemeClr&gt;</c>).
+    /// Takes precedence over <see cref="ShapeTextColor"/> when non-null.
+    /// </summary>
+    public WorkbookThemeColorReference? ShapeTextThemeColor { get; set; }
+
+    /// <summary>
+    /// Horizontal paragraph alignment from <c>&lt;a:pPr algn="l|ctr|r"/&gt;</c>.
+    /// </summary>
+    public DrawingShapeTextHAlign ShapeTextHAlign { get; set; } = DrawingShapeTextHAlign.Left;
+
+    /// <summary>
+    /// Vertical text anchor from <c>&lt;a:bodyPr anchor="t|ctr|b"/&gt;</c>.
+    /// </summary>
+    public DrawingShapeTextVAnchor ShapeTextVAnchor { get; set; } = DrawingShapeTextVAnchor.Middle;
+
+    /// <summary>
+    /// Whether the text wraps within the shape bounds (<c>&lt;a:bodyPr wrap="square"/&gt;</c>
+    /// vs <c>"none"</c>).
+    /// </summary>
+    public bool ShapeTextWrap { get; set; } = true;
+
+    /// <summary>
+    /// Returns <see langword="true"/> when this shape carries displayable text.
+    /// </summary>
+    public bool HasShapeText => !string.IsNullOrEmpty(ShapeText);
+
+    /// <summary>
+    /// Resolves the effective font color for shape text, using theme if available.
+    /// Returns <see langword="null"/> when neither an explicit nor a theme color is set
+    /// (caller should use a default such as white-on-dark / black-on-light).
+    /// </summary>
+    public CellColor? ResolveShapeTextColor(WorkbookTheme theme) =>
+        ShapeTextThemeColor?.Resolve(theme) ?? ShapeTextColor;
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;

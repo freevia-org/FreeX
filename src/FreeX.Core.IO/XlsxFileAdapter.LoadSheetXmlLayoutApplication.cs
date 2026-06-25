@@ -191,7 +191,17 @@ public sealed partial class XlsxFileAdapter
                 UsesThemeEffects = shapePart.UsesThemeEffects,
                 OutlineWidthPoints = shapePart.OutlineWidthPoints,
                 OutlineHasNoFill = shapePart.OutlineHasNoFill,
-                OutlineDash = shapePart.OutlineDash
+                OutlineDash = shapePart.OutlineDash,
+                ShapeText = shapePart.ShapeText,
+                ShapeTextFontSizePoints = shapePart.ShapeTextFontSizePoints,
+                ShapeTextBold = shapePart.ShapeTextBold,
+                ShapeTextItalic = shapePart.ShapeTextItalic,
+                ShapeTextUnderline = shapePart.ShapeTextUnderline,
+                ShapeTextColor = shapePart.ShapeTextColor,
+                ShapeTextThemeColor = shapePart.ShapeTextThemeColor,
+                ShapeTextHAlign = shapePart.ShapeTextHAlign,
+                ShapeTextVAnchor = shapePart.ShapeTextVAnchor,
+                ShapeTextWrap = shapePart.ShapeTextWrap
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet,
                 shapePart.XfrmWidthPixels, shapePart.XfrmHeightPixels);
