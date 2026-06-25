@@ -633,7 +633,18 @@ public sealed partial class MainWindow
         ShowWithParitySelectionAsync(
             new CellAddress(_session.ActiveSheet.Id, 2, 2),
             new CellAddress(_session.ActiveSheet.Id, 3, 3),
-            ShowWatchWindowDialogAsync);
+            async () =>
+            {
+                // Seed watches on the Units cells (C2=120, C3=85) so the Watch Window has
+                // rows to compare — mirrors the WPF parity capture's seeded watch entries.
+                var watchSheetId = _session.ActiveSheet.Id;
+                WatchWindowService.AddWatches(
+                    _session.Workbook,
+                    new GridRange(
+                        new CellAddress(watchSheetId, 2, 3),
+                        new CellAddress(watchSheetId, 3, 3)));
+                await ShowWatchWindowDialogAsync();
+            });
 
     private Task ShowAddWatchParityDialogAsync() =>
         ShowAddWatchDialogAsync("Sheet1!$B$2");
@@ -934,6 +945,10 @@ public sealed partial class MainWindow
     private async Task ShowCustomViewsParityDialogAsync()
     {
         _session.Workbook.CustomViews.Clear();
+        // Seed named views so the manager has meaningful rows to compare (mirrors the WPF
+        // parity capture, which seeds the same view names).
+        _session.Workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
+        _session.Workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
         await ShowCustomViewsManagerDialogAsync();
     }
 
