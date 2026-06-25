@@ -183,4 +183,35 @@ public class OddEvenAndBackgroundRoundTripTests
 
         RoundTrip(doc).Page.DifferentOddEvenPages.Should().BeTrue();
     }
+
+    // R17 regression — a non-final section with DifferentOddEvenPages=true but the final section OFF must
+    // still emit w:evenAndOddHeaders in settings.xml (the global toggle), otherwise Word ignores the even
+    // header/footer parts that were written for that section.
+    [Fact]
+    public void NonFinalSection_DifferentOddEvenPages_EmitsGlobalToggleEvenWhenFinalSectionIsOff()
+    {
+        var doc = new TextDocument();
+
+        // Section 1 (non-final): different odd/even on, with distinct even header.
+        var section1Page = new PageSettings { DifferentOddEvenPages = true };
+        var section1 = new Section(section1Page, SectionBreakKind.NextPage);
+        section1.HeadersFooters.Header = new HeaderFooter("Odd header s1");
+        section1.HeadersFooters.EvenHeader = new HeaderFooter("Even header s1");
+        doc.Blocks.Add(new Paragraph("Section 1 body") { SectionBreak = section1 });
+
+        // Final section: different odd/even explicitly OFF.
+        doc.Page.DifferentOddEvenPages = false;
+        doc.Header = new HeaderFooter("Final section header");
+        doc.Blocks.Add(new Paragraph("Final section body"));
+
+        var (_, settings, _, hasHeader2, _) = WriteParts(doc);
+
+        // The global toggle must be present because section1 has DifferentOddEvenPages=true.
+        settings.Should().NotBeNull(because: "settings.xml must exist whenever any section has different-odd/even on");
+        settings!.Root!.Element(W + "evenAndOddHeaders").Should().NotBeNull(
+            because: "w:evenAndOddHeaders must be set even when only a non-final section enables it");
+
+        // The even header part for section 1 must also have been written.
+        hasHeader2.Should().BeTrue(because: "the even-header part for section 1 must be emitted");
+    }
 }

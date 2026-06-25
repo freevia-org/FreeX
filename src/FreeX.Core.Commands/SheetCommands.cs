@@ -42,6 +42,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private readonly string _newName;
     private string? _oldName;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private Dictionary<string, string>? _namedFormulaSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -66,6 +67,9 @@ public sealed class RenameSheetCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
+        _namedFormulaSnapshot = [];
+        RowColumnShiftHelpers.RewriteNamedFormulas(
+            ctx.Workbook, new RenameSheetOp(_oldName, _newName), _namedFormulaSnapshot);
         return new CommandOutcome(true);
     }
 
@@ -76,6 +80,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             var sheet = ctx.GetSheet(_sheetId);
             sheet.Name = _oldName;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+            RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
         }
     }
 }

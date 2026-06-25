@@ -85,6 +85,39 @@ public class RtfRoundTripTests
         text.Should().Contain("After");
     }
 
+    // R16 regression — \cellxN column widths must survive a save→load round-trip.
+    // Previously the RtfReader had no \cellx handler so all per-cell widths were dropped and every column
+    // came back as the uniform fallback (equal division of 6-inch default width).
+    [Fact]
+    public void Table_ColumnWidths_PreservedOnRoundTrip()
+    {
+        // Build a 3-column table with explicit, non-uniform widths.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        // Widths in points: 100 pt, 150 pt, 50 pt  (total = 300 pt).
+        var widths = new[] { 100.0, 150.0, 50.0 };
+        foreach (var w in widths)
+            row.Cells.Add(new TableCell { WidthPt = w, Paragraphs = { new Paragraph("cell") } });
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+
+        var reloaded = Load(Save(document));
+
+        var reloadedTable = reloaded.Blocks.OfType<Table>().Single();
+        var reloadedRow = reloadedTable.Rows.Single();
+        reloadedRow.Cells.Should().HaveCount(3);
+
+        // Allow ±0.1 pt tolerance for twips↔point rounding (1 twip = 0.05 pt).
+        for (var i = 0; i < widths.Length; i++)
+        {
+            reloadedRow.Cells[i].WidthPt.Should().NotBeNull(because: $"column {i} width must be set after round-trip");
+            reloadedRow.Cells[i].WidthPt!.Value.Should().BeApproximately(widths[i], precision: 0.1,
+                because: $"column {i} width should survive RTF round-trip");
+        }
+    }
+
     // P8 regression — \binN must skip exactly N raw bytes without emitting them as text, and must not let
     // stray { } bytes in the binary payload unbalance group nesting and corrupt following text.
     [Fact]

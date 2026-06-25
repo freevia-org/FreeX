@@ -289,4 +289,58 @@ public sealed class DataValidationDialogModelTests
         result.IsValid.Should().BeFalse();
         result.FirstError!.Target.Should().Be(DvValidationTarget.Formula2);
     }
+
+    // ----- Culture-sensitive number parsing (R9 regression) -----
+
+    [Fact]
+    public void Validate_DeDE_CommaDecimal_ParsesAsDecimalNotThousandsSeparated()
+    {
+        // In de-DE, "3,5" is 3.5 (decimal comma). With NumberStyles.Any + InvariantCulture the comma
+        // was treated as a thousands separator, silently accepting 35 as a whole number.
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+
+        var model = DataValidationDialogModel.ForType(DvType.Decimal);
+        var result = model.Validate(new DvCriteriaInput
+        {
+            Type = DvType.Decimal,
+            Operator = DvOperator.GreaterThan,
+            Formula1 = "3,5"
+        });
+
+        result.IsValid.Should().BeTrue("\"3,5\" is a valid decimal in de-DE (= 3.5)");
+    }
+
+    [Fact]
+    public void Validate_DeDE_CommaDecimal_IsNotClassifiedAsWholeNumber()
+    {
+        // "3,5" in de-DE is 3.5 — a non-integer — so WholeNumber validation must reject it.
+        // The bug would have silently accepted it (as 35, a whole number).
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+
+        var model = DataValidationDialogModel.ForType(DvType.WholeNumber);
+        var result = model.Validate(new DvCriteriaInput
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.GreaterThan,
+            Formula1 = "3,5"
+        });
+
+        result.IsValid.Should().BeFalse("\"3,5\" in de-DE is 3.5, which is not a whole number");
+        result.FirstError!.Target.Should().Be(DvValidationTarget.Formula1);
+    }
+
+    [Fact]
+    public void Validate_EnglishDotDecimal_StillParsesCorrectly()
+    {
+        // Regression guard: English-format "3.5" must still parse as 3.5 (InvariantCulture fallback).
+        var model = DataValidationDialogModel.ForType(DvType.Decimal);
+        var result = model.Validate(new DvCriteriaInput
+        {
+            Type = DvType.Decimal,
+            Operator = DvOperator.GreaterThan,
+            Formula1 = "3.5"
+        });
+
+        result.IsValid.Should().BeTrue("\"3.5\" is always a valid decimal via InvariantCulture fallback");
+    }
 }
