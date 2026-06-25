@@ -1277,7 +1277,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-last-column",
                 "freew.table-banded-rows",
                 "freew.table-banded-cols",
-                "freew.cell-shading");
+                "freew.cell-shading",
+                "freew.cell-borders");
 
         foreach (var commandId in CommandIds(tableDesign))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
@@ -1441,6 +1442,9 @@ public sealed class FreeWRibbonParityTests
                 "freew.cell-align-bottom-center",
                 "freew.cell-align-bottom-right",
                 "freew.table-cell-margins",
+                "freew.cell-text-direction-horizontal",
+                "freew.cell-text-direction-rotate90",
+                "freew.cell-text-direction-rotate270",
                 // table-data group
                 "freew.table-repeat-header",
                 "freew.table-formula",

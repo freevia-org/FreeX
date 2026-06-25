@@ -1653,6 +1653,46 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set (or clear, when <paramref name="borders"/> is null) the per-edge cell borders on the table cell
+    /// containing the caret. Commits pending edits, mutates the model cell directly, and re-renders so the
+    /// borders show immediately and round-trip through save. No-op outside a table.
+    /// </summary>
+    public void SetCaretCellBorders(CellBorders? borders)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        cells[columnIndex].Borders = borders;
+        Render();
+    }
+
+    /// <summary>
+    /// Set the text direction on the table cell containing the caret. Commits pending edits, mutates the
+    /// model cell directly, and re-renders so the rotated text shows immediately and round-trips through
+    /// save (mirroring <see cref="SetSelectedShapeTextDirection"/>). No-op outside a table.
+    /// </summary>
+    public void SetCaretCellTextDirection(CellTextDirection direction)
+    {
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+            return;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
+            return;
+        var cells = table.Rows[rowIndex].Cells;
+        if (columnIndex < 0 || columnIndex >= cells.Count)
+            return;
+        cells[columnIndex].TextDirection = direction;
+        Render();
+    }
+
+    /// <summary>
     /// Toggle the header-row style (bold + shaded first row) on the table containing the caret. Commits
     /// pending edits, flips <see cref="TableFormatting.HeaderRow"/> on the model table, and re-renders so
     /// the styling shows immediately and round-trips through save. No-op outside a table.
@@ -5638,7 +5678,11 @@ public sealed class DocumentView : RichTextBox
                     var cell = new ModelTableCell
                     {
                         ShadingColorHex = cellShading,
-                        GridSpan = span
+                        GridSpan = span,
+                        // Recover per-cell borders and text direction from the stashed Tag (the WPF
+                        // FlowDocument has no representation for these; they survive only via the Tag).
+                        Borders = (wpfCell.Tag as TableCellTag)?.Borders,
+                        TextDirection = (wpfCell.Tag as TableCellTag)?.TextDirection ?? CellTextDirection.Horizontal
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
@@ -5730,7 +5774,10 @@ public sealed class DocumentView : RichTextBox
     /// shading can equal the header/banded style fill — so the model value is stashed verbatim here and the
     /// colour-equality heuristic is used only for cells the user created fresh in the editor (no Tag).
     /// </summary>
-    private sealed record TableCellTag(string? ShadingColorHex);
+    private sealed record TableCellTag(
+        string? ShadingColorHex,
+        CellBorders? Borders = null,
+        CellTextDirection TextDirection = CellTextDirection.Horizontal);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -5819,10 +5866,28 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
-                // Stash the model's author-set shading on the cell Tag so ReadTable can tell it apart from
-                // a style-derived header/banded fill on commit — a colour-equality heuristic alone can't,
-                // and would strip real shading that happens to match the style fill (see ReadTable).
-                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex);
+                // Stash the model's author-set shading, per-cell borders and text direction on the cell
+                // Tag so ReadTable can recover them on commit. A colour-equality heuristic alone can't
+                // distinguish author shading from style fills; borders and text direction have no WPF
+                // equivalent, so they are recovered verbatim from the stashed Tag.
+                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders, modelCell.TextDirection);
+
+                // Per-cell border override: when the cell carries its own explicit borders, apply them to
+                // the WPF cell individually so they override the table-level border brush. The WPF
+                // TableCell only supports uniform BorderThickness; per-edge widths are averaged for
+                // visual fidelity while the exact values survive through the stashed Tag.
+                if (modelCell.Borders is { IsEmpty: false } cellBorders)
+                {
+                    var topPt = cellBorders.Top?.WidthPt ?? 0.5;
+                    var bottomPt = cellBorders.Bottom?.WidthPt ?? 0.5;
+                    var leftPt = cellBorders.Left?.WidthPt ?? 0.5;
+                    var rightPt = cellBorders.Right?.WidthPt ?? 0.5;
+                    // Use the first non-null edge colour as the cell border colour.
+                    var edgeHex = (cellBorders.Top ?? cellBorders.Left ?? cellBorders.Bottom ?? cellBorders.Right)!.ColorHex;
+                    wpfCell.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(edgeHex));
+                    wpfCell.BorderThickness = new Thickness(leftPt * PxPerPoint, topPt * PxPerPoint,
+                        rightPt * PxPerPoint, bottomPt * PxPerPoint);
+                }
 
                 // Resolve cell appearance: explicit shading always wins; then catalog style; then legacy flags.
                 bool cellBold = isHeaderRow;
@@ -5846,7 +5911,38 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.Background = new SolidColorBrush(BandedRowFill);
                 if (cellBold)
                     wpfCell.FontWeight = FontWeights.Bold;
-                if (modelCell.Paragraphs.Count == 0)
+                if (modelCell.TextDirection != CellTextDirection.Horizontal)
+                {
+                    // Rotated cell: wrap all paragraphs in a StackPanel with a LayoutTransform so the
+                    // text rotates inside the cell, mirroring how shapes apply LayoutTransform to their
+                    // text blocks (see BuildShape). A BlockUIContainer lets any UIElement live in a
+                    // FlowDocument block.
+                    var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
+                    var stack = new System.Windows.Controls.StackPanel
+                    {
+                        LayoutTransform = new RotateTransform(angle)
+                    };
+                    var paragraphs = modelCell.Paragraphs.Count > 0
+                        ? modelCell.Paragraphs
+                        : [new ModelParagraph()];
+                    foreach (var cellParagraph in paragraphs)
+                    {
+                        // Build a TextBlock for each paragraph so the rotation applies to the text.
+                        var block = BuildParagraph(cellParagraph, document, inTableCell: true);
+                        // Embed the FlowDocument Paragraph into a nested FlowDocument to get a TextBlock.
+                        var nested = new System.Windows.Controls.RichTextBox
+                        {
+                            Document = new System.Windows.Documents.FlowDocument(block),
+                            IsReadOnly = true,
+                            BorderThickness = new Thickness(0),
+                            Padding = new Thickness(0),
+                            Background = System.Windows.Media.Brushes.Transparent
+                        };
+                        stack.Children.Add(nested);
+                    }
+                    wpfCell.Blocks.Add(new BlockUIContainer(stack));
+                }
+                else if (modelCell.Paragraphs.Count == 0)
                 {
                     wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document, inTableCell: true));
                 }

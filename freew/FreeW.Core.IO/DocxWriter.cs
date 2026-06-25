@@ -1810,14 +1810,44 @@ public static class DocxWriter
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", fill)));
+        // Per-cell border override (w:tcBorders): emitted only when the cell has at least one explicit edge
+        // so plain cells inherit table-level borders unchanged. Edge order follows CT_TcBorders schema.
+        if (cell.Borders is { IsEmpty: false } borders)
+            tcPr.Add(BuildCellBordersElement(borders));
         // Per-cell margin override (w:tcMar) and vertical alignment (w:vAlign), in CT_TcPr schema order
-        // (tcMar before vAlign, both after shd). Emitted only when set, so plain cells stay unchanged.
+        // (tcMar before vAlign, both after tcBorders). Emitted only when set, so plain cells stay unchanged.
         if (cell.Margins is { } margins)
             tcPr.Add(BuildCellMarginsElement("tcMar", margins));
         if (cell.VerticalAlignment != TableCellVerticalAlignment.Top)
             tcPr.Add(new XElement(W + "vAlign", new XAttribute(W + "val",
                 cell.VerticalAlignment == TableCellVerticalAlignment.Center ? "center" : "bottom")));
+        // Text direction (w:textDirection): emitted only when not the default horizontal direction so
+        // existing cells round-trip unchanged. Maps to the same btLr/tbRl tokens Word uses.
+        if (cell.TextDirection != CellTextDirection.Horizontal)
+            tcPr.Add(new XElement(W + "textDirection", new XAttribute(W + "val",
+                cell.TextDirection == CellTextDirection.Rotate90 ? "btLr" : "tbRl")));
         return tcPr.HasElements ? tcPr : null;
+    }
+
+    // Builds a w:tcBorders element with the four per-edge child elements, each carrying w:val/w:sz/w:color.
+    // Only non-null edges are emitted so the element only carries explicitly overridden edges.
+    private static XElement BuildCellBordersElement(CellBorders borders)
+    {
+        var tcBorders = new XElement(W + "tcBorders");
+        void Edge(string name, CellBorderEdge? edge)
+        {
+            if (edge is null) return;
+            tcBorders.Add(new XElement(W + name,
+                new XAttribute(W + "val", BorderLineStyles.ToToken(edge.Style)),
+                new XAttribute(W + "sz", (int)Math.Round(edge.WidthPt * 8)),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", edge.ColorHex.TrimStart('#'))));
+        }
+        Edge("top", borders.Top);
+        Edge("left", borders.Left);
+        Edge("bottom", borders.Bottom);
+        Edge("right", borders.Right);
+        return tcBorders;
     }
 
     // Builds a cell-margins container (w:tblCellMar for the table default, or w:tcMar for a per-cell

@@ -323,6 +323,12 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-banded-cols", new ActionCommand(() => { editor.Focus(); editor.ToggleTableBandedColumns(); }));
         // Table Layout Data group — Convert to Text
         registry.Register("freew.table-to-text", new ActionCommand(() => { editor.Focus(); editor.ConvertTableToText('\t'); }));
+        // Table Design — Cell Borders picker (per-edge borders for the caret cell).
+        registry.Register("freew.cell-borders", new CellBordersCommand(editor));
+        // Table Layout > Alignment — Text Direction cycling (Horizontal → Rotate90 → Rotate270 → Horizontal).
+        registry.Register("freew.cell-text-direction-horizontal", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Horizontal); }));
+        registry.Register("freew.cell-text-direction-rotate90", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate90); }));
+        registry.Register("freew.cell-text-direction-rotate270", new ActionCommand(() => { editor.Focus(); editor.SetCaretCellTextDirection(CellTextDirection.Rotate270); }));
 
         // Insert tab — Text: pick a .docx file and insert its body content at the caret (block merge).
         registry.Register("freew.insert-file", new InsertFileCommand(editor));
@@ -2812,6 +2818,168 @@ internal static class FreeWRibbonCommands
             window.Content = panel;
             window.ShowDialog();
             return (chosen, hex);
+        }
+    }
+
+    // Table Design — Borders picker: lets the user pick a border preset (All / Outside / Inside / Top /
+    // Bottom / Left / Right / None) with a style, colour and width chooser, then applies it to the caret
+    // cell via SetCaretCellBorders. Reuses the BorderLineStyle enum and CellBorderEdge record from the model.
+    private sealed class CellBordersCommand(DocumentView editor) : IRibbonCommand
+    {
+        private static readonly string[] ColorPalette =
+        [
+            "#000000", "#FF0000", "#0000FF", "#008000", "#800000",
+            "#808080", "#C0C0C0", "#FF6600", "#9900CC", "#FFFFFF",
+        ];
+
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var result = ShowBordersDialog(owner);
+            if (result is null)
+                return;
+            editor.SetCaretCellBorders(result);
+        }
+
+        private static CellBorders? ShowBordersDialog(Window? owner)
+        {
+            CellBorders? result = null;
+
+            var selectedStyle = BorderLineStyle.Single;
+            var selectedColor = "#000000";
+            var selectedWidthPt = 0.5;
+
+            var window = new Window
+            {
+                Title = "Cell Borders",
+                SizeToContent = SizeToContent.WidthAndHeight,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = owner is null
+                    ? WindowStartupLocation.CenterScreen
+                    : WindowStartupLocation.CenterOwner,
+                Owner = owner,
+                ShowInTaskbar = false
+            };
+
+            var outer = new StackPanel { Margin = new Thickness(10) };
+
+            // -- Preset buttons row --
+            var presetLabel = new TextBlock { Text = "Preset:", Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
+            outer.Children.Add(presetLabel);
+            var presetPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+            string[] presets = ["All", "Outside", "Inside", "Top", "Bottom", "Left", "Right", "None"];
+            Button? applyBtn = null;
+
+            CellBorderEdge MakeEdge() => new(selectedStyle, selectedColor, selectedWidthPt);
+            CellBorders BuildPreset(string preset, System.Func<CellBorderEdge> edge) => preset switch
+            {
+                "All" => new CellBorders { Top = edge(), Bottom = edge(), Left = edge(), Right = edge() },
+                "Outside" => new CellBorders { Top = edge(), Bottom = edge(), Left = edge(), Right = edge() },
+                "Inside" => new CellBorders(), // inside borders handled at table level; clear cell overrides
+                "Top" => new CellBorders { Top = edge() },
+                "Bottom" => new CellBorders { Bottom = edge() },
+                "Left" => new CellBorders { Left = edge() },
+                "Right" => new CellBorders { Right = edge() },
+                _ => null! // "None"
+            };
+
+            string? chosenPreset = null;
+            foreach (var preset in presets)
+            {
+                var btn = new Button
+                {
+                    Content = preset,
+                    Margin = new Thickness(2),
+                    Padding = new Thickness(8, 3, 8, 3),
+                    Tag = preset
+                };
+                btn.Click += (_, _) =>
+                {
+                    chosenPreset = (string)btn.Tag;
+                    if (applyBtn is not null) applyBtn.IsEnabled = true;
+                };
+                presetPanel.Children.Add(btn);
+            }
+            outer.Children.Add(presetPanel);
+
+            // -- Style picker --
+            var styleLabel = new TextBlock { Text = "Style:", Margin = new Thickness(0, 0, 0, 2) };
+            outer.Children.Add(styleLabel);
+            var styleCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
+            foreach (var s in Enum.GetValues<BorderLineStyle>())
+                styleCombo.Items.Add(s.ToString());
+            styleCombo.SelectedIndex = 0;
+            styleCombo.SelectionChanged += (_, _) =>
+            {
+                if (styleCombo.SelectedItem is string sv && Enum.TryParse<BorderLineStyle>(sv, out var parsed))
+                    selectedStyle = parsed;
+            };
+            outer.Children.Add(styleCombo);
+
+            // -- Colour swatches --
+            var colorLabel = new TextBlock { Text = "Color:", Margin = new Thickness(0, 0, 0, 2) };
+            outer.Children.Add(colorLabel);
+            var colorPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            Border? selectedColorBorder = null;
+            foreach (var hex in ColorPalette)
+            {
+                var swatch = new Border
+                {
+                    Width = 20, Height = 20, Margin = new Thickness(2),
+                    Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
+                    BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1),
+                    ToolTip = hex, Cursor = Cursors.Hand, Tag = hex
+                };
+                swatch.MouseLeftButtonUp += (_, _) =>
+                {
+                    selectedColor = (string)swatch.Tag;
+                    if (selectedColorBorder is not null)
+                        selectedColorBorder.BorderThickness = new Thickness(1);
+                    swatch.BorderThickness = new Thickness(2);
+                    selectedColorBorder = swatch;
+                };
+                colorPanel.Children.Add(swatch);
+            }
+            outer.Children.Add(colorPanel);
+
+            // -- Width spinner --
+            var widthLabel = new TextBlock { Text = "Width (pt):", Margin = new Thickness(0, 0, 0, 2) };
+            outer.Children.Add(widthLabel);
+            var widthBox = new TextBox { Text = "0.5", Width = 60, Margin = new Thickness(0, 0, 0, 10), HorizontalAlignment = HorizontalAlignment.Left };
+            widthBox.TextChanged += (_, _) =>
+            {
+                if (double.TryParse(widthBox.Text, out var w) && w > 0)
+                    selectedWidthPt = w;
+            };
+            outer.Children.Add(widthBox);
+
+            // -- Apply / Cancel --
+            var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            applyBtn = new Button
+            {
+                Content = "Apply",
+                IsEnabled = false,
+                Padding = new Thickness(12, 4, 12, 4),
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+            applyBtn.Click += (_, _) =>
+            {
+                if (chosenPreset == "None")
+                    result = null;
+                else if (chosenPreset is not null)
+                    result = BuildPreset(chosenPreset, MakeEdge);
+                window.Close();
+            };
+            var cancelBtn = new Button { Content = "Cancel", Padding = new Thickness(12, 4, 12, 4) };
+            cancelBtn.Click += (_, _) => window.Close();
+            buttonRow.Children.Add(applyBtn);
+            buttonRow.Children.Add(cancelBtn);
+            outer.Children.Add(buttonRow);
+
+            window.Content = outer;
+            window.ShowDialog();
+            return result;
         }
     }
 

@@ -143,6 +143,10 @@ internal static class FreeWRibbonIcons
             ["freew.table-last-column"] = RibbonCommandIconKind.Table,
             ["freew.table-banded-cols"] = RibbonCommandIconKind.Table,
             ["freew.table-to-text"] = RibbonCommandIconKind.TextFunction,
+            ["freew.cell-borders"] = RibbonCommandIconKind.Grid,
+            ["freew.cell-text-direction-horizontal"] = RibbonCommandIconKind.AlignLeft,
+            ["freew.cell-text-direction-rotate90"] = RibbonCommandIconKind.AlignLeft,
+            ["freew.cell-text-direction-rotate270"] = RibbonCommandIconKind.AlignLeft,
 
             // Insert: illustrations
             ["freew.picture"] = RibbonCommandIconKind.Picture,

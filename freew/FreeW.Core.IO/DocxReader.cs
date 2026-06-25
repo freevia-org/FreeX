@@ -2285,8 +2285,19 @@ public static class DocxReader
                         _ => TableCellVerticalAlignment.Top
                     };
 
+                    // Per-cell border override (w:tcBorders); absent → null (inherit table-level borders).
+                    cell.Borders = ReadCellBorders(tcPr.Element(W + "tcBorders"));
+
                     // Per-cell margin override (w:tcMar); absent → null (inherit table default).
                     cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"));
+
+                    // Text direction (w:textDirection w:val); absent → Horizontal.
+                    cell.TextDirection = (tcPr.Element(W + "textDirection")?.Attribute(W + "val")?.Value) switch
+                    {
+                        "btLr" => CellTextDirection.Rotate90,
+                        "tbRl" => CellTextDirection.Rotate270,
+                        _ => CellTextDirection.Horizontal
+                    };
                 }
                 foreach (var child in tc.Elements())
                 {
@@ -2360,6 +2371,33 @@ public static class DocxReader
             LeftPt: Edge("left", TableCellMargins.Default.LeftPt),
             BottomPt: Edge("bottom", TableCellMargins.Default.BottomPt),
             RightPt: Edge("right", TableCellMargins.Default.RightPt));
+    }
+
+    // Reads a w:tcBorders element into a CellBorders, or null when absent.
+    // Each named edge (top/left/bottom/right) maps to a CellBorderEdge when present and not "none"/"nil".
+    // Unknown or absent edges are left null so the cell inherits the table-level border for that edge.
+    private static CellBorders? ReadCellBorders(XElement? tcBorders)
+    {
+        if (tcBorders is null) return null;
+        CellBorderEdge? ReadEdge(string name)
+        {
+            var el = tcBorders.Element(W + name);
+            if (el is null) return null;
+            var val = el.Attribute(W + "val")?.Value;
+            if (val is "none" or "nil") return null;
+            var style = BorderLineStyles.FromToken(val);
+            var colorRaw = el.Attribute(W + "color")?.Value;
+            var colorHex = colorRaw is null or "auto" ? "#000000" : "#" + colorRaw.TrimStart('#');
+            var szRaw = el.Attribute(W + "sz")?.Value;
+            var widthPt = szRaw is not null && int.TryParse(szRaw, out var sz) ? sz / 8.0 : 0.5;
+            return new CellBorderEdge(style, colorHex, widthPt);
+        }
+        var top = ReadEdge("top");
+        var left = ReadEdge("left");
+        var bottom = ReadEdge("bottom");
+        var right = ReadEdge("right");
+        if (top is null && left is null && bottom is null && right is null) return null;
+        return new CellBorders { Top = top, Left = left, Bottom = bottom, Right = right };
     }
 
     private static bool ReadBorders(XElement? tblBorders)

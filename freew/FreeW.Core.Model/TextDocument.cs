@@ -1510,6 +1510,20 @@ public sealed class TableCell
     /// </summary>
     public TableCellMargins? Margins { get; set; }
 
+    /// <summary>
+    /// Per-edge cell borders (<c>tc/tcPr/w:tcBorders</c>), or null to inherit the table-level borders.
+    /// When set each non-null edge overrides the corresponding table/style border for this cell.
+    /// Null is the default so existing cells are unaffected.
+    /// </summary>
+    public CellBorders? Borders { get; set; }
+
+    /// <summary>
+    /// Text direction of the cell content (<c>tc/tcPr/w:textDirection/@w:val</c>).
+    /// <see cref="CellTextDirection.Horizontal"/> is the docx default (no element emitted) so existing
+    /// cells round-trip unchanged. Maps to the shape <see cref="ShapeTextDirection"/> pattern.
+    /// </summary>
+    public CellTextDirection TextDirection { get; set; } = CellTextDirection.Horizontal;
+
     public TableCell() { }
 
     public TableCell(string text) => Paragraphs.Add(new Paragraph(text));
@@ -1539,6 +1553,50 @@ public enum TableCellVerticalAlignment
     Top,
     Center,
     Bottom
+}
+
+/// <summary>
+/// Per-edge cell borders (<c>tc/tcPr/w:tcBorders</c>). Each edge is a nullable <see cref="CellBorderEdge"/>
+/// so that only explicitly set edges are emitted. All-null means inherit table-level borders.
+/// Immutable record so it can be compared and copied cleanly.
+/// </summary>
+public sealed record CellBorders
+{
+    /// <summary>Top edge border, or null to inherit.</summary>
+    public CellBorderEdge? Top { get; init; }
+    /// <summary>Bottom edge border, or null to inherit.</summary>
+    public CellBorderEdge? Bottom { get; init; }
+    /// <summary>Left edge border, or null to inherit.</summary>
+    public CellBorderEdge? Left { get; init; }
+    /// <summary>Right edge border, or null to inherit.</summary>
+    public CellBorderEdge? Right { get; init; }
+
+    /// <summary>True when all four edges are null (nothing to emit).</summary>
+    public bool IsEmpty => Top is null && Bottom is null && Left is null && Right is null;
+}
+
+/// <summary>
+/// A single edge of a <see cref="CellBorders"/> — style, colour and width, mirroring <see cref="ParagraphBorder"/>
+/// so the same <see cref="BorderLineStyle"/> enum and <see cref="BorderLineStyles"/> token mapping are reused.
+/// </summary>
+public sealed record CellBorderEdge(
+    BorderLineStyle Style = BorderLineStyle.Single,
+    string ColorHex = "#000000",
+    double WidthPt = 0.5);
+
+/// <summary>
+/// Text direction of a table cell's content (<c>tc/tcPr/w:textDirection/@w:val</c>).
+/// Mirrors <see cref="ShapeTextDirection"/> so the same rendering pattern (LayoutTransform) is reused.
+/// <see cref="Horizontal"/> is the docx default (no element emitted); existing cells are unaffected.
+/// </summary>
+public enum CellTextDirection
+{
+    /// <summary>Left-to-right, top-to-bottom — the standard docx default (<c>lrTb</c>, not emitted).</summary>
+    Horizontal,
+    /// <summary>Bottom-to-top, then left-to-right (<c>btLr</c> → Word rotates 90° CCW = Rotate90 up).</summary>
+    Rotate90,
+    /// <summary>Top-to-bottom, then right-to-left (<c>tbRl</c> → Word rotates 90° CW = Rotate270 down).</summary>
+    Rotate270
 }
 
 /// <summary>
