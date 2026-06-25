@@ -119,6 +119,11 @@ public static class SlideCompositor
                     ComposeTable(shape, theme, ops);
                 break;
 
+            case SlideShapeKind.Chart:
+                if (shape.Chart is not null)
+                    ComposeChart(shape, theme, ops);
+                break;
+
             default:
                 ComposeAutoShape(shape, slide, presentation, theme, ops);
                 break;
@@ -381,6 +386,51 @@ public static class SlideCompositor
             BoundsDip = frameBounds,
             Cells     = cellOps
         });
+    }
+
+    // ─── Chart ──────────────────────────────────────────────────────────────────────────────────
+
+    private static void ComposeChart(SlideShape shape, PresentationTheme theme, List<DrawOp> ops)
+    {
+        var chart = shape.Chart!;
+
+        var frameBounds = new LayoutRect(
+            shape.OffsetXEmu / EmuPerDip,
+            shape.OffsetYEmu / EmuPerDip,
+            shape.ExtentCxEmu / EmuPerDip,
+            shape.ExtentCyEmu / EmuPerDip);
+
+        // Resolve one concrete sRGB color per series (using theme color resolution)
+        var seriesColors = new SrgbColor[chart.Series.Count];
+        for (int i = 0; i < chart.Series.Count; i++)
+        {
+            var fillColor = chart.Series[i].FillColor;
+            seriesColors[i] = fillColor is not null
+                ? ThemeColorResolver.Resolve(fillColor, theme)
+                : DefaultAccentColor(i, theme);
+        }
+
+        ops.Add(new DrawOp.Chart
+        {
+            BoundsDip    = frameBounds,
+            ChartShape   = chart,
+            SeriesColors = seriesColors
+        });
+    }
+
+    /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>
+    private static SrgbColor DefaultAccentColor(int index, PresentationTheme theme)
+    {
+        var slot = (index % 6) switch
+        {
+            0 => ThemeColorSlot.Accent1,
+            1 => ThemeColorSlot.Accent2,
+            2 => ThemeColorSlot.Accent3,
+            3 => ThemeColorSlot.Accent4,
+            4 => ThemeColorSlot.Accent5,
+            _ => ThemeColorSlot.Accent6
+        };
+        return theme.ColorScheme[slot];
     }
 
     private static ResolvedTextLayout ResolveTableCellTextLayout(

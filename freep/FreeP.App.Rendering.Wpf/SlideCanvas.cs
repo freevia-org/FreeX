@@ -136,6 +136,9 @@ public sealed class SlideCanvas : FrameworkElement
             case DrawOp.Table table:
                 RenderTable(dc, table);
                 break;
+            case DrawOp.Chart chartOp:
+                RenderChart(dc, chartOp);
+                break;
         }
     }
 
@@ -329,6 +332,563 @@ public sealed class SlideCanvas : FrameworkElement
             curY += ft.Height + spaceAfterDip;
             paraIdx++;
         }
+    }
+
+    // ── Chart ──────────────────────────────────────────────────────────────────
+
+    private static void RenderChart(DrawingContext dc, DrawOp.Chart chartOp)
+    {
+        var bounds = chartOp.BoundsDip;
+        var chart  = chartOp.ChartShape;
+
+        // ── Frame background (white) + border ──────────────────────────────────
+        var frameBrush = FreezeBrush(new SolidColorBrush(Colors.White));
+        var framePen   = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF))), 0.5);
+        if (framePen.CanFreeze) framePen.Freeze();
+        var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        dc.DrawRectangle(frameBrush, framePen, frameRect);
+
+        // ── Layout areas ────────────────────────────────────────────────────────
+        // Margins inside the frame (DIP)
+        const double margin       = 8.0;
+        const double titleH       = 18.0;
+        const double legendH      = 14.0;
+        const double axisLabelW   = 36.0;  // value axis label area (left)
+        const double catLabelH    = 16.0;  // category label area (bottom)
+        const double gridlinePad  = 2.0;
+
+        double titleAreaH  = chart.Title is not null ? titleH + margin : 0;
+        bool   hasLegend   = chart.Legend.HasValue;
+        bool   isPie       = chart.ChartType == FreeP.Core.Model.ChartType.Pie;
+
+        // Title
+        if (chart.Title is not null)
+        {
+            var titleRect = new Rect(bounds.X + margin, bounds.Y + margin,
+                bounds.Width - 2 * margin, titleH);
+            DrawChartLabel(dc, chart.Title, titleRect, isBold: true, fontSize: 9.0,
+                align: TextAlignment.Center);
+        }
+
+        // Legend area (bottom when position is Bottom or unspecified, right otherwise)
+        double legendAreaW = 0, legendAreaH = 0;
+        bool   legendRight = chart.Legend is FreeP.Core.Model.LegendPosition.Right or
+                                             FreeP.Core.Model.LegendPosition.Left;
+        if (hasLegend)
+        {
+            if (legendRight)
+                legendAreaW = Math.Min(80, bounds.Width * 0.22);
+            else
+                legendAreaH = legendH + margin;
+        }
+
+        // Plot area
+        double plotX = bounds.X + margin + (isPie ? 0 : axisLabelW);
+        double plotY = bounds.Y + margin + titleAreaH;
+        double plotW = bounds.Width  - 2 * margin - (isPie ? 0 : axisLabelW) - legendAreaW;
+        double plotH = bounds.Height - 2 * margin - titleAreaH - legendAreaH
+                                     - (isPie ? 0 : catLabelH);
+
+        if (plotW <= 0 || plotH <= 0) return;
+
+        // ── Gridlines ──────────────────────────────────────────────────────────
+        if (!isPie && chart.ValueAxis.HasMajorGridlines)
+        {
+            var gridPen = new Pen(
+                FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
+            if (gridPen.CanFreeze) gridPen.Freeze();
+
+            const int gridLines = 5;
+            for (int gi = 0; gi <= gridLines; gi++)
+            {
+                double gy = plotY + plotH - (plotH / gridLines) * gi;
+                dc.DrawLine(gridPen,
+                    new Point(plotX, gy),
+                    new Point(plotX + plotW, gy));
+            }
+        }
+
+        // ── Dispatch to chart type ─────────────────────────────────────────────
+        switch (chart.ChartType)
+        {
+            case FreeP.Core.Model.ChartType.ColumnClustered:
+            case FreeP.Core.Model.ChartType.ColumnStacked:
+            case FreeP.Core.Model.ChartType.ColumnStacked100:
+                RenderColumnChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+                break;
+
+            case FreeP.Core.Model.ChartType.BarClustered:
+            case FreeP.Core.Model.ChartType.BarStacked:
+            case FreeP.Core.Model.ChartType.BarStacked100:
+                RenderBarChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+                break;
+
+            case FreeP.Core.Model.ChartType.Line:
+            case FreeP.Core.Model.ChartType.LineMarkers:
+                RenderLineChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH,
+                    withMarkers: chart.ChartType == FreeP.Core.Model.ChartType.LineMarkers);
+                break;
+
+            case FreeP.Core.Model.ChartType.Pie:
+                RenderPieChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+                break;
+
+            case FreeP.Core.Model.ChartType.Area:
+            case FreeP.Core.Model.ChartType.AreaStacked:
+                RenderAreaChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+                break;
+
+            default:
+                // Unknown — render a placeholder rectangle
+                dc.DrawRectangle(
+                    FreezeBrush(new SolidColorBrush(Color.FromArgb(30, 0, 0, 0))),
+                    null,
+                    new Rect(plotX, plotY, plotW, plotH));
+                break;
+        }
+
+        // ── Axis labels ────────────────────────────────────────────────────────
+        if (!isPie && chart.Categories.Count > 0)
+        {
+            double catStep = plotW / Math.Max(1, chart.Categories.Count);
+            for (int ci = 0; ci < chart.Categories.Count; ci++)
+            {
+                double lx = plotX + ci * catStep;
+                var labelRect = new Rect(lx, plotY + plotH + 2, catStep, catLabelH);
+                DrawChartLabel(dc, chart.Categories[ci], labelRect, isBold: false, fontSize: 7.0,
+                    align: TextAlignment.Center);
+            }
+        }
+
+        // Value axis labels (5 tick marks)
+        if (!isPie)
+        {
+            var (minVal, maxVal) = ComputeAxisRange(chart);
+            const int ticks = 5;
+            for (int ti = 0; ti <= ticks; ti++)
+            {
+                double val = minVal + (maxVal - minVal) * ti / ticks;
+                double vy  = plotY + plotH - plotH * ti / ticks;
+                var labelRect = new Rect(bounds.X + margin, vy - 6, axisLabelW - gridlinePad, 12);
+                DrawChartLabel(dc, FormatAxisValue(val), labelRect,
+                    isBold: false, fontSize: 6.5, align: TextAlignment.Right);
+            }
+        }
+
+        // ── Legend ─────────────────────────────────────────────────────────────
+        if (hasLegend && chart.Series.Count > 0)
+        {
+            double lx, ly, lw;
+            if (legendRight)
+            {
+                lx = bounds.X + bounds.Width - legendAreaW - margin / 2;
+                ly = plotY;
+                lw = legendAreaW - margin / 2;
+            }
+            else
+            {
+                lx = plotX;
+                ly = bounds.Y + bounds.Height - legendAreaH - margin / 2;
+                lw = plotW;
+            }
+
+            double itemH = legendH;
+            int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
+            int itemsToShow = Math.Min(chart.Series.Count, maxItems);
+
+            for (int si = 0; si < itemsToShow; si++)
+            {
+                var sc = si < chartOp.SeriesColors.Count
+                    ? chartOp.SeriesColors[si]
+                    : new SrgbColor(0x4F, 0x81, 0xBD);
+
+                if (legendRight)
+                {
+                    double iy = ly + si * itemH;
+                    dc.DrawRectangle(
+                        FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                        null,
+                        new Rect(lx, iy + 3, 8, 8));
+                    DrawChartLabel(dc, chart.Series[si].Name,
+                        new Rect(lx + 10, iy, lw - 10, itemH),
+                        isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                }
+                else
+                {
+                    double ix = lx + si * 80.0;
+                    dc.DrawRectangle(
+                        FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                        null,
+                        new Rect(ix, ly + 3, 8, 8));
+                    DrawChartLabel(dc, chart.Series[si].Name,
+                        new Rect(ix + 10, ly, 70, itemH),
+                        isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                }
+            }
+        }
+    }
+
+    // ── Column chart ─────────────────────────────────────────────────────────
+
+    private static void RenderColumnChart(
+        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        int catCount = Math.Max(1, chart.Categories.Count);
+        if (chart.Series.Count == 0) return;
+
+        var (minVal, maxVal) = ComputeAxisRange(chart);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.ColumnStacked
+                                       or FreeP.Core.Model.ChartType.ColumnStacked100;
+
+        double catW    = plotW / catCount;
+        double padding = catW * 0.15;
+        double serW    = stacked ? (catW - 2 * padding) : (catW - 2 * padding) / Math.Max(1, chart.Series.Count);
+
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double catX = plotX + ci * catW + padding;
+            double stackedY = plotY + plotH; // top of next stacked segment
+
+            for (int si = 0; si < chart.Series.Count; si++)
+            {
+                var series = chart.Series[si];
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+                if (rawVal is null) continue;
+
+                double val = rawVal.Value;
+                double barH = Math.Abs(val / range) * plotH;
+                if (barH < 0.5) barH = 0.5;
+
+                double barX = stacked ? catX : catX + si * serW;
+                double barY = stacked
+                    ? (stackedY - barH)
+                    : (plotY + plotH - barH);
+
+                var color = GetSeriesColor(chart, si, ci, seriesColors);
+                var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
+
+                dc.DrawRectangle(brush, null, new Rect(barX, barY, serW - 1, barH));
+
+                if (stacked) stackedY -= barH;
+            }
+        }
+    }
+
+    // ── Bar (horizontal) chart ────────────────────────────────────────────────
+
+    private static void RenderBarChart(
+        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        int catCount = Math.Max(1, chart.Categories.Count);
+        if (chart.Series.Count == 0) return;
+
+        var (minVal, maxVal) = ComputeAxisRange(chart);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.BarStacked
+                                       or FreeP.Core.Model.ChartType.BarStacked100;
+
+        double catH    = plotH / catCount;
+        double padding = catH * 0.15;
+        double serH    = stacked ? (catH - 2 * padding) : (catH - 2 * padding) / Math.Max(1, chart.Series.Count);
+
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double catY = plotY + ci * catH + padding;
+            double stackedX = plotX; // right edge of last stacked segment
+
+            for (int si = 0; si < chart.Series.Count; si++)
+            {
+                var series = chart.Series[si];
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+                if (rawVal is null) continue;
+
+                double val   = rawVal.Value;
+                double barW  = Math.Abs(val / range) * plotW;
+                if (barW < 0.5) barW = 0.5;
+
+                double barY = stacked ? catY : catY + si * serH;
+                double barX = stacked ? stackedX : plotX;
+
+                var color = GetSeriesColor(chart, si, ci, seriesColors);
+                var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
+
+                dc.DrawRectangle(brush, null, new Rect(barX, barY, barW, serH - 1));
+
+                if (stacked) stackedX += barW;
+            }
+        }
+    }
+
+    // ── Line chart ────────────────────────────────────────────────────────────
+
+    private static void RenderLineChart(
+        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH,
+        bool withMarkers)
+    {
+        int catCount = Math.Max(1, chart.Categories.Count);
+        if (chart.Series.Count == 0) return;
+
+        var (minVal, maxVal) = ComputeAxisRange(chart);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        double stepX = plotW / Math.Max(1, catCount - 1);
+
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            var series = chart.Series[si];
+            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var pen    = new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))), 1.5);
+            if (pen.CanFreeze) pen.Freeze();
+
+            Point? prev = null;
+            for (int ci = 0; ci < catCount; ci++)
+            {
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+                if (rawVal is null) { prev = null; continue; }
+
+                double px = plotX + ci * stepX;
+                double py = plotY + plotH - (rawVal.Value - minVal) / range * plotH;
+
+                var pt = new Point(px, py);
+
+                if (prev.HasValue)
+                    dc.DrawLine(pen, prev.Value, pt);
+
+                if (withMarkers)
+                {
+                    var markerBrush = FreezeBrush(
+                        new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
+                    dc.DrawEllipse(markerBrush, null, pt, 3, 3);
+                }
+
+                prev = pt;
+            }
+        }
+    }
+
+    // ── Pie chart ─────────────────────────────────────────────────────────────
+
+    private static void RenderPieChart(
+        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        if (chart.Series.Count == 0) return;
+
+        var firstSeries = chart.Series[0];
+        var values = firstSeries.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
+        if (values.Count == 0) return;
+
+        double total = values.Sum();
+        if (total <= 0) return;
+
+        double cx = plotX + plotW / 2;
+        double cy = plotY + plotH / 2;
+        double r  = Math.Min(plotW, plotH) / 2 * 0.85;
+
+        double startAngle = -Math.PI / 2; // start at top
+
+        // Accent colors for pie slices (cycle if more slices than theme colors)
+        var accentPalette = new[]
+        {
+            Color.FromRgb(0x4F, 0x81, 0xBD),
+            Color.FromRgb(0xC0, 0x50, 0x4D),
+            Color.FromRgb(0x9B, 0xBB, 0x59),
+            Color.FromRgb(0x80, 0x64, 0xA2),
+            Color.FromRgb(0x4B, 0xAC, 0xC6),
+            Color.FromRgb(0xF7, 0x96, 0x46)
+        };
+
+        for (int i = 0; i < values.Count; i++)
+        {
+            double sweepAngle = values[i] / total * 2 * Math.PI;
+            double endAngle   = startAngle + sweepAngle;
+
+            // Resolve slice color: per-point override → series color → accent palette
+            SrgbColor sc;
+            if (firstSeries.PointColors.TryGetValue(i, out var pointColor))
+                sc = new SrgbColor(pointColor.Resolved.R, pointColor.Resolved.G, pointColor.Resolved.B);
+            else if (seriesColors.Count > 0)
+                sc = new SrgbColor(
+                    accentPalette[i % accentPalette.Length].R,
+                    accentPalette[i % accentPalette.Length].G,
+                    accentPalette[i % accentPalette.Length].B);
+            else
+                sc = new SrgbColor(
+                    accentPalette[i % accentPalette.Length].R,
+                    accentPalette[i % accentPalette.Length].G,
+                    accentPalette[i % accentPalette.Length].B);
+
+            var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B)));
+
+            // Build wedge geometry via StreamGeometry
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                bool largeArc = sweepAngle > Math.PI;
+                var start = new Point(cx + r * Math.Cos(startAngle), cy + r * Math.Sin(startAngle));
+                var end   = new Point(cx + r * Math.Cos(endAngle),   cy + r * Math.Sin(endAngle));
+
+                ctx.BeginFigure(new Point(cx, cy), isFilled: true, isClosed: true);
+                ctx.LineTo(start, isStroked: false, isSmoothJoin: false);
+                ctx.ArcTo(end, new Size(r, r), 0, largeArc,
+                    SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
+            }
+            if (geo.CanFreeze) geo.Freeze();
+
+            var borderPen = new Pen(FreezeBrush(new SolidColorBrush(Colors.White)), 0.8);
+            if (borderPen.CanFreeze) borderPen.Freeze();
+
+            dc.DrawGeometry(brush, borderPen, geo);
+
+            startAngle = endAngle;
+        }
+    }
+
+    // ── Area chart ────────────────────────────────────────────────────────────
+
+    private static void RenderAreaChart(
+        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        int catCount = Math.Max(1, chart.Categories.Count);
+        if (chart.Series.Count == 0) return;
+
+        var (minVal, maxVal) = ComputeAxisRange(chart);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        double stepX = plotW / Math.Max(1, catCount - 1);
+        double baseY = plotY + plotH;
+
+        // Draw series back to front (later series on top)
+        for (int si = chart.Series.Count - 1; si >= 0; si--)
+        {
+            var series = chart.Series[si];
+            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var brush  = FreezeBrush(new SolidColorBrush(
+                Color.FromArgb(200, color.R, color.G, color.B)));
+
+            if (series.Values.Count == 0) continue;
+
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                ctx.BeginFigure(new Point(plotX, baseY), isFilled: true, isClosed: true);
+
+                for (int ci = 0; ci < catCount; ci++)
+                {
+                    double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+                    double  val    = rawVal ?? 0;
+                    double  px     = plotX + ci * stepX;
+                    double  py     = plotY + plotH - (val - minVal) / range * plotH;
+                    ctx.LineTo(new Point(px, py), isStroked: true, isSmoothJoin: false);
+                }
+
+                // Close to bottom-right then bottom-left
+                ctx.LineTo(new Point(plotX + plotW, baseY), isStroked: false, isSmoothJoin: false);
+            }
+            if (geo.CanFreeze) geo.Freeze();
+
+            dc.DrawGeometry(brush, null, geo);
+        }
+    }
+
+    // ── Chart helpers ─────────────────────────────────────────────────────────
+
+    private static SrgbColor GetSeriesColor(
+        FreeP.Core.Model.ChartShape chart, int seriesIndex, int pointIndex,
+        IReadOnlyList<SrgbColor> seriesColors)
+    {
+        if (seriesIndex < seriesColors.Count) return seriesColors[seriesIndex];
+        // Fallback cycle
+        var fallbacks = new SrgbColor[]
+        {
+            new(0x4F, 0x81, 0xBD), new(0xC0, 0x50, 0x4D),
+            new(0x9B, 0xBB, 0x59), new(0x80, 0x64, 0xA2),
+            new(0x4B, 0xAC, 0xC6), new(0xF7, 0x96, 0x46)
+        };
+        return fallbacks[seriesIndex % fallbacks.Length];
+    }
+
+    private static (double min, double max) ComputeAxisRange(FreeP.Core.Model.ChartShape chart)
+    {
+        double min = 0, max = 0;
+        foreach (var series in chart.Series)
+        {
+            foreach (var v in series.Values)
+            {
+                if (v.HasValue)
+                {
+                    min = Math.Min(min, v.Value);
+                    max = Math.Max(max, v.Value);
+                }
+            }
+        }
+
+        // Apply explicit axis overrides
+        if (chart.ValueAxis.Min.HasValue) min = chart.ValueAxis.Min.Value;
+        if (chart.ValueAxis.Max.HasValue) max = chart.ValueAxis.Max.Value;
+
+        if (max <= min) max = min + 1; // avoid zero range
+
+        // Nice round up
+        double range   = max - min;
+        double niceMax = Math.Ceiling(max / (range / 5)) * (range / 5);
+        return (min, niceMax > max ? niceMax : max);
+    }
+
+    private static string FormatAxisValue(double v) =>
+        Math.Abs(v) >= 1000
+            ? $"{v / 1000:G4}K"
+            : v == Math.Floor(v)
+                ? ((long)v).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : v.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static void DrawChartLabel(
+        DrawingContext dc, string text, Rect rect,
+        bool isBold, double fontSize, TextAlignment align)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        var typeface = new Typeface(
+            new FontFamily("Calibri"),
+            FontStyles.Normal,
+            isBold ? FontWeights.Bold : FontWeights.Normal,
+            FontStretches.Normal);
+
+        var ft = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize * (96.0 / 72.0),
+            FreezeBrush(new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40))),
+            numberSubstitution: null,
+            textFormattingMode: TextFormattingMode.Display,
+            pixelsPerDip: 1.0)
+        {
+            MaxTextWidth   = rect.Width,
+            MaxLineCount   = 1,
+            TextAlignment  = align,
+            Trimming       = TextTrimming.CharacterEllipsis
+        };
+
+        dc.DrawText(ft, new Point(rect.X, rect.Y));
     }
 
     // ── Text ────────────────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ public static class PptxPackageWriter
     private const string PresPropsRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps";
     private const string ViewPropsRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps";
     private const string TableStylesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
+    private const string ChartRelType       = PptxChartWriter.ChartRelType;
 
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
@@ -46,6 +47,7 @@ public static class PptxPackageWriter
     private const string TableStylesCT   = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
     private const string CorePropsCT     = "application/vnd.openxmlformats-package.core-properties+xml";
     private const string RelsCT          = "application/vnd.openxmlformats-package.relationships+xml";
+    private const string ChartCT         = PptxChartWriter.ChartCT;
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -160,6 +162,7 @@ public static class PptxPackageWriter
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
 
+        int globalChartIndex = 1; // monotonically increasing across all slides
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
             var slide = presentation.Slides[si];
@@ -173,14 +176,24 @@ public static class PptxPackageWriter
             // Write media (images) into the archive, get back rel-id map
             var mediaRelIds = WriteSlideMedia(archive, slide, si + 1);
 
-            // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaRelIds));
+            // Write charts into the archive, get back rel-id map
+            var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
 
-            // Slide rels: rId1=layout, rIdMedia1..=images
+            // Combined name→relId map for shape element building (images + charts)
+            var allRelIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var (n, relId, _) in mediaRelIds)  allRelIds[n] = relId;
+            foreach (var (n, relId, _) in chartRelIds)  allRelIds[n] = relId;
+
+            // Slide xml
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, allRelIds));
+
+            // Slide rels: rId1=layout, images, charts
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
-            foreach (var (shapeName, mediaRelId, mediaPath) in mediaRelIds)
+            foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, chartRelId, chartPath) in chartRelIds)
+                slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
             WriteRels(archive, slidePath, slideRels);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
@@ -238,6 +251,7 @@ public static class PptxPackageWriter
             overrides.Add(Override(CT, $"/ppt/slides/slide{si + 1}.xml", SlideCT));
 
         // Collect image content types
+        int chartGlobalIdx = 1;
         foreach (var slide in p.Slides)
         {
             foreach (var shape in AllShapes(slide.Shapes))
@@ -246,8 +260,12 @@ public static class PptxPackageWriter
                 {
                     var ext = ContentTypeToExtension(shape.Picture.ContentType ?? "image/png");
                     var ct = shape.Picture.ContentType ?? "image/png";
-                    // add defaults as needed
                     overrides.Add(Override(CT, $"/ppt/media/media_{GetShapeId(shape)}.{ext}", ct));
+                }
+                else if (shape.Kind == SlideShapeKind.Chart && shape.Chart is not null)
+                {
+                    overrides.Add(Override(CT, $"/ppt/charts/chart{chartGlobalIdx}.xml", ChartCT));
+                    chartGlobalIdx++;
                 }
             }
         }
@@ -297,9 +315,8 @@ public static class PptxPackageWriter
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
-        List<(string shapeName, string relId, string mediaPath)> mediaRelIds)
+        Dictionary<string, string> mediaByName)
     {
-        var mediaByName = mediaRelIds.ToDictionary(m => m.shapeName, m => m.relId);
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sld",
@@ -462,6 +479,7 @@ public static class PptxPackageWriter
             SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaByName),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
+            SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaByName),
             _ => BuildSpEl(shape, scheme)
         };
 
@@ -559,6 +577,50 @@ public static class PptxPackageWriter
                 new XElement(A + "graphicData",
                     new XAttribute("uri", DrawingTableUri),
                     BuildTableEl(table, scheme))));
+    }
+
+    // ── Chart / graphicFrame elements ─────────────────────────────────────────────
+
+    private const string DrawingChartUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace CChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    /// <summary>
+    /// Builds the p:graphicFrame element for a chart shape.
+    /// <paramref name="mediaByName"/> carries chart rel IDs added by
+    /// <see cref="WriteSlideCharts"/> (keyed by shape.Name).
+    /// </summary>
+    private static XElement BuildChartGraphicFrameEl(
+        SlideShape shape, Dictionary<string, string> mediaByName)
+    {
+        mediaByName.TryGetValue(shape.Name, out var chartRelId);
+        chartRelId ??= "rIdChart1"; // fallback (should not happen)
+
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr",
+                    new XElement(A + "graphicFrameLocks",
+                        new XAttribute("noGrp", "1"))),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingChartUri),
+                    new XElement(CChartNs + "chart",
+                        // Declare the c: prefix so PowerPoint sees <c:chart .../>
+                        new XAttribute(XNamespace.Xmlns + "c", DrawingChartUri),
+                        new XAttribute(R + "id", chartRelId)))));
     }
 
     private static XElement BuildTableEl(TableShape table, PresentationColorScheme scheme)
@@ -890,6 +952,32 @@ public static class PptxPackageWriter
         return result;
     }
 
+    // ── Chart writing ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes chart parts for all Chart shapes in the slide. Uses and increments
+    /// <paramref name="globalChartIndex"/> so chart file names are unique across slides.
+    /// Returns (shapeName, relId, chartPartPath) tuples for wiring into slide rels.
+    /// </summary>
+    private static List<(string shapeName, string relId, string chartPath)> WriteSlideCharts(
+        ZipArchive archive, Slide slide, ref int globalChartIndex)
+    {
+        var result = new List<(string, string, string)>();
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
+                continue;
+
+            var chartPath = PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex);
+            var relId = $"rIdChart{globalChartIndex}";
+            result.Add((shape.Name, relId, chartPath));
+            globalChartIndex++;
+        }
+
+        return result;
+    }
+
     // ── Zip helpers ───────────────────────────────────────────────────────────────
 
     // OOXML requires UTF-8 WITHOUT BOM. XDocument.Save(Stream) emits a BOM by default;
@@ -1014,8 +1102,9 @@ public static class PptxPackageWriter
         public XDocument ToXDocument() =>
             new XDocument(
                 new XDeclaration("1.0", "UTF-8", "yes"),
+                // OPC spec §9.3: Relationships element MUST use the default namespace,
+                // not a prefixed namespace (PowerPoint rejects r:Relationships).
                 new XElement(PkgRels + "Relationships",
-                    new XAttribute(XNamespace.Xmlns + "r", PkgRels),
                     _rels.Select(r =>
                         new XElement(PkgRels + "Relationship",
                             new XAttribute("Id", r.id),

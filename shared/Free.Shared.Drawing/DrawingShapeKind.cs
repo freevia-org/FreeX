@@ -71,5 +71,8 @@ public enum SlideShapeKind
     Table = 3,
 
     /// <summary>A connector (line/arrow) between two shapes.</summary>
-    Connector = 4
+    Connector = 4,
+
+    /// <summary>An embedded chart (p:graphicFrame with c:chart graphicData).</summary>
+    Chart = 5
 }

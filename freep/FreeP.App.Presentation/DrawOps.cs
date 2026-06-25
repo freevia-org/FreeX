@@ -212,6 +212,29 @@ public abstract class DrawOp
         /// <summary>Ordered list of cell draw ops (back to front, row-major).</summary>
         public IReadOnlyList<TableCellOp> Cells { get; init; } = Array.Empty<TableCellOp>();
     }
+
+    // ── Chart draw op ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draws an embedded chart with all resolved colors.
+    /// The renderer is responsible for computing the full chart layout (axes, bars, lines, etc.)
+    /// from the model data within <see cref="BoundsDip"/>.
+    /// </summary>
+    public sealed class Chart : DrawOp
+    {
+        /// <summary>Bounding box of the chart frame in DIP.</summary>
+        public LayoutRect BoundsDip { get; init; }
+
+        /// <summary>The chart data model (ChartType, Series, Categories, Axes, Legend).</summary>
+        public FreeP.Core.Model.ChartShape ChartShape { get; init; } = new();
+
+        /// <summary>
+        /// Resolved series fill colors, one per series (index matches ChartShape.Series).
+        /// For pie charts, per-point overrides are in ChartShape.Series[i].PointColors
+        /// but the base color for each slice is SeriesColors[0][pointIndex % 6].
+        /// </summary>
+        public IReadOnlyList<SrgbColor> SeriesColors { get; init; } = Array.Empty<SrgbColor>();
+    }
 }
 
 /// <summary>

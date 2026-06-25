@@ -29,6 +29,7 @@ public static class PptxPackageReader
     private const string ImageRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string CorePropsRelType     = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
+    private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -333,7 +334,7 @@ public static class PptxPackageReader
                 "pic" => ReadPic(child, archive, partPath, scheme),
                 "cxnSp" => ReadCxnSp(child, scheme),
                 "grpSp" => ReadGrpSp(child, archive, partPath, scheme, tableStyles),
-                "graphicFrame" => ReadGraphicFrame(child, scheme, tableStyles),
+                "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
                 _ => null
             };
 
@@ -347,8 +348,16 @@ public static class PptxPackageReader
     private const string DrawingTableUri =
         "http://schemas.openxmlformats.org/drawingml/2006/table";
 
+    private const string DrawingChartUri =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    // c: namespace for c:chart element inside graphicData
+    private static readonly XNamespace CChart =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
     private static SlideShape? ReadGraphicFrame(
-        XElement gfEl, PresentationColorScheme scheme,
+        XElement gfEl, ZipArchive archive, string partPath,
+        PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles)
     {
         var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
@@ -370,6 +379,7 @@ public static class PptxPackageReader
 
         var uri = graphicData.Attribute("uri")?.Value;
 
+        // ── Table ──────────────────────────────────────────────────────────────
         if (string.Equals(uri, DrawingTableUri, StringComparison.OrdinalIgnoreCase))
         {
             var tblEl = graphicData.Element(A + "tbl");
@@ -387,6 +397,35 @@ public static class PptxPackageReader
                 ExtentCxEmu = extCx,
                 ExtentCyEmu = extCy,
                 Table = tableShape
+            };
+        }
+
+        // ── Chart ──────────────────────────────────────────────────────────────
+        if (string.Equals(uri, DrawingChartUri, StringComparison.OrdinalIgnoreCase))
+        {
+            var chartRelId = graphicData.Element(CChart + "chart")?.Attribute(R + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(chartRelId)) return null;
+
+            // Resolve the chart part path via the slide's rels
+            var partRels = LoadRels(archive, GetRelsPath(partPath));
+            var chartTarget = partRels
+                .FirstOrDefault(r => r.id == chartRelId && r.type == ChartRelType).target;
+            if (string.IsNullOrWhiteSpace(chartTarget)) return null;
+
+            var chartPath = ResolvePath(GetDirectory(partPath), chartTarget);
+            var chartShape = PptxChartReader.ReadChartPart(archive, chartPath, scheme);
+            if (chartShape is null) return null;
+
+            return new SlideShape
+            {
+                Id = ParseUint(cNvPr?.Attribute("id")?.Value),
+                Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                Kind = SlideShapeKind.Chart,
+                OffsetXEmu = offX,
+                OffsetYEmu = offY,
+                ExtentCxEmu = extCx,
+                ExtentCyEmu = extCy,
+                Chart = chartShape
             };
         }
 

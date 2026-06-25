@@ -93,6 +93,11 @@ public sealed class SlideShape
     /// <summary>Table data when Kind == Table.</summary>
     public TableShape? Table { get; set; }
 
+    // ── Chart ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Chart data when Kind == Chart.</summary>
+    public ChartShape? Chart { get; set; }
+
     // ── Group children ────────────────────────────────────────────────────────────
 
     /// <summary>Child shapes when Kind == Group.</summary>
