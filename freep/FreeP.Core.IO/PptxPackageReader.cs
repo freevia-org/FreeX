@@ -872,17 +872,21 @@ public static class PptxPackageReader
                 fill = PptxColorReader.TryReadFill(fillEl, scheme);
 
             // Border: use tcBdr/insideH and insideV for interior, or lnB for bottom etc.
-            // For simplicity, read tcBdr and use any present outline as the base.
+            // Each side element (a:bottom etc.) wraps an a:ln child — pass the ln to TryReadOutline.
             var tcBdr = tcStyle.Element(A + "tcBdr");
             if (tcBdr is not null)
             {
-                // Try common border elements: bottom, left, top, right, insideH, insideV.
-                border = PptxColorReader.TryReadOutline(tcBdr.Element(A + "bottom"), scheme)
-                      ?? PptxColorReader.TryReadOutline(tcBdr.Element(A + "left"), scheme)
-                      ?? PptxColorReader.TryReadOutline(tcBdr.Element(A + "top"), scheme)
-                      ?? PptxColorReader.TryReadOutline(tcBdr.Element(A + "right"), scheme)
-                      ?? PptxColorReader.TryReadOutline(tcBdr.Element(A + "insideH"), scheme)
-                      ?? PptxColorReader.TryReadOutline(tcBdr.Element(A + "insideV"), scheme);
+                // Try common border elements: insideH/insideV for interior grid, then outer sides.
+                // Each side is structured as: a:bottom/a:ln, a:left/a:ln, etc.
+                static XElement? Ln(XElement? side) => side?.Element(
+                    XName.Get("ln", "http://schemas.openxmlformats.org/drawingml/2006/main"));
+
+                border = PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "insideH")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "insideV")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "bottom")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "left")),   scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "top")),    scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "right")),  scheme);
             }
         }
 
