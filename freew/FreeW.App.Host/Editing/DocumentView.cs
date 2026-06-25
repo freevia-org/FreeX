@@ -5886,14 +5886,17 @@ public sealed class DocumentView : RichTextBox
                     {
                         cellShading = null;
                     }
+                    var cellTag = wpfCell.Tag as TableCellTag;
                     var cell = new ModelTableCell
                     {
                         ShadingColorHex = cellShading,
                         GridSpan = span,
-                        // Recover per-cell borders and text direction from the stashed Tag (the WPF
-                        // FlowDocument has no representation for these; they survive only via the Tag).
-                        Borders = (wpfCell.Tag as TableCellTag)?.Borders,
-                        TextDirection = (wpfCell.Tag as TableCellTag)?.TextDirection ?? CellTextDirection.Horizontal
+                        // Recover per-cell borders, text direction and vertical alignment from the stashed
+                        // Tag (WPF FlowDocument has no native representation for any of these; they survive
+                        // the view→model round-trip only via the Tag).
+                        Borders = cellTag?.Borders,
+                        TextDirection = cellTag?.TextDirection ?? CellTextDirection.Horizontal,
+                        VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
                     foreach (var cellBlock in wpfCell.Blocks)
                     {
@@ -5988,7 +5991,8 @@ public sealed class DocumentView : RichTextBox
     private sealed record TableCellTag(
         string? ShadingColorHex,
         CellBorders? Borders = null,
-        CellTextDirection TextDirection = CellTextDirection.Horizontal);
+        CellTextDirection TextDirection = CellTextDirection.Horizontal,
+        TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -6043,6 +6047,15 @@ public sealed class DocumentView : RichTextBox
             var isHeaderRow = fmt.HeaderRow && rowIndex == 0;
             var isBandedRow = fmt.BandedRows && !isHeaderRow && IsBandedBodyRow(rowIndex, fmt.HeaderRow);
             var wpfRow = new WpfTableRow();
+            // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
+            // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
+            // height-enforcer into every non-Continue cell: a BlockUIContainer holding a Border whose
+            // MinHeight matches the requested row height. For both AtLeast and Exact rules, MinHeight is
+            // the closest WPF mapping. Exact cannot clip cell content (content overflows rather than being
+            // clipped) — that is a documented WPF FlowDocument limitation.
+            var rowHeightPx = modelRow.HeightPt is { } heightPt && heightPt > 0
+                ? (double?)(heightPt * PxPerPoint)
+                : null;
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;
@@ -6077,11 +6090,13 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderBrush = borderBrush;
                     wpfCell.BorderThickness = new Thickness(0.5);
                 }
-                // Stash the model's author-set shading, per-cell borders and text direction on the cell
-                // Tag so ReadTable can recover them on commit. A colour-equality heuristic alone can't
-                // distinguish author shading from style fills; borders and text direction have no WPF
-                // equivalent, so they are recovered verbatim from the stashed Tag.
-                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders, modelCell.TextDirection);
+                // Stash the model's author-set shading, per-cell borders, text direction and vertical
+                // alignment on the cell Tag so ReadTable can recover them on commit. A colour-equality
+                // heuristic alone can't distinguish author shading from style fills; borders, text
+                // direction and vertical alignment have no WPF FlowDocument equivalent, so they survive
+                // only through the stashed Tag.
+                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
+                    modelCell.TextDirection, modelCell.VerticalAlignment);
 
                 // Per-cell border override: when the cell carries its own explicit borders, apply them to
                 // the WPF cell individually so they override the table-level border brush. The WPF
@@ -6122,6 +6137,15 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.Background = new SolidColorBrush(BandedRowFill);
                 if (cellBold)
                     wpfCell.FontWeight = FontWeights.Bold;
+                // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
+                // everything in a BlockUIContainer so we can position the content via WPF layout. WPF
+                // FlowDocument's TableCell has no VerticalAlignment property, so the Grid wrapper is the
+                // closest faithful mapping: it stretches to fill the cell height (given by MinHeight) and
+                // positions the inner content at the requested vertical position. Top is rendered as plain
+                // Paragraph blocks (the default FlowDocument path) for editing efficiency; Center and
+                // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
+                // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
+                var vAlign = modelCell.VerticalAlignment;
                 if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
                     // Rotated cell: wrap all paragraphs in a StackPanel with a LayoutTransform so the
@@ -6153,6 +6177,43 @@ public sealed class DocumentView : RichTextBox
                     }
                     wpfCell.Blocks.Add(new BlockUIContainer(stack));
                 }
+                else if (vAlign != TableCellVerticalAlignment.Top)
+                {
+                    // Center or Bottom vertical alignment: wrap all paragraphs in a Grid that stretches
+                    // to fill the row height and positions the inner StackPanel accordingly. The Grid's
+                    // own VerticalAlignment=Stretch (the WPF default) fills the cell; the StackPanel's
+                    // VerticalAlignment positions the content block within the cell.
+                    var wpfVAlign = vAlign == TableCellVerticalAlignment.Center
+                        ? VerticalAlignment.Center
+                        : VerticalAlignment.Bottom;
+                    var contentStack = new System.Windows.Controls.StackPanel
+                    {
+                        VerticalAlignment = wpfVAlign
+                    };
+                    var cellParas = modelCell.Paragraphs.Count > 0
+                        ? modelCell.Paragraphs
+                        : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
+                    foreach (var cellParagraph in cellParas)
+                    {
+                        var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
+                        var nestedRtb = new System.Windows.Controls.RichTextBox
+                        {
+                            Document = new System.Windows.Documents.FlowDocument(paraBlock),
+                            IsReadOnly = true,
+                            BorderThickness = new Thickness(0),
+                            Padding = new Thickness(0),
+                            Background = System.Windows.Media.Brushes.Transparent
+                        };
+                        contentStack.Children.Add(nestedRtb);
+                    }
+                    var grid = new System.Windows.Controls.Grid();
+                    grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition
+                    {
+                        Height = new GridLength(1, GridUnitType.Star)
+                    });
+                    grid.Children.Add(contentStack);
+                    wpfCell.Blocks.Add(new BlockUIContainer(grid));
+                }
                 else if (modelCell.Paragraphs.Count == 0)
                 {
                     wpfCell.Blocks.Add(BuildParagraph(new ModelParagraph(), document, inTableCell: true));
@@ -6161,6 +6222,17 @@ public sealed class DocumentView : RichTextBox
                 {
                     foreach (var cellParagraph in modelCell.Paragraphs)
                         wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document, inTableCell: true));
+                }
+                // Row height enforcement: inject a zero-width Border spacer as the first block in the
+                // cell so WPF is forced to allocate at least the requested height. WPF TableRow is a
+                // TextElement, not a FrameworkElement, so it has no MinHeight property of its own.
+                // Placing the spacer in every cell in the row ensures the tallest-cell measurement
+                // (which drives the row) respects the minimum. The Border has zero Padding and is
+                // not visible; it simply prevents the row from collapsing below the authored height.
+                if (rowHeightPx is { } minH && modelCell.VerticalMerge != VerticalMergeState.Continue)
+                {
+                    var spacer = new System.Windows.Controls.Border { MinHeight = minH };
+                    wpfCell.Blocks.Add(new BlockUIContainer(spacer));
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;
@@ -6204,11 +6276,16 @@ public sealed class DocumentView : RichTextBox
         return null;
     }
 
-    /// <summary>Mirror of DocxWriter's banding rule: which body row (2nd, 4th, ...) is shaded.</summary>
+    /// <summary>
+    /// Returns true for the body rows that should receive the banded fill (1st, 3rd, 5th, …).
+    /// Word's convention is that Band 1 = the FIRST data row (bodyIndex 0), so even bodyIndexes
+    /// are banded. Both <see cref="BuildTable"/> and <see cref="ReadTable"/> must use the same
+    /// rule so the colour-equality heuristic in ReadTable recognises the same rows as banded.
+    /// </summary>
     private static bool IsBandedBodyRow(int rowIndex, bool hasHeader)
     {
         var bodyIndex = hasHeader ? rowIndex - 1 : rowIndex;
-        return bodyIndex >= 0 && bodyIndex % 2 == 1;
+        return bodyIndex >= 0 && bodyIndex % 2 == 0;
     }
 
     private static WpfParagraph BuildParagraph(ModelParagraph paragraph, TextDocument document, bool inTableCell = false)
