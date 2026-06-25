@@ -37,6 +37,36 @@ public sealed class CustomGeometryPath
 }
 
 /// <summary>
+/// Bevel descriptor (a:bevelT / a:bevelB inside a:sp3d). All sizes in EMU.
+/// </summary>
+public sealed class BevelInfo
+{
+    /// <summary>Bevel width in EMU (w= attribute). Default 76200 = 0.6 pt.</summary>
+    public long WidthEmu { get; set; } = 76200;
+
+    /// <summary>Bevel height in EMU (h= attribute). Default 76200.</summary>
+    public long HeightEmu { get; set; } = 76200;
+
+    /// <summary>Preset name (prst= attribute), e.g. "circle", "relaxedInset", "cross", "angle", etc. Empty = circle.</summary>
+    public string PresetName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// 3-D scene data from a:scene3d. Stored for round-trip; rendering is approximated.
+/// </summary>
+public sealed class Scene3dInfo
+{
+    /// <summary>Camera preset name (a:camera prst=), e.g. "orthographicFront", "perspectiveRelaxed".</summary>
+    public string CameraPreset { get; set; } = string.Empty;
+
+    /// <summary>Light rig preset name (a:lightRig rig=), e.g. "threePt", "flat", "balanced".</summary>
+    public string LightRig { get; set; } = string.Empty;
+
+    /// <summary>Light rig direction (a:lightRig dir=), e.g. "t", "tl", "r".</summary>
+    public string LightRigDir { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Shape effects carried on a SlideShape. All distances/radii are in EMU.
 /// </summary>
 public sealed class ShapeEffects
@@ -67,8 +97,39 @@ public sealed class ShapeEffects
     public bool HasSoftEdge { get; set; }
     public long SoftEdgeRadEmu { get; set; }
 
-    // ── Bevel (best-effort flag only) ─────────────────────────────────────────
-    public bool HasBevel { get; set; }
+    // ── Bevel / 3-D (a:sp3d) ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when any sp3d data is present. Back-compat alias; callers should prefer
+    /// checking BevelTop/BevelBottom/ExtrusionHeightEmu directly.
+    /// </summary>
+    public bool HasBevel => BevelTop is not null || BevelBottom is not null;
+
+    /// <summary>Top-face bevel (a:bevelT). Null = none.</summary>
+    public BevelInfo? BevelTop { get; set; }
+
+    /// <summary>Bottom-face bevel (a:bevelB). Null = none.</summary>
+    public BevelInfo? BevelBottom { get; set; }
+
+    /// <summary>3-D extrusion depth in EMU (a:sp3d extrusionH= attribute). 0 = none.</summary>
+    public long ExtrusionHeightEmu { get; set; }
+
+    /// <summary>Contour width in EMU (a:sp3d contourW= attribute). 0 = none.</summary>
+    public long ContourWidthEmu { get; set; }
+
+    /// <summary>Preset material name (a:sp3d prstMaterial= attribute).</summary>
+    public string PrstMaterial { get; set; } = string.Empty;
+
+    /// <summary>Extrusion colour (a:extrusionClr). Null = no override.</summary>
+    public SrgbColor? ExtrusionColor { get; set; }
+
+    /// <summary>Contour colour (a:contourClr). Null = no override.</summary>
+    public SrgbColor? ContourColor { get; set; }
+
+    // ── Scene 3-D (a:scene3d) ─────────────────────────────────────────────────
+
+    /// <summary>Scene 3-D camera/light data. Null = not present.</summary>
+    public Scene3dInfo? Scene3d { get; set; }
 }
 
 /// <summary>

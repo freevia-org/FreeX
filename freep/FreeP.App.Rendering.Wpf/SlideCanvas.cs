@@ -9,6 +9,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Rendering.Wpf;
 
+
 /// <summary>
 /// A WPF panel that renders a single <see cref="Slide"/> using the framework-free
 /// <see cref="SlideCompositor"/> to produce draw operations and converts them to WPF primitives.
@@ -213,6 +214,10 @@ public sealed class SlideCanvas : FrameworkElement
             dc.DrawGeometry(fillBrush, pen, geometry);
         }
 
+        // Bevel overlay: painted ON TOP of the fill (but before text)
+        if (shape.Effects is not null)
+            RenderShapeBevel(dc, shape);
+
         // Draw text overlay
         if (shape.Text is not null)
             RenderText(dc, shape.Text, bounds);
@@ -291,6 +296,123 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawGeometry(null, glowPen, glowGeo);
             }
         }
+
+        // Bevel: overlay highlight + shade stripes on the inner edge of the shape bounds.
+        // This runs AFTER the shape fill/outline are drawn (the caller RenderShape draws
+        // geometry after calling this method for shadows — but bevel must paint ON TOP of
+        // the fill).  We therefore invoke this portion from a second call site in RenderShape
+        // (RenderShapeBevel) so it can be layered correctly.
+    }
+
+    /// <summary>
+    /// Renders the bevel highlight/shade overlay for a shape.
+    /// Called AFTER the shape geometry has been painted so the overlay sits on top.
+    /// Also draws the contour outline if one is requested.
+    /// </summary>
+    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape)
+    {
+        var fx = shape.Effects;
+        if (fx is null) return;
+
+        bool hasBevel   = fx.BevelTop is not null || fx.BevelBottom is not null;
+        bool hasContour = fx.ContourWidthDip > 0;
+        if (!hasBevel && !hasContour) return;
+
+        if (shape.Geometry.Contours.Count == 0) return;
+
+        var geo    = ContourListToGeometry(shape.Geometry);
+        var bounds = shape.BoundsDip;
+
+        if (hasBevel && fx.BevelTop is not null)
+        {
+            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
+            DrawBevelOverlay(dc, geo, bounds, highlight, shade, fx.BevelTop.WidthDip, fx.BevelTop.HeightDip);
+        }
+
+        // Contour outline (thin ring in contourColor)
+        if (hasContour)
+        {
+            var cColor  = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
+            var contourBrush = new SolidColorBrush(Color.FromArgb(200, cColor.R, cColor.G, cColor.B));
+            if (contourBrush.CanFreeze) contourBrush.Freeze();
+            var contourPen = new Pen(contourBrush, Math.Max(0.5, fx.ContourWidthDip));
+            if (contourPen.CanFreeze) contourPen.Freeze();
+            dc.DrawGeometry(null, contourPen, geo);
+        }
+    }
+
+    private static void DrawBevelOverlay(
+        DrawingContext dc,
+        Geometry shapeGeo,
+        LayoutRect bounds,
+        BevelEdgeSet highlight,
+        BevelEdgeSet shade,
+        double bevelW,
+        double bevelH)
+    {
+        // We draw simple trapezoidal / rectangular strips clipped to the shape geometry.
+        // Highlight = near-white semi-transparent; Shade = near-black semi-transparent.
+        var highlightBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
+        var shadeBrush     = new SolidColorBrush(Color.FromArgb(110, 0,   0,   0  ));
+        if (highlightBrush.CanFreeze) highlightBrush.Freeze();
+        if (shadeBrush.CanFreeze)     shadeBrush.Freeze();
+
+        // Push clip to the shape boundary so bevel strips are contained within it
+        dc.PushClip(shapeGeo);
+
+        double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
+        double bw = Math.Min(bevelW, w / 3);
+        double bh = Math.Min(bevelH, h / 3);
+
+        // Draw trapezoidal wedge for each active edge
+        void DrawWedge(bool active, Brush brush, Point tl, Point tr, Point bl, Point br)
+        {
+            if (!active) return;
+            var pg = new StreamGeometry();
+            using (var sgc = pg.Open())
+            {
+                sgc.BeginFigure(tl, isFilled: true, isClosed: true);
+                sgc.LineTo(tr, isStroked: false, isSmoothJoin: true);
+                sgc.LineTo(br, isStroked: false, isSmoothJoin: true);
+                sgc.LineTo(bl, isStroked: false, isSmoothJoin: true);
+            }
+            pg.Freeze();
+            dc.DrawGeometry(brush, null, pg);
+        }
+
+        // Top edge wedge (trapezoid: outer rect top edge, inner inset)
+        DrawWedge(highlight.Top || shade.Top,
+            highlight.Top ? highlightBrush : shadeBrush,
+            new Point(x,      y),
+            new Point(x + w,  y),
+            new Point(x + w - bw, y + bh),
+            new Point(x + bw, y + bh));
+
+        // Bottom edge wedge
+        DrawWedge(highlight.Bottom || shade.Bottom,
+            highlight.Bottom ? highlightBrush : shadeBrush,
+            new Point(x + bw, y + h - bh),
+            new Point(x + w - bw, y + h - bh),
+            new Point(x + w,  y + h),
+            new Point(x,      y + h));
+
+        // Left edge wedge
+        DrawWedge(highlight.Left || shade.Left,
+            highlight.Left ? highlightBrush : shadeBrush,
+            new Point(x,      y),
+            new Point(x + bw, y + bh),
+            new Point(x + bw, y + h - bh),
+            new Point(x,      y + h));
+
+        // Right edge wedge
+        DrawWedge(highlight.Right || shade.Right,
+            highlight.Right ? highlightBrush : shadeBrush,
+            new Point(x + w - bw, y + bh),
+            new Point(x + w,      y),
+            new Point(x + w,      y + h),
+            new Point(x + w - bw, y + h - bh));
+
+        dc.Pop(); // pop clip
     }
 
     private static Transform BuildShapeTransform(DrawOp.Shape shape)
