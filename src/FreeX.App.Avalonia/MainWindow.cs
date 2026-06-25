@@ -10226,23 +10226,35 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        // Left "Link to:" category column (matches the Windows vertical button column).
-        var linkToColumn = new StackPanel
+        // Left "Link to:" category column. The label docks to the top and the category
+        // list fills the remaining vertical space so the column spans the dialog body,
+        // matching the Windows "Insert Hyperlink" layout.
+        var linkToLabel = new TextBlock { Text = UiText.Get("Hyperlink_LinkTo2") + ":", Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(linkToLabel, Dock.Top);
+        linkTypeBox.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+        var linkToColumn = new DockPanel
         {
-            Spacing = 4,
+            LastChildFill = true,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
             Children =
             {
-                new TextBlock { Text = UiText.Get("Hyperlink_LinkTo2") + ":" },
+                linkToLabel,
                 linkTypeBox,
             },
         };
 
-        // Right detail area: address/screen-tip/bookmark fields that change per category.
+        // Right detail area: "Text to display" + "Address" + screen-tip/bookmark fields,
+        // arranged as label/field rows like the Windows dialog's right region.
+        targetBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        displayBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        screenTipBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        bookmarkBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         var detailArea = new StackPanel
         {
-            Spacing = 8,
+            Spacing = 10,
             Children =
             {
+                CreateHyperlinkField(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay")) }, displayBox),
                 CreateHyperlinkField(targetLabel, targetBox),
                 CreateHyperlinkField(
                     new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")) },
@@ -10269,7 +10281,6 @@ public sealed partial class MainWindow : Window
             Spacing = 8,
             Children =
             {
-                CreateHyperlinkField(new TextBlock { Text = UiText.Get("Hyperlink_TextToDisplay") }, displayBox),
                 bodyGrid,
                 validationText,
                 buttonRow,
@@ -10829,7 +10840,9 @@ public sealed partial class MainWindow : Window
                 ? currentNumberCategory
                 : numberCategories[0],
             MinWidth = 150,
-            MaxHeight = 200,
+            // Stretch to fill the full body height (matches Windows, where the Category
+            // list spans the entire dialog body rather than capping at the list contents).
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
         };
         AutomationProperties.SetName(numberCategoryList, "Category");
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
@@ -11472,51 +11485,60 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var numberTab = CreateFormatCellsTab(
-            UiText.Get("FormatCells_TabNumber"),
-            "FormatCellsNumberTab",
-            new StackPanel
+        // Number tab body: a two-column Grid so the Category list stretches to the full
+        // height of the right-hand controls column (matches the Windows screenshot, where
+        // the Category list fills the entire dialog body vertically).
+        var numberCategoryLabel = new TextBlock { Text = UiText.Get("FormatCells_Category"), Margin = new Thickness(0, 0, 0, 4) };
+        DockPanel.SetDock(numberCategoryLabel, Dock.Top);
+        var numberCategoryField = new DockPanel
+        {
+            LastChildFill = true,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Children =
             {
-                Spacing = 10,
-                Children =
+                numberCategoryLabel,
+                numberCategoryList,
+            },
+        };
+        var numberRightColumn = new StackPanel
+        {
+            Spacing = 10,
+            Children =
+            {
+                new StackPanel
                 {
-                    new StackPanel
+                    Spacing = 4,
+                    Children =
                     {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 12,
-                        Children =
+                        new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
+                        new Border
                         {
-                            CreateFormatCellsField(UiText.Get("FormatCells_Category"), numberCategoryList),
-                            new StackPanel
-                            {
-                                Spacing = 10,
-                                Children =
-                                {
-                                    new StackPanel
-                                    {
-                                        Spacing = 4,
-                                        Children =
-                                        {
-                                            new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
-                                            new Border
-                                            {
-                                                BorderBrush = FormulaBarControlBorder,
-                                                BorderThickness = new Thickness(1),
-                                                Padding = new Thickness(8, 6),
-                                                Child = numberPreview,
-                                            },
-                                        },
-                                    },
-                                    CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
-                                    CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
-                                    CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
-                                    CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox),
-                                },
-                            },
+                            BorderBrush = FormulaBarControlBorder,
+                            BorderThickness = new Thickness(1),
+                            Padding = new Thickness(8, 6),
+                            Child = numberPreview,
                         },
                     },
                 },
-            });
+                CreateFormatCellsField(UiText.Get("FormatCells_Type"), numberFormatBox),
+                CreateFormatCellsField(UiText.Get("FormatCells_DecimalPlaces"), numberDecimalPlacesBox),
+                CreateFormatCellsField(UiText.Get("FormatCells_Symbol"), numberSymbolBox),
+                CreateFormatCellsField(UiText.Get("FormatCells_NegativeNumbers"), numberNegativeBox),
+            },
+        };
+        var numberBodyGrid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 12,
+        };
+        numberBodyGrid.Children.Add(numberCategoryField);
+        AvaloniaGrid.SetColumn(numberCategoryField, 0);
+        numberBodyGrid.Children.Add(numberRightColumn);
+        AvaloniaGrid.SetColumn(numberRightColumn, 1);
+        var numberTab = CreateFormatCellsTab(
+            UiText.Get("FormatCells_TabNumber"),
+            "FormatCellsNumberTab",
+            numberBodyGrid);
         var alignmentTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabAlignment"),
             "FormatCellsAlignmentTab",
@@ -15078,10 +15100,10 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
-            Width = 480,
-            Height = 460,
-            MinWidth = 460,
-            MinHeight = 420,
+            Width = 500,
+            Height = 560,
+            MinWidth = 480,
+            MinHeight = 520,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
@@ -15141,6 +15163,35 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
         AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
 
+        var changingCellsBox = new TextBox
+        {
+            MinWidth = 260,
+            IsReadOnly = true,
+        };
+        ApplyDataToolsTextBoxChrome(changingCellsBox);
+        AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
+        AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
+        AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
+
+        var preventChangesBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChanges")),
+            IsChecked = true,
+            FontSize = 12,
+        };
+        AutomationProperties.SetName(preventChangesBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChangesAutomationName")));
+        AutomationProperties.SetAutomationId(preventChangesBox, "ScenarioManagerPreventChangesBox");
+        AutomationProperties.SetHelpText(preventChangesBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
+
+        var hideBox = new CheckBox
+        {
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Hide")),
+            FontSize = 12,
+        };
+        AutomationProperties.SetName(hideBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_HideAutomationName")));
+        AutomationProperties.SetAutomationId(hideBox, "ScenarioManagerHideBox");
+        AutomationProperties.SetHelpText(hideBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
+
         var errorText = new TextBlock
         {
             Foreground = Brush(143, 74, 18),
@@ -15162,13 +15213,24 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
 
+        var editButton = new Button
+        {
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Edit")),
+            Width = 110,
+            MinWidth = 110,
+        };
+        ApplyDataToolsButtonChrome(editButton, 110);
+        AutomationProperties.SetName(editButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_EditScenarioAutomationName")));
+        AutomationProperties.SetAutomationId(editButton, "ScenarioManagerEditButton");
+        AutomationProperties.SetHelpText(editButton, UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
+
         var showButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
-            Width = 82,
-            MinWidth = 82,
+            Width = 110,
+            MinWidth = 110,
         };
-        ApplyDataToolsButtonChrome(showButton, 82);
+        ApplyDataToolsButtonChrome(showButton, 110);
         AutomationProperties.SetName(showButton, "Show");
         AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
         AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
@@ -15220,6 +15282,25 @@ public sealed partial class MainWindow : Window
             scenarioDetailsText.Text = FormatScenarioManagerScenarioDetails(selected);
             showButton.IsEnabled = selected is not null;
             deleteButton.IsEnabled = selected is not null;
+            editButton.IsEnabled = selected is not null;
+            if (selected is not null)
+            {
+                preventChangesBox.IsChecked = selected.Locked;
+                hideBox.IsChecked = selected.Hidden;
+            }
+        }
+
+        void LoadSelectedScenarioForEdit()
+        {
+            if (scenarioList.SelectedItem is not ScenarioManagerDialogScenarioItem item)
+                return;
+
+            nameBox.Text = item.Choice.Name;
+            commentBox.Text = item.Choice.Comment ?? "";
+            preventChangesBox.IsChecked = item.Choice.Locked;
+            hideBox.IsChecked = item.Choice.Hidden;
+            nameBox.Focus();
+            nameBox.SelectAll();
         }
 
         void RefreshDialogPlan(string? preferredScenarioName = null)
@@ -15242,6 +15323,7 @@ public sealed partial class MainWindow : Window
             scenarioList.SelectedItem = selectedItem;
             statusText.Text = plan.StatusText;
             selectionText.Text = FormatScenarioManagerSelectionSummary(_session.SelectedRange);
+            changingCellsBox.Text = FormatRangeReference(_session.SelectedRange);
             summaryButton.IsEnabled = items.Length > 0;
             RefreshSelectionDetails();
         }
@@ -15329,6 +15411,7 @@ public sealed partial class MainWindow : Window
 
         scenarioList.SelectionChanged += (_, _) => RefreshSelectionDetails();
         saveButton.Click += (_, _) => SaveCurrentValues();
+        editButton.Click += (_, _) => LoadSelectedScenarioForEdit();
         showButton.Click += (_, _) => ShowSelectedScenario();
         deleteButton.Click += (_, _) => DeleteSelectedScenario();
         summaryButton.Click += (_, _) => CreateSummaryReport();
@@ -15363,8 +15446,9 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 saveButton,
-                showButton,
+                editButton,
                 deleteButton,
+                showButton,
                 summaryButton,
             },
         };
@@ -15381,6 +15465,43 @@ public sealed partial class MainWindow : Window
         var scenariosHeader = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")),
+        };
+
+        // "Add/Edit Scenario" grouped box (matches the Windows bordered group): scenario
+        // name, changing cells, comment, plus the Prevent changes / Hide options.
+        var addEditGroup = new Border
+        {
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12),
+            Child = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_AddEditScenario")),
+                        FontWeight = FontWeight.SemiBold,
+                        FontSize = 12,
+                    },
+                    CreateScenarioManagerField(
+                        StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")),
+                        nameBox),
+                    CreateScenarioManagerField(
+                        StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")),
+                        changingCellsBox),
+                    CreateScenarioManagerField(
+                        StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
+                        commentBox),
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 16,
+                        Children = { preventChangesBox, hideBox },
+                    },
+                },
+            },
         };
 
         RefreshDialogPlan(selectedScenarioName);
@@ -15401,12 +15522,7 @@ public sealed partial class MainWindow : Window
                         listWithButtons,
                         selectionText,
                         scenarioDetailsText,
-                        CreateScenarioManagerField(
-                            StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")),
-                            nameBox),
-                        CreateScenarioManagerField(
-                            StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
-                            commentBox),
+                        addEditGroup,
                         errorText,
                     },
                 },

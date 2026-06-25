@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -37,6 +38,15 @@ public sealed class ChangeChartTypeDialog : Window
         root.Children.Add(heading);
         var panel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
         panel.Height = 290;
+        // The subtype gallery (Excel's "Clustered Column / Stacked Column / 100% Stacked / 3-D" row that
+        // sits between the category list and the preview) is normally filled by the category list's
+        // SelectionChanged handler. In the headless parity-capture render the gallery could come up empty,
+        // so populate and select it directly here — mirroring the Avalonia ShowChartTypePickerAsync — and
+        // give it a deterministic width plus a visible border so it reads like the Linux/Excel surface.
+        PopulateSubtypeGallery(currentType);
+        _subtypeGallery.Width = 180;
+        _subtypeGallery.BorderBrush = SystemColors.ControlDarkBrush;
+        _subtypeGallery.BorderThickness = new Thickness(1);
         _subtypeGallery.MouseDoubleClick += SubtypeGallery_MouseDoubleClick;
         DockPanel.SetDock(panel, Dock.Top);
         root.Children.Add(panel);
@@ -45,6 +55,23 @@ public sealed class ChangeChartTypeDialog : Window
         root.Children.Add(buttons);
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void PopulateSubtypeGallery(ChartType currentType)
+    {
+        if (_categoryList.SelectedItem is not ChartTypePickerCategory category)
+        {
+            if (_categoryList.Items.Count == 0)
+                return;
+            category = (ChartTypePickerCategory)_categoryList.Items[0]!;
+            _categoryList.SelectedItem = category;
+        }
+
+        var choices = ChartTypePickerPlanner.GetGalleryChoices(category.Name);
+        _subtypeGallery.ItemsSource = choices;
+        var selected = choices.FirstOrDefault(c => c.Type == currentType)
+            ?? (choices.Count > 0 ? choices[0] : null);
+        _subtypeGallery.SelectedItem = selected;
     }
 
     public static ChangeChartTypeDialogResult CreateResult(ChartType chartType) => new(chartType);

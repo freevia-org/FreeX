@@ -872,6 +872,11 @@ public sealed partial class MainWindow
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             Height = 24,
             MinHeight = 24,
+            // Without explicit padding + vertical-centering the Fluent ComboBox's default content
+            // padding pushes the selected item out of the forced 24px clip, leaving it visibly cut off.
+            // Match the proven chart/drawing combo chrome so the selected field reads fully (win.png).
+            Padding = new Thickness(5, 0, 4, 0),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(fieldBox, fieldListAutomationId);
 

@@ -451,9 +451,9 @@ public sealed partial class MainWindow
                 CreatePreviewComboBox(183, "Narrow"),
                 CreateSettingsSection(PrintPreviewText("PrintPreview_ScalingLabel", "Scaling:")),
                 CreatePreviewComboBox(183, PrintPreviewText("PrintPreview_ScaleNoScaling", "No Scaling")),
-                new CheckBox { Content = PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area"), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PrintPreview_IgnorePrintArea", "Ignore print area")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 CreateSettingsSection(PrintPreviewText("PrintPreview_PrintOptionsSection", "Print Options")),
-                new CheckBox { Content = PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines"), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new CheckBox { Content = StripDisplayMnemonic(PrintPreviewText("PageSetup_PrintGridlines", "Print gridlines")), IsChecked = false, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
 
@@ -513,7 +513,9 @@ public sealed partial class MainWindow
     private static TextBlock CreateSettingsSection(string text) =>
         new()
         {
-            Text = text,
+            // WPF Labels strip mnemonic underscores automatically; Avalonia TextBlocks render the
+            // leading/embedded "_" literally (e.g. "_Copies:", "Pa_ges:"). Strip them for parity.
+            Text = StripDisplayMnemonic(text),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -692,7 +694,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
 
-        RenderPreviewInstructions(canvas, painting.Instructions);
+        RenderPreviewInstructions(canvas, AlignCellTextLeft(layout, painting.Instructions));
 
         var pageBorder = new Border
         {
@@ -714,6 +716,46 @@ public sealed partial class MainWindow
         };
 
         return pageBorder;
+    }
+
+    /// <summary>
+    /// Forces every printed cell's text to be left-aligned at the cell's text origin, matching the
+    /// Windows WPF print renderer (<c>PrintRenderer.GridCells</c>), which draws all cell text from
+    /// <c>x + 2</c> with no horizontal alignment. The shared render model right-aligns numeric/currency
+    /// cells (Excel's general alignment), which made the Units/Revenue data values drift right of their
+    /// left-aligned column headers in the Avalonia preview. Heading and header/footer-band runs keep the
+    /// builder's alignment; only cell-text runs (identified by their cell's text + origin) are rewritten.
+    /// </summary>
+    private static IReadOnlyList<PrintPreviewPaintInstruction> AlignCellTextLeft(
+        PageContentLayout layout,
+        IReadOnlyList<PrintPreviewPaintInstruction> instructions)
+    {
+        var cellTextOrigins = new HashSet<(string Text, double Left, double Top)>();
+        foreach (var cell in layout.Cells)
+        {
+            if (!string.IsNullOrEmpty(cell.Text) && cell.Alignment != PageTextAlignment.Left)
+                cellTextOrigins.Add((cell.Text, cell.TextOrigin.X, cell.TextOrigin.Y));
+        }
+
+        if (cellTextOrigins.Count == 0)
+            return instructions;
+
+        var rewritten = new List<PrintPreviewPaintInstruction>(instructions.Count);
+        foreach (var instruction in instructions)
+        {
+            if (instruction.Kind == PrintPreviewPaintKind.Text
+                && instruction.Alignment != PageTextAlignment.Left
+                && cellTextOrigins.Contains((instruction.Text, instruction.Left, instruction.Top)))
+            {
+                rewritten.Add(instruction with { Alignment = PageTextAlignment.Left });
+            }
+            else
+            {
+                rewritten.Add(instruction);
+            }
+        }
+
+        return rewritten;
     }
 
     private static void RenderPreviewInstructions(

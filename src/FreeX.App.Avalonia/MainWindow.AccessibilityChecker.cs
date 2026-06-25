@@ -127,14 +127,24 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "AccessibilityCheckerDialog");
 
         // ---- Inspection Results tree ----
+        // Windows wraps the inspection results in a bordered box with a compact (12px) font; match
+        // that here by reducing the tree font size and hosting it inside a 1px light-gray Border.
         var resultsTree = new TreeView
         {
             Margin = new Thickness(0, 0, 0, 0),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
         };
         AutomationProperties.SetName(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListAutomationName"));
         AutomationProperties.SetAutomationId(resultsTree, "AccessibilityCheckerIssueList");
         AutomationProperties.SetHelpText(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListHelpText"));
+
+        var resultsBorder = new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB)),
+            BorderThickness = new Thickness(1),
+            Child = resultsTree,
+        };
 
         TreeViewItem? firstLeaf = null;
         foreach (var section in sections)
@@ -312,10 +322,10 @@ public sealed partial class MainWindow
             RowDefinitions = new RowDefinitions("Auto,*,Auto"),
         };
         Grid.SetRow(resultsHeader, 0);
-        Grid.SetRow(resultsTree, 1);
+        Grid.SetRow(resultsBorder, 1);
         Grid.SetRow(additionalInfoPanel, 2);
         bodyGrid.Children.Add(resultsHeader);
-        bodyGrid.Children.Add(resultsTree);
+        bodyGrid.Children.Add(resultsBorder);
         bodyGrid.Children.Add(additionalInfoPanel);
 
         var buttonRow = new StackPanel

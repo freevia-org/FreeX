@@ -64,6 +64,16 @@ public enum CfGlyphPrimitiveKind
     /// the long way round; the sweep is always clockwise.
     /// </summary>
     Pie,
+
+    /// <summary>
+    /// A five-pointed star (<see cref="CfGlyphOp.Points"/> holds the 10 outer/inner vertices) with
+    /// a horizontal clip so only the left <see cref="CfGlyphOp.RadiusX"/> fraction (0..1) of the
+    /// star's bounding box is filled with the icon color. The remaining (right) portion of the star
+    /// is drawn as an empty outline only. This produces the partial-fill star appearance used by
+    /// Excel's Stars icon sets. Renderers that do not support the clip may fall back to a full
+    /// (icon-colored) fill.
+    /// </summary>
+    StarFillFraction,
 }
 
 /// <summary>
@@ -100,6 +110,13 @@ public readonly record struct CfGlyphOp(
 
     public static CfGlyphOp Pie(LayoutPoint center, double radiusX, double radiusY, LayoutPoint start, LayoutPoint end, bool largeArc) =>
         new(CfGlyphPrimitiveKind.Pie, CfGlyphFill.Icon, CfGlyphStroke.None, new[] { start, end }, center, radiusX, radiusY, LargeArc: largeArc);
+
+    /// <summary>
+    /// Emits a star-with-partial-fill op. <paramref name="points"/> are the 10 outer/inner star
+    /// vertices; <paramref name="fillFraction"/> (0..1) is the left-to-right fill extent.
+    /// </summary>
+    public static CfGlyphOp StarFillFraction(IReadOnlyList<LayoutPoint> points, double fillFraction) =>
+        new(CfGlyphPrimitiveKind.StarFillFraction, CfGlyphFill.Icon, CfGlyphStroke.Outline, points, RadiusX: fillFraction);
 }
 
 /// <summary>
@@ -133,10 +150,11 @@ public static class ConditionalIconGlyphGeometry
             ConditionalIconGlyphKind.Sign => SignGlyph(iconIndex, r),
             ConditionalIconGlyphKind.Symbol => SymbolGlyph(iconIndex, r),
             ConditionalIconGlyphKind.Flag => FlagGlyph(r),
-            ConditionalIconGlyphKind.Rating => new[] { CfGlyphOp.Polygon(CfGlyphFill.Icon, CfGlyphStroke.Outline, StarPoints(r)) },
+            ConditionalIconGlyphKind.Rating => RatingBarsGlyph(iconIndex, iconCount, r),
+            ConditionalIconGlyphKind.Star => StarGlyph(iconIndex, iconCount, r),
             ConditionalIconGlyphKind.Quarter => QuarterGlyph(iconIndex, iconCount, r),
             ConditionalIconGlyphKind.Box => new[] { BoxGlyph(iconIndex, iconCount, r) },
-            _ => new[] { CfGlyphOp.Polygon(CfGlyphFill.Icon, CfGlyphStroke.Outline, ArrowPoints(r, iconIndex)) },
+            _ => new[] { CfGlyphOp.Polygon(CfGlyphFill.Icon, CfGlyphStroke.Outline, ArrowPoints(r, iconIndex, iconCount)) },
         };
     }
 
@@ -249,62 +267,209 @@ public static class ConditionalIconGlyphGeometry
 
     /// <summary>
     /// Builds a chunky filled-arrow polygon that closely matches Excel's icon-set arrow weight.
-    /// Each arrow is a standard 7-point chevron polygon: a rectangular shaft with a wide arrowhead.
-    /// iconIndex 0 = up (best), 1 = right/neutral, 2+ = down (worst).
+    /// iconIndex 0 = worst bucket (red, DOWN); iconIndex count-1 = best bucket (green, UP).
+    /// For 3-arrows: 0=DOWN, 1=RIGHT (neutral), 2=UP.
+    /// For 4-arrows: 0=DOWN, 1=DOWN-DIAGONAL, 2=UP-DIAGONAL, 3=UP.
+    /// For 5-arrows: 0=DOWN, 1=DOWN-DIAGONAL, 2=RIGHT (neutral), 3=UP-DIAGONAL, 4=UP.
     /// </summary>
-    private static LayoutPoint[] ArrowPoints(RectInfo r, int iconIndex)
+    private static LayoutPoint[] ArrowPoints(RectInfo r, int iconIndex, int iconCount)
     {
-        if (iconIndex == 1)
+        var direction = ResolveArrowDirection(iconIndex, iconCount);
+        return direction switch
         {
-            // Sideways (right-pointing) filled chevron arrow — neutral bucket.
-            // Shaft occupies left ~55% of the width; arrowhead the right ~45%.
-            var shaftTop    = r.Top    + r.Height * 0.30;
-            var shaftBottom = r.Bottom - r.Height * 0.30;
-            var neckX       = r.Left   + r.Width  * 0.55;
-            return new[]
-            {
-                new LayoutPoint(r.Left,  shaftTop),
-                new LayoutPoint(neckX,   shaftTop),
-                new LayoutPoint(neckX,   r.Top),
-                new LayoutPoint(r.Right, r.Top + r.Height / 2),
-                new LayoutPoint(neckX,   r.Bottom),
-                new LayoutPoint(neckX,   shaftBottom),
-                new LayoutPoint(r.Left,  shaftBottom),
-            };
-        }
+            ArrowDirection.Up => UpArrowPoints(r),
+            ArrowDirection.UpDiagonal => DiagonalArrowPoints(r, pointingUp: true),
+            ArrowDirection.Right => RightArrowPoints(r),
+            ArrowDirection.DownDiagonal => DiagonalArrowPoints(r, pointingUp: false),
+            _ => DownArrowPoints(r),
+        };
+    }
 
-        if (iconIndex == 0)
+    private enum ArrowDirection { Down, DownDiagonal, Right, UpDiagonal, Up }
+
+    private static ArrowDirection ResolveArrowDirection(int iconIndex, int iconCount)
+    {
+        // Map bucket index 0 (worst) → Down, index count-1 (best) → Up.
+        // Middle bucket distribution for 4/5 arrow sets includes diagonals.
+        return iconCount switch
         {
-            // Up arrow — best bucket.
-            var shaftLeft  = r.Left + r.Width  * 0.30;
-            var shaftRight = r.Left + r.Width  * 0.70;
-            var neckY      = r.Top  + r.Height * 0.45;
-            return new[]
+            >= 5 => iconIndex switch
             {
-                new LayoutPoint(r.Left + r.Width / 2, r.Top),
-                new LayoutPoint(r.Right,  neckY),
-                new LayoutPoint(shaftRight, neckY),
-                new LayoutPoint(shaftRight, r.Bottom),
-                new LayoutPoint(shaftLeft,  r.Bottom),
-                new LayoutPoint(shaftLeft,  neckY),
-                new LayoutPoint(r.Left,   neckY),
-            };
-        }
+                0 => ArrowDirection.Down,
+                1 => ArrowDirection.DownDiagonal,
+                2 => ArrowDirection.Right,
+                3 => ArrowDirection.UpDiagonal,
+                _ => ArrowDirection.Up,
+            },
+            4 => iconIndex switch
+            {
+                0 => ArrowDirection.Down,
+                1 => ArrowDirection.DownDiagonal,
+                2 => ArrowDirection.UpDiagonal,
+                _ => ArrowDirection.Up,
+            },
+            _ => iconIndex switch
+            {
+                0 => ArrowDirection.Down,
+                1 => ArrowDirection.Right,
+                _ => ArrowDirection.Up,
+            },
+        };
+    }
 
-        // Down arrow — worst bucket.
+    private static LayoutPoint[] UpArrowPoints(RectInfo r)
+    {
+        // Up arrow — best bucket: 7-point chevron pointing up.
+        var shaftLeft  = r.Left + r.Width  * 0.30;
+        var shaftRight = r.Left + r.Width  * 0.70;
+        var neckY      = r.Top  + r.Height * 0.45;
+        return
+        [
+            new LayoutPoint(r.Left + r.Width / 2, r.Top),
+            new LayoutPoint(r.Right,    neckY),
+            new LayoutPoint(shaftRight, neckY),
+            new LayoutPoint(shaftRight, r.Bottom),
+            new LayoutPoint(shaftLeft,  r.Bottom),
+            new LayoutPoint(shaftLeft,  neckY),
+            new LayoutPoint(r.Left,     neckY),
+        ];
+    }
+
+    private static LayoutPoint[] DownArrowPoints(RectInfo r)
+    {
+        // Down arrow — worst bucket: 7-point chevron pointing down.
         var dShaftLeft  = r.Left + r.Width  * 0.30;
         var dShaftRight = r.Left + r.Width  * 0.70;
         var dNeckY      = r.Top  + r.Height * 0.55;
-        return new[]
-        {
+        return
+        [
             new LayoutPoint(r.Left + r.Width / 2, r.Bottom),
-            new LayoutPoint(r.Right,  dNeckY),
+            new LayoutPoint(r.Right,    dNeckY),
             new LayoutPoint(dShaftRight, dNeckY),
             new LayoutPoint(dShaftRight, r.Top),
             new LayoutPoint(dShaftLeft,  r.Top),
             new LayoutPoint(dShaftLeft,  dNeckY),
-            new LayoutPoint(r.Left,   dNeckY),
-        };
+            new LayoutPoint(r.Left,      dNeckY),
+        ];
+    }
+
+    private static LayoutPoint[] RightArrowPoints(RectInfo r)
+    {
+        // Sideways (right-pointing) filled chevron arrow — neutral bucket.
+        // Shaft occupies left ~55% of the width; arrowhead the right ~45%.
+        var shaftTop    = r.Top    + r.Height * 0.30;
+        var shaftBottom = r.Bottom - r.Height * 0.30;
+        var neckX       = r.Left   + r.Width  * 0.55;
+        return
+        [
+            new LayoutPoint(r.Left,  shaftTop),
+            new LayoutPoint(neckX,   shaftTop),
+            new LayoutPoint(neckX,   r.Top),
+            new LayoutPoint(r.Right, r.Top + r.Height / 2),
+            new LayoutPoint(neckX,   r.Bottom),
+            new LayoutPoint(neckX,   shaftBottom),
+            new LayoutPoint(r.Left,  shaftBottom),
+        ];
+    }
+
+    /// <summary>
+    /// Diagonal arrow (up-right or down-right): a chevron rotated 45°, approximated as a simple
+    /// 7-point polygon. Excel uses a small-headed diagonal chevron; we approximate it as a rotated
+    /// shaft + triangular head to keep the geometry simple and framework-neutral.
+    /// </summary>
+    private static LayoutPoint[] DiagonalArrowPoints(RectInfo r, bool pointingUp)
+    {
+        // The diagonal arrow head points to the upper-right (pointingUp=true) or lower-right (false).
+        // We build it as a quadrilateral shaft plus triangular head, all within the icon rect.
+        var cx = r.Left + r.Width  / 2;
+        var cy = r.Top  + r.Height / 2;
+
+        if (pointingUp)
+        {
+            // Head points to top-right corner; tail at bottom-left area.
+            var headTip = new LayoutPoint(r.Right, r.Top);
+            var headLeft  = new LayoutPoint(r.Right - r.Width * 0.44, r.Top);
+            var headBottom = new LayoutPoint(r.Right, r.Top + r.Height * 0.44);
+            var shaftTL   = new LayoutPoint(r.Left  + r.Width * 0.16, r.Top  + r.Height * 0.36);
+            var shaftBL   = new LayoutPoint(r.Left  + r.Width * 0.04, r.Top  + r.Height * 0.52);
+            var shaftBR   = new LayoutPoint(r.Right - r.Width * 0.36, r.Bottom - r.Height * 0.04);
+            var shaftTR   = new LayoutPoint(r.Right - r.Width * 0.16, r.Bottom - r.Height * 0.16);
+            _ = cx;  // suppress unused warning (used for center-based fallback)
+            _ = cy;
+            return [headTip, headBottom, shaftTR, shaftBR, shaftBL, shaftTL, headLeft];
+        }
+        else
+        {
+            // Head points to bottom-right corner; tail at upper-left area.
+            var headTip   = new LayoutPoint(r.Right, r.Bottom);
+            var headTop   = new LayoutPoint(r.Right, r.Bottom - r.Height * 0.44);
+            var headLeft  = new LayoutPoint(r.Right - r.Width * 0.44, r.Bottom);
+            var shaftBL   = new LayoutPoint(r.Left  + r.Width * 0.16, r.Bottom - r.Height * 0.36);
+            var shaftTL   = new LayoutPoint(r.Left  + r.Width * 0.04, r.Bottom - r.Height * 0.52);
+            var shaftTR   = new LayoutPoint(r.Right - r.Width * 0.36, r.Top + r.Height * 0.04);
+            var shaftBR   = new LayoutPoint(r.Right - r.Width * 0.16, r.Top + r.Height * 0.16);
+            _ = cx;
+            _ = cy;
+            return [headTip, headLeft, shaftBL, shaftTL, shaftTR, shaftBR, headTop];
+        }
+    }
+
+    // ── Star (3Stars / 5Stars) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Five-pointed star glyph with a horizontal partial fill proportional to the bucket index.
+    /// Bucket 0 (worst) = empty outline only; bucket count-1 (best) = fully filled.
+    /// Emits a single <see cref="CfGlyphPrimitiveKind.StarFillFraction"/> op.
+    /// </summary>
+    private static IReadOnlyList<CfGlyphOp> StarGlyph(int iconIndex, int iconCount, RectInfo r)
+    {
+        // Fill fraction: 0.0 for the empty star (index 0), 1.0 for full (index count-1).
+        // Use (index / (count - 1)) so index 0 → 0 and last index → 1.
+        var fraction = iconCount <= 1
+            ? 1d
+            : Math.Clamp(iconIndex / (double)(iconCount - 1), 0d, 1d);
+        return new[] { CfGlyphOp.StarFillFraction(StarPoints(r), fraction) };
+    }
+
+    // ── Rating bars (4Rating / 5Rating) ─────────────────────────────────────
+
+    /// <summary>
+    /// Graduated bar-chart icon: N filled bar columns of equal width, bottom-aligned, where N is the
+    /// number of bars filled. Each bucket index fills progressively more bars (0 = 0 bars filled = all
+    /// empty; count-1 = all filled). The bars are drawn as a row of boxes with gray outline, matching
+    /// Excel's 4Rating / 5Rating icon-set appearance.
+    /// </summary>
+    private static IReadOnlyList<CfGlyphOp> RatingBarsGlyph(int iconIndex, int iconCount, RectInfo r)
+    {
+        // Clamp to ensure sensible values.
+        var count = Math.Max(1, iconCount);
+        var filled = Math.Clamp(iconIndex, 0, count - 1);  // number of bars filled (0 = none)
+        // Each bar takes an equal share of the width with a small gap between bars.
+        const double gapFraction = 0.06;
+        var totalGap = gapFraction * (count - 1);
+        var barWidth = (r.Width * (1 - totalGap)) / count;
+        var ops = new List<CfGlyphOp>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            // Bar i: left edge at x + i * (barWidth + gap)
+            var barLeft = r.Left + i * (barWidth + r.Width * gapFraction);
+            // Height scales with bar number: bar 0 (leftmost) is shortest (lowest rank),
+            // bar count-1 is tallest (full height), regardless of bucket fill level.
+            var heightFraction = (i + 1.0) / count;
+            var barHeight = r.Height * heightFraction;
+            var barTop    = r.Bottom - barHeight;
+            var rect = new LayoutRect(barLeft, barTop, Math.Max(1, barWidth), Math.Max(1, barHeight));
+
+            // Bars up to and including the fill index use icon color; remaining bars use outline only.
+            var isFilled = i <= filled;
+            ops.Add(CfGlyphOp.Box(
+                isFilled ? CfGlyphFill.Icon : CfGlyphFill.None,
+                CfGlyphStroke.Outline,
+                rect));
+        }
+
+        return ops;
     }
 
     private static LayoutPoint[] TrianglePoints(RectInfo r, bool pointUp) => pointUp

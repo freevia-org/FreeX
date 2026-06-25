@@ -127,14 +127,38 @@ public sealed partial class MainWindow
             ItemsSource = SymbolPickerFontChoices,
             SelectedIndex = 0,
             MinWidth = 150,
+            Width = 150,
+            FontSize = 12,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(6, 1),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         var subsetBox = new ComboBox
         {
             ItemsSource = new[] { "Latin-1 Supplement" },
             SelectedIndex = 0,
-            MinWidth = 160,
+            MinWidth = 150,
+            Width = 150,
+            FontSize = 12,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(6, 1),
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
-        var searchBox = new TextBox { MinWidth = 150 };
+        var searchBox = new TextBox
+        {
+            MinWidth = 150,
+            Width = 150,
+            FontSize = 12,
+            Height = 24,
+            MinHeight = 24,
+            MaxHeight = 24,
+            Padding = new Thickness(4, 1),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
         var resultCount = new TextBlock
         {
             Text = $"Symbols shown: {symbols.Count}",
@@ -350,7 +374,7 @@ public sealed partial class MainWindow
             Height = compact ? 28 : 30,
             Padding = new Thickness(0),
             Margin = new Thickness(0),
-            FontSize = compact ? 16 : 18,
+            FontSize = compact ? 14 : 15,
             FontFamily = new FontFamily("Segoe UI Symbol"),
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
