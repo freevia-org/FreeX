@@ -19,6 +19,8 @@ public sealed class App : Application
 
     internal static ParityCaptureOptions? ParityCaptureOptions { get; set; }
 
+    internal static GridCaptureOptions? GridCaptureOptions { get; set; }
+
     internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
 
     /// <summary>
@@ -82,6 +84,9 @@ public sealed class App : Application
 
             if (ParityCaptureOptions is { } parityCaptureOptions)
                 ParityCaptureCoordinator.Start(mainWindow, parityCaptureOptions, Diagnostics);
+
+            if (GridCaptureOptions is { } gridCaptureOptions)
+                GridCaptureCoordinator.Start(mainWindow, gridCaptureOptions, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -755,11 +755,13 @@ public sealed partial class MainWindow : Window
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
         _platformPrinter = platformPrinter;
-        // The headless --parity-capture mode renders the fixed parity demo workbook (the same content the WPF
-        // host adopts) so the cross-platform grid.demo comparison reflects only rendering differences, not the
-        // built-in macOS-preview demo. Every other startup path keeps the normal loader/fallback behavior.
+        // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
+        // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
+        // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
+        // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
+        // loader/fallback behavior.
         StartupWorkbookLoadResult? source = null;
-        if (App.ParityCaptureOptions is not null)
+        if (App.ParityCaptureOptions is not null || App.GridCaptureOptions is not null)
         {
             _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }

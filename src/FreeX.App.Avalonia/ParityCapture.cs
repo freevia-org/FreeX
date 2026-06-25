@@ -2,6 +2,7 @@ using System.Text;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using FreeX.App.Services;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -271,5 +272,208 @@ internal static class ParityCaptureCoordinator
             if (global::Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 desktop.TryShutdown(exitCode);
         }, DispatcherPriority.Background);
+    }
+}
+
+/// <summary>
+/// Options for the headless <c>--parity-grid &lt;fixture.xlsx&gt; &lt;A1:Range&gt; &lt;outDir&gt;</c> mode.
+/// Renders a specific cell range of a workbook to a PNG using Avalonia's in-process
+/// <see cref="global::Avalonia.Media.Imaging.RenderTargetBitmap"/> — cropped to the exact pixel extent of the
+/// requested range with no row/column header chrome — so it can be diffed against the WPF/Excel
+/// <c>--capture-range</c> output from <c>FreeX.SheetGridImageCompare</c>.
+///
+/// Runs headless (same bootstrap as <c>--parity-capture</c>) and emits a small JSON result alongside the PNG:
+/// <c>{ "png", "widthPx", "heightPx", "sheet", "range" }</c>.
+/// </summary>
+internal sealed record GridCaptureOptions(string WorkbookPath, string RangeText, string OutputDirectory)
+{
+    public const string Argument = "--parity-grid";
+
+    private static bool IsArgument(string argument) =>
+        string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Parses <c>--parity-grid &lt;xlsx&gt; &lt;range&gt; &lt;outDir&gt;</c> out of <paramref name="args"/>,
+    /// returning remaining (filtered) startup args. When the flag is absent, <paramref name="options"/> is null
+    /// and parsing still succeeds.
+    /// </summary>
+    public static bool TryParse(
+        IReadOnlyList<string> args,
+        out GridCaptureOptions? options,
+        out string[] startupArguments,
+        out string error)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        options = null;
+        error = "";
+        var filteredArguments = new List<string>();
+        string? workbookPath = null;
+        for (var index = 0; index < args.Count; index++)
+        {
+            var argument = args[index];
+            if (!IsArgument(argument))
+            {
+                filteredArguments.Add(argument);
+                continue;
+            }
+
+            if (workbookPath is not null)
+            {
+                startupArguments = [];
+                error = $"{Argument} was specified more than once.";
+                return false;
+            }
+
+            // Expect exactly three positional values after the flag: <xlsx> <range> <outDir>
+            if (index + 3 >= args.Count)
+            {
+                startupArguments = [];
+                error = $"{Argument} requires three arguments: <workbook.xlsx> <A1:Range> <outDir>.";
+                return false;
+            }
+
+            workbookPath = args[++index];
+            var rangeText = args[++index];
+            var outputDirectory = args[++index];
+
+            if (string.IsNullOrWhiteSpace(workbookPath) ||
+                string.IsNullOrWhiteSpace(rangeText) ||
+                string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                startupArguments = [];
+                error = $"{Argument}: none of <workbook.xlsx>, <A1:Range>, <outDir> may be blank.";
+                return false;
+            }
+
+            options = new GridCaptureOptions(workbookPath, rangeText, outputDirectory);
+        }
+
+        startupArguments = filteredArguments.ToArray();
+        return true;
+    }
+}
+
+/// <summary>
+/// Drives the headless grid-range capture: hooks <see cref="MainWindow.Opened"/>, waits for shell readiness,
+/// then delegates to <see cref="MainWindow.CaptureGridRangeAsync"/> to load the target workbook, build just the
+/// grid sub-tree for the requested range (no ribbon/chrome), render it to a PNG, write a JSON log, and shut down.
+/// </summary>
+internal static class GridCaptureCoordinator
+{
+    private const int ShellReadyWaitMilliseconds = 15000;
+    private const int PollDelayMilliseconds = 100;
+
+    public static void Start(MainWindow mainWindow, GridCaptureOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+    {
+        ArgumentNullException.ThrowIfNull(mainWindow);
+        ArgumentNullException.ThrowIfNull(options);
+
+        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
+    }
+
+    private static async Task RunAsync(MainWindow mainWindow, GridCaptureOptions options, AvaloniaAppDiagnostics? diagnostics)
+    {
+        diagnostics?.RecordEvent("grid_capture", new Dictionary<string, string?>
+        {
+            ["source"] = "grid_capture",
+            ["scope"] = "launch",
+            ["status"] = "starting",
+        });
+
+        try
+        {
+            Directory.CreateDirectory(options.OutputDirectory);
+            await WaitForShellReadyAsync(mainWindow);
+            var result = await mainWindow.CaptureGridRangeAsync(
+                options.WorkbookPath,
+                options.RangeText,
+                options.OutputDirectory);
+
+            Console.WriteLine(result.JsonLog);
+
+            diagnostics?.RecordEvent("grid_capture", new Dictionary<string, string?>
+            {
+                ["source"] = "grid_capture",
+                ["scope"] = "launch",
+                ["status"] = result.Captured ? "completed" : "failed",
+                ["png"] = result.PngPath,
+                ["note"] = result.Note,
+            });
+
+            Shutdown(result.Captured ? 0 : 1);
+        }
+        catch (Exception ex)
+        {
+            diagnostics?.RecordCrash(ex, "grid_capture");
+            Console.Error.WriteLine($"grid-capture failed: {ex.GetType().Name}: {ex.Message}");
+            Shutdown(1);
+        }
+    }
+
+    private static async Task WaitForShellReadyAsync(MainWindow mainWindow)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(ShellReadyWaitMilliseconds);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+            if (snapshot.WindowShown && !snapshot.IsOpening && snapshot.ViewportRowCount > 0)
+                return;
+            await Task.Delay(PollDelayMilliseconds);
+        }
+    }
+
+    private static void Shutdown(int exitCode)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (global::Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                desktop.TryShutdown(exitCode);
+        }, DispatcherPriority.Background);
+    }
+}
+
+/// <summary>Result returned by <see cref="MainWindow.CaptureGridRangeAsync"/>.</summary>
+internal sealed record GridCaptureResult(
+    bool Captured,
+    string PngPath,
+    string PngFileName,
+    int WidthPx,
+    int HeightPx,
+    string SheetName,
+    string RangeText,
+    string Note)
+{
+    /// <summary>
+    /// One-line JSON suitable for stdout so CI scripts can parse dimensions without reading the PNG.
+    /// <c>{ "png": "...", "widthPx": 123, "heightPx": 456, "sheet": "Sheet1", "range": "A1:B15" }</c>
+    /// </summary>
+    public string JsonLog =>
+        $"{{ \"captured\": {(Captured ? "true" : "false")}, \"png\": {JsonString(PngPath)}, " +
+        $"\"widthPx\": {WidthPx}, \"heightPx\": {HeightPx}, " +
+        $"\"sheet\": {JsonString(SheetName)}, \"range\": {JsonString(RangeText)}, " +
+        $"\"note\": {JsonString(Note)} }}";
+
+    private static string JsonString(string value)
+    {
+        var sb = new StringBuilder(value.Length + 2);
+        sb.Append('"');
+        foreach (var ch in value)
+        {
+            switch (ch)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (ch < 0x20) sb.Append("\\u").Append(((int)ch).ToString("x4"));
+                    else sb.Append(ch);
+                    break;
+            }
+        }
+        sb.Append('"');
+        return sb.ToString();
     }
 }
