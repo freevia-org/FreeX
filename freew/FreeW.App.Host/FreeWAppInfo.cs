@@ -56,18 +56,18 @@ public static class FreeWAppInfo
             assembly.GetName().Version?.ToString());
     }
 
+    /// <summary>
+    /// Formats <paramref name="informationalVersion"/> as a display version string.
+    /// FreeW preserves the full three-part version (e.g. <c>0.5.0</c> stays <c>0.5.0</c>);
+    /// delegates to <see cref="AppVersionFormatter.FormatVersionText"/> with the default
+    /// <c>dropTrailingZeroPatch: false</c>.
+    /// </summary>
     public static string FormatVersionText(string? informationalVersion) =>
-        $"Version {NormalizeVersionForDisplay(informationalVersion)} (Tester Release)";
+        AppVersionFormatter.FormatVersionText(informationalVersion);
 
-    public static string FormatBuildVersionText(string? informationalVersion, string? assemblyVersion = null)
-    {
-        var displayVersion = NormalizeVersionForDisplay(informationalVersion);
-        var buildVersion = NormalizeVersionForDisplay(assemblyVersion);
-
-        return string.Equals(displayVersion, buildVersion, StringComparison.OrdinalIgnoreCase)
-            ? $"Version {displayVersion} (Tester Release)"
-            : $"Version {displayVersion} (build {buildVersion}, Tester Release)";
-    }
+    /// <inheritdoc cref="AppVersionFormatter.FormatBuildVersionText"/>
+    public static string FormatBuildVersionText(string? informationalVersion, string? assemblyVersion = null) =>
+        AppVersionFormatter.FormatBuildVersionText(informationalVersion, assemblyVersion);
 
     public static string CreateDiagnosticsText(string diagnosticsDirectory, string optionsPath)
     {
@@ -84,15 +84,4 @@ public static class FreeWAppInfo
         return builder.ToString();
     }
 
-    private static string NormalizeVersionForDisplay(string? version)
-    {
-        var displayVersion = string.IsNullOrWhiteSpace(version)
-            ? "0.5.0"
-            : version.Trim();
-        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
-        if (metadataIndex >= 0)
-            displayVersion = displayVersion[..metadataIndex];
-
-        return string.IsNullOrWhiteSpace(displayVersion) ? "0.5.0" : displayVersion;
-    }
 }

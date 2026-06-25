@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.Pdf.Skia;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -61,11 +62,7 @@ public static class AvaloniaPdfDocumentExporter
     /// — those are real failures, not a "Skia unavailable" signal.
     /// </summary>
     private static bool IsSkiaUnavailable(Exception ex) =>
-        ex is DllNotFoundException
-            or TypeInitializationException
-            or PlatformNotSupportedException
-            or EntryPointNotFoundException
-            or BadImageFormatException;
+        SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex);
 }
 
 /// <summary>Which backend produced the exported PDF bytes.</summary>

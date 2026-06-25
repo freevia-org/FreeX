@@ -76,9 +76,5 @@ public static class FreeWAvaloniaPdfExport
     }
 
     private static bool IsSkiaUnavailable(Exception ex) =>
-        ex is DllNotFoundException
-            or TypeInitializationException
-            or PlatformNotSupportedException
-            or EntryPointNotFoundException
-            or BadImageFormatException;
+        SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex);
 }

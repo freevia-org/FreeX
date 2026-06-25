@@ -34,43 +34,18 @@ public static class AppHelpInfo
             assembly.GetName().Version?.ToString());
     }
 
-    public static string FormatVersionText(string? informationalVersion)
-    {
-        var displayVersion = NormalizeVersionForDisplay(informationalVersion);
+    /// <summary>
+    /// Formats <paramref name="informationalVersion"/> as a display version string,
+    /// dropping a trailing <c>.0</c> patch component (e.g. <c>0.5.0</c> → <c>0.5</c>).
+    /// Delegates to <see cref="AppVersionFormatter.FormatVersionText"/> with
+    /// <c>dropTrailingZeroPatch: true</c> to preserve FreeX's existing display behavior.
+    /// </summary>
+    public static string FormatVersionText(string? informationalVersion) =>
+        AppVersionFormatter.FormatVersionText(informationalVersion, dropTrailingZeroPatch: true);
 
-        var versionParts = displayVersion.Split('.');
-        if (versionParts.Length == 3 &&
-            versionParts[2] == "0" &&
-            versionParts[0].All(char.IsDigit) &&
-            versionParts[1].All(char.IsDigit))
-        {
-            displayVersion = $"{versionParts[0]}.{versionParts[1]}";
-        }
-
-        return $"Version {displayVersion} (Tester Release)";
-    }
-
-    public static string FormatBuildVersionText(string? informationalVersion, string? assemblyVersion = null)
-    {
-        var displayVersion = NormalizeVersionForDisplay(informationalVersion);
-        var buildVersion = NormalizeVersionForDisplay(assemblyVersion);
-
-        return string.Equals(displayVersion, buildVersion, StringComparison.OrdinalIgnoreCase)
-            ? $"Version {displayVersion} (Tester Release)"
-            : $"Version {displayVersion} (build {buildVersion}, Tester Release)";
-    }
-
-    private static string NormalizeVersionForDisplay(string? version)
-    {
-        var displayVersion = string.IsNullOrWhiteSpace(version)
-            ? "0.5.0"
-            : version.Trim();
-        var metadataIndex = displayVersion.IndexOf('+', StringComparison.Ordinal);
-        if (metadataIndex >= 0)
-            displayVersion = displayVersion[..metadataIndex];
-
-        return string.IsNullOrWhiteSpace(displayVersion) ? "0.5.0" : displayVersion;
-    }
+    /// <inheritdoc cref="AppVersionFormatter.FormatBuildVersionText"/>
+    public static string FormatBuildVersionText(string? informationalVersion, string? assemblyVersion = null) =>
+        AppVersionFormatter.FormatBuildVersionText(informationalVersion, assemblyVersion);
 
     public static string BuildAboutText(string versionText, string platformSummary) =>
         $"""
