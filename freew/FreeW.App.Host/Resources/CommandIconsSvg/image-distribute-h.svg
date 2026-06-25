@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Distribute Horizontally">
+<rect width="32" height="32" fill="none"/>
+<rect x="4" y="10" width="4" height="12" fill="#242424"/>
+<rect x="14" y="10" width="4" height="12" fill="#242424"/>
+<rect x="24" y="10" width="4" height="12" fill="#242424"/>
+<line x1="4" y1="16" x2="28" y2="16" stroke="#0078D4" stroke-width="1" stroke-dasharray="2,1"/>
+</svg>

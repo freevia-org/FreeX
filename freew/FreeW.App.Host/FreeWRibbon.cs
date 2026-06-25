@@ -518,7 +518,16 @@ internal static class FreeWRibbon
                 // Small toggle groups → labelled Medium toggles so Print Layout / Read Mode read clearly.
                 tab.Group("views", "Views", "V", 100, g =>
                 {
-                    g.MediumToggle("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode);
+                    g.Medium("freew.read-mode", "Read Mode", RibbonCommandIconKind.ReadMode, menu: m =>
+                    {
+                        m.Item("freew.read-mode-column-narrow",  "Narrow Column Width",  "N");
+                        m.Item("freew.read-mode-column-default", "Default Column Width",  "D");
+                        m.Item("freew.read-mode-column-wide",    "Wide Column Width",     "W");
+                        m.Separator();
+                        m.Item("freew.read-mode-color-none",    "No Page Color",         "O");
+                        m.Item("freew.read-mode-color-sepia",   "Sepia",                 "S");
+                        m.Item("freew.read-mode-color-inverse", "Inverse (Dark Mode)",   "I");
+                    });
                     g.MediumToggle("freew.print-layout", "Print Layout", RibbonCommandIconKind.PrintLayout);
                     g.MediumToggle("freew.web-layout", "Web Layout", RibbonCommandIconKind.WebLayout);
                     g.MediumToggle("freew.outline-view", "Outline", RibbonCommandIconKind.MultilevelList);
@@ -544,9 +553,13 @@ internal static class FreeWRibbon
                 });
                 // Window group → Word's View > Window group. Split splits the workspace into a live top pane
                 // (the editable surface) and a read-only snapshot bottom pane (built from the print paginator).
+                // New Window opens a second MainWindow bound to the same document. Arrange All tiles all open
+                // FreeW windows on screen.
                 tab.Group("window", "Window", "N", 70, g =>
                 {
                     g.MediumToggle("freew.split-window", "Split", RibbonCommandIconKind.Scale);
+                    g.Medium("freew.new-window", "New Window", RibbonCommandIconKind.Page);
+                    g.Medium("freew.arrange-all", "Arrange All", RibbonCommandIconKind.Grid);
                 });
             })
             .Tab("help", "Help", "Y", tab =>
@@ -792,6 +805,10 @@ internal static class FreeWRibbon
                     g.Medium("freew.shape-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.shape-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.shape-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    g.Medium("freew.shape-align-to-page", "Align to Page", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.shape-align-to-margin", "Align to Margin", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.shape-distribute-h", "Distribute Horizontally", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.shape-distribute-v", "Distribute Vertically", RibbonCommandIconKind.AlignCenter);
                     // Group / Ungroup (Phase 4).
                     g.Medium("freew.object-group", "Group", RibbonCommandIconKind.Generic);
                     g.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Generic);
@@ -827,6 +844,10 @@ internal static class FreeWRibbon
                     g.Medium("freew.image-align-left", "Align Left", RibbonCommandIconKind.AlignLeft);
                     g.Medium("freew.image-align-center", "Align Center", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.image-align-right", "Align Right", RibbonCommandIconKind.AlignRight);
+                    g.Medium("freew.image-align-to-page", "Align to Page", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.image-align-to-margin", "Align to Margin", RibbonCommandIconKind.Margins);
+                    g.Medium("freew.image-distribute-h", "Distribute Horizontally", RibbonCommandIconKind.AlignCenter);
+                    g.Medium("freew.image-distribute-v", "Distribute Vertically", RibbonCommandIconKind.AlignCenter);
                     // Z-order commands for floating images (Phase 2).
                     g.Medium("freew.image-bring-to-front",  "Bring to Front",  RibbonCommandIconKind.BringToFront);
                     g.Medium("freew.image-send-to-back",    "Send to Back",    RibbonCommandIconKind.SendToBack);

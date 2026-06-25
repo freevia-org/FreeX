@@ -128,7 +128,13 @@ internal static class FreeWRibbonCommands
         Action<string>? onOpenHeaderFooterPane = null,
         Action? onCloseHeaderFooterPane = null,
         Action? onTogglePagedEditView = null,
-        Func<bool>? isPagedEditViewActive = null)
+        Func<bool>? isPagedEditViewActive = null,
+        // Feature 4 — Read Mode options (column width / page color).
+        Action<string>? onReadModeColumnWidth = null,
+        Action<string>? onReadModePageColor = null,
+        // Feature 5 — New Window / Arrange All.
+        Action? onNewWindow = null,
+        Action? onArrangeAll = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -338,6 +344,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-align-left", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.image-align-center", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.image-align-right", new ImageAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        // Picture Format > Arrange — align floating images relative to page or margin, or distribute evenly.
+        registry.Register("freew.image-align-to-page",   new FloatingAlignCommand(editor, FloatingAlignTarget.Page));
+        registry.Register("freew.image-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
+        registry.Register("freew.image-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
+        registry.Register("freew.image-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
         registry.Register("freew.image-wrap-inline", new ImageWrapCommand(editor, ImageWrapping.Inline));
         registry.Register("freew.image-wrap-square", new ImageWrapCommand(editor, ImageWrapping.Square));
         registry.Register("freew.image-wrap-tight", new ImageWrapCommand(editor, ImageWrapping.Tight));
@@ -681,6 +692,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-align-left",   new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.shape-align-center", new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.shape-align-right",  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
+        // Drawing Tools > Arrange — align floating shapes relative to page or margin, or distribute evenly.
+        registry.Register("freew.shape-align-to-page",   new FloatingAlignCommand(editor, FloatingAlignTarget.Page));
+        registry.Register("freew.shape-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
+        registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
+        registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
         // WordArt style gallery — four existing presets.
         registry.Register("freew.wordart-style", new ActionCommand(() =>
         {
@@ -1278,7 +1294,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.line-numbers-none", new LineNumberModeCommand(editor, LineNumberMode.None));
         registry.Register("freew.line-numbers-continuous", new LineNumberModeCommand(editor, LineNumberMode.Continuous));
         registry.Register("freew.line-numbers-restart-page", new LineNumberModeCommand(editor, LineNumberMode.RestartEachPage));
-        registry.Register("freew.line-numbers-options", new PageSetupCommand(editor, PageSetupDialog.Tab.Layout));
+        // Line Numbering Options…: dedicated dialog (Start At / Count By / Restart mode), not Page Setup.
+        registry.Register("freew.line-numbers-options", new LineNumberOptionsCommand(editor));
 
         // Page setup polish — all mutate PageSettings via ApplyPageSettings (commit + re-render) and
         // round-trip through docx save.
@@ -1340,6 +1357,45 @@ internal static class FreeWRibbonCommands
         // reflects whether the chrome-light reading column is currently active.
         if (onToggleReadMode is not null && isReadModeActive is not null)
             registry.Register("freew.read-mode", new ToggleActionCommand(onToggleReadMode, isReadModeActive));
+
+        // View > Views > Read Mode dropdown options — column width and page color (Feature 4).
+        // The callback receives the choice token; behaviour applies immediately if in read mode.
+        if (onReadModeColumnWidth is not null)
+        {
+            registry.Register("freew.read-mode-column-narrow",  new ActionCommand(() => onReadModeColumnWidth("narrow")));
+            registry.Register("freew.read-mode-column-default", new ActionCommand(() => onReadModeColumnWidth("default")));
+            registry.Register("freew.read-mode-column-wide",    new ActionCommand(() => onReadModeColumnWidth("wide")));
+        }
+        else
+        {
+            registry.Register("freew.read-mode-column-narrow",  new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-column-default", new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-column-wide",    new NoOpRibbonCommand());
+        }
+        if (onReadModePageColor is not null)
+        {
+            registry.Register("freew.read-mode-color-none",    new ActionCommand(() => onReadModePageColor("none")));
+            registry.Register("freew.read-mode-color-sepia",   new ActionCommand(() => onReadModePageColor("sepia")));
+            registry.Register("freew.read-mode-color-inverse", new ActionCommand(() => onReadModePageColor("inverse")));
+        }
+        else
+        {
+            registry.Register("freew.read-mode-color-none",    new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-color-sepia",   new NoOpRibbonCommand());
+            registry.Register("freew.read-mode-color-inverse", new NoOpRibbonCommand());
+        }
+
+        // View > Window — New Window: open a second MainWindow (Feature 5).
+        if (onNewWindow is not null)
+            registry.Register("freew.new-window", new ActionCommand(onNewWindow));
+        else
+            registry.Register("freew.new-window", new NoOpRibbonCommand());
+
+        // View > Window — Arrange All: tile all open FreeW windows (Feature 5).
+        if (onArrangeAll is not null)
+            registry.Register("freew.arrange-all", new ActionCommand(onArrangeAll));
+        else
+            registry.Register("freew.arrange-all", new NoOpRibbonCommand());
 
         // View tab — toggle Print Layout (Word-style page view) vs the plain/continuous view. Stateful so
         // the ribbon's toggle button reflects whether the page presentation is currently active. Default
@@ -8095,6 +8151,121 @@ internal static class FreeWRibbonCommands
             dialog.Content = panel;
 
             return dialog.ShowDialog() == true ? result : null;
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Feature 1 — Line Number Options dialog and command
+    // -----------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Opens the dedicated Line Numbering Options dialog (Start At / Count By / Restart mode).
+    /// Writes back to <see cref="PageSettings"/> via <see cref="DocumentView.ApplyPageSettings"/>.
+    /// </summary>
+    private sealed class LineNumberOptionsCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var page = editor.Model.Page;
+            var result = LineNumberOptionsDialog.Prompt(
+                Window.GetWindow(editor),
+                page.LineNumberStartAt,
+                page.LineNumberCountBy,
+                page.LineNumberMode == LineNumberMode.None ? LineNumberMode.RestartEachPage : page.LineNumberMode);
+            if (result is null) return;
+            editor.ApplyPageSettings(p =>
+            {
+                p.LineNumberStartAt = result.StartAt;
+                p.LineNumberCountBy = result.CountBy;
+                p.LineNumberMode    = result.Mode;
+            });
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Feature 2 — Floating Align / Distribute commands
+    // -----------------------------------------------------------------------------------------
+
+    /// <summary>Which reference frame the floating-align command targets.</summary>
+    private enum FloatingAlignTarget { Page, Margin }
+
+    /// <summary>
+    /// Aligns the horizontal offset of all floating images in the document to the left edge of the
+    /// page or the printable margin area. Both floating-picture and floating-shape variants share
+    /// this command (the same <see cref="InlineImage"/> model underlies both).
+    /// </summary>
+    private sealed class FloatingAlignCommand(DocumentView editor, FloatingAlignTarget target) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+            var page = editor.Model.Page;
+            var refX = target == FloatingAlignTarget.Margin ? page.MarginLeftPt : 0.0;
+            var anchor = target == FloatingAlignTarget.Margin ? HorizontalAnchor.Margin : HorizontalAnchor.Page;
+
+            var changed = false;
+            foreach (var block in editor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
+            {
+                foreach (var run in block.Runs)
+                {
+                    if (run.Image?.IsFloating == true)
+                    {
+                        run.Image.HorizontalOffsetPt = refX;
+                        run.Image.HorizontalAnchor   = anchor;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) editor.Rerender();
+        }
+    }
+
+    /// <summary>
+    /// Distributes all floating images evenly along the horizontal (vertical=false) or vertical
+    /// (vertical=true) axis so that the gaps between consecutive offsets are equal.
+    /// Requires at least two floating images; otherwise shows an informational notice.
+    /// </summary>
+    private sealed class FloatingDistributeCommand(DocumentView editor, bool vertical) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.CommitToModel();
+
+            // Collect all floating images in document order.
+            var images = editor.Model.Blocks
+                .OfType<FreeW.Core.Model.Paragraph>()
+                .SelectMany(p => p.Runs)
+                .Where(r => r.Image?.IsFloating == true)
+                .Select(r => r.Image!)
+                .ToList();
+
+            if (images.Count < 2)
+            {
+                DialogMessageHelper.ShowInfo(
+                    Window.GetWindow(editor),
+                    "Select at least two floating objects to distribute.",
+                    vertical ? "Distribute Vertically" : "Distribute Horizontally");
+                return;
+            }
+
+            if (vertical)
+            {
+                var offsets = images.Select(img => img.VerticalOffsetPt).OrderBy(v => v).ToList();
+                var step = images.Count > 1 ? (offsets[^1] - offsets[0]) / (images.Count - 1) : 0;
+                var sorted = images.OrderBy(img => img.VerticalOffsetPt).ToList();
+                for (var i = 0; i < sorted.Count; i++)
+                    sorted[i].VerticalOffsetPt = offsets[0] + i * step;
+            }
+            else
+            {
+                var offsets = images.Select(img => img.HorizontalOffsetPt).OrderBy(v => v).ToList();
+                var step = images.Count > 1 ? (offsets[^1] - offsets[0]) / (images.Count - 1) : 0;
+                var sorted = images.OrderBy(img => img.HorizontalOffsetPt).ToList();
+                for (var i = 0; i < sorted.Count; i++)
+                    sorted[i].HorizontalOffsetPt = offsets[0] + i * step;
+            }
+
+            editor.Rerender();
         }
     }
 }

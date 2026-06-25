@@ -21,6 +21,8 @@ internal sealed class OutlineView : Border
     private readonly DocumentView _editor;
     private readonly ListBox _list;
     private readonly ComboBox _showLevel;
+    private ComboBox _outlineLevelCombo = null!;
+    private bool _updatingLevelCombo;
     private int _selectedShowLevel = OutlineViewModel.ShowAllLevels;
     private bool _firstLineOnly;
 
@@ -37,8 +39,10 @@ internal sealed class OutlineView : Border
             FontFamily = new FontFamily("Calibri"),
             FontSize = 15
         };
+        _list.SelectionChanged += (_, _) => UpdateOutlineLevelCombo();
 
         _showLevel = new ComboBox { Width = 120, VerticalAlignment = VerticalAlignment.Center };
+        _outlineLevelCombo = BuildOutlineLevelCombo();
         var toolbar = BuildToolbar();
 
         var grid = new Grid();
@@ -98,6 +102,16 @@ internal sealed class OutlineView : Border
         bar.Children.Add(_showLevel);
 
         bar.Children.Add(Spacer());
+        // Outline Level combo: set the heading level of the selected paragraph directly.
+        bar.Children.Add(new TextBlock
+        {
+            Text = "Outline Level:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        });
+        bar.Children.Add(_outlineLevelCombo);
+
+        bar.Children.Add(Spacer());
         // Promote to Heading 1, Promote, Demote — Word's outline left/right arrows.
         bar.Children.Add(ToolButton("⟪", "Promote to Heading 1", () => Apply(i => _editor.PromoteHeadingToHeading1(i))));
         bar.Children.Add(ToolButton("◄", "Promote", () => Apply(i => _editor.PromoteHeading(i))));
@@ -131,6 +145,61 @@ internal sealed class OutlineView : Border
             Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
             Child = bar
         };
+    }
+
+    // Build the "Outline Level" combo (Body Text / Level 1–MaxHeadingLevel).
+    private ComboBox BuildOutlineLevelCombo()
+    {
+        var combo = new ComboBox { Width = 130, VerticalAlignment = VerticalAlignment.Center };
+        combo.Items.Add(new OutlineLevelItem("Body Text", -1));
+        combo.Items.Add(new OutlineLevelItem("Title", 0));
+        for (var lvl = 1; lvl <= OutlineTools.MaxHeadingLevel; lvl++)
+            combo.Items.Add(new OutlineLevelItem($"Level {lvl}", lvl));
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (!_updatingLevelCombo && combo.SelectedItem is OutlineLevelItem item)
+                ApplyOutlineLevel(item.Level);
+        };
+        return combo;
+    }
+
+    // Apply the chosen heading level to the currently selected outline row.
+    private void ApplyOutlineLevel(int level)
+    {
+        if (_list.SelectedItem is not OutlineRowItem selected)
+            return;
+        _editor.SetHeadingLevel(selected.Row.BlockIndex, level);
+        Refresh();
+    }
+
+    // Sync the Outline Level combo to the currently selected row's actual level.
+    private void UpdateOutlineLevelCombo()
+    {
+        if (_outlineLevelCombo is null) return;
+        _updatingLevelCombo = true;
+        try
+        {
+            if (_list.SelectedItem is not OutlineRowItem selected)
+            {
+                _outlineLevelCombo.SelectedIndex = 0;
+                return;
+            }
+            var targetLevel = selected.Row.IsHeading ? selected.Row.Level : -1;
+            foreach (var item in _outlineLevelCombo.Items.OfType<OutlineLevelItem>())
+            {
+                if (item.Level == targetLevel)
+                {
+                    _outlineLevelCombo.SelectedItem = item;
+                    return;
+                }
+            }
+            _outlineLevelCombo.SelectedIndex = 0;
+        }
+        finally
+        {
+            _updatingLevelCombo = false;
+        }
     }
 
     private static UIElement Spacer() =>
@@ -214,8 +283,26 @@ internal sealed class OutlineView : Border
         Refresh();
     }
 
+    /// <summary>
+    /// Apply an outline level (-1 = Body Text, 0 = Title, 1..MaxHeadingLevel = Heading) to the
+    /// currently selected row. For tests.
+    /// </summary>
+    internal void SetOutlineLevel(int level) => ApplyOutlineLevel(level);
+
+    /// <summary>The level currently shown in the Outline Level combo (-1 = Body Text / 0 = Title / 1–N = HeadingN). For tests.</summary>
+    internal int CurrentOutlineLevel =>
+        _outlineLevelCombo.SelectedItem is OutlineLevelItem item ? item.Level : -1;
+
     // A Show-Level dropdown entry: a label plus the level it selects (or ShowAllLevels).
     private sealed class ShowLevelItem(string label, int level)
+    {
+        public int Level { get; } = level;
+        private readonly string _label = label;
+        public override string ToString() => _label;
+    }
+
+    // An Outline Level combo entry: a label plus the heading level it selects (-1 = Body Text, 0 = Title).
+    private sealed class OutlineLevelItem(string label, int level)
     {
         public int Level { get; } = level;
         private readonly string _label = label;

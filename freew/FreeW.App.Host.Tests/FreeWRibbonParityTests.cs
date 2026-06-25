@@ -1309,6 +1309,11 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-align-left",
                 "freew.image-align-center",
                 "freew.image-align-right",
+                // W24: align-to-page/margin and distribute for floating objects.
+                "freew.image-align-to-page",
+                "freew.image-align-to-margin",
+                "freew.image-distribute-h",
+                "freew.image-distribute-v",
                 // Phase 2: z-order commands for floating images.
                 "freew.image-bring-to-front",
                 "freew.image-send-to-back",
@@ -2111,5 +2116,189 @@ public sealed class FreeWRibbonParityTests
         registry.TryGet("freew.hf-close", out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
         closeCalled.Should().BeTrue("freew.hf-close must invoke the close callback");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // W24: Layout + View depth — new features
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void Layout_LineNumberOptions_IsBacked()
+    {
+        // freew.line-numbers-options must be registered (backed command, not a placeholder).
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.line-numbers-options", out var cmd).Should().BeTrue(
+            "freew.line-numbers-options must be registered — dedicated dialog, not Page Setup fallback");
+        cmd.Should().NotBeNull("line-numbers-options must be a real backed command");
+    }
+
+    [StaFact]
+    public void Layout_LineNumbers_LineNumberStartAt_RoundTrips()
+    {
+        // PageSettings.LineNumberStartAt persists through Clone.
+        var page = new PageSettings { LineNumberStartAt = 5, LineNumberCountBy = 2 };
+        var clone = page.Clone();
+        clone.LineNumberStartAt.Should().Be(5,
+            "LineNumberStartAt must round-trip through Clone for copy/combine paths");
+        clone.LineNumberCountBy.Should().Be(2, "LineNumberCountBy must also clone correctly");
+    }
+
+    [StaFact]
+    public void PictureArrange_AlignToPageAndMargin_AreBacked()
+    {
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("picture-format")!.FindGroup("picture-arrange");
+
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.image-align-to-page",   "Picture Format > Arrange must expose Align to Page");
+        ids.Should().Contain("freew.image-align-to-margin", "Picture Format > Arrange must expose Align to Margin");
+        ids.Should().Contain("freew.image-distribute-h",    "Picture Format > Arrange must expose Distribute Horizontally");
+        ids.Should().Contain("freew.image-distribute-v",    "Picture Format > Arrange must expose Distribute Vertically");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.image-align-to-page",   out _).Should().BeTrue();
+        registry.TryGet("freew.image-align-to-margin", out _).Should().BeTrue();
+        registry.TryGet("freew.image-distribute-h",    out _).Should().BeTrue();
+        registry.TryGet("freew.image-distribute-v",    out _).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void DrawingArrange_AlignToPageAndMargin_AreBacked()
+    {
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
+
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.shape-align-to-page",   "Drawing Tools > Arrange must expose Align to Page");
+        ids.Should().Contain("freew.shape-align-to-margin", "Drawing Tools > Arrange must expose Align to Margin");
+        ids.Should().Contain("freew.shape-distribute-h",    "Drawing Tools > Arrange must expose Distribute Horizontally");
+        ids.Should().Contain("freew.shape-distribute-v",    "Drawing Tools > Arrange must expose Distribute Vertically");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.shape-align-to-page",   out _).Should().BeTrue();
+        registry.TryGet("freew.shape-align-to-margin", out _).Should().BeTrue();
+        registry.TryGet("freew.shape-distribute-h",    out _).Should().BeTrue();
+        registry.TryGet("freew.shape-distribute-v",    out _).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void FloatingDistribute_CommandsAreRegisteredAsBacked()
+    {
+        // Both horizontal and vertical distribute commands must be registered and executable.
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.image-distribute-h", out var h).Should().BeTrue("freew.image-distribute-h must be backed");
+        registry.TryGet("freew.image-distribute-v", out var v).Should().BeTrue("freew.image-distribute-v must be backed");
+        h.Should().NotBeNull();
+        v.Should().NotBeNull();
+    }
+
+    [StaFact]
+    public void View_OutlineLevelCombo_SetHeadingLevel_IsPublicAndCallable()
+    {
+        // SetHeadingLevel(int, int) must be a public method on DocumentView.
+        // Out-of-range indices must be no-ops (no throw).
+        var editor = new DocumentView();
+        var act = () =>
+        {
+            editor.SetHeadingLevel(-1, 1);   // negative index: no-op
+            editor.SetHeadingLevel(99, 1);   // beyond range: no-op
+        };
+        act.Should().NotThrow("SetHeadingLevel must handle out-of-range indices gracefully");
+    }
+
+    [StaFact]
+    public void View_ReadModeOptions_AreBacked()
+    {
+        var definition = FreeWRibbon.Build();
+        var views = definition.FindTab("view")!.FindGroup("views");
+        // Read Mode must now carry a dropdown menu with column width and page color items.
+        var readMode = views!.Controls.FirstOrDefault(c => c.CommandId.Value == "freew.read-mode");
+        readMode.Should().NotBeNull("freew.read-mode must be in the views group");
+
+        var menuIds = MenuItemIds(readMode!);
+        menuIds.Should().Contain("freew.read-mode-column-narrow",  "Read Mode dropdown must offer Narrow column");
+        menuIds.Should().Contain("freew.read-mode-column-default", "Read Mode dropdown must offer Default column");
+        menuIds.Should().Contain("freew.read-mode-column-wide",    "Read Mode dropdown must offer Wide column");
+        menuIds.Should().Contain("freew.read-mode-color-none",     "Read Mode dropdown must offer No Color");
+        menuIds.Should().Contain("freew.read-mode-color-sepia",    "Read Mode dropdown must offer Sepia");
+        menuIds.Should().Contain("freew.read-mode-color-inverse",  "Read Mode dropdown must offer Inverse");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        foreach (var id in menuIds)
+            registry.TryGet(id, out _).Should().BeTrue($"{id} must be registered");
+    }
+
+    [StaFact]
+    public void View_ReadModeColumnWidthCallback_IsCalled()
+    {
+        var received = new List<string>();
+        var registry = FreeWRibbonCommands.Build(
+            new DocumentView(),
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onReadModeColumnWidth: token => received.Add(token));
+
+        registry.TryGet("freew.read-mode-column-narrow", out var narrow).Should().BeTrue();
+        narrow!.Execute(RibbonCommandContext.Empty);
+        received.Should().ContainSingle().Which.Should().Be("narrow");
+    }
+
+    [StaFact]
+    public void View_Window_NewWindowAndArrangeAll_AreBacked()
+    {
+        var definition = FreeWRibbon.Build();
+        var window = definition.FindTab("view")!.FindGroup("window");
+        var ids = window!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.new-window",  "View > Window must expose New Window");
+        ids.Should().Contain("freew.arrange-all", "View > Window must expose Arrange All");
+
+        var newWindowCalled = false;
+        var arrangeAllCalled = false;
+        var registry = FreeWRibbonCommands.Build(
+            new DocumentView(),
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            onNewWindow:   () => newWindowCalled = true,
+            onArrangeAll: () => arrangeAllCalled = true);
+
+        registry.TryGet("freew.new-window",  out var nw).Should().BeTrue();
+        registry.TryGet("freew.arrange-all", out var aa).Should().BeTrue();
+        nw!.Execute(RibbonCommandContext.Empty);
+        aa!.Execute(RibbonCommandContext.Empty);
+        newWindowCalled.Should().BeTrue("freew.new-window must invoke the onNewWindow callback");
+        arrangeAllCalled.Should().BeTrue("freew.arrange-all must invoke the onArrangeAll callback");
+    }
+
+    // Helper: collect all command id strings from a control's menu items (non-recursive depth-1, skips separators).
+    private static List<string> MenuItemIds(RibbonControl control)
+    {
+        IEnumerable<RibbonMenuItem> items = control switch
+        {
+            RibbonDropdown dd => dd.Menu.Items,
+            RibbonSplitButton sb => sb.Menu.Items,
+            _ => []
+        };
+        return items
+            .Where(i => i.CommandId is { } cid && !string.IsNullOrWhiteSpace(cid.Value))
+            .Select(i => i.CommandId!.Value.Value)  // RibbonCommandId?.Value is RibbonCommandId; .Value is the string
+            .ToList();
     }
 }

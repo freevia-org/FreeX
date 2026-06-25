@@ -158,6 +158,11 @@ internal static class FreeWRibbonIcons
             ["freew.image-align-left"] = RibbonCommandIconKind.AlignLeft,
             ["freew.image-align-center"] = RibbonCommandIconKind.AlignCenter,
             ["freew.image-align-right"] = RibbonCommandIconKind.AlignRight,
+            // Feature 2 — image align-to-page/margin and distribute
+            ["freew.image-align-to-page"] = RibbonCommandIconKind.Margins,
+            ["freew.image-align-to-margin"] = RibbonCommandIconKind.Margins,
+            ["freew.image-distribute-h"] = RibbonCommandIconKind.AlignCenter,
+            ["freew.image-distribute-v"] = RibbonCommandIconKind.AlignCenter,
             ["freew.shapes"] = RibbonCommandIconKind.Shapes,
             ["freew.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freew.shape-rounded"] = RibbonCommandIconKind.Rectangle,
@@ -187,6 +192,11 @@ internal static class FreeWRibbonIcons
             ["freew.shape-align-left"] = RibbonCommandIconKind.AlignLeft,
             ["freew.shape-align-center"] = RibbonCommandIconKind.AlignCenter,
             ["freew.shape-align-right"] = RibbonCommandIconKind.AlignRight,
+            // Feature 2 — shape align-to-page/margin and distribute
+            ["freew.shape-align-to-page"] = RibbonCommandIconKind.Margins,
+            ["freew.shape-align-to-margin"] = RibbonCommandIconKind.Margins,
+            ["freew.shape-distribute-h"] = RibbonCommandIconKind.AlignCenter,
+            ["freew.shape-distribute-v"] = RibbonCommandIconKind.AlignCenter,
             ["freew.wordart-style"] = RibbonCommandIconKind.WordArt,
             ["freew.wordart-style-fill-blue"] = RibbonCommandIconKind.WordArt,
             ["freew.wordart-style-gradient"] = RibbonCommandIconKind.WordArt,
@@ -370,6 +380,13 @@ internal static class FreeWRibbonIcons
             ["freew.formatting-marks"] = RibbonCommandIconKind.FormattingMarks,
             ["freew.reveal-formatting"] = RibbonCommandIconKind.Info,
             ["freew.read-mode"] = RibbonCommandIconKind.ReadMode,
+            // Feature 4 — Read Mode dropdown option items
+            ["freew.read-mode-column-narrow"]  = RibbonCommandIconKind.ReadMode,
+            ["freew.read-mode-column-default"] = RibbonCommandIconKind.ReadMode,
+            ["freew.read-mode-column-wide"]    = RibbonCommandIconKind.ReadMode,
+            ["freew.read-mode-color-none"]    = RibbonCommandIconKind.ReadMode,
+            ["freew.read-mode-color-sepia"]   = RibbonCommandIconKind.ReadMode,
+            ["freew.read-mode-color-inverse"] = RibbonCommandIconKind.ReadMode,
             ["freew.web-layout"] = RibbonCommandIconKind.WebLayout,
             ["freew.draft-view"] = RibbonCommandIconKind.Draft,
             ["freew.outline-view"] = RibbonCommandIconKind.MultilevelList,
@@ -377,6 +394,9 @@ internal static class FreeWRibbonIcons
             ["freew.zoom-100"] = RibbonCommandIconKind.Zoom,
             ["freew.zoom-one-page"] = RibbonCommandIconKind.OnePage,
             ["freew.zoom-page-width"] = RibbonCommandIconKind.Scale,
+            // Feature 5 — New Window / Arrange All (View > Window group)
+            ["freew.new-window"] = RibbonCommandIconKind.Page,
+            ["freew.arrange-all"] = RibbonCommandIconKind.Grid,
 
             // Mailings
             ["freew.start-mail-merge"] = RibbonCommandIconKind.Envelope,

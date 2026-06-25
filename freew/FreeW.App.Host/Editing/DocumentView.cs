@@ -2130,6 +2130,13 @@ public sealed class DocumentView : RichTextBox
     public void RerenderSelectedChart() => Render();
 
     /// <summary>
+    /// Trigger a full re-render of the document surface from the current model state.  Use this after
+    /// directly mutating model objects (e.g. batch floating-object position changes) that bypass the undo
+    /// bus's built-in render call.
+    /// </summary>
+    public void Rerender() => Render();
+
+    /// <summary>
     /// Apply a <see cref="ChartStyle"/> to the selected chart and re-render.
     /// No-op without a chart selection.
     /// </summary>
@@ -2963,6 +2970,23 @@ public sealed class DocumentView : RichTextBox
             return; // no change (e.g. promoting Title, or demoting past the cap)
 
         _commands.Execute(new SetParagraphStyleCommand(modelBlockIndex, next));
+    }
+
+    /// <summary>
+    /// Sets the heading level of the paragraph at <paramref name="modelBlockIndex"/> directly (no
+    /// step-promote/demote). <paramref name="level"/> 0 maps to "Title", 1–<see cref="OutlineTools.MaxHeadingLevel"/>
+    /// map to "Heading1"–"HeadingN", and -1 (or any value below 0) maps to "Normal" (body text).
+    /// No-op when <paramref name="modelBlockIndex"/> is out of range or the paragraph is already at the
+    /// requested level.
+    /// </summary>
+    public void SetHeadingLevel(int modelBlockIndex, int level)
+    {
+        var styleId = level < 0
+            ? "Normal"
+            : level == 0
+                ? "Title"
+                : $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}";
+        ShiftHeadingStyle(modelBlockIndex, _ => styleId);
     }
 
     /// <summary>

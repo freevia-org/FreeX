@@ -216,6 +216,7 @@ public static class DocumentCombine
         target.Page.Watermark = source.Page.Watermark;
         target.Page.LineNumberMode = source.Page.LineNumberMode;
         target.Page.LineNumberCountBy = source.Page.LineNumberCountBy;
+        target.Page.LineNumberStartAt = source.Page.LineNumberStartAt;
         target.Page.AutoHyphenation = source.Page.AutoHyphenation;
         target.Page.VerticalAlignment = source.Page.VerticalAlignment;
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
