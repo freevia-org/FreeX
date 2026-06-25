@@ -48,10 +48,23 @@ public sealed class SurfaceComparison
     /// <summary>A non-fatal reason the diff could not be computed (e.g. decode failure).</summary>
     public string? Error { get; set; }
 
-    /// <summary>True when this is a hard grid surface whose diff exceeds the fail threshold.</summary>
+    /// <summary>
+    /// True when this surface represents a hard fidelity failure:
+    /// <list type="bullet">
+    /// <item>a Hard (grid.*) surface whose pixel diff exceeds <paramref name="threshold"/> when present on both shells, OR</item>
+    /// <item>a Hard (grid.*) surface that is present on one shell but absent on the other — the most
+    ///       severe possible fidelity defect (the grid did not render at all on one platform).</item>
+    /// </list>
+    /// </summary>
     public bool IsHardRegression(double threshold) =>
-        Severity == DiffSeverity.Hard && Presence == SurfacePresence.Both
-        && DiffPercent is { } d && d > threshold;
+        Severity == DiffSeverity.Hard &&
+        (
+            // Both sides rendered: diff exceeds threshold.
+            (Presence == SurfacePresence.Both && DiffPercent is { } d && d > threshold)
+            // One side rendered, the other did not: always a hard failure regardless of threshold.
+            || Presence == SurfacePresence.WindowsOnly
+            || Presence == SurfacePresence.LinuxOnly
+        );
 
     /// <summary>
     /// True when this is a chrome surface whose diff exceeds the informational high-water mark —

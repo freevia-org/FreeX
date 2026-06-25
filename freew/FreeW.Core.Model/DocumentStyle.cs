@@ -1,6 +1,6 @@
 namespace FreeW.Core.Model;
 
-public enum StyleType { Paragraph, Character }
+public enum StyleType { Paragraph, Character, Table, Numbering }
 
 /// <summary>
 /// A named style (Word's styles.xml). Carries optional run and paragraph formatting that a

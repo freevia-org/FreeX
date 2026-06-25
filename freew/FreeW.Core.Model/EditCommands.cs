@@ -288,8 +288,42 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 }
 
 /// <summary>
+/// Shared grid-column helpers used by column insert/delete/merge commands. These helpers exist because
+/// the cell-list index does NOT equal the grid-column index when any cell in the row has
+/// <see cref="TableCell.GridSpan"/> &gt; 1 (horizontal merge).
+/// </summary>
+internal static class TableColumnHelpers
+{
+    /// <summary>
+    /// Maps a target GRID-column index to the <see cref="TableRow.Cells"/> list index for
+    /// <paramref name="row"/>, accounting for each preceding cell's <see cref="TableCell.GridSpan"/>.
+    /// Returns the index of the first cell whose cumulative grid span covers the target column, or -1
+    /// if the target is beyond the row's total grid width.
+    /// </summary>
+    internal static int GridColumnToCellIndex(TableRow row, int targetGridColumn)
+    {
+        var gridPos = 0;
+        for (var i = 0; i < row.Cells.Count; i++)
+        {
+            var span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridColumn < gridPos + span)
+                return i;
+            gridPos += span;
+        }
+        return -1; // target grid column is beyond the row's extent
+    }
+
+    /// <summary>
+    /// Returns the total number of grid columns for <paramref name="row"/> (sum of all cell GridSpans).
+    /// </summary>
+    internal static int RowGridWidth(TableRow row) =>
+        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+}
+
+/// <summary>
 /// Insert a blank column at <paramref name="columnIndex"/> (clamped) into the table at
-/// <paramref name="blockIndex"/>: one new empty cell in every row. Reversible.
+/// <paramref name="blockIndex"/>: one new empty cell in every row. Keeps
+/// <see cref="Table.ColumnWidthsPt"/> in sync. Reversible.
 /// </summary>
 public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : IDocumentCommand
 {
@@ -303,8 +337,20 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
         _appliedAt = Math.Max(columnIndex, 0);
         foreach (var row in table.Rows)
         {
-            var at = Math.Clamp(_appliedAt, 0, row.Cells.Count);
+            // Map the target grid column to a cell-list position for this row (H6 grid awareness).
+            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(row, _appliedAt);
+            var at = cellIdx >= 0 ? cellIdx : row.Cells.Count;
             row.Cells.Insert(at, new TableCell(string.Empty));
+        }
+        // Keep ColumnWidthsPt consistent with the new column count (H4). Insert a default width at the
+        // same position; use the average of neighbours when available, else zero (auto).
+        if (table.ColumnWidthsPt.Count > 0)
+        {
+            var insertAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count);
+            var defaultWidth = table.ColumnWidthsPt.Count > 0
+                ? table.ColumnWidthsPt.Average()
+                : 0.0;
+            table.ColumnWidthsPt.Insert(insertAt, defaultWidth);
         }
     }
 
@@ -312,41 +358,84 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
     {
         if (_appliedAt < 0)
             return;
-        foreach (var row in InsertTableRowCommand.TableAt(context, blockIndex).Rows)
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+        foreach (var row in table.Rows)
         {
-            if (_appliedAt < row.Cells.Count)
-                row.Cells.RemoveAt(_appliedAt);
+            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(row, _appliedAt);
+            if (cellIdx >= 0 && cellIdx < row.Cells.Count)
+                row.Cells.RemoveAt(cellIdx);
+        }
+        if (table.ColumnWidthsPt.Count > 0)
+        {
+            var removeAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count - 1);
+            table.ColumnWidthsPt.RemoveAt(removeAt);
         }
         _appliedAt = -1;
     }
 }
 
 /// <summary>
-/// Delete the column at <paramref name="columnIndex"/> from the table at <paramref name="blockIndex"/>,
-/// snapshotting the removed cell of every row so undo restores them. Never removes the last column.
+/// Delete the column at grid-column index <paramref name="columnIndex"/> from the table at
+/// <paramref name="blockIndex"/>, snapshotting the removed cell of every row so undo restores them.
+/// Handles rows with horizontal merges (GridSpan &gt; 1): when the target grid column falls inside a
+/// spanning cell, the span is decremented instead of the cell being removed. Keeps
+/// <see cref="Table.ColumnWidthsPt"/> in sync. Never removes the last column.
 /// </summary>
 public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : IDocumentCommand
 {
-    private List<(int Row, TableCell Cell)>? _removed;
+    private List<(int Row, TableCell Cell, bool WasSpanDecrement)>? _removed;
+    private double _removedWidth;
 
     public string Label => "Delete Column";
 
     public void Apply(IDocumentCommandContext context)
     {
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
-        if (table.ColumnCount <= 1 || columnIndex < 0)
+        // Guard: need at least one grid column to delete, and columnIndex must be valid.
+        if (columnIndex < 0)
             return;
-        var removed = new List<(int, TableCell)>();
+        // Compute total grid width from row 0 (or any row); bail if only one grid column remains.
+        var totalGridCols = table.Rows.Count > 0 ? TableColumnHelpers.RowGridWidth(table.Rows[0]) : 0;
+        if (totalGridCols <= 1)
+            return;
+
+        var removed = new List<(int, TableCell, bool)>();
         for (var r = 0; r < table.Rows.Count; r++)
         {
             var cells = table.Rows[r].Cells;
-            if (columnIndex < cells.Count)
+            // Map target grid column → cell list index for this row.
+            var gridPos = 0;
+            for (var i = 0; i < cells.Count; i++)
             {
-                removed.Add((r, cells[columnIndex]));
-                cells.RemoveAt(columnIndex);
+                var span = Math.Max(1, cells[i].GridSpan);
+                if (columnIndex >= gridPos && columnIndex < gridPos + span)
+                {
+                    if (span > 1)
+                    {
+                        // The target grid column falls inside a spanning cell — decrement its span
+                        // rather than removing the whole cell.
+                        cells[i].GridSpan = span - 1;
+                        removed.Add((r, cells[i], true));
+                    }
+                    else
+                    {
+                        // Normal single-grid-column cell: remove it.
+                        removed.Add((r, cells[i], false));
+                        cells.RemoveAt(i);
+                    }
+                    break;
+                }
+                gridPos += span;
             }
         }
         _removed = removed.Count > 0 ? removed : null;
+
+        // Keep ColumnWidthsPt consistent (H4): remove the width at the deleted grid-column position.
+        if (table.ColumnWidthsPt.Count > columnIndex)
+        {
+            _removedWidth = table.ColumnWidthsPt[columnIndex];
+            table.ColumnWidthsPt.RemoveAt(columnIndex);
+        }
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -354,13 +443,39 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
         if (_removed is null)
             return;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
-        foreach (var (rowIndex, cell) in _removed)
+        foreach (var (rowIndex, cell, wasSpanDecrement) in _removed)
         {
             var cells = table.Rows[rowIndex].Cells;
-            var at = Math.Clamp(columnIndex, 0, cells.Count);
-            cells.Insert(at, cell);
+            if (wasSpanDecrement)
+            {
+                // Restore the decremented span.
+                cell.GridSpan++;
+            }
+            else
+            {
+                // Re-insert the removed cell at the correct grid position.
+                var gridPos = 0;
+                var insertAt = cells.Count; // default: end of row
+                for (var i = 0; i < cells.Count; i++)
+                {
+                    if (gridPos >= columnIndex)
+                    {
+                        insertAt = i;
+                        break;
+                    }
+                    gridPos += Math.Max(1, cells[i].GridSpan);
+                }
+                cells.Insert(insertAt, cell);
+            }
+        }
+        // Restore the removed column width.
+        if (_removedWidth > 0 || table.ColumnWidthsPt.Count >= columnIndex)
+        {
+            var at = Math.Clamp(columnIndex, 0, table.ColumnWidthsPt.Count);
+            table.ColumnWidthsPt.Insert(at, _removedWidth);
         }
         _removed = null;
+        _removedWidth = 0;
     }
 }
 
@@ -430,7 +545,9 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
 /// </summary>
 public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, int firstRow, int lastRow) : IDocumentCommand
 {
-    private (int Row, VerticalMergeState State)[]? _previous;
+    // Stores (rowIndex, cellListIndex, previousMergeState) — the cell-list index is resolved per-row
+    // via GridColumnToCellIndex so horizontal merges (GridSpan > 1) are accounted for correctly.
+    private (int Row, int CellIdx, VerticalMergeState State)[]? _previous;
 
     public string Label => "Merge Cells";
 
@@ -442,19 +559,21 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
         if (first < 0 || last >= table.Rows.Count || first >= last)
             return;
 
-        var snapshot = new List<(int, VerticalMergeState)>();
+        var snapshot = new List<(int, int, VerticalMergeState)>();
         for (var r = first; r <= last; r++)
         {
-            var cells = table.Rows[r].Cells;
-            if (columnIndex < 0 || columnIndex >= cells.Count)
+            // H6 fix: map the target GRID column to the correct cell-list index for this row.
+            // A direct cells[columnIndex] lookup is wrong when preceding cells have GridSpan > 1.
+            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[r], columnIndex);
+            if (cellIdx < 0)
                 return;
-            snapshot.Add((r, cells[columnIndex].VerticalMerge));
+            snapshot.Add((r, cellIdx, table.Rows[r].Cells[cellIdx].VerticalMerge));
         }
 
         _previous = [.. snapshot];
-        table.Rows[first].Cells[columnIndex].VerticalMerge = VerticalMergeState.Restart;
+        table.Rows[first].Cells[_previous[0].CellIdx].VerticalMerge = VerticalMergeState.Restart;
         for (var r = first + 1; r <= last; r++)
-            table.Rows[r].Cells[columnIndex].VerticalMerge = VerticalMergeState.Continue;
+            table.Rows[r].Cells[_previous[r - first].CellIdx].VerticalMerge = VerticalMergeState.Continue;
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -462,10 +581,10 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
         if (_previous is null)
             return;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
-        foreach (var (row, state) in _previous)
+        foreach (var (row, cellIdx, state) in _previous)
         {
-            if (row < table.Rows.Count && columnIndex < table.Rows[row].Cells.Count)
-                table.Rows[row].Cells[columnIndex].VerticalMerge = state;
+            if (row < table.Rows.Count && cellIdx < table.Rows[row].Cells.Count)
+                table.Rows[row].Cells[cellIdx].VerticalMerge = state;
         }
         _previous = null;
     }
