@@ -22,7 +22,10 @@ internal static class FidelityComparison
         AddInventoryDiff(result, "tables", f.Tables, e.Tables);
         AddInventoryDiff(result, "comments", f.Comments, e.Comments);
 
-        // Cell value comparison over sheets present in both, on the intersection of occupied addresses.
+        // Cell value comparison over sheets present in both.
+        // Pass 1: walk FreeX cells and compare against Excel (intersection + FreeX-only cells).
+        // Pass 2: walk Excel-only occupied addresses (cells present in Excel but absent/empty in FreeX)
+        //         and count each as a mismatch so that silent data-loss in FreeX is caught.
         foreach (var (sheetKey, freexCells) in result.FreeXCells)
         {
             if (!result.ExcelCells.TryGetValue(sheetKey, out var excelCells))
@@ -43,7 +46,28 @@ internal static class FidelityComparison
                     }
                 }
             }
+
+            // Pass 2: addresses occupied in Excel but missing (or empty) in FreeX.
+            foreach (var (addr, excelVal) in excelCells)
+            {
+                if (excelVal.IsEmpty)
+                    continue; // Excel cell carries no content — not a fidelity gap
+                if (freexCells.TryGetValue(addr, out var freexVal) && !freexVal.IsEmpty)
+                    continue; // already counted in pass 1
+                result.CellsCompared++;
+                result.ValueMismatches++;
+                if (result.MismatchSamples.Count < options.MaxMismatchSamples)
+                {
+                    result.MismatchSamples.Add(
+                        $"{sheetKey}!{ColumnName(addr.Col)}{addr.Row}: FreeX='(missing)' Excel='{excelVal}'");
+                }
+            }
         }
+
+        // Also check sheets that exist in Excel but have no FreeX cell data at all (sheet-level missing).
+        // Individual missing-cell accounting above covers sheets where FreeX has the sheet but dropped cells.
+        // Sheets entirely absent from FreeXCells are already caught by the f.Sheets != e.Sheets sheet-count
+        // check below, so no additional per-cell walk is needed for those.
 
         // FAIL only on unambiguous functional differences: too many differing computed values, or a
         // missing/extra sheet (data loss). Charts/pivots/tables/comments diffs are reported for review but

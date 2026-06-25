@@ -50,7 +50,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_sheetGridHost.PointerReleased += CellSelectionCapturePointerReleased;");
         source.Should().Contain("_sheetGridHost.PointerCaptureLost += CellSelectionCapturePointerCaptureLost;");
         source.Should().Contain("DetachCellSelectionDragHandlers();");
-        source.Should().Contain("args.Pointer.Capture(capture);");
+        source.Should().Contain("args.Pointer.Capture(_sheetGridHost);");
         source.Should().Contain("TryResolveCellPointerAddress(args, out var pointerAddress)");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");
         source.Should().Contain("_cellDragSelectionPointer?.Capture(null);");

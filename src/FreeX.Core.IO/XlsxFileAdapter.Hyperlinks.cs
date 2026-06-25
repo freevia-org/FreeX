@@ -50,18 +50,14 @@ public sealed partial class XlsxFileAdapter
             hyperlink.IsExternal = false;
             hyperlink.InternalAddress = linkTarget;
         }
-        else if (Uri.TryCreate(linkTarget, UriKind.Absolute, out var uri))
-        {
-            hyperlink.IsExternal = true;
-            hyperlink.ExternalAddress = uri;
-        }
         else
         {
-            // Not an absolute URI and not flagged internal: ClosedXML would crash building an external
-            // relationship with a null URI. Fall back to an internal link so the cell keeps a usable
-            // target (the visible text/value is unchanged) instead of aborting the whole save.
-            hyperlink.IsExternal = false;
-            hyperlink.InternalAddress = linkTarget;
+            // External link: absolute URIs (http://, file:///, mailto:…) and relative file paths
+            // (docs/report.pdf, ../other.xlsx) are both valid external hyperlink targets in Excel.
+            // UriKind.RelativeOrAbsolute accepts both forms; ClosedXML emits a proper relationship
+            // entry for any non-null ExternalAddress, whether the Uri is absolute or relative.
+            hyperlink.IsExternal = true;
+            hyperlink.ExternalAddress = new Uri(linkTarget, UriKind.RelativeOrAbsolute);
         }
 
         if (!string.IsNullOrWhiteSpace(metadata.ScreenTip))

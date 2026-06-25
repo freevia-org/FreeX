@@ -28,18 +28,69 @@ internal static class ExcelInspector
             inv.Sheets = worksheetCount;
             for (var s = 1; s <= worksheetCount; s++)
             {
-                dynamic ws = workbook.Worksheets.Item(s);
-                string sheetName = Convert.ToString(ws.Name, CultureInfo.InvariantCulture) ?? $"Sheet{s}";
+                object? wsObject = null;
+                object? chartObjectsRcw = null;
+                object? pivotTablesRcw = null;
+                object? listObjectsRcw = null;
+                object? hyperlinksRcw = null;
+                object? commentsRcw = null;
+                try
+                {
+                    dynamic ws = workbook.Worksheets.Item(s);
+                    wsObject = ws;
+                    string sheetName = Convert.ToString(ws.Name, CultureInfo.InvariantCulture) ?? $"Sheet{s}";
 
-                try { inv.Charts += InvokeWithComRetry(() => (int)ws.ChartObjects().Count, "ChartObjects.Count"); } catch { }
-                try { inv.PivotTables += InvokeWithComRetry(() => (int)ws.PivotTables().Count, "PivotTables.Count"); } catch { }
-                try { inv.Tables += InvokeWithComRetry(() => (int)ws.ListObjects.Count, "ListObjects.Count"); } catch { }
-                try { inv.Hyperlinks += InvokeWithComRetry(() => (int)ws.Hyperlinks.Count, "Hyperlinks.Count"); } catch { }
-                try { inv.Comments += InvokeWithComRetry(() => (int)ws.Comments.Count, "Comments.Count"); } catch { }
+                    try
+                    {
+                        var co = ws.ChartObjects();
+                        chartObjectsRcw = co;
+                        inv.Charts += InvokeWithComRetry(() => (int)co.Count, "ChartObjects.Count");
+                    }
+                    catch { }
+                    try
+                    {
+                        var pt = ws.PivotTables();
+                        pivotTablesRcw = pt;
+                        inv.PivotTables += InvokeWithComRetry(() => (int)pt.Count, "PivotTables.Count");
+                    }
+                    catch { }
+                    try
+                    {
+                        var lo = ws.ListObjects;
+                        listObjectsRcw = lo;
+                        inv.Tables += InvokeWithComRetry(() => (int)lo.Count, "ListObjects.Count");
+                    }
+                    catch { }
+                    try
+                    {
+                        var hl = ws.Hyperlinks;
+                        hyperlinksRcw = hl;
+                        inv.Hyperlinks += InvokeWithComRetry(() => (int)hl.Count, "Hyperlinks.Count");
+                    }
+                    catch { }
+                    try
+                    {
+                        var cm = ws.Comments;
+                        commentsRcw = cm;
+                        inv.Comments += InvokeWithComRetry(() => (int)cm.Count, "Comments.Count");
+                    }
+                    catch { }
 
-                var cells = ReadSheetValues(ws);
-                var key = result.ExcelCells.ContainsKey(sheetName) ? $"{sheetName}#{s}" : sheetName;
-                result.ExcelCells[key] = cells;
+                    var cells = ReadSheetValues(ws);
+                    var key = result.ExcelCells.ContainsKey(sheetName) ? $"{sheetName}#{s}" : sheetName;
+                    result.ExcelCells[key] = cells;
+                }
+                finally
+                {
+                    // Release per-sheet RCWs so they don't accumulate across the batch and destabilize the
+                    // shared Excel instance. Pattern mirrors TryGetExcelPivotTableRange in SheetGridImageCompare.
+                    try { if (commentsRcw is not null && Marshal.IsComObject(commentsRcw)) Marshal.FinalReleaseComObject(commentsRcw); } catch { }
+                    try { if (hyperlinksRcw is not null && Marshal.IsComObject(hyperlinksRcw)) Marshal.FinalReleaseComObject(hyperlinksRcw); } catch { }
+                    try { if (listObjectsRcw is not null && Marshal.IsComObject(listObjectsRcw)) Marshal.FinalReleaseComObject(listObjectsRcw); } catch { }
+                    try { if (pivotTablesRcw is not null && Marshal.IsComObject(pivotTablesRcw)) Marshal.FinalReleaseComObject(pivotTablesRcw); } catch { }
+                    try { if (chartObjectsRcw is not null && Marshal.IsComObject(chartObjectsRcw)) Marshal.FinalReleaseComObject(chartObjectsRcw); } catch { }
+                    try { if (wsObject is not null && Marshal.IsComObject(wsObject)) Marshal.FinalReleaseComObject(wsObject); } catch { }
+                }
             }
 
             result.Excel = inv;
@@ -102,38 +153,47 @@ internal static class ExcelInspector
     private static Dictionary<(int Row, int Col), CellVal> ReadSheetValues(dynamic ws)
     {
         var cells = new Dictionary<(int, int), CellVal>();
-        dynamic used;
-        try { used = InvokeWithComRetry(() => ws.UsedRange, "UsedRange"); } catch { return cells; }
-        int rows = InvokeWithComRetry(() => (int)used.Rows.Count, "UsedRange.Rows.Count");
-        int cols = InvokeWithComRetry(() => (int)used.Columns.Count, "UsedRange.Columns.Count");
-        if (rows <= 0 || cols <= 0 || (long)rows * cols > MaxCellsPerSheet)
-            return cells;
-
-        int top = InvokeWithComRetry(() => (int)used.Row, "UsedRange.Row");
-        int left = InvokeWithComRetry(() => (int)used.Column, "UsedRange.Column");
-        object value2 = InvokeWithComRetry(() => (object)used.Value2, "UsedRange.Value2");
-        if (value2 is null)
-            return cells;
-
-        if (value2 is object[,] grid)
+        object? usedObject = null;
+        try
         {
-            // Excel's Value2 array is 1-based [1..rows, 1..cols].
-            for (var r = 1; r <= rows; r++)
-            for (var c = 1; c <= cols; c++)
+            dynamic used;
+            try { used = InvokeWithComRetry(() => ws.UsedRange, "UsedRange"); } catch { return cells; }
+            usedObject = used;
+            int rows = InvokeWithComRetry(() => (int)used.Rows.Count, "UsedRange.Rows.Count");
+            int cols = InvokeWithComRetry(() => (int)used.Columns.Count, "UsedRange.Columns.Count");
+            if (rows <= 0 || cols <= 0 || (long)rows * cols > MaxCellsPerSheet)
+                return cells;
+
+            int top = InvokeWithComRetry(() => (int)used.Row, "UsedRange.Row");
+            int left = InvokeWithComRetry(() => (int)used.Column, "UsedRange.Column");
+            object value2 = InvokeWithComRetry(() => (object)used.Value2, "UsedRange.Value2");
+            if (value2 is null)
+                return cells;
+
+            if (value2 is object[,] grid)
             {
-                var cell = Normalize(grid[r, c]);
-                if (!cell.IsEmpty)
-                    cells[(top + r - 1, left + c - 1)] = cell;
+                // Excel's Value2 array is 1-based [1..rows, 1..cols].
+                for (var r = 1; r <= rows; r++)
+                for (var c = 1; c <= cols; c++)
+                {
+                    var cell = Normalize(grid[r, c]);
+                    if (!cell.IsEmpty)
+                        cells[(top + r - 1, left + c - 1)] = cell;
+                }
             }
-        }
-        else
-        {
-            var single = Normalize(value2);
-            if (!single.IsEmpty)
-                cells[(top, left)] = single;
-        }
+            else
+            {
+                var single = Normalize(value2);
+                if (!single.IsEmpty)
+                    cells[(top, left)] = single;
+            }
 
-        return cells;
+            return cells;
+        }
+        finally
+        {
+            try { if (usedObject is not null && Marshal.IsComObject(usedObject)) Marshal.FinalReleaseComObject(usedObject); } catch { }
+        }
     }
 
     private static T InvokeWithComRetry<T>(Func<T> action, string operation)

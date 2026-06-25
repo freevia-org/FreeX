@@ -690,6 +690,8 @@ public sealed partial class MainWindow : Window
     private CellAddress? _cellDragSelectionAnchor;
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
+    private HeaderResizeKind _headerSelectionDragKind;
+    private uint _headerSelectionDragAnchorIndex;
     private HeaderResizeDrag? _headerResizeDrag;
     private CellAddress? _selectionExtensionAnchor;
     private CellAddress? _selectionExtensionCursor;
@@ -5266,19 +5268,64 @@ public sealed partial class MainWindow : Window
         if (_headerResizeDrag is not null)
             return;
 
+        // Defensive: drop any stale subscriptions left over from a drag that lost capture without a
+        // PointerReleased (grid rebuild, alt-tab, context menu), so we never double-subscribe.
+        DetachHeaderSelectionDragHandlers();
+        // Also defensively clear shared drag-state so a stranded header-drag cannot anchor a later drag.
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+
         _cellDragSelectionAnchor = kind == HeaderResizeKind.Column
             ? new CellAddress(_session.ActiveSheet.Id, 1, index)
             : new CellAddress(_session.ActiveSheet.Id, index, 1);
+        // Keep capture for Focus() — the per-header border is the right focus target.
         _cellDragSelectionCapture = capture;
         _cellDragSelectionPointer = args.Pointer;
+        _headerSelectionDragKind = kind;
+        _headerSelectionDragAnchorIndex = index;
         capture.Focus();
-        args.Pointer.Capture(capture);
+        // Capture on _sheetGridHost — the persistent host that SURVIVES RefreshShell/BuildSheetGrid,
+        // so a ContinueHeaderSelectionDrag → SelectEntireColumn/Row → RefreshShell cannot
+        // destroy the captured header Border and cause Avalonia to silently drop pointer capture.
+        _sheetGridHost.PointerMoved += HeaderSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased += HeaderSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost += HeaderSelectionCapturePointerCaptureLost;
+        args.Pointer.Capture(_sheetGridHost);
+    }
+
+    private void HeaderSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
+        ContinueHeaderSelectionDrag(args, _headerSelectionDragKind, _headerSelectionDragAnchorIndex);
+
+    private void HeaderSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        EndHeaderSelectionDrag(args);
+
+    // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
+    // abort the drag and clear all drag state — mirrors the CellSelectionCapturePointerCaptureLost
+    // and HeaderResizeCapturePointerCaptureLost cleanup pattern.
+    private void HeaderSelectionCapturePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        // Detach FIRST so the Capture(null) below cannot re-raise PointerCaptureLost back into
+        // this handler (which would re-enter indefinitely and hang the app).
+        DetachHeaderSelectionDragHandlers();
+        _cellDragSelectionPointer?.Capture(null);
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+        _headerSelectionDragAnchorIndex = 0;
+    }
+
+    private void DetachHeaderSelectionDragHandlers()
+    {
+        _sheetGridHost.PointerMoved -= HeaderSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased -= HeaderSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost -= HeaderSelectionCapturePointerCaptureLost;
     }
 
     private void ContinueHeaderSelectionDrag(PointerEventArgs args, HeaderResizeKind kind, uint index)
     {
         if (_cellDragSelectionCapture is null ||
-            !args.GetCurrentPoint(_cellDragSelectionCapture).Properties.IsLeftButtonPressed)
+            !args.GetCurrentPoint(_sheetGridHost).Properties.IsLeftButtonPressed)
         {
             return;
         }
@@ -5403,10 +5450,12 @@ public sealed partial class MainWindow : Window
     {
         if (_cellDragSelectionCapture is not null)
         {
+            DetachHeaderSelectionDragHandlers();
             _cellDragSelectionPointer?.Capture(null);
             _cellDragSelectionCapture = null;
             _cellDragSelectionAnchor = null;
             _cellDragSelectionPointer = null;
+            _headerSelectionDragAnchorIndex = 0;
             args.Handled = true;
         }
     }

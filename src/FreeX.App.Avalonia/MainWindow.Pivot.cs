@@ -297,6 +297,19 @@ public sealed partial class MainWindow
         chip.PointerPressed += (_, e) => BeginPivotFieldDrag(field, e);
         chip.PointerMoved += PivotFieldDrag_PointerMoved;
         chip.PointerReleased += (_, e) => CompletePivotFieldDrag(pivot, headers, e);
+        // If the OS revokes pointer capture mid-drag (pane rebuild, context menu, focus loss), abort
+        // the drag and reset all visual state so highlighted drop-zone backgrounds are not stuck and
+        // _pivotPaneDragItem cannot be acted on by a subsequent stale PointerReleased — mirrors the
+        // chart-drag PointerCaptureLost cleanup pattern.
+        chip.PointerCaptureLost += (_, _) =>
+        {
+            // Null _pivotPaneDragItem FIRST so that any PointerReleased that still fires after
+            // PointerCaptureLost sees a null drag item and is a no-op.  No explicit Capture(null)
+            // needed here — the capture is already gone by the time this handler fires.
+            _pivotPaneDragItem = null;
+            foreach (var (bucket, _) in _pivotDropZones)
+                bucket.Background = PivotBucketBackground;
+        };
         return chip;
     }
 
