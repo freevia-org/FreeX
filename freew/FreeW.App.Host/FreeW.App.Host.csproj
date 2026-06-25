@@ -17,6 +17,8 @@
     <InternalsVisibleTo Include="FreeW.RenderCompare" />
     <!-- Tests reach the internal print paginator (HeaderFooterPaginator) directly. -->
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
+    <!-- FidelityRender composite path uses internal overlay/chrome/column helpers. -->
+    <InternalsVisibleTo Include="FreeW.FidelityRender" />
   </ItemGroup>
 
   <ItemGroup>
