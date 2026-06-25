@@ -797,6 +797,190 @@ public static class PptxPackageReader
 
         shape.Fill = PptxColorReader.TryReadFill(spPr, scheme);
         shape.Outline = PptxColorReader.TryReadOutline(spPr.Element(A + "ln"), scheme);
+
+        // Custom geometry
+        var custGeom = spPr.Element(A + "custGeom");
+        if (custGeom is not null)
+            ReadCustGeom(custGeom, shape);
+
+        // Shape effects
+        var effectLst = spPr.Element(A + "effectLst");
+        if (effectLst is not null)
+            shape.Effects = ReadEffectLst(effectLst, scheme);
+    }
+
+    private static void ReadCustGeom(XElement custGeom, SlideShape shape)
+    {
+        var pathLst = custGeom.Element(A + "pathLst");
+        if (pathLst is null) return;
+
+        foreach (var pathEl in pathLst.Elements(A + "path"))
+        {
+            var cgp = new CustomGeometryPath
+            {
+                PathW  = ParseLong(pathEl.Attribute("w")?.Value),
+                PathH  = ParseLong(pathEl.Attribute("h")?.Value),
+                Fill   = pathEl.Attribute("fill")?.Value   is not ("none" or "0"),
+                Stroke = pathEl.Attribute("stroke")?.Value is not ("0" or "false")
+            };
+
+            foreach (var segEl in pathEl.Elements())
+            {
+                switch (segEl.Name.LocalName)
+                {
+                    case "moveTo":
+                    {
+                        var pt = segEl.Element(A + "pt");
+                        cgp.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo,
+                            X: ParseLong(pt?.Attribute("x")?.Value),
+                            Y: ParseLong(pt?.Attribute("y")?.Value)));
+                        break;
+                    }
+                    case "lnTo":
+                    {
+                        var pt = segEl.Element(A + "pt");
+                        cgp.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo,
+                            X: ParseLong(pt?.Attribute("x")?.Value),
+                            Y: ParseLong(pt?.Attribute("y")?.Value)));
+                        break;
+                    }
+                    case "cubicBezTo":
+                    {
+                        var pts = segEl.Elements(A + "pt").ToList();
+                        if (pts.Count >= 3)
+                            cgp.Segments.Add(new CustomSegment(CustomSegmentKind.CubicBezTo,
+                                X:  ParseLong(pts[0].Attribute("x")?.Value),
+                                Y:  ParseLong(pts[0].Attribute("y")?.Value),
+                                X1: ParseLong(pts[1].Attribute("x")?.Value),
+                                Y1: ParseLong(pts[1].Attribute("y")?.Value),
+                                X2: ParseLong(pts[2].Attribute("x")?.Value),
+                                Y2: ParseLong(pts[2].Attribute("y")?.Value)));
+                        break;
+                    }
+                    case "quadBezTo":
+                    {
+                        var pts = segEl.Elements(A + "pt").ToList();
+                        if (pts.Count >= 2)
+                            cgp.Segments.Add(new CustomSegment(CustomSegmentKind.QuadBezTo,
+                                X:  ParseLong(pts[0].Attribute("x")?.Value),
+                                Y:  ParseLong(pts[0].Attribute("y")?.Value),
+                                X1: ParseLong(pts[1].Attribute("x")?.Value),
+                                Y1: ParseLong(pts[1].Attribute("y")?.Value)));
+                        break;
+                    }
+                    case "arcTo":
+                    {
+                        // arcTo attributes wR, hR, stAng, swAng are in 1/60000 degrees
+                        cgp.Segments.Add(new CustomSegment(CustomSegmentKind.ArcTo,
+                            WR:    ParseDouble(segEl.Attribute("wR")?.Value),
+                            HR:    ParseDouble(segEl.Attribute("hR")?.Value),
+                            StAng: ParseDouble(segEl.Attribute("stAng")?.Value) / 60000.0,
+                            SwAng: ParseDouble(segEl.Attribute("swAng")?.Value) / 60000.0));
+                        break;
+                    }
+                    case "close":
+                        cgp.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+                        break;
+                }
+            }
+
+            if (cgp.Segments.Count > 0)
+                shape.CustomGeometry.Add(cgp);
+        }
+    }
+
+    private static ShapeEffects? ReadEffectLst(XElement effectLst, PresentationColorScheme scheme)
+    {
+        var fx = new ShapeEffects();
+        bool any = false;
+
+        // a:outerShdw
+        var outerShdw = effectLst.Element(A + "outerShdw");
+        if (outerShdw is not null)
+        {
+            fx.HasOuterShadow = true; any = true;
+            fx.OuterShadowBlurRadEmu = ParseLong(outerShdw.Attribute("blurRad")?.Value);
+            fx.OuterShadowDistEmu    = ParseLong(outerShdw.Attribute("dist")?.Value);
+            fx.OuterShadowDirDeg     = ParseDouble(outerShdw.Attribute("dir")?.Value) / 60000.0;
+            var colorEl = outerShdw.Elements().FirstOrDefault();
+            if (colorEl is not null)
+            {
+                var tac = PptxColorReader.TryReadColor(outerShdw, scheme);
+                if (tac is not null)
+                {
+                    fx.OuterShadowColor = tac.Resolved;
+                    fx.OuterShadowAlpha = ReadAlphaFromColorEl(colorEl);
+                }
+            }
+        }
+
+        // a:innerShdw
+        var innerShdw = effectLst.Element(A + "innerShdw");
+        if (innerShdw is not null)
+        {
+            fx.HasInnerShadow = true; any = true;
+            fx.InnerShadowBlurRadEmu = ParseLong(innerShdw.Attribute("blurRad")?.Value);
+            fx.InnerShadowDistEmu    = ParseLong(innerShdw.Attribute("dist")?.Value);
+            fx.InnerShadowDirDeg     = ParseDouble(innerShdw.Attribute("dir")?.Value) / 60000.0;
+            var colorEl = innerShdw.Elements().FirstOrDefault();
+            if (colorEl is not null)
+            {
+                var tac = PptxColorReader.TryReadColor(innerShdw, scheme);
+                if (tac is not null)
+                {
+                    fx.InnerShadowColor = tac.Resolved;
+                    fx.InnerShadowAlpha = ReadAlphaFromColorEl(colorEl);
+                }
+            }
+        }
+
+        // a:glow
+        var glow = effectLst.Element(A + "glow");
+        if (glow is not null)
+        {
+            fx.HasGlow = true; any = true;
+            fx.GlowRadiusEmu = ParseLong(glow.Attribute("rad")?.Value);
+            var colorEl = glow.Elements().FirstOrDefault();
+            if (colorEl is not null)
+            {
+                var tac = PptxColorReader.TryReadColor(glow, scheme);
+                if (tac is not null)
+                {
+                    fx.GlowColor = tac.Resolved;
+                    fx.GlowAlpha = ReadAlphaFromColorEl(colorEl);
+                }
+            }
+        }
+
+        // a:softEdge
+        var softEdge = effectLst.Element(A + "softEdge");
+        if (softEdge is not null)
+        {
+            fx.HasSoftEdge = true; any = true;
+            fx.SoftEdgeRadEmu = ParseLong(softEdge.Attribute("rad")?.Value);
+        }
+
+        // a:sp3d (bevel — best-effort flag)
+        var sp3d = effectLst.Element(A + "sp3d");
+        if (sp3d is not null) { fx.HasBevel = true; any = true; }
+
+        return any ? fx : null;
+    }
+
+    private static byte ReadAlphaFromColorEl(XElement colorEl)
+    {
+        // Look for a:alpha child directly on the color element
+        var alphaEl = colorEl.Element(A + "alpha");
+        if (alphaEl is not null && long.TryParse(alphaEl.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha100k))
+            return (byte)(alpha100k * 255 / 100000);
+        return 0x80; // default ~50% opacity
+    }
+
+    private static double ParseDouble(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return 0;
+        return double.TryParse(value, NumberStyles.Float,
+            CultureInfo.InvariantCulture, out var v) ? v : 0;
     }
 
     // ── TextBody ─────────────────────────────────────────────────────────────────

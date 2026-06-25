@@ -860,13 +860,125 @@ public static class PptxPackageWriter
         xfrm.Add(new XElement(A + "off", new XAttribute("x", shape.OffsetXEmu), new XAttribute("y", shape.OffsetYEmu)));
         xfrm.Add(new XElement(A + "ext", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
 
+        // Geometry: custom or preset
+        XElement geomEl;
+        if (forcePrst is null && shape.CustomGeometry.Count > 0)
+            geomEl = BuildCustGeomEl(shape.CustomGeometry);
+        else
+            geomEl = new XElement(A + "prstGeom",
+                new XAttribute("prst", forcePrst ?? PptxShapeKindMap.ToPreset(shape.AutoShapeKind)),
+                new XElement(A + "avLst"));
+
         return new XElement(P + "spPr",
             xfrm,
-            new XElement(A + "prstGeom",
-                new XAttribute("prst", forcePrst ?? PptxShapeKindMap.ToPreset(shape.AutoShapeKind)),
-                new XElement(A + "avLst")),
+            geomEl,
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
-            shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null);
+            shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
+            shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null);
+    }
+
+    private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)
+    {
+        var pathEls = new List<XElement>();
+        foreach (var path in paths)
+        {
+            var pathEl = new XElement(A + "path");
+            if (path.PathW > 0) pathEl.Add(new XAttribute("w", path.PathW));
+            if (path.PathH > 0) pathEl.Add(new XAttribute("h", path.PathH));
+            if (!path.Fill)   pathEl.Add(new XAttribute("fill", "none"));
+            if (!path.Stroke) pathEl.Add(new XAttribute("stroke", "0"));
+
+            foreach (var seg in path.Segments)
+            {
+                switch (seg.Kind)
+                {
+                    case CustomSegmentKind.MoveTo:
+                        pathEl.Add(new XElement(A + "moveTo",
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                        break;
+                    case CustomSegmentKind.LineTo:
+                        pathEl.Add(new XElement(A + "lnTo",
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X), new XAttribute("y", (long)seg.Y))));
+                        break;
+                    case CustomSegmentKind.CubicBezTo:
+                        pathEl.Add(new XElement(A + "cubicBezTo",
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1)),
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X2), new XAttribute("y", (long)seg.Y2))));
+                        break;
+                    case CustomSegmentKind.QuadBezTo:
+                        pathEl.Add(new XElement(A + "quadBezTo",
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X),  new XAttribute("y", (long)seg.Y)),
+                            new XElement(A + "pt", new XAttribute("x", (long)seg.X1), new XAttribute("y", (long)seg.Y1))));
+                        break;
+                    case CustomSegmentKind.ArcTo:
+                        pathEl.Add(new XElement(A + "arcTo",
+                            new XAttribute("wR",    (long)seg.WR),
+                            new XAttribute("hR",    (long)seg.HR),
+                            new XAttribute("stAng", (long)Math.Round(seg.StAng * 60000)),
+                            new XAttribute("swAng", (long)Math.Round(seg.SwAng * 60000))));
+                        break;
+                    case CustomSegmentKind.Close:
+                        pathEl.Add(new XElement(A + "close"));
+                        break;
+                }
+            }
+            pathEls.Add(pathEl);
+        }
+
+        return new XElement(A + "custGeom",
+            new XElement(A + "avLst"),
+            new XElement(A + "gdLst"),
+            new XElement(A + "ahLst"),
+            new XElement(A + "cxnLst"),
+            new XElement(A + "rect",
+                new XAttribute("l", "0"), new XAttribute("t", "0"),
+                new XAttribute("r", "r"), new XAttribute("b", "b")),
+            new XElement(A + "pathLst", pathEls));
+    }
+
+    private static XElement BuildEffectLstEl(ShapeEffects fx)
+    {
+        var effectLst = new XElement(A + "effectLst");
+
+        if (fx.HasOuterShadow)
+        {
+            long alpha100k = fx.OuterShadowAlpha * 100000L / 255;
+            effectLst.Add(new XElement(A + "outerShdw",
+                new XAttribute("blurRad", fx.OuterShadowBlurRadEmu),
+                new XAttribute("dist",    fx.OuterShadowDistEmu),
+                new XAttribute("dir",     (long)Math.Round(fx.OuterShadowDirDeg * 60000)),
+                new XElement(A + "srgbClr",
+                    new XAttribute("val", FmtColor(fx.OuterShadowColor)),
+                    new XElement(A + "alpha", new XAttribute("val", alpha100k)))));
+        }
+
+        if (fx.HasInnerShadow)
+        {
+            long alpha100k = fx.InnerShadowAlpha * 100000L / 255;
+            effectLst.Add(new XElement(A + "innerShdw",
+                new XAttribute("blurRad", fx.InnerShadowBlurRadEmu),
+                new XAttribute("dist",    fx.InnerShadowDistEmu),
+                new XAttribute("dir",     (long)Math.Round(fx.InnerShadowDirDeg * 60000)),
+                new XElement(A + "srgbClr",
+                    new XAttribute("val", FmtColor(fx.InnerShadowColor)),
+                    new XElement(A + "alpha", new XAttribute("val", alpha100k)))));
+        }
+
+        if (fx.HasGlow)
+        {
+            long alpha100k = fx.GlowAlpha * 100000L / 255;
+            effectLst.Add(new XElement(A + "glow",
+                new XAttribute("rad", fx.GlowRadiusEmu),
+                new XElement(A + "srgbClr",
+                    new XAttribute("val", FmtColor(fx.GlowColor)),
+                    new XElement(A + "alpha", new XAttribute("val", alpha100k)))));
+        }
+
+        if (fx.HasSoftEdge)
+            effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRadEmu)));
+
+        return effectLst;
     }
 
     // ── Table / graphicFrame elements ─────────────────────────────────────────────
