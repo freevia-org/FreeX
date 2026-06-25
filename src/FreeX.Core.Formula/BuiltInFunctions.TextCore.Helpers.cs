@@ -10,7 +10,7 @@ public static partial class BuiltInFunctions
         ExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
 
     private static bool ExceedsExcelTextLimit(string text) =>
-        (ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length) > 32767;
+        text.Length > 32767;
 
     private static RangeValue MapUnaryTextRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
     {

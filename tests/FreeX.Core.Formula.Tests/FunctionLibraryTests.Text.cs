@@ -63,13 +63,27 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void LenLeftAndRight_CountSurrogatePairsAsSingleCharacters()
+    public void LenLeftAndRight_CountSurrogatePairsAsUtf16CodeUnits()
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
-        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("x😀"));
+        // Excel counts UTF-16 code units: 😀 is a surrogate pair (2 code units).
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("😀"));
+    }
+
+    [Fact]
+    public void Len_SurrogatePairCountsAsTwoCodeUnits()
+    {
+        var sheet = MakeSheet();
+
+        // Q12 regression: LEN must return UTF-16 code-unit count, not grapheme count.
+        _eval.Evaluate("=LEN(\"😀\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEN(\"A😀B\")", sheet).Should().Be(new NumberValue(4));
+        // BMP-only text is unchanged.
+        _eval.Evaluate("=LEN(\"abc\")", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=LEN(\"\")", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -164,10 +178,12 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void LeftAndRight_PreserveSurrogatePairAtBoundary()
+    public void LeftAndRight_SplitSurrogatePairAtCodeUnitBoundary()
     {
-        _eval.Evaluate("=LEFT(\"😀x\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
-        _eval.Evaluate("=RIGHT(\"x😀\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
+        // Excel slices on UTF-16 code-unit boundaries, splitting surrogate pairs.
+        // LEFT("😀x",1) returns just the high surrogate; RIGHT("x😀",1) just the low surrogate.
+        _eval.Evaluate("=LEFT(\"😀x\",1)", MakeSheet()).Should().Be(new TextValue("\uD83D"));
+        _eval.Evaluate("=RIGHT(\"x😀\",1)", MakeSheet()).Should().Be(new TextValue("\uDE00"));
     }
 
     [Fact]
@@ -460,7 +476,9 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Substitute_ResultWithSurrogatePairsAtExcelCellLimit_ReturnsText()
     {
-        var text = string.Concat(Enumerable.Repeat("😀", 32767));
+        // Cell limit is 32767 UTF-16 code units; 😀 is 2 code units.
+        // 16383 emoji = 32766 code units ≤ 32767 → valid text.
+        var text = string.Concat(Enumerable.Repeat("😀", 16383));
         var sheet = MakeSheet((1, 1, new TextValue(text)));
 
         _eval.Evaluate("=SUBSTITUTE(A1,\"😀\",\"😀\",1)", sheet).Should().Be(new TextValue(text));
@@ -534,21 +552,39 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
+        // 😀 is 2 UTF-16 code units; empty-string match is valid up to length+1 = 3.
         _eval.Evaluate("=FIND(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=FIND(\"\",\"😀\",4)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",4)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void FindAndSearch_ReturnTextPositionsAfterSurrogatePairs()
+    public void FindAndSearch_ReturnUtf16CodeUnitPositionsAfterSurrogatePairs()
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        // 😀 is a surrogate pair (2 UTF-16 code units); positions are code-unit based.
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(4));
+    }
+
+    [Fact]
+    public void Find_SurrogatePairUtf16Positions_ExcelParity()
+    {
+        var sheet = MakeSheet();
+
+        // Q12 regression: FIND positions count UTF-16 code units.
+        // FIND("X","A😀X"): "A😀X" = A+\uD83D+\uDE00+X → "X" at index 3 (0-based) = position 4.
+        _eval.Evaluate("=FIND(\"X\",\"A😀X\")", sheet).Should().Be(new NumberValue(4));
+        // FIND("😀","A😀B"): "😀" at index 1 (0-based) = position 2.
+        _eval.Evaluate("=FIND(\"😀\",\"A😀B\")", sheet).Should().Be(new NumberValue(2));
+        // BMP-only text unchanged.
+        _eval.Evaluate("=FIND(\"c\",\"abcd\")", sheet).Should().Be(new NumberValue(3));
     }
 
     [Fact]
@@ -839,14 +875,30 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Mid_DoesNotSplitSurrogatePairs()
+    public void Mid_SlicesOnUtf16CodeUnitBoundaries()
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("😀"));
-        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("x"));
-        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("😀"));
-        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("y"));
+        // Excel MID counts UTF-16 code units; 😀 is a surrogate pair at indices 0+1.
+        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("\uD83D"));
+        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("\uDE00"));
+        _eval.Evaluate("=MID(\"😀x\",3,1)", sheet).Should().Be(new TextValue("x"));
+        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("\uD83D"));
+        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("\uDE00"));
+        _eval.Evaluate("=MID(\"x😀y\",4,1)", sheet).Should().Be(new TextValue("y"));
+    }
+
+    [Fact]
+    public void Mid_SurrogatePair_ExcelParityRegression()
+    {
+        var sheet = MakeSheet();
+
+        // Q12 regression: MID("😀",1,1) returns the lone high surrogate (Excel behavior).
+        _eval.Evaluate("=MID(\"😀\",1,1)", sheet).Should().Be(new TextValue("\uD83D"));
+        // MID("😀",1,2) returns the whole emoji.
+        _eval.Evaluate("=MID(\"😀\",1,2)", sheet).Should().Be(new TextValue("😀"));
+        // BMP-only text unchanged.
+        _eval.Evaluate("=MID(\"abcd\",2,2)", sheet).Should().Be(new TextValue("bc"));
     }
 
     [Fact]
@@ -902,12 +954,16 @@ public partial class FunctionLibraryTests
     // ── VALUE ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Rept_SupplementaryUnicodeCountsExcelCharactersForCellLimit()
+    public void Rept_SupplementaryUnicodeUsesCodeUnitLimitOf32767()
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=LEN(REPT(\"😀\",32767))", sheet).Should().Be(new NumberValue(32767));
-        _eval.Evaluate("=REPT(\"😀\",32768)", sheet).Should().Be(ErrorValue.Value);
+        // 😀 is 2 UTF-16 code units; cell limit is 32767 code units.
+        // 16383 * 2 = 32766 ≤ 32767 → valid; 16384 * 2 = 32768 > 32767 → error.
+        _eval.Evaluate("=LEN(REPT(\"😀\",16383))", sheet).Should().Be(new NumberValue(32766));
+        _eval.Evaluate("=REPT(\"😀\",16384)", sheet).Should().Be(ErrorValue.Value);
+        // The old 32767-repetition limit no longer applies to emoji.
+        _eval.Evaluate("=REPT(\"😀\",32767)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

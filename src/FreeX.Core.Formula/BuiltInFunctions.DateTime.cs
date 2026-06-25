@@ -686,7 +686,7 @@ public static partial class BuiltInFunctions
         if (!TryOADateToDateTime(endDate, out var endRaw)) return ErrorValue.Num;
         var startDt = startRaw.Date;
         var endDt   = endRaw.Date;
-        double days = european ? Days30E360(startDt, endDt) : Days30US360(startDt, endDt);
+        double days = european ? Days30E360(startDt, endDt) : Days30US360Days360(startDt, endDt);
         return new NumberValue(Math.Truncate(days));
     }
 
@@ -766,6 +766,19 @@ public static partial class BuiltInFunctions
         for (int y = start.Year; y <= end.Year; y++)
             total += DateTime.IsLeapYear(y) ? 366.0 : 365.0;
         return total / (end.Year - start.Year + 1);
+    }
+
+    // DAYS360 US method: applies ONLY the day-31 reductions; does NOT fold in the
+    // IsExcelNasdLastDayOfFebruary adjustment.  Excel's DAYS360(start,end,FALSE)
+    // leaves February end-of-month dates alone — only the day-31 rule applies.
+    // YEARFRAC basis-0 uses the full Days30US360 (with Feb-end adjustment) below.
+    private static double Days30US360Days360(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, dd1 = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, dd2 = d2.Day;
+        if (dd1 == 31) dd1 = 30;
+        if (dd2 == 31 && dd1 == 30) dd2 = 30;
+        return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
 
     private static double Days30US360(DateTime d1, DateTime d2)

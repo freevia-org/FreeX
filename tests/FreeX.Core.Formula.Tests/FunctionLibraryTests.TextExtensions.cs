@@ -68,13 +68,25 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Replace_DoesNotSplitSurrogatePairs()
+    public void Replace_SlicesOnUtf16CodeUnitBoundaries()
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
-        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
-        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
+        // Excel REPLACE counts UTF-16 code units; 😀 is a surrogate pair (😀).
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Q\uDE00x"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQ\uDE00y"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("\uD83DQ\uDE00x"));
+    }
+
+    [Fact]
+    public void Replace_SurrogatePair_ExcelParityRegression()
+    {
+        var sheet = MakeSheet();
+
+        // Q12 regression: REPLACE("😀",1,2,"Q") replaces the full emoji (2 code units) with Q.
+        _eval.Evaluate("=REPLACE(\"😀\",1,2,\"Q\")", sheet).Should().Be(new TextValue("Q"));
+        // BMP-only text unchanged.
+        _eval.Evaluate("=REPLACE(\"abcd\",2,2,\"XY\")", sheet).Should().Be(new TextValue("aXYd"));
     }
 
     [Fact]

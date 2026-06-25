@@ -139,16 +139,10 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
     {
-        bool hasSurrogatePair = ContainsSurrogatePair(text);
-        int length = hasSurrogatePair ? CountTextElements(text) : text.Length;
-        if (startNum > length + 1) return ErrorValue.Value;
+        if (startNum > text.Length + 1) return ErrorValue.Value;
 
-        int start = hasSurrogatePair
-            ? TextElementIndexFromOneBasedPosition(text, startNum)
-            : Math.Min(startNum - 1, text.Length);
-        int end = hasSurrogatePair
-            ? AdvanceTextElements(text, start, numChars)
-            : start + Math.Min(numChars, text.Length - start);
+        int start = Math.Min(startNum - 1, text.Length);
+        int end = start + Math.Min(numChars, text.Length - start);
         return TextResult(text[..start] + newText + text[end..]);
     }
 

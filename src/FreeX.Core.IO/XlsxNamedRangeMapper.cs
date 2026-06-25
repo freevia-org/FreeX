@@ -18,7 +18,29 @@ internal static class XlsxNamedRangeMapper
 
     public static void Load(XLWorkbook xlWorkbook, Workbook workbook, List<string>? warnings = null)
     {
-        foreach (var namedRange in xlWorkbook.DefinedNames)
+        // Load workbook-scoped defined names.
+        LoadDefinedNames(xlWorkbook.DefinedNames, workbook, scopeSheetId: null, warnings);
+
+        // Load sheet-scoped defined names. Excel allows the same name at both workbook scope and
+        // a specific sheet scope simultaneously. Sheet-scoped names win during resolution when the
+        // formula's context sheet matches the name's scope sheet.
+        foreach (var xlSheet in xlWorkbook.Worksheets)
+        {
+            var sheet = workbook.GetSheet(xlSheet.Name);
+            if (sheet is null)
+                continue;
+
+            LoadDefinedNames(xlSheet.DefinedNames, workbook, scopeSheetId: sheet.Id, warnings);
+        }
+    }
+
+    private static void LoadDefinedNames(
+        IXLDefinedNames namedRanges,
+        Workbook workbook,
+        SheetId? scopeSheetId,
+        List<string>? warnings)
+    {
+        foreach (var namedRange in namedRanges)
         {
             try
             {
@@ -41,7 +63,12 @@ internal static class XlsxNamedRangeMapper
                 {
                     // Named formula: store the bare expression for on-demand evaluation.
                     if (workbook.ValidateNamedRangeName(namedRange.Name) is null)
-                        workbook.NamedFormulas[namedRange.Name] = refersToBody;
+                    {
+                        if (scopeSheetId is { } fid)
+                            workbook.DefineNamedFormula(namedRange.Name, refersToBody, fid);
+                        else
+                            workbook.NamedFormulas[namedRange.Name] = refersToBody;
+                    }
                     continue;
                 }
 
@@ -79,7 +106,10 @@ internal static class XlsxNamedRangeMapper
                     (uint)lastCell.Address.RowNumber,
                     (uint)lastCell.Address.ColumnNumber);
 
-                workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end));
+                if (scopeSheetId is { } sid)
+                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end), metadata: null, sid);
+                else
+                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end));
             }
             catch (Exception ex)
             {

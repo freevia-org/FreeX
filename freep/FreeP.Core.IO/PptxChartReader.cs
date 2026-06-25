@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -35,7 +37,8 @@ internal static class PptxChartReader
         try
         {
             using var s = entry.Open();
-            doc = XDocument.Load(s);
+            using var reader = XmlReader.Create(s, SecureXmlReaderSettings.Create());
+            doc = XDocument.Load(reader);
         }
         catch { return null; }
 

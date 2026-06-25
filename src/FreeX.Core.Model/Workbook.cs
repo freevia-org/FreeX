@@ -102,6 +102,13 @@ public sealed class Workbook
     private readonly List<CellStyle> _styles = [CellStyle.Default];
     private readonly Dictionary<CellStyle, int> _styleIndex = new() { [CellStyle.Default] = 0 };
 
+    // Sheet-scoped defined names: keyed by (name, sheetId). Only populated when a name has
+    // explicit sheet scope (Excel "localSheetId"). Workbook-scoped names go in NamedRanges /
+    // NamedFormulas as before. Resolution order: sheet-scoped first, then workbook-global.
+    private Dictionary<(string Name, SheetId Sheet), GridRange>? _scopedNamedRanges;
+    private Dictionary<(string Name, SheetId Sheet), NamedRangeMetadata>? _scopedNamedRangeMetadata;
+    private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulas;
+
     /// <summary>Unique identifier for this workbook instance.</summary>
     public WorkbookId Id { get; }
 
@@ -279,6 +286,111 @@ public sealed class Workbook
     public bool TryGetNamedRangeMetadata(string name, out NamedRangeMetadata metadata) =>
         NamedRangeMetadataByName.TryGetValue(name, out metadata!);
 
+    // ── Sheet-scoped defined name API ─────────────────────────────────────────
+
+    /// <summary>
+    /// Sheet-scoped named ranges. Keyed by (name, sheetId). Only populated when a name has
+    /// explicit sheet scope (XLSX localSheetId). Use <see cref="TryGetNamedRange(string,SheetId,out GridRange)"/>
+    /// for sheet-scope-aware resolution; direct access is for serialization/inspection only.
+    /// </summary>
+    public IReadOnlyDictionary<(string Name, SheetId Sheet), GridRange> ScopedNamedRanges =>
+        _scopedNamedRanges is not null
+            ? _scopedNamedRanges
+            : EmptyScopedRanges;
+
+    /// <summary>
+    /// Sheet-scoped named formulas. Keyed by (name, sheetId).
+    /// </summary>
+    public IReadOnlyDictionary<(string Name, SheetId Sheet), string> ScopedNamedFormulas =>
+        _scopedNamedFormulas is not null
+            ? _scopedNamedFormulas
+            : EmptyScopedFormulas;
+
+    private static readonly Dictionary<(string, SheetId), GridRange> EmptyScopedRanges =
+        new(ScopedNameKeyComparer.Instance);
+    private static readonly Dictionary<(string, SheetId), string> EmptyScopedFormulas =
+        new(ScopedNameKeyComparer.Instance);
+
+    /// <summary>
+    /// Define or replace a sheet-scoped named range. Sheet-scoped names take precedence
+    /// over a same-named workbook-global name when resolving formulas on that sheet.
+    /// </summary>
+    public void DefineNamedRange(string name, GridRange range, NamedRangeMetadata? metadata, SheetId scopeSheetId)
+    {
+        var error = ValidateNamedRangeName(name);
+        if (error is not null)
+            throw new ArgumentException(error, nameof(name));
+
+        var key = (name, scopeSheetId);
+        _scopedNamedRanges ??= new Dictionary<(string, SheetId), GridRange>(ScopedNameKeyComparer.Instance);
+        _scopedNamedRanges[key] = range;
+        _scopedNamedRangeMetadata ??= new Dictionary<(string, SheetId), NamedRangeMetadata>(ScopedNameKeyComparer.Instance);
+        _scopedNamedRangeMetadata[key] = metadata ?? NamedRangeMetadata.WorkbookScope;
+    }
+
+    /// <summary>
+    /// Define or replace a sheet-scoped named formula.
+    /// </summary>
+    public void DefineNamedFormula(string name, string formulaText, SheetId scopeSheetId)
+    {
+        var error = ValidateNamedRangeName(name);
+        if (error is not null)
+            throw new ArgumentException(error, nameof(name));
+
+        var key = (name, scopeSheetId);
+        _scopedNamedFormulas ??= new Dictionary<(string, SheetId), string>(ScopedNameKeyComparer.Instance);
+        _scopedNamedFormulas[key] = formulaText;
+    }
+
+    /// <summary>
+    /// Try to get a named range with sheet-scope-first precedence. When <paramref name="contextSheetId"/>
+    /// is provided, a sheet-scoped name for that sheet takes priority over the workbook-global name.
+    /// Returns false if neither a scoped nor a global name is found.
+    /// </summary>
+    public bool TryGetNamedRange(string name, SheetId contextSheetId, out GridRange range)
+    {
+        if (_scopedNamedRanges is not null &&
+            _scopedNamedRanges.TryGetValue((name, contextSheetId), out range))
+            return true;
+
+        return NamedRanges.TryGetValue(name, out range);
+    }
+
+    /// <summary>
+    /// Try to get a named formula text with sheet-scope-first precedence.
+    /// Returns null when neither a scoped nor a global formula text is found.
+    /// </summary>
+    public string? TryGetNamedFormulaText(string name, SheetId contextSheetId)
+    {
+        if (_scopedNamedFormulas is not null &&
+            _scopedNamedFormulas.TryGetValue((name, contextSheetId), out var scoped))
+            return scoped;
+
+        return NamedFormulas.TryGetValue(name, out var global) ? global : null;
+    }
+
+    /// <summary>Remove a sheet-scoped named range. Returns true if found and removed.</summary>
+    public bool RemoveScopedNamedRange(string name, SheetId scopeSheetId)
+    {
+        if (_scopedNamedRanges is null) return false;
+        var key = (name, scopeSheetId);
+        _scopedNamedRangeMetadata?.Remove(key);
+        return _scopedNamedRanges.Remove(key);
+    }
+
+    // ── Keyed equality for (string, SheetId) dictionary keys ─────────────────
+
+    private sealed class ScopedNameKeyComparer : IEqualityComparer<(string Name, SheetId Sheet)>
+    {
+        public static readonly ScopedNameKeyComparer Instance = new();
+
+        public bool Equals((string Name, SheetId Sheet) x, (string Name, SheetId Sheet) y) =>
+            string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase) && x.Sheet.Equals(y.Sheet);
+
+        public int GetHashCode((string Name, SheetId Sheet) obj) =>
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Name), obj.Sheet.GetHashCode());
+    }
+
     public Workbook(string name = "Untitled")
     {
         Id = WorkbookId.New();
@@ -435,6 +547,22 @@ public sealed class Workbook
         {
             if (range.Start.Sheet == sheetId || range.End.Sheet == sheetId)
                 RemoveNamedRange(name);
+        }
+
+        // Remove all sheet-scoped names belonging to the deleted sheet.
+        if (_scopedNamedRanges is not null)
+        {
+            foreach (var key in _scopedNamedRanges.Keys.Where(k => k.Sheet == sheetId).ToList())
+            {
+                _scopedNamedRanges.Remove(key);
+                _scopedNamedRangeMetadata?.Remove(key);
+            }
+        }
+
+        if (_scopedNamedFormulas is not null)
+        {
+            foreach (var key in _scopedNamedFormulas.Keys.Where(k => k.Sheet == sheetId).ToList())
+                _scopedNamedFormulas.Remove(key);
         }
     }
 

@@ -262,5 +262,147 @@ public class NamedRangeTests
         result.Should().Be(new NumberValue(24));
     }
 
+    // ── Sheet-scoped name collision support (Q13 fix) ────────────────────────
 
+    [Fact]
+    public void SheetScoped_And_WorkbookScoped_SameName_StoredWithoutCollision()
+    {
+        // Both a workbook-global 'Rate' and a Sheet2-scoped 'Rate' must coexist.
+        var wb     = new Workbook("rate-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        var rangeWb = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
+        var rangeS2 = new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 1, 1));
+
+        sheet1.SetCell(new CellAddress(sheet1.Id, 1, 1), new NumberValue(0.05));
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(0.07));
+
+        // Workbook-scoped name
+        wb.DefineNamedRange("Rate", rangeWb);
+        // Sheet2-scoped name with same name — must NOT overwrite workbook-scoped
+        wb.DefineNamedRange("Rate", rangeS2, metadata: null, sheet2.Id);
+
+        // Both must be present and distinct
+        wb.TryGetNamedRange("Rate", out var globalRange).Should().BeTrue();
+        globalRange.Should().Be(rangeWb);
+
+        wb.ScopedNamedRanges.Should().ContainKey(("Rate", sheet2.Id));
+        wb.ScopedNamedRanges[("Rate", sheet2.Id)].Should().Be(rangeS2);
+    }
+
+    [Fact]
+    public void SheetScoped_ResolvesSheetLocal_WhenOnMatchingSheet()
+    {
+        // A formula on Sheet2 using 'Rate' resolves the Sheet2-scoped name (0.07), not the
+        // workbook-global one (0.05). This is Excel's sheet-scope-first resolution rule.
+        var wb     = new Workbook("rate-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        sheet1.SetCell(new CellAddress(sheet1.Id, 1, 1), new NumberValue(0.05));
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(0.07));
+
+        wb.DefineNamedRange("Rate",
+            new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1)));
+        wb.DefineNamedRange("Rate",
+            new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 1, 1)),
+            metadata: null, sheet2.Id);
+
+        var eval = new FormulaEvaluator();
+
+        // Formula on Sheet2 → should resolve to Sheet2-scoped Rate = 0.07
+        // (SUM wraps the named range to force scalar extraction)
+        var resultOnSheet2 = eval.Evaluate("=SUM(Rate)", sheet2, wb);
+        resultOnSheet2.Should().Be(new NumberValue(0.07));
+    }
+
+    [Fact]
+    public void WorkbookScoped_ResolvesGlobal_WhenOnNonMatchingSheet()
+    {
+        // A formula on Sheet1 using 'Rate' falls back to the workbook-global name (0.05)
+        // because there is no Sheet1-scoped 'Rate'.
+        var wb     = new Workbook("rate-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        sheet1.SetCell(new CellAddress(sheet1.Id, 1, 1), new NumberValue(0.05));
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(0.07));
+
+        wb.DefineNamedRange("Rate",
+            new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1)));
+        wb.DefineNamedRange("Rate",
+            new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 1, 1)),
+            metadata: null, sheet2.Id);
+
+        var eval = new FormulaEvaluator();
+
+        // Formula on Sheet1 → no Sheet1-scoped Rate; falls back to workbook-global = 0.05
+        var resultOnSheet1 = eval.Evaluate("=SUM(Rate)", sheet1, wb);
+        resultOnSheet1.Should().Be(new NumberValue(0.05));
+    }
+
+    [Fact]
+    public void RemoveSheet_ClearsScopedNamesForThatSheet()
+    {
+        var wb     = new Workbook("cleanup-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new NumberValue(42));
+        wb.DefineNamedRange("Temp",
+            new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 1, 1)),
+            metadata: null, sheet2.Id);
+
+        wb.ScopedNamedRanges.Should().ContainKey(("Temp", sheet2.Id));
+
+        // Removing Sheet2 must clean up its scoped names
+        wb.RemoveSheet(sheet2.Id);
+
+        wb.ScopedNamedRanges.Should().NotContainKey(("Temp", sheet2.Id));
+        _ = sheet1; // suppress unused
+    }
+
+    [Fact]
+    public void SheetScopedNamedFormula_ResolvesSheetLocal_WhenOnMatchingSheet()
+    {
+        // A named formula scoped to Sheet2 resolves to the sheet-local value.
+        var wb     = new Workbook("formula-scope-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        // Workbook-global constant formula
+        wb.NamedFormulas["MyConst"] = "100";
+        // Sheet2-scoped override
+        wb.DefineNamedFormula("MyConst", "200", sheet2.Id);
+
+        var eval = new FormulaEvaluator();
+
+        // On Sheet2: sheet-scoped formula wins
+        eval.Evaluate("=MyConst", sheet2, wb).Should().Be(new NumberValue(200));
+        // On Sheet1: falls back to workbook-global
+        eval.Evaluate("=MyConst", sheet1, wb).Should().Be(new NumberValue(100));
+    }
+
+    [Fact]
+    public void TryGetNamedRange_SheetAware_FindsScopedFirst()
+    {
+        var wb     = new Workbook("api-test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+
+        var rangeGlobal = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
+        var rangeScoped = new GridRange(new CellAddress(sheet2.Id, 2, 2), new CellAddress(sheet2.Id, 2, 2));
+
+        wb.DefineNamedRange("X", rangeGlobal);
+        wb.DefineNamedRange("X", rangeScoped, metadata: null, sheet2.Id);
+
+        // Sheet2 context → scoped wins
+        wb.TryGetNamedRange("X", sheet2.Id, out var found2).Should().BeTrue();
+        found2.Should().Be(rangeScoped);
+
+        // Sheet1 context → no scoped, falls back to global
+        wb.TryGetNamedRange("X", sheet1.Id, out var found1).Should().BeTrue();
+        found1.Should().Be(rangeGlobal);
+    }
 }

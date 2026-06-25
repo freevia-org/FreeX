@@ -748,14 +748,16 @@ public sealed class RecalcEngine
             case NamedRangeNode named:
             {
                 cacheableForDependencyPlan = false;
-                if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
+                // Sheet-scope-first: a name scoped to defaultSheetId takes precedence
+                // over a same-named workbook-global name (Excel rule §18.2.6).
+                if (workbook is not null && workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange))
                 {
                     refs.AddRange(namedRange);
                     return false;
                 }
 
-                if (workbook?.NamedFormulas.TryGetValue(named.Name, out var formulaText) == true &&
-                    !string.IsNullOrWhiteSpace(formulaText))
+                var formulaText = workbook?.TryGetNamedFormulaText(named.Name, defaultSheetId);
+                if (formulaText is not null && !string.IsNullOrWhiteSpace(formulaText))
                 {
                     namedFormulaStack ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     if (!namedFormulaStack.Add(named.Name))
