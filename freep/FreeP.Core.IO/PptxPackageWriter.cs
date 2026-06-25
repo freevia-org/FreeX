@@ -461,6 +461,7 @@ public static class PptxPackageWriter
             SlideShapeKind.Picture => BuildPicEl(shape, mediaByName),
             SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaByName),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
+            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             _ => BuildSpEl(shape, scheme)
         };
 
@@ -525,6 +526,159 @@ public static class PptxPackageWriter
                 new XElement(A + "avLst")),
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null);
+    }
+
+    // ── Table / graphicFrame elements ─────────────────────────────────────────────
+
+    private const string DrawingTableUri = "http://schemas.openxmlformats.org/drawingml/2006/table";
+
+    private static XElement BuildGraphicFrameEl(SlideShape shape, PresentationColorScheme scheme)
+    {
+        var table = shape.Table!;
+
+        // xfrm
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr",
+                    new XElement(A + "graphicFrameLocks",
+                        new XAttribute("noGrp", "1"))),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingTableUri),
+                    BuildTableEl(table, scheme))));
+    }
+
+    private static XElement BuildTableEl(TableShape table, PresentationColorScheme scheme)
+    {
+        // tblPr
+        var tblPr = new XElement(A + "tblPr");
+        if (table.Flags.FirstRow) tblPr.Add(new XAttribute("firstRow", "1"));
+        if (table.Flags.LastRow)  tblPr.Add(new XAttribute("lastRow", "1"));
+        if (table.Flags.FirstCol) tblPr.Add(new XAttribute("firstCol", "1"));
+        if (table.Flags.LastCol)  tblPr.Add(new XAttribute("lastCol", "1"));
+        if (table.Flags.BandRow)  tblPr.Add(new XAttribute("bandRow", "1"));
+        if (table.Flags.BandCol)  tblPr.Add(new XAttribute("bandCol", "1"));
+        if (!string.IsNullOrWhiteSpace(table.TableStyleId))
+            tblPr.Add(new XElement(A + "tableStyleId", table.TableStyleId));
+
+        // tblGrid
+        var tblGrid = new XElement(A + "tblGrid",
+            table.ColumnWidthsEmu.Select(w =>
+                new XElement(A + "gridCol", new XAttribute("w", w))));
+
+        // rows
+        var rowEls = table.Rows.Select(row => BuildTableRowEl(row, scheme));
+
+        return new XElement(A + "tbl", tblPr, tblGrid, rowEls);
+    }
+
+    private static XElement BuildTableRowEl(TableRow row, PresentationColorScheme scheme) =>
+        new XElement(A + "tr",
+            new XAttribute("h", row.HeightEmu),
+            row.Cells.Select(cell => BuildTableCellEl(cell, scheme)));
+
+    private static XElement BuildTableCellEl(TableCell cell, PresentationColorScheme scheme)
+    {
+        // txBody (a:txBody inside a cell uses A namespace directly)
+        XElement? txBody = null;
+        if (cell.TextBody is not null)
+        {
+            var bodyPr = new XElement(A + "bodyPr");
+            if (cell.TextBody.Anchor.HasValue)
+                bodyPr.Add(new XAttribute("anchor", cell.TextBody.Anchor.Value switch
+                {
+                    VerticalAnchor.Middle => "ctr",
+                    VerticalAnchor.Bottom => "b",
+                    _ => "t"
+                }));
+
+            txBody = new XElement(A + "txBody",
+                bodyPr,
+                new XElement(A + "lstStyle"),
+                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p)));
+        }
+        else
+        {
+            // Empty txBody is required by spec.
+            txBody = new XElement(A + "txBody",
+                new XElement(A + "bodyPr"),
+                new XElement(A + "lstStyle"),
+                new XElement(A + "p"));
+        }
+
+        // tcPr
+        var tcPr = new XElement(A + "tcPr");
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", (long)Math.Round(cell.InsetLeftPt.Value * 12700)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", (long)Math.Round(cell.InsetRightPt.Value * 12700)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", (long)Math.Round(cell.InsetTopPt.Value * 12700)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", (long)Math.Round(cell.InsetBottomPt.Value * 12700)));
+        if (cell.Anchor.HasValue)
+            tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
+            {
+                TableCellAnchor.Middle => "ctr",
+                TableCellAnchor.Bottom => "b",
+                _ => "t"
+            }));
+
+        // Per-side borders
+        if (cell.Borders?.Left   is { } bl) tcPr.Add(new XElement(A + "lnL",   BuildBorderAttrs(bl)));
+        if (cell.Borders?.Right  is { } br) tcPr.Add(new XElement(A + "lnR",   BuildBorderAttrs(br)));
+        if (cell.Borders?.Top    is { } bt) tcPr.Add(new XElement(A + "lnT",   BuildBorderAttrs(bt)));
+        if (cell.Borders?.Bottom is { } bb) tcPr.Add(new XElement(A + "lnB",   BuildBorderAttrs(bb)));
+
+        // Explicit fill
+        if (cell.Fill is not null)
+        {
+            var fillEl = BuildFillEl(cell.Fill, scheme);
+            if (fillEl is not null)
+                tcPr.Add(new XElement(A + "fill", fillEl));
+        }
+
+        // Build the tc element.
+        var tc = new XElement(A + "tc");
+
+        // Merge attributes.
+        if (cell.GridSpan > 1) tc.Add(new XAttribute("gridSpan", cell.GridSpan));
+        if (cell.RowSpan > 1)  tc.Add(new XAttribute("rowSpan", cell.RowSpan));
+        if (cell.HMerge) tc.Add(new XAttribute("hMerge", "1"));
+        if (cell.VMerge) tc.Add(new XAttribute("vMerge", "1"));
+
+        tc.Add(txBody);
+        tc.Add(tcPr);
+        return tc;
+    }
+
+    private static object[] BuildBorderAttrs(ShapeOutline outline)
+    {
+        if (outline is ShapeOutline.None)
+            return new object[] { new XElement(A + "noFill") };
+
+        if (outline is ShapeOutline.Visible v)
+        {
+            var children = new List<object>
+            {
+                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XElement(A + "solidFill", BuildColorEl(v.Color))
+            };
+            if (v.Dash != OutlineDash.Solid)
+                children.Add(new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash))));
+            return children.ToArray();
+        }
+
+        return Array.Empty<object>();
     }
 
     // ── Fill elements ─────────────────────────────────────────────────────────────

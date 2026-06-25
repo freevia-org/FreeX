@@ -875,6 +875,170 @@ public sealed class SlideCompositorTests
         shapeOp.Text!.Anchor.Should().Be(VerticalAnchor.Bottom,
             "vertical anchor is inherited from layout placeholder bodyPr");
     }
+
+    // --- Table compositor tests -------------------------------------------
+
+    private static (PresentationModel pres, Slide slide, SlideShape shape)
+        MakeTableShape(TableShape table, long offX = 0, long offY = 0, long cx = 9144000, long cy = 4572000)
+    {
+        var p = MakePresentation();
+        var slide = p.Slides[0];
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Name = "Table 1",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = offX,
+            OffsetYEmu = offY,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Table = table
+        };
+        slide.Shapes.Add(shape);
+        return (p, slide, shape);
+    }
+
+    [Fact]
+    public void ComposeTable_EmptyTable_ProducesTableOp()
+    {
+        // Arrange: empty table (no rows)
+        var table = new TableShape();
+        var (p, slide, _) = MakeTableShape(table);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+
+        // Assert: should get a Background op + a Table op
+        ops.Should().ContainSingle(o => o is DrawOp.Table, "a Table draw op should be emitted");
+    }
+
+    [Fact]
+    public void ComposeTable_CellRects_MatchCumulativeWidthsAndHeights()
+    {
+        // Arrange: 2-col x 2-row table
+        // col0=3048000 EMU (320 DIP), col1=3048000 EMU (320 DIP)
+        // row0=914400 EMU (96 DIP), row1=914400 EMU (96 DIP)
+        const long colW  = 3048000L;
+        const long rowH  = 914400L;
+        const long offX  = 914400L;  // 96 DIP
+        const long offY  = 914400L;  // 96 DIP
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(colW);
+        table.ColumnWidthsEmu.Add(colW);
+
+        for (int r = 0; r < 2; r++)
+        {
+            var row = new TableRow { HeightEmu = rowH };
+            row.Cells.Add(new TableCell());
+            row.Cells.Add(new TableCell());
+            table.Rows.Add(row);
+        }
+
+        var (p, slide, _) = MakeTableShape(table, offX, offY, colW * 2, rowH * 2);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var tbl = ops.OfType<DrawOp.Table>().Single();
+
+        // Assert: 4 non-merged cells
+        tbl.Cells.Should().HaveCount(4);
+
+        const double emu = 9525.0;
+        double x0 = offX / emu;
+        double y0 = offY / emu;
+        double w  = colW  / emu;
+        double h  = rowH  / emu;
+
+        // Row 0, col 0
+        tbl.Cells[0].BoundsDip.X.Should().BeApproximately(x0,         0.001);
+        tbl.Cells[0].BoundsDip.Y.Should().BeApproximately(y0,         0.001);
+        tbl.Cells[0].BoundsDip.Width.Should().BeApproximately(w,       0.001);
+        tbl.Cells[0].BoundsDip.Height.Should().BeApproximately(h,      0.001);
+
+        // Row 0, col 1
+        tbl.Cells[1].BoundsDip.X.Should().BeApproximately(x0 + w,     0.001);
+        tbl.Cells[1].BoundsDip.Y.Should().BeApproximately(y0,         0.001);
+
+        // Row 1, col 0
+        tbl.Cells[2].BoundsDip.X.Should().BeApproximately(x0,         0.001);
+        tbl.Cells[2].BoundsDip.Y.Should().BeApproximately(y0 + h,     0.001);
+
+        // Row 1, col 1
+        tbl.Cells[3].BoundsDip.X.Should().BeApproximately(x0 + w,     0.001);
+        tbl.Cells[3].BoundsDip.Y.Should().BeApproximately(y0 + h,     0.001);
+    }
+
+    [Fact]
+    public void ComposeTable_MergedCells_SkipsCoveredCells()
+    {
+        // Arrange: 3-col x 1-row; cell 0 has GridSpan=2, cell 1+2 are HMerge.
+        const long colW = 3048000L;
+        const long rowH = 914400L;
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(colW);
+        table.ColumnWidthsEmu.Add(colW);
+        table.ColumnWidthsEmu.Add(colW);
+
+        var row = new TableRow { HeightEmu = rowH };
+        row.Cells.Add(new TableCell { GridSpan = 2 });
+        row.Cells.Add(new TableCell { HMerge = true });
+        row.Cells.Add(new TableCell());
+        table.Rows.Add(row);
+
+        var (p, slide, _) = MakeTableShape(table, 0, 0, colW * 3, rowH);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var tbl = ops.OfType<DrawOp.Table>().Single();
+
+        // Assert: only 2 cells emitted (origin + col2); HMerge cell skipped
+        tbl.Cells.Should().HaveCount(2, "HMerge cells should be skipped");
+
+        const double emu = 9525.0;
+        // Origin cell should span 2 columns
+        tbl.Cells[0].BoundsDip.Width.Should().BeApproximately(colW * 2 / emu, 0.001);
+        // The last cell occupies only col 2
+        tbl.Cells[1].BoundsDip.X.Should().BeApproximately(colW * 2 / emu, 0.001);
+        tbl.Cells[1].BoundsDip.Width.Should().BeApproximately(colW / emu, 0.001);
+    }
+
+    [Fact]
+    public void TableStyleData_EffectiveFill_FirstRowWins()
+    {
+        // Arrange: table with FirstRow flag + style that has distinct firstRow vs band fills.
+        var wholeFill  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xAA, 0xAA, 0xAA)));
+        var firstFill  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x1F, 0x4E, 0x79)));
+        var band1Fill  = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xDD, 0xEE, 0xFF)));
+
+        var styleData = new TableStyleData
+        {
+            StyleId  = "{test}",
+            WholeTbl = new TableStyleEntry { Fill = wholeFill },
+            FirstRow = new TableStyleEntry { Fill = firstFill },
+            Band1H   = new TableStyleEntry { Fill = band1Fill }
+        };
+
+        var table = new TableShape
+        {
+            TableStyleId = "{test}",
+            StyleData    = styleData
+        };
+        table.Flags.FirstRow = true;
+        table.Flags.BandRow  = true;
+        table.ColumnWidthsEmu.Add(914400);
+        table.Rows.Add(new TableRow { HeightEmu = 457200 });
+        table.Rows[0].Cells.Add(new TableCell());  // row 0, first row
+        table.Rows.Add(new TableRow { HeightEmu = 457200 });
+        table.Rows[1].Cells.Add(new TableCell());  // row 1, band1
+
+        // Act: effective fill for row 0 (first row) should be firstFill
+        var fill0 = table.ComputeEffectiveFill(0, 0, table.Rows[0].Cells[0]);
+        fill0.Should().Be(firstFill, "first row flag should pick firstRow style fill over band");
+
+        // row 1 = band 1 (after first row header, row 1 is band index 0 = Band1H)
+        var fill1 = table.ComputeEffectiveFill(1, 0, table.Rows[1].Cells[0]);
+        fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
+    }
 }
-
-

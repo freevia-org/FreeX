@@ -133,6 +133,9 @@ public sealed class SlideCanvas : FrameworkElement
             case DrawOp.Picture pic:
                 RenderPicture(dc, pic);
                 break;
+            case DrawOp.Table table:
+                RenderTable(dc, table);
+                break;
         }
     }
 
@@ -243,6 +246,89 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         if (hasRotation) dc.Pop();
+    }
+
+    // ── Table ──────────────────────────────────────────────────────────────────
+
+    private static void RenderTable(DrawingContext dc, DrawOp.Table tableOp)
+    {
+        foreach (var cell in tableOp.Cells)
+            RenderTableCell(dc, cell);
+    }
+
+    private static void RenderTableCell(DrawingContext dc, TableCellOp cell)
+    {
+        var rect = new Rect(cell.BoundsDip.X, cell.BoundsDip.Y, cell.BoundsDip.Width, cell.BoundsDip.Height);
+
+        // Fill
+        var fillBrush = MakeBrush(cell.Fill, cell.BoundsDip);
+        if (fillBrush is not null)
+            dc.DrawRectangle(fillBrush, null, rect);
+
+        // Per-side borders (draw as single-pixel lines along each edge to avoid overlap issues).
+        DrawCellBorder(dc, cell.BorderTop,
+            new Point(rect.Left,  rect.Top), new Point(rect.Right, rect.Top));
+        DrawCellBorder(dc, cell.BorderBottom,
+            new Point(rect.Left,  rect.Bottom), new Point(rect.Right, rect.Bottom));
+        DrawCellBorder(dc, cell.BorderLeft,
+            new Point(rect.Left,  rect.Top), new Point(rect.Left,  rect.Bottom));
+        DrawCellBorder(dc, cell.BorderRight,
+            new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+
+        // Text (respecting cell vertical anchor + insets).
+        if (cell.Text is not null)
+            RenderTableCellText(dc, cell.Text, cell.BoundsDip, cell.Anchor);
+    }
+
+    private static void DrawCellBorder(DrawingContext dc, ResolvedOutline outline, Point p1, Point p2)
+    {
+        var pen = MakePen(outline);
+        if (pen is null) return;
+        dc.DrawLine(pen, p1, p2);
+    }
+
+    private static void RenderTableCellText(
+        DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
+        FreeP.Core.Model.TableCellAnchor anchor)
+    {
+        double insetLeft   = text.InsetLeftDip;
+        double insetTop    = text.InsetTopDip;
+        double insetRight  = text.InsetRightDip;
+        double insetBottom = text.InsetBottomDip;
+
+        double textAreaW = Math.Max(0, bounds.Width  - insetLeft - insetRight);
+        double textAreaH = Math.Max(0, bounds.Height - insetTop  - insetBottom);
+
+        var formatted = new List<(FormattedText ft, double spaceAfter)>();
+        double totalH = 0;
+
+        foreach (var para in text.Paragraphs)
+        {
+            if (para.Runs.Count == 0) continue;
+            var ft = BuildFormattedText(para, textAreaW, text.Wrap);
+            formatted.Add((ft, para.SpaceAfterPt * (96.0 / 72.0)));
+            totalH += ft.Height + para.SpaceBeforePt * (96.0 / 72.0) + para.SpaceAfterPt * (96.0 / 72.0);
+        }
+
+        double startY = anchor switch
+        {
+            FreeP.Core.Model.TableCellAnchor.Middle => bounds.Y + insetTop + Math.Max(0, (textAreaH - totalH) / 2),
+            FreeP.Core.Model.TableCellAnchor.Bottom => bounds.Y + insetTop + Math.Max(0, textAreaH - totalH),
+            _ => bounds.Y + insetTop
+        };
+
+        double curY = startY;
+        int paraIdx = 0;
+        foreach (var para in text.Paragraphs)
+        {
+            if (para.Runs.Count == 0) { paraIdx++; continue; }
+            var (ft, spaceAfterDip) = formatted[paraIdx];
+            double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0);
+            curY += spaceBefore;
+            dc.DrawText(ft, new Point(bounds.X + insetLeft, curY));
+            curY += ft.Height + spaceAfterDip;
+            paraIdx++;
+        }
     }
 
     // ── Text ────────────────────────────────────────────────────────────────────

@@ -88,6 +88,11 @@ public sealed class SlideShape
     /// <summary>Image data when Kind == Picture.</summary>
     public ImagePart? Picture { get; set; }
 
+    // ── Table ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Table data when Kind == Table.</summary>
+    public TableShape? Table { get; set; }
+
     // ── Group children ────────────────────────────────────────────────────────────
 
     /// <summary>Child shapes when Kind == Group.</summary>

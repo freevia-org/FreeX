@@ -638,4 +638,126 @@ public sealed class PptxRoundTripTests : IDisposable
         return Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
     }
+
+    // -------------------------------------------------------------------------
+    // Table round-trip tests
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void RoundTrip_TableShape_ColsRowsCellsPreserved()
+    {
+        // Arrange: 2-col x 2-row table with header row flag.
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var table = new TableShape
+        {
+            TableStyleId = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"
+        };
+        table.Flags.FirstRow = true;
+        table.Flags.BandRow  = true;
+        table.ColumnWidthsEmu.Add(2743200L);  // ~288 DIP
+        table.ColumnWidthsEmu.Add(2743200L);
+
+        var row0 = new TableRow { HeightEmu = 685800L };
+        row0.Cells.Add(new TableCell
+        {
+            TextBody = MakeBody("Header A")
+        });
+        row0.Cells.Add(new TableCell
+        {
+            TextBody = MakeBody("Header B")
+        });
+        table.Rows.Add(row0);
+
+        var row1 = new TableRow { HeightEmu = 685800L };
+        row1.Cells.Add(new TableCell { TextBody = MakeBody("Cell 1") });
+        row1.Cells.Add(new TableCell { TextBody = MakeBody("Cell 2"), GridSpan = 1 });
+        table.Rows.Add(row1);
+
+        var shape = new SlideShape
+        {
+            Id = 10, Name = "Table 1",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 457200, OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400, ExtentCyEmu = 1371600,
+            Table = table
+        };
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        // Act: write → read
+        var path = Path.Combine(_tempDir, "table-rt.pptx");
+        PptxPackageWriter.Write(pres, path);
+        var read = PptxPackageReader.Read(path);
+
+        // Assert: shape present
+        var readSlide = read.Slides[0];
+        var tableShape = readSlide.Shapes.SingleOrDefault(s => s.Kind == SlideShapeKind.Table);
+        tableShape.Should().NotBeNull("table shape should survive round-trip");
+        tableShape!.Table.Should().NotBeNull();
+
+        var rt = tableShape.Table!;
+        rt.ColumnWidthsEmu.Should().HaveCount(2, "column count preserved");
+        rt.Rows.Should().HaveCount(2, "row count preserved");
+        rt.Flags.FirstRow.Should().BeTrue("FirstRow flag preserved");
+
+        // Header text
+        rt.Rows[0].Cells[0].TextBody?.Paragraphs[0].Runs[0].Text.Should().Be("Header A");
+        rt.Rows[0].Cells[1].TextBody?.Paragraphs[0].Runs[0].Text.Should().Be("Header B");
+
+        // Style ID preserved
+        rt.TableStyleId.Should().Be("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}");
+    }
+
+    [Fact]
+    public void RoundTrip_TableMergedCell_SpanAttributesPreserved()
+    {
+        // Arrange: 3-col x 1-row table with a 2-column merged cell.
+        var pres = new Presentation();
+        var slide = new Slide();
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(2000000L);
+        table.ColumnWidthsEmu.Add(2000000L);
+        table.ColumnWidthsEmu.Add(2000000L);
+
+        var row = new TableRow { HeightEmu = 685800L };
+        row.Cells.Add(new TableCell { GridSpan = 2 });
+        row.Cells.Add(new TableCell { HMerge = true });
+        row.Cells.Add(new TableCell());
+        table.Rows.Add(row);
+
+        var shape = new SlideShape
+        {
+            Id = 11, Name = "Table 2",
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 457200, OffsetYEmu = 1000000,
+            ExtentCxEmu = 6000000, ExtentCyEmu = 685800,
+            Table = table
+        };
+        slide.Shapes.Add(shape);
+        pres.Slides.Add(slide);
+
+        // Act
+        var path = Path.Combine(_tempDir, "table-merge.pptx");
+        PptxPackageWriter.Write(pres, path);
+        var read = PptxPackageReader.Read(path);
+
+        // Assert
+        var rt = read.Slides[0].Shapes.Single(s => s.Kind == SlideShapeKind.Table).Table!;
+        rt.ColumnWidthsEmu.Should().HaveCount(3);
+        rt.Rows[0].Cells[0].GridSpan.Should().Be(2, "gridSpan=2 preserved");
+        rt.Rows[0].Cells[1].HMerge.Should().BeTrue("hMerge flag preserved");
+        rt.Rows[0].Cells[2].HMerge.Should().BeFalse("last cell is not merged");
+    }
+
+    private static TextBody MakeBody(string text)
+    {
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(para);
+        return body;
+    }
 }

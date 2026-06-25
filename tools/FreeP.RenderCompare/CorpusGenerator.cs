@@ -63,6 +63,7 @@ internal static class CorpusGenerator
                 ("02-autoshapes",   GenerateAutoshapes),
                 ("03-mixed-text",   GenerateMixedText),
                 ("04-picture",      GeneratePicture),
+                ("05-table",        GenerateTable),
             };
 
             var errors = 0;
@@ -240,6 +241,72 @@ internal static class CorpusGenerator
         run.Font.Italic = isItalic ? MsoTrue : MsoFalse;
         run.Font.Color.RGB = colorRgb;
         run.Font.Size = size;
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 05: Table — 3 columns x 4 rows, header row, banded, merged cell
+    // -----------------------------------------------------------------------
+    private static void GenerateTable(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // AddTable(NumRows, NumColumns, Left, Top, Width, Height)
+            // Slide is 960 x 540 pt. Centre a 700x260 table.
+            dynamic table = slide.Shapes.AddTable(4, 3, 130f, 140f, 700f, 260f).Table;
+
+            // Apply "Medium Style 2 - Accent 1" table style
+            // Note: we set FirstRow = true so the header row gets a distinct style.
+            table.ShowHeaders = MsoTrue;
+            table.ApplyStyle("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", MsoTrue);
+
+            // Column widths (sum ~700pt)
+            table.Columns.Item(1).Width = 220f;
+            table.Columns.Item(2).Width = 240f;
+            table.Columns.Item(3).Width = 240f;
+
+            // Row heights
+            for (int r = 1; r <= 4; r++)
+                table.Rows.Item(r).Height = 65f;
+
+            // Header row
+            SetCell(table, 1, 1, "Category", isBold: true);
+            SetCell(table, 1, 2, "Value",    isBold: true);
+            SetCell(table, 1, 3, "Notes",    isBold: true);
+
+            // Data rows
+            SetCell(table, 2, 1, "Alpha");
+            SetCell(table, 2, 2, "1 234");
+            SetCell(table, 2, 3, "First row of data");
+
+            SetCell(table, 3, 1, "Beta");
+            SetCell(table, 3, 2, "5 678");
+            SetCell(table, 3, 3, "Second row of data");
+
+            // Row 4: merge columns 2 and 3
+            SetCell(table, 4, 1, "Total");
+            SetCell(table, 4, 2, "6 912");
+            // Merge columns 2+3 in row 4
+            table.Cell(4, 2).Merge(table.Cell(4, 3));
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    private static void SetCell(dynamic table, int row, int col, string text, bool isBold = false)
+    {
+        dynamic cell = table.Cell(row, col);
+        cell.Shape.TextFrame.TextRange.Text = text;
+        cell.Shape.TextFrame.TextRange.Font.Bold   = isBold ? MsoTrue : MsoFalse;
+        cell.Shape.TextFrame.TextRange.Font.Size   = 16;
+        cell.Shape.TextFrame.TextRange.ParagraphFormat.Alignment = 1; // ppAlignLeft
     }
 
     // -----------------------------------------------------------------------

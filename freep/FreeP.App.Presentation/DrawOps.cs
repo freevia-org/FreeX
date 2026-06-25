@@ -1,9 +1,9 @@
-﻿using Free.Shared.Drawing;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
-// â”€â”€â”€ Resolved text types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Resolved text types ──────────────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
 /// A fully-resolved text run ready for the renderer: all inherited properties have been applied
@@ -58,7 +58,7 @@ public sealed class ResolvedTextLayout
     public bool Wrap { get; init; } = true;
 }
 
-// â”€â”€â”€ Resolved fill/outline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Resolved fill/outline ────────────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>Resolved fill for a draw operation: concrete sRGB values, no theme refs needed.</summary>
 public abstract class ResolvedFill
@@ -80,7 +80,7 @@ public abstract class ResolvedFill
     {
         public SrgbColor StartColor { get; }
         public SrgbColor EndColor { get; }
-        /// <summary>Angle in degrees (0 = leftâ†’right, 90 = topâ†’bottom).</summary>
+        /// <summary>Angle in degrees (0 = left->right, 90 = top->bottom).</summary>
         public double AngleDegrees { get; }
         public Gradient(SrgbColor startColor, SrgbColor endColor, double angleDegrees)
         {
@@ -113,7 +113,7 @@ public abstract class ResolvedOutline
     }
 }
 
-// â”€â”€â”€ Draw operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
 /// Base class for a single resolved draw operation emitted by the compositor.
@@ -123,7 +123,7 @@ public abstract class DrawOp
 {
     private DrawOp() { }
 
-    // â”€â”€ Shape draw op â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Shape draw op ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Draw a shape geometry with optional fill, outline, rotation/flip, and text overlay.
@@ -162,14 +162,14 @@ public abstract class DrawOp
         public ResolvedTextLayout? Text { get; init; }
     }
 
-    // â”€â”€ Picture draw op â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Picture draw op ───────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Draw a picture (raster or vector image) at a given rectangle.
     /// </summary>
     public sealed class Picture : DrawOp
     {
-        /// <summary>Raw image bytes (JPEG, PNG, GIF, â€¦).</summary>
+        /// <summary>Raw image bytes (JPEG, PNG, GIF, ...).</summary>
         public byte[] Bytes { get; init; } = Array.Empty<byte>();
 
         /// <summary>MIME content type (e.g. "image/png").</summary>
@@ -185,7 +185,7 @@ public abstract class DrawOp
         public ResolvedOutline Outline { get; init; } = ResolvedOutline.None.Instance;
     }
 
-    // â”€â”€ Background draw op â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Background draw op ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Draw the slide background (always the first op in the list when the background is not transparent).
@@ -197,5 +197,48 @@ public abstract class DrawOp
         /// <summary>Slide bounds in DIP (always origin-anchored: 0,0 x slideCx x slideCy).</summary>
         public LayoutRect BoundsDip { get; init; }
     }
+
+    // ── Table draw op ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draws a table: an ordered list of resolved cell operations in painter's order.
+    /// The overall bounding box of the table frame is <see cref="BoundsDip"/>.
+    /// </summary>
+    public sealed class Table : DrawOp
+    {
+        /// <summary>Bounding box of the entire table frame in DIP.</summary>
+        public LayoutRect BoundsDip { get; init; }
+
+        /// <summary>Ordered list of cell draw ops (back to front, row-major).</summary>
+        public IReadOnlyList<TableCellOp> Cells { get; init; } = Array.Empty<TableCellOp>();
+    }
 }
 
+/// <summary>
+/// A single resolved table cell draw operation.
+/// Contains the cell's bounding rect (already accounting for spans + table frame position),
+/// its resolved fill, per-side borders, and optional text layout.
+/// </summary>
+public sealed class TableCellOp
+{
+    /// <summary>Cell rectangle in DIP (the origin cell for merged cells; covered cells are skipped).</summary>
+    public LayoutRect BoundsDip { get; init; }
+
+    /// <summary>Resolved fill for the cell (may be None).</summary>
+    public ResolvedFill Fill { get; init; } = ResolvedFill.None.Instance;
+
+    /// <summary>Left border (may be None).</summary>
+    public ResolvedOutline BorderLeft   { get; init; } = ResolvedOutline.None.Instance;
+    /// <summary>Right border.</summary>
+    public ResolvedOutline BorderRight  { get; init; } = ResolvedOutline.None.Instance;
+    /// <summary>Top border.</summary>
+    public ResolvedOutline BorderTop    { get; init; } = ResolvedOutline.None.Instance;
+    /// <summary>Bottom border.</summary>
+    public ResolvedOutline BorderBottom { get; init; } = ResolvedOutline.None.Instance;
+
+    /// <summary>Text to render in this cell, or null if the cell is empty.</summary>
+    public ResolvedTextLayout? Text { get; init; }
+
+    /// <summary>Vertical anchor for the cell text.</summary>
+    public TableCellAnchor Anchor { get; init; } = TableCellAnchor.Top;
+}
