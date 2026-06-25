@@ -2729,6 +2729,91 @@ public sealed partial class MainWindow
         bitmap.Save(stream);
     }
 
+    /// <summary>
+    /// Variant of <see cref="RenderVisualToPng"/> used for the parity-grid capture.  When
+    /// <paramref name="visual"/> is a composite <c>AvaloniaGrid</c> that contains a
+    /// <c>Canvas</c> overlay child (the drawing-object layer), <c>RenderTargetBitmap.Render</c>
+    /// in Avalonia's headless platform does not reliably paint the Canvas sibling.
+    /// <para/>
+    /// This method works around that by using a two-pass render: first the cell-grid child is
+    /// rendered into the primary bitmap; then any remaining children (the overlay Canvas) are
+    /// rendered into a scratch bitmap and blitted on top via
+    /// <c>RenderTargetBitmap.CreateDrawingContext</c> (which is additive, not clearing).
+    /// </summary>
+    private static void RenderVisualToPngWithOverlay(Visual visual, int width, int height, string path)
+    {
+        var pixelWidth  = Math.Max(1, width);
+        var pixelHeight = Math.Max(1, height);
+        var pixelSize   = new PixelSize(pixelWidth, pixelHeight);
+        var dpi         = new Vector(96, 96);
+        var fullRect    = new Rect(0, 0, pixelWidth, pixelHeight);
+
+        // ── Layout pass ──────────────────────────────────────────────────────────────────────────
+        if (visual is Layoutable root)
+        {
+            root.Measure(new Size(pixelWidth, pixelHeight));
+            root.Arrange(fullRect);
+        }
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+        // ── Check whether we have a composite Grid with a Canvas overlay sibling ───────────────
+        // If so, identify the cell-grid child and the overlay-canvas children separately.
+        var compositeGrid = visual as AvaloniaGrid;
+        var layerSeparation = compositeGrid is not null &&
+                              compositeGrid.Children.Count >= 2 &&
+                              compositeGrid.Children[compositeGrid.Children.Count - 1] is Canvas;
+
+        if (!layerSeparation)
+        {
+            // Plain visual — render directly as before.
+            using var bitmap = new RenderTargetBitmap(pixelSize, dpi);
+            bitmap.Render(visual);
+            SaveBitmap(bitmap, path);
+            return;
+        }
+
+        // ── Two-pass composite render ─────────────────────────────────────────────────────────
+        // Pass 1: render the cell grid (first child) into the primary bitmap.
+        var cellGrid = compositeGrid!.Children[0];
+        if (cellGrid is Layoutable cellLayoutable)
+        {
+            cellLayoutable.Measure(new Size(pixelWidth, pixelHeight));
+            cellLayoutable.Arrange(fullRect);
+        }
+
+        using var primaryBitmap = new RenderTargetBitmap(pixelSize, dpi);
+        primaryBitmap.Render(cellGrid);
+
+        // Pass 2: render each overlay child onto a scratch bitmap and blit.
+        // CreateDrawingContext is additive (does not clear the primary bitmap).
+        for (var i = 1; i < compositeGrid.Children.Count; i++)
+        {
+            var overlay = compositeGrid.Children[i];
+            if (overlay is Layoutable overlayLayoutable)
+            {
+                overlayLayoutable.Measure(new Size(pixelWidth, pixelHeight));
+                overlayLayoutable.Arrange(fullRect);
+            }
+
+            using var overlayBitmap = new RenderTargetBitmap(pixelSize, dpi);
+            overlayBitmap.Render(overlay);
+
+            using var ctx = primaryBitmap.CreateDrawingContext();
+            ctx.DrawImage(overlayBitmap, fullRect, fullRect);
+        }
+
+        SaveBitmap(primaryBitmap, path);
+    }
+
+    private static void SaveBitmap(RenderTargetBitmap bitmap, string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        using var stream = File.Create(path);
+        bitmap.Save(stream);
+    }
+
     private static RenderTargetBitmap RenderVisualToBitmap(Visual visual, int width, int height)
     {
         var pixelWidth = Math.Max(1, width);
@@ -2841,7 +2926,9 @@ public sealed partial class MainWindow
 
         // Use the shared WorkbookSessionFactory so the session is wired identically to the live app.
         var sessionFactory = new WorkbookSessionFactory();
-        var tempSession = sessionFactory.Create(source, measureHeight, measureWidth, includeObjects: false);
+        // includeObjects: true so that drawing shapes, pictures and text boxes appear in the
+        // captured grid image — this is the whole point of the --parity-grid harness for shapes.
+        var tempSession = sessionFactory.Create(source, measureHeight, measureWidth, includeObjects: true);
 
         // Scroll viewport to the range origin so the range cells are the first ones materialised.
         tempSession.SetViewportOrigin(range.Start.Row, range.Start.Col);
@@ -2902,7 +2989,12 @@ public sealed partial class MainWindow
             // Render the detached grid sub-tree directly to a PNG sized to the exact range extent. This
             // matches the surface-capture path's RenderVisualToPng usage on a freshly-built (unparented)
             // visual, which the headless drawing platform renders to a valid bitmap.
-            RenderVisualToPng(gridControl, pixelWidth, pixelHeight, pngPath);
+            //
+            // Drawing-object overlay (shapes, pictures, text boxes): RenderTargetBitmap.Render on a
+            // composite AvaloniaGrid doesn't always paint the Canvas sibling in headless mode.  We
+            // use a two-pass approach: render the cell grid first, then render the Canvas overlay into
+            // a second bitmap and blit it on top via CreateDrawingContext (additive draw).
+            RenderVisualToPngWithOverlay(gridControl, pixelWidth, pixelHeight, pngPath);
 
             // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
             var result = new GridCaptureResult(

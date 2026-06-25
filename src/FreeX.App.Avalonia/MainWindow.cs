@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -4497,41 +4498,159 @@ public sealed partial class MainWindow : Window
         double height)
     {
         var fill = Brush(drawingObject.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5));
-        var stroke = Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        // When OutlineHasNoFill is set the shape explicitly has no border stroke.
+        IBrush? strokeBrush = drawingObject.OutlineHasNoFill
+            ? null
+            : Brush(drawingObject.OutlineColor ?? new CellColor(0x2F, 0x55, 0x97));
+        // pt → Avalonia DIPs at 96 dpi: 1 pt = 96/72 DIP. Fall back to 1.5 when unset.
+        const double PtToDip = 96.0 / 72.0;
+        var strokeThickness = drawingObject.OutlineWidthPoints > 0
+            ? drawingObject.OutlineWidthPoints * PtToDip
+            : 1.5;
+        var dashArray = GetShapeOutlineDashArray(drawingObject.OutlineDash);
+
         var w = Math.Max(1, width);
         var h = Math.Max(1, height);
-        Control visual = drawingObject.ShapeKind switch
+
+        // Line now flows through CreateDrawingShapeGeometryVisual → ShapeGeometryBuilder (LinePath)
+        // so it renders at the correct angle and length. The old stub Border is removed.
+        Control shapeControl = drawingObject.ShapeKind switch
         {
-            DrawingShapeKind.Ellipse => new AvaloniaEllipse
+            DrawingShapeKind.Ellipse => CreateEllipseShapeVisual(fill, strokeBrush, strokeThickness, dashArray, w, h),
+            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, strokeBrush, strokeThickness, dashArray, w, h),
+        };
+
+        ApplyDrawingObjectEffect(shapeControl, drawingObject.Effect);
+
+        // Overlay shape text inside the same rotation envelope (text is added as a sibling in a
+        // Grid so that ApplyDrawingObjectTransform, called by the caller, rotates both together).
+        if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+        {
+            var grid = new AvaloniaGrid
             {
                 Width = w,
                 Height = h,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1.5,
                 IsHitTestVisible = false,
-            },
-            DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width),
-            _ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, stroke, w, h),
-        };
+            };
+            grid.Children.Add(shapeControl);
+            grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
+            return grid;
+        }
 
-        ApplyDrawingObjectEffect(visual, drawingObject.Effect);
-        return visual;
+        return shapeControl;
     }
 
-    // Non-ellipse/line shapes: render the true preset outline via the geometry factory when available,
+    private static AvaloniaEllipse CreateEllipseShapeVisual(
+        IBrush fill,
+        IBrush? stroke,
+        double strokeThickness,
+        double[]? dashArray,
+        double w,
+        double h)
+    {
+        var ellipse = new AvaloniaEllipse
+        {
+            Width = w,
+            Height = h,
+            Fill = fill,
+            Stroke = stroke,
+            StrokeThickness = strokeThickness,
+            IsHitTestVisible = false,
+        };
+        if (dashArray is not null)
+            ellipse.StrokeDashArray = new AvaloniaList<double>(dashArray);
+        return ellipse;
+    }
+
+    // Renders shape text as a TextBlock overlay that sits inside the shape's bounding box.
+    // Padding, alignment, font, and wrap mirror WPF DrawShapeText.
+    private static TextBlock CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
+    {
+        const double HPad = 4;
+        const double VPad = 2;
+        const double DefaultFontSizePt = 11.0;
+        const double PtToDip = 96.0 / 72.0;
+
+        var fontSizeDip = (d.ShapeTextFontSizePoints > 0 ? d.ShapeTextFontSizePoints : DefaultFontSizePt) * PtToDip;
+
+        IBrush textBrush;
+        if (d.ShapeTextColor is { } tc)
+        {
+            textBrush = Brush(tc);
+        }
+        else
+        {
+            // Default: white on dark fill, black on light fill.
+            var fc = d.FillColor ?? new CellColor(0x5B, 0x9B, 0xD5);
+            var luminance = 0.299 * fc.R + 0.587 * fc.G + 0.114 * fc.B;
+            textBrush = luminance < 128 ? Brushes.White : Brushes.Black;
+        }
+
+        var hAlign = d.ShapeTextHAlign switch
+        {
+            DrawingShapeTextHAlign.Center => TextAlignment.Center,
+            DrawingShapeTextHAlign.Right  => TextAlignment.Right,
+            _                             => TextAlignment.Left,
+        };
+
+        var vAlign = d.ShapeTextVAnchor switch
+        {
+            DrawingShapeTextVAnchor.Top    => AvaloniaVerticalAlignment.Top,
+            DrawingShapeTextVAnchor.Bottom => AvaloniaVerticalAlignment.Bottom,
+            _                             => AvaloniaVerticalAlignment.Center,
+        };
+
+        var decorations = d.ShapeTextUnderline
+            ? TextDecorations.Underline
+            : null;
+
+        return new TextBlock
+        {
+            Text = d.ShapeText,
+            FontSize = fontSizeDip,
+            FontWeight = d.ShapeTextBold ? FontWeight.Bold : FontWeight.Normal,
+            FontStyle = d.ShapeTextItalic ? FontStyle.Italic : FontStyle.Normal,
+            TextDecorations = decorations,
+            Foreground = textBrush,
+            TextAlignment = hAlign,
+            VerticalAlignment = vAlign,
+            TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(HPad, VPad, HPad, VPad),
+            IsHitTestVisible = false,
+        };
+    }
+
+    // Maps DrawingShapeOutlineDash → dash arrays compatible with Avalonia StrokeDashArray.
+    // Arrays are dash/gap lengths in units of stroke thickness, matching WPF DashStyles.
+    private static double[]? GetShapeOutlineDashArray(DrawingShapeOutlineDash dash) => dash switch
+    {
+        DrawingShapeOutlineDash.Dash or DrawingShapeOutlineDash.LongDash
+            or DrawingShapeOutlineDash.SystemDash                       => [2, 2],
+        DrawingShapeOutlineDash.Dot or DrawingShapeOutlineDash.SystemDot => [1, 2],
+        DrawingShapeOutlineDash.DashDot or DrawingShapeOutlineDash.SystemDashDot => [2, 2, 1, 2],
+        DrawingShapeOutlineDash.LongDashDot                             => [2, 2, 1, 2],
+        DrawingShapeOutlineDash.LongDashDotDot                          => [2, 2, 1, 2, 1, 2],
+        _                                                               => null,
+    };
+
+    // Non-ellipse shapes: render the true preset outline via the geometry factory when available,
     // falling back to a plain rectangle for kinds the factory does not cover.
+    // Line now flows through here too (the factory opt-out was removed) so LinePath renders
+    // at the correct angle and length authored by ShapeGeometryBuilder.
     private static Control CreateDrawingShapeGeometryVisual(
         DrawingShapeKind? shapeKind,
         IBrush fill,
-        IBrush stroke,
+        IBrush? stroke,
+        double strokeThickness,
+        double[]? dashArray,
         double w,
         double h)
     {
         if (shapeKind is { } kind &&
             AvaloniaDrawingShapeGeometryFactory.CreateGeometry(kind, w, h) is { } geometry)
         {
-            return new global::Avalonia.Controls.Shapes.Path
+            var path = new global::Avalonia.Controls.Shapes.Path
             {
                 Data = geometry,
                 // Geometry is authored inside a (0,0,w,h) box, so render it 1:1.
@@ -4540,20 +4659,26 @@ public sealed partial class MainWindow : Window
                 Height = h,
                 Fill = fill,
                 Stroke = stroke,
-                StrokeThickness = 1.5,
+                StrokeThickness = strokeThickness,
                 IsHitTestVisible = false,
             };
+            if (dashArray is not null)
+                path.StrokeDashArray = new AvaloniaList<double>(dashArray);
+            return path;
         }
 
-        return new AvaloniaRectangle
+        var rect = new AvaloniaRectangle
         {
             Width = w,
             Height = h,
             Fill = fill,
             Stroke = stroke,
-            StrokeThickness = 1.5,
+            StrokeThickness = strokeThickness,
             IsHitTestVisible = false,
         };
+        if (dashArray is not null)
+            rect.StrokeDashArray = new AvaloniaList<double>(dashArray);
+        return rect;
     }
 
     // Approximates the authored shape effect (shadow / glow / soft-edges / bevel / reflection / 3-D)
@@ -4585,15 +4710,6 @@ public sealed partial class MainWindow : Window
             Opacity = effect.Opacity,
         };
     }
-
-    private static Border CreateDrawingLineVisual(IBrush stroke, double width) =>
-        new()
-        {
-            Width = Math.Max(1, width),
-            Height = 2,
-            Background = stroke,
-            IsHitTestVisible = false,
-        };
 
     private static Control CreateDrawingImageVisual(
         DrawingObjectRenderPlan renderPlan,
