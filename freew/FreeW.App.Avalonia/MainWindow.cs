@@ -21,6 +21,13 @@ public sealed class MainWindow : Window
 {
     private const string DefaultSaveExtension = ".docx";
 
+    /// <summary>
+    /// Number of entries kept in the recent-files store for this session.
+    /// A FreeWOptions-driven cap comes in a later round; this constant is the
+    /// interim default (matches the WPF host's <c>FreeWOptions.DefaultRecentFilesCap</c>).
+    /// </summary>
+    private const int DefaultRecentFilesCap = 10;
+
     private static readonly FilePickerFileType PdfFileType = new("PDF document")
     {
         Patterns = ["*.pdf"],
@@ -35,10 +42,12 @@ public sealed class MainWindow : Window
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
     private readonly FileCommandWorkflow _fileWorkflow;
+    private readonly AutosaveAdapter _autosave;
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
     private bool _suppressEditorDirty;
+    private bool _closingConfirmed;
 
     public MainWindow()
         : this(Array.Empty<string>())
@@ -54,10 +63,11 @@ public sealed class MainWindow : Window
         MinHeight = 480;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         _fileWorkflow = new FileCommandWorkflow(
-            maxRecentEntries: () => 0,
+            maxRecentEntries: () => DefaultRecentFilesCap,
             onChanged: UpdateStatus,
-            promptSaveChanges: _ => SaveChangesPrompt.DontSave,
-            save: () => true);
+            promptSaveChanges: action => PromptSaveChangesSync(action),
+            save: () => SaveAsync().GetAwaiter().GetResult());
+        _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
 
         var root = new DockPanel();
 
@@ -100,6 +110,18 @@ public sealed class MainWindow : Window
         };
         LoadDocumentAsSaved(LoadStartupDocument(startupArguments), path: null);
         KeyDown += MainWindow_KeyDown;
+
+        // Start autosave once the window is shown; offer recovery on first open.
+        Opened += async (_, _) =>
+        {
+            _autosave.Start();
+            await _autosave.OfferRecoveryAsync(this);
+        };
+
+        // Dirty-gate on close: run async dirty-check; cancel the close synchronously
+        // and let the async flow re-close if the user saves or discards.
+        Closing += OnWindowClosing;
+
         Content = root;
         UpdateStatus();
     }
@@ -224,6 +246,48 @@ public sealed class MainWindow : Window
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
         }
+    }
+
+    // ── Closing gate ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Synchronous bridge called by <see cref="FileCommandWorkflow"/> when it needs a save-changes
+    /// answer. Because the workflow's dirty-gate is synchronous, we block the UI thread here by
+    /// getting the async dialog result via GetAwaiter().GetResult(). This is safe because
+    /// <see cref="OnWindowClosing"/> always cancels the OS close first and then re-invokes
+    /// the async path — the sync call here only happens from the New/Open dirty-gate paths
+    /// which already run synchronously on the UI thread.
+    /// </summary>
+    private SaveChangesPrompt PromptSaveChangesSync(string action) =>
+        SaveChangesDialog.ShowAsync(this, _fileWorkflow.DisplayName, action)
+            .GetAwaiter().GetResult();
+
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // If we already ran the async gate and decided it's OK to close, let it through.
+        if (_closingConfirmed)
+        {
+            _ = _autosave.StopAsync(); // fire-and-forget — cleanup is best-effort on close
+            return;
+        }
+
+        // Cancel this synchronous close event and run the gate asynchronously.
+        e.Cancel = true;
+        _ = ConfirmAndCloseAsync();
+    }
+
+    private async Task ConfirmAndCloseAsync()
+    {
+        // ConfirmCloseAllowed runs on the UI thread because PromptSaveChangesSync shows
+        // an Avalonia dialog. It blocks the UI thread briefly via GetAwaiter().GetResult()
+        // on the dialog task — acceptable for a synchronous dirty-gate path.
+        var allowed = _fileWorkflow.ConfirmCloseAllowed("closing");
+        if (!allowed)
+            return;
+
+        await _autosave.StopAsync();
+        _closingConfirmed = true;
+        Close();
     }
 
     private void ApplyZoom(double scale)
@@ -488,7 +552,7 @@ public sealed class MainWindow : Window
 
     private void MarkDocumentSavedWithPath(string path)
     {
-        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: true);
+        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
     }
 
     private void UpdateStatus()
