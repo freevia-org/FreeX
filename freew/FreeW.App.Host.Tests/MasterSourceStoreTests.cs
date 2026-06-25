@@ -1,0 +1,108 @@
+using System;
+using System.IO;
+using System.Linq;
+using FluentAssertions;
+using Free.Shared.AppServices;
+using FreeW.App.Host;
+using FreeW.Core.Model;
+using Xunit;
+
+namespace FreeW.App.Host.Tests;
+
+public sealed class MasterSourceStoreTests
+{
+    [Fact]
+    public void MasterStore_AddSource_PersistsAndReloads()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"master-sources-test-{Guid.NewGuid()}.json");
+        try
+        {
+            var store1 = new MasterSourceStore();
+            store1.AddOrUpdate(new Source
+            {
+                Tag       = "Smith2020",
+                Author    = "Smith, John",
+                Title     = "Test Book",
+                Year      = "2020",
+                Publisher = "Test Press"
+            });
+            var settingsStore = JsonSettingsStore<MasterSourceStore>.ForPath(path);
+            settingsStore.Save(store1);
+
+            // Reload from a new store instance.
+            var store2 = JsonSettingsStore<MasterSourceStore>.ForPath(path).Load();
+            store2.Sources.Should().HaveCount(1);
+            store2.Sources[0].Tag.Should().Be("Smith2020");
+            store2.Sources[0].Author.Should().Be("Smith, John");
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void MasterStore_ToSources_ReturnsModelObjects()
+    {
+        var store = new MasterSourceStore();
+        store.AddOrUpdate(new Source { Tag = "A1", Author = "Alice", Title = "Alpha", Year = "2021" });
+        store.AddOrUpdate(new Source { Tag = "B2", Author = "Bob",   Title = "Beta",  Year = "2022" });
+
+        var sources = store.ToSources();
+        sources.Should().HaveCount(2);
+        sources.Select(s => s.Tag).Should().Equal("A1", "B2");
+    }
+
+    [Fact]
+    public void MasterStore_AddOrUpdate_ReplacesExistingTag()
+    {
+        var store = new MasterSourceStore();
+        store.AddOrUpdate(new Source { Tag = "X1", Author = "Old Author", Title = "Old", Year = "2000" });
+        store.AddOrUpdate(new Source { Tag = "X1", Author = "New Author", Title = "New", Year = "2024" });
+
+        store.Sources.Should().HaveCount(1);
+        store.Sources[0].Author.Should().Be("New Author");
+    }
+
+    [Fact]
+    public void MasterStore_Remove_DeletesByTag()
+    {
+        var store = new MasterSourceStore();
+        store.AddOrUpdate(new Source { Tag = "Del1",  Author = "A", Title = "T",  Year = "2020" });
+        store.AddOrUpdate(new Source { Tag = "Keep1", Author = "B", Title = "T2", Year = "2021" });
+
+        store.Remove("Del1").Should().BeTrue();
+        store.Sources.Should().HaveCount(1);
+        store.Sources[0].Tag.Should().Be("Keep1");
+    }
+
+    [Fact]
+    public void MasterStore_CopyToCurrentDoc_SourceAppearsInList()
+    {
+        // Simulate the "Copy → Current Doc" operation without a DocumentView:
+        // start with a master containing one source and a doc with zero sources;
+        // after copy the doc list should contain the master source.
+        var masterStore = new MasterSourceStore();
+        masterStore.AddOrUpdate(new Source
+        {
+            Tag    = "Copy1",
+            Author = "Copy Author",
+            Title  = "Copy Title",
+            Year   = "2023"
+        });
+
+        // Simulate document-level source list (mutable list as document keeps internally).
+        var docSources = new System.Collections.Generic.List<Source>();
+
+        // Perform copy: take all master sources and add to doc (simulate dialog Copy→ action).
+        var masterSources = masterStore.ToSources();
+        foreach (var src in masterSources)
+        {
+            if (!docSources.Any(s => s.Tag == src.Tag))
+                docSources.Add(src);
+        }
+
+        docSources.Should().HaveCount(1);
+        docSources[0].Tag.Should().Be("Copy1");
+    }
+}
