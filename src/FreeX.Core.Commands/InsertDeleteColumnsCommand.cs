@@ -21,12 +21,14 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Column(s)";
 
@@ -71,6 +73,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleColumnsUp(sheet, _beforeCol, _count);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaColumnsUp(sheet, _beforeCol, _count);
@@ -90,7 +93,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _formulaSnapshot);
         _namedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _namedFormulaSnapshot);
+        _scopedNamedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -105,7 +109,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row, snapshot.Col + _count);
@@ -125,6 +129,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
@@ -237,12 +242,14 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Column(s)";
 
@@ -288,6 +295,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleColumnsDown(sheet, _startCol, _count);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
@@ -307,7 +315,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _formulaSnapshot);
         _namedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _namedFormulaSnapshot);
+        _scopedNamedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -322,7 +331,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row, snapshot.Col - _count);
@@ -345,6 +354,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);

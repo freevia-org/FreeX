@@ -21,12 +21,14 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
 
@@ -72,6 +74,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsUp(sheet, _beforeRow, _count);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
@@ -99,7 +102,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
         _namedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _namedFormulaSnapshot);
+        _scopedNamedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -114,7 +118,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row + _count, snapshot.Col);
@@ -135,6 +139,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);

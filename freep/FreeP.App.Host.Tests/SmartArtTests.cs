@@ -51,7 +51,7 @@ public sealed class SmartArtTests : IDisposable
 
         const string diagramDataCT    = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
         const string diagramLayoutCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
-        const string diagramQsCT      = "application/vnd.openxmlformats-officedocument.drawingml.diagramQuickStyle+xml";
+        const string diagramQsCT      = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
         const string diagramColorsCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
         const string diagramDrawingCT = "application/vnd.ms-office.drawingml.diagramDrawing+xml";
 
@@ -532,5 +532,134 @@ public sealed class SmartArtTests : IDisposable
         // Background + placeholder rectangle
         ops.Should().HaveCount(2);
         ops[1].Should().BeOfType<DrawOp.Shape>("no fallback shapes → grey placeholder rectangle");
+    }
+
+    // ── S1: correct quickStyle content type ──────────────────────────────────────
+
+    /// <summary>
+    /// S1: After a round-trip the writer must emit the ECMA-376-correct content type
+    /// "...diagramStyle+xml" (not the incorrect "...diagramQuickStyle+xml") for the
+    /// quickStyle (qs) diagram part.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_SmartArt_QuickStyleContentType_IsCorrect()
+    {
+        const string correctQsCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+        const string wrongQsCT    = "application/vnd.openxmlformats-officedocument.drawingml.diagramQuickStyle+xml";
+
+        var pptxPath      = MakeSmartArtPptx(["Node1"]);
+        var pres          = PptxPackageReader.Read(pptxPath);
+        var roundTripPath = WriteToPptx(pres);
+
+        // Inspect [Content_Types].xml inside the written archive
+        using var archive = new ZipArchive(File.OpenRead(roundTripPath), ZipArchiveMode.Read);
+        var ctEntry = archive.GetEntry("[Content_Types].xml");
+        ctEntry.Should().NotBeNull("[Content_Types].xml must be present");
+
+        using var stream = ctEntry!.Open();
+        var ctDoc = XDocument.Load(stream);
+        var ctNs  = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+
+        var allCTs = ctDoc.Descendants(ctNs + "Override")
+            .Select(e => e.Attribute("ContentType")?.Value ?? "")
+            .ToList();
+
+        allCTs.Should().Contain(correctQsCT,
+            "the quickStyle part must carry the ECMA-376-correct diagramStyle+xml content type");
+        allCTs.Should().NotContain(wrongQsCT,
+            "the incorrect diagramQuickStyle+xml content type must not appear");
+    }
+
+    // ── S4: no duplicate relIds when source diagram relId collides with rId1 ─────
+
+    /// <summary>
+    /// S4: If the source .pptx uses "rId1" as a diagram relId (which collides with the
+    /// slide layout rel), the writer must remap it to a fresh id so the slide rels XML
+    /// contains no duplicate Id attributes.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_SmartArt_DiagramRelId_CollisionWithRId1_Remapped()
+    {
+        // MakeSmartArtPptx uses rIdDm1/rIdLo1/rIdQs1/rIdCs1 in the source.
+        // After round-trip we must verify NO duplicate Relationship/@Id values appear.
+        var pptxPath      = MakeSmartArtPptx(["A", "B"]);
+        var pres          = PptxPackageReader.Read(pptxPath);
+
+        // Manually force a relId collision: rename one diagram relId to "rId1"
+        var smartArt = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        // Change dm relId to rId1 so it would collide with the layout rel
+        if (smartArt.DiagramRelIds.ContainsKey("dm"))
+            smartArt.DiagramRelIds["dm"] = "rId1";
+
+        var roundTripPath = WriteToPptx(pres);
+
+        using var archive = new ZipArchive(File.OpenRead(roundTripPath), ZipArchiveMode.Read);
+        var relsEntry = archive.GetEntry("ppt/slides/_rels/slide1.xml.rels");
+        relsEntry.Should().NotBeNull("slide rels must be present");
+
+        using var stream = relsEntry!.Open();
+        var relsDoc = XDocument.Load(stream);
+        var pkgNs   = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        var ids     = relsDoc.Descendants(pkgNs + "Relationship")
+            .Select(e => e.Attribute("Id")?.Value)
+            .ToList();
+
+        ids.Should().OnlyHaveUniqueItems("slide rels must not contain duplicate relationship Ids");
+    }
+
+    // ── S2: SmartArt with missing data part is dropped (no dangling frame) ───────
+
+    /// <summary>
+    /// S2: If the SmartArt's data (dm) part is absent (e.g. bytes were unreadable at
+    /// read time), the writer must NOT emit a graphicFrame with a dangling r:dm attribute.
+    /// The shape should be omitted entirely from the slide XML.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_SmartArt_MissingDataPart_DropsDanglingGraphicFrame()
+    {
+        var pptxPath = MakeSmartArtPptx(["X"]);
+        var pres     = PptxPackageReader.Read(pptxPath);
+
+        // Remove the data (dm) part from the SmartArt model to simulate an unreadable part
+        var smartArt = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        var dmPath = smartArt.Parts.Keys
+            .FirstOrDefault(k => k.Contains("data", StringComparison.OrdinalIgnoreCase));
+        if (dmPath is not null)
+            smartArt.Parts.Remove(dmPath);
+
+        var roundTripPath = WriteToPptx(pres);
+
+        using var archive = new ZipArchive(File.OpenRead(roundTripPath), ZipArchiveMode.Read);
+        var slideEntry = archive.GetEntry("ppt/slides/slide1.xml");
+        slideEntry.Should().NotBeNull();
+
+        using var stream = slideEntry!.Open();
+        var slideDoc = XDocument.Load(stream);
+        var pNs      = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var rNs      = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+
+        // No graphicFrame element should be present (SmartArt without data must be dropped)
+        var graphicFrames = slideDoc.Descendants(pNs + "graphicFrame").ToList();
+        graphicFrames.Should().BeEmpty(
+            "SmartArt with no data part must not produce a graphicFrame with a dangling r:dm attribute");
+
+        // Also verify the slide rels don't reference a non-existent diagram data part
+        var relsEntry = archive.GetEntry("ppt/slides/_rels/slide1.xml.rels");
+        if (relsEntry is not null)
+        {
+            using var rStream  = relsEntry.Open();
+            var relsDoc        = XDocument.Load(rStream);
+            var pkgNs          = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var diagramDataRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+            var dmRels         = relsDoc.Descendants(pkgNs + "Relationship")
+                .Where(e => e.Attribute("Type")?.Value == diagramDataRel)
+                .ToList();
+            dmRels.Should().BeEmpty(
+                "when data part is missing no diagramData relationship should be written to slide rels");
+        }
     }
 }

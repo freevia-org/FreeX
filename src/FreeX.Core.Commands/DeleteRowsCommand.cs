@@ -24,12 +24,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
+    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
 
@@ -78,6 +80,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsDown(sheet, _startRow, _count);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         _printAreaSnapshot = sheet.PrintArea;
         RowColumnShiftHelpers.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
@@ -108,14 +111,21 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
                 uint newStart = m.Start.Row < _startRow ? m.Start.Row : _startRow;
                 uint newEnd   = m.End.Row   > endRow    ? m.End.Row - _count
                               : _startRow > 1           ? _startRow - 1 : 0;
-                // Keep only if it still spans ≥2 rows (height > 1); a 1×1 merge is invalid per Excel.
-                if (newEnd > 0 && newEnd > newStart)
+                // Drop only when the row range is entirely consumed (no surviving rows) OR
+                // when the result is a true single cell (1 row tall AND 1 column wide).
+                // A region that becomes 1 row tall but still spans multiple columns is a valid
+                // horizontal merge in Excel and must be kept.
+                bool rowRangeGone = newEnd == 0 || newEnd < newStart;
+                bool singleRow = newEnd == newStart;
+                bool multiCol = m.Start.Col != m.End.Col;
+
+                if (!rowRangeGone && (singleRow ? multiCol : true))
                 {
                     adjustedMerges.Add(new GridRange(
                         new CellAddress(m.Start.Sheet, newStart, m.Start.Col),
                         new CellAddress(m.End.Sheet,   newEnd,   m.End.Col)));
                 }
-                // if newEnd <= newStart the merge shrunk to a single cell or was entirely deleted — drop it
+                // if row range gone, or shrinks to single cell (1×1), drop it
             }
         }
         sheet.ReplaceMergedRegions(adjustedMerges);
@@ -124,7 +134,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _formulaSnapshot);
         _namedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _namedFormulaSnapshot);
+        _scopedNamedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -139,7 +150,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row - _count, snapshot.Col);
@@ -163,6 +174,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);

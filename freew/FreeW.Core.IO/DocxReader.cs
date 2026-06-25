@@ -59,6 +59,25 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        // w:evenAndOddHeaders and w:mirrorMargins are document-global toggles stored in settings.xml, read
+        // into document.Page by ReadSettings. Non-final sections' PageSettings are constructed earlier (during
+        // body parsing), before ReadSettings runs, so their DifferentOddEvenPages/MirrorMargins stay false.
+        // Propagate the document-wide values now so the writer's per-section even-part emission gate
+        // (which keys off section.Page.DifferentOddEvenPages) correctly emits even header/footer parts for
+        // every non-final section whose sectPr carried even header/footer references.
+        if (document.Page.DifferentOddEvenPages || document.Page.MirrorMargins)
+        {
+            foreach (var block in document.Blocks)
+            {
+                if (block is Paragraph { SectionBreak: { } section })
+                {
+                    if (document.Page.DifferentOddEvenPages)
+                        section.Page.DifferentOddEvenPages = true;
+                    if (document.Page.MirrorMargins)
+                        section.Page.MirrorMargins = true;
+                }
+            }
+        }
         ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
@@ -890,7 +909,9 @@ public static class DocxReader
 
             var colElements = cols.Elements(W + "col").ToList();
             var equalWidthOff = cols.Attribute(W + "equalWidth")?.Value is "0" or "false" or "off";
-            if (equalWidthOff && colElements.Count > 1
+            // A single w:col child with an explicit width is valid (e.g. a one-column section with an
+            // explicit w:col w:w="..."), so the guard is >= 1 (not > 1) when equalWidth is off.
+            if (equalWidthOff && colElements.Count >= 1
                 && colElements.All(c => c.Attribute(W + "w") is not null))
             {
                 var widths = colElements.Select(c => DxaToPoints(c.Attribute(W + "w")!.Value)).ToList();

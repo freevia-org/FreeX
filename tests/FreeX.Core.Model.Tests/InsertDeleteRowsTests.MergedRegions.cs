@@ -122,4 +122,49 @@ public partial class InsertDeleteRowsTests
             "undo should restore the original 2-row merge");
     }
 
+    // S9 regression: deleting rows must not drop a merge that shrinks to 1 row tall
+    // when it still spans multiple columns (valid horizontal merge).
+
+    [Fact]
+    public void DeleteRows_MergeShrinkToOneRowButMultiCol_IsKept()
+    {
+        // A1:C2 merge (2 rows, 3 cols); delete row 2 → must become A1:C1 (1 row, 3 cols, valid).
+        var (_, sheet, ctx) = Setup();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 3)));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle(
+            because: "a merge that becomes 1 row tall but spans 3 columns is a valid horizontal merge and must not be dropped");
+        var kept = sheet.MergedRegions[0];
+        kept.Start.Row.Should().Be(1);
+        kept.End.Row.Should().Be(1);
+        kept.Start.Col.Should().Be(1);
+        kept.End.Col.Should().Be(3);
+
+        cmd.Revert(ctx);
+
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
+            "undo must restore the original 2-row merge");
+    }
+
+    [Fact]
+    public void DeleteRows_MergeShrinkToSingleCell_DropsIt()
+    {
+        // A1:A2 (2-row single-column merge); delete row 2 → becomes A1 (1×1, must be dropped).
+        var (_, sheet, ctx) = Setup();
+        sheet.AddMergedRegion(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
+
+        var cmd = new DeleteRowsCommand(sheet.Id, startRow: 2, count: 1);
+        cmd.Apply(ctx);
+
+        sheet.MergedRegions.Should().BeEmpty("a 1×1 collapsed merge must be dropped");
+    }
+
 }

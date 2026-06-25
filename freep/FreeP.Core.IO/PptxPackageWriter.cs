@@ -215,8 +215,16 @@ public static class PptxPackageWriter
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
 
-            // Write SmartArt diagram parts (verbatim bytes + rels)
-            var smartArtSlideRels = WriteSlideSmartArt(archive, slide);
+            // Write SmartArt diagram parts (verbatim bytes + rels).
+            // Collect already-used relIds so the SmartArt allocator avoids them.
+            var usedRelIds = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "rId1", // always reserved for slide layout
+            };
+            foreach (var (_, mediaRelId, _) in mediaRelIds)  usedRelIds.Add(mediaRelId);
+            foreach (var (_, chartRelId, _) in chartRelIds)  usedRelIds.Add(chartRelId);
+
+            var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
             // Combined shapeId→relId map for shape element building (images + charts)
             var mediaById = new Dictionary<uint, string>();
@@ -224,7 +232,7 @@ public static class PptxPackageWriter
             foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
 
             // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap));
 
             // Slide rels: rId1=layout, images, charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
@@ -431,7 +439,8 @@ public static class PptxPackageWriter
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
-        Dictionary<uint, string> mediaById)
+        Dictionary<uint, string> mediaById,
+        Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -446,7 +455,9 @@ public static class PptxPackageWriter
                         : null,
                     new XElement(P + "spTree",
                         GrpSpHeader(),
-                        slide.Shapes.Select(s => BuildShapeEl(s, scheme, mediaById)))),
+                        slide.Shapes
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap))
+                            .OfType<XElement>())),
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
     }
@@ -725,11 +736,11 @@ public static class PptxPackageWriter
                         new XAttribute("name", layout.Name),
                         new XElement(P + "spTree",
                             GrpSpHeader(),
-                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new()))))
+                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>()))
                     : new XElement(P + "cSld",
                         new XElement(P + "spTree",
                             GrpSpHeader(),
-                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())))),
+                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>())),
                 new XElement(P + "clrMapOvr",
                     new XElement(A + "masterClrMapping"))));
 
@@ -751,7 +762,7 @@ public static class PptxPackageWriter
                         : null,
                     new XElement(P + "spTree",
                         GrpSpHeader(),
-                        master.Placeholders.Select(s => BuildShapeEl(s, scheme, new())))),
+                        master.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>())),
                 BuildColorMapEl(master.ColorMap),
                 master.TextStyles is not null ? BuildTxStylesEl(master.TextStyles) : null,
                 new XElement(P + "sldLayoutIdLst",
@@ -935,16 +946,19 @@ public static class PptxPackageWriter
 
     // ── Shape elements ────────────────────────────────────────────────────────────
 
-    private static XElement BuildShapeEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
+    private static XElement? BuildShapeEl(
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
-            SlideShapeKind.SmartArt when shape.SmartArt is not null => BuildSmartArtGraphicFrameEl(shape),
+            SlideShapeKind.SmartArt when shape.SmartArt is not null =>
+                BuildSmartArtGraphicFrameEl(shape,
+                    smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
             _ => BuildSpEl(shape, scheme)
         };
 
@@ -984,14 +998,17 @@ public static class PptxPackageWriter
     }
 
     private static XElement BuildGrpSpEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
-            shape.Children.Select(c => BuildShapeEl(c, scheme, mediaById)));
+            shape.Children
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap))
+                .OfType<XElement>());
 
     /// <summary>
     /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
@@ -1231,9 +1248,19 @@ public static class PptxPackageWriter
     /// Builds the p:graphicFrame element for a SmartArt shape, referencing the diagram
     /// sub-parts (data/layout/quickStyle/colors) via the rel IDs stored in the model.
     /// </summary>
-    private static XElement BuildSmartArtGraphicFrameEl(SlideShape shape)
+    /// <summary>
+    /// Builds the graphicFrame element for a SmartArt shape.
+    /// <paramref name="relIdRemap"/> maps diagram key (dm/lo/qs/cs) to the fresh relId that
+    /// was written into the slide rels. Only keys present in the map are emitted as r: attributes.
+    /// Returns null if the required data part (dm) has no relId — the shape cannot render and
+    /// must be dropped entirely to avoid dangling relationships.
+    /// </summary>
+    private static XElement? BuildSmartArtGraphicFrameEl(
+        SlideShape shape, Dictionary<string, string>? relIdRemap)
     {
-        var smart = shape.SmartArt!;
+        // S2: if dm (data) part is absent, the SmartArt can't render — drop the frame.
+        if (relIdRemap is null || !relIdRemap.ContainsKey("dm"))
+            return null;
 
         var xfrm = new XElement(P + "xfrm",
             new XElement(A + "off",
@@ -1243,12 +1270,13 @@ public static class PptxPackageWriter
                 new XAttribute("cx", shape.ExtentCxEmu),
                 new XAttribute("cy", shape.ExtentCyEmu)));
 
-        // Build dgm:relIds child with r:dm / r:lo / r:qs / r:cs attributes
+        // Build dgm:relIds child with r:dm / r:lo / r:qs / r:cs attributes.
+        // S2: only emit attributes for keys whose parts were actually written.
         var relIdsEl = new XElement(DgmNs + "relIds",
             new XAttribute(XNamespace.Xmlns + "dgm", DrawingDiagramUri),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
 
-        foreach (var (key, relId) in smart.DiagramRelIds)
+        foreach (var (key, relId) in relIdRemap)
         {
             relIdsEl.Add(new XAttribute(R + key, relId));
         }
@@ -1656,13 +1684,20 @@ public static class PptxPackageWriter
     /// <summary>
     /// Writes all diagram parts (data/layout/quickStyle/colors/drawing) for SmartArt shapes
     /// verbatim from the stored raw bytes. Also writes each part's rels file (if any).
-    /// Returns the (relId, relType, target) tuples for the slide rels file (one per dm/lo/qs/cs key).
+    /// Returns:
+    ///   - slideRels: (newRelId, relType, target) tuples for the slide rels file (one per dm/lo/qs/cs key).
+    ///   - relIdRemap: per-shape (shape.Id → (key → newRelId)) so BuildSmartArtGraphicFrameEl
+    ///     can emit only the r: attributes that have an actual written part (S2),
+    ///     using fresh collision-free relIds (S4).
     /// The drawing part rels are internal to the data part's rels — not in the slide rels.
     /// </summary>
-    private static List<(string relId, string relType, string target)> WriteSlideSmartArt(
-        ZipArchive archive, Slide slide)
+    private static (
+        List<(string relId, string relType, string target)> slideRels,
+        Dictionary<uint, Dictionary<string, string>> relIdRemap)
+        WriteSlideSmartArt(ZipArchive archive, Slide slide, HashSet<string> usedRelIds)
     {
-        var slideRels = new List<(string, string, string)>();
+        var slideRels  = new List<(string, string, string)>();
+        var relIdRemap = new Dictionary<uint, Dictionary<string, string>>();
 
         // Track parts already written (a single part may be referenced by multiple shapes)
         var writtenParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1674,6 +1709,16 @@ public static class PptxPackageWriter
             ["qs"] = DiagramQuickStyleRelType,
             ["cs"] = DiagramColorsRelType
         };
+
+        // S4: counter for fresh diagram relIds that don't collide with layout/media/chart ids.
+        int dgmRelIdCounter = 1;
+        string AllocDgmRelId()
+        {
+            string id;
+            do { id = $"rIdDgm{dgmRelIdCounter++}"; } while (usedRelIds.Contains(id));
+            usedRelIds.Add(id);
+            return id;
+        }
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
@@ -1709,32 +1754,51 @@ public static class PptxPackageWriter
                 }
             }
 
-            // Build slide rels for the four named diagram parts (dm/lo/qs/cs)
-            foreach (var (key, relId) in smart.DiagramRelIds)
+            // Build slide rels for the four named diagram parts (dm/lo/qs/cs).
+            // S2: skip keys whose part was not written (FindDiagramPartPathForKey returns null).
+            // S3: compute the correct relative path from ppt/slides/ to the actual part location.
+            // S4: allocate a fresh relId to avoid collision with rId1/media/chart ids.
+            var shapeRemap = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var (key, _) in smart.DiagramRelIds)
             {
                 if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
 
-                // Find the corresponding part to build the relative target path
-                // The relId maps to a part path in the Parts dictionary
-                // We need to find which part has this key
-                // Since the SmartArt has DiagramRelIds["dm"] = some relId, and Parts[partPath] for the data part
-                // we reconstruct the target from the part paths
                 var partPath = FindDiagramPartPathForKey(smart, key);
-                if (partPath is null) continue;
+                if (partPath is null) continue; // S2: part missing — skip this key
 
-                // Target is relative to "ppt/slides/" -> "../diagrams/filenameN.xml"
-                var fileName = partPath.Split('/').Last();
-                var partDir  = GetDirectory(partPath);
-                // typical: ppt/diagrams/data1.xml → from ppt/slides/slideN.xml → ../diagrams/data1.xml
-                var target   = $"../diagrams/{fileName}";
+                // S3: compute rel target as correct relative path from ppt/slides/ to partPath.
+                // partPath is like "ppt/diagrams/data1.xml"; slides live in "ppt/slides/".
+                // Relative path: go up from ppt/slides/ -> ppt/ (one ".."), then follow partPath
+                // relative to ppt/. E.g. "ppt/diagrams/data1.xml" -> "../diagrams/data1.xml".
+                var partPathFromPpt = partPath.StartsWith("ppt/", StringComparison.OrdinalIgnoreCase)
+                    ? partPath["ppt/".Length..]   // "diagrams/data1.xml"
+                    : partPath;
+                var target = $"../{partPathFromPpt}";
 
-                // Check we won't duplicate this relId
-                if (!slideRels.Any(r => r.Item1 == relId))
-                    slideRels.Add((relId, relType, target));
+                // S4: reuse existing relId if this exact part was already registered (shared
+                // part across shapes), otherwise allocate a fresh collision-free relId.
+                var existing = slideRels.FirstOrDefault(r => r.Item3 == target && r.Item2 == relType);
+                string newRelId;
+                if (existing != default)
+                {
+                    newRelId = existing.Item1; // reuse the already-assigned id
+                }
+                else
+                {
+                    newRelId = AllocDgmRelId();
+                    slideRels.Add((newRelId, relType, target));
+                }
+
+                shapeRemap[key] = newRelId;
             }
+
+            // S2: only register the shape in the remap if dm is present (required for rendering)
+            if (shapeRemap.ContainsKey("dm"))
+                relIdRemap[shape.Id] = shapeRemap;
         }
 
-        return slideRels;
+        return (slideRels, relIdRemap);
     }
 
     /// <summary>
@@ -1747,7 +1811,7 @@ public static class PptxPackageWriter
         {
             "dm" => "diagramData",
             "lo" => "diagramLayout",
-            "qs" => "diagramQuickStyle",
+            "qs" => "diagramStyle",
             "cs" => "diagramColors",
             _    => null
         };

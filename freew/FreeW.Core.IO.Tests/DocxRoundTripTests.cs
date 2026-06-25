@@ -2392,6 +2392,79 @@ public class DocxRoundTripTests
         result.Page.ColumnWidthsPt![1].Should().BeApproximately(360, 0.001);
     }
 
+    // S7 regression — a <w:cols w:equalWidth="0"><w:col w:w="..."/></w:cols> with a SINGLE explicit-width
+    // column was silently treated as equal-width (the old guard required colElements.Count > 1). The width
+    // was dropped and ColumnWidthsPt stayed null. The fix relaxes the guard to >= 1.
+    [Fact]
+    public void SingleExplicitWidthColumn_EqualWidthOff_ReadsWidth()
+    {
+        // Build a minimal package whose sectPr has one explicit w:col with w:equalWidth="0".
+        // 4320 dxa = 216 pt (1.5 inches in Word's default 1440-dxa-per-inch scale).
+        var stream = BuildSingleExplicitColPackage(colWidthDxa: 4320);
+        stream.Position = 0;
+        var doc = DocxReader.Read(stream);
+
+        doc.Page.ColumnWidthsPt.Should().NotBeNull(
+            because: "a single w:col with w:equalWidth=0 must be captured as an explicit-width column");
+        doc.Page.ColumnWidthsPt!.Should().HaveCount(1);
+        doc.Page.ColumnWidthsPt![0].Should().BeApproximately(216.0, 0.001,
+            because: "4320 dxa = 216 pt (4320 / 20)");
+    }
+
+    private static MemoryStream BuildSingleExplicitColPackage(int colWidthDxa)
+    {
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string xml)
+            {
+                var entry = zip.CreateEntry(path);
+                using var w = new StreamWriter(entry.Open());
+                w.Write(xml);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>
+                """);
+
+            Add("word/document.xml",
+                $"""
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:r><w:t>Body</w:t></w:r></w:p>
+                    <w:sectPr>
+                      <w:cols w:equalWidth="0">
+                        <w:col w:w="{colWidthDxa}"/>
+                      </w:cols>
+                    </w:sectPr>
+                  </w:body>
+                </w:document>
+                """);
+        }
+        return stream;
+    }
+
     [Fact]
     public void InsertedRun_RoundTrips_KindAuthorAndDate()
     {

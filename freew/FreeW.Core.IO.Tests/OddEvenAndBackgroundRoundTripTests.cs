@@ -214,4 +214,52 @@ public class OddEvenAndBackgroundRoundTripTests
         // The even header part for section 1 must also have been written.
         hasHeader2.Should().BeTrue(because: "the even-header part for section 1 must be emitted");
     }
+
+    // S5 regression — a non-final section's even header/footer must survive a full read→write→read cycle
+    // when the global w:evenAndOddHeaders toggle is on. Before this fix the reader set DifferentOddEvenPages
+    // only on document.Page (the final section), leaving non-final sections' PageSettings with the flag off;
+    // the writer then skipped emitting the even header/footer part + reference for those sections.
+    [Fact]
+    public void NonFinalSection_EvenHeader_SurvivesReadWriteReadRoundTrip()
+    {
+        var doc = new TextDocument();
+
+        // Section 1 (non-final): different odd/even on, with a DISTINCT even header.
+        var section1Page = new PageSettings { DifferentOddEvenPages = true };
+        var section1 = new Section(section1Page, SectionBreakKind.NextPage);
+        section1.HeadersFooters.Header = new HeaderFooter("Section 1 odd header");
+        section1.HeadersFooters.EvenHeader = new HeaderFooter("Section 1 even header");
+        doc.Blocks.Add(new Paragraph("Section 1 body") { SectionBreak = section1 });
+
+        // Final section: also different odd/even, with its own even header.
+        doc.Page.DifferentOddEvenPages = true;
+        doc.Header = new HeaderFooter("Final section odd header");
+        doc.EvenHeader = new HeaderFooter("Final section even header");
+        doc.Blocks.Add(new Paragraph("Final section body"));
+
+        // Write → read back → write again → read back (two full round-trips).
+        TextDocument Roundtrip(TextDocument d)
+        {
+            using var ms = new MemoryStream();
+            DocxWriter.Write(d, ms);
+            ms.Position = 0;
+            return DocxReader.Read(ms);
+        }
+
+        var rt1 = Roundtrip(doc);
+        var rt2 = Roundtrip(rt1);
+
+        // After both round-trips the non-final section must still carry its distinct even header.
+        var sections = rt2.Sections;
+        sections.Should().HaveCount(2, "the document has one non-final + one final section");
+        var s1 = sections[0];
+        s1.HeadersFooters.EvenHeader.Should().NotBeNull(
+            because: "the non-final section's even header must survive read→write→read");
+        s1.HeadersFooters.EvenHeader!.PlainText.Should().Be("Section 1 even header",
+            because: "the non-final section's even header content must be preserved");
+
+        // The final section's even header must also be intact.
+        rt2.EvenHeader.Should().NotBeNull();
+        rt2.EvenHeader!.PlainText.Should().Be("Final section even header");
+    }
 }
