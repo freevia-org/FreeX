@@ -514,9 +514,27 @@ public static class PptxPackageReader
     private const string DrawingChartUri =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
+    private const string DrawingDiagramUri =
+        "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
     // c: namespace for c:chart element inside graphicData
     private static readonly XNamespace CChart =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    // dgm: namespace for SmartArt relId attributes inside graphicData
+    private static readonly XNamespace Dgm =
+        "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
+    // dsp: namespace for dsp:drawing (SmartArt cached render)
+    private static readonly XNamespace Dsp =
+        "http://schemas.microsoft.com/office/drawing/2008/diagram";
+
+    // Relationship types for SmartArt diagram parts
+    private const string DiagramDataRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+    private const string DiagramLayoutRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+    private const string DiagramQuickStyleRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+    private const string DiagramColorsRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+    private const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
     private static SlideShape? ReadGraphicFrame(
         XElement gfEl, ZipArchive archive, string partPath,
@@ -592,8 +610,251 @@ public static class PptxPackageReader
             };
         }
 
+        // ── SmartArt diagram ──────────────────────────────────────────────────
+        if (string.Equals(uri, DrawingDiagramUri, StringComparison.OrdinalIgnoreCase))
+        {
+            var smartArt = ReadSmartArt(graphicData, archive, partPath, scheme);
+            return new SlideShape
+            {
+                Id = ParseUint(cNvPr?.Attribute("id")?.Value),
+                Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                Kind = SlideShapeKind.SmartArt,
+                OffsetXEmu = offX,
+                OffsetYEmu = offY,
+                ExtentCxEmu = extCx,
+                ExtentCyEmu = extCy,
+                SmartArt = smartArt
+            };
+        }
+
         // Unknown graphicFrame type — skip for now.
         return null;
+    }
+
+    // ── SmartArt diagram parsing ──────────────────────────────────────────────────
+
+    private static SmartArtShape ReadSmartArt(
+        XElement graphicData, ZipArchive archive, string partPath, PresentationColorScheme scheme)
+    {
+        var smart = new SmartArtShape();
+
+        // The graphicData element holds a dgm:relIds child (or attributes directly) with
+        // r:dm / r:lo / r:qs / r:cs pointing to the diagram sub-parts via slide rels.
+        // Some encoders put them directly on the graphicData element; others use dgm:relIds.
+        var relIdsEl = graphicData.Element(Dgm + "relIds") ?? graphicData;
+
+        var dmRelId = relIdsEl.Attribute(R + "dm")?.Value;
+        var loRelId = relIdsEl.Attribute(R + "lo")?.Value;
+        var qsRelId = relIdsEl.Attribute(R + "qs")?.Value;
+        var csRelId = relIdsEl.Attribute(R + "cs")?.Value;
+
+        if (dmRelId is not null) smart.DiagramRelIds["dm"] = dmRelId;
+        if (loRelId is not null) smart.DiagramRelIds["lo"] = loRelId;
+        if (qsRelId is not null) smart.DiagramRelIds["qs"] = qsRelId;
+        if (csRelId is not null) smart.DiagramRelIds["cs"] = csRelId;
+
+        // Resolve each rel id -> part path via slide rels.
+        var slideRels = LoadRels(archive, GetRelsPath(partPath));
+        var slideDir  = GetDirectory(partPath);
+
+        var relTypeForKey = new Dictionary<string, string>
+        {
+            ["dm"] = DiagramDataRelType,
+            ["lo"] = DiagramLayoutRelType,
+            ["qs"] = DiagramQuickStyleRelType,
+            ["cs"] = DiagramColorsRelType
+        };
+
+        var contentTypeForKey = new Dictionary<string, string>
+        {
+            ["dm"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            ["lo"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
+            ["qs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramQuickStyle+xml",
+            ["cs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"
+        };
+
+        string? dataPartPath = null;
+
+        foreach (var (key, relId) in smart.DiagramRelIds)
+        {
+            if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
+
+            // Find target by relId (type not always set correctly — match by id first)
+            var target = slideRels.FirstOrDefault(r => r.id == relId).target;
+            if (string.IsNullOrWhiteSpace(target)) continue;
+
+            var absPath = ResolvePath(slideDir, target);
+            var bytes = ReadEntryBytes(archive, absPath);
+            if (bytes is null) continue;
+
+            contentTypeForKey.TryGetValue(key, out var ct);
+            smart.Parts[absPath] = new DiagramPart
+            {
+                ContentType = ct ?? "application/xml",
+                PartPath    = absPath,
+                Bytes       = bytes
+            };
+
+            // Capture and store rels for this part
+            var partRelsPath = GetRelsPath(absPath);
+            var partRelsBytes = ReadEntryBytes(archive, partRelsPath);
+            if (partRelsBytes is not null)
+                smart.PartRels[absPath] = partRelsBytes;
+
+            if (key == "dm") dataPartPath = absPath;
+        }
+
+        // Resolve the dsp:drawing part path from the data part's rels.
+        if (dataPartPath is not null)
+        {
+            var dataPartRels = LoadRels(archive, GetRelsPath(dataPartPath));
+            var drawingTarget = dataPartRels
+                .FirstOrDefault(r => r.type == DiagramDrawingRelType).target;
+
+            if (!string.IsNullOrWhiteSpace(drawingTarget))
+            {
+                var drawingPath = ResolvePath(GetDirectory(dataPartPath), drawingTarget);
+                smart.DrawingPartPath = drawingPath;
+
+                var drawingBytes = ReadEntryBytes(archive, drawingPath);
+                if (drawingBytes is not null)
+                {
+                    smart.Parts[drawingPath] = new DiagramPart
+                    {
+                        ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+                        PartPath    = drawingPath,
+                        Bytes       = drawingBytes
+                    };
+
+                    // Also capture rels for drawing part if present
+                    var drawRelsBytes = ReadEntryBytes(archive, GetRelsPath(drawingPath));
+                    if (drawRelsBytes is not null)
+                        smart.PartRels[drawingPath] = drawRelsBytes;
+
+                    // Parse dsp:drawing shapes into FallbackShapes
+                    try
+                    {
+                        ReadDspDrawing(drawingBytes, smart, scheme);
+                    }
+                    catch
+                    {
+                        // Graceful degradation: if dsp parsing fails, FallbackShapes stays empty
+                    }
+                }
+            }
+        }
+
+        return smart;
+    }
+
+    /// <summary>
+    /// Parses a dsp:drawing XML (SmartArt cached render) into FallbackShapes on the SmartArtShape.
+    /// dsp:sp elements are structurally like p:sp (spPr + txBody); dsp:grpSp like p:grpSp.
+    /// </summary>
+    private static void ReadDspDrawing(byte[] bytes, SmartArtShape smart, PresentationColorScheme scheme)
+    {
+        XDocument doc;
+        using (var ms = new MemoryStream(bytes))
+            doc = XDocument.Load(ms);
+
+        var root = doc.Root;
+        if (root is null) return;
+
+        // dsp:drawing / dsp:spTree
+        var spTree = root.Element(Dsp + "spTree");
+        if (spTree is null) return;
+
+        foreach (var el in spTree.Elements())
+        {
+            var shape = ReadDspElement(el, scheme);
+            if (shape is not null)
+                smart.FallbackShapes.Add(shape);
+        }
+    }
+
+    /// <summary>
+    /// Reads a dsp:sp or dsp:grpSp element into a SlideShape using the existing spPr/txBody helpers.
+    /// </summary>
+    private static SlideShape? ReadDspElement(XElement el, PresentationColorScheme scheme)
+    {
+        switch (el.Name.LocalName)
+        {
+            case "sp":
+                return ReadDspSp(el, scheme);
+            case "grpSp":
+                return ReadDspGrpSp(el, scheme);
+            default:
+                return null;
+        }
+    }
+
+    private static SlideShape ReadDspSp(XElement sp, PresentationColorScheme scheme)
+    {
+        // dsp:sp has dsp:nvSpPr/dsp:cNvPr (id, name), dsp:spPr (a: children), dsp:txBody (a: children)
+        var cNvPrEl = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "nvSpPr")
+                        ?.Elements().FirstOrDefault(e => e.Name.LocalName == "cNvPr");
+
+        var shape = new SlideShape
+        {
+            Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
+            Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            Kind = SlideShapeKind.AutoShape
+        };
+
+        // spPr — same structure as p:spPr with a: children
+        var spPrEl = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "spPr");
+        if (spPrEl is not null)
+        {
+            // Build a synthetic a:spPr element so we can reuse ReadSpPr (it uses the A namespace)
+            var aSpPr = new XElement(A + "spPr", spPrEl.Attributes(), spPrEl.Elements());
+            ReadSpPr(aSpPr, shape, scheme);
+
+            var prst = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+            shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        }
+
+        // txBody
+        var txBodyEl = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "txBody");
+        if (txBodyEl is not null)
+        {
+            // dsp:txBody uses a: children — same as p:txBody
+            var aTxBody = new XElement(A + "txBody", txBodyEl.Attributes(), txBodyEl.Elements());
+            shape.TextBody = ReadTxBody(aTxBody, scheme);
+        }
+
+        return shape;
+    }
+
+    private static SlideShape ReadDspGrpSp(XElement grpSp, PresentationColorScheme scheme)
+    {
+        var cNvPrEl = grpSp.Elements().FirstOrDefault(e => e.Name.LocalName == "nvGrpSpPr")
+                           ?.Elements().FirstOrDefault(e => e.Name.LocalName == "cNvPr");
+
+        var shape = new SlideShape
+        {
+            Id   = ParseUint(cNvPrEl?.Attribute("id")?.Value),
+            Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            Kind = SlideShapeKind.Group
+        };
+
+        var grpSpPrEl = grpSp.Elements().FirstOrDefault(e => e.Name.LocalName == "grpSpPr");
+        if (grpSpPrEl is not null)
+        {
+            var aGrpSpPr = new XElement(A + "spPr", grpSpPrEl.Attributes(), grpSpPrEl.Elements());
+            ReadSpPr(aGrpSpPr, shape, scheme);
+        }
+
+        // Recurse children
+        var spTreeEl = grpSp.Elements().FirstOrDefault(e => e.Name.LocalName == "spTree")
+                     ?? grpSp; // some encoders put children directly inside grpSp
+        foreach (var child in spTreeEl.Elements())
+        {
+            var childShape = ReadDspElement(child, scheme);
+            if (childShape is not null)
+                shape.Children.Add(childShape);
+        }
+
+        return shape;
     }
 
     // ── a:tbl table parsing ───────────────────────────────────────────────────────
@@ -1600,5 +1861,22 @@ public static class PptxPackageReader
         if (!byte.TryParse(s[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return false;
         color = new SrgbColor(r, g, b);
         return true;
+    }
+
+    /// <summary>
+    /// Reads the raw bytes of a zip entry. Returns null when the entry does not exist.
+    /// </summary>
+    private static byte[]? ReadEntryBytes(ZipArchive archive, string path)
+    {
+        var entry = archive.GetEntry(path);
+        if (entry is null) return null;
+        try
+        {
+            using var stream = entry.Open();
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return ms.ToArray();
+        }
+        catch { return null; }
     }
 }
