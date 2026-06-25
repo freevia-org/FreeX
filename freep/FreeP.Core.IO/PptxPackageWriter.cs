@@ -558,11 +558,16 @@ public static class PptxPackageWriter
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 new XAttribute("type", ToLayoutTypeStr(layout.LayoutType)),
                 new XAttribute("preserve", "1"),
-                new XElement(P + "cSld",
-                    new XAttribute("name", layout.Name),
-                    new XElement(P + "spTree",
-                        GrpSpHeader(),
-                        layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())))),
+                layout.Name is { Length: > 0 }
+                    ? new XElement(P + "cSld",
+                        new XAttribute("name", layout.Name),
+                        new XElement(P + "spTree",
+                            GrpSpHeader(),
+                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new()))))
+                    : new XElement(P + "cSld",
+                        new XElement(P + "spTree",
+                            GrpSpHeader(),
+                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())))),
                 new XElement(P + "clrMapOvr",
                     new XElement(A + "masterClrMapping"))));
 
@@ -585,21 +590,102 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         master.Placeholders.Select(s => BuildShapeEl(s, scheme, new())))),
-                BuildColorMap(),
+                BuildColorMapEl(master.ColorMap),
+                master.TextStyles is not null ? BuildTxStylesEl(master.TextStyles) : null,
                 new XElement(P + "sldLayoutIdLst",
                     layoutRelIds.Select((lr, i) =>
                         new XElement(P + "sldLayoutId",
                             new XAttribute("id", 2147483649u + (uint)i),
                             new XAttribute(R + "id", lr.relId))))));
 
-    private static XElement BuildColorMap() =>
-        new XElement(P + "clrMap",
-            new XAttribute("bg1", "lt1"), new XAttribute("tx1", "dk1"),
-            new XAttribute("bg2", "lt2"), new XAttribute("tx2", "dk2"),
-            new XAttribute("accent1", "accent1"), new XAttribute("accent2", "accent2"),
-            new XAttribute("accent3", "accent3"), new XAttribute("accent4", "accent4"),
-            new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
-            new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink"));
+    private static XElement BuildColorMapEl(Dictionary<string, string>? colorMap)
+    {
+        // Use the stored color map if present; otherwise emit the default Office mapping.
+        var map = colorMap ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bg1"] = "lt1", ["tx1"] = "dk1", ["bg2"] = "lt2", ["tx2"] = "dk2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+
+        var el = new XElement(P + "clrMap");
+        foreach (var (key, val) in map)
+            el.Add(new XAttribute(key, val));
+        return el;
+    }
+
+    // ── p:txStyles builder ────────────────────────────────────────────────────────
+
+    private static XElement BuildTxStylesEl(MasterTextStyles txStyles)
+    {
+        return new XElement(P + "txStyles",
+            BuildTextStyleEl(P + "titleStyle", txStyles.TitleStyle),
+            BuildTextStyleEl(P + "bodyStyle",  txStyles.BodyStyle),
+            BuildTextStyleEl(P + "otherStyle", txStyles.OtherStyle));
+    }
+
+    private static XElement? BuildTextStyleEl(XName elementName, TextStyleLevels levels)
+    {
+        if (!levels.HasAny) return null;
+        var el = new XElement(elementName);
+        for (int i = 0; i < 9; i++)
+        {
+            var level = levels[i];
+            if (level is null) continue;
+            el.Add(BuildLvlpPrEl($"lvl{i + 1}pPr", level));
+        }
+        return el;
+    }
+
+    private static XElement BuildLvlpPrEl(string localName, TextStyleLevel level)
+    {
+        var el = new XElement(A + localName);
+
+        if (level.Align.HasValue)
+            el.Add(new XAttribute("algn", level.Align.Value switch
+            {
+                TextAlign.Center => "ctr",
+                TextAlign.Right => "r",
+                TextAlign.Justify => "just",
+                TextAlign.Distributed => "dist",
+                _ => "l"
+            }));
+        if (level.MarginLeftEmu.HasValue) el.Add(new XAttribute("marL", level.MarginLeftEmu.Value));
+        if (level.IndentEmu.HasValue)     el.Add(new XAttribute("indent", level.IndentEmu.Value));
+
+        // Bullet
+        switch (level.BulletKind)
+        {
+            case BulletKind.None:
+                el.Add(new XElement(A + "buNone")); break;
+            case BulletKind.Char:
+                el.Add(new XElement(A + "buChar", new XAttribute("char", level.BulletChar ?? "•"))); break;
+            case BulletKind.Auto:
+                el.Add(new XElement(A + "buAutoNum", new XAttribute("type", "arabicPeriod"))); break;
+        }
+
+        // a:defRPr
+        bool hasRPr = level.FontSizePt.HasValue || level.Bold.HasValue || level.Italic.HasValue
+                   || level.Color is not null || level.LatinFont is not null;
+        if (hasRPr)
+        {
+            var defRPr = new XElement(A + "defRPr");
+            if (level.FontSizePt.HasValue)
+                defRPr.Add(new XAttribute("sz", (int)Math.Round(level.FontSizePt.Value * 100)));
+            if (level.Bold.HasValue)
+                defRPr.Add(new XAttribute("b", level.Bold.Value ? "1" : "0"));
+            if (level.Italic.HasValue)
+                defRPr.Add(new XAttribute("i", level.Italic.Value ? "1" : "0"));
+            if (level.Color is not null)
+                defRPr.Add(new XElement(A + "solidFill", BuildColorEl(level.Color)));
+            if (level.LatinFont is not null)
+                defRPr.Add(new XElement(A + "latin", new XAttribute("typeface", level.LatinFont)));
+            el.Add(defRPr);
+        }
+
+        return el;
+    }
 
     // ── theme.xml ────────────────────────────────────────────────────────────────
 
@@ -906,7 +992,7 @@ public static class PptxPackageWriter
 
             txBody = new XElement(A + "txBody",
                 bodyPr,
-                new XElement(A + "lstStyle"),
+                BuildLstStyleEl(cell.TextBody.LstStyle),
                 cell.TextBody.Paragraphs.Select(p => BuildParaEl(p)));
         }
         else
@@ -1037,6 +1123,28 @@ public static class PptxPackageWriter
             _ => new XElement(A + "ln")
         };
 
+    // ── a:lstStyle helper ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Emits an <c>a:lstStyle</c> element. When <paramref name="levels"/> is null (no explicit list
+    /// style) emits an empty element so the XML remains valid. When levels are present each
+    /// non-null level is emitted as <c>a:lvlNpPr</c>.
+    /// </summary>
+    private static XElement BuildLstStyleEl(TextStyleLevels? levels)
+    {
+        if (levels is null || !levels.HasAny)
+            return new XElement(A + "lstStyle");
+
+        var el = new XElement(A + "lstStyle");
+        for (int i = 0; i < 9; i++)
+        {
+            var level = levels[i];
+            if (level is null) continue;
+            el.Add(BuildLvlpPrEl($"lvl{i + 1}pPr", level));
+        }
+        return el;
+    }
+
     // ── TextBody elements ─────────────────────────────────────────────────────────
 
     private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme)
@@ -1066,7 +1174,7 @@ public static class PptxPackageWriter
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
         return new XElement(P + "txBody",
             bodyPr,
-            new XElement(A + "lstStyle"),
+            BuildLstStyleEl(body.LstStyle),
             body.Paragraphs.Select(p => BuildParaEl(p)));
     }
 

@@ -1,6 +1,89 @@
 namespace FreeP.Core.Model;
 
 /// <summary>
+/// Default paragraph/run properties for a single indent level (0-based; level 0 = top-level).
+/// Corresponds to <c>a:lvl1pPr</c> .. <c>a:lvl9pPr</c> inside <c>p:txStyles/*Style</c>
+/// and <c>a:lstStyle</c> elements on layout placeholders.
+/// </summary>
+public sealed class TextStyleLevel
+{
+    /// <summary>Paragraph alignment, or null if not set at this level.</summary>
+    public TextAlign? Align { get; set; }
+
+    /// <summary>Left margin (first-line hanging indent) in EMU, or null if not set.</summary>
+    public long? MarginLeftEmu { get; set; }
+
+    /// <summary>Indent (negative for hanging) in EMU, or null if not set.</summary>
+    public long? IndentEmu { get; set; }
+
+    // ── Default run properties (a:defRPr) ──────────────────────────────────────
+
+    /// <summary>Default font size in points (e.g. 28.0), or null if not set.</summary>
+    public double? FontSizePt { get; set; }
+
+    /// <summary>Default bold, or null if not set.</summary>
+    public bool? Bold { get; set; }
+
+    /// <summary>Default italic, or null if not set.</summary>
+    public bool? Italic { get; set; }
+
+    /// <summary>Default text color, or null if not set.</summary>
+    public ThemeAwareColor? Color { get; set; }
+
+    /// <summary>Default Latin font family (e.g. "+mj-lt" = theme major font), or null if not set.</summary>
+    public string? LatinFont { get; set; }
+
+    /// <summary>Bullet kind for this level, or null if not specified at this level.</summary>
+    public BulletKind? BulletKind { get; set; }
+
+    /// <summary>Bullet character (when BulletKind == Char).</summary>
+    public string? BulletChar { get; set; }
+}
+
+/// <summary>
+/// Up to 9 indent-level defaults for one text style category (title / body / other).
+/// Index 0 = lvl1pPr (top-level), index 8 = lvl9pPr.
+/// </summary>
+public sealed class TextStyleLevels
+{
+    private readonly TextStyleLevel?[] _levels = new TextStyleLevel?[9];
+
+    /// <summary>Returns the level properties, or null if that level has no explicit settings.</summary>
+    public TextStyleLevel? this[int level]
+    {
+        get => (level >= 0 && level < 9) ? _levels[level] : null;
+        set { if (level >= 0 && level < 9) _levels[level] = value; }
+    }
+
+    /// <summary>True if at least one level has been set.</summary>
+    public bool HasAny => _levels.Any(l => l is not null);
+
+    /// <summary>Returns the effective (first-set) level properties walking from the given level up to 0.</summary>
+    public TextStyleLevel? Resolve(int level)
+    {
+        for (int l = Math.Min(level, 8); l >= 0; l--)
+            if (_levels[l] is { } found) return found;
+        return null;
+    }
+}
+
+/// <summary>
+/// Master text styles from <c>p:txStyles</c>: title, body, and "other" (footer/date/slide-number)
+/// default paragraph and run properties per indent level.
+/// </summary>
+public sealed class MasterTextStyles
+{
+    /// <summary>Title placeholder defaults (<c>p:titleStyle</c>).</summary>
+    public TextStyleLevels TitleStyle { get; } = new();
+
+    /// <summary>Body placeholder defaults (<c>p:bodyStyle</c>).</summary>
+    public TextStyleLevels BodyStyle { get; } = new();
+
+    /// <summary>Other placeholder defaults (<c>p:otherStyle</c>).</summary>
+    public TextStyleLevels OtherStyle { get; } = new();
+}
+
+/// <summary>
 /// A slide master: the root of the layout/theme inheritance hierarchy. Holds placeholder shapes
 /// (with default geometry and text styles) that slide layouts and slides inherit from.
 /// Corresponds to <c>slideMaster*.xml</c> in the .pptx package.
@@ -21,6 +104,20 @@ public sealed class SlideMaster
 
     /// <summary>Optional background fill for this master (inherited by layouts/slides).</summary>
     public ShapeFill? Background { get; set; }
+
+    /// <summary>
+    /// Master text styles parsed from <c>p:txStyles</c>. Null if the element was absent
+    /// (pre-Wave-6B masters/new masters). Provides per-level font-size/bold/color defaults
+    /// for title, body, and other placeholders.
+    /// </summary>
+    public MasterTextStyles? TextStyles { get; set; }
+
+    /// <summary>
+    /// Raw color map from <c>p:clrMap</c>. Stored as a dictionary mapping scheme-color role
+    /// name (e.g. "bg1") to target slot name (e.g. "lt1"). Null if absent.
+    /// Used by the compositor for correct scheme-color resolution per master.
+    /// </summary>
+    public Dictionary<string, string>? ColorMap { get; set; }
 }
 
 /// <summary>Slide layout type identifiers from OOXML <c>p:sld type="..."</c>.</summary>
@@ -69,4 +166,11 @@ public sealed class SlideLayout
 
     /// <summary>Optional background fill for this layout (overrides master, inherited by slides).</summary>
     public ShapeFill? Background { get; set; }
+
+    /// <summary>
+    /// Per-placeholder list styles parsed from each layout placeholder's <c>a:lstStyle</c>.
+    /// Key = Placeholder Idx (with Type encoded as Idx*100+Type for uniqueness), value = the levels.
+    /// Populated by the reader; written back faithfully by the writer.
+    /// </summary>
+    public Dictionary<int, TextStyleLevels> PlaceholderLstStyles { get; } = new();
 }
