@@ -277,6 +277,68 @@ public sealed class EditingSession
         Bus.Execute(new ReorderShapeCommand(_currentSlideIndex, id, idx - 1));
     }
 
+    // ── Transition operations ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets (or clears) the slide transition on the current slide. Undoable.
+    /// Pass null to remove the transition.
+    /// </summary>
+    public void SetTransition(SlideTransition? transition)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new SetSlideTransitionCommand(_currentSlideIndex, transition));
+    }
+
+    /// <summary>Gets the transition for the current slide, or null if none.</summary>
+    public SlideTransition? CurrentSlideTransition => CurrentSlide?.Transition;
+
+    // ── Animation operations ──────────────────────────────────────────────────────
+
+    /// <summary>Read-only ordered animation list for the current slide.</summary>
+    public IReadOnlyList<ShapeAnimation> CurrentSlideAnimations =>
+        (IReadOnlyList<ShapeAnimation>?)CurrentSlide?.Animations ?? Array.Empty<ShapeAnimation>();
+
+    /// <summary>
+    /// Appends an animation to the current slide's build sequence. Undoable.
+    /// If <paramref name="shapeId"/> is 0 and a shape is selected, uses the first selected shape.
+    /// </summary>
+    public void AddAnimation(uint shapeId, ShapeAnimation animation)
+    {
+        if (CurrentSlide is null) return;
+        var id = shapeId != 0 ? shapeId
+                 : _selectedShapeIds.Count > 0 ? _selectedShapeIds[0] : 0u;
+        if (id == 0) return;
+        animation.ShapeId = id;
+        Bus.Execute(new AddShapeAnimationCommand(_currentSlideIndex, animation));
+    }
+
+    /// <summary>Removes the animation at <paramref name="index"/> from the current slide. Undoable.</summary>
+    public void RemoveAnimation(int index)
+    {
+        if (CurrentSlide is null) return;
+        if (index < 0 || index >= CurrentSlide.Animations.Count) return;
+        Bus.Execute(new RemoveShapeAnimationCommand(_currentSlideIndex, index));
+    }
+
+    /// <summary>
+    /// Moves the animation at <paramref name="fromIndex"/> to <paramref name="toIndex"/>. Undoable.
+    /// </summary>
+    public void MoveAnimation(int fromIndex, int toIndex)
+    {
+        if (CurrentSlide is null) return;
+        Bus.Execute(new ReorderShapeAnimationCommand(_currentSlideIndex, fromIndex, toIndex));
+    }
+
+    /// <summary>
+    /// Replaces the animation at <paramref name="index"/> with <paramref name="animation"/>. Undoable.
+    /// </summary>
+    public void SetAnimation(int index, ShapeAnimation animation)
+    {
+        if (CurrentSlide is null) return;
+        if (index < 0 || index >= CurrentSlide.Animations.Count) return;
+        Bus.Execute(new SetShapeAnimationCommand(_currentSlideIndex, index, animation));
+    }
+
     // ── Text / run-format operations ──────────────────────────────────────────────
 
     /// <summary>

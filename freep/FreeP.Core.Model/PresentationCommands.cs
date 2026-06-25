@@ -707,6 +707,182 @@ public sealed class SetRunFontSizeCommand : IPresentationCommand
     }
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// TRANSITION + ANIMATION COMMANDS
+// ════════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Sets or clears the slide transition for the slide at <paramref name="slideIndex"/>.
+/// Captures the old transition for undo.
+/// </summary>
+public sealed class SetSlideTransitionCommand : IPresentationCommand
+{
+    private readonly int              _slideIndex;
+    private readonly SlideTransition? _newTransition;
+    private SlideTransition?          _oldTransition;
+
+    public SetSlideTransitionCommand(int slideIndex, SlideTransition? transition)
+    {
+        _slideIndex    = slideIndex;
+        _newTransition = transition;
+    }
+
+    public string Label => "Set Transition";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var slide         = p.Slides[_slideIndex];
+        _oldTransition    = slide.Transition;
+        slide.Transition  = _newTransition;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        p.Slides[_slideIndex].Transition = _oldTransition;
+    }
+}
+
+/// <summary>
+/// Appends a <see cref="ShapeAnimation"/> to the animation list of the slide at
+/// <paramref name="slideIndex"/>.
+/// </summary>
+public sealed class AddShapeAnimationCommand : IPresentationCommand
+{
+    private readonly int            _slideIndex;
+    private readonly ShapeAnimation _animation;
+
+    public AddShapeAnimationCommand(int slideIndex, ShapeAnimation animation)
+    {
+        _slideIndex = slideIndex;
+        _animation  = animation;
+    }
+
+    public string Label => "Add Animation";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        p.Slides[_slideIndex].Animations.Add(_animation);
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        p.Slides[_slideIndex].Animations.Remove(_animation);
+    }
+}
+
+/// <summary>
+/// Removes the animation at <paramref name="animationIndex"/> from the slide at <paramref name="slideIndex"/>.
+/// Captures the entry and its index for undo.
+/// </summary>
+public sealed class RemoveShapeAnimationCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly int _animationIndex;
+    private ShapeAnimation? _captured;
+
+    public RemoveShapeAnimationCommand(int slideIndex, int animationIndex)
+    {
+        _slideIndex     = slideIndex;
+        _animationIndex = animationIndex;
+    }
+
+    public string Label => "Remove Animation";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var anims = p.Slides[_slideIndex].Animations;
+        if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
+        _captured = anims[_animationIndex];
+        anims.RemoveAt(_animationIndex);
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_captured is null) return;
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var anims = p.Slides[_slideIndex].Animations;
+        var idx = Math.Clamp(_animationIndex, 0, anims.Count);
+        anims.Insert(idx, _captured);
+    }
+}
+
+/// <summary>
+/// Reorders the animation at <paramref name="fromIndex"/> to <paramref name="toIndex"/>.
+/// </summary>
+public sealed class ReorderShapeAnimationCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly int _from;
+    private readonly int _to;
+
+    public ReorderShapeAnimationCommand(int slideIndex, int fromIndex, int toIndex)
+    {
+        _slideIndex = slideIndex;
+        _from       = fromIndex;
+        _to         = toIndex;
+    }
+
+    public string Label => "Reorder Animation";
+
+    public void Apply(Presentation p)  => MoveInList(p, _from, _to);
+    public void Revert(Presentation p) => MoveInList(p, _to, _from);
+
+    private void MoveInList(Presentation p, int from, int to)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var anims = p.Slides[_slideIndex].Animations;
+        if (from == to || from < 0 || from >= anims.Count) return;
+        var item = anims[from];
+        anims.RemoveAt(from);
+        var dest = Math.Clamp(to, 0, anims.Count);
+        anims.Insert(dest, item);
+    }
+}
+
+/// <summary>
+/// Replaces the animation entry at <paramref name="animationIndex"/> with a new <see cref="ShapeAnimation"/>.
+/// Captures old entry for undo.
+/// </summary>
+public sealed class SetShapeAnimationCommand : IPresentationCommand
+{
+    private readonly int            _slideIndex;
+    private readonly int            _animationIndex;
+    private readonly ShapeAnimation _newAnimation;
+    private ShapeAnimation?         _oldAnimation;
+
+    public SetShapeAnimationCommand(int slideIndex, int animationIndex, ShapeAnimation newAnimation)
+    {
+        _slideIndex      = slideIndex;
+        _animationIndex  = animationIndex;
+        _newAnimation    = newAnimation;
+    }
+
+    public string Label => "Edit Animation";
+
+    public void Apply(Presentation p)
+    {
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var anims = p.Slides[_slideIndex].Animations;
+        if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
+        _oldAnimation         = anims[_animationIndex];
+        anims[_animationIndex] = _newAnimation;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (_oldAnimation is null) return;
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
+        var anims = p.Slides[_slideIndex].Animations;
+        if (_animationIndex < 0 || _animationIndex >= anims.Count) return;
+        anims[_animationIndex] = _oldAnimation;
+    }
+}
+
 /// <summary>Sets the color on a single run; captures old value for undo.</summary>
 public sealed class SetRunColorCommand : IPresentationCommand
 {
