@@ -37,8 +37,6 @@ public sealed class FunctionalParityMatrixTests
         // ─────────────────────────────────────────────────────────────────────────────────────────────
         // (1) GENUINELY WINDOWS-ONLY
         // ─────────────────────────────────────────────────────────────────────────────────────────────
-        // View ▸ Window multi-window features that depend on the Windows window manager / MDI behavior.
-        "View Side by Side", "Synchronous Scrolling",
         // JIS B-series paper sizes: the Linux Page Setup wires "B4"/"B5"; the WPF "(JIS)"-suffixed ids are
         // Win32 PaperKind names with no Linux equivalent.
         "B4 (JIS)", "B5 (JIS)",

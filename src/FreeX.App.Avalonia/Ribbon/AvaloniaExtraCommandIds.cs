@@ -65,6 +65,7 @@ internal static class AvaloniaExtraCommandIds
         "Delete Note", "Edit Note", "Workbook Statistics", "Share",
         // ── View tab menu items ───────────────────────────────────────────────────────────────────────
         "Ruler", "Switch Windows", "Reset Window Position", "Custom Views",
+        "View Side by Side", "Synchronous Scrolling",
         "Freeze Panes#FreezeAtSelectionMenuItem_Click", "Freeze Top Row", "Freeze First Column",
         "Unfreeze Panes", "Tiled", "Cascade", "Vertical", "Horizontal#ArrangeAllMenuItem_Click",
         "200%", "100%#ZoomPresetMenuItem_Click", "75%", "50%", "25%", "More",
