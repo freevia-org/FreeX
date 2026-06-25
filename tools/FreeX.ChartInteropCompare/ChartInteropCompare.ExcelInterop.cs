@@ -202,38 +202,81 @@ internal static partial class ChartInteropCompare
         var worksheetCount = (int)workbook.Worksheets.Count;
         for (var sheetIndex = 1; sheetIndex <= worksheetCount; sheetIndex++)
         {
-            dynamic worksheet = workbook.Worksheets.Item(sheetIndex);
-            dynamic chartObjects = worksheet.ChartObjects();
-            var chartObjectCount = (int)chartObjects.Count;
-            chartCount += chartObjectCount;
-            if (chartObjectCount > 0)
+            object? worksheetRcw = null;
+            object? chartObjectsRcw = null;
+            object? shapesRcw = null;
+            try
             {
-                dynamic chart = chartObjects.Item(1).Chart;
-                string? exportError;
-                return new ExcelChartExport(chartCount, TryExportChart(chart, pngPath, out exportError));
+                dynamic worksheet = workbook.Worksheets.Item(sheetIndex);
+                worksheetRcw = worksheet;
+
+                dynamic chartObjects = worksheet.ChartObjects();
+                chartObjectsRcw = chartObjects;
+                var chartObjectCount = (int)chartObjects.Count;
+                chartCount += chartObjectCount;
+                if (chartObjectCount > 0)
+                {
+                    // chartObjects.Item(1).Chart: release the intermediate chartObject RCW after export.
+                    object? chartObjectItemRcw = null;
+                    object? chartRcw = null;
+                    try
+                    {
+                        dynamic chartObjectItem = chartObjects.Item(1);
+                        chartObjectItemRcw = chartObjectItem;
+                        dynamic chart = chartObjectItem.Chart;
+                        chartRcw = chart;
+                        string? exportError;
+                        return new ExcelChartExport(chartCount, TryExportChart(chart, pngPath, out exportError));
+                    }
+                    finally
+                    {
+                        try { if (chartRcw is not null && Marshal.IsComObject(chartRcw)) Marshal.FinalReleaseComObject(chartRcw); } catch { }
+                        try { if (chartObjectItemRcw is not null && Marshal.IsComObject(chartObjectItemRcw)) Marshal.FinalReleaseComObject(chartObjectItemRcw); } catch { }
+                    }
+                }
+
+                dynamic shapes = worksheet.Shapes;
+                shapesRcw = shapes;
+                var shapeCount = (int)shapes.Count;
+                for (var shapeIndex = 1; shapeIndex <= shapeCount; shapeIndex++)
+                {
+                    object? shapeRcw = null;
+                    object? shapeChartRcw = null;
+                    try
+                    {
+                        dynamic shape = shapes.Item(shapeIndex);
+                        shapeRcw = shape;
+                        var hasChart = false;
+                        try
+                        {
+                            hasChart = Convert.ToBoolean(shape.HasChart, CultureInfo.InvariantCulture);
+                        }
+                        catch (COMException)
+                        {
+                            hasChart = false;
+                        }
+
+                        if (!hasChart)
+                            continue;
+
+                        chartCount++;
+                        dynamic shapeChart = shape.Chart;
+                        shapeChartRcw = shapeChart;
+                        string? exportError;
+                        return new ExcelChartExport(chartCount, TryExportChart(shapeChart, pngPath, out exportError));
+                    }
+                    finally
+                    {
+                        try { if (shapeChartRcw is not null && Marshal.IsComObject(shapeChartRcw)) Marshal.FinalReleaseComObject(shapeChartRcw); } catch { }
+                        try { if (shapeRcw is not null && Marshal.IsComObject(shapeRcw)) Marshal.FinalReleaseComObject(shapeRcw); } catch { }
+                    }
+                }
             }
-
-            dynamic shapes = worksheet.Shapes;
-            var shapeCount = (int)shapes.Count;
-            for (var shapeIndex = 1; shapeIndex <= shapeCount; shapeIndex++)
+            finally
             {
-                dynamic shape = shapes.Item(shapeIndex);
-                var hasChart = false;
-                try
-                {
-                    hasChart = Convert.ToBoolean(shape.HasChart, CultureInfo.InvariantCulture);
-                }
-                catch (COMException)
-                {
-                    hasChart = false;
-                }
-
-                if (!hasChart)
-                    continue;
-
-                chartCount++;
-                string? exportError;
-                return new ExcelChartExport(chartCount, TryExportChart(shape.Chart, pngPath, out exportError));
+                try { if (shapesRcw is not null && Marshal.IsComObject(shapesRcw)) Marshal.FinalReleaseComObject(shapesRcw); } catch { }
+                try { if (chartObjectsRcw is not null && Marshal.IsComObject(chartObjectsRcw)) Marshal.FinalReleaseComObject(chartObjectsRcw); } catch { }
+                try { if (worksheetRcw is not null && Marshal.IsComObject(worksheetRcw)) Marshal.FinalReleaseComObject(worksheetRcw); } catch { }
             }
         }
 
@@ -241,9 +284,18 @@ internal static partial class ChartInteropCompare
         chartCount += chartSheetCount;
         if (chartSheetCount > 0)
         {
-            dynamic chart = workbook.Charts.Item(1);
-            string? exportError;
-            return new ExcelChartExport(chartCount, TryExportChart(chart, pngPath, out exportError));
+            object? chartSheetRcw = null;
+            try
+            {
+                dynamic chart = workbook.Charts.Item(1);
+                chartSheetRcw = chart;
+                string? exportError;
+                return new ExcelChartExport(chartCount, TryExportChart(chart, pngPath, out exportError));
+            }
+            finally
+            {
+                try { if (chartSheetRcw is not null && Marshal.IsComObject(chartSheetRcw)) Marshal.FinalReleaseComObject(chartSheetRcw); } catch { }
+            }
         }
 
         return new ExcelChartExport(chartCount, false);

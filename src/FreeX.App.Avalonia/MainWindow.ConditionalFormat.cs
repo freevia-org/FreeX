@@ -35,6 +35,32 @@ public sealed partial class MainWindow
         (CfRuleType.AboveAverage, "Above Average"),
     ];
 
+    /// <summary>
+    /// The Excel "Select a Rule Type:" list shown on the left of the New/Edit Formatting Rule dialog,
+    /// in Excel order. Each shell entry maps to the <see cref="CfRuleType"/> the right-hand description
+    /// editor pre-selects when that row is chosen.
+    /// </summary>
+    private static readonly IReadOnlyList<(string LabelKey, CfRuleType Type)> ConditionalFormatRuleShellChoices =
+    [
+        ("ConditionalFormatDialog_RuleShell_FormatAllCells", CfRuleType.ColorScale),
+        ("ConditionalFormatDialog_RuleShell_FormatContainingCells", CfRuleType.CellValue),
+        ("ConditionalFormatDialog_RuleShell_FormatTopBottom", CfRuleType.Top10),
+        ("ConditionalFormatDialog_RuleShell_FormatAboveBelowAverage", CfRuleType.AboveAverage),
+        ("ConditionalFormatDialog_RuleShell_FormatUniqueDuplicate", CfRuleType.DuplicateValues),
+        ("ConditionalFormatDialog_RuleShell_UseFormula", CfRuleType.Formula),
+    ];
+
+    /// <summary>Maps a concrete rule type to the shell row that should be highlighted for it.</summary>
+    private static int ConditionalFormatShellIndexForRuleType(CfRuleType ruleType) => ruleType switch
+    {
+        CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet => 0,
+        CfRuleType.Top10 => 2,
+        CfRuleType.AboveAverage => 3,
+        CfRuleType.DuplicateValues or CfRuleType.UniqueValues => 4,
+        CfRuleType.Formula => 5,
+        _ => 1,
+    };
+
     private static readonly IReadOnlyList<(CfOperator Op, string Label)> ConditionalFormatOperatorChoices =
     [
         (CfOperator.GreaterThan, "greater than"),
@@ -248,9 +274,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = existingRule is null ? UiText.Get("ConditionalFormat_NewRuleTitle") : UiText.Get("ConditionalFormat_EditRuleTitle"),
-            Width = 460,
+            Width = 640,
             Height = 470,
-            MinWidth = 420,
+            MinWidth = 600,
             MinHeight = 400,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -449,6 +475,52 @@ public sealed partial class MainWindow
 
         UpdateFieldVisibility();
 
+        // The Excel "Select a Rule Type:" list (left column). Selecting a row re-targets the rule-type
+        // dropdown that drives the description editor on the right, keeping the two in sync.
+        var ruleTypeShellList = new ListBox
+        {
+            ItemsSource = ConditionalFormatRuleShellChoices
+                .Select(c => UiText.Get(c.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal))
+                .ToList(),
+            MinHeight = 182,
+            Background = Brushes.White,
+            BorderThickness = new Thickness(1),
+            BorderBrush = Brush(171, 173, 179),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetAutomationId(ruleTypeShellList, "ConditionalFormatRuleShellList");
+        AutomationProperties.SetName(ruleTypeShellList, UiText.Get("ConditionalFormatDialog_RuleTypeAutomationName"));
+
+        var syncingShell = false;
+
+        void SyncShellFromRuleType()
+        {
+            if (syncingShell)
+                return;
+            syncingShell = true;
+            ruleTypeShellList.SelectedIndex = ConditionalFormatShellIndexForRuleType(SelectedRuleType());
+            syncingShell = false;
+        }
+
+        ruleTypeShellList.SelectionChanged += (_, _) =>
+        {
+            if (syncingShell || ruleTypeShellList.SelectedIndex < 0)
+                return;
+
+            var targetType = ConditionalFormatRuleShellChoices[ruleTypeShellList.SelectedIndex].Type;
+            var idx = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == targetType);
+            if (idx >= 0 && idx != ruleTypeBox.SelectedIndex)
+            {
+                syncingShell = true;
+                ruleTypeBox.SelectedIndex = idx;
+                syncingShell = false;
+                UpdateFieldVisibility();
+            }
+        };
+        ruleTypeBox.SelectionChanged += (_, _) => SyncShellFromRuleType();
+        SyncShellFromRuleType();
+
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         ApplyCfButtonChrome(okButton, 84, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "ConditionalFormatOkButton");
@@ -485,47 +557,89 @@ public sealed partial class MainWindow
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        // Left column: "Select a Rule Type:" header + the Excel rule-type list.
+        var leftColumn = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(0, 0, 12, 0),
             Children =
             {
-                buttonRow,
-                new ScrollViewer
+                new TextBlock
                 {
-                    Content = new StackPanel
-                    {
-                        Spacing = 10,
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Text = UiText.Format("ConditionalFormat_AppliesToFormat", FormatRangeReference(range)),
-                                Foreground = HeaderForeground,
-                                TextWrapping = TextWrapping.Wrap,
-                                FontSize = 12,
-                                FontFamily = FormulaBarFontFamily,
-                            },
-                            CreateDataValidationField(UiText.Get("ConditionalFormat_RuleTypeLabel"), ruleTypeBox),
-                            presetField,
-                            operatorField,
-                            value1Field,
-                            value2Field,
-                            formulaField,
-                            textField,
-                            rankField,
-                            percentBox,
-                            topBottomField,
-                            iconSetField,
-                            threeColorBox,
-                            minColorField,
-                            midColorField,
-                            maxColorField,
-                            highlightField,
-                            errorText,
-                        },
-                    },
+                    Text = UiText.Get("ConditionalFormatDialog_SelectRuleTypeHeader").Replace("_", string.Empty, StringComparison.Ordinal),
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 6),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
                 },
+                ruleTypeShellList,
+            },
+        };
+        AvaloniaGrid.SetColumn(leftColumn, 0);
+
+        // Right column: "Edit the Rule Description:" header, the per-type description editor, and buttons.
+        var descriptionEditor = new ScrollViewer
+        {
+            Content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = UiText.Format("ConditionalFormat_AppliesToFormat", FormatRangeReference(range)),
+                        Foreground = HeaderForeground,
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12,
+                        FontFamily = FormulaBarFontFamily,
+                    },
+                    CreateDataValidationField(UiText.Get("ConditionalFormat_RuleTypeLabel"), ruleTypeBox),
+                    presetField,
+                    operatorField,
+                    value1Field,
+                    value2Field,
+                    formulaField,
+                    textField,
+                    rankField,
+                    percentBox,
+                    topBottomField,
+                    iconSetField,
+                    threeColorBox,
+                    minColorField,
+                    midColorField,
+                    maxColorField,
+                    highlightField,
+                    errorText,
+                },
+            },
+        };
+
+        var rightColumn = new DockPanel
+        {
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = UiText.Get("ConditionalFormatDialog_EditRuleDescriptionHeader").Replace("_", string.Empty, StringComparison.Ordinal),
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 6),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    [DockPanel.DockProperty] = Dock.Top,
+                },
+                buttonRow,
+                descriptionEditor,
+            },
+        };
+        AvaloniaGrid.SetColumn(rightColumn, 1);
+
+        dialog.Content = new AvaloniaGrid
+        {
+            Margin = new Thickness(16),
+            ColumnDefinitions = new ColumnDefinitions("230,*"),
+            Children =
+            {
+                leftColumn,
+                rightColumn,
             },
         };
 
@@ -835,7 +949,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
 
-        var appliesToBox = new TextBox { MinWidth = 160, IsVisible = false };
+        var appliesToBox = new TextBox { MinWidth = 160, IsVisible = false, Margin = new Thickness(0, 4, 0, 0), [DockPanel.DockProperty] = Dock.Bottom };
         ApplyCfTextBoxChrome(appliesToBox);
         AutomationProperties.SetAutomationId(appliesToBox, "ManageConditionalFormatsAppliesToBox");
         AutomationProperties.SetName(appliesToBox, UiText.Get("ManageConditionalFormats_AppliesToColumn"));
@@ -1131,9 +1245,11 @@ public sealed partial class MainWindow
                 scopeRow,
                 buttonRow,
                 toolbarRow,
-                new StackPanel
+                // Center fill: "Rules:" label (top) + appliesTo box (bottom) + the rules frame
+                // stretched to consume all remaining height, so there is no dead gap above the
+                // docked button/toolbar rows (matches the Windows layout spacing).
+                new DockPanel
                 {
-                    Spacing = 4,
                     Children =
                     {
                         new TextBlock
@@ -1141,9 +1257,11 @@ public sealed partial class MainWindow
                             Text = UiText.Get("ManageConditionalFormats_Rules").Replace("_", string.Empty, StringComparison.Ordinal),
                             FontSize = 12,
                             FontFamily = FormulaBarFontFamily,
+                            Margin = new Thickness(0, 0, 0, 4),
+                            [DockPanel.DockProperty] = Dock.Top,
                         },
-                        rulesFrame,
                         appliesToBox,
+                        rulesFrame,
                     },
                 },
             },

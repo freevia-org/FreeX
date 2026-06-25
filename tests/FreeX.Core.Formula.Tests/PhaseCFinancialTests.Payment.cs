@@ -132,6 +132,49 @@ public partial class PhaseCFinancialTests
         }
     }
 
+    // ── IPMT/PPMT type=1 (annuity-due) correctness (J3) ──────────────────
+
+    [Fact]
+    public void Ipmt_Type1_Period1_ReturnsZero()
+    {
+        // Excel: =IPMT(0.05/12,1,60,10000,0,1) = 0 exactly
+        // First payment is at period start so no interest has accrued yet.
+        double ipmt = Calc("IPMT(0.05/12,1,60,10000,0,1)");
+        ipmt.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Ppmt_Type1_Period1_EqualsPmt()
+    {
+        // Excel: =PPMT(0.05/12,1,60,10000,0,1) = PMT(0.05/12,60,10000,0,1)
+        // When IPMT=0 the entire first payment goes to principal.
+        double ppmt = Calc("PPMT(0.05/12,1,60,10000,0,1)");
+        double pmt  = Calc("PMT(0.05/12,60,10000,0,1)");
+        ppmt.Should().BeApproximately(pmt, 1e-9);
+    }
+
+    [Fact]
+    public void Ipmt_Type1_Period2_EqualsType0Period1()
+    {
+        // Excel: =IPMT(0.05/12,2,60,10000,0,1) = IPMT(0.05/12,1,60,10000,0,0)
+        // = -(10000 * 0.05/12) ≈ -41.6667
+        double type1per2 = Calc("IPMT(0.05/12,2,60,10000,0,1)");
+        double type0per1 = Calc("IPMT(0.05/12,1,60,10000,0,0)");
+        type1per2.Should().BeApproximately(type0per1, 1e-9);
+        type1per2.Should().BeApproximately(-41.6666666666667, 1e-6);
+    }
+
+    [Fact]
+    public void Ipmt_Type1_Period30_EqualsType0Period29()
+    {
+        // Excel: =IPMT(0.05/12,30,60,10000,0,1) = IPMT(0.05/12,29,60,10000,0,0)
+        // ≈ -23.5106
+        double type1per30 = Calc("IPMT(0.05/12,30,60,10000,0,1)");
+        double type0per29 = Calc("IPMT(0.05/12,29,60,10000,0,0)");
+        type1per30.Should().BeApproximately(type0per29, 1e-9);
+        type1per30.Should().BeApproximately(-23.510578647465, 1e-7);
+    }
+
     [Fact]
     public void Ipmt_InvalidPeriod_ReturnsNumError()
         => CalcError("IPMT(0.1,0,12,10000)").Should().Be("#NUM!");

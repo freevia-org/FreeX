@@ -170,7 +170,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
         captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoActions(FreeXBackstageInfoSurface.ParityCapture)");
         captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)");
-        captureSource.Should().Contain("FreeXBackstagePaneCatalog.BuildAccountDetails()");
+        // The parity-captured Account pane mirrors the WPF host page ("Local account information"
+        // with the local app/OS identity rows) rather than the 4-row product-info catalog, so the
+        // Linux capture no longer mislabels Account as "Product information".
+        captureSource.Should().Contain("BuildParityCapturedBackstageAccountRows()");
+        captureSource.Should().Contain("Backstage_Account_LocalInfoHeading");
         captureSource.Should().Contain("CreateParityCapturedBackstageContentScroll(content)");
         captureSource.Should().Contain("CreateParityCapturedBackstageScrollbar()");
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
@@ -524,9 +528,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("private async Task ShowAccessibilityCheckerCleanDialogAsync()");
         source.Should().Contain("private async Task ShowAccessibilityCheckerIssuesDialogAsync(");
 
-        // Issues dialog has the key WPF-parity controls
-        source.Should().Contain("new ListBox");
-        source.Should().Contain("AutomationProperties.SetAutomationId(issueList, \"AccessibilityCheckerIssueList\");");
+        // Issues dialog has the key WPF-parity controls. Redesigned to the Excel task-pane layout:
+        // an "Inspection Results" TreeView grouped by Errors/Warnings/Tips (replacing the flat
+        // ListBox), keyed by the same AccessibilityCheckerIssueList automation id.
+        source.Should().Contain("new TreeView");
+        source.Should().Contain("AutomationProperties.SetAutomationId(resultsTree, \"AccessibilityCheckerIssueList\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(goToButton, \"AccessibilityCheckerGoToButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"AccessibilityCheckerCloseButton\");");
 
@@ -535,8 +541,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("ReviewWorkflowPlanner.GetAccessibilityNavigationTarget(",
             "navigation target resolution must stay in the shared session layer, not be duplicated in the shell");
 
-        // Uses shared localization keys
-        source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerTitle\")");
+        // Uses shared localization keys (the Excel-style title resolves via the shared
+        // AccessibilityChecker_Title catalog key)
+        source.Should().Contain("AcText(\"AccessibilityChecker_Title\"");
         source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerGoToButton\")");
         source.Should().Contain("UiText.Get(\"ShellLoc_AccessibilityCheckerNoIssues\")");
 

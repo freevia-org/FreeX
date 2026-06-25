@@ -62,6 +62,70 @@ public sealed partial class MainWindow
         await ShowPrintPreviewWindowCoreAsync(context);
     }
 
+    /// <summary>
+    /// Seeds the active sheet with the "Parity Demo / Revenue by region" report used by the parity
+    /// capture so the Linux preview renders the same column-aligned grid as the Windows ground truth:
+    /// a bold title, a dimmed subtitle, a bold header row, and four data rows whose Revenue column is
+    /// currency-formatted. Without this seed the active sheet still holds the leftover Text-to-Columns
+    /// demo cells (raw "North,Widget,120" strings in column F), which previewed as comma-joined CSV
+    /// text instead of a laid-out table. A tight A1:D8 print area constrains the preview to the report.
+    /// </summary>
+    private void SeedPrintPreviewParityReport()
+    {
+        var workbook = _session.Workbook;
+        var sheet = _session.ActiveSheet;
+
+        var titleStyle = workbook.RegisterStyle(new CellStyle { Bold = true, FontSize = 16 });
+        var subtitleStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(112, 112, 112),
+        });
+        var headerStyle = workbook.RegisterStyle(new CellStyle { Bold = true });
+        var currencyStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0" });
+
+        // Clear any leftover cells (e.g. the Text-to-Columns CSV demo in column F) inside the report
+        // print area so they cannot bleed into the previewed grid.
+        for (uint row = 1; row <= 8; row++)
+            for (uint col = 1; col <= 6; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(BlankValue.Instance));
+
+        SetReportCell(sheet, 1, 1, new TextValue("Parity Demo"), titleStyle);
+        SetReportCell(sheet, 2, 1, new TextValue("Revenue by region"), subtitleStyle);
+
+        var headers = new[] { "Region", "Product", "Units", "Revenue" };
+        for (var col = 0; col < headers.Length; col++)
+            SetReportCell(sheet, 4, (uint)(col + 1), new TextValue(headers[col]), headerStyle);
+
+        (string Region, string Product, double Units, double Revenue)[] rows =
+        {
+            ("North", "Widget", 120, 12480),
+            ("South", "Gadget", 85, 8925),
+            ("East", "Sprocket", 200, 21700),
+            ("West", "Gizmo", 64, 6080),
+        };
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var row = (uint)(5 + i);
+            var data = rows[i];
+            SetReportCell(sheet, row, 1, new TextValue(data.Region), StyleId.Default);
+            SetReportCell(sheet, row, 2, new TextValue(data.Product), StyleId.Default);
+            SetReportCell(sheet, row, 3, new NumberValue(data.Units), StyleId.Default);
+            SetReportCell(sheet, row, 4, new NumberValue(data.Revenue), currencyStyle);
+        }
+
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 8, 4));
+    }
+
+    private static void SetReportCell(Sheet sheet, uint row, uint col, ScalarValue value, StyleId styleId)
+    {
+        var cell = Cell.FromValue(value);
+        cell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
+    }
+
     private async Task ShowPrintPreviewWindowCoreAsync(PrintPreviewPaginationContext context)
     {
         var navigator = PrintPreviewPageNavigator.Create(context.PageCount);

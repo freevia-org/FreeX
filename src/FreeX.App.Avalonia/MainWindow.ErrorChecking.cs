@@ -161,9 +161,12 @@ public sealed partial class MainWindow
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         var root = new DockPanel { Margin = new Thickness(ErrorCheckingDialogPlanner.RootMargin) };
+        // Dock the bottom button bar BEFORE the right-hand action panel so the bar spans the full
+        // dialog width (matching the WPF/Windows layout); the action panel then claims the right
+        // edge above it and the issues list fills the remaining area.
         root.Children.Add(header);
-        root.Children.Add(actionPanel);
         root.Children.Add(buttons);
+        root.Children.Add(actionPanel);
         root.Children.Add(listPanel);
         dialog.Content = root;
 
@@ -409,6 +412,9 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            // Side-panel buttons (no explicit width) stretch to a uniform full-panel width so the
+            // "Error help" action stack is not ragged; bottom-bar buttons keep their fixed width.
+            HorizontalAlignment = width is null ? AvaloniaHorizontalAlignment.Stretch : AvaloniaHorizontalAlignment.Left,
             Margin = new Thickness(width is null ? 0 : 4, 0, 0, width is null ? 6 : 0),
         };
         return button;

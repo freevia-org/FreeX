@@ -232,7 +232,10 @@ public sealed partial class MainWindow
             {
                 IsChecked = row.IsVisible,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                MinWidth = 24,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                MinWidth = 0,
+                Margin = new Thickness(0),
+                Padding = new Thickness(0),
             };
             ApplySortOptionsCheckBoxChrome(visibilityBox);
             AutomationProperties.SetAutomationId(visibilityBox, "SelectionPaneVisibility_" + row.Id.ToString("N"));
@@ -242,10 +245,10 @@ public sealed partial class MainWindow
             var nameBox = new TextBox
             {
                 Text = row.Name,
-                Width = 160,
                 BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
                 Height = 24,
@@ -262,16 +265,26 @@ public sealed partial class MainWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
-                MinWidth = 64,
             };
 
-            return new StackPanel
+            // Fixed shared columns so the checkbox / name / type line up row-to-row (Windows parity).
+            var rowGrid = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
                 MinHeight = 24,
-                Children = { visibilityBox, nameBox, kindText },
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(28) },
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = new GridLength(110) },
+                },
             };
+            Grid.SetColumn(visibilityBox, 0);
+            Grid.SetColumn(nameBox, 1);
+            Grid.SetColumn(kindText, 2);
+            rowGrid.Children.Add(visibilityBox);
+            rowGrid.Children.Add(nameBox);
+            rowGrid.Children.Add(kindText);
+            return rowGrid;
         });
 
         listBox.SelectionChanged += (_, _) => UpdateMoveButtons();
@@ -383,6 +396,9 @@ public sealed partial class MainWindow
                 new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent),
                 new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
                 new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+                // Stretch each row so the name column (star-width) fills the list and the type
+                // column right-edge lines up row-to-row.
+                new Setter(ContentControl.HorizontalContentAlignmentProperty, AvaloniaHorizontalAlignment.Stretch),
             },
         });
         listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(":selected"))

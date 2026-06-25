@@ -216,8 +216,11 @@ public sealed class FillSeriesStepDialog : Window
     private static bool TryParseOptionalFiniteDouble(string? input, out double value)
     {
         value = 0;
+        // Parse with the SAME culture/styles as the Step field (FillSeriesPlanner.TryParseStep uses
+        // CurrentCulture); otherwise a locale whose decimal separator is ',' rejects a Stop value the
+        // user typed in the same format the Step field just accepted.
         return !string.IsNullOrWhiteSpace(input) &&
-               double.TryParse(input.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+               double.TryParse(input.Trim(), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out value) &&
                double.IsFinite(value);
     }
 

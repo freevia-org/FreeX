@@ -14,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Presentation;
@@ -689,6 +690,8 @@ public sealed partial class MainWindow : Window
     private CellAddress? _cellDragSelectionAnchor;
     private Control? _cellDragSelectionCapture;
     private IPointer? _cellDragSelectionPointer;
+    private HeaderResizeKind _headerSelectionDragKind;
+    private uint _headerSelectionDragAnchorIndex;
     private HeaderResizeDrag? _headerResizeDrag;
     private CellAddress? _selectionExtensionAnchor;
     private CellAddress? _selectionExtensionCursor;
@@ -5265,19 +5268,64 @@ public sealed partial class MainWindow : Window
         if (_headerResizeDrag is not null)
             return;
 
+        // Defensive: drop any stale subscriptions left over from a drag that lost capture without a
+        // PointerReleased (grid rebuild, alt-tab, context menu), so we never double-subscribe.
+        DetachHeaderSelectionDragHandlers();
+        // Also defensively clear shared drag-state so a stranded header-drag cannot anchor a later drag.
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+
         _cellDragSelectionAnchor = kind == HeaderResizeKind.Column
             ? new CellAddress(_session.ActiveSheet.Id, 1, index)
             : new CellAddress(_session.ActiveSheet.Id, index, 1);
+        // Keep capture for Focus() — the per-header border is the right focus target.
         _cellDragSelectionCapture = capture;
         _cellDragSelectionPointer = args.Pointer;
+        _headerSelectionDragKind = kind;
+        _headerSelectionDragAnchorIndex = index;
         capture.Focus();
-        args.Pointer.Capture(capture);
+        // Capture on _sheetGridHost — the persistent host that SURVIVES RefreshShell/BuildSheetGrid,
+        // so a ContinueHeaderSelectionDrag → SelectEntireColumn/Row → RefreshShell cannot
+        // destroy the captured header Border and cause Avalonia to silently drop pointer capture.
+        _sheetGridHost.PointerMoved += HeaderSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased += HeaderSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost += HeaderSelectionCapturePointerCaptureLost;
+        args.Pointer.Capture(_sheetGridHost);
+    }
+
+    private void HeaderSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
+        ContinueHeaderSelectionDrag(args, _headerSelectionDragKind, _headerSelectionDragAnchorIndex);
+
+    private void HeaderSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        EndHeaderSelectionDrag(args);
+
+    // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
+    // abort the drag and clear all drag state — mirrors the CellSelectionCapturePointerCaptureLost
+    // and HeaderResizeCapturePointerCaptureLost cleanup pattern.
+    private void HeaderSelectionCapturePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        // Detach FIRST so the Capture(null) below cannot re-raise PointerCaptureLost back into
+        // this handler (which would re-enter indefinitely and hang the app).
+        DetachHeaderSelectionDragHandlers();
+        _cellDragSelectionPointer?.Capture(null);
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+        _headerSelectionDragAnchorIndex = 0;
+    }
+
+    private void DetachHeaderSelectionDragHandlers()
+    {
+        _sheetGridHost.PointerMoved -= HeaderSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased -= HeaderSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost -= HeaderSelectionCapturePointerCaptureLost;
     }
 
     private void ContinueHeaderSelectionDrag(PointerEventArgs args, HeaderResizeKind kind, uint index)
     {
         if (_cellDragSelectionCapture is null ||
-            !args.GetCurrentPoint(_cellDragSelectionCapture).Properties.IsLeftButtonPressed)
+            !args.GetCurrentPoint(_sheetGridHost).Properties.IsLeftButtonPressed)
         {
             return;
         }
@@ -5402,10 +5450,12 @@ public sealed partial class MainWindow : Window
     {
         if (_cellDragSelectionCapture is not null)
         {
+            DetachHeaderSelectionDragHandlers();
             _cellDragSelectionPointer?.Capture(null);
             _cellDragSelectionCapture = null;
             _cellDragSelectionAnchor = null;
             _cellDragSelectionPointer = null;
+            _headerSelectionDragAnchorIndex = 0;
             args.Handled = true;
         }
     }
@@ -7913,11 +7963,9 @@ public sealed partial class MainWindow : Window
         {
             Title = "Zoom",
             Width = 300,
-            Height = 420,
             MinWidth = 300,
-            MinHeight = 420,
             MaxWidth = 300,
-            MaxHeight = 420,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -8237,24 +8285,28 @@ public sealed partial class MainWindow : Window
         WorkbookHiddenSheet? result = null;
         var dialog = new Window
         {
-            Title = "Unhide Sheet",
-            Width = 380,
-            Height = 190,
+            Title = UiText.Get("UnhideSheet_UnhideSheet"),
+            Width = 360,
+            Height = 220,
             MinWidth = 340,
-            MinHeight = 180,
+            MinHeight = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
 
-        var sheetBox = new ComboBox
+        var sheetBox = new ListBox
         {
             ItemsSource = hiddenSheets,
             MinWidth = 280,
+            MinHeight = 64,
+            SelectionMode = SelectionMode.Single,
             SelectedIndex = hiddenSheets.Count > 0 ? 0 : -1,
+            Background = Brushes.White,
         };
-        AutomationProperties.SetName(sheetBox, "Hidden sheet");
+        AutomationProperties.SetName(sheetBox, UiText.Get("UnhideSheet_UnhideSheet"));
         AutomationProperties.SetAutomationId(sheetBox, "UnhideSheetList");
-        AutomationProperties.SetHelpText(sheetBox, "Select the hidden worksheet to make visible.");
+        AutomationProperties.SetHelpText(sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
+        sheetBox.DoubleTapped += (_, _) => Accept();
 
         var okButton = new Button
         {
@@ -8314,7 +8366,7 @@ public sealed partial class MainWindow : Window
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Hidden sheet" },
+                new TextBlock { Text = UiText.Get("UnhideSheet_UnhideSheet2").Replace("_", string.Empty) },
                 sheetBox,
                 buttonRow,
             },
@@ -8408,8 +8460,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -8440,27 +8492,287 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var search = await ShowFindInputDialogAsync();
-        if (search is null)
-            return;
+        await ShowFindReplaceTabbedDialogAsync();
+    }
 
-        if (search.Action == FindDialogAction.FindNext)
+    /// <summary>
+    /// The tabbed Find &amp; Replace dialog used by the Find command (Ctrl/Cmd+F) — the Avalonia equivalent of the
+    /// WPF <c>FindReplaceDialog</c>. A <see cref="TabControl"/> exposes a "Find" tab and a "Replace" tab that share
+    /// the Options area (Within / Search / Look in / Match case / Match entire cell contents) and a results list.
+    /// The Replace tab adds a "Replace with:" box; the Replace and Replace All buttons are only visible on that tab.
+    /// The dialog stays open so multiple Find Next / Replace operations can run, matching Excel. Find actions route
+    /// through <see cref="WorkbookSession.FindNext"/>/<c>FindAll</c>; replace actions through
+    /// <see cref="WorkbookSession.ReplaceNextValue"/>/<c>ReplaceAllValues</c>.
+    /// </summary>
+    private async Task ShowFindReplaceTabbedDialogAsync()
+    {
+        var dialog = new Window
         {
-            FindNext(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
-            return;
+            Title = UiText.Get("FindReplace_FindAndReplace"),
+            Width = 720,
+            Height = 440,
+            MinWidth = 520,
+            MinHeight = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "FindReplaceDialog");
+
+        // Resolve a localized caption, stripping the WPF access-key marker ('_') so labels read cleanly.
+        string Fr(string key, string fallback) =>
+            (UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback)
+                .Replace("_", string.Empty, StringComparison.Ordinal);
+
+        // ── Find tab: "Find what" box ───────────────────────────────────────────
+        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
+        ApplyDialogTextBoxChrome(findBox);
+
+        // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
+        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        AutomationProperties.SetName(replaceFindBox, "Find what");
+        AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
+        ApplyDialogTextBoxChrome(replaceFindBox);
+
+        var replaceWithBox = new TextBox { Text = "", MinWidth = 300 };
+        AutomationProperties.SetName(replaceWithBox, "Replace with");
+        AutomationProperties.SetAutomationId(replaceWithBox, "FindReplaceReplaceWithBox");
+        ApplyDialogTextBoxChrome(replaceWithBox);
+
+        // Keep the two "Find what" boxes in sync so switching tabs preserves the term.
+        var syncing = false;
+        findBox.TextChanged += (_, _) =>
+        {
+            if (syncing) return;
+            syncing = true;
+            replaceFindBox.Text = findBox.Text;
+            syncing = false;
+        };
+        replaceFindBox.TextChanged += (_, _) =>
+        {
+            if (syncing) return;
+            syncing = true;
+            findBox.Text = replaceFindBox.Text;
+            syncing = false;
+        };
+
+        var findTabGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Thickness(10),
+        };
+        var findLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(findLabel, 0);
+        Grid.SetColumn(findBox, 1);
+        findTabGrid.Children.Add(findLabel);
+        findTabGrid.Children.Add(findBox);
+
+        var replaceTabPanel = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
+        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var replaceFindLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(replaceFindLabel, 0);
+        Grid.SetColumn(replaceFindBox, 1);
+        replaceFindRow.Children.Add(replaceFindLabel);
+        replaceFindRow.Children.Add(replaceFindBox);
+        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var replaceWithLabel = new TextBlock { Text = Fr("FindReplace_ReplaceWith", "Replace with:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(replaceWithLabel, 0);
+        Grid.SetColumn(replaceWithBox, 1);
+        replaceWithRow.Children.Add(replaceWithLabel);
+        replaceWithRow.Children.Add(replaceWithBox);
+        replaceTabPanel.Children.Add(replaceFindRow);
+        replaceTabPanel.Children.Add(replaceWithRow);
+
+        var findTabItem = new TabItem { Header = Fr("FindReplace_Find", "Find"), Content = findTabGrid };
+        AutomationProperties.SetAutomationId(findTabItem, "FindReplaceFindTab");
+        var replaceTabItem = new TabItem { Header = Fr("FindReplace_Replace", "Replace"), Content = replaceTabPanel };
+        AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
+
+        var tabs = new TabControl
+        {
+            Items = { findTabItem, replaceTabItem },
+            SelectedIndex = 0,
+        };
+        AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
+
+        // ── Shared options ──────────────────────────────────────────────────────
+        var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
+
+        // ── Results list ────────────────────────────────────────────────────────
+        var resultsList = new ListBox { MinHeight = 120 };
+        AutomationProperties.SetName(resultsList, "Find all results");
+        AutomationProperties.SetAutomationId(resultsList, "FindReplaceResultsList");
+        resultsList.SelectionChanged += (_, _) =>
+        {
+            if (resultsList.SelectedItem is WorkbookFindAllMatch match)
+                NavigateToFindAllMatch(match);
+        };
+        var resultsBorder = new Border
+        {
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = resultsList,
+        };
+
+        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
+        AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
+
+        // ── Buttons ─────────────────────────────────────────────────────────────
+        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
+        ApplyDialogButtonChrome(findAllButton);
+
+        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
+        ApplyDialogButtonChrome(findNextButton, isDefault: true);
+
+        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), MinWidth = 84, Padding = new Thickness(10, 4), IsVisible = false };
+        AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
+        ApplyDialogButtonChrome(replaceButton);
+
+        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), MinWidth = 96, Padding = new Thickness(10, 4), IsVisible = false };
+        AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
+        ApplyDialogButtonChrome(replaceAllButton);
+
+        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), MinWidth = 84, Padding = new Thickness(10, 4), IsCancel = true };
+        AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
+        ApplyDialogButtonChrome(closeButton);
+
+        bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
+        string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
+
+        void UpdateButtonVisibility()
+        {
+            var replaceMode = OnReplaceTab();
+            replaceButton.IsVisible = replaceMode;
+            replaceAllButton.IsVisible = replaceMode;
+        }
+        tabs.SelectionChanged += (_, _) => UpdateButtonVisibility();
+        UpdateButtonVisibility();
+
+        var options = optionsControls;
+
+        FindOptions BuildOptions() => CreateFindOptions(options);
+        bool MatchCase() => options.MatchCaseBox.IsChecked == true;
+        bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
+
+        void DoFindNext()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_FindFailed");
+                return;
+            }
+            statusLabel.Text = UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(r.SelectedRange!.Value), r.MatchIndex, r.MatchCount);
+            RefreshShell(statusLabel.Text);
         }
 
-        var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
-        if (!result.Success)
+        void DoFindAll()
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed"));
-            return;
+            if (!TryCommitPendingFormulaEdit()) return;
+            var search = new FindDialogResult(CurrentFindText(), FindDialogAction.FindAll, BuildOptions(), MatchCase(), MatchEntire());
+            var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
+            if (!result.Success)
+            {
+                statusLabel.Text = result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed");
+                return;
+            }
+            resultsList.ItemsSource = result.Matches;
+            statusLabel.Text = result.MatchCount == 0
+                ? UiText.Get("MainLoc_NoMatchesFound")
+                : UiText.Format("MainLoc_FoundCells", result.MatchCount);
+            RefreshShell(statusLabel.Text);
         }
 
-        RefreshShell(result.MatchCount == 0
-            ? UiText.Get("MainLoc_NoMatchesFound")
-            : UiText.Format("MainLoc_FoundCells", result.MatchCount));
-        await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
+        void DoReplace()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                return;
+            }
+            statusLabel.Text = r.ReplacedCount == 0
+                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
+                : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(r.ReplacedRange!.Value), r.MatchIndex, r.MatchCount);
+            RefreshShell(statusLabel.Text);
+        }
+
+        void DoReplaceAll()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                return;
+            }
+            statusLabel.Text = r.ReplacedCount == 0
+                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
+                : UiText.Format("MainLoc_ReplacedCells", r.ReplacedCount);
+            RefreshShell(statusLabel.Text);
+        }
+
+        findNextButton.Click += (_, _) => DoFindNext();
+        findAllButton.Click += (_, _) => DoFindAll();
+        replaceButton.Click += (_, _) => DoReplace();
+        replaceAllButton.Click += (_, _) => DoReplaceAll();
+        closeButton.Click += (_, _) => dialog.Close();
+
+        void HandleEnter(KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                if (OnReplaceTab()) DoReplace(); else DoFindNext();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        }
+        findBox.KeyDown += (_, e) => HandleEnter(e);
+        replaceFindBox.KeyDown += (_, e) => HandleEnter(e);
+        replaceWithBox.KeyDown += (_, e) => HandleEnter(e);
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        DockPanel.SetDock(statusLabel, Dock.Bottom);
+        DockPanel.SetDock(tabs, Dock.Top);
+        DockPanel.SetDock(options.Panel, Dock.Top);
+
+        tabs.Margin = new Thickness(0, 0, 0, 10);
+        options.Panel.Margin = new Thickness(0, 0, 0, 10);
+        statusLabel.Margin = new Thickness(0, 8, 0, 8);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
+
+        root.Children.Add(tabs);
+        root.Children.Add(options.Panel);
+        root.Children.Add(buttonRow);
+        root.Children.Add(statusLabel);
+        root.Children.Add(resultsBorder); // fills remaining space
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            findBox.Focus();
+            findBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
     }
 
     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
@@ -9561,32 +9873,32 @@ public sealed partial class MainWindow : Window
 
         var dialog = new Window
         {
-            Title = "Insert Hyperlink",
-            Width = 460,
-            Height = 420,
-            MinWidth = 400,
-            MinHeight = 380,
+            Title = UiText.Get("Hyperlink_InsertHyperlink"),
+            Width = 560,
+            Height = 360,
+            MinWidth = 520,
+            MinHeight = 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "HyperlinkCompactDialog");
 
-        var linkTypeBox = new ComboBox
+        var linkTypeBox = new ListBox
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
-            MinWidth = 300,
+            MinWidth = 168,
+            Width = 168,
         };
-        AutomationProperties.SetName(linkTypeBox, "Link type");
+        AutomationProperties.SetName(linkTypeBox, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
-        ApplyDialogComboBoxChrome(linkTypeBox);
 
         var displayBox = new TextBox
         {
             Text = prefill.DisplayText,
-            MinWidth = 300,
+            MinWidth = 280,
         };
-        AutomationProperties.SetName(displayBox, "Text to display");
+        AutomationProperties.SetName(displayBox, UiText.Get("Hyperlink_TextToDisplay"));
         AutomationProperties.SetAutomationId(displayBox, "HyperlinkDisplayTextBox");
         ApplyDialogTextBoxChrome(displayBox);
 
@@ -9594,7 +9906,7 @@ public sealed partial class MainWindow : Window
         var targetBox = new TextBox
         {
             Text = prefill.Target,
-            MinWidth = 300,
+            MinWidth = 280,
         };
         AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
         ApplyDialogTextBoxChrome(targetBox);
@@ -9602,18 +9914,18 @@ public sealed partial class MainWindow : Window
         var screenTipBox = new TextBox
         {
             Text = prefill.ScreenTip,
-            MinWidth = 300,
+            MinWidth = 280,
         };
-        AutomationProperties.SetName(screenTipBox, "Screen tip");
+        AutomationProperties.SetName(screenTipBox, UiText.Get("Hyperlink_ScreenTipTextLabel"));
         AutomationProperties.SetAutomationId(screenTipBox, "HyperlinkScreenTipTextBox");
         ApplyDialogTextBoxChrome(screenTipBox);
 
         var bookmarkBox = new TextBox
         {
             Text = prefill.Bookmark,
-            MinWidth = 300,
+            MinWidth = 280,
         };
-        AutomationProperties.SetName(bookmarkBox, "Bookmark");
+        AutomationProperties.SetName(bookmarkBox, UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel"));
         AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
         ApplyDialogTextBoxChrome(bookmarkBox);
 
@@ -9626,7 +9938,7 @@ public sealed partial class MainWindow : Window
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_Ok"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -9635,7 +9947,7 @@ public sealed partial class MainWindow : Window
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_Cancel"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -9698,6 +10010,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
                 okButton,
@@ -9705,22 +10018,51 @@ public sealed partial class MainWindow : Window
             },
         };
 
+        // Left "Link to:" category column (matches the Windows vertical button column).
+        var linkToColumn = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = UiText.Get("Hyperlink_LinkTo2") + ":" },
+                linkTypeBox,
+            },
+        };
+
+        // Right detail area: address/screen-tip/bookmark fields that change per category.
+        var detailArea = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                CreateHyperlinkField(targetLabel, targetBox),
+                CreateHyperlinkField(
+                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTipTextLabel")) },
+                    screenTipBox),
+                CreateHyperlinkField(
+                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel")) },
+                    bookmarkBox),
+            },
+        };
+
+        var bodyGrid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+        };
+        bodyGrid.Children.Add(linkToColumn);
+        AvaloniaGrid.SetColumn(linkToColumn, 0);
+        detailArea.Margin = new Thickness(16, 0, 0, 0);
+        bodyGrid.Children.Add(detailArea);
+        AvaloniaGrid.SetColumn(detailArea, 1);
+
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Link type" },
-                linkTypeBox,
-                new TextBlock { Text = "Text to display" },
-                displayBox,
-                targetLabel,
-                targetBox,
-                new TextBlock { Text = "Screen tip" },
-                screenTipBox,
-                new TextBlock { Text = "Bookmark" },
-                bookmarkBox,
+                CreateHyperlinkField(new TextBlock { Text = UiText.Get("Hyperlink_TextToDisplay") }, displayBox),
+                bodyGrid,
                 validationText,
                 buttonRow,
             },
@@ -9738,20 +10080,34 @@ public sealed partial class MainWindow : Window
 
     private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
     [
-        new("Existing File or Web Page", HyperlinkTargetKind.ExistingFileOrWebPage),
-        new("Place in This Document", HyperlinkTargetKind.PlaceInThisDocument),
-        new("Create New Document", HyperlinkTargetKind.CreateNewDocument),
-        new("Email Address", HyperlinkTargetKind.EmailAddress),
+        new(UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"), HyperlinkTargetKind.ExistingFileOrWebPage),
+        new(UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"), HyperlinkTargetKind.PlaceInThisDocument),
+        new(UiText.Get("Hyperlink_LinkTypeCreateNewDocument"), HyperlinkTargetKind.CreateNewDocument),
+        new(UiText.Get("Hyperlink_LinkTypeEmailAddress"), HyperlinkTargetKind.EmailAddress),
     ];
 
-    private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
-        linkType switch
+    private static StackPanel CreateHyperlinkField(Control label, Control control) =>
+        new()
         {
-            HyperlinkTargetKind.PlaceInThisDocument => "Cell reference or defined name",
-            HyperlinkTargetKind.CreateNewDocument => "New document name",
-            HyperlinkTargetKind.EmailAddress => "Email address",
-            _ => "Address"
+            Spacing = 4,
+            Children =
+            {
+                label,
+                control,
+            },
         };
+
+    private static string StripDisplayMnemonic(string text) =>
+        (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
+
+    private static string GetHyperlinkTargetLabel(HyperlinkTargetKind linkType) =>
+        StripDisplayMnemonic(linkType switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => UiText.Get("Hyperlink_CellReferenceLabel"),
+            HyperlinkTargetKind.CreateNewDocument => UiText.Get("Hyperlink_NewDocumentLabel"),
+            HyperlinkTargetKind.EmailAddress => UiText.Get("Hyperlink_EmailAddressLabel"),
+            _ => UiText.Get("Hyperlink_Address"),
+        });
 
     private static string GetHyperlinkTargetHelpText(HyperlinkTargetKind linkType) =>
         linkType switch
@@ -9836,11 +10192,17 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
     {
-        var statisticsBlock = new TextBlock
+        var statisticsBlock = new TextBox
         {
             Text = FormatWorkbookStatistics(statistics),
+            IsReadOnly = true,
+            AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            LineHeight = 22,
+            Background = Brushes.White,
+            BorderBrush = Brush(171, 171, 171),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(6, 4),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
         AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
@@ -9851,6 +10213,7 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
         };
         if (copyToClipboardButton is not null)
             buttonRow.Children.Add(copyToClipboardButton);
@@ -9862,12 +10225,7 @@ public sealed partial class MainWindow : Window
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = statisticsBlock,
-        });
+        root.Children.Add(statisticsBlock);
 
         return root;
     }
@@ -10926,18 +11284,18 @@ public sealed partial class MainWindow : Window
                                 Spacing = 10,
                                 Children =
                                 {
-                                    new Border
+                                    new StackPanel
                                     {
-                                        BorderBrush = Brushes.Gray,
-                                        BorderThickness = new Thickness(1),
-                                        Padding = new Thickness(6, 4),
-                                        Child = new StackPanel
+                                        Spacing = 4,
+                                        Children =
                                         {
-                                            Spacing = 2,
-                                            Children =
+                                            new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
+                                            new Border
                                             {
-                                                new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
-                                                numberPreview,
+                                                BorderBrush = FormulaBarControlBorder,
+                                                BorderThickness = new Thickness(1),
+                                                Padding = new Thickness(8, 6),
+                                                Child = numberPreview,
                                             },
                                         },
                                     },
@@ -11077,6 +11435,7 @@ public sealed partial class MainWindow : Window
         var tabStrip = new TabControl
         {
             SelectedIndex = 0,
+            Padding = new Thickness(0),
             ItemsSource = new[]
             {
                 numberTab,
@@ -11088,6 +11447,7 @@ public sealed partial class MainWindow : Window
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
+        ApplyClassicTabChrome(tabStrip);
 
         var buttonRow = new StackPanel
         {
@@ -11138,6 +11498,44 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    // Avalonia's default TabControl theme renders a borderless content pane and
+    // borderless inactive tabs, which diverges from the WPF/Windows "classic" Format
+    // Cells dialog (bordered tab pane + outlined inactive tabs). These template-targeting
+    // styles restore that look so the Linux dialog matches the Windows screenshot.
+    private static void ApplyClassicTabChrome(TabControl tabStrip)
+    {
+        var paneBorder = FormulaBarControlBorder; // light gray (192,192,192)
+        var inactiveTabBorder = Brush(160, 160, 160);
+        var inactiveTabBackground = Brush(243, 243, 243);
+
+        // Bordered content pane around the selected tab's content.
+        var contentPaneStyle = new Style(s => s
+            .OfType<TabControl>()
+            .Template()
+            .OfType<ContentPresenter>()
+            .Name("PART_SelectedContentHost"));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, paneBorder));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(12)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
+        tabStrip.Styles.Add(contentPaneStyle);
+
+        // Outlined inactive tabs (classic look). Default + non-selected.
+        var tabStyle = new Style(s => s.OfType<TabItem>());
+        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
+        tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
+        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, 0)));
+        tabStrip.Styles.Add(tabStyle);
+
+        // Selected tab: white background to merge with the content pane.
+        var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, paneBorder));
+        tabStrip.Styles.Add(selectedTabStyle);
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
@@ -14471,11 +14869,11 @@ public sealed partial class MainWindow : Window
         string? selectedScenarioName = plan.SelectedScenario?.Name;
         var dialog = new Window
         {
-            Title = "Scenario Manager",
-            Width = 460,
-            Height = 500,
+            Title = UiText.Get("ScenarioManager_ScenarioManager"),
+            Width = 480,
+            Height = 460,
             MinWidth = 460,
-            MinHeight = 430,
+            MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             FontFamily = FormulaBarFontFamily,
@@ -14504,7 +14902,7 @@ public sealed partial class MainWindow : Window
             MinHeight = 120,
             MaxHeight = 150,
         };
-        AutomationProperties.SetName(scenarioList, "Scenarios");
+        AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
         AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
         AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
 
@@ -14547,18 +14945,18 @@ public sealed partial class MainWindow : Window
 
         var saveButton = new Button
         {
-            Content = "Save/Add",
-            Width = 92,
-            MinWidth = 92,
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Add")),
+            Width = 110,
+            MinWidth = 110,
         };
-        ApplyDataToolsButtonChrome(saveButton, 92);
+        ApplyDataToolsButtonChrome(saveButton, 110);
         AutomationProperties.SetName(saveButton, "Save/Add");
         AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
 
         var showButton = new Button
         {
-            Content = "Show",
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
             Width = 82,
             MinWidth = 82,
         };
@@ -14569,34 +14967,34 @@ public sealed partial class MainWindow : Window
 
         var deleteButton = new Button
         {
-            Content = "Delete",
-            Width = 82,
-            MinWidth = 82,
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Delete")),
+            Width = 110,
+            MinWidth = 110,
         };
-        ApplyDataToolsButtonChrome(deleteButton, 82);
+        ApplyDataToolsButtonChrome(deleteButton, 110);
         AutomationProperties.SetName(deleteButton, "Delete");
         AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
         AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
 
         var summaryButton = new Button
         {
-            Content = "Summary Report",
-            Width = 128,
-            MinWidth = 128,
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Summary")),
+            Width = 110,
+            MinWidth = 110,
         };
-        ApplyDataToolsButtonChrome(summaryButton, 128);
+        ApplyDataToolsButtonChrome(summaryButton, 110);
         AutomationProperties.SetName(summaryButton, "Summary Report");
         AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
         AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
 
         var closeButton = new Button
         {
-            Content = "Close",
-            Width = 72,
-            MinWidth = 72,
+            Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")),
+            Width = 82,
+            MinWidth = 82,
         };
-        ApplyDataToolsButtonChrome(closeButton, 72);
-        AutomationProperties.SetName(closeButton, "Close");
+        ApplyDataToolsButtonChrome(closeButton, 82);
+        AutomationProperties.SetName(closeButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")));
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
         AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
 
@@ -14772,6 +15170,11 @@ public sealed partial class MainWindow : Window
         listWithButtons.Children.Add(actionColumn);
         AvaloniaGrid.SetColumn(actionColumn, 1);
 
+        var scenariosHeader = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")),
+        };
+
         RefreshDialogPlan(selectedScenarioName);
         nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
         dialog.Content = new DockPanel
@@ -14786,11 +15189,16 @@ public sealed partial class MainWindow : Window
                     Children =
                     {
                         statusText,
-                        selectionText,
+                        scenariosHeader,
                         listWithButtons,
+                        selectionText,
                         scenarioDetailsText,
-                        CreateScenarioManagerField("Name", nameBox),
-                        CreateScenarioManagerField("Comment", commentBox),
+                        CreateScenarioManagerField(
+                            StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")),
+                            nameBox),
+                        CreateScenarioManagerField(
+                            StripDisplayMnemonic(UiText.Get("ScenarioManager_Comment")),
+                            commentBox),
                         errorText,
                     },
                 },
@@ -15385,11 +15793,11 @@ public sealed partial class MainWindow : Window
             _session.SelectedRange);
         var dialog = new Window
         {
-            Title = "Data Validation",
-            Width = 540,
+            Title = UiText.Get("DataValidation_DataValidation"),
+            Width = 520,
             Height = 560,
-            MinWidth = 460,
-            MinHeight = 440,
+            MinWidth = 480,
+            MinHeight = 460,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -15432,7 +15840,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(operatorBox, "Data");
         AutomationProperties.SetAutomationId(operatorBox, "DataValidationOperatorBox");
         ApplyDialogComboBoxChrome(operatorBox);
-        var operatorField = CreateDataValidationField("Data", operatorBox);
+        var operatorField = CreateDataValidationField(UiText.Get("DataValidation_Data"), operatorBox);
 
         var formula1Label = new TextBlock();
         var formula1Box = new TextBox
@@ -15456,21 +15864,28 @@ public sealed partial class MainWindow : Window
 
         var allowBlankBox = new CheckBox
         {
-            Content = "Allow blank",
+            Content = UiText.Get("DataValidation_IgnoreBlank"),
         };
         AutomationProperties.SetAutomationId(allowBlankBox, "DataValidationAllowBlankBox");
         ApplyDialogCheckBoxChrome(allowBlankBox);
 
+        var sameSettingsBox = new CheckBox
+        {
+            Content = UiText.Get("DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings"),
+        };
+        AutomationProperties.SetAutomationId(sameSettingsBox, "DataValidationSameSettingsBox");
+        ApplyDialogCheckBoxChrome(sameSettingsBox);
+
         var showDropdownBox = new CheckBox
         {
-            Content = "In-cell dropdown",
+            Content = UiText.Get("DataValidation_InCellDropdown"),
         };
         AutomationProperties.SetAutomationId(showDropdownBox, "DataValidationShowDropdownBox");
         ApplyDialogCheckBoxChrome(showDropdownBox);
 
         var showInputMessageBox = new CheckBox
         {
-            Content = "Show input message",
+            Content = UiText.Get("DataValidation_ShowInputMessageWhenCellIsSelected"),
         };
         AutomationProperties.SetAutomationId(showInputMessageBox, "DataValidationShowInputMessageBox");
         ApplyDialogCheckBoxChrome(showInputMessageBox);
@@ -15499,7 +15914,7 @@ public sealed partial class MainWindow : Window
 
         var showErrorMessageBox = new CheckBox
         {
-            Content = "Show error alert",
+            Content = UiText.Get("DataValidation_ShowErrorAlertAfterInvalidDataIsEntered"),
         };
         AutomationProperties.SetAutomationId(showErrorMessageBox, "DataValidationShowErrorMessageBox");
         ApplyDialogCheckBoxChrome(showErrorMessageBox);
@@ -15544,7 +15959,7 @@ public sealed partial class MainWindow : Window
 
         var applyButton = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_Ok"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15553,7 +15968,7 @@ public sealed partial class MainWindow : Window
 
         var clearButton = new Button
         {
-            Content = "Clear All",
+            Content = UiText.Get("DataValidation_ClearAll"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15562,7 +15977,7 @@ public sealed partial class MainWindow : Window
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_Cancel"),
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -15616,12 +16031,12 @@ public sealed partial class MainWindow : Window
             var isAny = type == DvType.Any;
 
             formula1Label.Text = isList
-                ? "Source"
+                ? UiText.Get("DataValidation_Source")
                 : isCustom
-                    ? "Formula"
+                    ? UiText.Get("DataValidation_Formula")
                     : showSecondFormula
-                        ? "Minimum"
-                        : "Value";
+                        ? UiText.Get("DataValidation_Minimum")
+                        : UiText.Get("DataValidation_Value");
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
             AutomationProperties.SetHelpText(
                 formula1Box,
@@ -15632,7 +16047,7 @@ public sealed partial class MainWindow : Window
                         : showSecondFormula
                             ? "Minimum value for the validation rule."
                             : "Value for the validation rule.");
-            formula2Label.Text = "Maximum";
+            formula2Label.Text = UiText.Get("DataValidation_Maximum");
             operatorField.IsVisible = !isList && !isCustom && !isAny;
             formula1Field.IsVisible = !isAny;
             formula2Field.IsVisible = showSecondFormula;
@@ -15725,34 +16140,77 @@ public sealed partial class MainWindow : Window
                 RefreshMessageEditorStates();
         };
 
-        var criteriaPanel = new StackPanel
+        var criteriaHeader = new TextBlock
+        {
+            Text = UiText.Get("DataValidation_ValidationCriteria"),
+            FontWeight = FontWeight.SemiBold,
+        };
+
+        var settingsContent = new StackPanel
         {
             Spacing = 8,
             Children =
             {
-                CreateDataValidationField("Allow", typeBox),
+                criteriaHeader,
+                CreateDataValidationField(UiText.Get("DataValidation_Allow"), typeBox),
                 operatorField,
                 formula1Field,
                 formula2Field,
-                allowBlankBox,
                 showDropdownBox,
+                allowBlankBox,
+                sameSettingsBox,
             },
         };
 
-        var messagePanel = new StackPanel
+        var inputMessageContent = new StackPanel
         {
             Spacing = 8,
             Children =
             {
                 showInputMessageBox,
-                CreateDataValidationField("Input title", promptTitleBox),
-                CreateDataValidationField("Input message", promptMessageBox),
-                showErrorMessageBox,
-                CreateDataValidationField("Style", alertStyleBox),
-                CreateDataValidationField("Error title", errorTitleBox),
-                CreateDataValidationField("Error message", errorMessageBox),
+                CreateDataValidationField(UiText.Get("DataValidation_InputTitle"), promptTitleBox),
+                CreateDataValidationField(UiText.Get("DataValidation_InputMessage2"), promptMessageBox),
             },
         };
+
+        var errorAlertContent = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                showErrorMessageBox,
+                CreateDataValidationField(UiText.Get("DataValidation_AlertStyle"), alertStyleBox),
+                CreateDataValidationField(UiText.Get("DataValidation_ErrorTitle"), errorTitleBox),
+                CreateDataValidationField(UiText.Get("DataValidation_ErrorMessage"), errorMessageBox),
+            },
+        };
+
+        var settingsTab = CreateFormatCellsTab(
+            UiText.Get("DataValidation_Settings"),
+            "DataValidationSettingsTab",
+            settingsContent);
+        var inputMessageTab = CreateFormatCellsTab(
+            UiText.Get("DataValidation_InputMessage"),
+            "DataValidationInputMessageTab",
+            inputMessageContent);
+        var errorAlertTab = CreateFormatCellsTab(
+            UiText.Get("DataValidation_ErrorAlert"),
+            "DataValidationErrorAlertTab",
+            errorAlertContent);
+
+        var tabStrip = new TabControl
+        {
+            SelectedIndex = 0,
+            Padding = new Thickness(0),
+            ItemsSource = new[]
+            {
+                settingsTab,
+                inputMessageTab,
+                errorAlertTab,
+            },
+        };
+        AutomationProperties.SetAutomationId(tabStrip, "DataValidationTabStrip");
+        ApplyClassicTabChrome(tabStrip);
 
         var buttonRow = new StackPanel
         {
@@ -15767,30 +16225,17 @@ public sealed partial class MainWindow : Window
                 cancelButton,
             },
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
+            Spacing = 10,
             Children =
             {
+                summaryText,
+                tabStrip,
+                errorText,
                 buttonRow,
-                new ScrollViewer
-                {
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    Content = new StackPanel
-                    {
-                        Spacing = 12,
-                        Children =
-                        {
-                            summaryText,
-                            criteriaPanel,
-                            messagePanel,
-                            errorText,
-                        },
-                    },
-                },
             },
         };
         dialog.Opened += (_, _) => typeBox.Focus();

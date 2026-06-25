@@ -70,6 +70,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
         AutomationProperties.SetName(dataRangeBox, UiText.Get("Sparkline_DataRange"));
 
+        // Windows shows a range-picker button to the right of each range field; clicking it fills the
+        // field from the current sheet selection.
+        var selectDataRangeButton = new Button { Content = UiText.Get("Sparkline_SelectDataRange"), MinWidth = 140 };
+        ApplyDataToolsButtonChrome(selectDataRangeButton, 140);
+        AutomationProperties.SetAutomationId(selectDataRangeButton, "SparklineSelectDataRangeButton");
+        selectDataRangeButton.Click += (_, _) =>
+        {
+            var sel = _session.SelectedRange;
+            dataRangeBox.Text = sel.CellCount > 1 ? FormatRangeReference(sel) : FormatCellReference(_session.ActiveCell);
+        };
+
         var locationBox = new TextBox
         {
             MinWidth = 220,
@@ -79,14 +90,19 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
         AutomationProperties.SetName(locationBox, UiText.Get("Sparkline_LocationRange"));
 
+        var selectLocationRangeButton = new Button { Content = UiText.Get("Sparkline_SelectLocationRange"), MinWidth = 140 };
+        ApplyDataToolsButtonChrome(selectLocationRangeButton, 140);
+        AutomationProperties.SetAutomationId(selectLocationRangeButton, "SparklineSelectLocationRangeButton");
+        selectLocationRangeButton.Click += (_, _) =>
+            locationBox.Text = FormatCellReference(_session.ActiveCell);
+
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
         ApplyDataToolsComboBoxChrome(typeBox);
 
         var dialog = new Window
         {
             Title = UiText.Get("Sparkline_InsertTitle"),
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
+            SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
@@ -118,9 +134,9 @@ public sealed partial class MainWindow
 
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
         content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_DataRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
-        content.Children.Add(dataRangeBox);
+        content.Children.Add(BuildSparklineRangeRow(dataRangeBox, selectDataRangeButton));
         content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_LocationRange"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
-        content.Children.Add(locationBox);
+        content.Children.Add(BuildSparklineRangeRow(locationBox, selectLocationRangeButton));
         content.Children.Add(new TextBlock { Text = UiText.Get("Sparkline_SparklineType"), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
         content.Children.Add(typeBox);
         content.Children.Add(new StackPanel
@@ -322,6 +338,26 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(UiText.Get("Sparkline_Updated"));
+    }
+
+    /// <summary>Lays a range text box and its range-picker button side by side (box fills, button hugs the right).</summary>
+    private static Grid BuildSparklineRangeRow(TextBox rangeBox, Button pickerButton)
+    {
+        var row = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        rangeBox.MinWidth = 200;
+        pickerButton.Margin = new Thickness(8, 0, 0, 0);
+        Grid.SetColumn(rangeBox, 0);
+        Grid.SetColumn(pickerButton, 1);
+        row.Children.Add(rangeBox);
+        row.Children.Add(pickerButton);
+        return row;
     }
 
     private static ComboBox BuildKindComboBox(string automationId, SparklineKind selected)

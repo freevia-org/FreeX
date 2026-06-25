@@ -9,6 +9,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
@@ -118,9 +119,20 @@ public sealed partial class MainWindow
         showValuesAsBox.SelectionChanged += (_, _) => SyncBaseFieldState();
         SyncBaseFieldState();
 
+        var numberFormatButton = new Button
+        {
+            Content = UiText.Get("PivotValueFieldSettings_NumberFormat3"),
+            MinWidth = 128,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Margin = new Thickness(0, 12, 0, 0),
+        };
+        ApplyPivotButtonChrome(numberFormatButton, 128);
+        AutomationProperties.SetAutomationId(numberFormatButton, "PivotValueNumberFormatButton");
+        AutomationProperties.SetName(numberFormatButton, UiText.Get("PivotValueFieldSettings_NumberFormat2"));
+
         var dialog = new Window
         {
-            Title = UiText.Format("PivotValueField_Title", target.FieldCaption),
+            Title = UiText.Get("PivotValueFieldSettings_ValueFieldSettings"),
             Width = 430,
             Height = 430,
             MinWidth = 430,
@@ -154,21 +166,84 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(12) };
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_CustomName"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(nameBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_SummarizeBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(summaryBox);
-        content.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_ShowValuesAs"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(showValuesAsBox);
-        content.Children.Add(basePanel);
-        content.Children.Add(new StackPanel
+        // ── Top row: Custom Name (label + textbox) ─────────────────────────────
+        var customNameRow = new Grid
+        {
+            Margin = new Thickness(0, 0, 0, 12),
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(118) },
+                new ColumnDefinition { Width = GridLength.Star },
+            },
+        };
+        var customNameLabel = new TextBlock
+        {
+            Text = UiText.Get("PivotValueFieldSettings_CustomName"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        Grid.SetColumn(customNameLabel, 0);
+        Grid.SetColumn(nameBox, 1);
+        customNameRow.Children.Add(customNameLabel);
+        customNameRow.Children.Add(nameBox);
+
+        // ── Tab 1: Summarize Values By ─────────────────────────────────────────
+        var summarizePanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
+        summarizePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_SummarizeValueFieldBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        summarizePanel.Children.Add(summaryBox);
+
+        // ── Tab 2: Show Values As ──────────────────────────────────────────────
+        var showValuesAsPanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
+        showValuesAsPanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_ShowValuesAs2"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        showValuesAsPanel.Children.Add(showValuesAsBox);
+        showValuesAsPanel.Children.Add(basePanel);
+
+        // ── Tab 3: Number Format ───────────────────────────────────────────────
+        var numberFormatPanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
+        numberFormatPanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_NumberFormat2"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        numberFormatPanel.Children.Add(numberFormatButton);
+
+        var tabs = new TabControl
+        {
+            Padding = new Thickness(0),
+            Items =
+            {
+                new TabItem { Header = UiText.Get("PivotValueFieldSettings_SummarizeValuesBy"), Content = summarizePanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotValueFieldSettings_ShowValuesAs"), Content = showValuesAsPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotValueFieldSettings_NumberFormat"), Content = numberFormatPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+            },
+        };
+        AutomationProperties.SetAutomationId(tabs, "PivotValueFieldSettingsTabs");
+
+        var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
+            Margin = new Thickness(0, 12, 0, 0),
             Children = { ok, cancel },
-        });
+        };
+
+        var bodyGrid = new Grid
+        {
+            RowDefinitions =
+            {
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Star },
+                new RowDefinition { Height = GridLength.Auto },
+            },
+        };
+        Grid.SetRow(customNameRow, 0);
+        Grid.SetRow(tabs, 1);
+        Grid.SetRow(buttonRow, 2);
+        bodyGrid.Children.Add(customNameRow);
+        bodyGrid.Children.Add(tabs);
+        bodyGrid.Children.Add(buttonRow);
+
+        var content = new Grid { Margin = new Thickness(14), Children = { bodyGrid } };
         dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);

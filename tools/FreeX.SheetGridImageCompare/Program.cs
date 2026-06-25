@@ -428,15 +428,21 @@ internal static class Program
 
         // Estimate row-header width (uses GridView's static helper with a placeholder viewport)
         // We need an approximate lastVisibleRow for the header width calc.
-        var rowHeaderWidth = captureRange is null ? GridView.RowHeaderWidth : 0.0;
-        var colHeaderHeight = captureRange is null ? GridView.ColHeaderHeight : 0.0;
+        // When comparing against an Excel reference PNG (targetPixelDimensions is not null), Excel's
+        // CopyPicture-of-range exports cell content only — no row/column header chrome — so FreeX must
+        // also suppress headers to keep cell positions aligned in both images.
+        var showHeaders = captureRange is null && sheet.ShowHeadings && targetPixelDimensions is null;
+        var rowHeaderWidth = (captureRange is null && targetPixelDimensions is null) ? GridView.RowHeaderWidth : 0.0;
+        var colHeaderHeight = (captureRange is null && targetPixelDimensions is null) ? GridView.ColHeaderHeight : 0.0;
 
         // The viewport is capped so huge sheets don't explode. The cap must be at least as large as
         // the drawing-content cap; otherwise an object that sits just past MaxViewportWidth/Height
         // (e.g. a chart below a tall table) would be clipped again here even though the region above
         // already accounted for it. ExpandRegionForDrawingObjects bounds totalColWidth/totalRowHeight
         // to MaxDrawingContentWidth/Height, so these effective caps stay bounded.
-        var safetyPadding = captureRange is null ? 20.0 : 0.0;
+        // When matching Excel reference dimensions, omit safety padding so viewW/viewH exactly
+        // equal the cell-content extents and the render scale matches Excel's CopyPicture scale.
+        var safetyPadding = (captureRange is null && targetPixelDimensions is null) ? 20.0 : 0.0;
         double maxViewW = Math.Max(MaxViewportWidth,  MaxDrawingContentWidth  + rowHeaderWidth  + safetyPadding);
         double maxViewH = Math.Max(MaxViewportHeight, MaxDrawingContentHeight + colHeaderHeight + safetyPadding);
 
@@ -495,7 +501,7 @@ internal static class Program
             WorksheetBackground = null,
             ObjectDisplayMode = GridObjectDisplayMode.All,
             ShowGridLines   = sheet.ShowGridlines,
-            ShowHeaders     = captureRange is null && sheet.ShowHeadings,
+            ShowHeaders     = showHeaders,
             ZoomFactor      = 1.0,
             WorksheetViewMode = sheet.ViewMode,
         };

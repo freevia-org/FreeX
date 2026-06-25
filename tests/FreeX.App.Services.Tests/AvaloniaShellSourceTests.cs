@@ -4696,7 +4696,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FindLookIn.Comments");
         source.Should().Contain("var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);");
         source.Should().Contain("var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);");
-        source.Should().Contain("await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);");
+        // The Find command now opens the tabbed Find & Replace dialog (parity with the WPF FindReplaceDialog),
+        // which renders Find All matches inline rather than in a separate results window.
+        source.Should().Contain("private async Task ShowFindReplaceTabbedDialogAsync()");
+        source.Should().Contain("resultsList.ItemsSource = result.Matches;");
         source.Should().Contain("var result = _session.GoToCell(match.Address);");
         source.Should().Contain("replacement.Action == ReplaceDialogAction.ReplaceAll");
         source.Should().Contain("replacement.Options,");

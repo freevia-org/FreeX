@@ -23,7 +23,7 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0 || dsm > 182) return ErrorValue.Num;
+        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
         return NumberResult((365 * discount) / (360 - discount * dsm));
     }
 
@@ -44,7 +44,7 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0) return ErrorValue.Num;
+        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
         return NumberResult(100 * (1 - discount * dsm / 360.0));
     }
 
@@ -65,7 +65,7 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0) return ErrorValue.Num;
+        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
         return NumberResult((100 - pr) / pr * 360.0 / dsm);
     }
 }

@@ -59,16 +59,17 @@ public sealed class AllowEditRangeDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
+        // Layout mirrors the Avalonia/Linux shell (the agreed parity target): a single vertical flow of
+        // intro text, a "Ranges" group whose New/Modify/Delete/Permissions buttons sit UNDER the list,
+        // then the range label + box stacked vertically, the example hint, and an [OK][Cancel] row.
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("AllowEditRange_IntroText"),
+            Text = UiText.Get("AllowEditRange_Intro"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10)
         });
 
-        var existingGroup = new GroupBox { Margin = new Thickness(0, 0, 0, 10) };
-        var existingPanel = new DockPanel { Margin = new Thickness(8) };
         _existingRangesBox.ItemsSource = AllowEditRangeDialogPlanner.BuildExistingRangeItems(existingRanges);
         AutomationProperties.SetName(_existingRangesBox, UiText.Get("AllowEditRange_ExistingRangesAutomationName"));
         AutomationProperties.SetAutomationId(_existingRangesBox, "AllowEditRangeExistingRangesList");
@@ -77,16 +78,7 @@ public sealed class AllowEditRangeDialog : Window
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += ExistingRangesBox_SelectionChanged;
         _existingRangesBox.MouseDoubleClick += ExistingRangesBox_MouseDoubleClick;
-        var existingRangesLabel = new Label { Content = UiText.Get("AllowEditRange_ExistingRangesLabel"), Target = _existingRangesBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
-        DockPanel.SetDock(existingRangesLabel, Dock.Top);
-        existingPanel.Children.Add(existingRangesLabel);
-        existingPanel.Children.Add(_existingRangesBox);
-        var rangeButtons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 0, 0)
-        };
+
         _newRangeButton.Click += NewRange_Click;
         _modifyRangeButton.Click += ModifySelectedRange_Click;
         _deleteRangeButton.Click += DeleteSelectedRange_Click;
@@ -103,47 +95,51 @@ public sealed class AllowEditRangeDialog : Window
         AutomationProperties.SetName(_permissionsButton, UiText.Get("AllowEditRange_PermissionsAutomationName"));
         AutomationProperties.SetAutomationId(_permissionsButton, "AllowEditRangePermissionsButton");
         AutomationProperties.SetHelpText(_permissionsButton, UiText.Get("AllowEditRange_PermissionsHelpText"));
+
+        // New/Modify/Delete/Permissions sit in a left-aligned row directly under the list.
+        var rangeButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
         rangeButtons.Children.Add(_newRangeButton);
         rangeButtons.Children.Add(_modifyRangeButton);
         rangeButtons.Children.Add(_deleteRangeButton);
         rangeButtons.Children.Add(_permissionsButton);
-        DockPanel.SetDock(rangeButtons, Dock.Bottom);
+
+        var existingPanel = new StackPanel { Margin = new Thickness(8) };
+        existingPanel.Children.Add(_existingRangesBox);
         existingPanel.Children.Add(rangeButtons);
-        existingGroup.Content = existingPanel;
+        var existingGroup = new GroupBox
+        {
+            Header = UiText.Get("AllowEditRange_ExistingRangesLabel"),
+            Content = existingPanel,
+            Margin = new Thickness(0, 0, 0, 10)
+        };
         root.Children.Add(existingGroup);
 
-        var group = new GroupBox { Header = UiText.Get("AllowEditRange_RangeGroupHeader"), Margin = new Thickness(0, 0, 0, 10) };
-        var rangePanel = new DockPanel { Margin = new Thickness(8) };
-        rangePanel.Children.Add(new Label { Content = UiText.Get("AllowEditRange_RangeLabel"), Target = _rangeBox, Margin = new Thickness(0, 0, 8, 0) });
-        var rangePicker = new Button
-        {
-            Content = "...",
-            Width = 28,
-            Margin = new Thickness(0, 0, 6, 0),
-            ToolTip = UiText.Get("AllowEditRange_PickerToolTip")
-        };
-        AutomationProperties.SetName(rangePicker, UiText.Get("AllowEditRange_PickerAutomationName"));
-        AutomationProperties.SetAutomationId(rangePicker, "AllowEditRangePickerButton");
-        AutomationProperties.SetHelpText(
-            rangePicker,
-            UiText.Get("AllowEditRange_PickerHelpText"));
-        rangePicker.Click += RangePicker_Click;
-        DockPanel.SetDock(rangePicker, Dock.Right);
-        rangePanel.Children.Add(rangePicker);
+        // Range label + box stacked vertically (no nested "Range" group box, no inline "..." picker),
+        // matching the Linux layout.
         _rangeBox.Text = defaultRange;
         AutomationProperties.SetName(_rangeBox, UiText.Get("AllowEditRange_RangeAutomationName"));
         AutomationProperties.SetAutomationId(_rangeBox, "AllowEditRangeBox");
         AutomationProperties.SetHelpText(_rangeBox, UiText.Get("AllowEditRange_RangeHelpText"));
-        rangePanel.Children.Add(_rangeBox);
-        group.Content = rangePanel;
-        root.Children.Add(group);
+        root.Children.Add(new Label
+        {
+            Content = UiText.Get("AllowEditRange_RangeLabel"),
+            Target = _rangeBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+        root.Children.Add(_rangeBox);
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("AllowEditRange_ExampleText"),
+            Text = UiText.Get("AllowEditRange_Example"),
             Foreground = SystemColors.GrayTextBrush,
-            Margin = new Thickness(0, 0, 0, 10)
+            Margin = new Thickness(0, 6, 0, 10)
         });
-        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72));
+        root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 84));
 
         Content = root;
         UpdateRangeButtons();

@@ -78,14 +78,17 @@ public sealed class SortOptionsDialog : Window
         };
         body.Children.Add(orientation);
 
-        root.Children.Add(DialogButtonRowFactory.Create(() =>
+        var buttons = DialogButtonRowFactory.Create(() =>
         {
             Result = new SortDialogOptions(
                 CaseSensitive: _caseSensitiveBox.IsChecked == true,
                 LeftToRight: _leftToRightButton.IsChecked == true,
                 FirstKeySortOrder: _firstKeySortOrderBox.SelectedValue as string ?? NormalFirstKeySortOrder);
             DialogResult = true;
-        }, buttonWidth: 72));
+        }, buttonWidth: 72);
+        buttons.VerticalAlignment = VerticalAlignment.Bottom;
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        root.Children.Add(buttons);
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

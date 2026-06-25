@@ -46,7 +46,9 @@ public sealed class MainWindow : Window
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
+    private readonly RevealFormattingPane _revealPane;
     private Border? _findBar;
+    private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
     private bool _suppressEditorDirty;
@@ -73,6 +75,7 @@ public sealed class MainWindow : Window
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
         _navPane = new NavigationPane(_editor);
         _reviewingPane = new ReviewingPane(_editor);
+        _revealPane = new RevealFormattingPane(_editor);
 
         var root = new DockPanel();
 
@@ -111,12 +114,16 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(_reviewingPane, Dock.Right);
         root.Children.Add(_reviewingPane);
 
+        DockPanel.SetDock(_revealPane, Dock.Right);
+        root.Children.Add(_revealPane);
+
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CellEditRequested += async req =>
         {
@@ -156,6 +163,11 @@ public sealed class MainWindow : Window
     internal ReviewingPane ReviewingPane => _reviewingPane;
 
     /// <summary>
+    /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal RevealFormattingPane RevealPane => _revealPane;
+
+    /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
     /// Wired to <c>freew.navigationpane</c> ribbon toggle.
     /// </summary>
@@ -175,6 +187,37 @@ public sealed class MainWindow : Window
         _reviewingPane.IsVisible = !_reviewingPane.IsVisible;
         if (_reviewingPane.IsVisible)
             _reviewingPane.Refresh();
+    }
+
+    /// <summary>
+    /// Show or hide the Reveal Formatting pane and refresh its content when making it visible.
+    /// Wired to <c>freew.reveal-formatting</c> ribbon toggle (View → Show group) and Shift+F1.
+    /// </summary>
+    internal void ToggleRevealFormatting()
+    {
+        _revealPane.IsVisible = !_revealPane.IsVisible;
+        if (_revealPane.IsVisible)
+            _revealPane.Refresh();
+    }
+
+    /// <summary>
+    /// Opens the Find &amp; Replace dialog (modeless). If an instance is already open it is
+    /// brought to the front. Wired to <c>freew.find-replace-dialog</c> ribbon command and Ctrl+H.
+    /// </summary>
+    internal void OpenFindReplaceDialog()
+    {
+        if (_findReplaceDialog is not null)
+        {
+            _findReplaceDialog.Activate();
+            return;
+        }
+
+        _findReplaceDialog = new FindReplaceDialog(_editor)
+        {
+            ScrollerRef = _scroller,
+        };
+        _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
+        _findReplaceDialog.Show(this);
     }
 
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
@@ -202,7 +245,9 @@ public sealed class MainWindow : Window
             Paste: () => _ = PasteAsync(),
             Backstage: () => _ = ShowBackstageAsync(),
             ToggleNavigationPane: ToggleNavigationPane,
-            ToggleReviewingPane: ToggleReviewingPane);
+            ToggleReviewingPane: ToggleReviewingPane,
+            ToggleRevealFormatting: ToggleRevealFormatting,
+            OpenFindReplaceDialog: OpenFindReplaceDialog);
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
@@ -289,6 +334,7 @@ public sealed class MainWindow : Window
         switch (e.Key)
         {
             case Key.F: ToggleFindBar(show: true); e.Handled = true; break;
+            case Key.H: OpenFindReplaceDialog(); e.Handled = true; break;
             case Key.N: NewDocument(); e.Handled = true; break;
             case Key.O: _ = OpenAsync(); e.Handled = true; break;
             case Key.S: _ = SaveAsync(); e.Handled = true; break;
@@ -296,6 +342,13 @@ public sealed class MainWindow : Window
             case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
+        }
+
+        // Shift+F1 (no Ctrl required) = Reveal Formatting — matches Word's shortcut.
+        if (e.Key == Key.F1 && (e.KeyModifiers & KeyModifiers.Shift) != 0)
+        {
+            ToggleRevealFormatting();
+            e.Handled = true;
         }
     }
 
