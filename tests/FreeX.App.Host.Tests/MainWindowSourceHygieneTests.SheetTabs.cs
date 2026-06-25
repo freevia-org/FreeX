@@ -741,10 +741,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
-        source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
-        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");
+        source.Should().Contain("case WorksheetContextMenuAction.ShowHideNote:");
+        source.Should().Contain("ExecuteShowHideNote(address);");
+        source.Should().Contain("case WorksheetContextMenuAction.ShowAllNotes:");
+        source.Should().Contain("ExecuteShowAllNotes();");
         source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
-        plannerSource.Should().Contain("\"Show Notes\", WorksheetContextMenuAction.ShowNotes, AccessHeader: \"_Show Notes\", IsEnabled: state.HasNote");
+        plannerSource.Should().Contain("\"Show Notes\", WorksheetContextMenuAction.ShowAllNotes, AccessHeader: \"_Show Notes\"");
+        plannerSource.Should().Contain("WorksheetContextMenuAction.ShowHideNote, AccessHeader: state.NoteIsShown ? \"_Hide Note\" : \"S_how Note\", IsEnabled: state.HasNote");
         plannerSource.Should().NotContain("IsEnabled: state.HasNote || state.HasThreadedComment");
     }
 

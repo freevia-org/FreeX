@@ -198,7 +198,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Header == "Edit Note...")
             .Action.Should().Be(WorksheetContextMenuAction.EditNote);
         commands.Single(command => command.Header == "Show Notes")
-            .Action.Should().Be(WorksheetContextMenuAction.ShowNotes);
+            .Action.Should().Be(WorksheetContextMenuAction.ShowAllNotes);
     }
 
     [Fact]

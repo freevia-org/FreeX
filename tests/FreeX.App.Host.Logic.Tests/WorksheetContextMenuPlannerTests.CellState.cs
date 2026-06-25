@@ -19,7 +19,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
-        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowHideNote).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ClearHyperlinks).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
         commands.Single(command => command.Action == WorksheetContextMenuAction.ReapplyFilter).IsEnabled.Should().BeFalse();
@@ -42,7 +42,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
-        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
+        commands.Single(command => command.Action == WorksheetContextMenuAction.ShowHideNote).IsEnabled.Should().BeTrue();
         commands.Single(command => command.Header == "Clear Hyperlinks").IsEnabled.Should().BeTrue();
     }
 
@@ -57,7 +57,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeTrue();
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeFalse();
         threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeFalse();
-        threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeFalse();
+        threadedOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ShowHideNote).IsEnabled.Should().BeFalse();
 
         var noteOnlyCommands = FlattenActionCommands(WorksheetContextMenuPlanner.BuildCommands(
             state: new WorksheetContextMenuState(HasNote: true)));
@@ -67,7 +67,7 @@ public sealed partial class WorksheetContextMenuPlannerTests
         noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.DeleteComment).IsEnabled.Should().BeFalse();
         noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.EditNote).IsEnabled.Should().BeTrue();
         noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.DeleteNote).IsEnabled.Should().BeTrue();
-        noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ShowNotes).IsEnabled.Should().BeTrue();
+        noteOnlyCommands.Single(command => command.Action == WorksheetContextMenuAction.ShowHideNote).IsEnabled.Should().BeTrue();
     }
 
     [Fact]
