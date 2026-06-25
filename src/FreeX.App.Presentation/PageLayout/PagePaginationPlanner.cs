@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -64,19 +65,43 @@ public static class PagePaginationPlanner
     /// <summary>Drawing surface resolution the source layout assumes for the printable area, in dots per inch.</summary>
     public const double Dpi = 96.0;
 
-    /// <summary>Nominal printed column width (pixels) used to size a page when no explicit scale is set.</summary>
+    /// <summary>
+    /// Fallback printed column width in pixels used when no column-width information is available for
+    /// a column (e.g. when calling the overload that does not receive sheet sizing data).
+    /// </summary>
     public const double MinimumPrintColumnWidth = 40.0;
 
-    /// <summary>Nominal printed row height (pixels) used to size a page when no explicit scale is set.</summary>
+    /// <summary>
+    /// Fallback printed row height in pixels used when no row-height information is available for a row
+    /// (e.g. when calling the overload that does not receive sheet sizing data).
+    /// </summary>
     public const double NominalRowHeight = 20.0;
 
     private const int MinScalePercent = 10;
     private const int MaxScalePercent = 400;
 
     /// <summary>
-    /// Computes the baseline rows/columns that fit on one page from paper size, margins, and
-    /// orientation, then applies the scale-to-fit setting (explicit percent or fit-to-pages) per axis.
+    /// Computes the baseline rows/columns that fit on one page, using the actual per-row heights and
+    /// per-column widths from the sheet model. The average row height across the print range and the
+    /// average column width (in pixels) across the print range are used to estimate how many items fit
+    /// on one page. The printable body height is the paper height minus page margins minus the
+    /// header/footer margin reservations (PR5 fix); the printable body width is the paper width minus
+    /// page margins. Falls back to <see cref="NominalRowHeight"/> or <see cref="MinimumPrintColumnWidth"/>
+    /// when a row/column has no recorded size.
     /// </summary>
+    /// <param name="printRange">The range of rows and columns being printed.</param>
+    /// <param name="scaleToFit">Explicit scale percent or fit-to-pages request (or neither).</param>
+    /// <param name="printTitleRows">Rows repeated on every page, or null.</param>
+    /// <param name="printTitleColumns">Columns repeated on every page, or null.</param>
+    /// <param name="paperSize">Paper size for page dimension lookup.</param>
+    /// <param name="orientation">Portrait or landscape.</param>
+    /// <param name="margins">Page margins in inches.</param>
+    /// <param name="rowHeights">Per-row height overrides in pixels (1-based row → pixels). May be empty.</param>
+    /// <param name="defaultRowHeight">Default row height in pixels, used for rows absent from <paramref name="rowHeights"/>.</param>
+    /// <param name="columnWidths">Per-column width overrides in characters (1-based col → characters). May be empty.</param>
+    /// <param name="defaultColumnWidth">Default column width in characters, used for columns absent from <paramref name="columnWidths"/>.</param>
+    /// <param name="headerMarginInches">Distance from page top to header, in inches (PR5: subtracted from body height).</param>
+    /// <param name="footerMarginInches">Distance from page bottom to footer, in inches (PR5: subtracted from body height).</param>
     public static PageCapacity CalculatePageCapacity(
         GridRange printRange,
         WorksheetScaleToFit scaleToFit,
@@ -84,13 +109,33 @@ public static class PagePaginationPlanner
         WorksheetRepeatRange? printTitleColumns,
         WorksheetPaperSize paperSize,
         WorksheetPageOrientation orientation,
-        WorksheetPageMargins margins)
+        WorksheetPageMargins margins,
+        IReadOnlyDictionary<uint, double> rowHeights,
+        double defaultRowHeight,
+        IReadOnlyDictionary<uint, double> columnWidths,
+        double defaultColumnWidth,
+        double headerMarginInches,
+        double footerMarginInches)
     {
         var pageSize = WorksheetPageLayout.GetPageSizeInches(paperSize, orientation);
+
+        // PR5: subtract header + footer margin reservations from the body height.
+        var headerFooterReservedPx = Math.Max(0.0, headerMarginInches + footerMarginInches) * Dpi;
         var printableWidth = Math.Max(1.0, (pageSize.Width - margins.Left - margins.Right) * Dpi);
-        var printableHeight = Math.Max(1.0, (pageSize.Height - margins.Top - margins.Bottom) * Dpi);
-        var rowsPerPage = Math.Max(1u, (uint)Math.Floor(printableHeight / NominalRowHeight));
-        var columnsPerPage = Math.Max(1u, (uint)Math.Floor(printableWidth / MinimumPrintColumnWidth));
+        var printableHeight = Math.Max(1.0, (pageSize.Height - margins.Top - margins.Bottom) * Dpi - headerFooterReservedPx);
+
+        // PR1: compute average row height from actual per-row sizes across the print range.
+        var effectiveRowHeight = AverageRowHeightPixels(
+            printRange.Start.Row, printRange.End.Row,
+            rowHeights, defaultRowHeight);
+
+        // PR1: compute average column width in pixels from actual per-column character widths.
+        var effectiveColWidth = AverageColumnWidthPixels(
+            printRange.Start.Col, printRange.End.Col,
+            columnWidths, defaultColumnWidth);
+
+        var rowsPerPage = Math.Max(1u, (uint)Math.Floor(printableHeight / effectiveRowHeight));
+        var columnsPerPage = Math.Max(1u, (uint)Math.Floor(printableWidth / effectiveColWidth));
 
         rowsPerPage = ApplyScaleToFitCapacity(
             rowsPerPage,
@@ -113,10 +158,96 @@ public static class PagePaginationPlanner
     }
 
     /// <summary>
+    /// Computes the baseline rows/columns that fit on one page from paper size, margins, and
+    /// orientation, then applies the scale-to-fit setting (explicit percent or fit-to-pages) per axis.
+    /// Uses fixed fallback constants (<see cref="NominalRowHeight"/>, <see cref="MinimumPrintColumnWidth"/>)
+    /// for row height and column width. Prefer the overload that accepts sheet row/column sizing for
+    /// accurate pagination of sheets with custom row heights or column widths.
+    /// </summary>
+    public static PageCapacity CalculatePageCapacity(
+        GridRange printRange,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins)
+    {
+        return CalculatePageCapacity(
+            printRange,
+            scaleToFit,
+            printTitleRows,
+            printTitleColumns,
+            paperSize,
+            orientation,
+            margins,
+            rowHeights: new Dictionary<uint, double>(),
+            defaultRowHeight: NominalRowHeight,
+            columnWidths: new Dictionary<uint, double>(),
+            defaultColumnWidth: ColumnWidthPixelMapper.PixelsToColumnWidth(MinimumPrintColumnWidth),
+            headerMarginInches: 0.0,
+            footerMarginInches: 0.0);
+    }
+
+    /// <summary>
+    /// Slices a print range into page segments along both axes using actual sheet row heights and
+    /// column widths, and reports the effective scale. Title rows/columns are reprinted on every page;
+    /// manual breaks force a new page; the explicit scale percent (when set) wins, otherwise a
+    /// fit-to-pages request resolves to the shrink ratio that makes the body fit the requested page count.
+    /// </summary>
+    public static PagePaginationPlan BuildPlan(
+        GridRange printRange,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins,
+        IReadOnlyDictionary<uint, double> rowHeights,
+        double defaultRowHeight,
+        IReadOnlyDictionary<uint, double> columnWidths,
+        double defaultColumnWidth,
+        double headerMarginInches,
+        double footerMarginInches,
+        IReadOnlyCollection<uint>? rowPageBreaks = null,
+        IReadOnlyCollection<uint>? columnPageBreaks = null)
+    {
+        var capacity = CalculatePageCapacity(
+            printRange,
+            scaleToFit,
+            printTitleRows,
+            printTitleColumns,
+            paperSize,
+            orientation,
+            margins,
+            rowHeights,
+            defaultRowHeight,
+            columnWidths,
+            defaultColumnWidth,
+            headerMarginInches,
+            footerMarginInches);
+
+        var rowPlans = PrintLayoutPlanner.BuildRowPlans(
+            printRange,
+            printTitleRows,
+            capacity.RowsPerPage,
+            rowPageBreaks);
+        var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
+            printRange,
+            printTitleColumns,
+            capacity.ColumnsPerPage,
+            columnPageBreaks);
+
+        var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
+        return new PagePaginationPlan(rowPlans, columnPlans, capacity, effectiveScale);
+    }
+
+    /// <summary>
     /// Slices a print range into page segments along both axes and reports the effective scale.
     /// Title rows/columns are reprinted on every page; manual breaks force a new page; the explicit
     /// scale percent (when set) wins, otherwise a fit-to-pages request resolves to the shrink ratio
-    /// that makes the body fit the requested page count.
+    /// that makes the body fit the requested page count. Uses fixed fallback constants for row height
+    /// and column width. Prefer the overload that accepts sheet row/column sizing.
     /// </summary>
     public static PagePaginationPlan BuildPlan(
         GridRange printRange,
@@ -151,6 +282,50 @@ public static class PagePaginationPlanner
 
         var effectiveScale = CalculateEffectiveScalePercent(scaleToFit, rowPlans.Count, columnPlans.Count);
         return new PagePaginationPlan(rowPlans, columnPlans, capacity, effectiveScale);
+    }
+
+    /// <summary>
+    /// Slices a print range into page segments along both axes using actual sheet row heights and
+    /// column widths, and reports the effective scale.
+    /// </summary>
+    public static PagePaginationResult Paginate(
+        GridRange printRange,
+        WorksheetScaleToFit scaleToFit,
+        WorksheetRepeatRange? printTitleRows,
+        WorksheetRepeatRange? printTitleColumns,
+        WorksheetPaperSize paperSize,
+        WorksheetPageOrientation orientation,
+        WorksheetPageMargins margins,
+        IReadOnlyDictionary<uint, double> rowHeights,
+        double defaultRowHeight,
+        IReadOnlyDictionary<uint, double> columnWidths,
+        double defaultColumnWidth,
+        double headerMarginInches,
+        double footerMarginInches,
+        IReadOnlyCollection<uint>? rowPageBreaks = null,
+        IReadOnlyCollection<uint>? columnPageBreaks = null)
+    {
+        var plan = BuildPlan(
+            printRange,
+            scaleToFit,
+            printTitleRows,
+            printTitleColumns,
+            paperSize,
+            orientation,
+            margins,
+            rowHeights,
+            defaultRowHeight,
+            columnWidths,
+            defaultColumnWidth,
+            headerMarginInches,
+            footerMarginInches,
+            rowPageBreaks,
+            columnPageBreaks);
+
+        return new PagePaginationResult(
+            BuildSegments(plan.RowPlans),
+            BuildSegments(plan.ColumnPlans),
+            plan.EffectiveScalePercent);
     }
 
     /// <summary>
@@ -283,5 +458,59 @@ public static class PagePaginationPlanner
         }
 
         return segments;
+    }
+
+    /// <summary>
+    /// Returns the average row height in pixels across the rows [startRow, endRow]. Each row's height
+    /// is taken from <paramref name="rowHeights"/> when present; rows absent from the dictionary use
+    /// <paramref name="defaultRowHeight"/>. Falls back to <see cref="NominalRowHeight"/> when
+    /// <paramref name="defaultRowHeight"/> is not positive.
+    /// </summary>
+    public static double AverageRowHeightPixels(
+        uint startRow,
+        uint endRow,
+        IReadOnlyDictionary<uint, double> rowHeights,
+        double defaultRowHeight)
+    {
+        var fallback = defaultRowHeight > 0 ? defaultRowHeight : NominalRowHeight;
+        if (endRow < startRow)
+            return fallback;
+
+        var total = 0.0;
+        var count = endRow - startRow + 1;
+        for (var row = startRow; row <= endRow; row++)
+            total += rowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
+
+        return total / count;
+    }
+
+    /// <summary>
+    /// Returns the average column width in pixels across the columns [startCol, endCol]. Each column's
+    /// character-unit width is taken from <paramref name="columnWidths"/> when present; columns absent
+    /// from the dictionary use <paramref name="defaultColumnWidth"/>. The character-unit width is
+    /// converted to pixels via <see cref="ColumnWidthPixelMapper.ColumnWidthToPixels"/>. Falls back to
+    /// <see cref="MinimumPrintColumnWidth"/> when the computed pixel width would be zero or negative.
+    /// </summary>
+    public static double AverageColumnWidthPixels(
+        uint startCol,
+        uint endCol,
+        IReadOnlyDictionary<uint, double> columnWidths,
+        double defaultColumnWidth)
+    {
+        var fallbackChars = defaultColumnWidth > 0 ? defaultColumnWidth : ColumnWidthPixelMapper.PixelsToColumnWidth(MinimumPrintColumnWidth);
+        var fallbackPx = Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(fallbackChars));
+        if (endCol < startCol)
+            return fallbackPx;
+
+        var total = 0.0;
+        var count = endCol - startCol + 1;
+        for (var col = startCol; col <= endCol; col++)
+        {
+            var chars = columnWidths.TryGetValue(col, out var w) && w > 0 ? w : fallbackChars;
+            var px = ColumnWidthPixelMapper.ColumnWidthToPixels(chars);
+            total += Math.Max(MinimumPrintColumnWidth, px);
+        }
+
+        return total / count;
     }
 }
