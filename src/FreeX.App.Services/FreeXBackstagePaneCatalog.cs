@@ -52,10 +52,14 @@ public sealed record FreeXBackstageInfoDetailDefinition(
 
 public enum FreeXBackstageAccountDetailId
 {
-    Product,
-    Version,
+    FreeXUserName,
+    LocalOsAccount,
     Device,
-    User
+    AppVersion,
+    OptionsFile,
+    CurrentWorkbook,
+    Sharing,
+    Export
 }
 
 public sealed record FreeXBackstageAccountDetailDefinition(
@@ -238,12 +242,20 @@ public static class FreeXBackstagePaneCatalog
 
     private static readonly FreeXBackstageInfoDetailDefinition[] ParityInfoDetails = WpfInfoDetails;
 
+    // Mirrors the Windows backstage Account page ("Local account information"): the local app/OS
+    // identity, version, and local workbook/sharing/export readiness rows (no cloud account). The WPF
+    // host pane (ParityCapture.CreateBackstageAccountPane) and the Avalonia parity-capture pane render
+    // the same row set; this catalog is the single source the interactive Avalonia dialog renders from.
     private static readonly FreeXBackstageAccountDetailDefinition[] AccountDetails =
     [
-        new(FreeXBackstageAccountDetailId.Product, "Backstage_Account_ProductLabel", "BackstageAccountProduct"),
-        new(FreeXBackstageAccountDetailId.Version, "Backstage_Account_VersionLabel", "BackstageAccountVersion"),
-        new(FreeXBackstageAccountDetailId.Device, "Backstage_Account_DeviceLabel", "BackstageAccountDevice"),
-        new(FreeXBackstageAccountDetailId.User, "Backstage_Account_UserLabel", "BackstageAccountUser"),
+        new(FreeXBackstageAccountDetailId.FreeXUserName, "Backstage_Account_FreeXUserNameLabel", "BackstageAccountFreeXUserName"),
+        new(FreeXBackstageAccountDetailId.LocalOsAccount, "Backstage_Account_LocalOSAccountLabel", "BackstageAccountLocalOsAccount"),
+        new(FreeXBackstageAccountDetailId.Device, "Backstage_Account_DeviceRowLabel", "BackstageAccountDevice"),
+        new(FreeXBackstageAccountDetailId.AppVersion, "Backstage_Account_AppVersionLabel", "BackstageAccountAppVersion"),
+        new(FreeXBackstageAccountDetailId.OptionsFile, "Backstage_Account_OptionsFileLabel", "BackstageAccountOptionsFile"),
+        new(FreeXBackstageAccountDetailId.CurrentWorkbook, "Backstage_Account_CurrentWorkbookLabel", "BackstageAccountCurrentWorkbook"),
+        new(FreeXBackstageAccountDetailId.Sharing, "Backstage_Account_SharingLabel", "BackstageAccountSharing"),
+        new(FreeXBackstageAccountDetailId.Export, "Backstage_Account_ExportLabel", "BackstageAccountExport"),
     ];
 
     private static readonly FreeXBackstageAccountActionDefinition[] AccountActions =

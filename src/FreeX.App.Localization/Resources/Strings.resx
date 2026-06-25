@@ -19544,4 +19544,7 @@ and {0} more.</value>
   <data name="Backstage_Account_ExportReadyLocal" xml:space="preserve">
     <value>Ready for local PDF/XPS export to a chosen local path.</value>
   </data>
+  <data name="Backstage_Account_CurrentWorkbookUnsaved" xml:space="preserve">
+    <value>Not saved yet</value>
+  </data>
 </root>

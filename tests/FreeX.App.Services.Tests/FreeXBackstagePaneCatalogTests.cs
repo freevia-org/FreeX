@@ -96,10 +96,14 @@ public sealed class FreeXBackstagePaneCatalogTests
         FreeXBackstagePaneCatalog.BuildAccountDetails()
             .Select(detail => (detail.Id, detail.LabelKey, detail.ValueAutomationId))
             .Should().Equal(
-                (FreeXBackstageAccountDetailId.Product, "Backstage_Account_ProductLabel", "BackstageAccountProduct"),
-                (FreeXBackstageAccountDetailId.Version, "Backstage_Account_VersionLabel", "BackstageAccountVersion"),
-                (FreeXBackstageAccountDetailId.Device, "Backstage_Account_DeviceLabel", "BackstageAccountDevice"),
-                (FreeXBackstageAccountDetailId.User, "Backstage_Account_UserLabel", "BackstageAccountUser"));
+                (FreeXBackstageAccountDetailId.FreeXUserName, "Backstage_Account_FreeXUserNameLabel", "BackstageAccountFreeXUserName"),
+                (FreeXBackstageAccountDetailId.LocalOsAccount, "Backstage_Account_LocalOSAccountLabel", "BackstageAccountLocalOsAccount"),
+                (FreeXBackstageAccountDetailId.Device, "Backstage_Account_DeviceRowLabel", "BackstageAccountDevice"),
+                (FreeXBackstageAccountDetailId.AppVersion, "Backstage_Account_AppVersionLabel", "BackstageAccountAppVersion"),
+                (FreeXBackstageAccountDetailId.OptionsFile, "Backstage_Account_OptionsFileLabel", "BackstageAccountOptionsFile"),
+                (FreeXBackstageAccountDetailId.CurrentWorkbook, "Backstage_Account_CurrentWorkbookLabel", "BackstageAccountCurrentWorkbook"),
+                (FreeXBackstageAccountDetailId.Sharing, "Backstage_Account_SharingLabel", "BackstageAccountSharing"),
+                (FreeXBackstageAccountDetailId.Export, "Backstage_Account_ExportLabel", "BackstageAccountExport"));
 
         FreeXBackstagePaneCatalog.BuildAccountActions(optionsAvailable: true)
             .Select(action => action.Id)

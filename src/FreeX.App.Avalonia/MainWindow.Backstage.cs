@@ -341,7 +341,10 @@ public sealed partial class MainWindow
 
         var content = new StackPanel { Spacing = 14 };
 
-        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_ProductSectionHeader")));
+        // Match the Windows backstage Account page: an "Account" heading + "Local account information"
+        // subheading over the local app/OS identity rows sourced from the shared catalog (no cloud note).
+        content.Children.Add(CreateBackstageAccountHeading(UiText.Get("Backstage_Account_Title")));
+        content.Children.Add(CreateBackstageSectionHeader(UiText.Get("Backstage_Account_LocalInfoHeading")));
         var grid = CreateBackstageDetailGrid();
         foreach (var detail in FreeXBackstagePaneCatalog.BuildAccountDetails())
         {
@@ -352,8 +355,6 @@ public sealed partial class MainWindow
                 detail.ValueAutomationId);
         }
         content.Children.Add(grid);
-
-        content.Children.Add(CreateBackstageNote(UiText.Get("Backstage_Account_LocalOnlyNote"), "BackstageAccountLocalOnlyNote"));
 
         var actionRow = new StackPanel
         {
@@ -412,19 +413,40 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static string ResolveBackstageAccountDetailValue(
+    private string ResolveBackstageAccountDetailValue(
         FreeXBackstageAccountDetailId id,
         LocalAccountInfoPlan plan) =>
         id switch
         {
-            FreeXBackstageAccountDetailId.Product => plan.ProductName,
-            FreeXBackstageAccountDetailId.Version => plan.VersionText,
+            // No personalized FreeX user name override is configured, so it falls back to the OS account
+            // — matching the Windows page, which shows the same identity for both rows by default.
+            FreeXBackstageAccountDetailId.FreeXUserName => ResolveBackstageAccountUserName(plan),
+            FreeXBackstageAccountDetailId.LocalOsAccount => ResolveBackstageAccountUserName(plan),
             FreeXBackstageAccountDetailId.Device => plan.DeviceName,
-            FreeXBackstageAccountDetailId.User => string.IsNullOrWhiteSpace(plan.UserName)
-                ? UiText.Get("Backstage_Account_UserLocalOnly")
-                : plan.UserName,
+            FreeXBackstageAccountDetailId.AppVersion => plan.VersionText,
+            FreeXBackstageAccountDetailId.OptionsFile => UiText.Get("Backstage_Account_OptionsFileLocalProfile"),
+            FreeXBackstageAccountDetailId.CurrentWorkbook => ResolveBackstageAccountCurrentWorkbook(),
+            FreeXBackstageAccountDetailId.Sharing => UiText.Get("Backstage_Account_SharingSaveAsRequired"),
+            FreeXBackstageAccountDetailId.Export => UiText.Get("Backstage_Account_ExportReadyLocal"),
             _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
         };
+
+    private static string ResolveBackstageAccountUserName(LocalAccountInfoPlan plan) =>
+        string.IsNullOrWhiteSpace(plan.UserName)
+            ? UiText.Get("Backstage_Account_UserLocalOnly")
+            : plan.UserName;
+
+    private string ResolveBackstageAccountCurrentWorkbook()
+    {
+        var path = _session.CurrentFilePath;
+        if (!string.IsNullOrWhiteSpace(path))
+            return Path.GetFileName(path);
+
+        var name = _session.Workbook.Name;
+        return string.IsNullOrWhiteSpace(name)
+            ? UiText.Get("Backstage_Account_CurrentWorkbookUnsaved")
+            : name;
+    }
 
     private Action ResolveBackstageAccountAction(FreeXBackstageAccountActionId id) =>
         id switch
@@ -458,6 +480,15 @@ public sealed partial class MainWindow
     }
 
     // ── shared backstage chrome helpers ─────────────────────────────────────────
+    private static TextBlock CreateBackstageAccountHeading(string text) =>
+        new()
+        {
+            Text = text,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 22,
+            Foreground = PrimaryInk,
+        };
+
     private static TextBlock CreateBackstageSectionHeader(string text) =>
         new()
         {
