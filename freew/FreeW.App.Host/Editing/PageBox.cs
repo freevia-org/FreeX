@@ -14,7 +14,8 @@ internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingFor
 
 /// <summary>
 /// One physical page slot in the <see cref="PaginatedEditorPanel"/>.  Hosts an editable header
-/// region at the top (Phase 4), a body <see cref="RichTextBox"/> that the user edits, and an
+/// region at the top (Phase 4), a body <see cref="RichTextBox"/> that the user edits, an optional
+/// read-only footnote region (separator rule + numbered footnote texts) above the footer, and an
 /// editable footer region at the bottom (Phase 4).  The body is fixed to the page content area so
 /// each box represents exactly one page.
 ///
@@ -50,6 +51,8 @@ internal sealed class PageBox : Border
     private const double PageGapDip = 20;        // vertical gap rendered above each page box
     private const double HeaderHeightDip = 36;   // in-page header region height (Phase 4; was 24)
     private const double FooterHeightDip = 36;   // in-page footer region height (Phase 4; was 24)
+    private const double FootnoteSeparatorHeight = 1.0; // thin horizontal rule
+    private const double FootnoteTextSizePt = 9.0;      // slightly smaller than body (Word default)
 
     // ── public surface ────────────────────────────────────────────────────────────────────────────
     /// <summary>The editable body RichTextBox for this page.</summary>
@@ -57,6 +60,25 @@ internal sealed class PageBox : Border
 
     /// <summary>1-based page number (informational; shown in header strip label).</summary>
     internal int PageNumber { get; }
+
+    /// <summary>
+    /// The ordered footnote IDs whose text is rendered in this page's footnote region.
+    /// Empty when the page has no footnotes.  Set by <see cref="PaginatedEditorPanel.Build"/>.
+    /// </summary>
+    internal IReadOnlyList<int> FootnoteIds { get; private set; } = Array.Empty<int>();
+
+    /// <summary>
+    /// The ordered endnote IDs rendered in this page's endnote region (used when this box is the
+    /// synthetic endnotes page appended at the end of the document).
+    /// </summary>
+    internal IReadOnlyList<int> EndnoteIds { get; private set; } = Array.Empty<int>();
+
+    /// <summary>
+    /// True when this page box is the synthetic endnotes page appended after all body pages.
+    /// It has no body blocks and no header/footer sub-editors.  Used by the FidelityRender tool to
+    /// identify the synthetic page and render it separately from the body FlowDocument paginator.
+    /// </summary>
+    internal bool IsEndnoteSyntheticPage { get; private set; }
 
     // ── Phase 4: in-page editable header/footer sub-editors ───────────────────────────────────────
 
@@ -126,6 +148,13 @@ internal sealed class PageBox : Border
     /// so PAGE field runs in the header/footer render as the actual 1-based page number for this box, and
     /// NUMPAGES renders the real total.  The underlying model field run is unchanged (round-trip lossless).
     /// </para>
+    ///
+    /// <para>
+    /// <strong>Footnotes:</strong> <paramref name="footnoteIds"/> lists the IDs of footnotes that
+    /// appeared on this page (determined by scanning the body blocks for <c>FootnoteMarker</c> tags).
+    /// When non-empty a footnote region is inserted between the body and the footer: a short horizontal
+    /// separator followed by the footnote paragraphs in smaller text.
+    /// </para>
     /// </summary>
     internal PageBox(
         int pageNumber,
@@ -136,11 +165,20 @@ internal sealed class PageBox : Border
         string? headerSlotName = null,
         HeaderFooter? footerSlot = null,
         string? footerSlotName = null,
-        int pageCount = 1)
+        int pageCount = 1,
+        IReadOnlyList<int>? footnoteIds = null,
+        IReadOnlyList<int>? endnoteIds = null)
     {
         PageNumber = pageNumber;
         HeaderSlotName = headerSlotName;
         FooterSlotName = footerSlotName;
+        if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
+        if (endnoteIds is { Count: > 0 })
+        {
+            EndnoteIds = endnoteIds;
+            // The synthetic endnotes page has endnote IDs but no body blocks and no header/footer.
+            IsEndnoteSyntheticPage = pageBlocks.Count == 0 && headerSlotName is null && footerSlotName is null;
+        }
 
         var (pageWidth, _) = PageLayout.PageSizeDip(page);
         var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -153,11 +191,14 @@ internal sealed class PageBox : Border
         Margin = new Thickness(0, PageGapDip, 0, 0);
         Width = pageWidth;
 
-        // ── outer stack: header region | body | footer region ────────────────────────────────────
+        // ── outer grid: row 0 = header | row 1 = body | row 2 = footnote region | row 3 = footer ──
+        // The footnote row is always present but has zero height when there are no footnotes, so
+        // the layout is identical to the pre-footnote behaviour for pages without footnotes.
         var stack = new Grid();
-        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeightDip) });
-        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });
+        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderHeightDip) });    // row 0: header
+        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 1: body
+        stack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // row 2: footnotes
+        stack.RowDefinitions.Add(new RowDefinition { Height = new GridLength(FooterHeightDip) });    // row 3: footer
 
         // ── Phase 4: header region ────────────────────────────────────────────────────────────────
         if (sourceModel is not null && headerSlotName is not null)
@@ -213,19 +254,34 @@ internal sealed class PageBox : Border
         Grid.SetRow(Body, 1);
         stack.Children.Add(Body);
 
-        // ── Phase 4: footer region ────────────────────────────────────────────────────────────────
+        // ── Footnote / endnote region (row 2) ─────────────────────────────────────────────────────
+        // Rendered as a read-only StackPanel: separator rule + one TextBlock per note entry.
+        // If neither footnotes nor endnotes are present, the row collapses to zero height.
+        var noteIds = endnoteIds is { Count: > 0 } ? endnoteIds : footnoteIds;
+        bool isEndnoteBox = endnoteIds is { Count: > 0 };
+        if (sourceModel is not null && noteIds is { Count: > 0 })
+        {
+            var noteRegion = BuildNoteRegion(
+                sourceModel, footnoteIds ?? Array.Empty<int>(),
+                endnoteIds ?? Array.Empty<int>(),
+                marginLeft, marginRight, isEndnoteBox);
+            Grid.SetRow(noteRegion, 2);
+            stack.Children.Add(noteRegion);
+        }
+
+        // ── Phase 4: footer region (row 3) ───────────────────────────────────────────────────────
         if (sourceModel is not null && footerSlotName is not null)
         {
             FooterSubEditor = BuildHfSubEditor(
                 sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
                 hfPageNumber: pageNumber, hfPageCount: pageCount);
-            Grid.SetRow(FooterSubEditor, 2);
+            Grid.SetRow(FooterSubEditor, 3);
             stack.Children.Add(FooterSubEditor);
         }
         else
         {
             var footerStrip = BuildStrip(string.Empty, marginLeft, marginRight);
-            Grid.SetRow(footerStrip, 2);
+            Grid.SetRow(footerStrip, 3);
             stack.Children.Add(footerStrip);
         }
 
@@ -516,5 +572,129 @@ internal sealed class PageBox : Border
             Padding = new Thickness(padLeft, 2, padRight, 2),
             Child = label
         };
+    }
+
+    // ── Footnote / endnote region builder ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds the read-only note region displayed at the bottom of a page (above the footer).
+    /// For footnotes: a short horizontal separator rule (matching Word's footnote separator) followed
+    /// by the footnote texts in smaller type, each prefixed with a superscript number matching the
+    /// body reference mark.  For the synthetic endnotes page: a heading "Endnotes" + separator +
+    /// numbered endnote texts.
+    ///
+    /// <para>The region is read-only (not a RichTextBox sub-editor) because footnote content round-
+    /// trips through the model, not through the page-box commit path.</para>
+    /// </summary>
+    private static StackPanel BuildNoteRegion(
+        TextDocument model,
+        IReadOnlyList<int> footnoteIds,
+        IReadOnlyList<int> endnoteIds,
+        double marginLeft,
+        double marginRight,
+        bool isEndnotePage)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Vertical };
+        double textSizePx = FootnoteTextSizePt * (96.0 / 72.0);
+        double noteSeparatorWidth = 60; // ~1/3 of column width (Word default separator length)
+
+        if (footnoteIds.Count > 0)
+        {
+            // ── Footnote separator rule ────────────────────────────────────────────────────────────
+            // Word renders a ~50mm (about 1/3 of the text column) horizontal rule.
+            panel.Children.Add(new Border
+            {
+                Height = FootnoteSeparatorHeight,
+                Width = noteSeparatorWidth,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(marginLeft, 4, 0, 2),
+                Background = Brushes.Black
+            });
+
+            // ── Footnote text entries ──────────────────────────────────────────────────────────────
+            foreach (var id in footnoteIds)
+            {
+                if (!model.Footnotes.TryGetValue(id, out var footnote))
+                    continue;
+
+                var noteText = footnote.PlainText;
+                if (string.IsNullOrEmpty(noteText))
+                    continue;
+
+                panel.Children.Add(BuildNoteTextBlock(id.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                    noteText, marginLeft, marginRight, textSizePx));
+            }
+        }
+
+        if (endnoteIds.Count > 0)
+        {
+            // ── Endnotes page heading + separator ─────────────────────────────────────────────────
+            if (isEndnotePage)
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "Endnotes",
+                    FontSize = textSizePx + 2,
+                    FontWeight = FontWeights.Bold,
+                    Margin = new Thickness(marginLeft, 8, marginRight, 2)
+                });
+            }
+
+            panel.Children.Add(new Border
+            {
+                Height = FootnoteSeparatorHeight,
+                Margin = new Thickness(marginLeft, 2, marginRight, 2),
+                Background = Brushes.Black
+            });
+
+            // ── Endnote text entries ───────────────────────────────────────────────────────────────
+            foreach (var id in endnoteIds)
+            {
+                if (!model.Endnotes.TryGetValue(id, out var endnote))
+                    continue;
+
+                var noteText = endnote.PlainText;
+                if (string.IsNullOrEmpty(noteText))
+                    continue;
+
+                panel.Children.Add(BuildNoteTextBlock(id.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                    noteText, marginLeft, marginRight, textSizePx));
+            }
+        }
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Builds one note entry line: a superscript number label followed by the note text.
+    /// The number visually matches the in-body reference superscript.
+    /// </summary>
+    private static TextBlock BuildNoteTextBlock(
+        string number,
+        string text,
+        double marginLeft,
+        double marginRight,
+        double textSizePx)
+    {
+        var tb = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(marginLeft, 1, marginRight, 1),
+            FontSize = textSizePx
+        };
+
+        // Superscript number
+        tb.Inlines.Add(new System.Windows.Documents.Run(number)
+        {
+            BaselineAlignment = BaselineAlignment.Superscript,
+            FontSize = textSizePx * 0.75
+        });
+
+        // A thin space then the note text
+        tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+
+        return tb;
     }
 }
