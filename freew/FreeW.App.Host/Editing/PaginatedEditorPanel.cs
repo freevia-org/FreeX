@@ -187,10 +187,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var boxes = new List<PageBox>(totalBoxCount);
         for (var i = 0; i < pageCount; i++)
         {
-            var (section, sectionRelPageNumber) = pageToSection[i];
+            // SG: use this page's section's own PageSettings for geometry (width, height, margins).
+            // This makes portrait → landscape section breaks render each page at the correct size.
+            var (section, sectionRelPageNumber, sectionPage) = pageToSection[i];
             var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
-                section, sectionRelPageNumber, model.Page);
-            var box = new PageBox(i + 1, page, shards[i],
+                section, sectionRelPageNumber, sectionPage);
+            var box = new PageBox(i + 1, sectionPage, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
@@ -205,6 +207,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // ── Endnotes page (synthetic last page) ───────────────────────────────────────────────────
         // All endnote entries are collected into one page at the end of the document, mirroring
         // Word's behaviour. The synthetic page has no body blocks and no header/footer.
+        // Use the final section's page settings for the endnotes page.
         if (hasEndnotes)
         {
             var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
@@ -303,7 +306,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Per-section header COMMIT is a separate model-addition task.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<(SectionHeadersFooters Hf, int SectionRelPageNumber)>
+    private static IReadOnlyList<(SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)>
         ComputePageSectionMap(
             IReadOnlyList<System.Windows.Documents.Block> allBlocks,
             int[] assignment,
@@ -311,7 +314,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             TextDocument model)
     {
         var sections = model.Sections; // reconstructed per-section list
-        var result   = new (SectionHeadersFooters Hf, int SectionRelPageNumber)[pageCount];
+        var result   = new (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[pageCount];
 
         // Map each block to a section index.  A block is in section[k] if it comes before the k-th
         // SectionBreak paragraph; section indices are 0-based.
@@ -368,8 +371,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             if (sectionHf.IsEmpty)
                 sectionHf = model.FinalSectionHeadersFooters;
 
+            // Per-section page geometry: each section carries its own PageSettings (size,
+            // orientation, margins). Use it so portrait/landscape sections render correctly.
+            var sectionPage = sections[sec].Page;
+
             int sectionRelPage = pg - sectionFirstPage[sec] + 1;
-            result[pg] = (sectionHf, sectionRelPage);
+            result[pg] = (sectionHf, sectionRelPage, sectionPage);
         }
 
         return result;
@@ -749,10 +756,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var pageToSectionRep = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
-            var (section, sectionRelPageNumber) = pageToSectionRep[i];
+            // SG: per-section page geometry.
+            var (section, sectionRelPageNumber, sectionPage) = pageToSectionRep[i];
             var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
-                section, sectionRelPageNumber, model.Page);
-            var box = new PageBox(i + 1, page, shards[i],
+                section, sectionRelPageNumber, sectionPage);
+            var box = new PageBox(i + 1, sectionPage, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
@@ -877,10 +885,11 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var pageToSectionReb = ComputePageSectionMap(allBlocks, assignment, pageCount, model);
         for (var i = 0; i < pageCount; i++)
         {
-            var (section, sectionRelPageNumber) = pageToSectionReb[i];
+            // SG: per-section page geometry.
+            var (section, sectionRelPageNumber, sectionPage) = pageToSectionReb[i];
             var (hSlot, hName, fSlot, fName) = ResolveHfSlots(
-                section, sectionRelPageNumber, model.Page);
-            var box = new PageBox(i + 1, page, shards[i],
+                section, sectionRelPageNumber, sectionPage);
+            var box = new PageBox(i + 1, sectionPage, shards[i],
                 sourceModel: model,
                 headerSlot: hSlot, headerSlotName: hName,
                 footerSlot: fSlot, footerSlotName: fName,
