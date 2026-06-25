@@ -354,6 +354,195 @@ public sealed class DocumentViewHeadlessTests
         return doc;
     }
 
+    // ---- View mode tests -----------------------------------------------------------------------
+
+    /// <summary>
+    /// WebLayout and Draft modes must report PageCount == 1 regardless of document length.
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task Non_print_modes_report_page_count_of_one(DocumentViewMode mode)
+    {
+        var pageCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument(); // long enough to produce >1 pages in PrintLayout
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.ViewMode = mode;
+            view.Measure(new Size(800, 4000));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+        pageCount.Should().Be(1, $"{mode} is a continuous-column mode — no discrete pages");
+    }
+
+    /// <summary>
+    /// WebLayout and Draft content height must be less than the PrintLayout height for the same
+    /// document because they have no inter-page gaps and no DeskPadding.
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task Non_print_modes_content_height_less_than_print_layout(DocumentViewMode mode)
+    {
+        double printHeight = 0, continuousHeight = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument();
+
+            var print = new DocumentView();
+            print.LoadDocument(doc);
+            print.ViewMode = DocumentViewMode.PrintLayout;
+            print.Measure(new Size(800, double.PositiveInfinity));
+            printHeight = print.DesiredSize.Height;
+
+            var continuous = new DocumentView();
+            continuous.LoadDocument(doc);
+            continuous.ViewMode = mode;
+            continuous.Measure(new Size(800, double.PositiveInfinity));
+            continuousHeight = continuous.DesiredSize.Height;
+        });
+
+        if (!ran)
+            return;
+        continuousHeight.Should().BeLessThan(printHeight,
+            $"{mode} has no inter-page gaps so total height must be less than Print Layout");
+    }
+
+    /// <summary>
+    /// Switching from WebLayout / Draft back to PrintLayout must restore pagination (PageCount > 1
+    /// for a long document).
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task Switching_back_to_print_restores_pagination(DocumentViewMode mode)
+    {
+        var pageCountAfterSwitch = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.ViewMode = mode;
+            view.Measure(new Size(800, 4000));
+            // Now switch back.
+            view.ViewMode = DocumentViewMode.PrintLayout;
+            view.Measure(new Size(800, double.PositiveInfinity));
+            pageCountAfterSwitch = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+        pageCountAfterSwitch.Should().BeGreaterThan(1,
+            "switching back to Print Layout must restore discrete pagination");
+    }
+
+    /// <summary>
+    /// Caret hit-test and selection must work in WebLayout / Draft (the transform is simpler but
+    /// non-zero — content starts at _marginTopDip).
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task Caret_and_editing_work_in_non_print_mode(DocumentViewMode mode)
+    {
+        string? textBefore = null, textAfter = null;
+        var canUndo = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.ViewMode = mode;
+            view.Measure(new Size(800, 4000));
+            textBefore = view.PlainText;
+            view.InsertText("ZZ");
+            textAfter  = view.PlainText;
+            canUndo    = view.CanUndo;
+            view.Undo();
+        });
+
+        if (!ran)
+            return;
+        textAfter.Should().StartWith("ZZ", $"typed text must appear in {mode}");
+        canUndo.Should().BeTrue($"undo must be available after editing in {mode}");
+    }
+
+    /// <summary>
+    /// GetBlockTop must return a non-negative value in WebLayout / Draft — blocks are laid out at
+    /// _marginTopDip + cumulative content Y, never at negative positions.
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task GetBlockTop_returns_non_negative_in_non_print_mode(DocumentViewMode mode)
+    {
+        double blockTop = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.ViewMode = mode;
+            view.Measure(new Size(800, 4000));
+            blockTop = view.GetBlockTop(0);
+        });
+
+        if (!ran)
+            return;
+        blockTop.Should().BeGreaterThanOrEqualTo(0, $"GetBlockTop(0) must be ≥ 0 in {mode}");
+    }
+
+    /// <summary>
+    /// Find must work in WebLayout / Draft: glyphs are still in _placed, just with a simpler Y offset.
+    /// </summary>
+    [Theory]
+    [InlineData(DocumentViewMode.WebLayout)]
+    [InlineData(DocumentViewMode.Draft)]
+    public async Task Find_works_in_non_print_mode(DocumentViewMode mode)
+    {
+        var found = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.ViewMode = mode;
+            view.Measure(new Size(800, 4000));
+            found = view.FindNext("FreeW");
+        });
+
+        if (!ran)
+            return;
+        found.Should().BeTrue($"FindNext must locate text in {mode}");
+    }
+
+    /// <summary>
+    /// ViewModeChanged event is raised when the mode changes and NOT raised when setting the same mode.
+    /// </summary>
+    [Fact]
+    public async Task ViewModeChanged_event_fires_on_change_and_not_on_same_mode()
+    {
+        var changeCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.ViewModeChanged += () => changeCount++;
+
+            view.ViewMode = DocumentViewMode.WebLayout; // 1 change
+            view.ViewMode = DocumentViewMode.WebLayout; // same — no event
+            view.ViewMode = DocumentViewMode.Draft;     // 1 change
+            view.ViewMode = DocumentViewMode.PrintLayout; // 1 change
+        });
+
+        if (!ran)
+            return;
+        changeCount.Should().Be(3, "event fires only when the mode actually changes");
+    }
+
     private static T InvokePrivate<T>(object instance, string name, params object[] args)
     {
         var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
