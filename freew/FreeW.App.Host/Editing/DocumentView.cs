@@ -8364,13 +8364,16 @@ public sealed class DocumentView : RichTextBox
         bool PlotAreaFill,
         bool ShowMarkers,
         bool ShowDataLabels,
+        bool ShowAxisTitles,
         Color[] Palette);
 
     /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
     private static ChartRenderSettings ResolveChartRenderSettings(Chart chart)
     {
-        // Color scheme → palette
-        var scheme = (chart.ColorSchemeId is not null ? ChartColorScheme.FindById(chart.ColorSchemeId) : null)
+        // Color scheme → palette.
+        // Trim the id before lookup so trailing whitespace from XML parsing never causes a miss.
+        var schemeId = chart.ColorSchemeId?.Trim();
+        var scheme = (!string.IsNullOrEmpty(schemeId) ? ChartColorScheme.FindById(schemeId) : null)
                      ?? ChartColorScheme.Default;
         var palette = scheme.Colors.Select(hex => ParseHexColor(hex)).ToArray();
 
@@ -8379,7 +8382,7 @@ public sealed class DocumentView : RichTextBox
                     ?? ChartStyle.Default;
 
         // Quick layout → element visibility (overrides model toggles when set)
-        bool showTitle, showLegend;
+        bool showTitle, showLegend, showAxisTitles;
         bool showGridlines = style.ShowGridlines;
         bool showDataLabels = style.ShowDataLabels;
         if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
@@ -8388,11 +8391,15 @@ public sealed class DocumentView : RichTextBox
             showLegend = ql.ShowLegend && chart.Series.Count > 0;
             showGridlines = ql.ShowGridlines;
             showDataLabels = ql.ShowDataLabels;
+            showAxisTitles = ql.ShowAxisTitles;
         }
         else
         {
             showTitle = !string.IsNullOrEmpty(chart.Title);
             showLegend = (chart.ShowLegend || chart.Series.Count > 1) && chart.Series.Count > 0;
+            // Show axis titles whenever the chart model carries them (regardless of quick layout).
+            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle)
+                          || !string.IsNullOrEmpty(chart.ValueAxisTitle);
         }
 
         return new ChartRenderSettings(
@@ -8402,6 +8409,7 @@ public sealed class DocumentView : RichTextBox
             PlotAreaFill: style.PlotAreaFill,
             ShowMarkers: style.ShowMarkers,
             ShowDataLabels: showDataLabels,
+            ShowAxisTitles: showAxisTitles,
             Palette: palette);
     }
 
@@ -8452,6 +8460,38 @@ public sealed class DocumentView : RichTextBox
             ? new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3))
             : System.Windows.Media.Brushes.Transparent;
 
+        // Axis titles (for non-pie charts): value-axis title on the left (rotated), category-axis title at the bottom.
+        // These are added to the root DockPanel before the plot so they dock outside the plot area.
+        var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var showAxisTitles = !isPie && settings.ShowAxisTitles;
+        if (showAxisTitles && !string.IsNullOrEmpty(chart.ValueAxisTitle))
+        {
+            var valueLabel = new TextBlock
+            {
+                Text = chart.ValueAxisTitle,
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                LayoutTransform = new RotateTransform(-90)
+            };
+            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2) };
+            DockPanel.SetDock(valueHost, Dock.Left);
+            root.Children.Add(valueHost);
+        }
+        if (showAxisTitles && !string.IsNullOrEmpty(chart.CategoryAxisTitle))
+        {
+            var catLabel = new TextBlock
+            {
+                Text = chart.CategoryAxisTitle,
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+            DockPanel.SetDock(catLabel, Dock.Bottom);
+            root.Children.Add(catLabel);
+        }
+
         var plot = new Canvas { Width = plotW, Height = plotH, Background = plotBg };
         switch (chart.Kind)
         {
@@ -8461,8 +8501,10 @@ public sealed class DocumentView : RichTextBox
                 break;
             case ChartKind.Line:
             case ChartKind.Area:
-            case ChartKind.Scatter:
                 DrawLineChart(plot, chart, plotW, plotH, settings: settings);
+                break;
+            case ChartKind.Scatter:
+                DrawScatterChart(plot, chart, plotW, plotH, settings: settings);
                 break;
             case ChartKind.Bar:
                 DrawBarChart(plot, chart, plotW, plotH, horizontal: true, settings: settings);
@@ -8694,6 +8736,82 @@ public sealed class DocumentView : RichTextBox
 
         for (var c = 0; c < cats; c++)
             AddCategoryLabel(plot, chart, c, X(c) - (w / cats) / 2, plotH + 1, w / cats, System.Windows.TextAlignment.Center);
+    }
+
+    /// <summary>
+    /// XY scatter chart: discrete point markers at each (x, y) coordinate with NO connecting line.
+    /// X values come from <see cref="Chart.Categories"/> (parsed as numbers; index used as fallback).
+    /// Each series gets distinct coloured markers (Ellipse). Data labels are placed to the upper-right.
+    /// </summary>
+    private static void DrawScatterChart(Canvas plot, Chart chart, double w, double h, ChartRenderSettings settings)
+    {
+        if (chart.Series.Count == 0)
+            return;
+
+        const double labelStrip = 14;
+        var plotH = Math.Max(8, h - labelStrip);
+        if (settings.ShowGridlines)
+            DrawChartGridlines(plot, plotH, w);
+        plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+
+        // Determine X range from categories (numeric) or fall back to 1..N.
+        var xVals = chart.Categories
+            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
+                                         System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
+            .ToList();
+        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
+        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
+        if (xMax <= xMin) xMax = xMin + 1;
+
+        var yMax = chart.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max();
+        yMax = Math.Max(1.0, yMax);
+
+        double Px(int c)
+        {
+            var xv = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
+            return (xv - xMin) / (xMax - xMin) * w;
+        }
+        double Py(double val) => plotH - plotH * (Math.Max(0, val) / yMax);
+
+        const double markerR = 4; // radius in pixels
+
+        for (var s = 0; s < chart.Series.Count; s++)
+        {
+            var vals = chart.Series[s].Values;
+            var color = new SolidColorBrush(settings.Palette[s % settings.Palette.Length]);
+
+            for (var c = 0; c < vals.Count; c++)
+            {
+                var px = Px(c);
+                var py = Py(vals[c]);
+
+                // Filled circle marker — no connecting line.
+                var dot = new System.Windows.Shapes.Ellipse
+                {
+                    Width = markerR * 2,
+                    Height = markerR * 2,
+                    Fill = color,
+                    Stroke = System.Windows.Media.Brushes.White,
+                    StrokeThickness = 0.5
+                };
+                Canvas.SetLeft(dot, px - markerR);
+                Canvas.SetTop(dot, py - markerR);
+                plot.Children.Add(dot);
+
+                if (settings.ShowDataLabels)
+                    AddDataLabel(plot, vals[c], px + markerR + 2, py - 10);
+            }
+        }
+
+        // X-axis category labels at bottom.
+        for (var c = 0; c < chart.Categories.Count; c++)
+        {
+            if (string.IsNullOrEmpty(chart.Categories[c]))
+                continue;
+            var px = Px(c);
+            var catW = w / Math.Max(1, chart.Categories.Count);
+            AddCategoryLabel(plot, chart, c, px - catW / 2, plotH + 1, catW, System.Windows.TextAlignment.Center);
+        }
     }
 
     /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>

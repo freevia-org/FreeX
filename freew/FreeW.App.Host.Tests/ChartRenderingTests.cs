@@ -197,4 +197,79 @@ public sealed class ChartRenderingTests
         view.ApplySelectedChartQuickLayout(ChartQuickLayout.Catalog[2]); // Layout 3
         chart.QuickLayoutId.Should().Be(3);
     }
+
+    // ── Bug-fix regression tests (2026-06-25) ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Bug fix: Scatter chart must NOT dispatch to DrawLineChart (no Polyline), but instead render
+    /// discrete Ellipse markers at each (x,y) point. Regression test for B-charts fix #1.
+    /// </summary>
+    [StaFact]
+    public void ScatterChart_RendersEllipseMarkersAndNoPolylines()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = new Chart { Kind = ChartKind.Scatter, Title = "Height vs Weight" };
+        chart.Categories.AddRange(new[] { "155", "160", "165", "170", "175" });
+        chart.Series.Add(new ChartSeries("Sample", new double[] { 52, 58, 63, 68, 74 }));
+        view.InsertChart(chart);
+
+        // After fix: scatter → DrawScatterChart → Ellipse markers, NO connecting Polyline.
+        var polylines = LogicalDescendants<System.Windows.Shapes.Polyline>(view.Document);
+        Assert.Empty(polylines);
+
+        // One Ellipse per data point (5 points × 1 series = 5 markers).
+        var ellipses = LogicalDescendants<System.Windows.Shapes.Ellipse>(view.Document);
+        Assert.Equal(5, ellipses.Count);
+    }
+
+    /// <summary>
+    /// Bug fix: ColorSchemeId lookup must return the named scheme, not the default. Verifies that
+    /// <c>ChartColorScheme.FindById</c> doesn't silently fall through to colorful1 default.
+    /// Regression test for B-charts fix #2.
+    /// </summary>
+    [StaFact]
+    public void ColorScheme_Colorful2_SeriesZeroIsOrangeNotBlue()
+    {
+        // colorful2 palette: Colors[0] = "#ED7D31" (orange). colorful1 Colors[0] = "#4472C4" (blue).
+        // If FindById returns null and falls back to Default (colorful1), series 0 will be blue.
+        var view = ViewWithStyledChart(colorSchemeId: "colorful2");
+        var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
+        var bars = rects.Where(r => r.Height > 5).ToList();
+        Assert.True(bars.Count > 0, "expected at least one bar rectangle");
+
+        var fill = bars[0].Fill as System.Windows.Media.SolidColorBrush;
+        Assert.NotNull(fill);
+        // colorful2 first color #ED7D31 → R=0xED, G=0x7D, B=0x31
+        Assert.Equal(0xED, fill!.Color.R);
+        Assert.Equal(0x7D, fill.Color.G);
+        Assert.Equal(0x31, fill.Color.B);
+    }
+
+    /// <summary>
+    /// Bug fix: axis titles (ValueAxisTitle / CategoryAxisTitle) must appear in the chart when set.
+    /// Regression test for B-charts fix #3.
+    /// </summary>
+    [StaFact]
+    public void AxisTitles_WhenSet_AreRenderedAsTextBlocks()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = new Chart
+        {
+            Kind = ChartKind.Scatter,
+            Title = "Height vs Weight",
+            ValueAxisTitle = "Weight (kg)",
+            CategoryAxisTitle = "Height (cm)"
+        };
+        chart.Categories.AddRange(new[] { "155", "160", "165" });
+        chart.Series.Add(new ChartSeries("S", new double[] { 52, 58, 63 }));
+        view.InsertChart(chart);
+
+        var allTexts = LogicalDescendants<System.Windows.Controls.TextBlock>(view.Document)
+            .Select(tb => tb.Text)
+            .ToList();
+        Assert.Contains("Weight (kg)", allTexts);
+        Assert.Contains("Height (cm)", allTexts);
+    }
 }

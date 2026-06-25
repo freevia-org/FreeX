@@ -182,19 +182,40 @@ internal static class SmartArtRenderer
                 padding: new Thickness(8, 5, 8, 5),
                 minWidth: 50));
 
-            // Arrow connector between nodes.
+            // Arrow connector between nodes: use a darker/neutral shade so it is visible against any box fill.
+            // We darken the current node's fill color rather than repeating it verbatim.
             if (i < nodes.Count - 1)
-                panel.Children.Add(MakeArrow(colorScheme.FillHexAt(i)));
+            {
+                var boxFill = ParseHex(colorScheme.FillHexAt(i));
+                var arrowFill = ArrowContrastFill(boxFill);
+                panel.Children.Add(MakeArrow(arrowFill));
+            }
         }
         return panel;
     }
 
-    private static FrameworkElement MakeArrow(string fillHex)
+    /// <summary>
+    /// Derives a visually distinct arrow fill from a box fill colour: darkens the fill by ~30% so the
+    /// triangle sits visibly between two boxes of the same or similar colour. Falls back to dark grey when
+    /// the fill is already very dark (luminance &lt; 0.25).
+    /// </summary>
+    private static Color ArrowContrastFill(Color boxFill)
+    {
+        // Approximate luminance (simplified sRGB, no gamma).
+        var lum = (boxFill.R * 0.299 + boxFill.G * 0.587 + boxFill.B * 0.114) / 255.0;
+        // Dark fill: lighten the arrow so it is still visible.
+        if (lum < 0.25)
+            return AdjustBrightness(boxFill, +0.30);
+        // Light-to-mid fill: darken significantly.
+        return AdjustBrightness(boxFill, -0.30);
+    }
+
+    private static FrameworkElement MakeArrow(Color fill)
     {
         var arrow = new Polygon
         {
             Points = new PointCollection([new Point(0, 5), new Point(8, 10), new Point(0, 15)]),
-            Fill = new SolidColorBrush(ParseHex(fillHex)),
+            Fill = new SolidColorBrush(fill),
             Stretch = Stretch.Uniform,
             Width = 12,
             Height = 18,
