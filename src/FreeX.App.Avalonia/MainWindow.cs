@@ -695,8 +695,8 @@ public sealed partial class MainWindow : Window
     private GridRange? _selectionMoveSourceRange;
     private GridRange? _selectionMovePreviewRange;
     private CellAddress _selectionMoveStartCell;
-    private IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> _sparklinesByCell =
-        new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
+    private IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> _sparklinesByCell =
+        new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
     private string? _formulaBoxEditOriginalText;
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
@@ -709,6 +709,18 @@ public sealed partial class MainWindow : Window
     private Guid? _selectedDrawingObjectId;
     private readonly AvaloniaRibbonContextSource _ribbonContextSource = new();
     private Action? _refreshRibbonToggleStates;
+
+    /// <summary>
+    /// Holds everything a <see cref="SparklineCellPanel"/> needs: the numeric series, the full
+    /// <see cref="SparklineModel"/> (colors, markers, axis flags, line weight), and the axis-bound
+    /// overrides pre-computed from group/custom scaling so construction is O(1) per cell.
+    /// </summary>
+    private sealed record SparklineCellEntry(
+        IReadOnlyList<double> Values,
+        SparklineModel Sparkline,
+        double? OverrideMin,
+        double? OverrideMax,
+        double? OverrideMaxAbs);
 
     private sealed record HeaderResizeDrag(
         HeaderResizeKind Kind,
@@ -5925,24 +5937,104 @@ public sealed partial class MainWindow : Window
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
     /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
-    /// drawable data don't get an empty panel.
+    /// drawable data don't get an empty panel. Group scaling (min/max/maxAbs) is pre-computed here
+    /// so each <see cref="SparklineCellPanel"/> receives the correct axis overrides at construction.
     /// </summary>
-    private static IReadOnlyDictionary<(uint Row, uint Col), (IReadOnlyList<double> Values, SparklineKind Kind)> BuildSparklineCellLookup(Sheet sheet)
+    private static IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> BuildSparklineCellLookup(Sheet sheet)
     {
-        var lookup = new Dictionary<(uint Row, uint Col), (IReadOnlyList<double>, SparklineKind)>();
+        var lookup = new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
         if (sheet.Sparklines.Count == 0)
             return lookup;
 
         var values = SparklineRenderPlanner.BuildValues(sheet);
+
+        // ── Pre-compute group scaling bounds ──────────────────────────────────
+        // When MinAxisType or MaxAxisType == Group, find the shared min/max across all
+        // sparklines that share the same GroupId, mirroring the WPF RenderSparklines logic.
+        var groupMin    = new Dictionary<int, double>(); // groupId → shared min
+        var groupMax    = new Dictionary<int, double>(); // groupId → shared max
+        var groupMaxAbs = new Dictionary<int, double>(); // groupId → shared maxAbs (column)
+
+        foreach (var sp in sheet.Sparklines)
+        {
+            if ((sp.MinAxisType == SparklineAxisScaling.Group ||
+                 sp.MaxAxisType == SparklineAxisScaling.Group) &&
+                values.TryGetValue(sp.Id, out var groupVals) && groupVals.Count > 0)
+            {
+                if (!groupMin.ContainsKey(sp.GroupId))
+                {
+                    groupMin[sp.GroupId]    = double.MaxValue;
+                    groupMax[sp.GroupId]    = double.MinValue;
+                    groupMaxAbs[sp.GroupId] = 0;
+                }
+
+                foreach (var v in groupVals)
+                {
+                    if (!double.IsFinite(v)) continue;
+                    if (v < groupMin[sp.GroupId])    groupMin[sp.GroupId]    = v;
+                    if (v > groupMax[sp.GroupId])    groupMax[sp.GroupId]    = v;
+                    var abs = Math.Abs(v);
+                    if (abs > groupMaxAbs[sp.GroupId]) groupMaxAbs[sp.GroupId] = abs;
+                }
+            }
+        }
+
+        // ── Build per-cell entries with resolved axis overrides ───────────────
         foreach (var sparkline in sheet.Sparklines)
         {
             if (!values.TryGetValue(sparkline.Id, out var series) || series.Count == 0)
                 continue;
 
-            lookup[(sparkline.Location.Row, sparkline.Location.Col)] = (series, sparkline.Kind);
+            var overrideMin    = ResolveSparklineGroupMin(sparkline, groupMin);
+            var overrideMax    = ResolveSparklineGroupMax(sparkline, groupMax);
+            var overrideMaxAbs = ResolveSparklineGroupMaxAbs(sparkline, groupMax, groupMaxAbs);
+
+            lookup[(sparkline.Location.Row, sparkline.Location.Col)] =
+                new SparklineCellEntry(series, sparkline, overrideMin, overrideMax, overrideMaxAbs);
         }
 
         return lookup;
+    }
+
+    private static double? ResolveSparklineGroupMin(SparklineModel sp, Dictionary<int, double> groupMin) =>
+        sp.MinAxisType switch
+        {
+            SparklineAxisScaling.Custom => sp.ManualMin,
+            SparklineAxisScaling.Group  =>
+                groupMin.TryGetValue(sp.GroupId, out var v) && v != double.MaxValue ? v : null,
+            _ => null,
+        };
+
+    private static double? ResolveSparklineGroupMax(SparklineModel sp, Dictionary<int, double> groupMax) =>
+        sp.MaxAxisType switch
+        {
+            SparklineAxisScaling.Custom => sp.ManualMax,
+            SparklineAxisScaling.Group  =>
+                groupMax.TryGetValue(sp.GroupId, out var v) && v != double.MinValue ? v : null,
+            _ => null,
+        };
+
+    private static double? ResolveSparklineGroupMaxAbs(
+        SparklineModel sp,
+        Dictionary<int, double> groupMax,
+        Dictionary<int, double> groupMaxAbs)
+    {
+        // Custom axis wins for its side; take the larger abs when both apply.
+        double? customAbs = null;
+        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
+            customAbs = Math.Abs(sp.ManualMax.Value);
+        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
+        {
+            var absMin = Math.Abs(sp.ManualMin.Value);
+            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
+        }
+
+        double? groupAbs = null;
+        if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
+            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
+
+        if (customAbs.HasValue && groupAbs.HasValue) return Math.Max(customAbs.Value, groupAbs.Value);
+        return customAbs ?? groupAbs;
     }
 
     private Border CreateCell(DisplayCell cell, uint row, uint col, double zoomFactor, double cellWidth, double cellHeight)
@@ -6006,8 +6098,13 @@ public sealed partial class MainWindow : Window
 
         // Sparklines live per-cell on the sheet (keyed by Location). When one anchors here, build a
         // binding-free panel that paints the series geometry behind the cell text.
-        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparkline)
-            ? new SparklineCellPanel(sparkline.Values, sparkline.Kind)
+        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparklineEntry)
+            ? new SparklineCellPanel(
+                sparklineEntry.Values,
+                sparklineEntry.Sparkline,
+                sparklineEntry.OverrideMin,
+                sparklineEntry.OverrideMax,
+                sparklineEntry.OverrideMaxAbs)
             : null;
 
         return CreateInteractiveCellBorder(
