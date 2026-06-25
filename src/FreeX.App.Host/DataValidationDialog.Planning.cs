@@ -338,7 +338,8 @@ public partial class DataValidationDialog
     }
 
     private static bool TryParseNumber(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) ||
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
     private static bool IsWholeNumber(double value) =>
         double.IsFinite(value) && Math.Abs(value - Math.Round(value)) <= double.Epsilon;

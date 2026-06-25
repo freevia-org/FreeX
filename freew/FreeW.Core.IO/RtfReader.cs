@@ -92,6 +92,8 @@ public static class RtfReader
         private TableRow? _currentRow;
         private TableCell? _currentCell;
         private readonly List<Paragraph> _cellParagraphs = new();
+        // Cumulative \cellxN boundary positions (twips) for the current row definition, cleared on \trowd.
+        private readonly List<int> _cellxBoundaries = new();
 
         // Header tables resolved while parsing: \colortbl entries (the leading bare ';' defines index 0 =
         // auto/null) and \fonttbl names keyed by \fN id.
@@ -356,6 +358,11 @@ public static class RtfReader
                 // ---- tables ----
                 case "intbl": _state.InTable = true; break;
                 case "trowd": BeginRow(); break;
+                case "cellx":
+                    // Record the cumulative right-edge boundary of the next cell in twips.
+                    if (param is { } cellxTwips)
+                        _cellxBoundaries.Add(cellxTwips);
+                    break;
                 case "cell": EndCell(); break;
                 case "row": EndRow(); break;
                 case "nestcell": EndCell(); break;
@@ -689,6 +696,7 @@ public static class RtfReader
             _currentRow = new TableRow();
             _cellParagraphs.Clear();
             _currentCell = new TableCell();
+            _cellxBoundaries.Clear();
         }
 
         private void EndCellParagraph()
@@ -716,6 +724,18 @@ public static class RtfReader
             // A cell may have content not yet closed by \cell (some writers omit the final \cell before \row).
             if (_cellParagraphs.Count > 0 || _currentText.Length > 0 || _currentRuns.Count > 0)
                 EndCell();
+
+            // Apply per-cell widths from the \cellxN boundary list. The first cell's width is boundary[0]
+            // (from the row's left edge at 0); each subsequent cell's width is boundary[i] - boundary[i-1].
+            // Width is in points: twips / 20 (20 twips per point, 1440 twips per inch = 72 pt/inch).
+            if (_cellxBoundaries.Count == _currentRow.Cells.Count && _cellxBoundaries.Count > 0)
+            {
+                for (var i = 0; i < _currentRow.Cells.Count; i++)
+                {
+                    var prev = i == 0 ? 0 : _cellxBoundaries[i - 1];
+                    _currentRow.Cells[i].WidthPt = (_cellxBoundaries[i] - prev) / 20.0;
+                }
+            }
 
             _currentTable.Rows.Add(_currentRow);
             _currentRow = null;
