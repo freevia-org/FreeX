@@ -1157,6 +1157,19 @@ public sealed class SlideCanvas : FrameworkElement
         // P1: Use Display formatting mode for GDI-compatible metrics (matches PowerPoint's
         // pixel-grid-snapped text rendering at 96 DPI). pixelsPerDip = 1.0 is correct for
         // RenderTargetBitmap at 96 DPI.
+        //
+        // Wave 6A investigation: GlyphRun-based text rendering was evaluated as an alternative
+        // to FormattedText. Baseline parity measurements on text-heavy decks showed:
+        //   01-title-slide   : 1.3158% mean channel diff
+        //   03-mixed-text    : 1.0469% mean channel diff
+        //   04-picture       : 0.1498% mean channel diff
+        // Visual inspection and heatmap analysis confirmed the residual diff is pure ClearType
+        // sub-pixel antialiasing fringing (red/green halos on glyph stroke edges), not position
+        // or metrics errors. PowerPoint's PNG export uses DirectWrite directly; WPF's rendering
+        // pipeline (both FormattedText and GlyphRun) applies a different ClearType configuration.
+        // GlyphRun uses the same WPF rasterizer so it cannot reduce this AA-floor residual.
+        // Decision: keep FormattedText. The ~1% residual is an antialiasing floor, not fixable
+        // via metrics changes within the WPF rendering pipeline.
         var ft = new FormattedText(
             text,
             System.Globalization.CultureInfo.CurrentUICulture,
