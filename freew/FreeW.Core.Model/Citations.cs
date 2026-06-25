@@ -19,6 +19,38 @@ public enum CitationStyle
 
     /// <summary>Institute of Electrical and Electronics Engineers (numeric in-text; author-first entries).</summary>
     Ieee = 3,
+
+    /// <summary>
+    /// Turabian (Notes-Bibliography variant; author–date in-text similar to Chicago, bibliography
+    /// ordering and heading identical to Chicago). Numeric values are stable.
+    /// </summary>
+    Turabian = 4,
+
+    /// <summary>
+    /// Harvard (author–date; in-text <c>(Author, Year)</c> like APA; bibliography: <c>Author Year, Title,
+    /// Publisher.</c> — the year comes immediately after the author).
+    /// </summary>
+    Harvard = 5,
+
+    /// <summary>
+    /// Vancouver (numeric; in-text <c>[n]</c>; bibliography entries are numbered and omit the title's
+    /// quotation marks, following the NLM/ICMJE medical-journal style).
+    /// </summary>
+    Vancouver = 6,
+
+    /// <summary>
+    /// GOST R 7.0.5-2008 (Russian national standard; Cyrillic-aware but ASCII-compatible for FreeW's
+    /// model; author–year in-text; bibliography: Author. Title. City: Publisher, Year. — pages/journal
+    /// come after the publisher).
+    /// </summary>
+    Gost = 7,
+
+    /// <summary>
+    /// ISO 690 (international bibliographic standard; author–date in-text identical to Harvard/APA;
+    /// bibliography: AUTHOR, Year. Title. Publisher. DOI/URL. — family-name in SMALL-CAPS is approximated
+    /// in FreeW with ALL-CAPS on the author segment).
+    /// </summary>
+    Iso690 = 8,
 }
 
 /// <summary>
@@ -63,34 +95,40 @@ public static class Citations
     public const string EntryStyleId = "BibliographyEntry";
 
     /// <summary>
-    /// The bibliography heading text for <paramref name="style"/>: <c>References</c> (APA / IEEE),
-    /// <c>Works Cited</c> (MLA), or <c>Bibliography</c> (Chicago).
+    /// The bibliography heading text for <paramref name="style"/>:
+    /// <c>Works Cited</c> (MLA), <c>Bibliography</c> (Chicago / Turabian), or <c>References</c> for all
+    /// others (APA, IEEE, Harvard, Vancouver, GOST, ISO-690).
     /// </summary>
     public static string HeadingTextFor(CitationStyle style) => style switch
     {
         CitationStyle.Mla => "Works Cited",
-        CitationStyle.Chicago => "Bibliography",
+        CitationStyle.Chicago or CitationStyle.Turabian => "Bibliography",
         _ => "References",
     };
 
     /// <summary>
-    /// The stable style name for <paramref name="style"/> — <c>APA</c>, <c>MLA</c>, <c>Chicago</c> or
-    /// <c>IEEE</c> — as used by the References &gt; Citation Style combo and persisted to the docx
-    /// bibliography part (<c>b:Sources/@SelectedStyle</c>). Round-trips with <see cref="ParseStyle"/>.
+    /// The stable style name for <paramref name="style"/> — <c>APA</c>, <c>MLA</c>, <c>Chicago</c>,
+    /// <c>IEEE</c>, <c>Turabian</c>, <c>Harvard</c>, <c>Vancouver</c>, <c>GOST</c>, <c>ISO690</c> — as used
+    /// by the References &gt; Citation Style combo and persisted to the docx bibliography part
+    /// (<c>b:Sources/@SelectedStyle</c>). Round-trips with <see cref="ParseStyle"/>.
     /// </summary>
     public static string StyleName(CitationStyle style) => style switch
     {
         CitationStyle.Mla => "MLA",
         CitationStyle.Chicago => "Chicago",
         CitationStyle.Ieee => "IEEE",
+        CitationStyle.Turabian => "Turabian",
+        CitationStyle.Harvard => "Harvard",
+        CitationStyle.Vancouver => "Vancouver",
+        CitationStyle.Gost => "GOST",
+        CitationStyle.Iso690 => "ISO690",
         _ => "APA",
     };
 
     /// <summary>
-    /// Parses a style name (case-insensitively; <c>APA</c> / <c>MLA</c> / <c>Chicago</c> / <c>IEEE</c>) back
-    /// to a <see cref="CitationStyle"/>. An unrecognised or blank value yields the supplied
-    /// <paramref name="fallback"/> (default <see cref="CitationStyle.Apa"/>) so unknown persisted styles
-    /// degrade to the original behaviour. Inverse of <see cref="StyleName"/>.
+    /// Parses a style name (case-insensitively) back to a <see cref="CitationStyle"/>. An unrecognised or
+    /// blank value yields the supplied <paramref name="fallback"/> (default <see cref="CitationStyle.Apa"/>)
+    /// so unknown persisted styles degrade to the original behaviour. Inverse of <see cref="StyleName"/>.
     /// </summary>
     public static CitationStyle ParseStyle(string? name, CitationStyle fallback = CitationStyle.Apa) =>
         (name?.Trim().ToUpperInvariant()) switch
@@ -98,6 +136,11 @@ public static class Citations
             "MLA" => CitationStyle.Mla,
             "CHICAGO" => CitationStyle.Chicago,
             "IEEE" => CitationStyle.Ieee,
+            "TURABIAN" => CitationStyle.Turabian,
+            "HARVARD" => CitationStyle.Harvard,
+            "VANCOUVER" => CitationStyle.Vancouver,
+            "GOST" => CitationStyle.Gost,
+            "ISO690" => CitationStyle.Iso690,
             "APA" => CitationStyle.Apa,
             _ => fallback,
         };
@@ -131,10 +174,11 @@ public static class Citations
         var year = source.Year?.Trim() ?? string.Empty;
 
         string inner;
-        if (style == CitationStyle.Ieee)
+
+        // Numeric styles — IEEE and Vancouver — use bracketed reference numbers when cited by position;
+        // without a known position, bracket the author or tag as a placeholder.
+        if (style is CitationStyle.Ieee or CitationStyle.Vancouver)
         {
-            // IEEE is numeric and bracketed; without a known reference index, cite the tag (then author/year)
-            // inside square brackets so the in-text marker still resolves to a source.
             if (author.Length > 0)
                 inner = author;
             else if (year.Length > 0)
@@ -156,8 +200,11 @@ public static class Citations
         }
         else if (author.Length > 0 && year.Length > 0)
         {
-            // APA separates author and year with a comma; Chicago author–date uses a space.
-            inner = style == CitationStyle.Chicago ? $"{author} {year}" : $"{author}, {year}";
+            // Chicago and Turabian (author–date): (Author Year) — space between.
+            // APA, Harvard, GOST, ISO-690: (Author, Year) — comma between.
+            inner = style is CitationStyle.Chicago or CitationStyle.Turabian
+                ? $"{author} {year}"
+                : $"{author}, {year}";
         }
         else if (author.Length > 0)
             inner = author;
@@ -182,7 +229,7 @@ public static class Citations
     /// fall back to <see cref="FormatInText(Source, CitationStyle)"/>. <paramref name="number"/> is 1-based.
     /// </summary>
     public static string FormatInText(int number, CitationStyle style) =>
-        style == CitationStyle.Ieee ? $"[{number}]" : string.Empty;
+        style is CitationStyle.Ieee or CitationStyle.Vancouver ? $"[{number}]" : string.Empty;
 
     /// <summary>
     /// Formats a source as a bibliography entry using the default <see cref="CitationStyle.Apa"/> style:
@@ -213,6 +260,11 @@ public static class Citations
         {
             CitationStyle.Apa => FormatApaEntry(source),
             CitationStyle.Ieee => FormatIeeeEntry(source),
+            CitationStyle.Vancouver => FormatVancouverEntry(source),
+            CitationStyle.Harvard => FormatHarvardEntry(source),
+            CitationStyle.Gost => FormatGostEntry(source),
+            CitationStyle.Iso690 => FormatIso690Entry(source),
+            // Turabian author–date bibliography is identical to Chicago's ordering.
             _ => FormatAuthorTitlePublisherYearEntry(source),
         };
     }
@@ -334,6 +386,175 @@ public static class Citations
         var head = before.Count > 0 ? string.Join(", ", before) + ", " : string.Empty;
         var body = tail.Length > 0 ? $"{quotedTitle} {tail}" : quotedTitle;
         return head + body;
+    }
+
+    // Vancouver: [N]. Author. Title. Journal. Year;Volume(Issue):Pages.  /  book: Author. Title. City: Publisher; Year.
+    // Vancouver is primarily numeric; without a reference number the author is the lead segment.
+    // The core NLM style: Author. Title. Journal Year;Vol(Issue):Pages.
+    private static string FormatVancouverEntry(Source source)
+    {
+        var segments = new List<string>(5);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        if (author.Length > 0)
+            segments.Add(WithPeriod(author));
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length > 0)
+            segments.Add(WithPeriod(title));
+
+        // Type-specific: journal uses condensed Vancouver citation string; books use Publisher, Year.
+        if (source.Type == SourceType.JournalArticle)
+        {
+            // Build: Journal. Year;Vol(Issue):Pages.
+            var journalParts = new List<string>(2);
+            if (NonEmpty(source.Journal) is { } j)
+                journalParts.Add(j);
+            var yearVolIssuePage = new System.Text.StringBuilder();
+            if (NonEmpty(source.Year) is { } y)
+                yearVolIssuePage.Append(y);
+            if (NonEmpty(source.Volume) is { } vol)
+                yearVolIssuePage.Append(';').Append(vol);
+            if (NonEmpty(source.Issue) is { } iss)
+                yearVolIssuePage.Append('(').Append(iss).Append(')');
+            if (NonEmpty(source.Pages) is { } pg)
+                yearVolIssuePage.Append(':').Append(pg);
+            if (yearVolIssuePage.Length > 0)
+                journalParts.Add(yearVolIssuePage.ToString());
+            if (journalParts.Count > 0)
+                segments.Add(WithPeriod(string.Join(". ", journalParts)));
+        }
+        else
+        {
+            // Book / website: Publisher; Year.
+            var tail = new List<string>(2);
+            AddIfPresent(tail, source.Publisher);
+            AddIfPresent(tail, source.Year);
+            if (tail.Count > 0)
+                segments.Add(WithPeriod(string.Join("; ", tail)));
+        }
+
+        return string.Join(" ", segments);
+    }
+
+    // Harvard: Author Year, Title, Publisher.
+    // In-text: (Author, Year) — identical to APA. Bibliography year comes directly after the author.
+    private static string FormatHarvardEntry(Source source)
+    {
+        var segments = new List<string>(4);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        var year = source.Year?.Trim() ?? string.Empty;
+
+        // Author Year combined: "Author Year," or just "Author." or just "Year," etc.
+        if (author.Length > 0 && year.Length > 0)
+            segments.Add($"{author} {year},");
+        else if (author.Length > 0)
+            segments.Add(WithPeriod(author));
+        else if (year.Length > 0)
+            segments.Add($"{year},");
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length > 0)
+            segments.Add(WithPeriod(title));
+
+        var detail = string.Join(", ", SourceDetail(source));
+        if (detail.Length > 0)
+            segments.Add(WithPeriod(detail));
+
+        return string.Join(" ", segments);
+    }
+
+    // GOST R 7.0.5-2008: Author. Title. City: Publisher, Year. — pages/journal come after publisher.
+    // For journal articles: Author. Title. Journal. Year. Vol. Issue. Pp. Pages.
+    private static string FormatGostEntry(Source source)
+    {
+        var segments = new List<string>(5);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        if (author.Length > 0)
+            segments.Add(WithPeriod(author));
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length > 0)
+            segments.Add(WithPeriod(title));
+
+        if (source.Type == SourceType.JournalArticle)
+        {
+            // Journal. Year. Vol. Volume. Issue. Pages.
+            AddIfPresent(segments, source.Journal);
+            var year = source.Year?.Trim() ?? string.Empty;
+            if (year.Length > 0)
+                segments.Add(year + ".");
+            if (NonEmpty(source.Volume) is { } vol)
+                segments.Add($"Vol. {vol}.");
+            if (NonEmpty(source.Issue) is { } iss)
+                segments.Add($"No. {iss}.");
+            if (NonEmpty(source.Pages) is { } pg)
+                segments.Add($"Pp. {pg}.");
+        }
+        else
+        {
+            // City: Publisher, Year.  (GOST typically uses City but FreeW has no City field; use Publisher.)
+            var publisher = source.Publisher?.Trim() ?? string.Empty;
+            var year = source.Year?.Trim() ?? string.Empty;
+            if (publisher.Length > 0 && year.Length > 0)
+                segments.Add($"{publisher}, {year}.");
+            else if (publisher.Length > 0)
+                segments.Add(WithPeriod(publisher));
+            else if (year.Length > 0)
+                segments.Add($"{year}.");
+        }
+
+        return string.Join(" ", segments);
+    }
+
+    // ISO 690: AUTHOR, Year. Title. Place: Publisher.
+    // Family name in SMALL CAPS; FreeW approximates with ALL-CAPS on the author segment.
+    // For journal articles: AUTHOR, Year. Title. Journal, Volume(Issue), pages.
+    private static string FormatIso690Entry(Source source)
+    {
+        var segments = new List<string>(5);
+
+        var author = source.Author?.Trim() ?? string.Empty;
+        var year = source.Year?.Trim() ?? string.Empty;
+
+        // Author in ALL-CAPS + year: "AUTHOR, Year."
+        if (author.Length > 0 && year.Length > 0)
+            segments.Add($"{author.ToUpperInvariant()}, {year}.");
+        else if (author.Length > 0)
+            segments.Add(WithPeriod(author.ToUpperInvariant()));
+        else if (year.Length > 0)
+            segments.Add($"{year}.");
+
+        var title = source.Title?.Trim() ?? string.Empty;
+        if (title.Length > 0)
+            segments.Add(WithPeriod(title));
+
+        if (source.Type == SourceType.JournalArticle)
+        {
+            // Journal, Volume(Issue), Pages.
+            var detailParts = new List<string>(3);
+            AddIfPresent(detailParts, source.Journal);
+            if (NonEmpty(source.Volume) is { } vol)
+            {
+                var volStr = vol;
+                if (NonEmpty(source.Issue) is { } iss)
+                    volStr = vol + $"({iss})";
+                detailParts.Add(volStr);
+            }
+            AddIfPresent(detailParts, source.Pages);
+            if (detailParts.Count > 0)
+                segments.Add(WithPeriod(string.Join(", ", detailParts)));
+        }
+        else
+        {
+            var publisher = source.Publisher?.Trim() ?? string.Empty;
+            if (publisher.Length > 0)
+                segments.Add(WithPeriod(publisher));
+        }
+
+        return string.Join(" ", segments);
     }
 
     private static string? NonEmpty(string? value)

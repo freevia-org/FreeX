@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
 
@@ -18,20 +19,37 @@ namespace FreeW.App.Host;
 /// </para>
 ///
 /// <para>
-/// The result carries the resolved file path and the (possibly user-overridden) author string ready for
-/// <see cref="FreeW.Core.Model.DocumentCompare.Compare"/>. The date is stamped by the calling command
-/// (UI side) so the pure model helper stays deterministic.
+/// A "More &gt;&gt;" expander reveals the Comparison Settings panel: check-boxes for which changes to track
+/// (insertions, deletions, moves, formatting, comments, case changes, whitespace) and a "Show changes in:"
+/// radio group (New Document / Original / Revised). These surface <see cref="CompareSettings"/> that are
+/// passed straight through to <see cref="FreeW.Core.Model.DocumentCompare.Compare"/>. The date is stamped
+/// by the calling command (UI side) so the pure model helper stays deterministic.
 /// </para>
 /// </summary>
 internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     /// <summary>What the dialog returns when the user clicks OK.</summary>
-    internal sealed record Result(string OriginalFilePath, string Author);
+    internal sealed record Result(string OriginalFilePath, string Author, CompareSettings Settings);
 
     private const string DocxFilter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
 
     private readonly string _originalPath;
     private readonly TextBox _authorBox;
+
+    // Comparison Settings checkboxes.
+    private readonly CheckBox _chkInsertions;
+    private readonly CheckBox _chkDeletions;
+    private readonly CheckBox _chkMoves;
+    private readonly CheckBox _chkComments;
+    private readonly CheckBox _chkFormatting;
+    private readonly CheckBox _chkCaseChanges;
+    private readonly CheckBox _chkWhitespace;
+
+    // Show changes in radio buttons.
+    private readonly RadioButton _radioNew;
+    private readonly RadioButton _radioOriginal;
+    private readonly RadioButton _radioRevised;
+
     private Result? _result;
 
     private CompareDocumentsDialog(Window? owner, string originalPath, string defaultAuthor, string revisedTitle)
@@ -40,7 +58,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         Owner = owner;
         Title = "Compare Documents";
-        Width = 440;
+        Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -53,11 +71,48 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             MaxWidth = 260
         };
 
-        // Grid: 2 read-only path rows, a separator, the author row, then OK/Cancel.
+        // ---- Comparison Settings (all on by default, matching Word) ----
+        _chkInsertions  = MakeCheckBox("Insertions and deletions", true);
+        _chkDeletions   = MakeCheckBox("Deletions", true);
+        _chkMoves       = MakeCheckBox("Moves", true);
+        _chkComments    = MakeCheckBox("Comments", true);
+        _chkFormatting  = MakeCheckBox("Formatting", true);
+        _chkCaseChanges = MakeCheckBox("Case changes", true);
+        _chkWhitespace  = MakeCheckBox("White space", true);
+
+        var settingsPanel = new StackPanel { Margin = new Thickness(16, 4, 0, 4) };
+        settingsPanel.Children.Add(new TextBlock { Text = "Mark up which changes:", FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        settingsPanel.Children.Add(_chkInsertions);
+        settingsPanel.Children.Add(_chkDeletions);
+        settingsPanel.Children.Add(_chkMoves);
+        settingsPanel.Children.Add(_chkComments);
+        settingsPanel.Children.Add(_chkFormatting);
+        settingsPanel.Children.Add(_chkCaseChanges);
+        settingsPanel.Children.Add(_chkWhitespace);
+
+        settingsPanel.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
+        settingsPanel.Children.Add(new TextBlock { Text = "Show changes in:", FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        _radioNew      = new RadioButton { Content = "New document", IsChecked = true, Margin = new Thickness(0, 0, 0, 2) };
+        _radioOriginal = new RadioButton { Content = "Original document", Margin = new Thickness(0, 0, 0, 2) };
+        _radioRevised  = new RadioButton { Content = "Revised document", Margin = new Thickness(0, 0, 0, 2) };
+        settingsPanel.Children.Add(_radioNew);
+        settingsPanel.Children.Add(_radioOriginal);
+        settingsPanel.Children.Add(_radioRevised);
+
+        // ---- "More >>" expander ----
+        var expander = new Expander
+        {
+            Header = "More",
+            Content = settingsPanel,
+            IsExpanded = false,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+
+        // Grid: 2 read-only path rows, separator, author row, expander, then OK/Cancel.
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         AddReadOnlyRow(grid, 0, "Original:", TruncatePath(originalPath));
@@ -71,14 +126,21 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         AddFieldRow(grid, 3, "Label revisions with:", _authorBox);
 
+        Grid.SetRow(expander, 4);
+        Grid.SetColumnSpan(expander, 2);
+        grid.Children.Add(expander);
+
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
-        Grid.SetRow(buttons, 4);
+        Grid.SetRow(buttons, 5);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
 
         Content = grid;
         DialogFocus.FocusAndSelect(_authorBox);
     }
+
+    private static CheckBox MakeCheckBox(string label, bool isChecked) =>
+        new() { Content = label, IsChecked = isChecked, Margin = new Thickness(0, 0, 0, 2) };
 
     // Add a label+read-only text row to the grid.
     private static void AddReadOnlyRow(Grid grid, int row, string label, string text)
@@ -133,7 +195,23 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             return;
         }
 
-        _result = new Result(_originalPath, author);
+        var showIn = _radioOriginal.IsChecked == true ? CompareShowChangesIn.Original
+            : _radioRevised.IsChecked == true ? CompareShowChangesIn.Revised
+            : CompareShowChangesIn.NewDocument;
+
+        var settings = new CompareSettings
+        {
+            Insertions  = _chkInsertions.IsChecked == true,
+            Deletions   = _chkDeletions.IsChecked == true,
+            Moves       = _chkMoves.IsChecked == true,
+            Comments    = _chkComments.IsChecked == true,
+            Formatting  = _chkFormatting.IsChecked == true,
+            CaseChanges = _chkCaseChanges.IsChecked == true,
+            Whitespace  = _chkWhitespace.IsChecked == true,
+            ShowChangesIn = showIn
+        };
+
+        _result = new Result(_originalPath, author, settings);
         Close();
     }
 

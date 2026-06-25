@@ -122,4 +122,94 @@ public class DocumentCompareTests
         TrackChanges.RejectAll(result);
         result.Paragraphs.Single().PlainText.Should().Be("one two three");
     }
+
+    // --- CompareSettings depth ---------------------------------------------------
+
+    [Fact]
+    public void CompareSettings_Default_AllChangeTypesEnabled()
+    {
+        // All flags must default to true so passing no settings preserves existing behaviour.
+        var settings = CompareSettings.Default;
+        settings.Insertions.Should().BeTrue();
+        settings.Deletions.Should().BeTrue();
+        settings.Moves.Should().BeTrue();
+        settings.Comments.Should().BeTrue();
+        settings.Formatting.Should().BeTrue();
+        settings.CaseChanges.Should().BeTrue();
+        settings.Whitespace.Should().BeTrue();
+        settings.ShowChangesIn.Should().Be(CompareShowChangesIn.NewDocument);
+    }
+
+    [Fact]
+    public void Compare_WithDefaultSettings_MatchesNoSettingsOverload()
+    {
+        // The two-argument and five-argument Compare calls must produce identical results.
+        var original = DocWith("alpha beta");
+        var revised = DocWith("alpha gamma");
+
+        var withDefaults  = DocumentCompare.Compare(original, revised, Author, DateXml, CompareSettings.Default);
+        var withoutSettings = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        // Same paragraph count; same revision kinds on matching tokens.
+        withDefaults.Paragraphs.Count().Should().Be(withoutSettings.Paragraphs.Count());
+        withDefaults.Paragraphs.SelectMany(p => p.Runs).Where(r => r.Revision != RevisionKind.None).Count()
+            .Should().Be(withoutSettings.Paragraphs.SelectMany(p => p.Runs).Where(r => r.Revision != RevisionKind.None).Count());
+    }
+
+    [Fact]
+    public void Compare_InsertionsSuppressed_InsertedTokensAreOrdinaryRuns()
+    {
+        var original = DocWith("the brown fox");
+        var revised  = DocWith("the quick red fox");
+
+        var settings = new CompareSettings { Insertions = false };
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml, settings);
+
+        var paragraph = result.Paragraphs.Single();
+        // No inserted revision marks; deleted tokens are still marked.
+        paragraph.Runs.Should().NotContain(r => r.Revision == RevisionKind.Inserted,
+            "insertions flag is false — no inserted marks must appear");
+        paragraph.Runs.Should().Contain(r => r.Revision == RevisionKind.Deleted,
+            "deletions flag is true — deleted marks must still appear");
+    }
+
+    [Fact]
+    public void Compare_DeletionsSuppressed_DeletedTokensAreDropped()
+    {
+        var original = DocWith("the brown fox");
+        var revised  = DocWith("the red fox");
+
+        var settings = new CompareSettings { Deletions = false };
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml, settings);
+
+        var paragraph = result.Paragraphs.Single();
+        // Deleted tokens are dropped entirely; inserted tokens are still marked.
+        paragraph.Runs.Should().NotContain(r => r.Revision == RevisionKind.Deleted,
+            "deletions flag is false — no deleted marks must appear");
+        paragraph.Runs.Should().Contain(r => r.Revision == RevisionKind.Inserted,
+            "insertions flag is true — inserted marks must still appear");
+    }
+
+    [Fact]
+    public void Compare_BothSuppressed_ProducesNoRevisionMarks()
+    {
+        var original = DocWith("hello world");
+        var revised  = DocWith("goodbye universe");
+
+        var settings = new CompareSettings { Insertions = false, Deletions = false };
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml, settings);
+
+        result.Paragraphs.SelectMany(p => p.Runs)
+            .Should().NotContain(r => r.Revision != RevisionKind.None,
+                "both insertion and deletion tracking suppressed — result must contain no revision marks");
+    }
+
+    [Fact]
+    public void Compare_ShowChangesIn_StoredOnSettings()
+    {
+        // The ShowChangesIn flag is a dialog/presentation concept; the engine doesn't act on it, but
+        // it must round-trip through the CompareSettings so the calling command can use it.
+        var settings = new CompareSettings { ShowChangesIn = CompareShowChangesIn.Original };
+        settings.ShowChangesIn.Should().Be(CompareShowChangesIn.Original);
+    }
 }

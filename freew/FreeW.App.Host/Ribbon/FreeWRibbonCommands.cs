@@ -836,7 +836,7 @@ internal static class FreeWRibbonCommands
         // Insert tab — References: mark the selection as a legal citation (a hidden TA field), and insert /
         // rebuild a Table of Authorities built from those marks, grouped by category (reversibly via the bus).
         registry.Register("freew.mark-citation", new MarkCitationCommand(editor));
-        registry.Register("freew.table-of-authorities", new ActionCommand(() => { editor.Focus(); editor.InsertTableOfAuthorities(); }));
+        registry.Register("freew.table-of-authorities", new InsertTableOfAuthoritiesCommand(editor));
         registry.Register("freew.table-of-authorities-refresh", new ActionCommand(() => { editor.Focus(); editor.RefreshTableOfAuthorities(); }));
         // Insert tab — Links: name the caret's paragraph as a bookmark target (an invisible marker).
         registry.Register("freew.bookmark", new InsertBookmarkCommand(editor));
@@ -4311,7 +4311,7 @@ internal static class FreeWRibbonCommands
                 var dateXml = DateTimeOffset.UtcNow.ToString(
                     "yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 
-                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml);
+                var compared = DocumentCompare.Compare(original, revised, picked.Author, dateXml, picked.Settings);
                 editor.LoadModel(compared);
             }
             catch (Exception ex)
@@ -4527,6 +4527,23 @@ internal static class FreeWRibbonCommands
     // for a Table of Authorities. Opens a small dialog to pick the category and confirm the long/short
     // forms, then drops a hidden TA field at the caret (the visible table is built later by Table of
     // Authorities). Cancelling or an empty long form marks nothing.
+    // References > Table of Authorities: prompt for options then insert (or update) the ToA.
+    // Opens the TableOfAuthoritiesDialog to collect Word's standard ToA options (category filter,
+    // passim, keep original formatting, tab leader) and passes the resulting ToaOptions to the
+    // document engine for the actual build.
+    private sealed class InsertTableOfAuthoritiesCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var owner = Window.GetWindow(editor);
+            var picked = TableOfAuthoritiesDialog.Prompt(owner);
+            if (picked is null)
+                return; // cancelled
+            editor.InsertTableOfAuthorities(picked.Options);
+        }
+    }
+
     private sealed class MarkCitationCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)

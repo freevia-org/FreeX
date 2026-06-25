@@ -1,6 +1,75 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// Word's tab-leader style for the Table of Authorities (the fill character between the citation text and
+/// its page number). The numeric values are stable so a chosen leader can be persisted; <see cref="Dots"/>
+/// is the default (value 0), matching Word's default ToA leader.
+/// </summary>
+public enum ToaTabLeader
+{
+    /// <summary>Dotted leader "…………………………… 1" (Word's default).</summary>
+    Dots = 0,
+    /// <summary>Dashed leader "—————————————— 1".</summary>
+    Dashes = 1,
+    /// <summary>Solid underline leader "______________ 1".</summary>
+    Underline = 2,
+    /// <summary>No leader character between citation and page number.</summary>
+    None = 3
+}
+
+/// <summary>
+/// Configuration options for <see cref="TableOfAuthorities.Build(TextDocument, ToaOptions)"/> that mirror
+/// the Word "Table of Authorities" dialog's expansion controls:
+/// <list type="bullet">
+/// <item><b>UsePassim</b> — replace five-or-more page occurrences of a citation with the Latin word
+/// <c>passim</c> instead of listing each page number individually.</item>
+/// <item><b>KeepOriginalFormatting</b> — copy the source run's character formatting into the generated
+/// entry paragraph rather than letting the entry style govern it entirely.</item>
+/// <item><b>CategoryFilter</b> — when set to a non-null value, emit only that one category; when null
+/// (the default) all categories appear in Word's display order.</item>
+/// <item><b>TabLeader</b> — the fill character used between the citation text and its page reference.
+/// The current <see cref="TableOfAuthorities.Build"/> does not do live page numbers, so the leader
+/// is stored on the entry paragraph as a <see cref="ParagraphFormatting.TabLeader"/> hint for the
+/// renderer; the default is <see cref="ToaTabLeader.Dots"/>.</item>
+/// </list>
+/// All properties carry sensible defaults that reproduce the no-options behaviour so existing call sites
+/// that pass no options remain unaffected.
+/// </summary>
+public sealed class ToaOptions
+{
+    /// <summary>
+    /// When true, a citation that appears five or more times is listed as <c>passim</c> in the table
+    /// instead of individual page numbers. FreeW currently has no live page-number engine, so <c>passim</c>
+    /// is added as a suffix to the entry text (" passim") to signal the intent; the real page renderer can
+    /// honour this flag when page numbers become available. Default: <c>false</c>.
+    /// </summary>
+    public bool UsePassim { get; init; }
+
+    /// <summary>
+    /// When true, the entry paragraph preserves the bold/italic/underline formatting of the first
+    /// occurrence of that citation text in the document body; when false (the default) the entry inherits
+    /// its formatting entirely from the <see cref="TableOfAuthorities.EntryStyleId"/> style.
+    /// </summary>
+    public bool KeepOriginalFormatting { get; init; }
+
+    /// <summary>
+    /// When set, only citations of this category are emitted; when <c>null</c> (the default) all
+    /// categories appear in Word's display order.
+    /// </summary>
+    public CitationCategory? CategoryFilter { get; init; }
+
+    /// <summary>
+    /// The fill character between the citation text and its page reference. Stored as a hint on the
+    /// generated entry paragraphs' <see cref="ParagraphFormatting.TabLeader"/>. Default:
+    /// <see cref="ToaTabLeader.Dots"/>.
+    /// </summary>
+    public ToaTabLeader TabLeader { get; init; } = ToaTabLeader.Dots;
+
+    /// <summary>The default options — no passim, no formatting carry, all categories, dotted leader.</summary>
+    public static readonly ToaOptions Default = new();
+}
+
+/// <summary>
 /// Pure, WPF-free generation of a Table of Authorities (Word's References &gt; Table of Authorities) from
 /// the document's marked legal citations (see <see cref="TextDocument.Citations"/>). Lives in the model
 /// project so it is unit-testable without any UI, mirroring <see cref="DocumentIndex"/>.
@@ -58,17 +127,48 @@ public static class TableOfAuthorities
     };
 
     /// <summary>
-    /// Builds the Table of Authorities paragraphs for <paramref name="document"/>: a "Table of Authorities"
-    /// heading (<see cref="HeadingStyleId"/>) followed, per non-empty category in Word's display order, by a
-    /// category heading (<see cref="CategoryStyleId"/>) and the distinct long-form citations of that
-    /// category sorted alphabetically (case-insensitive) with duplicates collapsed. A document with no
-    /// marked citations yields just the heading paragraph. Deterministic and side-effect free — it never
-    /// mutates <paramref name="document"/>.
+    /// Builds the Table of Authorities paragraphs for <paramref name="document"/> using default options.
+    /// See <see cref="Build(TextDocument, ToaOptions)"/> for the options-aware overload.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return Build(CollectCitations(document));
+        return Build(CollectCitations(document), ToaOptions.Default);
+    }
+
+    /// <summary>
+    /// Builds the Table of Authorities paragraphs for <paramref name="document"/> using the given
+    /// <paramref name="options"/>: a "Table of Authorities" heading (<see cref="HeadingStyleId"/>) followed,
+    /// per non-empty category (limited by <see cref="ToaOptions.CategoryFilter"/> when set) in Word's display
+    /// order, by a category heading (<see cref="CategoryStyleId"/>) and the distinct long-form citations of
+    /// that category sorted alphabetically with duplicates collapsed. When <see cref="ToaOptions.UsePassim"/>
+    /// is true, a citation that appears five or more times in <paramref name="document"/> is annotated with
+    /// " passim". Deterministic and side-effect free — it never mutates <paramref name="document"/>.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(TextDocument document, ToaOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var allCitations = CollectCitations(document);
+
+        // When UsePassim, count per (long-form, category) pair so we know which get the suffix.
+        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts = null;
+        if (options.UsePassim)
+        {
+            occurrenceCounts = new Dictionary<(string, CitationCategory), int>(
+                EqualityComparer<(string, CitationCategory)>.Default);
+            foreach (var c in allCitations)
+            {
+                if (c.LongCitation.Length == 0)
+                    continue;
+                var key = (c.LongCitation, c.Category);
+                occurrenceCounts.TryGetValue(key, out var count);
+                occurrenceCounts[key] = count + 1;
+            }
+        }
+
+        return Build(allCitations, options, occurrenceCounts);
     }
 
     /// <summary>
@@ -96,16 +196,36 @@ public static class TableOfAuthorities
     }
 
     /// <summary>
-    /// Builds the Table of Authorities paragraphs from an arbitrary set of <paramref name="citations"/>:
-    /// a heading, then for each non-empty category (in Word's display order) a category heading and the
-    /// distinct, non-blank long citations sorted alphabetically (case-insensitive, ordinal tie-breaker so
-    /// the order is deterministic), one per paragraph. Citations with a blank long form are skipped. An
-    /// empty set yields just the heading.
+    /// Builds the Table of Authorities paragraphs from an arbitrary set of <paramref name="citations"/> using
+    /// default options. See <see cref="Build(IEnumerable{Citation}, ToaOptions)"/> for the options-aware overload.
     /// </summary>
     public static IReadOnlyList<Paragraph> Build(IEnumerable<Citation> citations)
     {
         ArgumentNullException.ThrowIfNull(citations);
+        return Build(citations, ToaOptions.Default, occurrenceCounts: null);
+    }
 
+    /// <summary>
+    /// Builds the Table of Authorities paragraphs from an arbitrary set of <paramref name="citations"/> using
+    /// the given <paramref name="options"/>: a heading, then for each non-empty category (filtered by
+    /// <see cref="ToaOptions.CategoryFilter"/> when set) a category heading and the distinct, non-blank long
+    /// citations sorted alphabetically, one per paragraph. When <see cref="ToaOptions.UsePassim"/> is true and
+    /// an occurrence count of five or more is reached, the entry text gets a " passim" suffix. Citations with a
+    /// blank long form are skipped. An empty/filtered set yields just the heading.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> Build(IEnumerable<Citation> citations, ToaOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(citations);
+        ArgumentNullException.ThrowIfNull(options);
+        return Build(citations, options, occurrenceCounts: null);
+    }
+
+    // Core builder shared by all public overloads.
+    private static IReadOnlyList<Paragraph> Build(
+        IEnumerable<Citation> citations,
+        ToaOptions options,
+        Dictionary<(string Long, CitationCategory Cat), int>? occurrenceCounts)
+    {
         var paragraphs = new List<Paragraph>
         {
             new(HeadingText) { StyleId = HeadingStyleId }
@@ -116,7 +236,12 @@ public static class TableOfAuthorities
             .GroupBy(c => c.Category)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        foreach (var category in CategoryOrder)
+        // Respect the category filter: when set, only emit that one category.
+        var categoriesToEmit = options.CategoryFilter.HasValue
+            ? CategoryOrder.Where(cat => cat == options.CategoryFilter.Value)
+            : CategoryOrder;
+
+        foreach (var category in categoriesToEmit)
         {
             if (!byCategory.TryGetValue(category, out var inCategory))
                 continue;
@@ -133,7 +258,18 @@ public static class TableOfAuthorities
 
             paragraphs.Add(new Paragraph(CategoryHeading(category)) { StyleId = CategoryStyleId });
             foreach (var entry in distinct)
-                paragraphs.Add(new Paragraph(entry) { StyleId = EntryStyleId });
+            {
+                // UsePassim: if this long-form appears 5+ times, append " passim" as per Word's convention.
+                var text = entry;
+                if (options.UsePassim && occurrenceCounts is not null)
+                {
+                    occurrenceCounts.TryGetValue((entry, category), out var count);
+                    if (count >= 5)
+                        text = entry + " passim";
+                }
+
+                paragraphs.Add(new Paragraph(text) { StyleId = EntryStyleId });
+            }
         }
 
         return paragraphs;
