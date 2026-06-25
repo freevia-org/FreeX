@@ -69,6 +69,7 @@ internal static class CorpusGenerator
                 ("06-charts",       GenerateCharts),
                 ("07-customgeom",   GenerateCustomGeom),
                 ("08-effects",      GenerateEffects),
+                ("09-smartart",     GenerateSmartArt),
             };
 
             var errors = 0;
@@ -889,6 +890,94 @@ internal static class CorpusGenerator
             tb.TextFrame.TextRange.Text = "Shape Effects: outer shadow, glow, soft edge";
             tb.TextFrame.TextRange.Font.Size = 18;
             tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 09: SmartArt — Basic Process diagram with text nodes
+    // -----------------------------------------------------------------------
+    private static void GenerateSmartArt(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Title label
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "SmartArt — Basic Process";
+            tb.TextFrame.TextRange.Font.Size = 20;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            // Try to insert a SmartArt via Shapes.AddSmartArt if available (PPTX 2013+).
+            // SmartArtLayout index 1 = Basic Block List; we want a process / hierarchy.
+            // The SmartArt layouts are accessed via Application.SmartArtLayouts collection.
+            // We wrap in try/catch so older versions fall back to regular shapes.
+            bool smartArtInserted = false;
+            try
+            {
+                // ppLayoutBlank slide dimensions in points: 960 wide x 540 tall (16:9)
+                // Position: left=60, top=60, width=840, height=360
+                dynamic layouts = app.SmartArtLayouts;
+                dynamic? targetLayout = null;
+
+                // Walk layouts to find "Basic Process" (or any process-family layout)
+                for (int li = 1; li <= (int)layouts.Count; li++)
+                {
+                    dynamic layout = layouts.Item(li);
+                    string name = (string)layout.Name;
+                    if (name.Contains("Process", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Basic", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetLayout = layout;
+                        break;
+                    }
+                }
+
+                targetLayout ??= layouts.Item(1); // fallback to first
+
+                dynamic saShape = slide.Shapes.AddSmartArt(targetLayout, 60f, 60f, 840f, 360f);
+
+                // Populate nodes; SmartArt AllNodes collection
+                dynamic nodes = saShape.SmartArt.AllNodes;
+                string[] texts = ["Plan", "Design", "Build", "Test", "Deploy"];
+                for (int ni = 1; ni <= Math.Min((int)nodes.Count, texts.Length); ni++)
+                {
+                    try { nodes.Item(ni).TextFrame2.TextRange.Text = texts[ni - 1]; }
+                    catch { /* node may not accept text */ }
+                }
+
+                smartArtInserted = true;
+            }
+            catch (Exception ex)
+            {
+                Console.Write($"(SmartArtLayouts not available: {ex.Message}; using placeholder shapes) ");
+            }
+
+            if (!smartArtInserted)
+            {
+                // Fallback: draw a row of 5 process rectangles manually to simulate SmartArt
+                int accentBase = MsoThemeColorAccent1;
+                string[] steps = ["Plan", "Design", "Build", "Test", "Deploy"];
+                for (int i = 0; i < steps.Length; i++)
+                {
+                    dynamic sh = slide.Shapes.AddShape(MsoShapeRectangle,
+                        60f + i * 168f, 80f, 150f, 80f);
+                    sh.Name = $"Step{i + 1}";
+                    sh.Fill.ForeColor.ObjectThemeColor = accentBase + (i % 6);
+                    sh.Fill.Solid();
+                    sh.TextFrame.TextRange.Text = steps[i];
+                    sh.TextFrame.TextRange.Font.Size = 14;
+                    sh.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+                }
+            }
 
             SaveAndExport(pres, pptxPath, refDir);
         }
