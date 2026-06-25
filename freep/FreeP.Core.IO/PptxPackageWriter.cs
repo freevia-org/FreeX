@@ -38,6 +38,13 @@ public static class PptxPackageWriter
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
 
+    // SmartArt diagram relationship types (slide rels point to the named sub-parts)
+    private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+    private const string DiagramLayoutRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+    private const string DiagramQuickStyleRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+    private const string DiagramColorsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+    private const string DiagramDrawingRelType   = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
     private const string SlideCT         = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
@@ -208,6 +215,9 @@ public static class PptxPackageWriter
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
 
+            // Write SmartArt diagram parts (verbatim bytes + rels)
+            var smartArtSlideRels = WriteSlideSmartArt(archive, slide);
+
             // Combined shapeId→relId map for shape element building (images + charts)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
@@ -216,13 +226,16 @@ public static class PptxPackageWriter
             // Slide xml
             WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById));
 
-            // Slide rels: rId1=layout, images, charts, optional notesSlide
+            // Slide rels: rId1=layout, images, charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, chartRelId, chartPath) in chartRelIds)
                 slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
+            // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
+            foreach (var (relId, relType, target) in smartArtSlideRels)
+                slideRels.Add(relId, relType, target);
 
             // Write notes slide and add rel when the slide has speaker notes
             if (slide.Notes is not null)
@@ -352,6 +365,27 @@ public static class PptxPackageWriter
                 {
                     overrides.Add(Override(CT, $"/ppt/charts/chart{chartGlobalIdx}.xml", ChartCT));
                     chartGlobalIdx++;
+                }
+            }
+        }
+
+        // Collect SmartArt diagram part content types (from the stored DiagramPart objects)
+        var seenSmartArtParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind == SlideShapeKind.SmartArt && shape.SmartArt is { } sa)
+                {
+                    foreach (var part in sa.Parts.Values)
+                    {
+                        if (!string.IsNullOrEmpty(part.PartPath) &&
+                            !string.IsNullOrEmpty(part.ContentType) &&
+                            seenSmartArtParts.Add(part.PartPath))
+                        {
+                            overrides.Add(Override(CT, "/" + part.PartPath, part.ContentType));
+                        }
+                    }
                 }
             }
         }
@@ -910,6 +944,7 @@ public static class PptxPackageWriter
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
+            SlideShapeKind.SmartArt when shape.SmartArt is not null => BuildSmartArtGraphicFrameEl(shape),
             _ => BuildSpEl(shape, scheme)
         };
 
@@ -1184,6 +1219,54 @@ public static class PptxPackageWriter
                         // Declare the c: prefix so PowerPoint sees <c:chart .../>
                         new XAttribute(XNamespace.Xmlns + "c", DrawingChartUri),
                         new XAttribute(R + "id", chartRelId)))));
+    }
+
+    // ── SmartArt / graphicFrame elements ──────────────────────────────────────────
+
+    private const string DrawingDiagramUri = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+    private static readonly XNamespace DgmNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
+    /// <summary>
+    /// Builds the p:graphicFrame element for a SmartArt shape, referencing the diagram
+    /// sub-parts (data/layout/quickStyle/colors) via the rel IDs stored in the model.
+    /// </summary>
+    private static XElement BuildSmartArtGraphicFrameEl(SlideShape shape)
+    {
+        var smart = shape.SmartArt!;
+
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        // Build dgm:relIds child with r:dm / r:lo / r:qs / r:cs attributes
+        var relIdsEl = new XElement(DgmNs + "relIds",
+            new XAttribute(XNamespace.Xmlns + "dgm", DrawingDiagramUri),
+            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
+
+        foreach (var (key, relId) in smart.DiagramRelIds)
+        {
+            relIdsEl.Add(new XAttribute(R + key, relId));
+        }
+
+        return new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr",
+                    new XElement(A + "graphicFrameLocks",
+                        new XAttribute("noGrp", "1"))),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingDiagramUri),
+                    relIdsEl)));
     }
 
     private static XElement BuildTableEl(TableShape table, PresentationColorScheme scheme)
@@ -1566,6 +1649,128 @@ public static class PptxPackageWriter
         }
 
         return result;
+    }
+
+    // ── SmartArt diagram part writing ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes all diagram parts (data/layout/quickStyle/colors/drawing) for SmartArt shapes
+    /// verbatim from the stored raw bytes. Also writes each part's rels file (if any).
+    /// Returns the (relId, relType, target) tuples for the slide rels file (one per dm/lo/qs/cs key).
+    /// The drawing part rels are internal to the data part's rels — not in the slide rels.
+    /// </summary>
+    private static List<(string relId, string relType, string target)> WriteSlideSmartArt(
+        ZipArchive archive, Slide slide)
+    {
+        var slideRels = new List<(string, string, string)>();
+
+        // Track parts already written (a single part may be referenced by multiple shapes)
+        var writtenParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var relTypeForKey = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["dm"] = DiagramDataRelType,
+            ["lo"] = DiagramLayoutRelType,
+            ["qs"] = DiagramQuickStyleRelType,
+            ["cs"] = DiagramColorsRelType
+        };
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.SmartArt || shape.SmartArt is not { } smart)
+                continue;
+
+            // Write each raw diagram part that hasn't been written yet
+            foreach (var part in smart.Parts.Values)
+            {
+                if (string.IsNullOrEmpty(part.PartPath) || part.Bytes.Length == 0) continue;
+                if (!writtenParts.Add(part.PartPath)) continue; // already written
+
+                var entry = archive.CreateEntry(part.PartPath, CompressionLevel.Optimal);
+                using (var es = entry.Open())
+                    es.Write(part.Bytes);
+
+                // Write this part's rels file if we have it
+                if (smart.PartRels.TryGetValue(part.PartPath, out var relsBytes) && relsBytes.Length > 0)
+                {
+                    var partDir  = GetDirectory(part.PartPath);
+                    var partFile = part.PartPath[(part.PartPath.LastIndexOf('/') + 1)..];
+                    var relsPath = string.IsNullOrEmpty(partDir)
+                        ? $"_rels/{partFile}.rels"
+                        : $"{partDir}/_rels/{partFile}.rels";
+
+                    if (!writtenParts.Contains(relsPath))
+                    {
+                        writtenParts.Add(relsPath);
+                        var relsEntry = archive.CreateEntry(relsPath, CompressionLevel.Optimal);
+                        using var re = relsEntry.Open();
+                        re.Write(relsBytes);
+                    }
+                }
+            }
+
+            // Build slide rels for the four named diagram parts (dm/lo/qs/cs)
+            foreach (var (key, relId) in smart.DiagramRelIds)
+            {
+                if (!relTypeForKey.TryGetValue(key, out var relType)) continue;
+
+                // Find the corresponding part to build the relative target path
+                // The relId maps to a part path in the Parts dictionary
+                // We need to find which part has this key
+                // Since the SmartArt has DiagramRelIds["dm"] = some relId, and Parts[partPath] for the data part
+                // we reconstruct the target from the part paths
+                var partPath = FindDiagramPartPathForKey(smart, key);
+                if (partPath is null) continue;
+
+                // Target is relative to "ppt/slides/" -> "../diagrams/filenameN.xml"
+                var fileName = partPath.Split('/').Last();
+                var partDir  = GetDirectory(partPath);
+                // typical: ppt/diagrams/data1.xml → from ppt/slides/slideN.xml → ../diagrams/data1.xml
+                var target   = $"../diagrams/{fileName}";
+
+                // Check we won't duplicate this relId
+                if (!slideRels.Any(r => r.Item1 == relId))
+                    slideRels.Add((relId, relType, target));
+            }
+        }
+
+        return slideRels;
+    }
+
+    /// <summary>
+    /// Heuristic: map a diagram key ("dm"/"lo"/"qs"/"cs") to a part path by matching
+    /// the part's content type keyword.
+    /// </summary>
+    private static string? FindDiagramPartPathForKey(SmartArtShape smart, string key)
+    {
+        var ctKeyword = key switch
+        {
+            "dm" => "diagramData",
+            "lo" => "diagramLayout",
+            "qs" => "diagramQuickStyle",
+            "cs" => "diagramColors",
+            _    => null
+        };
+        if (ctKeyword is null) return null;
+
+        // Try content-type match first
+        var match = smart.Parts.Values
+            .FirstOrDefault(p => p.ContentType.Contains(ctKeyword, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) return match.PartPath;
+
+        // Fallback: filename keyword match
+        var nameKeyword = key switch
+        {
+            "dm" => "data",
+            "lo" => "layout",
+            "qs" => "quickStyle",
+            "cs" => "colors",
+            _    => null
+        };
+        if (nameKeyword is null) return null;
+
+        return smart.Parts.Keys
+            .FirstOrDefault(p => p.Contains(nameKeyword, StringComparison.OrdinalIgnoreCase));
     }
 
     // ── Zip helpers ───────────────────────────────────────────────────────────────
