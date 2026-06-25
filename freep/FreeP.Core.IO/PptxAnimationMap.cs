@@ -1,0 +1,350 @@
+using FreeP.Core.Model;
+
+namespace FreeP.Core.IO;
+
+/// <summary>
+/// Bidirectional mapping tables between FreeP model enums and PresentationML XML string values
+/// for transitions and animations.
+///
+/// TRANSITION MAPPING
+/// ==================
+/// TransitionKind  | p:transition child element name
+/// None            | (no child, omit p:transition)
+/// Fade            | p:fade
+/// Cut             | p:cut
+/// Push            | p:push  (dir attr)
+/// Wipe            | p:wipe  (dir attr)
+/// Cover           | p:cover (dir attr)
+/// Uncover         | p:uncover (dir attr)
+/// Split           | p:split (orient + dir attr)
+/// Blinds          | p:blinds (dir attr = horz|vert)
+/// Dissolve        | p:dissolve
+/// Zoom            | p:zoom  (dir attr = in|out)
+/// Wheel           | p:wheel (spokes attr)
+/// RandomBar       | p:randomBar (dir attr)
+/// Strips          | p:strips (dir attr)
+/// Fly             | (not standard — mapped to p:push as fallback)
+/// Random          | p:random
+///
+/// ANIMATION PRESET MAPPING
+/// ========================
+/// AnimationPreset | presetClass | presetID (int)
+/// Appear          | entr        | 1
+/// Fade            | entr        | 10
+/// FlyIn           | entr        | 2
+/// Wipe            | entr        | 8
+/// Zoom            | entr        | 11
+/// Split           | entr        | 3
+/// Blinds          | entr        | 4
+/// Box             | entr        | 5
+/// Checkerboard    | entr        | 6
+/// Circle          | entr        | 7
+/// Crawl           | entr        | 26
+/// Diamond         | entr        | 9
+/// Dissolve        | entr        | 25
+/// Flash           | entr        | 22
+/// Peek            | entr        | 27
+/// Plus            | entr        | 13
+/// RandomBars      | entr        | 14
+/// Spiral          | entr        | 28
+/// Strips          | entr        | 16
+/// Swivel          | entr        | 17
+/// Wedge           | entr        | 18
+/// Wheel           | entr        | 19
+/// Bounce          | entr        | 21
+/// Float           | entr        | 23
+/// Swoop           | entr        | 24
+/// Boomerang       | entr        | 29
+/// Grow            | emph        | 5   (Grow/Shrink)
+/// Shrink          | emph        | 5   (same preset, direction=shrink)
+/// Spin            | emph        | 3
+/// Pulse           | emph        | 14
+/// ColorPulse      | emph        | 6
+/// Teeter          | emph        | 4
+/// Blink           | emph        | 15
+/// Bold            | emph        | 1
+/// Wave            | emph        | 13
+/// Underline       | emph        | 2
+/// GrowWithColor   | emph        | 12
+/// ChangeColor     | emph        | 7
+/// Shimmer         | emph        | 11
+///
+/// Exit effects share the same presetIDs as Entrance (presetClass = "exit").
+/// </summary>
+internal static class PptxAnimationMap
+{
+    // ── Transition kind <-> element name ──────────────────────────────────────────
+
+    public static string? TransitionKindToElementName(TransitionKind kind) => kind switch
+    {
+        TransitionKind.Fade      => "fade",
+        TransitionKind.Cut       => "cut",
+        TransitionKind.Push      => "push",
+        TransitionKind.Wipe      => "wipe",
+        TransitionKind.Cover     => "cover",
+        TransitionKind.Uncover   => "uncover",
+        TransitionKind.Split     => "split",
+        TransitionKind.Blinds    => "blinds",
+        TransitionKind.Dissolve  => "dissolve",
+        TransitionKind.Zoom      => "zoom",
+        TransitionKind.Wheel     => "wheel",
+        TransitionKind.RandomBar => "randomBar",
+        TransitionKind.Strips    => "strips",
+        TransitionKind.Fly       => "push",   // no standard "fly" — use push as fallback
+        TransitionKind.Random    => "random",
+        _                        => null      // None or unknown
+    };
+
+    public static TransitionKind ElementNameToTransitionKind(string? name) => name switch
+    {
+        "fade"      => TransitionKind.Fade,
+        "cut"       => TransitionKind.Cut,
+        "push"      => TransitionKind.Push,
+        "wipe"      => TransitionKind.Wipe,
+        "cover"     => TransitionKind.Cover,
+        "uncover"   => TransitionKind.Uncover,
+        "split"     => TransitionKind.Split,
+        "blinds"    => TransitionKind.Blinds,
+        "dissolve"  => TransitionKind.Dissolve,
+        "zoom"      => TransitionKind.Zoom,
+        "wheel"     => TransitionKind.Wheel,
+        "randomBar" => TransitionKind.RandomBar,
+        "strips"    => TransitionKind.Strips,
+        "random"    => TransitionKind.Random,
+        _           => TransitionKind.None
+    };
+
+    // Direction attrs on directional transitions
+    public static string? TransitionDirectionToAttr(TransitionDirection? d) => d switch
+    {
+        TransitionDirection.Left      => "l",
+        TransitionDirection.Right     => "r",
+        TransitionDirection.Up        => "u",
+        TransitionDirection.Down      => "d",
+        TransitionDirection.LeftUp    => "lu",
+        TransitionDirection.LeftDown  => "ld",
+        TransitionDirection.RightUp   => "ru",
+        TransitionDirection.RightDown => "rd",
+        TransitionDirection.Horizontal => "horz",
+        TransitionDirection.Vertical   => "vert",
+        TransitionDirection.In        => "in",
+        TransitionDirection.Out       => "out",
+        _                             => null
+    };
+
+    public static TransitionDirection? AttrToTransitionDirection(string? attr) => attr switch
+    {
+        "l"    => TransitionDirection.Left,
+        "r"    => TransitionDirection.Right,
+        "u"    => TransitionDirection.Up,
+        "d"    => TransitionDirection.Down,
+        "lu"   => TransitionDirection.LeftUp,
+        "ld"   => TransitionDirection.LeftDown,
+        "ru"   => TransitionDirection.RightUp,
+        "rd"   => TransitionDirection.RightDown,
+        "horz" => TransitionDirection.Horizontal,
+        "vert" => TransitionDirection.Vertical,
+        "in"   => TransitionDirection.In,
+        "out"  => TransitionDirection.Out,
+        _      => (TransitionDirection?)null
+    };
+
+    // DurationMs <-> spd string
+    public static string DurationToSpd(int ms) => ms switch
+    {
+        <= 600  => "fast",
+        <= 1000 => "med",
+        _       => "slow"
+    };
+
+    public static int SpdToDuration(string? spd) => spd switch
+    {
+        "fast" => 500,
+        "med"  => 750,
+        "slow" => 1500,
+        _      => 500
+    };
+
+    // ── Animation preset <-> (presetClass, presetID) ──────────────────────────────
+
+    public static (string presetClass, int presetId) AnimationPresetToOoxml(AnimationPreset preset, AnimationKind kind)
+    {
+        string pc = kind switch
+        {
+            AnimationKind.Entrance  => "entr",
+            AnimationKind.Exit      => "exit",
+            AnimationKind.Emphasis  => "emph",
+            _                       => "entr"
+        };
+
+        if (kind == AnimationKind.Emphasis)
+        {
+            int emphId = preset switch
+            {
+                AnimationPreset.Bold          => 1,
+                AnimationPreset.Underline      => 2,
+                AnimationPreset.Spin           => 3,
+                AnimationPreset.Teeter         => 4,
+                AnimationPreset.Grow           => 5,
+                AnimationPreset.Shrink         => 5,
+                AnimationPreset.ColorPulse     => 6,
+                AnimationPreset.ChangeColor    => 7,
+                AnimationPreset.Shimmer        => 11,
+                AnimationPreset.GrowWithColor  => 12,
+                AnimationPreset.Wave           => 13,
+                AnimationPreset.Pulse          => 14,
+                AnimationPreset.Blink          => 15,
+                _                              => 14  // default to pulse
+            };
+            return (pc, emphId);
+        }
+
+        // Entrance / Exit share the same presetID table
+        int id = preset switch
+        {
+            AnimationPreset.Appear     => 1,
+            AnimationPreset.FlyIn      => 2,
+            AnimationPreset.Split      => 3,
+            AnimationPreset.Blinds     => 4,
+            AnimationPreset.Box        => 5,
+            AnimationPreset.Checkerboard => 6,
+            AnimationPreset.Circle     => 7,
+            AnimationPreset.Wipe       => 8,
+            AnimationPreset.Diamond    => 9,
+            AnimationPreset.Fade       => 10,
+            AnimationPreset.Zoom       => 11,
+            AnimationPreset.Plus       => 13,
+            AnimationPreset.RandomBars => 14,
+            AnimationPreset.Strips     => 16,
+            AnimationPreset.Swivel     => 17,
+            AnimationPreset.Wedge      => 18,
+            AnimationPreset.Wheel      => 19,
+            AnimationPreset.Bounce     => 21,
+            AnimationPreset.Flash      => 22,
+            AnimationPreset.Float      => 23,
+            AnimationPreset.Swoop      => 24,
+            AnimationPreset.Dissolve   => 25,
+            AnimationPreset.Crawl      => 26,
+            AnimationPreset.Peek       => 27,
+            AnimationPreset.Spiral     => 28,
+            AnimationPreset.Boomerang  => 29,
+            _                          => 1   // default to Appear
+        };
+        return (pc, id);
+    }
+
+    public static (AnimationKind kind, AnimationPreset preset) OoxmlToAnimationPreset(string presetClass, int presetId)
+    {
+        var kind = presetClass switch
+        {
+            "entr" => AnimationKind.Entrance,
+            "exit" => AnimationKind.Exit,
+            "emph" => AnimationKind.Emphasis,
+            _      => AnimationKind.Entrance
+        };
+
+        if (kind == AnimationKind.Emphasis)
+        {
+            var emphPreset = presetId switch
+            {
+                1  => AnimationPreset.Bold,
+                2  => AnimationPreset.Underline,
+                3  => AnimationPreset.Spin,
+                4  => AnimationPreset.Teeter,
+                5  => AnimationPreset.Grow,
+                6  => AnimationPreset.ColorPulse,
+                7  => AnimationPreset.ChangeColor,
+                11 => AnimationPreset.Shimmer,
+                12 => AnimationPreset.GrowWithColor,
+                13 => AnimationPreset.Wave,
+                14 => AnimationPreset.Pulse,
+                15 => AnimationPreset.Blink,
+                _  => AnimationPreset.Pulse
+            };
+            return (kind, emphPreset);
+        }
+
+        var p = presetId switch
+        {
+            1  => AnimationPreset.Appear,
+            2  => AnimationPreset.FlyIn,
+            3  => AnimationPreset.Split,
+            4  => AnimationPreset.Blinds,
+            5  => AnimationPreset.Box,
+            6  => AnimationPreset.Checkerboard,
+            7  => AnimationPreset.Circle,
+            8  => AnimationPreset.Wipe,
+            9  => AnimationPreset.Diamond,
+            10 => AnimationPreset.Fade,
+            11 => AnimationPreset.Zoom,
+            13 => AnimationPreset.Plus,
+            14 => AnimationPreset.RandomBars,
+            16 => AnimationPreset.Strips,
+            17 => AnimationPreset.Swivel,
+            18 => AnimationPreset.Wedge,
+            19 => AnimationPreset.Wheel,
+            21 => AnimationPreset.Bounce,
+            22 => AnimationPreset.Flash,
+            23 => AnimationPreset.Float,
+            24 => AnimationPreset.Swoop,
+            25 => AnimationPreset.Dissolve,
+            26 => AnimationPreset.Crawl,
+            27 => AnimationPreset.Peek,
+            28 => AnimationPreset.Spiral,
+            29 => AnimationPreset.Boomerang,
+            _  => AnimationPreset.Appear
+        };
+        return (kind, p);
+    }
+
+    // Animation direction string (accel direction / subtype)
+    public static string? AnimationDirectionToSubtype(AnimationDirection? d) => d switch
+    {
+        AnimationDirection.Left        => "left",
+        AnimationDirection.Right       => "right",
+        AnimationDirection.Up          => "top",
+        AnimationDirection.Down        => "bottom",
+        AnimationDirection.LeftUp      => "topLeft",
+        AnimationDirection.LeftDown    => "bottomLeft",
+        AnimationDirection.RightUp     => "topRight",
+        AnimationDirection.RightDown   => "bottomRight",
+        AnimationDirection.Horizontal  => "horizontal",
+        AnimationDirection.Vertical    => "vertical",
+        AnimationDirection.In          => "in",
+        AnimationDirection.Out         => "out",
+        AnimationDirection.FromLeft    => "fromLeft",
+        AnimationDirection.FromRight   => "fromRight",
+        AnimationDirection.FromTop     => "fromTop",
+        AnimationDirection.FromBottom  => "fromBottom",
+        AnimationDirection.FromTopLeft => "fromTopLeft",
+        AnimationDirection.FromTopRight => "fromTopRight",
+        AnimationDirection.FromBottomLeft => "fromBottomLeft",
+        AnimationDirection.FromBottomRight => "fromBottomRight",
+        _                              => null
+    };
+
+    public static AnimationDirection? SubtypeToAnimationDirection(string? s) => s switch
+    {
+        "left"            => AnimationDirection.Left,
+        "right"           => AnimationDirection.Right,
+        "top"             => AnimationDirection.Up,
+        "bottom"          => AnimationDirection.Down,
+        "topLeft"         => AnimationDirection.LeftUp,
+        "bottomLeft"      => AnimationDirection.LeftDown,
+        "topRight"        => AnimationDirection.RightUp,
+        "bottomRight"     => AnimationDirection.RightDown,
+        "horizontal"      => AnimationDirection.Horizontal,
+        "vertical"        => AnimationDirection.Vertical,
+        "in"              => AnimationDirection.In,
+        "out"             => AnimationDirection.Out,
+        "fromLeft"        => AnimationDirection.FromLeft,
+        "fromRight"       => AnimationDirection.FromRight,
+        "fromTop"         => AnimationDirection.FromTop,
+        "fromBottom"      => AnimationDirection.FromBottom,
+        "fromTopLeft"     => AnimationDirection.FromTopLeft,
+        "fromTopRight"    => AnimationDirection.FromTopRight,
+        "fromBottomLeft"  => AnimationDirection.FromBottomLeft,
+        "fromBottomRight" => AnimationDirection.FromBottomRight,
+        _                 => (AnimationDirection?)null
+    };
+}

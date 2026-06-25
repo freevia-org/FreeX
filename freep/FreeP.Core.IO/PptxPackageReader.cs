@@ -300,6 +300,16 @@ public static class PptxPackageReader
                 slide.Shapes.Add(shape);
         }
 
+        // Transition
+        var transEl = xml.Root.Element(P + "transition");
+        if (transEl is not null)
+            slide.Transition = ReadTransition(transEl);
+
+        // Animations (main sequence only)
+        var timingEl = xml.Root.Element(P + "timing");
+        if (timingEl is not null)
+            ReadAnimations(timingEl, slide);
+
         return slide;
     }
 
@@ -806,6 +816,187 @@ public static class PptxPackageReader
                 run.Color = PptxColorReader.TryReadColor(solidFill, scheme);
         }
         return run;
+    }
+
+    // ── p:transition ─────────────────────────────────────────────────────────────
+
+    private static SlideTransition ReadTransition(XElement transEl)
+    {
+        var t = new SlideTransition();
+
+        // spd or dur attribute for duration
+        var spd = transEl.Attribute("spd")?.Value;
+        if (!string.IsNullOrEmpty(spd))
+            t.DurationMs = PptxAnimationMap.SpdToDuration(spd);
+        if (int.TryParse(transEl.Attribute("dur")?.Value, out var dur) && dur > 0)
+            t.DurationMs = dur;
+
+        // advClick
+        t.AdvanceOnClick = transEl.Attribute("advClick")?.Value != "0";
+
+        // advTm (auto-advance)
+        if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
+            t.AdvanceAfterMs = advTm;
+
+        // Find the effect child element (first child that is not an attribute-only element)
+        var effectEl = transEl.Elements().FirstOrDefault();
+        if (effectEl is not null)
+        {
+            t.Kind = PptxAnimationMap.ElementNameToTransitionKind(effectEl.Name.LocalName);
+            // Direction: try "dir" first, then "orient"
+            var dirAttr = effectEl.Attribute("dir")?.Value ?? effectEl.Attribute("orient")?.Value;
+            t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirAttr);
+        }
+
+        return t;
+    }
+
+    // ── p:timing (main sequence animations) ──────────────────────────────────────
+
+    private static void ReadAnimations(XElement timingEl, Slide slide)
+    {
+        // Walk: p:timing > p:tnLst > p:par (interactive) > p:cTn > p:childTnLst > p:seq (main seq)
+        // > p:cTn > p:childTnLst > p:par (build step) > p:cTn > p:childTnLst > p:par > p:cTn
+        // > ... > p:set | p:animEffect (target shape).
+        //
+        // Real-world structure (PowerPoint 2016+):
+        // p:timing/p:tnLst/p:par/p:cTn/p:childTnLst/p:seq/p:cTn/p:childTnLst/p:par*
+        // Each outer p:par in childTnLst of the seq = one "click group".
+        // Each click group's p:cTn/p:childTnLst/p:par* = individual build items.
+        //
+        // We flatten and collect every p:animEffect / p:set that targets a spTgt.
+
+        try
+        {
+            var tnLst = timingEl.Element(P + "tnLst");
+            if (tnLst is null) return;
+
+            // Find the main sequence: p:seq with the "mainSeq" presentation attribute or just the first p:seq
+            var seq = FindMainSequence(tnLst);
+            if (seq is null) return;
+
+            var seqChildTnLst = seq.Element(P + "cTn")?.Element(P + "childTnLst");
+            if (seqChildTnLst is null) return;
+
+            // Each p:par inside is one "click group"
+            foreach (var clickGroup in seqChildTnLst.Elements(P + "par"))
+            {
+                ReadClickGroup(clickGroup, slide);
+            }
+        }
+        catch
+        {
+            // If we fail to parse the timing tree (complex/unknown structure), skip silently.
+            // Unmodeled timing is dropped per spec.
+        }
+    }
+
+    private static XElement? FindMainSequence(XElement tnLst)
+    {
+        // Typical: tnLst/par/cTn/childTnLst/seq
+        // But FreeP writes: tnLst/par/cTn/childTnLst/par/cTn(interactiveSeq)/childTnLst/seq
+        // So we search descendants broadly for the first p:seq with nodeType="mainSeq"
+        // or just the first p:seq anywhere.
+        var mainSeq = tnLst.Descendants(P + "seq")
+            .FirstOrDefault(s => s.Element(P + "cTn")?.Attribute("nodeType")?.Value == "mainSeq");
+        if (mainSeq is not null) return mainSeq;
+
+        // Fallback: any seq
+        return tnLst.Descendants(P + "seq").FirstOrDefault();
+    }
+
+    private static void ReadClickGroup(XElement clickGroup, Slide slide)
+    {
+        var innerTnLst = clickGroup.Element(P + "cTn")?.Element(P + "childTnLst");
+        if (innerTnLst is null) return;
+
+        // Determine trigger from the click group's stCondLst
+        // If it has a cond with delay="indefinite" -> OnClick; else WithPrevious or AfterPrevious
+        var trigger = GetTrigger(clickGroup.Element(P + "cTn")?.Element(P + "stCondLst"));
+
+        foreach (var buildItem in innerTnLst.Elements(P + "par"))
+        {
+            var anim = ReadBuildItem(buildItem, trigger);
+            if (anim is not null)
+                slide.Animations.Add(anim);
+        }
+    }
+
+    private static AnimationTrigger GetTrigger(XElement? stCondLst)
+    {
+        if (stCondLst is null) return AnimationTrigger.OnClick;
+        var cond = stCondLst.Element(P + "cond");
+        var delay = cond?.Attribute("delay")?.Value;
+        if (delay == "indefinite") return AnimationTrigger.OnClick;
+        if (delay == "0") return AnimationTrigger.WithPrevious;
+        return AnimationTrigger.AfterPrevious;
+    }
+
+    private static ShapeAnimation? ReadBuildItem(XElement buildPar, AnimationTrigger outerTrigger)
+    {
+        // Navigate down to find a p:animEffect or p:set with a p:spTgt
+        var cTn = buildPar.Element(P + "cTn");
+        if (cTn is null) return null;
+
+        // presetClass and presetID are on the innermost cTn
+        var presetClass = cTn.Attribute("presetClass")?.Value;
+        var presetIdStr = cTn.Attribute("presetID")?.Value;
+        if (string.IsNullOrEmpty(presetClass)) return null;
+
+        if (!int.TryParse(presetIdStr, out var presetId)) return null;
+
+        // presetSubtype for direction
+        var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
+
+        // Find shape target (spTgt) anywhere in the descendants
+        var spTgt = FindSpTgt(buildPar);
+        if (spTgt is null) return null;
+
+        if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+
+        // Duration from p:cTn dur attribute
+        int durationMs = 500;
+        if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
+            durationMs = d;
+
+        // Delay from stCondLst/cond delay
+        int delayMs = 0;
+        var stCondLst = cTn.Element(P + "stCondLst");
+        var innerTrigger = outerTrigger;
+        if (stCondLst is not null)
+        {
+            var cond = stCondLst.Element(P + "cond");
+            var delay = cond?.Attribute("delay")?.Value;
+            if (delay == "indefinite")
+                innerTrigger = AnimationTrigger.OnClick;
+            else if (delay != null && int.TryParse(delay, out var delayVal))
+            {
+                delayMs = delayVal;
+                innerTrigger = delayVal == 0 ? AnimationTrigger.WithPrevious : AnimationTrigger.AfterPrevious;
+            }
+        }
+
+        var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
+        var direction = PptxAnimationMap.SubtypeToAnimationDirection(presetSubtype);
+
+        return new ShapeAnimation
+        {
+            ShapeId    = shapeId,
+            Kind       = kind,
+            Preset     = preset,
+            Trigger    = innerTrigger,
+            DelayMs    = delayMs,
+            DurationMs = durationMs,
+            Direction  = direction,
+        };
+    }
+
+    private static XElement? FindSpTgt(XElement root)
+    {
+        // BFS/DFS to find p:spTgt
+        foreach (var el in root.Descendants(P + "spTgt"))
+            return el;
+        return null;
     }
 
     // ── Background ───────────────────────────────────────────────────────────────
