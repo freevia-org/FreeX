@@ -104,7 +104,11 @@ internal static class ChartDialogHelpers
         color is null ? "none" : ColorInputParser.FormatHexColor(color.Value);
 
     public static double ParseDouble(string text, double fallback) =>
-        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)
+        FreeX.App.Presentation.NumericInputParser.TryParseFiniteDouble(
+            text.Trim(),
+            System.Globalization.CultureInfo.CurrentCulture,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value)
             ? value
             : fallback;
 
@@ -114,5 +118,5 @@ internal static class ChartDialogHelpers
             : ChartDialogHelpers.ParseDouble(text, 0);
 
     public static string FormatNullable(double? value) =>
-        value?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        value?.ToString(System.Globalization.CultureInfo.CurrentCulture) ?? "";
 }

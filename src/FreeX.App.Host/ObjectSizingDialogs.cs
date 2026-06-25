@@ -30,8 +30,8 @@ public sealed class ObjectSizeDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
-        _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        _widthBox.Text = width.ToString(CultureInfo.CurrentCulture);
+        _heightBox.Text = height.ToString(CultureInfo.CurrentCulture);
         AutomationProperties.SetName(_heightBox, UiText.Get("ObjectSizing_ObjectHeight"));
         AutomationProperties.SetAutomationId(_heightBox, "ObjectSizeHeightBox");
         AutomationProperties.SetHelpText(_heightBox, UiText.Get("ObjectSizing_EnterTheObjectSHeight"));
@@ -120,7 +120,7 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (!NumericInputParser.TryParseFiniteDouble(_widthBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var width) || width <= 0)
             return;
 
         SetHeight(CalculateLockedAspectHeight(width, _originalWidth, _originalHeight));
@@ -131,7 +131,7 @@ public sealed class ObjectSizeDialog : Window
         if (_updatingSize || _lockAspectRatioBox.IsChecked != true)
             return;
 
-        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (!NumericInputParser.TryParseFiniteDouble(_heightBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var height) || height <= 0)
             return;
 
         SetWidth(CalculateLockedAspectWidth(height, _originalWidth, _originalHeight));
@@ -164,7 +164,7 @@ public sealed class ObjectSizeDialog : Window
     }
 
     private static string FormatSize(double value) =>
-        Math.Round(value, 2).ToString("0.##", CultureInfo.InvariantCulture);
+        Math.Round(value, 2).ToString("0.##", CultureInfo.CurrentCulture);
 
     private StackPanel CreateSizeContent(Action accept)
     {

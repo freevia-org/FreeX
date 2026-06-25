@@ -112,9 +112,9 @@ public sealed partial class ObjectDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("FormatPictureDialog.cs");
 
-        source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture)");
-        source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture)");
-        source.Should().Contain("_rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture)");
+        source.Should().Contain("_widthBox.Text = _initialResult.Width.ToString(CultureInfo.CurrentCulture)");
+        source.Should().Contain("_heightBox.Text = _initialResult.Height.ToString(CultureInfo.CurrentCulture)");
+        source.Should().Contain("_rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.CurrentCulture)");
         source.Should().Contain("_lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio");
         source.Should().Contain("_cropLeftBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropLeft)");
         source.Should().Contain("_cropTopBox.Text = DrawingInputParser.FormatCropPercent(_initialResult.CropTop)");

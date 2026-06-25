@@ -60,9 +60,9 @@ public sealed class FormatPictureDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _widthBox.Text = picture.Width.ToString(CultureInfo.InvariantCulture);
-        _heightBox.Text = picture.Height.ToString(CultureInfo.InvariantCulture);
-        _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _widthBox.Text = picture.Width.ToString(CultureInfo.CurrentCulture);
+        _heightBox.Text = picture.Height.ToString(CultureInfo.CurrentCulture);
+        _rotationBox.Text = picture.RotationDegrees.ToString(CultureInfo.CurrentCulture);
         _lockAspectRatioBox.IsChecked = picture.LockAspectRatio;
         _cropLeftBox.Text = DrawingInputParser.FormatCropPercent(picture.CropLeft);
         _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
@@ -304,9 +304,9 @@ public sealed class FormatPictureDialog : Window
     private void ResetSizeToInitial()
     {
         _updatingAspect = true;
-        _widthBox.Text = _initialResult.Width.ToString(CultureInfo.InvariantCulture);
-        _heightBox.Text = _initialResult.Height.ToString(CultureInfo.InvariantCulture);
-        _rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.InvariantCulture);
+        _widthBox.Text = _initialResult.Width.ToString(CultureInfo.CurrentCulture);
+        _heightBox.Text = _initialResult.Height.ToString(CultureInfo.CurrentCulture);
+        _rotationBox.Text = _initialResult.RotationDegrees.ToString(CultureInfo.CurrentCulture);
         _lockAspectRatioBox.IsChecked = _initialResult.LockAspectRatio;
         _updatingAspect = false;
     }
@@ -323,10 +323,10 @@ public sealed class FormatPictureDialog : Window
     {
         if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
             return;
-        if (!double.TryParse(_widthBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) || width <= 0)
+        if (!NumericInputParser.TryParseFiniteDouble(_widthBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var width) || width <= 0)
             return;
         _updatingAspect = true;
-        _heightBox.Text = (width / _aspectRatio).ToString("0.###", CultureInfo.InvariantCulture);
+        _heightBox.Text = (width / _aspectRatio).ToString("0.###", CultureInfo.CurrentCulture);
         _updatingAspect = false;
     }
 
@@ -334,10 +334,10 @@ public sealed class FormatPictureDialog : Window
     {
         if (_updatingAspect || _lockAspectRatioBox.IsChecked != true || _aspectRatio <= 0)
             return;
-        if (!double.TryParse(_heightBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var height) || height <= 0)
+        if (!NumericInputParser.TryParseFiniteDouble(_heightBox.Text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var height) || height <= 0)
             return;
         _updatingAspect = true;
-        _widthBox.Text = (height * _aspectRatio).ToString("0.###", CultureInfo.InvariantCulture);
+        _widthBox.Text = (height * _aspectRatio).ToString("0.###", CultureInfo.CurrentCulture);
         _updatingAspect = false;
     }
 }
