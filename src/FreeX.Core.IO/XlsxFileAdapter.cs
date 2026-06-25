@@ -139,12 +139,14 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             return (
                 IndexedColors: loadedIndexedColors,
                 CellBorderStyles: XlsxCellBorderStyleReader.Read(stylesXml, workbookTheme, loadedIndexedColors),
+                CellGradientFills: XlsxCellGradientFillReader.Read(stylesXml, workbookTheme, loadedIndexedColors),
                 PivotTableStyles: XlsxPivotTableStyleMetadataReader.Load(stylesXml),
                 StructuredTableStyles: XlsxStructuredTableStyleMetadataReader.Load(stylesXml),
                 CustomViews: workbookMetadata.CustomViews);
         });
         var indexedColors = styleMetadata.IndexedColors;
         var cellBorderStyles = styleMetadata.CellBorderStyles;
+        var cellGradientFills = styleMetadata.CellGradientFills;
         var pivotTableStyleMetadata = styleMetadata.PivotTableStyles;
         var structuredTableStyleMetadata = styleMetadata.StructuredTableStyles;
         var xlsxCustomViews = styleMetadata.CustomViews;
@@ -274,6 +276,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
         var explicitStyleOnlyStyleIdsByXlsxStyleIndex = new Dictionary<int, StyleId?>();
         var styleIdsByNativeBorderStyleIndex = new Dictionary<int, StyleId?>();
+        var styleIdsByNativeGradientStyleIndex = new Dictionary<int, StyleId?>();
         var styleIdsByXlsxStyleValue = new Dictionary<object, StyleId?>();
         // Single shared dictionary instance reused across all sheets (cleared between sheets) to avoid
         // per-sheet allocation churn. The ordering invariant of ExplicitPopulatedCellStyles (XLSX
@@ -292,7 +295,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             var sheet = workbook.GetSheet(xlSheet.Name)!;
             sheetXmlLayout.TryGetValue(xlSheet.Name, out var xmlLayout);
             Dictionary<(uint Row, uint Col), int>? populatedCellStyleIndexes = null;
-            if (cellBorderStyles.HasVisibleBorders)
+            if (cellBorderStyles.HasVisibleBorders || cellGradientFills.HasAny)
             {
                 sharedPopulatedCellStyleIndexes = BuildCellStyleIndexLookup(
                     xmlLayout?.ExplicitPopulatedCellStyles,
@@ -454,8 +457,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         workbook.Theme,
                         styleIdsByXlsxStyleValue,
                         cellBorderStyles,
+                        cellGradientFills,
                         xlsxStyleIndex,
-                        styleIdsByNativeBorderStyleIndex) is { } styleId)
+                        styleIdsByNativeBorderStyleIndex,
+                        styleIdsByNativeGradientStyleIndex) is { } styleId)
                 {
                     cell.StyleId = styleId;
                 }
@@ -504,11 +509,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     workbook.Theme,
                     styleIdsByXlsxStyleValue,
                     cellBorderStyles,
+                    cellGradientFills,
                     populatedCellStyleIndexes is not null &&
                         populatedCellStyleIndexes.TryGetValue((row, col), out var ssStyleIndex)
                         ? ssStyleIndex
                         : null,
-                    styleIdsByNativeBorderStyleIndex);
+                    styleIdsByNativeBorderStyleIndex,
+                    styleIdsByNativeGradientStyleIndex);
                 var valueCell = Cell.FromValue(new TextValue(""));
                 if (styleId is { } ssStyleId)
                     valueCell.StyleId = ssStyleId;
@@ -524,7 +531,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
                     var xlCell = xlSheet.Cell((int)row, (int)col);
-                    var style = MapStyleWithNativeBorders(xlCell.Style, workbook.Theme, cellBorderStyles, styleIndex);
+                    var style = MapStyleWithNativeFills(xlCell.Style, workbook.Theme, cellBorderStyles, cellGradientFills, styleIndex);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
                         : workbook.RegisterStyle(style);
@@ -1050,21 +1057,36 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         WorkbookTheme theme,
         Dictionary<object, StyleId?> styleIdsByStyleValue,
         XlsxCellBorderStyleTable cellBorderStyles,
+        XlsxCellGradientFillTable cellGradientFills,
         int? xlsxStyleIndex,
-        Dictionary<int, StyleId?> styleIdsByNativeBorderStyleIndex)
+        Dictionary<int, StyleId?> styleIdsByNativeBorderStyleIndex,
+        Dictionary<int, StyleId?> styleIdsByNativeGradientStyleIndex)
     {
-        if (xlsxStyleIndex is { } styleIndex &&
-            cellBorderStyles.TryGetVisibleBorders(styleIndex, out _))
+        if (xlsxStyleIndex is { } styleIndex)
         {
-            if (styleIdsByNativeBorderStyleIndex.TryGetValue(styleIndex, out var cachedNativeStyleId))
-                return cachedNativeStyleId;
+            bool hasBorder   = cellBorderStyles.TryGetVisibleBorders(styleIndex, out _);
+            bool hasGradient = cellGradientFills.TryGet(styleIndex, out _);
+            if (hasBorder || hasGradient)
+            {
+                // Borders and gradients use separate caches so we pick the innermost hit.
+                // When both are present on the same xf, the gradient cache wins (it contains border too).
+                if (hasGradient)
+                {
+                    if (styleIdsByNativeGradientStyleIndex.TryGetValue(styleIndex, out var cachedGradId))
+                        return cachedGradId;
+                    var gradStyle = MapStyleWithNativeFills(xlCell.Style, theme, cellBorderStyles, cellGradientFills, styleIndex);
+                    StyleId? gradStyleId = gradStyle.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(gradStyle);
+                    styleIdsByNativeGradientStyleIndex[styleIndex] = gradStyleId;
+                    return gradStyleId;
+                }
 
-            var nativeStyle = MapStyleWithNativeBorders(xlCell.Style, theme, cellBorderStyles, styleIndex);
-            StyleId? nativeStyleId = nativeStyle.Equals(CellStyle.Default)
-                ? null
-                : workbook.RegisterStyle(nativeStyle);
-            styleIdsByNativeBorderStyleIndex[styleIndex] = nativeStyleId;
-            return nativeStyleId;
+                if (styleIdsByNativeBorderStyleIndex.TryGetValue(styleIndex, out var cachedNativeStyleId))
+                    return cachedNativeStyleId;
+                var nativeStyle = MapStyleWithNativeFills(xlCell.Style, theme, cellBorderStyles, cellGradientFills, styleIndex);
+                StyleId? nativeStyleId = nativeStyle.Equals(CellStyle.Default) ? null : workbook.RegisterStyle(nativeStyle);
+                styleIdsByNativeBorderStyleIndex[styleIndex] = nativeStyleId;
+                return nativeStyleId;
+            }
         }
 
         var styleValue = XlCellStyleValueAccessor is not null
@@ -1082,17 +1104,26 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return styleId;
     }
 
-    private static CellStyle MapStyleWithNativeBorders(
+    private static CellStyle MapStyleWithNativeFills(
         IXLStyle xlStyle,
         WorkbookTheme theme,
         XlsxCellBorderStyleTable cellBorderStyles,
+        XlsxCellGradientFillTable cellGradientFills,
         int? xlsxStyleIndex)
     {
         var style = XlsxClosedXmlCellMapper.MapStyle(xlStyle, theme);
-        if (xlsxStyleIndex is { } styleIndex &&
-            cellBorderStyles.TryGetVisibleBorders(styleIndex, out var nativeBorders))
+        if (xlsxStyleIndex is { } styleIndex)
         {
-            nativeBorders.ApplyTo(style);
+            if (cellBorderStyles.TryGetVisibleBorders(styleIndex, out var nativeBorders))
+                nativeBorders.ApplyTo(style);
+            if (cellGradientFills.TryGet(styleIndex, out var gradient))
+            {
+                style.GradientFill = gradient;
+                // A gradient fill cell has no solid FillColor from ClosedXML — clear any spurious
+                // default solid fill that ClosedXML assigned (it typically assigns a NoFill xf as solid).
+                style.FillColor = null;
+                style.FillPatternStyle = CellFillPatternStyle.None;
+            }
         }
 
         return style;

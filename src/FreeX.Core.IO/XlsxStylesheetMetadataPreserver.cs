@@ -27,6 +27,8 @@ internal static class XlsxStylesheetMetadataPreserver
         var changed = false;
         if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
             changed = true;
+        if (MergeStylesheetGradientFills(sourceStylesXml.Root, targetRoot, workbookNs))
+            changed = true;
         if (MergeStylesheetDifferentialStyles(sourceStylesXml.Root?.Element(workbookNs + "dxfs"), targetRoot, workbookNs))
             changed = true;
         if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
@@ -80,6 +82,10 @@ internal static class XlsxStylesheetMetadataPreserver
                     case "colors":
                     case "extLst":
                         return true;
+                    case "fills":
+                        if (HasGradientFill(reader))
+                            return true;
+                        break;
                     case "dxfs":
                         if (HasPreservableDifferentialStyles(reader))
                             return true;
@@ -97,6 +103,25 @@ internal static class XlsxStylesheetMetadataPreserver
         {
             return true;
         }
+    }
+
+    private static bool HasGradientFill(XmlReader reader)
+    {
+        if (reader.IsEmptyElement)
+            return false;
+
+        using var subtree = reader.ReadSubtree();
+        while (subtree.Read())
+        {
+            if (subtree.NodeType == XmlNodeType.Element &&
+                subtree.LocalName == "gradientFill" &&
+                subtree.NamespaceURI == "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasPreservableDifferentialStyles(XmlReader reader)
@@ -202,6 +227,53 @@ internal static class XlsxStylesheetMetadataPreserver
     private static bool IsNamespaceDeclaration(XmlReader reader) =>
         reader.Prefix == "xmlns" ||
         (reader.Prefix.Length == 0 && reader.LocalName == "xmlns");
+
+    /// <summary>
+    /// Copies gradient fill entries from the source styles.xml fills section into the target.
+    /// ClosedXML does not know about gradient fills; when a loaded workbook is saved, ClosedXML
+    /// replaces all gradient fill entries with a default patternFill:None. This method detects
+    /// that case and restores the gradient fill at the correct fill index by matching fillId
+    /// references in the cellXfs sections.
+    /// </summary>
+    private static bool MergeStylesheetGradientFills(XElement? sourceRoot, XElement targetRoot, XNamespace workbookNs)
+    {
+        var sourceFills = sourceRoot?.Element(workbookNs + "fills");
+        if (sourceFills is null)
+            return false;
+
+        var sourceGradientFills = sourceFills
+            .Elements(workbookNs + "fill")
+            .Select((fill, idx) => (Fill: fill, Index: idx))
+            .Where(pair => pair.Fill.Element(workbookNs + "gradientFill") is not null)
+            .ToList();
+
+        if (sourceGradientFills.Count == 0)
+            return false;
+
+        var targetFills = targetRoot.Element(workbookNs + "fills");
+        if (targetFills is null)
+            return false;
+
+        var targetFillList = targetFills.Elements(workbookNs + "fill").ToList();
+        var changed = false;
+
+        foreach (var (sourceFill, fillIndex) in sourceGradientFills)
+        {
+            if (fillIndex >= targetFillList.Count)
+                continue;
+
+            var targetFill = targetFillList[fillIndex];
+            // Only replace if target has a patternFill (not already a gradientFill)
+            if (targetFill.Element(workbookNs + "gradientFill") is not null)
+                continue; // already a gradient — no change needed
+
+            // Replace the target fill's content with the source gradient fill content
+            targetFill.ReplaceNodes(sourceFill.Nodes().Select(n => new XElement((XElement)n)));
+            changed = true;
+        }
+
+        return changed;
+    }
 
     private static bool MergeStylesheetColors(XElement? sourceColors, XElement targetRoot, XNamespace workbookNs)
     {
