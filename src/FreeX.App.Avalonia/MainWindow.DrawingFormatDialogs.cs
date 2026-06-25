@@ -599,11 +599,16 @@ public sealed partial class MainWindow
                 UpdatePreview();
         };
 
+        // Explicit Width+Height (rather than SizeToContent.Height) so the window fits its content snugly:
+        // the headless parity-capture render reads dialog.Bounds verbatim and SizeToContent.Height did not
+        // collapse there, leaving a large dead band below the OK/Cancel buttons. The height is sized to the
+        // gradient-stops group (two stop rows + direction + preview) plus the Start/End summary and button
+        // row, matching the compact Windows "Gradient Fill" dialog.
         var dialog = new Window
         {
             Title = UiText.Get("ShapeGradient_Title"),
             Width = 500,
-            SizeToContent = SizeToContent.Height,
+            Height = 300,
             MinWidth = 500,
             Background = Brushes.White,
             FontFamily = FormulaBarFontFamily,
@@ -646,7 +651,9 @@ public sealed partial class MainWindow
         AddGradientDirectionRow(stopGrid, directionBox);
         Grid.SetRow(preview, 3);
         Grid.SetColumnSpan(preview, 4);
-        preview.Margin = new Thickness(0, 13, 0, 0);
+        // Bottom margin keeps the preview's own 1px border clear of the GroupBox's bottom border so it
+        // is not clipped (the Windows dialog shows a clear gap below the gradient bar).
+        preview.Margin = new Thickness(0, 13, 0, 4);
         stopGrid.Children.Add(preview);
 
         startSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);

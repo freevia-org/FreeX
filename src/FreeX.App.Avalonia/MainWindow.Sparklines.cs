@@ -99,10 +99,17 @@ public sealed partial class MainWindow
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
         ApplyDataToolsComboBoxChrome(typeBox);
 
+        // Explicit Width+Height (rather than SizeToContent.WidthAndHeight) keeps the dialog as compact as
+        // the Windows "Create Sparklines" dialog (Data Range row + Location Range row + Type + OK/Cancel).
+        // The headless parity-capture render reads dialog.Bounds verbatim and SizeToContent did not collapse
+        // there, leaving the window at its large default size (dead space on the right and bottom). The
+        // width fits the range row (~200px box + 8 + 140px picker button); the height fits the three label +
+        // field rows, the type combo, and the OK/Cancel row.
         var dialog = new Window
         {
             Title = UiText.Get("Sparkline_InsertTitle"),
-            SizeToContent = SizeToContent.WidthAndHeight,
+            Width = 372,
+            Height = 230,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
