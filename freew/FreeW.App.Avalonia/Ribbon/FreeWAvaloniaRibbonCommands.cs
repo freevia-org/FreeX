@@ -1,0 +1,132 @@
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+using Free.Shared.Ribbon;
+using TextAlignment = FreeW.Core.Model.TextAlignment;
+
+namespace FreeW.App.Avalonia.Ribbon;
+
+/// <summary>
+/// Structured command registry for the FreeW Avalonia shell. This is the Avalonia analogue of the
+/// WPF shell's <c>FreeWRibbonCommands.cs</c>.
+///
+/// <para>
+/// Every ribbon command id declared in <see cref="FreeWRibbon.BuildDefinition()"/> must have a
+/// corresponding <see cref="RibbonCommandRegistry.Register"/> call here. Commands are grouped by
+/// functional area (mirroring the ribbon tab/group structure) for readability.
+/// </para>
+///
+/// <para>
+/// <b>Design rule:</b> This file owns all command wiring. <see cref="FreeWRibbon.BuildRegistry"/>
+/// delegates here. Shell-level callbacks (open/save/clipboard) are routed through the typed
+/// <see cref="RibbonHostCallbacks"/> record so that <c>MainWindow</c> stays thin.
+/// </para>
+///
+/// <para>
+/// <b>Wave A1 commands wired here (new in this wave):</b>
+/// <list type="bullet">
+///   <item><c>freew.strikethrough</c> — toggle run strikethrough</item>
+///   <item><c>freew.grow-font</c> — bump font size up one ladder step</item>
+///   <item><c>freew.shrink-font</c> — bump font size down one ladder step</item>
+///   <item><c>freew.clear-formatting</c> — reset run formatting to default</item>
+///   <item><c>freew.font-color</c> — set selection foreground colour (value = RRGGBB hex)</item>
+///   <item><c>freew.change-case</c> — cycle text case lower → Title → UPPER</item>
+///   <item><c>freew.select-all</c> — select the whole document</item>
+///   <item><c>freew.show-hide-para</c> — toggle paragraph mark display</item>
+///   <item><c>freew.increase-indent</c> — increase list/indent level</item>
+///   <item><c>freew.decrease-indent</c> — decrease list/indent level</item>
+///   <item><c>freew.style-heading3</c> — apply Heading 3 quick style</item>
+///   <item><c>freew.new</c> — create a new blank document</item>
+///   <item><c>freew.zoom-in</c> — zoom in 10%</item>
+///   <item><c>freew.zoom-out</c> — zoom out 10%</item>
+///   <item><c>freew.zoom-100</c> — reset zoom to 100%</item>
+/// </list>
+/// Existing 22 commands are also registered here (migrated from the old inline ad-hoc block).
+/// </para>
+/// </summary>
+internal static class FreeWAvaloniaRibbonCommands
+{
+    /// <summary>
+    /// Build and return the complete command registry for the Avalonia ribbon.
+    /// </summary>
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(callbacks);
+
+        var r = new RibbonCommandRegistry();
+
+        // ── File ─────────────────────────────────────────────────────────────
+        r.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
+        r.Register("freew.new",       new RelayCommand(callbacks.NewDocument));
+        r.Register("freew.open",      new RelayCommand(callbacks.Open));
+        r.Register("freew.save",      new RelayCommand(callbacks.Save));
+
+        // ── Clipboard ────────────────────────────────────────────────────────
+        r.Register("freew.cut",   new RelayCommand(callbacks.Cut));
+        r.Register("freew.copy",  new RelayCommand(callbacks.Copy));
+        r.Register("freew.paste", new RelayCommand(callbacks.Paste));
+
+        // ── Font ─────────────────────────────────────────────────────────────
+        r.Register("freew.font-family", new RelayValueCommand(value =>
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+                editor.SetSelectionFontFamily(value);
+        }));
+        r.Register("freew.font-size", new RelayValueCommand(value =>
+        {
+            if (double.TryParse(value, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pts) && pts > 0)
+                editor.SetSelectionFontSize(pts);
+        }));
+        r.Register("freew.bold",         new RelayCommand(editor.ToggleBold));
+        r.Register("freew.italic",        new RelayCommand(editor.ToggleItalic));
+        r.Register("freew.underline",     new RelayCommand(editor.ToggleUnderline));
+        r.Register("freew.strikethrough", new RelayCommand(editor.ToggleStrikethrough));
+        r.Register("freew.grow-font",     new RelayCommand(editor.GrowFont));
+        r.Register("freew.shrink-font",   new RelayCommand(editor.ShrinkFont));
+        r.Register("freew.clear-formatting", new RelayCommand(editor.ClearFormatting));
+        r.Register("freew.font-color",    new RelayValueCommand(value => editor.SetFontColor(value)));
+        r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
+
+        // ── Paragraph ────────────────────────────────────────────────────────
+        r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
+        r.Register("freew.numbering",        new RelayCommand(() => editor.ToggleList(ListKind.Number)));
+        r.Register("freew.align-left",       new RelayCommand(() => editor.SetAlignment(TextAlignment.Left)));
+        r.Register("freew.align-center",     new RelayCommand(() => editor.SetAlignment(TextAlignment.Center)));
+        r.Register("freew.align-right",      new RelayCommand(() => editor.SetAlignment(TextAlignment.Right)));
+        r.Register("freew.increase-indent",  new RelayCommand(editor.IncreaseIndent));
+        r.Register("freew.decrease-indent",  new RelayCommand(editor.DecreaseIndent));
+        r.Register("freew.show-hide-para",   new RelayCommand(() => editor.ShowParagraphMarks = !editor.ShowParagraphMarks));
+
+        // ── Styles ───────────────────────────────────────────────────────────
+        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
+        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyQuickStyle(16, bold: true)));
+        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyQuickStyle(14, bold: true)));
+        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyQuickStyle(12, bold: true)));
+        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyQuickStyle(24, bold: true)));
+
+        // ── Editing ──────────────────────────────────────────────────────────
+        r.Register("freew.undo",              new RelayCommand(editor.Undo));
+        r.Register("freew.redo",              new RelayCommand(editor.Redo));
+        r.Register("freew.select-all",        new RelayCommand(editor.SelectAll));
+        r.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
+
+        // ── Insert ───────────────────────────────────────────────────────────
+        r.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
+
+        // ── View ─────────────────────────────────────────────────────────────
+        r.Register("freew.printlayout",       new RelayCommand(callbacks.SetPrintLayout));
+        r.Register("freew.weblayout",         new RelayCommand(callbacks.SetWebLayout));
+        r.Register("freew.draftview",         new RelayCommand(callbacks.SetDraftView));
+        r.Register("freew.navigationpane",    new RelayCommand(callbacks.ToggleNavigationPane));
+        r.Register("freew.reveal-formatting", new RelayCommand(callbacks.ToggleRevealFormatting));
+        r.Register("freew.zoom-in",           new RelayCommand(() => callbacks.ApplyZoom(null, +0.1)));
+        r.Register("freew.zoom-out",          new RelayCommand(() => callbacks.ApplyZoom(null, -0.1)));
+        r.Register("freew.zoom-100",          new RelayCommand(() => callbacks.ApplyZoom(1.0, 0)));
+
+        // ── Review ───────────────────────────────────────────────────────────
+        r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
+
+        return r;
+    }
+}

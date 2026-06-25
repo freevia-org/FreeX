@@ -62,6 +62,10 @@ public sealed class DocumentView : Control
     private const double DraftInset = 16;
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
+    private bool _showParagraphMarks;
+
+    // Standard Word font-size ladder (pt).
+    private static readonly double[] FontSizeLadder = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
@@ -1050,6 +1054,20 @@ public sealed class DocumentView : Control
         foreach (var (mx, my, text, fmt) in _markers)
             context.DrawText(Build(text, fmt), new Point(mx, my));
 
+        // Paragraph marks (¶) rendered faintly at the end-sentinel of each block when enabled.
+        if (_showParagraphMarks)
+        {
+            var pilcrowFmt = new RunFormatting { FontSizePt = 8, ColorHex = "#999999" };
+            foreach (var pc in _placed)
+            {
+                if (pc.Sentinel)
+                {
+                    var ft = Build("¶", pilcrowFmt);
+                    context.DrawText(ft, new Point(pc.X + 1, pc.Y + pc.LineHeight - ft.Height));
+                }
+            }
+        }
+
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
     }
@@ -1291,6 +1309,96 @@ public sealed class DocumentView : Control
     public void ToggleBold() => ToggleRunFlag(f => f.Bold, (f, v) => f with { Bold = v });
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
+    public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+
+    /// <summary>
+    /// Increase the font size of the selection (or whole paragraph when no selection) to the next
+    /// standard size step: 8 9 10 11 12 14 16 18 20 24 28 36 48 72. Above 72 the step is 8.
+    /// </summary>
+    public void GrowFont() => ApplyRunFormatting(f => f with { FontSizePt = NextFontSize(f.FontSizePt ?? DefaultFontSizePt, +1) });
+
+    /// <summary>
+    /// Decrease the font size of the selection (or whole paragraph when no selection) to the
+    /// previous standard size step.
+    /// </summary>
+    public void ShrinkFont() => ApplyRunFormatting(f => f with { FontSizePt = NextFontSize(f.FontSizePt ?? DefaultFontSizePt, -1) });
+
+    /// <summary>
+    /// Remove all character-level formatting from the selection (resets to <see cref="RunFormatting.Default"/>).
+    /// Paragraph-level properties (alignment, list kind, style) are untouched.
+    /// </summary>
+    public void ClearFormatting() => ApplyRunFormatting(_ => RunFormatting.Default);
+
+    /// <summary>
+    /// Set the text (foreground) colour of the selection or current paragraph to the given RRGGBB
+    /// hex (e.g. <c>"#FF0000"</c>). Pass null to clear the explicit colour (inherit from theme).
+    /// </summary>
+    public void SetFontColor(string? colorHex) => ApplyRunFormatting(f => f with { ColorHex = colorHex });
+
+    /// <summary>
+    /// Extend the selection to encompass every block in the document (mirrors Ctrl+A / Edit → Select All).
+    /// </summary>
+    public void SelectAll()
+    {
+        if (_doc.Blocks.Count == 0)
+            return;
+        _selectionAnchor = new DocPosition(0, 0);
+        var lastBlock = _doc.Blocks.Count - 1;
+        _caret = new DocPosition(lastBlock, BlockLength(lastBlock));
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Cycle the text case of the selection: lower → Title → UPPER → lower.
+    /// When there is no selection the whole current paragraph is cycled.
+    /// </summary>
+    public void ChangeCase() => ApplyRunFormattingToText(CycleCase);
+
+    /// <summary>
+    /// Increase the list indent level of the current paragraph by one (up to a reasonable cap).
+    /// For non-list paragraphs this increases the left indent.
+    /// </summary>
+    public void IncreaseIndent()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        var fmt = paragraph.Formatting;
+        if (fmt.ListKind != ListKind.None)
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Min(fmt.ListLevel + 1, 8) }));
+        else
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { IndentLeftPt = fmt.IndentLeftPt + 36 }));
+    }
+
+    /// <summary>
+    /// Decrease the list indent level of the current paragraph by one (floor at 0).
+    /// For non-list paragraphs this decreases the left indent (floor at 0).
+    /// </summary>
+    public void DecreaseIndent()
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        var fmt = paragraph.Formatting;
+        if (fmt.ListKind != ListKind.None)
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { ListLevel = Math.Max(fmt.ListLevel - 1, 0) }));
+        else
+            _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt with { IndentLeftPt = Math.Max(fmt.IndentLeftPt - 36, 0) }));
+    }
+
+    /// <summary>
+    /// Toggle display of paragraph marks (¶) and other formatting symbols.
+    /// The marks are drawn as faint decorations that do not affect layout.
+    /// </summary>
+    public bool ShowParagraphMarks
+    {
+        get => _showParagraphMarks;
+        set
+        {
+            if (_showParagraphMarks == value)
+                return;
+            _showParagraphMarks = value;
+            InvalidateVisual();
+        }
+    }
 
     public void SetAlignment(TextAlignment alignment)
     {
@@ -1388,6 +1496,84 @@ public sealed class DocumentView : Control
             return false;
         DeleteSelection();
         return true;
+    }
+
+    /// <summary>
+    /// Returns the next font size on the standard ladder in the given direction (+1 = grow, -1 = shrink).
+    /// Clamps to [1, 1638] (Word's limits). Above the ladder top the step is 8pt.
+    /// </summary>
+    private static double NextFontSize(double current, int direction)
+    {
+        if (direction > 0)
+        {
+            foreach (var s in FontSizeLadder)
+                if (s > current + 0.01)
+                    return s;
+            return Math.Min(current + 8, 1638);
+        }
+        else
+        {
+            for (var i = FontSizeLadder.Length - 1; i >= 0; i--)
+                if (FontSizeLadder[i] < current - 0.01)
+                    return FontSizeLadder[i];
+            return Math.Max(current - 8, 1);
+        }
+    }
+
+    /// <summary>
+    /// Applies a character-level text transform to the raw characters in the selection or paragraph.
+    /// Used for Change Case operations that need to read each character before writing.
+    /// </summary>
+    private void ApplyRunFormattingToText(Func<string, string> textTransform)
+    {
+        var sel = NormalizedSelection();
+        if (sel is { } s && s.Start.Block == s.End.Block)
+        {
+            var block = s.Start.Block;
+            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+                return;
+            var a = s.Start.Offset;
+            var b = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var live = ParaCells(p);
+                var selectedText = new string(live.Skip(a).Take(b - a).Select(c => c.Ch).ToArray());
+                var transformed = textTransform(selectedText);
+                for (var i = 0; i < b - a && i < transformed.Length; i++)
+                    live[a + i] = live[a + i] with { Ch = transformed[i] };
+                SetRuns(p, live);
+            }));
+        }
+        else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+        {
+            _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
+            {
+                var live = ParaCells(p);
+                var text = new string(live.Select(c => c.Ch).ToArray());
+                var transformed = textTransform(text);
+                for (var i = 0; i < live.Count && i < transformed.Length; i++)
+                    live[i] = live[i] with { Ch = transformed[i] };
+                SetRuns(p, live);
+            }));
+        }
+    }
+
+    /// <summary>Cycles text case: lower → Title Case → UPPER → lower.</summary>
+    private static string CycleCase(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text;
+
+        // Determine current state.
+        var isAllLower = text == text.ToLowerInvariant();
+        var isAllUpper = text == text.ToUpperInvariant();
+        var isTitle = !isAllUpper && text == System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(text.ToLowerInvariant());
+
+        if (isAllLower)
+            return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(text);
+        if (isTitle)
+            return text.ToUpperInvariant();
+        return text.ToLowerInvariant();
     }
 
     private void ApplyRunFormatting(Func<RunFormatting, RunFormatting> transform)
