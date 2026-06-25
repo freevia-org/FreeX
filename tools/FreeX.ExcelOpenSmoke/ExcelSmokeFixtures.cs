@@ -4344,8 +4344,9 @@ internal static class ExcelSmokeFixtures
             workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Gradient", out object ws);
             worksheet = ws;
 
-            SetExcelCellValue(worksheet, 1, 1, "2-stop linear gradient (blue → orange)");
-            SetExcelCellValue(worksheet, 3, 1, "2-stop linear gradient (green → white, 90°)");
+            SetExcelCellValue(worksheet, 1, 1, "2-stop linear gradient (blue → orange, 0° left→right)");
+            SetExcelCellValue(worksheet, 6, 1, "2-stop linear gradient (green → white, 90° top→bottom)");
+            SetExcelCellValue(worksheet, 11, 1, "3-stop linear gradient (red → yellow → blue, 0°)");
 
             // Gradient 1: blue→orange, 0° (left→right)
             range    = ((dynamic)worksheet).Range("B2:E5");
@@ -4404,6 +4405,39 @@ internal static class ExcelSmokeFixtures
                 ReleaseComObject(interior);
                 ReleaseComObject(range);
                 stop1 = stop2 = gradStops = gradient = interior = range = null;
+            }
+
+            // Gradient 3: red→yellow→blue (3-stop), 0° (left→right)
+            object? stop3 = null;
+            range    = ((dynamic)worksheet).Range("B12:E15");
+            interior = ((dynamic)range).Interior;
+            try
+            {
+                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                gradient  = ((dynamic)interior).Gradient;
+                ((dynamic)gradient).Degree = 0.0;
+                gradStops = ((dynamic)gradient).ColorStops;
+                stop1 = ((dynamic)gradStops).Add(0.0);
+                ((dynamic)stop1).Color = ToOleColor(220, 30, 30);   // red
+                stop2 = ((dynamic)gradStops).Add(0.5);
+                ((dynamic)stop2).Color = ToOleColor(255, 230, 0);   // yellow
+                stop3 = ((dynamic)gradStops).Add(1.0);
+                ((dynamic)stop3).Color = ToOleColor(30, 60, 220);   // blue
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  COM note: gradient fill (3-stop red→yellow→blue) failed: {ex.Message}");
+            }
+            finally
+            {
+                ReleaseComObject(stop3);
+                ReleaseComObject(stop2);
+                ReleaseComObject(stop1);
+                ReleaseComObject(gradStops);
+                ReleaseComObject(gradient);
+                ReleaseComObject(interior);
+                ReleaseComObject(range);
+                stop1 = stop2 = stop3 = gradStops = gradient = interior = range = null;
             }
 
             SaveExcelWorkbook(workbook, outputPath);

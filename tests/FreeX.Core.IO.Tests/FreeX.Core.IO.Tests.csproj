@@ -31,6 +31,7 @@
   <ItemGroup>
     <None Include="Fixtures\Simple.xls" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fixtures\Simple.xlsb" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Fixtures\CellGradientFillLinear.xlsx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
