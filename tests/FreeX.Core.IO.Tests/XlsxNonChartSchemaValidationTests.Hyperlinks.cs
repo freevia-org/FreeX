@@ -195,4 +195,90 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
         return workbook;
     }
+
+    /// <summary>
+    /// Regression test for the P6 hyperlink-normalizer bug: a hyperlink whose <c>ref</c>
+    /// attribute is a whole-column reference (e.g. <c>A:A</c>) or whole-row reference
+    /// (e.g. <c>3:3</c>) must survive a round-trip without being silently removed.
+    /// </summary>
+    [Fact]
+    public void HyperlinkNormalizer_PreservesWholeColumnAndRowRefs()
+    {
+        // Build a workbook and inject raw hyperlink elements with column/row-wide refs.
+        var workbook = new Workbook("WholeColumnRowHyperlinks");
+        var sheet = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        using var stream = Save(workbook);
+        stream.Position = 0;
+
+        // Inject hyperlinks with column-only (A:A) and row-only (3:3) refs.
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        // Add an external relationship for the hyperlinks.
+        const string sheet1RelsPath = "xl/worksheets/_rels/sheet1.xml.rels";
+        var relsXml = archive.GetEntry(sheet1RelsPath) is { } relsEntry
+            ? LoadPackageXml(relsEntry)
+            : new XDocument(new XElement(packageRelNs + "Relationships"));
+        relsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rIdColHyperlink"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+            new XAttribute("Target", "https://example.com/col"),
+            new XAttribute("TargetMode", "External")));
+        relsXml.Root!.Add(new XElement(
+            packageRelNs + "Relationship",
+            new XAttribute("Id", "rIdRowHyperlink"),
+            new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"),
+            new XAttribute("Target", "https://example.com/row"),
+            new XAttribute("TargetMode", "External")));
+        ReplacePackageXml(archive, sheet1RelsPath, relsXml);
+
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var hyperlinkContainer = worksheetXml.Root!.Element(worksheetNs + "hyperlinks")
+            ?? new XElement(worksheetNs + "hyperlinks");
+        hyperlinkContainer.Add(new XElement(
+            worksheetNs + "hyperlink",
+            new XAttribute("ref", "A:A"),
+            new XAttribute(relNs + "id", "rIdColHyperlink")));
+        hyperlinkContainer.Add(new XElement(
+            worksheetNs + "hyperlink",
+            new XAttribute("ref", "3:3"),
+            new XAttribute(relNs + "id", "rIdRowHyperlink")));
+        if (worksheetXml.Root.Element(worksheetNs + "hyperlinks") is null)
+            worksheetXml.Root.Add(hyperlinkContainer);
+        ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        archive.Dispose();
+
+        // Save again through the adapter (triggers normalization on the full-save path).
+        stream.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(stream);
+
+        loaded.GetSheetAt(0).SetCell(
+            new CellAddress(loaded.GetSheetAt(0).Id, 9, 9),
+            new NumberValue(99));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        // The normalizer must not drop the whole-column/row hyperlink elements.
+        saved.Position = 0;
+        using var resultArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var savedWorksheetXml = LoadPackageXml(resultArchive, "xl/worksheets/sheet1.xml");
+        var savedHyperlinks = savedWorksheetXml.Root!
+            .Element(worksheetNs + "hyperlinks")?
+            .Elements(worksheetNs + "hyperlink")
+            .Select(e => e.Attribute("ref")?.Value)
+            .ToList()
+            ?? [];
+
+        savedHyperlinks.Should().Contain("A:A",
+            "a whole-column hyperlink ref must survive normalization");
+        savedHyperlinks.Should().Contain("3:3",
+            "a whole-row hyperlink ref must survive normalization");
+    }
 }

@@ -111,6 +111,28 @@ public partial class PhaseCFinancialTests
         CalcError("RATE(10,100,100)").Should().Be("#NUM!");
     }
 
+    // ── P2 regression: RATE convergence guard must be scale-relative ─────────
+
+    [Fact]
+    public void Rate_LargeLoan_ConvergesToCorrectRate()
+    {
+        // RATE(360, -60000, 10000000): 30-year monthly mortgage at $10M.
+        // Excel returns ≈ 0.00500583 (about 0.5% per month = ~6% annual).
+        // The absolute residual at the true root is ~4.77e-7 > 1e-7 in absolute terms,
+        // but is tiny relative to the problem scale (~1e7).  The guard must be scale-relative
+        // to avoid wrongly returning #NUM! for this legitimately converged solution.
+        double result = Calc("RATE(360,-60000,10000000)");
+        result.Should().BeApproximately(0.00500583, 1e-6);
+    }
+
+    [Fact]
+    public void Rate_PathologicalInput_StillReturnsNumError_AfterScaledGuard()
+    {
+        // Confirm the scaled guard still rejects a genuine non-converger.
+        // RATE(10, 100, 100): same-sign pmt and pv, no real solution.
+        CalcError("RATE(10,100,100)").Should().Be("#NUM!");
+    }
+
     // ── MIRR ─────────────────────────────────────────────────────────────
 
     [Fact]

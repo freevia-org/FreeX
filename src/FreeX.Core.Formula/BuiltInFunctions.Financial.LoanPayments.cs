@@ -22,7 +22,9 @@ public static partial class BuiltInFunctions
         if (type == 1)
         {
             if (per == 1) return 0.0;
-            return CalcIpmt(rate, per - 1, nper, pv, fv, 0);
+            // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2
+            // The annuity-due payment is discounted back one period relative to ordinary annuity.
+            return CalcIpmt(rate, per - 1, nper, pv, fv, 0) / (1 + rate);
         }
         double pmt = CalcPmt(rate, nper, pv, fv, 0);
         double pvAtPer = pv * Math.Pow(1 + rate, per - 1)

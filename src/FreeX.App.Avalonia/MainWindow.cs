@@ -5596,9 +5596,12 @@ public sealed partial class MainWindow : Window
             : GridResizeSizePlanner.ClampRowSize(requestedSize);
 
         RestoreHeaderResizeOriginal(drag);
-        drag.Pointer.Capture(null);
-        _headerResizeDrag = null;
+        // Detach BEFORE releasing capture: drag.Pointer.Capture(null) synchronously raises
+        // PointerCaptureLost, which would otherwise re-enter HeaderResizeCapturePointerCaptureLost (it sees
+        // _headerResizeDrag still set) and run CancelHeaderResizePreview mid-commit/cancel.
         DetachHeaderResizeCaptureHandlers();
+        _headerResizeDrag = null;
+        drag.Pointer.Capture(null);
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
@@ -5636,9 +5639,12 @@ public sealed partial class MainWindow : Window
             return;
 
         RestoreHeaderResizeOriginal(drag);
-        drag.Pointer.Capture(null);
-        _headerResizeDrag = null;
+        // Detach BEFORE releasing capture: drag.Pointer.Capture(null) synchronously raises
+        // PointerCaptureLost, which would otherwise re-enter HeaderResizeCapturePointerCaptureLost (it sees
+        // _headerResizeDrag still set) and run CancelHeaderResizePreview mid-commit/cancel.
         DetachHeaderResizeCaptureHandlers();
+        _headerResizeDrag = null;
+        drag.Pointer.Capture(null);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
     }
 
