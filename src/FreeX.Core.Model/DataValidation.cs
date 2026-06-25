@@ -45,4 +45,13 @@ public sealed class DataValidation
     public IReadOnlyList<string>? NativeChildXmls { get; set; }
     public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
     public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
+
+    /// <summary>
+    /// When true, the validation originated from (or must be written to) the worksheet x14 extLst
+    /// block (<x14:dataValidation> with <xm:f>/<xm:sqref>). Excel 2010+ uses this path for List
+    /// validations whose source formula references another sheet or is otherwise too long for the
+    /// legacy &lt;dataValidation&gt; element. The legacy element is kept with an empty formula1 so
+    /// older readers can still open the file; the x14 block carries the real formula.
+    /// </summary>
+    public bool IsX14 { get; set; }
 }

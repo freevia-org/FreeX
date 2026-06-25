@@ -82,6 +82,12 @@ public sealed partial class XlsxFileAdapter
             XlsxAdvancedConditionalFormatWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (featurePlan.HasX14DataValidations)
+        {
+            packageStream.Position = 0;
+            XlsxX14DataValidationWriter.Save(packageStream, workbook);
+        }
+
         if (featurePlan.HasSparklines)
         {
             packageStream.Position = 0;
@@ -268,6 +274,15 @@ public sealed partial class XlsxFileAdapter
 
         packageStream.Position = 0;
         var sourceParts = PreserveSourcePackageParts(workbook, packageStream);
+
+        // Re-apply x14 data validations after source-part preservation. The source package
+        // restores the original worksheet XML (which may carry an x14 DV extLst block); we
+        // overwrite it with the current model state so edits to x14 DV rules survive save.
+        if (featurePlan.HasX14DataValidations)
+        {
+            packageStream.Position = 0;
+            XlsxX14DataValidationWriter.Save(packageStream, workbook);
+        }
 
         // Re-apply after source-part preservation: PreserveSourcePackageParts restores Excel's
         // original worksheet XML, which can carry formulas (notably dynamic arrays stored as
@@ -506,6 +521,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasPhoneticProperties;
         public bool HasAllowEditRanges;
         public bool HasAdvancedConditionalFormats;
+        public bool HasX14DataValidations;
         public bool HasSparklines;
         public bool HasThreadedComments;
         public bool HasBackgroundImages;
@@ -550,6 +566,7 @@ public sealed partial class XlsxFileAdapter
             HasPhoneticProperties |= sheet.PhoneticProperties is not null;
             HasAllowEditRanges |= sheet.AllowEditRanges.Count > 0;
             HasAdvancedConditionalFormats |= XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(sheet);
+            HasX14DataValidations |= XlsxX14DataValidationWriter.HasX14DataValidations(sheet);
             HasSparklines |= sheet.Sparklines.Count > 0;
             HasThreadedComments |= XlsxWorksheetThreadedCommentMapper.HasThreadedComments(sheet);
             HasBackgroundImages |= sheet.BackgroundImage is not null;

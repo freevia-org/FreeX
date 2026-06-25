@@ -135,8 +135,11 @@ internal static class XlsxDataValidationClosedXmlMapper
                 if (!string.IsNullOrEmpty(dv.PromptTitle)) xlDv.InputTitle = dv.PromptTitle;
                 if (!string.IsNullOrEmpty(dv.PromptMessage)) xlDv.InputMessage = dv.PromptMessage;
 
-                var f1 = dv.Formula1 ?? "";
-                var f2 = dv.Formula2 ?? "";
+                // For x14 rules the real formula lives in the worksheet extLst x14 block;
+                // the legacy <dataValidation> intentionally carries an empty formula1 so
+                // that older readers gracefully ignore it. Pass empty strings here.
+                var f1 = dv.IsX14 ? "" : (dv.Formula1 ?? "");
+                var f2 = dv.IsX14 ? "" : (dv.Formula2 ?? "");
 
                 switch (dv.Type)
                 {

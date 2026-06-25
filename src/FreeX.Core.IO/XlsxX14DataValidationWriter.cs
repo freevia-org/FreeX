@@ -1,0 +1,263 @@
+using System.IO.Compression;
+using System.Text;
+using System.Xml.Linq;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO;
+
+/// <summary>
+/// Writes x14-extension data validation rules into the worksheet extLst.
+///
+/// For each <see cref="DataValidation"/> with <see cref="DataValidation.IsX14"/> = true this
+/// writer emits:
+/// <code>
+/// &lt;extLst&gt;
+///   &lt;ext uri="{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}"
+///        xmlns:x14="…/2009/9/main" xmlns:xm="…/excel/2006/main"&gt;
+///     &lt;x14:dataValidations&gt;
+///       &lt;x14:dataValidation type="list" …&gt;
+///         &lt;x14:formula1&gt;&lt;xm:f&gt;Sheet2!$A$1:$A$5&lt;/xm:f&gt;&lt;/x14:formula1&gt;
+///         &lt;xm:sqref&gt;B2&lt;/xm:sqref&gt;
+///       &lt;/x14:dataValidation&gt;
+///     &lt;/x14:dataValidations&gt;
+///   &lt;/ext&gt;
+/// &lt;/extLst&gt;
+/// </code>
+///
+/// The legacy <c>&lt;dataValidation&gt;</c> for the same cell is kept with an empty
+/// <c>&lt;formula1&gt;</c> so older readers can still open the file without errors; the x14 block
+/// carries the real (cross-sheet) formula.
+///
+/// Any pre-existing extLst ext children with other URIs are preserved unchanged.
+/// </summary>
+internal static class XlsxX14DataValidationWriter
+{
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+    private static readonly XNamespace XmNs = "http://schemas.microsoft.com/office/excel/2006/main";
+
+    public static bool HasX14DataValidations(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (HasX14DataValidations(sheet))
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool HasX14DataValidations(Sheet sheet)
+    {
+        foreach (var dv in sheet.DataValidations)
+        {
+            if (dv.IsX14)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static void Save(Stream xlsxStream, Workbook workbook)
+    {
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap;
+        using (var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true))
+            worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+
+        if (worksheetPathMap is null)
+            return;
+
+        if (xlsxStream.CanSeek)
+            xlsxStream.Position = 0;
+
+        using var archive2 = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (!HasX14DataValidations(sheet))
+                continue;
+
+            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive2.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var root = worksheetXml.Root;
+            if (root is null)
+                continue;
+
+            WriteX14DataValidations(root, sheet);
+
+            XlsxPackageXmlEditor.ReplaceXml(archive2, worksheetPath, worksheetXml);
+        }
+    }
+
+    private static void WriteX14DataValidations(XElement worksheetRoot, Sheet sheet)
+    {
+        var x14Rules = new List<DataValidation>();
+        foreach (var dv in sheet.DataValidations)
+        {
+            if (dv.IsX14)
+                x14Rules.Add(dv);
+        }
+
+        if (x14Rules.Count == 0)
+            return;
+
+        // Build the x14 dataValidations element.
+        var x14DvElements = new List<XElement>(x14Rules.Count);
+        foreach (var dv in x14Rules)
+        {
+            var x14Dv = BuildX14DataValidationElement(dv);
+            x14DvElements.Add(x14Dv);
+        }
+
+        var x14DvsElement = new XElement(X14Ns + "dataValidations",
+            new XAttribute("count", x14DvElements.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            x14DvElements);
+
+        // Find or create the worksheet extLst, then find/replace the x14 DV ext block.
+        var existingExtLst = FindOrCreateExtLst(worksheetRoot);
+
+        // Remove any existing x14 DV ext block (we'll rewrite it).
+        var existing = existingExtLst.Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "ext" && e.Attribute("uri")?.Value == XlsxX14DataValidationReader.X14DvUri);
+        existing?.Remove();
+
+        // Add the new x14 DV ext block (at the end of extLst, after other ext children).
+        existingExtLst.Add(new XElement(
+            WorksheetNs + "ext",
+            new XAttribute(XNamespace.Xmlns + "x14", X14Ns.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xm", XmNs.NamespaceName),
+            new XAttribute("uri", XlsxX14DataValidationReader.X14DvUri),
+            x14DvsElement));
+    }
+
+    private static XElement BuildX14DataValidationElement(DataValidation dv)
+    {
+        var x14Dv = new XElement(X14Ns + "dataValidation");
+
+        // Attributes
+        if (dv.Type != DvType.Any)
+            x14Dv.SetAttributeValue("type", ToTypeString(dv.Type));
+        if (ShouldWriteOperator(dv.Type))
+            x14Dv.SetAttributeValue("operator", ToOperatorString(dv.Operator));
+        if (dv.AllowBlank)
+            x14Dv.SetAttributeValue("allowBlank", "1");
+        // In OOXML, showDropDown="1" means HIDE the dropdown. When ShowDropdown=false we write "1".
+        if (!dv.ShowDropdown)
+            x14Dv.SetAttributeValue("showDropDown", "1");
+        if (dv.AlertStyle != DvAlertStyle.Stop)
+            x14Dv.SetAttributeValue("errorStyle", ToAlertStyleString(dv.AlertStyle));
+        if (!dv.ShowInputMessage)
+            x14Dv.SetAttributeValue("showInputMessage", "0");
+        if (!dv.ShowErrorMessage)
+            x14Dv.SetAttributeValue("showErrorMessage", "0");
+        if (!string.IsNullOrEmpty(dv.ErrorTitle))
+            x14Dv.SetAttributeValue("errorTitle", dv.ErrorTitle);
+        if (!string.IsNullOrEmpty(dv.ErrorMessage))
+            x14Dv.SetAttributeValue("error", dv.ErrorMessage);
+        if (!string.IsNullOrEmpty(dv.PromptTitle))
+            x14Dv.SetAttributeValue("promptTitle", dv.PromptTitle);
+        if (!string.IsNullOrEmpty(dv.PromptMessage))
+            x14Dv.SetAttributeValue("prompt", dv.PromptMessage);
+
+        // <x14:formula1><xm:f>…</xm:f></x14:formula1>
+        var formula1 = dv.Formula1;
+        if (!string.IsNullOrEmpty(formula1))
+        {
+            x14Dv.Add(new XElement(X14Ns + "formula1",
+                new XElement(XmNs + "f", formula1)));
+        }
+
+        // <x14:formula2><xm:f>…</xm:f></x14:formula2>
+        if (!string.IsNullOrEmpty(dv.Formula2))
+        {
+            x14Dv.Add(new XElement(X14Ns + "formula2",
+                new XElement(XmNs + "f", dv.Formula2)));
+        }
+
+        // <xm:sqref>…</xm:sqref> — MUST be last child per schema.
+        x14Dv.Add(new XElement(XmNs + "sqref", BuildSqref(dv)));
+
+        return x14Dv;
+    }
+
+    /// <summary>
+    /// Finds the last extLst element at the worksheet root level, or creates a new one appended
+    /// after &lt;tableParts&gt; / at the end of the root. Any pre-existing extLst children with
+    /// other URIs are left intact.
+    /// </summary>
+    private static XElement FindOrCreateExtLst(XElement worksheetRoot)
+    {
+        // Prefer an existing extLst (the last one if there are multiples).
+        var existing = worksheetRoot.Elements()
+            .LastOrDefault(e => e.Name.LocalName == "extLst");
+        if (existing is not null)
+            return existing;
+
+        // Create a new extLst positioned after any tableParts element (or at the end).
+        var newExtLst = new XElement(WorksheetNs + "extLst");
+        var tableParts = worksheetRoot.Elements()
+            .LastOrDefault(e => e.Name.LocalName == "tableParts");
+        if (tableParts is not null)
+            tableParts.AddAfterSelf(newExtLst);
+        else
+            worksheetRoot.Add(newExtLst);
+
+        return newExtLst;
+    }
+
+    private static string BuildSqref(DataValidation dv)
+    {
+        if (dv.AdditionalRanges.Count == 0)
+            return RangeToSqrefPart(dv.AppliesTo);
+
+        var sb = new StringBuilder(RangeToSqrefPart(dv.AppliesTo));
+        foreach (var range in dv.AdditionalRanges)
+            sb.Append(' ').Append(RangeToSqrefPart(range));
+
+        return sb.ToString();
+    }
+
+    private static string RangeToSqrefPart(GridRange range) =>
+        range.Start == range.End
+            ? range.Start.ToA1()
+            : range.ToString();
+
+    private static bool ShouldWriteOperator(DvType type) =>
+        type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time or DvType.TextLength;
+
+    private static string ToTypeString(DvType type) => type switch
+    {
+        DvType.WholeNumber => "whole",
+        DvType.Decimal => "decimal",
+        DvType.List => "list",
+        DvType.Date => "date",
+        DvType.Time => "time",
+        DvType.TextLength => "textLength",
+        DvType.Custom => "custom",
+        _ => "none",
+    };
+
+    private static string ToOperatorString(DvOperator op) => op switch
+    {
+        DvOperator.NotBetween => "notBetween",
+        DvOperator.Equal => "equal",
+        DvOperator.NotEqual => "notEqual",
+        DvOperator.GreaterThan => "greaterThan",
+        DvOperator.LessThan => "lessThan",
+        DvOperator.GreaterThanOrEqual => "greaterThanOrEqual",
+        DvOperator.LessThanOrEqual => "lessThanOrEqual",
+        _ => "between",
+    };
+
+    private static string ToAlertStyleString(DvAlertStyle style) => style switch
+    {
+        DvAlertStyle.Warning => "warning",
+        DvAlertStyle.Information => "information",
+        _ => "stop",
+    };
+}

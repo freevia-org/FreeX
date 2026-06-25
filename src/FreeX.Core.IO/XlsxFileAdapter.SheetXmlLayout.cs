@@ -72,6 +72,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<FormControlModel> FormControls,
         IReadOnlyList<ConditionalFormat> AdvancedConditionalFormats,
         IReadOnlyList<DataValidationNativeMetadata> DataValidationNativeMetadata,
+        IReadOnlyList<X14DataValidationMetadata> X14DataValidations,
         IgnoredErrorLayout IgnoredErrors,
         WorksheetIgnoredErrorsMetadataModel? IgnoredErrorsMetadata,
         IReadOnlyList<CellAddress> CellWatches,
@@ -279,6 +280,7 @@ public sealed partial class XlsxFileAdapter
         var formControls = XlsxFormControlMapper.ReadWorksheet(archive, worksheetPath, worksheetXml);
         var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
+        var x14DataValidations = XlsxX14DataValidationReader.Read(worksheetXml);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
         var ignoredErrorsMetadata = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrorsMetadata(worksheetXml, worksheetNs);
         var cellWatches = XlsxWorksheetDiagnosticsMapper.ReadCellWatches(worksheetXml, worksheetNs);
@@ -396,6 +398,7 @@ public sealed partial class XlsxFileAdapter
             formControls,
             advancedConditionalFormats,
             dataValidationNativeMetadata,
+            x14DataValidations,
             ignoredErrors,
             ignoredErrorsMetadata,
             cellWatches,

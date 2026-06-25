@@ -283,13 +283,27 @@ internal static class XlsxDataValidationNativeMetadataMapper
         if (!string.IsNullOrEmpty(validation.PromptMessage))
             validationElement.SetAttributeValue(PromptAttributeName, validation.PromptMessage);
 
-        var formula1 = validation.Type == DvType.List
-            ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
-            : validation.Formula1;
+        // For x14 rules the real formula lives in the worksheet extLst x14 block; the
+        // legacy element intentionally carries an empty formula1 so older readers ignore it.
+        string? formula1;
+        string? formula2;
+        if (validation.IsX14)
+        {
+            formula1 = null;
+            formula2 = null;
+        }
+        else
+        {
+            formula1 = validation.Type == DvType.List
+                ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
+                : validation.Formula1;
+            formula2 = validation.Formula2;
+        }
+
         if (!string.IsNullOrEmpty(formula1))
             validationElement.Add(new XElement(Formula1Name, formula1));
-        if (!string.IsNullOrEmpty(validation.Formula2))
-            validationElement.Add(new XElement(Formula2Name, validation.Formula2));
+        if (!string.IsNullOrEmpty(formula2))
+            validationElement.Add(new XElement(Formula2Name, formula2));
 
         ApplyValidationNativeMetadata(validationElement, validation, WorksheetNs);
         return true;

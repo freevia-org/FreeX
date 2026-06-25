@@ -701,7 +701,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             try { XlsxDataValidationClosedXmlMapper.Load(xlSheet, sheet, warnings); }
             catch (Exception ex) { warnings.Add($"[data-validation] Sheet '{xlSheet.Name}': {ex.Message}"); }
             if (xmlLayout is not null)
+            {
                 XlsxDataValidationNativeMetadataMapper.Apply(sheet, xmlLayout.DataValidationNativeMetadata);
+                XlsxX14DataValidationReader.Apply(sheet, xmlLayout.X14DataValidations);
+            }
 
             if (xmlLayout is null)
             {
