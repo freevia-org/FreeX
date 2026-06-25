@@ -367,11 +367,70 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
                     }
                 }
             }
+
+            // ─ Layer 6: footnote region (separator + footnote texts above footer) ─────────────────
+            // Render footnotes that appear on this page.  We draw them above the footer zone using
+            // the same TextBlock approach as PageBox.BuildNoteRegion.
+            if (box.FootnoteIds.Count > 0)
+            {
+                var footnoteBmp = RenderNoteRegion(doc, box.FootnoteIds, Array.Empty<int>(),
+                    pageWDip, marginLeft, marginRight, isEndnotePage: false);
+                if (footnoteBmp is not null)
+                {
+                    // Place the footnote region just above the footer strip.
+                    double fnH = footnoteBmp.Height;
+                    double fnY = pixH - hfH - fnH - 4;
+                    var fnVis = new DrawingVisual();
+                    using (var dc = fnVis.RenderOpen())
+                        dc.DrawImage(footnoteBmp, new Rect(0, fnY, pixW, fnH));
+                    bmp.Render(fnVis);
+                }
+            }
+
+            // Note: EndnoteIds rendering is intentionally deferred to the post-loop synthetic page
+            // (see below). Endnotes never appear inline on body pages — they collect at document end.
         }
 
         string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
         SavePng(bmp, outPath);
         Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({pageCount} pages, composite)");
+    }
+
+    // ═══ Synthetic endnotes page (rendered after all body pages) ══════════════════════════════════
+    // The PaginatedEditorPanel appends one extra PageBox for endnotes when the document has endnotes.
+    // This box has no corresponding body paginator page, so we render it separately here.
+    // Find it by IsEndnoteSyntheticPage (it may be at any index since overflow pagination can produce
+    // a different body-page count than the panel body-box count).
+    var endnotePageBox = panel?.PageBoxes.FirstOrDefault(b => b.IsEndnoteSyntheticPage);
+    if (endnotePageBox is not null && endnotePageBox.EndnoteIds.Count > 0)
+    {
+        var endnoteBox = endnotePageBox; // the synthetic page box
+        if (true)
+        {
+            var pageColor = Colors.White;
+            var bmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+
+            // White background page.
+            var bgVis = new DrawingVisual();
+            using (var dc = bgVis.RenderOpen())
+                dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
+            bmp.Render(bgVis);
+
+            // Endnote region starting at top-margin.
+            var endnoteBmp = RenderNoteRegion(doc, Array.Empty<int>(), endnoteBox.EndnoteIds,
+                pageWDip, marginLeft, marginRight, isEndnotePage: true);
+            if (endnoteBmp is not null)
+            {
+                var enVis = new DrawingVisual();
+                using (var dc = enVis.RenderOpen())
+                    dc.DrawImage(endnoteBmp, new Rect(0, marginTop, pixW, endnoteBmp.Height));
+                bmp.Render(enVis);
+            }
+
+            string endnotePath = Path.Combine(outDir, $"{name}_p{pageCount + 1}.png");
+            SavePng(bmp, endnotePath);
+            Console.WriteLine($"ok    {Path.GetFileName(endnotePath)} (endnotes page, composite)");
+        }
     }
 }
 
@@ -435,6 +494,129 @@ static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pa
     }
     pageBmp.Render(pageVis);
     return pageBmp;
+}
+
+/// <summary>
+/// Renders the footnote or endnote region for a page as a bitmap, using the same visual layout as
+/// <see cref="PageBox.BuildNoteRegion"/>: separator rule + numbered note text entries.  Returns null
+/// if all requested note IDs are missing from the document.
+/// </summary>
+static RenderTargetBitmap? RenderNoteRegion(
+    TextDocument doc,
+    IReadOnlyList<int> footnoteIds,
+    IReadOnlyList<int> endnoteIds,
+    double pageWDip,
+    double marginLeft,
+    double marginRight,
+    bool isEndnotePage)
+{
+    double textSizePx = 9.0 * (96.0 / 72.0);   // 9 pt footnote text
+    double sepWidth   = isEndnotePage ? pageWDip - marginLeft - marginRight : 60.0;
+
+    // Build a StackPanel mirroring PageBox.BuildNoteRegion and measure it.
+    var panel = new System.Windows.Controls.StackPanel
+    {
+        Orientation = System.Windows.Controls.Orientation.Vertical,
+        Background  = System.Windows.Media.Brushes.White
+    };
+
+    bool hasContent = false;
+
+    if (footnoteIds.Count > 0)
+    {
+        // Separator line
+        panel.Children.Add(new System.Windows.Controls.Border
+        {
+            Height                  = 1,
+            Width                   = sepWidth,
+            HorizontalAlignment     = System.Windows.HorizontalAlignment.Left,
+            Margin                  = new System.Windows.Thickness(marginLeft, 4, 0, 2),
+            Background              = System.Windows.Media.Brushes.Black
+        });
+
+        foreach (var id in footnoteIds)
+        {
+            if (!doc.Footnotes.TryGetValue(id, out var footnote)) continue;
+            var text = footnote.PlainText;
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var tb = new System.Windows.Controls.TextBlock
+            {
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
+                FontSize     = textSizePx
+            };
+            tb.Inlines.Add(new System.Windows.Documents.Run(id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            {
+                BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                FontSize          = textSizePx * 0.75
+            });
+            tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+            panel.Children.Add(tb);
+            hasContent = true;
+        }
+    }
+
+    if (endnoteIds.Count > 0)
+    {
+        if (isEndnotePage)
+        {
+            panel.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text    = "Endnotes",
+                FontSize = textSizePx + 2,
+                FontWeight = System.Windows.FontWeights.Bold,
+                Margin  = new System.Windows.Thickness(marginLeft, 8, marginRight, 2)
+            });
+        }
+
+        panel.Children.Add(new System.Windows.Controls.Border
+        {
+            Height  = 1,
+            Margin  = new System.Windows.Thickness(marginLeft, 2, marginRight, 2),
+            Background = System.Windows.Media.Brushes.Black
+        });
+
+        foreach (var id in endnoteIds)
+        {
+            if (!doc.Endnotes.TryGetValue(id, out var endnote)) continue;
+            var text = endnote.PlainText;
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var tb = new System.Windows.Controls.TextBlock
+            {
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                Margin       = new System.Windows.Thickness(marginLeft, 1, marginRight, 1),
+                FontSize     = textSizePx
+            };
+            tb.Inlines.Add(new System.Windows.Documents.Run(id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            {
+                BaselineAlignment = System.Windows.BaselineAlignment.Superscript,
+                FontSize          = textSizePx * 0.75
+            });
+            tb.Inlines.Add(new System.Windows.Documents.Run(" " + text));
+            panel.Children.Add(tb);
+            hasContent = true;
+        }
+    }
+
+    if (!hasContent)
+        return null;
+
+    // Measure and arrange the panel at page width so text wraps correctly.
+    panel.Measure(new System.Windows.Size(pageWDip, double.PositiveInfinity));
+    panel.Arrange(new System.Windows.Rect(new System.Windows.Size(pageWDip, panel.DesiredSize.Height)));
+    panel.UpdateLayout();
+
+    int pixW = (int)Math.Ceiling(pageWDip);
+    int pixH = (int)Math.Ceiling(panel.ActualHeight > 0 ? panel.ActualHeight : panel.DesiredSize.Height);
+    if (pixH <= 0 || pixW <= 0)
+        return null;
+
+    var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(pixW, pixH, 96, 96,
+        System.Windows.Media.PixelFormats.Pbgra32);
+    bmp.Render(panel);
+    return bmp;
 }
 
 /// <summary>
