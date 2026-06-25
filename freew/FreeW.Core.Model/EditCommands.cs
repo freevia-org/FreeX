@@ -1531,6 +1531,111 @@ public sealed class SetShapeTextDirectionCommand(int paragraphIndex, int runInde
 }
 
 /// <summary>
+/// Set the rotation angle and flip flags on the inline shape at the given paragraph/run indices,
+/// snapshotting prior values for undo. Mirrors <see cref="SetImageRotationCommand"/> for shapes.
+/// </summary>
+public sealed class SetShapeRotationCommand(int paragraphIndex, int runIndex, double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+{
+    private double _prevAngle;
+    private bool _prevFlipH, _prevFlipV;
+    private bool _applied;
+
+    public string Label => "Rotate/Flip Shape";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevAngle = shape.RotationAngle; _prevFlipH = shape.FlipH; _prevFlipV = shape.FlipV;
+        shape.RotationAngle = angleDeg; shape.FlipH = flipH; shape.FlipV = flipV;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.RotationAngle = _prevAngle; shape.FlipH = _prevFlipH; shape.FlipV = _prevFlipV;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the floating wrapping mode on the inline shape at the given paragraph/run indices,
+/// snapshotting the prior value for undo. Mirrors <see cref="SetImagePositionCommand"/> for shapes.
+/// </summary>
+public sealed class SetShapeWrappingCommand(int paragraphIndex, int runIndex, ImageWrapping wrapping) : IDocumentCommand
+{
+    private ImageWrapping _previous;
+    private bool _applied;
+
+    public string Label => "Shape Wrap Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        // Ensure a FloatingPlacement exists before writing wrapping.
+        shape.Placement ??= new FloatingPlacement();
+        _previous = shape.Placement.Wrapping;
+        shape.Placement.Wrapping = wrapping;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        if (shape.Placement is not null)
+            shape.Placement.Wrapping = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the floating position offsets and anchors on the inline shape at the given paragraph/run indices,
+/// snapshotting prior values for undo. Mirrors <see cref="SetImagePositionCommand"/> for shapes.
+/// </summary>
+public sealed class SetShapePositionCommand(int paragraphIndex, int runIndex,
+    double horizontalOffsetPt, double verticalOffsetPt,
+    HorizontalAnchor horizontalAnchor, VerticalAnchor verticalAnchor) : IDocumentCommand
+{
+    private double _ph, _pv;
+    private HorizontalAnchor _pha;
+    private VerticalAnchor _pva;
+    private bool _applied;
+
+    public string Label => "Set Shape Position";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        shape.Placement ??= new FloatingPlacement();
+        _ph = shape.Placement.HorizontalOffsetPt; _pv = shape.Placement.VerticalOffsetPt;
+        _pha = shape.Placement.HorizontalAnchor; _pva = shape.Placement.VerticalAnchor;
+        shape.Placement.HorizontalOffsetPt = horizontalOffsetPt; shape.Placement.VerticalOffsetPt = verticalOffsetPt;
+        shape.Placement.HorizontalAnchor = horizontalAnchor; shape.Placement.VerticalAnchor = verticalAnchor;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape || shape.Placement is null) return;
+        shape.Placement.HorizontalOffsetPt = _ph; shape.Placement.VerticalOffsetPt = _pv;
+        shape.Placement.HorizontalAnchor = _pha; shape.Placement.VerticalAnchor = _pva;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
 /// Set the alt-text accessibility description on the WordArt at the given paragraph/run indices,
 /// snapshotting the prior value for undo.
 /// </summary>

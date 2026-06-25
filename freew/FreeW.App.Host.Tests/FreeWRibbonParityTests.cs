@@ -1835,7 +1835,9 @@ public sealed class FreeWRibbonParityTests
             .Distinct()
             .Where(id => id is not ("freew.shape-change" or "freew.shape-fill" or "freew.shape-outline"
                 or "freew.shape-effects" or "freew.shape-styles-gallery"
-                or "freew.shape-text-direction" or "freew.wordart-style" or "freew.wordart-transform"));
+                or "freew.shape-text-direction" or "freew.wordart-style" or "freew.wordart-transform"
+                // W26 drawing-arrange parent dropdown buttons (menu items backed individually):
+                or "freew.shape-wrap" or "freew.shape-rotate"));
 
         foreach (var commandId in allIds)
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed");
@@ -2232,6 +2234,70 @@ public sealed class FreeWRibbonParityTests
         registry.TryGet("freew.shape-align-to-margin", out _).Should().BeTrue();
         registry.TryGet("freew.shape-distribute-h",    out _).Should().BeTrue();
         registry.TryGet("freew.shape-distribute-v",    out _).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void DrawingArrange_ZOrder_CommandsExistInRibbonAndRegistry()
+    {
+        // The z-order commands in drawing-arrange reuse the existing freew.image-bring-* / freew.image-send-*
+        // command ids (ChangeSelectedImageZOrder works for any floating object including shapes).
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.image-bring-to-front",  "Drawing Tools > Arrange must expose Bring to Front");
+        ids.Should().Contain("freew.image-send-to-back",    "Drawing Tools > Arrange must expose Send to Back");
+        ids.Should().Contain("freew.image-bring-forward",   "Drawing Tools > Arrange must expose Bring Forward");
+        ids.Should().Contain("freew.image-send-backward",   "Drawing Tools > Arrange must expose Send Backward");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.image-bring-to-front", out _).Should().BeTrue("z-order bring-to-front backed for shapes");
+        registry.TryGet("freew.image-send-to-back",   out _).Should().BeTrue("z-order send-to-back backed for shapes");
+        registry.TryGet("freew.image-bring-forward",  out _).Should().BeTrue("z-order bring-forward backed for shapes");
+        registry.TryGet("freew.image-send-backward",  out _).Should().BeTrue("z-order send-backward backed for shapes");
+    }
+
+    [StaFact]
+    public void DrawingArrange_WrapText_CommandsExistInRibbonAndRegistry()
+    {
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.shape-wrap", "Drawing Tools > Arrange must expose Wrap Text dropdown");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.shape-wrap-inline",     out _).Should().BeTrue("shape wrap inline backed");
+        registry.TryGet("freew.shape-wrap-square",     out _).Should().BeTrue("shape wrap square backed");
+        registry.TryGet("freew.shape-wrap-tight",      out _).Should().BeTrue("shape wrap tight backed");
+        registry.TryGet("freew.shape-wrap-top-bottom", out _).Should().BeTrue("shape wrap top-bottom backed");
+        registry.TryGet("freew.shape-wrap-behind",     out _).Should().BeTrue("shape wrap behind backed");
+        registry.TryGet("freew.shape-wrap-front",      out _).Should().BeTrue("shape wrap front backed");
+    }
+
+    [StaFact]
+    public void DrawingArrange_Position_CommandExistsInRibbonAndRegistry()
+    {
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.shape-position", "Drawing Tools > Arrange must expose Position");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.shape-position", out _).Should().BeTrue("shape position command backed");
+    }
+
+    [StaFact]
+    public void DrawingArrange_Rotate_CommandsExistInRibbonAndRegistry()
+    {
+        var definition = FreeWRibbon.Build();
+        var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
+        var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
+        ids.Should().Contain("freew.shape-rotate", "Drawing Tools > Arrange must expose Rotate dropdown");
+
+        var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
+        registry.TryGet("freew.shape-rotate-right90",  out _).Should().BeTrue("shape rotate right 90 backed");
+        registry.TryGet("freew.shape-rotate-left90",   out _).Should().BeTrue("shape rotate left 90 backed");
+        registry.TryGet("freew.shape-flip-vertical",   out _).Should().BeTrue("shape flip vertical backed");
+        registry.TryGet("freew.shape-flip-horizontal", out _).Should().BeTrue("shape flip horizontal backed");
     }
 
     [StaFact]
