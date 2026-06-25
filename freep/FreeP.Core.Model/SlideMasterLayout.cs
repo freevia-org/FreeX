@@ -46,6 +46,12 @@ public sealed class SlideLayout
     /// <summary>Stable identifier (from the relationship id, e.g. "rId1").</summary>
     public string Id { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The OPC part path within the zip archive (e.g. "ppt/slideLayouts/slideLayout1.xml").
+    /// Used by the reader to match slides to their layout by path.
+    /// </summary>
+    public string PartPath { get; set; } = string.Empty;
+
     /// <summary>Human-readable layout name (from <c>p:cSld name="..."</c>).</summary>
     public string Name { get; set; } = string.Empty;
 

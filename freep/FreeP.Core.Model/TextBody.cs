@@ -76,8 +76,18 @@ public sealed class TextBody
     /// <summary>Paragraphs in order; may be empty for a shape with no text.</summary>
     public List<Paragraph> Paragraphs { get; } = new();
 
-    /// <summary>Vertical text anchor within the bounding box (top/middle/bottom).</summary>
-    public VerticalAnchor Anchor { get; set; } = VerticalAnchor.Top;
+    /// <summary>
+    /// Vertical text anchor within the bounding box (top/middle/bottom).
+    /// Null means not explicitly set on this shape — inherit from layout/master.
+    /// </summary>
+    public VerticalAnchor? Anchor { get; set; }
+
+    /// <summary>
+    /// Default paragraph horizontal alignment from the body's <c>a:lstStyle/a:lvl1pPr algn</c>.
+    /// Null means not set on this shape — inherit from layout/master.
+    /// Stored here so the compositor can walk the inheritance chain without re-reading XML.
+    /// </summary>
+    public TextAlign? DefaultParaAlign { get; set; }
 
     /// <summary>Left inset (internal padding) in points. Null = use default (≈7pt).</summary>
     public double? InsetLeftPt { get; set; }
