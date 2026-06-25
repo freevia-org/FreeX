@@ -89,7 +89,9 @@ public sealed partial class FormulaEvaluator
         public FreeX.Core.Model.GridRange? TryResolveNamedRange(string name)
         {
             if (_workbook is null) return null;
-            if (_workbook.TryGetNamedRange(name, out var range))
+            // Sheet-scope-first: a name scoped to the current sheet takes precedence
+            // over a same-named workbook-global name (Excel rule §18.2.6).
+            if (_workbook.TryGetNamedRange(name, _sheet.Id, out var range))
                 return range;
             return null;
         }
@@ -97,7 +99,8 @@ public sealed partial class FormulaEvaluator
         public string? TryGetNamedFormulaText(string name)
         {
             if (_workbook is null) return null;
-            return _workbook.NamedFormulas.TryGetValue(name, out var formulaText) ? formulaText : null;
+            // Sheet-scope-first for named formulas too.
+            return _workbook.TryGetNamedFormulaText(name, _sheet.Id);
         }
 
         public string? TryGetSheetName(FreeX.Core.Model.SheetId sheetId)

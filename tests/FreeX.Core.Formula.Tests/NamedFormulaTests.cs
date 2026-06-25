@@ -164,6 +164,41 @@ public class NamedFormulaTests
         result.Should().Be(new NumberValue(60));
     }
 
+    // ── Sheet-scoped named formula precedence (Q13 fix) ──────────────────────
+
+    [Fact]
+    public void SheetScopedNamedFormula_ShadowsWorkbookGlobal_OnMatchingSheet()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+
+        // Workbook-global: MyConst = 10
+        workbook.NamedFormulas["MyConst"] = "10";
+        // Sheet2-scoped: MyConst = 20 — must shadow the global when on Sheet2
+        workbook.DefineNamedFormula("MyConst", "20", sheet2.Id);
+
+        var result = _evaluator.Evaluate("=MyConst", sheet2, workbook);
+        result.Should().Be(new NumberValue(20));
+        _ = sheet1;
+    }
+
+    [Fact]
+    public void SheetScopedNamedFormula_FallsBackToWorkbookGlobal_OnNonMatchingSheet()
+    {
+        var workbook = new Workbook("Test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+
+        workbook.NamedFormulas["MyConst"] = "10";
+        workbook.DefineNamedFormula("MyConst", "20", sheet2.Id);
+
+        // On Sheet1 there is no scoped binding; global = 10
+        var result = _evaluator.Evaluate("=MyConst", sheet1, workbook);
+        result.Should().Be(new NumberValue(10));
+        _ = sheet2;
+    }
+
     // ── Cross-sheet named formula ─────────────────────────────────────────────
 
     [Fact]
