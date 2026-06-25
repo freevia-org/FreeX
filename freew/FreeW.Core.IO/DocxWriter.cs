@@ -148,9 +148,15 @@ public static class DocxWriter
         // settings survive the round-trip even when none of FreeW's own settings-triggering features are on.
         var hasPreservedSettings = document.Preserved.OriginalSettings is not null;
 
+        // The w:evenAndOddHeaders toggle is document-global: it must be set whenever ANY section (final or
+        // non-final) has DifferentOddEvenPages on, because even-page header/footer parts emitted by a
+        // non-final section are silently ignored by Word when the global toggle is absent.
+        var anyDifferentOddEvenPages = document.Page.DifferentOddEvenPages
+            || document.Blocks.OfType<Paragraph>().Any(p => p.SectionBreak?.Page.DifferentOddEvenPages == true);
+
         var hasSettings = hasProtection
             || document.Page.AutoHyphenation
-            || document.Page.DifferentOddEvenPages
+            || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
             || HasCustomDefaultTabStop(document.Page)
             || hasBackground
@@ -194,7 +200,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -5210,10 +5216,12 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original)
+    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
-        var differentOddEvenPages = page.DifferentOddEvenPages;
+        // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
+        // non-final section with DifferentOddEvenPages=true still sets the document-global toggle.
+        var differentOddEvenPages = anyDifferentOddEvenPages || page.DifferentOddEvenPages;
         var mirrorMargins = page.MirrorMargins;
         var defaultTabStop = HasCustomDefaultTabStop(page)
             ? new XElement(W + "defaultTabStop", new XAttribute(W + "val", PointsToDxa(page.DefaultTabStopPt)))

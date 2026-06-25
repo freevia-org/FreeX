@@ -74,6 +74,8 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
             _snapshot.Restore(pivotTable);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        if (pivotTable is not null)
+            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _snapshot = null;
         _targetSnapshot = null;
     }
@@ -232,5 +234,18 @@ public sealed class ConfigurePivotTableLayoutCommand : IWorkbookCommand
         return dataFieldIndexMap.TryGetValue(sort.DataFieldIndex, out var newDataFieldIndex)
             ? sort with { DataFieldIndex = newDataFieldIndex }
             : null;
+    }
+
+    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
+    {
+        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
+        foreach (var chartSheet in workbook.Sheets)
+        foreach (var chart in chartSheet.Charts.Where(chart =>
+                     chart.IsPivotChart &&
+                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            chart.DataRange = outputRange;
+            chart.PivotCacheId = pivotTable.CacheId;
+        }
     }
 }

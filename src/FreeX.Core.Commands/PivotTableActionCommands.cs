@@ -250,10 +250,11 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
         _oldTargetRange = pivotTable.TargetRange;
         _newTargetRange = movedRange;
         _oldLastRenderedRange = pivotTable.LastRenderedRange;
-        _rangeSnapshot = SnapshotRanges(sheet, _oldTargetRange.Value, _newTargetRange.Value);
+        _rangeSnapshot = SnapshotRanges(sheet, _oldTargetRange.Value, _oldLastRenderedRange ?? _oldTargetRange.Value, _newTargetRange.Value);
 
         if (_oldTargetRange.Value != _newTargetRange.Value)
         {
+            PivotTableRefreshService.ClearRenderedRange(sheet, _oldLastRenderedRange);
             ClearRange(sheet, _oldTargetRange.Value);
             pivotTable.TargetRange = _newTargetRange.Value;
             RefreshPivotTableAndCharts(ctx.Workbook, sheet, pivotTable);
@@ -270,6 +271,7 @@ public sealed class MovePivotTableCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
         {
+            PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             pivotTable.TargetRange = _oldTargetRange.Value;
             pivotTable.LastRenderedRange = _oldLastRenderedRange;
         }

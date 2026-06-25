@@ -110,4 +110,60 @@ public sealed partial class DataValidationDialogTests
 
         error.Should().BeNull();
     }
+
+    // ----- Culture-sensitive number parsing (R10 regression) -----
+
+    [Fact]
+    public void ValidateCriteriaInputs_DeDE_CommaDecimal_AcceptedAsDecimal()
+    {
+        // In de-DE, "3,5" is 3.5 (decimal comma). With NumberStyles.Any + InvariantCulture the comma
+        // was treated as a thousands separator, silently accepting 35 as a whole number.
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Decimal",
+                "GreaterThan",
+                "3,5",
+                "",
+                out var error)
+            .Should()
+            .BeTrue("\"3,5\" is a valid decimal in de-DE (= 3.5)");
+
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidateCriteriaInputs_DeDE_CommaDecimal_RejectedAsWholeNumber()
+    {
+        // "3,5" in de-DE is 3.5 — a non-integer — so WholeNumber must reject it.
+        // The bug would have silently accepted it (as 35, a whole number).
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "WholeNumber",
+                "GreaterThan",
+                "3,5",
+                "",
+                out var error)
+            .Should()
+            .BeFalse("\"3,5\" in de-DE is 3.5, which is not a whole number");
+
+        error.Should().Contain("Whole number");
+    }
+
+    [Fact]
+    public void ValidateCriteriaInputs_EnglishDotDecimal_StillParsesCorrectly()
+    {
+        // Regression guard: English-format "3.5" must still parse as 3.5 via InvariantCulture fallback.
+        DataValidationDialog.TryValidateCriteriaInputs(
+                "Decimal",
+                "GreaterThan",
+                "3.5",
+                "",
+                out var error)
+            .Should()
+            .BeTrue("\"3.5\" is always a valid decimal via InvariantCulture fallback");
+
+        error.Should().BeNull();
+    }
 }

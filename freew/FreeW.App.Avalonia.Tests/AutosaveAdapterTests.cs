@@ -151,6 +151,11 @@ public sealed class AutosaveAdapterTests
         public string DisplayName => "Test document";
         public bool IsDirty { get; init; }
         public int DirtyGeneration => IsDirty ? 1 : 0;
-        public void WriteSnapshot(string snapshotPath) => File.WriteAllText(snapshotPath, "fake");
+        // Real snapshots are OPC/ZIP packages; the store now validates that on enumeration.
+        public void WriteSnapshot(string snapshotPath)
+        {
+            using var zip = System.IO.Compression.ZipFile.Open(snapshotPath, System.IO.Compression.ZipArchiveMode.Create);
+            zip.CreateEntry("[Content_Types].xml");
+        }
     }
 }

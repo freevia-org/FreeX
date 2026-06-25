@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using FluentAssertions;
 using FreeX.App.Services;
 
@@ -5,6 +6,14 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class AutosaveSnapshotStoreTests
 {
+    // Real snapshots are OPC/ZIP packages and EnumerateCandidates now validates that, so test
+    // snapshots must be readable archives (not plain text) to be enumerated as valid candidates.
+    private static void WriteSnapshotZip(string path)
+    {
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        zip.CreateEntry("[Content_Types].xml");
+    }
+
     // ── ShouldSnapshot ────────────────────────────────────────────────────────
 
     [Theory]
@@ -124,7 +133,7 @@ public sealed class AutosaveSnapshotStoreTests
         var sidecarPath = store.GetSidecarPath(snapshotId);
 
         // Write a minimal .fxl placeholder and a sidecar.
-        File.WriteAllText(snapshotPath, "placeholder");
+        WriteSnapshotZip(snapshotPath);
         var sidecar = new AutosaveSidecar
         {
             OriginalFilePath = @"C:\test.xlsx",
@@ -146,7 +155,7 @@ public sealed class AutosaveSnapshotStoreTests
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
 
-        File.WriteAllText(store.GetSnapshotPath("recovery-1-w0"), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath("recovery-1-w0"));
         // No sidecar written.
 
         store.EnumerateCandidates().Should().BeEmpty();
@@ -197,7 +206,7 @@ public sealed class AutosaveSnapshotStoreTests
         var store = new AutosaveSnapshotStore(dir.Path);
 
         const string snapshotId = "recovery-badorder-w0";
-        File.WriteAllText(store.GetSnapshotPath(snapshotId), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath(snapshotId));
         // Sidecar not yet written (simulates the OLD broken ordering after crash).
 
         store.EnumerateCandidates().Should().BeEmpty(
@@ -211,7 +220,7 @@ public sealed class AutosaveSnapshotStoreTests
         var store = new AutosaveSnapshotStore(dir.Path);
 
         const string snapshotId = "recovery-2-w0";
-        File.WriteAllText(store.GetSnapshotPath(snapshotId), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath(snapshotId));
         File.WriteAllText(store.GetSidecarPath(snapshotId), "corrupt{{json");
 
         store.EnumerateCandidates().Should().BeEmpty();
@@ -226,7 +235,7 @@ public sealed class AutosaveSnapshotStoreTests
         var store = new AutosaveSnapshotStore(dir.Path);
 
         const string snapshotId = "recovery-3-w0";
-        File.WriteAllText(store.GetSnapshotPath(snapshotId), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath(snapshotId));
         File.WriteAllText(store.GetSidecarPath(snapshotId), "{}");
 
         store.DeleteSnapshot(snapshotId);
@@ -245,7 +254,7 @@ public sealed class AutosaveSnapshotStoreTests
         var snapshotPath = store.GetSnapshotPath(snapshotId);
         var sidecarPath = store.GetSidecarPath(snapshotId);
 
-        File.WriteAllText(snapshotPath, "placeholder");
+        WriteSnapshotZip(snapshotPath);
         var sidecar = new AutosaveSidecar { SnapshotId = snapshotId };
         File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 

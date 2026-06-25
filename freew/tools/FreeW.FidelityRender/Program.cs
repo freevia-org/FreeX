@@ -33,12 +33,14 @@ using FreeW.Core.Model;
 
 var composite = true; // composite is the default
 var generateFixtures = false;
+var generateF2Corpus = false;
 var filteredArgs = new List<string>();
 foreach (var a in args)
 {
     if (a == "--composite") composite = true;
     else if (a == "--no-composite") composite = false;
     else if (a == "--generate-fixtures") generateFixtures = true;
+    else if (a == "--generate-f2-corpus") generateF2Corpus = true;
     else filteredArgs.Add(a);
 }
 args = filteredArgs.ToArray();
@@ -55,10 +57,20 @@ if (generateFixtures)
     return exit2;
 }
 
+if (generateF2Corpus)
+{
+    // Generate the f2-flow visual-verification corpus (headers/footers/footnotes/endnotes/
+    // section-break page-size/tracked-changes/comments).
+    string corpusDir = args.Length > 0 ? args[0] : ".";
+    GenerateF2FlowCorpus(corpusDir);
+    return 0;
+}
+
 if (args.Length < 2)
 {
     Console.Error.WriteLine("usage: FreeW.FidelityRender <input.docx | inputDir> <outputDir> [maxPagesPerDoc] [--composite|--no-composite]");
     Console.Error.WriteLine("       FreeW.FidelityRender --generate-fixtures <outputDir>");
+    Console.Error.WriteLine("       FreeW.FidelityRender --generate-f2-corpus <outputDir>");
     return 2;
 }
 
@@ -687,6 +699,283 @@ static int GenerateFixtures(string outDir)
 
     Console.WriteLine($"Done — 4 fixtures written to {outDir}");
     return 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════
+// F2-flow corpus generator  (--generate-f2-corpus <dir>)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Generates the f2-flow visual-verification corpus: focused .docx files for the headers/footers,
+/// footnotes, endnotes, section-break page-size, tracked-changes, and comments passes.
+/// Run via:
+///   FreeW.FidelityRender --generate-f2-corpus &lt;outputDir&gt;
+/// </summary>
+static void GenerateF2FlowCorpus(string outDir)
+{
+    Directory.CreateDirectory(outDir);
+
+    static FreeW.Core.Model.Paragraph MP(string text, string? styleId = null)
+    {
+        var p = new FreeW.Core.Model.Paragraph(text);
+        if (styleId is not null)
+            p.StyleId = styleId;
+        return p;
+    }
+
+    // ─── 1. Header + Footer basic (default, repeating across 3+ pages) ───────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter("My Document Header");
+        doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("Page Footer Text");
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Header/Footer Basic Test", "Heading1"));
+        doc.Blocks.Add(MP("This document has a header (top) and footer (bottom) on every page. Verify both appear on pages 1, 2, and 3."));
+        for (int i = 1; i <= 50; i++)
+            doc.Blocks.Add(MP($"Body paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore."));
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-basic.docx"));
+        Console.WriteLine("  wrote f2-hf-basic.docx");
+    }
+
+    // ─── 2. Different first-page header ──────────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.DifferentFirstPage = true;
+        doc.FinalSectionHeadersFooters.FirstHeader = new HeaderFooter("=== FIRST PAGE ONLY HEADER ===");
+        doc.FinalSectionHeadersFooters.FirstFooter = new HeaderFooter("=== FIRST PAGE ONLY FOOTER ===");
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter("=== SUBSEQUENT PAGES HEADER ===");
+        doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("=== SUBSEQUENT PAGES FOOTER ===");
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Cover Page", "Title"));
+        doc.Blocks.Add(MP("Page 1: should show FIRST PAGE ONLY HEADER/FOOTER. Pages 2+ should show SUBSEQUENT PAGES HEADER/FOOTER."));
+        for (int i = 1; i <= 45; i++)
+            doc.Blocks.Add(MP($"Content paragraph {i}: Different-first-page headers and footers."));
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-firstpage.docx"));
+        Console.WriteLine("  wrote f2-hf-firstpage.docx");
+    }
+
+    // ─── 3. Odd/even (mirror) headers ────────────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Page.DifferentOddEvenPages = true;
+        doc.FinalSectionHeadersFooters.Header     = new HeaderFooter("=== ODD PAGE HEADER (pages 1, 3, ...) ===");
+        doc.FinalSectionHeadersFooters.EvenHeader = new HeaderFooter("=== EVEN PAGE HEADER (pages 2, 4, ...) ===");
+        doc.FinalSectionHeadersFooters.Footer     = new HeaderFooter("=== ODD PAGE FOOTER ===");
+        doc.FinalSectionHeadersFooters.EvenFooter = new HeaderFooter("=== EVEN PAGE FOOTER ===");
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Odd/Even Headers Demo", "Heading1"));
+        doc.Blocks.Add(MP("Page 1 (odd) → ODD PAGE HEADER. Page 2 (even) → EVEN PAGE HEADER. Page 3 (odd) → ODD PAGE HEADER."));
+        for (int i = 1; i <= 50; i++)
+            doc.Blocks.Add(MP($"Paragraph {i}: Mirror-margin headers alternate on odd/even pages."));
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-hf-oddeven.docx"));
+        Console.WriteLine("  wrote f2-hf-oddeven.docx");
+    }
+
+    // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Footnotes Test", "Heading1"));
+        doc.Blocks.Add(MP("This tests whether footnote content appears at the foot of each page."));
+
+        var p1 = new FreeW.Core.Model.Paragraph();
+        p1.Runs.Add(new FreeW.Core.Model.Run("This sentence has a footnote reference"));
+        p1.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { FootnoteId = 1 });
+        p1.Runs.Add(new FreeW.Core.Model.Run(". The footnote content should appear at the bottom of this page."));
+        doc.Blocks.Add(p1);
+        doc.Footnotes[1] = new Footnote(1, "Footnote 1: This is first footnote content. Should appear at bottom of page 1 with a separator rule.");
+
+        for (int i = 1; i <= 22; i++)
+            doc.Blocks.Add(MP($"Filler paragraph {i}: Lorem ipsum dolor sit amet consectetur adipiscing."));
+
+        var p2 = new FreeW.Core.Model.Paragraph();
+        p2.Runs.Add(new FreeW.Core.Model.Run("This sentence on page 2 has a second footnote reference"));
+        p2.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { FootnoteId = 2 });
+        p2.Runs.Add(new FreeW.Core.Model.Run(". The second footnote should be at the bottom of page 2."));
+        doc.Blocks.Add(p2);
+        doc.Footnotes[2] = new Footnote(2, "Footnote 2: Second footnote content. Should appear at the bottom of page 2.");
+
+        for (int i = 1; i <= 20; i++)
+            doc.Blocks.Add(MP($"More filler {i}: Additional content to ensure footnote reference is on page 2."));
+
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-footnotes.docx"));
+        Console.WriteLine("  wrote f2-footnotes.docx");
+    }
+
+    // ─── 5. Endnotes ─────────────────────────────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Endnotes Test", "Heading1"));
+        doc.Blocks.Add(MP("This tests whether endnote content appears at the end of the document."));
+
+        var p1 = new FreeW.Core.Model.Paragraph();
+        p1.Runs.Add(new FreeW.Core.Model.Run("First sentence with an endnote reference"));
+        p1.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { EndnoteId = 1 });
+        p1.Runs.Add(new FreeW.Core.Model.Run(". Endnotes should collect at the document end."));
+        doc.Blocks.Add(p1);
+        doc.Endnotes[1] = new Endnote(1, "Endnote 1: This content should appear at the very end of the document, after all body text.");
+
+        for (int i = 1; i <= 20; i++)
+            doc.Blocks.Add(MP($"Body paragraph {i}: Endnote references collect at document end."));
+
+        var p2 = new FreeW.Core.Model.Paragraph();
+        p2.Runs.Add(new FreeW.Core.Model.Run("Second sentence with another endnote reference"));
+        p2.Runs.Add(new FreeW.Core.Model.Run(string.Empty) { EndnoteId = 2 });
+        p2.Runs.Add(new FreeW.Core.Model.Run(". Both endnotes should appear together at the end."));
+        doc.Blocks.Add(p2);
+        doc.Endnotes[2] = new Endnote(2, "Endnote 2: This is the second endnote. Both endnotes should be listed together at the document end.");
+
+        for (int i = 1; i <= 20; i++)
+            doc.Blocks.Add(MP($"More body content {i}: Additional text before the endnotes section."));
+
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-endnotes.docx"));
+        Console.WriteLine("  wrote f2-endnotes.docx");
+    }
+
+    // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        // Section 1: portrait 8.5x11 (default)
+        doc.Page.WidthPt  = 612;  // 8.5in @ 72dpi
+        doc.Page.HeightPt = 792;  // 11in
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
+        doc.Blocks.Add(MP("This section is portrait. The page is taller than wide. A next-page section break below this paragraph should switch to landscape."));
+        for (int i = 1; i <= 4; i++)
+            doc.Blocks.Add(MP($"Portrait section paragraph {i}: Standard letter-size portrait page."));
+
+        // Marker paragraph carries the section break; its SectionBreak property specifies the NEXT section
+        var sectionMarker = MP("[ End of Portrait Section ]");
+        var landscapePage = new PageSettings
+        {
+            WidthPt        = 792,  // 11in (wider)
+            HeightPt       = 612,  // 8.5in (shorter — swapped for landscape)
+            Landscape      = true,
+            MarginLeftPt   = 72,
+            MarginRightPt  = 72,
+            MarginTopPt    = 72,
+            MarginBottomPt = 72,
+        };
+        sectionMarker.SectionBreak = new FreeW.Core.Model.Section(landscapePage, SectionBreakKind.NextPage);
+        doc.Blocks.Add(sectionMarker);
+
+        // Section 2: landscape
+        doc.Blocks.Add(MP("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
+        doc.Blocks.Add(MP("This section should be landscape. If the section break rendered correctly the page is now wider than tall, and this text spans a wider line length. The page geometry changed from portrait (8.5x11) to landscape (11x8.5)."));
+        for (int i = 1; i <= 4; i++)
+            doc.Blocks.Add(MP($"Landscape section paragraph {i}: Page is now wider than tall."));
+
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-section-landscape.docx"));
+        Console.WriteLine("  wrote f2-section-landscape.docx");
+    }
+
+    // ─── 7. Tracked insertions and deletions ─────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Tracked Changes Test", "Heading1"));
+        doc.Blocks.Add(MP("Insertions should be underlined; deletions should be struck-through."));
+
+        var p1 = new FreeW.Core.Model.Paragraph();
+        p1.Runs.Add(new FreeW.Core.Model.Run("Normal text before. "));
+        p1.Runs.Add(new FreeW.Core.Model.Run("INSERTED text by Alice.")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Alice",
+            RevisionDateXml = "2026-06-26T09:00:00Z"
+        });
+        p1.Runs.Add(new FreeW.Core.Model.Run(" Normal text between. "));
+        p1.Runs.Add(new FreeW.Core.Model.Run("DELETED text by Bob.")
+        {
+            Revision = RevisionKind.Deleted,
+            RevisionAuthor = "Bob",
+            RevisionDateXml = "2026-06-26T09:30:00Z"
+        });
+        p1.Runs.Add(new FreeW.Core.Model.Run(" Normal text after."));
+        doc.Blocks.Add(p1);
+
+        var p2 = new FreeW.Core.Model.Paragraph();
+        p2.Runs.Add(new FreeW.Core.Model.Run("This entire paragraph is a tracked insertion by Carol.")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Carol",
+            RevisionDateXml = "2026-06-26T10:00:00Z"
+        });
+        doc.Blocks.Add(p2);
+
+        var p3 = new FreeW.Core.Model.Paragraph();
+        p3.Runs.Add(new FreeW.Core.Model.Run("Alice: "));
+        p3.Runs.Add(new FreeW.Core.Model.Run("inserted-by-alice ")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Alice",
+            RevisionDateXml = "2026-06-26T09:00:00Z"
+        });
+        p3.Runs.Add(new FreeW.Core.Model.Run("Bob: "));
+        p3.Runs.Add(new FreeW.Core.Model.Run("deleted-by-bob ")
+        {
+            Revision = RevisionKind.Deleted,
+            RevisionAuthor = "Bob",
+            RevisionDateXml = "2026-06-26T09:30:00Z"
+        });
+        p3.Runs.Add(new FreeW.Core.Model.Run("Carol: "));
+        p3.Runs.Add(new FreeW.Core.Model.Run("inserted-by-carol")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Carol",
+            RevisionDateXml = "2026-06-26T10:00:00Z"
+        });
+        doc.Blocks.Add(p3);
+
+        for (int i = 1; i <= 40; i++)
+            doc.Blocks.Add(MP($"Normal paragraph {i}: No tracked changes here."));
+
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-tracked-changes.docx"));
+        Console.WriteLine("  wrote f2-tracked-changes.docx");
+    }
+
+    // ─── 8. Anchored comments ─────────────────────────────────────────────────────────────────────
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(MP("Comments Test", "Heading1"));
+        doc.Blocks.Add(MP("Comment anchors should be highlighted. Comment content should appear as balloons or in a reviewing pane."));
+
+        var p1 = new FreeW.Core.Model.Paragraph();
+        p1.Runs.Add(new FreeW.Core.Model.Run("Text before the first comment anchor. "));
+        p1.Runs.Add(FreeW.Core.Model.Run.CommentReference(1));
+        p1.Runs.Add(new FreeW.Core.Model.Run("The first commented span.") { CommentId = 1 });
+        p1.Runs.Add(new FreeW.Core.Model.Run(" Text after the first comment anchor."));
+        doc.Blocks.Add(p1);
+        doc.Comments[1] = new Comment(1, "Comment 1 by Alice: This is the comment text. Should appear as a balloon in the right margin.")
+        {
+            Author   = "Alice",
+            Initials = "A",
+            DateXml  = "2026-06-26T09:00:00Z"
+        };
+
+        var p2 = new FreeW.Core.Model.Paragraph();
+        p2.Runs.Add(new FreeW.Core.Model.Run("Second paragraph before comment. "));
+        p2.Runs.Add(FreeW.Core.Model.Run.CommentReference(2));
+        p2.Runs.Add(new FreeW.Core.Model.Run("Second commented phrase.") { CommentId = 2 });
+        p2.Runs.Add(new FreeW.Core.Model.Run(" End of second paragraph."));
+        doc.Blocks.Add(p2);
+        doc.Comments[2] = new Comment(2, "Comment 2 by Bob: Different author, distinct comment. Both should be visible.")
+        {
+            Author   = "Bob",
+            Initials = "B",
+            DateXml  = "2026-06-26T09:30:00Z"
+        };
+
+        for (int i = 1; i <= 35; i++)
+            doc.Blocks.Add(MP($"Normal paragraph {i}: No comments here."));
+
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-comments.docx"));
+        Console.WriteLine("  wrote f2-comments.docx");
+    }
+
+    Console.WriteLine($"\nDone — 8 corpus files written to {outDir}");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
