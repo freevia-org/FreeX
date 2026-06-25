@@ -3,10 +3,16 @@ namespace FreeX.App.Services;
 /// <summary>
 /// FreeX's <see cref="AppOptions"/> persistence. The generic JSON load/save/atomic-write/error-capture
 /// plumbing is delegated to the shared <see cref="JsonSettingsStore{T}"/>; this type owns only the
-/// FreeX-specific behaviour: the <c>options.json</c> store-path resolution, the
-/// <see cref="AppOptions.NormalizePersistedCollections"/> step (run on every load and save), the
-/// user-facing "options" wording in error messages, and surfacing failures via
-/// <see cref="AppOptions.SetPersistenceError"/> (cleared on a successful save).
+/// FreeX-specific behaviour: the <c>options.json</c> store-path resolution (including the
+/// <c>FREEX_OPTIONS_PATH</c> env-var override), the user-facing <c>"options"</c> wording in error
+/// messages (via the <c>noun</c> parameter), the <see cref="INormalizableApplicationOptions.Normalize"/>
+/// step (run on every load and save via <see cref="AppOptions"/> which now implements that interface),
+/// and surfacing failures via <see cref="AppOptions.SetPersistenceError"/> (cleared on a successful save).
+/// <para>
+/// Because <see cref="AppOptions"/> implements <see cref="INormalizableApplicationOptions"/>, callers
+/// that do not need the static façade or the FreeX-specific error wording can now also construct an
+/// <see cref="ApplicationOptionsStore{T}"/> directly — the same pattern used by FreeW and FreeP.
+/// </para>
 /// </summary>
 public static class AppOptionsStore
 {
@@ -44,7 +50,7 @@ public static class AppOptionsStore
             return options;
         }
 
-        options.NormalizePersistedCollections();
+        options.Normalize();
         return options;
     }
 
@@ -54,7 +60,7 @@ public static class AppOptionsStore
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        options.NormalizePersistedCollections();
+        options.Normalize();
         var error = JsonSettingsStore<AppOptions>.SaveToPath(options, storePath, noun: PersistenceNoun);
         options.SetPersistenceError(error);
         return error is null;

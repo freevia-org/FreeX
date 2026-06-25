@@ -10,6 +10,28 @@ using TextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Avalonia.Editing;
 
+/// <summary>Controls how <see cref="DocumentView"/> lays out and renders the document.</summary>
+public enum DocumentViewMode
+{
+    /// <summary>
+    /// Paginated white pages on a grey desk with margins, page breaks, and inter-page gaps.
+    /// This is the default — matches Word's Print Layout view.
+    /// </summary>
+    PrintLayout,
+
+    /// <summary>
+    /// Single continuous column at the control's available width (capped at <c>WebMaxContentWidth</c>),
+    /// plain white background, no page breaks, no grey desk, no page chrome. Matches Word's Web Layout.
+    /// </summary>
+    WebLayout,
+
+    /// <summary>
+    /// Plain white background, small fixed left margin, no chrome, continuous flow.
+    /// Fastest/plainest reading/editing view. Matches Word's Draft view.
+    /// </summary>
+    Draft,
+}
+
 /// <summary>
 /// FreeW's editing surface. The WPF host used a RichTextBox/FlowDocument; Avalonia has no
 /// FlowDocument, so this is a custom <see cref="Control"/> that lays out the
@@ -30,6 +52,16 @@ public sealed class DocumentView : Control
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
     private const double ListIndentStep = 24;
+
+    // Web/Draft layout constants.
+    // Web: content column capped at this width (responsive up to this limit).
+    private const double WebMaxContentWidth = 1000;
+    // Web: small fixed left/right inset (no page chrome).
+    private const double WebInset = 24;
+    // Draft: even smaller left margin, no right constraint.
+    private const double DraftInset = 16;
+
+    private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
 
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
@@ -75,6 +107,32 @@ public sealed class DocumentView : Control
 
     /// <summary>Raised when a table cell is double-clicked, so the shell can open a cell editor.</summary>
     public event Action<CellEditRequest>? CellEditRequested;
+
+    /// <summary>Raised when <see cref="ViewMode"/> changes so the shell can update the status bar / ribbon state.</summary>
+    public event Action? ViewModeChanged;
+
+    /// <summary>
+    /// Gets or sets the view mode. Switching modes triggers a full re-layout and visual invalidation.
+    /// <list type="bullet">
+    ///   <item><see cref="DocumentViewMode.PrintLayout"/> — paginated, grey desk (default).</item>
+    ///   <item><see cref="DocumentViewMode.WebLayout"/> — continuous column, plain white, no page chrome.</item>
+    ///   <item><see cref="DocumentViewMode.Draft"/> — continuous, minimal left margin, no chrome.</item>
+    /// </list>
+    /// Editing (caret, hit-test, selection, undo/redo, GetBlockTop, find) works in all modes because
+    /// all operations read <c>_placed</c>, which is fully re-laid-out for the active mode.
+    /// </summary>
+    public DocumentViewMode ViewMode
+    {
+        get => _viewMode;
+        set
+        {
+            if (_viewMode == value)
+                return;
+            _viewMode = value;
+            InvalidateLayoutAndVisual();
+            ViewModeChanged?.Invoke();
+        }
+    }
 
     public sealed record CellEditRequest(int Block, int Row, int Col, string Text);
 
@@ -134,11 +192,17 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    /// <summary>Number of discrete pages in the current layout (at least 1).</summary>
+    /// <summary>
+    /// Number of discrete pages in the current layout (at least 1).
+    /// Always 1 in <see cref="DocumentViewMode.WebLayout"/> and <see cref="DocumentViewMode.Draft"/> modes
+    /// because those modes render a single continuous column with no page boundaries.
+    /// </summary>
     public int PageCount
     {
         get
         {
+            if (_viewMode != DocumentViewMode.PrintLayout)
+                return 1;
             if (_laidOutWidth < 0)
                 Relayout(FallbackWidth);
             return _pageCount;
@@ -405,20 +469,53 @@ public sealed class DocumentView : Control
         _rects.Clear();
         _images.Clear();
         _cellHits.Clear();
-        // Page geometry from the document's PageSettings: a centred page with its own margins.
-        _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
-        _pageHeightPx = Math.Max(400, _doc.Page.HeightPt * PxPerPoint);
-        var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
-        var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
-        _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
-        _marginBottomDip = Math.Max(0, _doc.Page.MarginBottomPt) * PxPerPoint;
-        // Centre the page in the available width, never closer than MinHorzGutter to the edge.
-        _pageLeft = Math.Max(MinHorzGutter, (width - _pageWidth) / 2);
-        _contentLeft = _pageLeft + marginLeft;
-        _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            // ---- Print Layout: paginated white pages on a grey desk ----
+            // Page geometry from the document's PageSettings: a centred page with its own margins.
+            _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
+            _pageHeightPx = Math.Max(400, _doc.Page.HeightPt * PxPerPoint);
+            var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
+            var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
+            _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
+            _marginBottomDip = Math.Max(0, _doc.Page.MarginBottomPt) * PxPerPoint;
+            // Centre the page in the available width, never closer than MinHorzGutter to the edge.
+            _pageLeft = Math.Max(MinHorzGutter, (width - _pageWidth) / 2);
+            _contentLeft = _pageLeft + marginLeft;
+            _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
+        }
+        else if (_viewMode == DocumentViewMode.WebLayout)
+        {
+            // ---- Web Layout: continuous column, capped width, no page chrome ----
+            // Responsive up to WebMaxContentWidth; small fixed inset on each side.
+            var colWidth = Math.Min(width - 2 * WebInset, WebMaxContentWidth);
+            _pageWidth = Math.Max(320, colWidth);
+            _pageHeightPx = double.MaxValue / 2; // effectively infinite — no pagination
+            _marginTopDip    = WebInset;
+            _marginBottomDip = WebInset;
+            _pageLeft = WebInset;
+            _contentLeft = WebInset;
+            _contentWidth = Math.Max(120, colWidth);
+        }
+        else // Draft
+        {
+            // ---- Draft: plain left-margin continuous flow ----
+            _pageWidth = Math.Max(320, width - DraftInset);
+            _pageHeightPx = double.MaxValue / 2;
+            _marginTopDip    = DraftInset;
+            _marginBottomDip = DraftInset;
+            _pageLeft = DraftInset;
+            _contentLeft = DraftInset;
+            _contentWidth = Math.Max(120, width - DraftInset * 2);
+        }
+
         var textWidth = _contentWidth;
         // Available text-area height per page (between top and bottom margin).
-        var textAreaHeight = Math.Max(40, _pageHeightPx - _marginTopDip - _marginBottomDip);
+        // For Web/Draft this is effectively infinite so ReserveContentY never paginates.
+        var textAreaHeight = _viewMode == DocumentViewMode.PrintLayout
+            ? Math.Max(40, _pageHeightPx - _marginTopDip - _marginBottomDip)
+            : double.MaxValue / 2;
 
         // _layoutContentY tracks the "content Y" — the offset within the flowing text area
         // (0 = start of the first text area). This gets converted to page-space Y via
@@ -477,11 +574,21 @@ public sealed class DocumentView : Control
             }
         }
 
-        // The number of pages = pageIndex of the last content Y + 1.
-        var lastPageIndex = (int)(_layoutContentY / _layoutTextAreaHeight);
-        _pageCount = Math.Max(1, lastPageIndex + 1);
-        // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
-        _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            // The number of pages = pageIndex of the last content Y + 1.
+            var lastPageIndex = (int)(_layoutContentY / _layoutTextAreaHeight);
+            _pageCount = Math.Max(1, lastPageIndex + 1);
+            // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
+            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+        }
+        else
+        {
+            // Web/Draft: single continuous column — total height is just the content plus margins.
+            _pageCount = 1;
+            _contentHeight = _layoutContentY + _marginBottomDip;
+        }
+
         _laidOutWidth = width;
     }
 
@@ -492,13 +599,19 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Converts a content-space Y (0 = first line of text area, increasing downward) to a
     /// page-space Y (the actual pixel Y in the control's coordinate system).
+    /// <para>In <see cref="DocumentViewMode.PrintLayout"/>:</para>
     /// Content wraps line-granularly: a line that starts past the current page's bottom
     /// margin is pushed to the top of the next page.
     /// Formula: pageIndex = floor(contentY / textAreaHeight)
     ///          pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+gap) + marginTopDip + (contentY - pageIndex*textAreaHeight)
+    /// <para>In <see cref="DocumentViewMode.WebLayout"/> / <see cref="DocumentViewMode.Draft"/>:</para>
+    /// No pagination — pageSpaceY = marginTopDip + contentY (simple offset by the top inset).
     /// </summary>
     private double ContentYToPageSpaceY(double contentY)
     {
+        if (_viewMode != DocumentViewMode.PrintLayout)
+            return _marginTopDip + contentY;
+
         var pageIndex = (int)(contentY / _layoutTextAreaHeight);
         var offsetWithinPage = contentY - pageIndex * _layoutTextAreaHeight;
         return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
@@ -507,9 +620,13 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Derives the zero-based page index from a page-space Y coordinate.
     /// Inverse of <see cref="ContentYToPageSpaceY"/>.
+    /// In Web/Draft modes always returns 0 (single continuous page).
     /// </summary>
     private int PageIndexFromPageSpaceY(double pageSpaceY)
     {
+        if (_viewMode != DocumentViewMode.PrintLayout)
+            return 0;
+
         // Each page occupies (pageHeightPx + PageGap) in page space, starting at DeskPadding.
         var rel = pageSpaceY - DeskPadding;
         if (rel < 0) return 0;
@@ -870,18 +987,26 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
-        // Grey desk fills the full control area.
-        context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
-
-        // Draw each discrete page rectangle: white page with drop-shadow + border.
-        for (var pi = 0; pi < _pageCount; pi++)
+        if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
-            var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
-            var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
-            context.FillRectangle(PageShadowBrush, shadowRect);
-            context.FillRectangle(Brushes.White, pageRect);
-            context.DrawRectangle(null, PageBorderPen, pageRect);
+            // Grey desk fills the full control area.
+            context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
+
+            // Draw each discrete page rectangle: white page with drop-shadow + border.
+            for (var pi = 0; pi < _pageCount; pi++)
+            {
+                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
+                var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
+                context.FillRectangle(PageShadowBrush, shadowRect);
+                context.FillRectangle(Brushes.White, pageRect);
+                context.DrawRectangle(null, PageBorderPen, pageRect);
+            }
+        }
+        else
+        {
+            // Web Layout / Draft: plain white background — no desk, no page chrome.
+            context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
         }
 
         // Table fills + borders sit beneath the text.

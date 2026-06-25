@@ -1,12 +1,15 @@
-// FreeW.PageLayoutShot — renders the FreeW Avalonia DocumentView (with print-layout chrome) to a PNG
-// for visual verification. Uses the real Avalonia Skia backend (not the headless stub) so the output
-// contains actual pixels: grey desk, white page with drop-shadow, content inset to real margins.
+// FreeW.PageLayoutShot — renders the FreeW Avalonia DocumentView to PNGs for visual verification.
+// Uses the real Avalonia Skia backend (not the headless stub) so the output contains actual pixels.
 //
 // Usage:
-//   FreeW.PageLayoutShot [<output-path>]
+//   FreeW.PageLayoutShot [<output-dir>]
 //
-// If <output-path> is omitted the PNG is written next to the executable as freew_pagelayout.png.
-// The program exits after writing the PNG (no interactive window appears).
+// If <output-dir> is omitted PNGs are written next to the executable:
+//   freew_print_layout.png  — Print Layout (grey desk + discrete white pages + drop-shadow)
+//   freew_web_layout.png    — Web Layout (plain white, continuous column, no page chrome)
+//   freew_draft_layout.png  — Draft (plain white, minimal left margin, continuous)
+//
+// The program exits after writing the PNGs (no interactive window appears).
 
 using System;
 using System.IO;
@@ -22,7 +25,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 using SkiaSharp;
 
-var outPath = args.Length > 0 ? args[0] : Path.Combine(AppContext.BaseDirectory, "freew_pagelayout.png");
+var outDir = args.Length > 0 ? args[0] : AppContext.BaseDirectory;
 
 int exitCode = 0;
 var done = new ManualResetEventSlim(false);
@@ -36,7 +39,7 @@ Dispatcher.UIThread.Post(() =>
 {
     try
     {
-        exitCode = Render(outPath);
+        exitCode = RenderAll(outDir);
     }
     catch (Exception ex)
     {
@@ -53,16 +56,36 @@ Dispatcher.UIThread.RunJobs();
 done.Wait();
 return exitCode;
 
-static int Render(string outPath)
+static int RenderAll(string outDir)
 {
-    const int width  = 960;
-    // Tall enough to show 2-3 discrete page rectangles with gaps between them.
-    // A US Letter page at 96dpi = 1056px; 3 pages + 2 gaps (~40px) + padding ≈ 3250px.
-    const int height = 3300;
+    Directory.CreateDirectory(outDir);
 
+    var printPath = Path.GetFullPath(Path.Combine(outDir, "freew_print_layout.png"));
+    var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
+    var draftPath = Path.GetFullPath(Path.Combine(outDir, "freew_draft_layout.png"));
+
+    var rc = RenderMode(DocumentViewMode.PrintLayout, printPath,
+        width: 960, height: 3300,
+        label: "Print Layout");
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.WebLayout, webPath,
+        width: 960, height: 2400,
+        label: "Web Layout");
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.Draft, draftPath,
+        width: 960, height: 2400,
+        label: "Draft");
+    return rc;
+}
+
+static int RenderMode(DocumentViewMode mode, string outPath, int width, int height, string label)
+{
     var doc = BuildMultiPageDocument();
     var view = new DocumentView();
     view.LoadDocument(doc);
+    view.ViewMode = mode;
     view.Measure(new Size(width, height));
     view.Arrange(new Rect(0, 0, width, height));
     view.UpdateLayout();
@@ -79,24 +102,24 @@ static int Render(string outPath)
     if (bytes.Length > 0)
     {
         File.WriteAllBytes(outPath, bytes);
-        Console.WriteLine($"[PageLayoutShot] Written {bytes.Length:N0} bytes to: {Path.GetFullPath(outPath)}");
+        Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
 
     // Fallback: encode via SkiaSharp if the Avalonia encoder produced nothing.
-    var pngBytes = TryEncodeViaSkia(view, width, height);
+    var pngBytes = TryEncodeViaSkia(view, width, height, label);
     if (pngBytes is { Length: > 0 })
     {
         File.WriteAllBytes(outPath, pngBytes);
-        Console.WriteLine($"[PageLayoutShot] Skia fallback: {pngBytes.Length:N0} bytes to: {Path.GetFullPath(outPath)}");
+        Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
 
-    Console.Error.WriteLine("[PageLayoutShot] Both encoding paths produced 0 bytes.");
+    Console.Error.WriteLine($"[PageLayoutShot] {label}: both encoding paths produced 0 bytes.");
     return 2;
 }
 
-static byte[] TryEncodeViaSkia(DocumentView view, int width, int height)
+static byte[] TryEncodeViaSkia(DocumentView view, int width, int height, string label = "")
 {
     try
     {
@@ -126,7 +149,7 @@ static byte[] TryEncodeViaSkia(DocumentView view, int width, int height)
             });
             using var textFont  = new SKFont(SKTypeface.Default, 16);
             using var textPaint = new SKPaint { Color = SKColors.DarkBlue, IsAntialias = true };
-            canvas.DrawText("FreeW — Avalonia Print Layout (Skia fallback placeholder)", 50, 70,
+            canvas.DrawText($"FreeW — {label} (Skia fallback placeholder)", 50, 70,
                 SKTextAlign.Left, textFont, textPaint);
             canvas.DrawText("Run FreeW normally to see the real page chrome.", 50, 100,
                 SKTextAlign.Left, textFont, textPaint);

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Free.Shared.AppServices;
 using FreeX.Core.IO;
 
 namespace FreeX.App.Services;
@@ -18,7 +19,7 @@ public enum AppOptionsObjectDisplay
     Nothing
 }
 
-public sealed class AppOptions
+public sealed class AppOptions : INormalizableApplicationOptions
 {
     public const string DefaultFontNameFallback = "Calibri";
     public const int DefaultFontSizeFallback = 11;
@@ -95,6 +96,9 @@ public sealed class AppOptions
 
     [JsonIgnore]
     public string? LastPersistenceError { get; private set; }
+
+    /// <inheritdoc cref="INormalizableApplicationOptions.Normalize"/>
+    public void Normalize() => NormalizePersistedCollections();
 
     public void NormalizePersistedCollections()
     {
