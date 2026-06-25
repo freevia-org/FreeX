@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
+using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
@@ -151,7 +152,8 @@ public sealed class MainWindow : Window
             Save: () => _ = SaveAsync(),
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
-            Paste: () => _ = PasteAsync());
+            Paste: () => _ = PasteAsync(),
+            Backstage: () => _ = ShowBackstageAsync());
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
@@ -562,5 +564,98 @@ public sealed class MainWindow : Window
         var chars = text.Length;
         _status.Text = $"{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
             + (_editor.CanUndo ? "   • edited" : "");
+    }
+
+    // ── Backstage (File screen) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens the FreeW backstage (File screen) as a modal full-window overlay.
+    /// The backstage renders its panes from the portable Presentation-tier planners and
+    /// dispatches user actions back through this shell's file workflow and open/save paths.
+    /// </summary>
+    private Task ShowBackstageAsync()
+    {
+        var callbacks = BuildBackstageCallbacks();
+        return BackstageView.ShowAsync(this, callbacks);
+    }
+
+    internal BackstageCallbacks BuildBackstageCallbacks() =>
+        new BackstageCallbacks(
+            DisplayName: _fileWorkflow.DisplayName,
+            CurrentPath: _fileWorkflow.CurrentPath,
+            GetRecentEntries: () => _fileWorkflow.RecentEntries,
+            GetFileFormats: () => _adapters.SelectMany(a => a.Formats),
+            GetPageSettings: () => _editor.Document.Page,
+
+            NewDocument: NewDocument,
+            OpenRecent: path =>
+            {
+                // Run the dirty-gate synchronously (ConfirmDiscardOrSave calls PromptSaveChangesSync
+                // which is safe because we block the UI thread only briefly for the dialog).
+                if (_fileWorkflow.Open("opening another document", () => path, p =>
+                    {
+                        _ = OpenPathAsync(p);
+                        return true;
+                    }))
+                {
+                    // success — OpenPathAsync was already fired
+                }
+            },
+            Browse: () => _ = OpenAsync(),
+            RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),
+            SaveAs: () => _ = SaveAsAsync(),
+            SaveAsExtension: ext => _ = SaveAsWithExtensionAsync(ext),
+            OpenContainingFolder: path =>
+            {
+                try
+                {
+                    var folder = System.IO.Path.GetDirectoryName(path);
+                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = folder,
+                            UseShellExecute = true,
+                        });
+                }
+                catch (Exception ex)
+                {
+                    _status.Text = $"Could not open folder: {ex.Message}";
+                }
+            },
+            ExportPdf: () => _ = ExportPdfAsync());
+
+    /// <summary>
+    /// Save As targeting a specific file extension chosen from the backstage planner.
+    /// Builds a save-picker pre-filtered to the requested extension and lets the user
+    /// confirm the filename before saving.
+    /// </summary>
+    private async Task SaveAsWithExtensionAsync(string extension)
+    {
+        var normalizedExt = DocumentFileFormatResolver.NormalizeExtension(extension);
+        var adapter = DocumentFileFormatResolver.FindSaveAdapter(_adapters, normalizedExt, out var format);
+        if (adapter is null)
+        {
+            _status.Text = $"Save failed: unsupported extension \"{extension}\".";
+            return;
+        }
+
+        var suggestedName = (_fileWorkflow.CurrentPath is null
+            ? "Document"
+            : System.IO.Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentPath)) + normalizedExt;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = $"Save as {format?.FormatName ?? extension}",
+            DefaultExtension = normalizedExt.TrimStart('.'),
+            SuggestedFileName = suggestedName,
+            FileTypeChoices = [DocumentFilePickerTypes.ToFileType(
+                new Free.Shared.IO.FileDialogPickerTypeDescriptor(
+                    format?.FormatName ?? extension,
+                    [$"*{normalizedExt}"]))],
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (path is not null)
+            await SaveToPathAsync(path);
     }
 }

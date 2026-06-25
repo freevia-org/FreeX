@@ -25,6 +25,7 @@ internal static class FreeWRibbon
             .Tab("file", "File", "F", tab =>
                 tab.Group("document", "Document", null, 100, g =>
                 {
+                    g.Button("freew.backstage", "File...");
                     g.Button("freew.open", "Open");
                     g.Button("freew.save", "Save");
                 }))
@@ -103,6 +104,7 @@ internal static class FreeWRibbon
             if (!string.IsNullOrWhiteSpace(value))
                 editor.SetSelectionFontFamily(value);
         }));
+        registry.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
         registry.Register("freew.open", new RelayCommand(callbacks.Open));
         registry.Register("freew.save", new RelayCommand(callbacks.Save));
         registry.Register("freew.cut", new RelayCommand(callbacks.Cut));
@@ -117,7 +119,8 @@ internal sealed record RibbonHostCallbacks(
     Action Save,
     Action Cut,
     Action Copy,
-    Action Paste);
+    Action Paste,
+    Action Backstage);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {
