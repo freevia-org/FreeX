@@ -68,8 +68,8 @@ public sealed class MainWindow : Window
     private TabControl _ribbonTabs = null!;
     private TabItem _fileTab = null!;
     private RibbonFileTabRouter? _fileTabRouter;
-    private Border _canvas = null!;
-    private TextBlock _canvasLabel = null!;
+    private Border _canvasHost = null!;
+    private SlideCanvas _slideCanvas = null!;
     private TextBlock _slideCountText = null!;
 
     public MainWindow() : this(new FreePOptions())
@@ -171,47 +171,40 @@ public sealed class MainWindow : Window
         _commandBus.Execute(new AddSlideCommand(slide));
     }
 
-    // Placeholder slide canvas: a grey "stage" hosting a centred white 16:9 slide page labelled with the
-    // current slide's title. There is NO slide rendering here — this is chrome standing in for the real
-    // editor the presentation-domain session will build.
+    // Real slide canvas: a grey "stage" hosting the SlideCanvas renderer, which uses
+    // SlideCompositor to convert the presentation model into WPF draw calls.
     private UIElement BuildCanvas()
     {
-        _canvasLabel = new TextBlock
+        _slideCanvas = new SlideCanvas
         {
-            FontSize = 28,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
         };
 
-        var page = new Border
+        // Slide canvas hosted inside a viewbox so it scales uniformly with the window.
+        var viewbox = new Viewbox
         {
-            Width = 720,
-            Height = 405, // 16:9
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-            BorderThickness = new Thickness(1),
-            Child = _canvasLabel
+            Stretch = Stretch.Uniform,
+            StretchDirection = StretchDirection.Both,
+            Margin = new Thickness(40),
+            Child = _slideCanvas
         };
 
-        _canvas = new Border
+        _canvasHost = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
-            Child = new Viewbox
-            {
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.DownOnly,
-                Margin = new Thickness(40),
-                Child = page
-            }
+            Child = viewbox
         };
-        return _canvas;
+
+        return _canvasHost;
     }
 
     private void RefreshCanvas()
     {
         var first = _presentation.Slides.Count > 0 ? _presentation.Slides[0] : null;
-        _canvasLabel.Text = first is null ? "No slides" : (string.IsNullOrWhiteSpace(first.Title) ? "Slide 1" : first.Title);
+        _slideCanvas.Presentation = _presentation;
+        _slideCanvas.Slide = first;
+        _slideCanvas.Refresh();
     }
 
     private Border BuildStatusBar()
