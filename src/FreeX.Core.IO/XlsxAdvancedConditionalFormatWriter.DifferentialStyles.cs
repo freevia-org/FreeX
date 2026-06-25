@@ -127,12 +127,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                                 : new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))
                 : null,
             HasDifferentialBorder(style)
-                ? new XElement(
-                    workbookNs + "border",
-                    ToDifferentialBorderXml("left", style.BorderLeft, workbookNs),
-                    ToDifferentialBorderXml("right", style.BorderRight, workbookNs),
-                    ToDifferentialBorderXml("top", style.BorderTop, workbookNs),
-                    ToDifferentialBorderXml("bottom", style.BorderBottom, workbookNs))
+                ? ToDifferentialBorderElement(style, workbookNs)
                 : null);
 
         MergeDifferentialStyleElementNativeMetadata(dxf, style, workbookNs);
@@ -355,7 +350,27 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         style.BorderLeft.Style != BorderStyle.None ||
         style.BorderRight.Style != BorderStyle.None ||
         style.BorderTop.Style != BorderStyle.None ||
-        style.BorderBottom.Style != BorderStyle.None;
+        style.BorderBottom.Style != BorderStyle.None ||
+        style.BorderDiagonalDown.Style != BorderStyle.None ||
+        style.BorderDiagonalUp.Style != BorderStyle.None;
+
+    private static XElement ToDifferentialBorderElement(CellStyle style, XNamespace workbookNs)
+    {
+        var element = new XElement(workbookNs + "border");
+        // OOXML dxf <border> shares one diagonal style/color for both directions.
+        var diagBorder = style.BorderDiagonalDown.Style != BorderStyle.None ? style.BorderDiagonalDown : style.BorderDiagonalUp;
+        if (style.BorderDiagonalDown.Style != BorderStyle.None)
+            element.SetAttributeValue("diagonalDown", "1");
+        if (style.BorderDiagonalUp.Style != BorderStyle.None)
+            element.SetAttributeValue("diagonalUp", "1");
+        element.Add(ToDifferentialBorderXml("left", style.BorderLeft, workbookNs));
+        element.Add(ToDifferentialBorderXml("right", style.BorderRight, workbookNs));
+        element.Add(ToDifferentialBorderXml("top", style.BorderTop, workbookNs));
+        element.Add(ToDifferentialBorderXml("bottom", style.BorderBottom, workbookNs));
+        if (diagBorder.Style != BorderStyle.None)
+            element.Add(ToDifferentialBorderXml("diagonal", diagBorder, workbookNs));
+        return element;
+    }
 
     private static bool HasDifferentialFill(CellStyle style) =>
         style.FillColor is not null ||
@@ -383,6 +398,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             BorderStyle.Dashed => "dashed",
             BorderStyle.Dotted => "dotted",
             BorderStyle.Double => "double",
+            BorderStyle.Hair => "hair",
+            BorderStyle.SlantDashDot => "slantDashDot",
+            BorderStyle.MediumDashed => "mediumDashed",
+            BorderStyle.DashDot => "dashDot",
+            BorderStyle.MediumDashDot => "mediumDashDot",
+            BorderStyle.DashDotDot => "dashDotDot",
+            BorderStyle.MediumDashDotDot => "mediumDashDotDot",
             _ => "none"
         };
 }

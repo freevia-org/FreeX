@@ -96,6 +96,8 @@ public static class CellTextOrientationLayoutPlanner
             HorizontalAlignment.Justify or HorizontalAlignment.Distributed => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
             HorizontalAlignment.Center => cellRect.Left + (cellRect.Width - boundsWidth) / 2,
             HorizontalAlignment.General when isNumeric => cellRect.Right - boundsWidth - 2,
+            // Fill: text is repeated to fill width — the layout origin is still Left+2; rendering clips/repeats.
+            HorizontalAlignment.Fill => cellRect.Left + 2,
             _ => cellRect.Left + 2 + indentPixels
         };
         var boundsY = verticalAlignment switch

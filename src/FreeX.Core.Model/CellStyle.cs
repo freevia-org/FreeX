@@ -43,7 +43,21 @@ public enum BorderStyle
     Thick,
     Dashed,
     Dotted,
-    Double
+    Double,
+    /// <summary>Sub-pixel thin line, lighter/thinner than Thin. Excel: "hair".</summary>
+    Hair,
+    /// <summary>Slanted dash-dot pattern. Excel: "slantDashDot".</summary>
+    SlantDashDot,
+    /// <summary>Medium dashed line. Excel: "mediumDashed".</summary>
+    MediumDashed,
+    /// <summary>Dash-dot line. Excel: "dashDot".</summary>
+    DashDot,
+    /// <summary>Medium dash-dot line. Excel: "mediumDashDot".</summary>
+    MediumDashDot,
+    /// <summary>Dash-dot-dot line. Excel: "dashDotDot".</summary>
+    DashDotDot,
+    /// <summary>Medium dash-dot-dot line. Excel: "mediumDashDotDot".</summary>
+    MediumDashDotDot,
 }
 
 /// <summary>
@@ -87,7 +101,9 @@ public enum HorizontalAlignment
     Center,
     Right,
     Justify,
-    Distributed
+    Distributed,
+    /// <summary>Repeats the cell text to fill the column width. Excel: "fill".</summary>
+    Fill,
 }
 
 /// <summary>
@@ -164,6 +180,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
     /// <summary>Left border.</summary>
     public CellBorder BorderLeft { get; set; }
 
+    /// <summary>Diagonal-down border (top-left → bottom-right, i.e. Excel's xlDiagonalDown / OOXML diagonalDown="1").</summary>
+    public CellBorder BorderDiagonalDown { get; set; }
+
+    /// <summary>Diagonal-up border (bottom-left → top-right, i.e. Excel's xlDiagonalUp / OOXML diagonalUp="1").</summary>
+    public CellBorder BorderDiagonalUp { get; set; }
+
     /// <summary>Number format string (e.g. "General", "0.00", "#,##0").</summary>
     public string NumberFormat { get; set; } = "General";
 
@@ -234,6 +256,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         BorderRight = BorderRight,
         BorderBottom = BorderBottom,
         BorderLeft = BorderLeft,
+        BorderDiagonalDown = BorderDiagonalDown,
+        BorderDiagonalUp = BorderDiagonalUp,
         NumberFormat = NumberFormat,
         HorizontalAlignment = HorizontalAlignment,
         VerticalAlignment = VerticalAlignment,
@@ -277,6 +301,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && BorderRight == other.BorderRight
             && BorderBottom == other.BorderBottom
             && BorderLeft == other.BorderLeft
+            && BorderDiagonalDown == other.BorderDiagonalDown
+            && BorderDiagonalUp == other.BorderDiagonalUp
             && NumberFormat == other.NumberFormat
             && HorizontalAlignment == other.HorizontalAlignment
             && VerticalAlignment == other.VerticalAlignment
@@ -341,6 +367,8 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(BorderRight);
         h.Add(BorderBottom);
         h.Add(BorderLeft);
+        h.Add(BorderDiagonalDown);
+        h.Add(BorderDiagonalUp);
         h.Add(NumberFormat);
         h.Add(HorizontalAlignment);
         h.Add(VerticalAlignment);
@@ -435,10 +463,12 @@ public record StyleDiff(
     bool? DoubleUnderline       = null,
     int? IndentLevel            = null,
     int? TextRotation           = null,
-    CellBorder? BorderTop       = null,
-    CellBorder? BorderRight     = null,
-    CellBorder? BorderBottom    = null,
-    CellBorder? BorderLeft      = null,
+    CellBorder? BorderTop            = null,
+    CellBorder? BorderRight          = null,
+    CellBorder? BorderBottom         = null,
+    CellBorder? BorderLeft           = null,
+    CellBorder? BorderDiagonalDown   = null,
+    CellBorder? BorderDiagonalUp     = null,
     bool? Locked                = null,
     bool? Hidden                = null,
     bool? ClearFill             = null,
@@ -473,10 +503,12 @@ public record StyleDiff(
         DoubleUnderline: style.DoubleUnderline,
         IndentLevel:     style.IndentLevel,
         TextRotation:    style.TextRotation,
-        BorderTop:       style.BorderTop,
-        BorderRight:     style.BorderRight,
-        BorderBottom:    style.BorderBottom,
-        BorderLeft:      style.BorderLeft,
+        BorderTop:            style.BorderTop,
+        BorderRight:          style.BorderRight,
+        BorderBottom:         style.BorderBottom,
+        BorderLeft:           style.BorderLeft,
+        BorderDiagonalDown:   style.BorderDiagonalDown,
+        BorderDiagonalUp:     style.BorderDiagonalUp,
         Locked:          style.Locked,
         Hidden:          style.Hidden,
         FontScheme:      style.FontScheme
@@ -549,11 +581,13 @@ public record StyleDiff(
         if (DoubleUnderline is not null) s.DoubleUnderline = DoubleUnderline.Value;
         if (IndentLevel    is not null) s.IndentLevel   = Math.Clamp(IndentLevel.Value, 0, 15);
         if (TextRotation   is not null) s.TextRotation  = TextRotation.Value;
-        if (BorderTop      is not null) s.BorderTop     = BorderTop.Value;
-        if (BorderRight    is not null) s.BorderRight   = BorderRight.Value;
-        if (BorderBottom   is not null) s.BorderBottom  = BorderBottom.Value;
-        if (BorderLeft     is not null) s.BorderLeft    = BorderLeft.Value;
-        if (Locked         is not null) s.Locked        = Locked.Value;
+        if (BorderTop          is not null) s.BorderTop          = BorderTop.Value;
+        if (BorderRight        is not null) s.BorderRight        = BorderRight.Value;
+        if (BorderBottom       is not null) s.BorderBottom       = BorderBottom.Value;
+        if (BorderLeft         is not null) s.BorderLeft         = BorderLeft.Value;
+        if (BorderDiagonalDown is not null) s.BorderDiagonalDown = BorderDiagonalDown.Value;
+        if (BorderDiagonalUp   is not null) s.BorderDiagonalUp   = BorderDiagonalUp.Value;
+        if (Locked             is not null) s.Locked             = Locked.Value;
         if (Hidden         is not null) s.Hidden        = Hidden.Value;
         return s;
     }

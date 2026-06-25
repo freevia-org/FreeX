@@ -248,6 +248,11 @@ public partial class GridView
             DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
             DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
             DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+            // Diagonal borders: drawn across cell interior (not edge-aligned), so no pen cache — these are rare
+            if (style.BorderDiagonalDown.Style != BorderStyle.None)
+                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache);
+            if (style.BorderDiagonalUp.Style != BorderStyle.None)
+                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top), _brushCache);
         }
 
         if (cell.HasComment)
@@ -351,6 +356,22 @@ public partial class GridView
             isNumeric,
             indentPx,
             textRotation);
+
+        // Fill alignment: repeat text horizontally to fill the cell width, clipped to textClipRect.
+        if (hAlign == CellHAlign.Fill && text.Width > 0 && rect.Width > 0)
+        {
+            dc.PushClip(GetCellClipGeometry(textClipRect));
+            var fillX = rect.Left + 2;
+            var fillY = textLayout.TextPoint.Y;
+            while (fillX < textClipRect.Right)
+            {
+                dc.DrawText(text, new Point(fillX, fillY));
+                fillX += text.Width;
+            }
+            dc.Pop();
+            return;
+        }
+
         var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);
         if (shouldClipText)
             dc.PushClip(GetCellClipGeometry(textClipRect));
@@ -483,6 +504,10 @@ public partial class GridView
             DrawBorderEdge(dc, style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
             DrawBorderEdge(dc, style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), _brushCache, _borderPenCache);
             DrawBorderEdge(dc, style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), _brushCache, _borderPenCache);
+            if (style.BorderDiagonalDown.Style != BorderStyle.None)
+                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + w, y + h), _brushCache);
+            if (style.BorderDiagonalUp.Style != BorderStyle.None)
+                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + h), new Point(x + w, y), _brushCache);
         }
 
         // Pass 2b: comment/note indicators
@@ -665,6 +690,21 @@ public partial class GridView
 
             if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
+
+            // Fill alignment: repeat text horizontally to fill the cell width.
+            if (hAlign == CellHAlign.Fill && text.Width > 0 && rect.Width > 0)
+            {
+                dc.PushClip(GetCellClipGeometry(clipRect));
+                var fillX = rect.Left + 2;
+                var fillY = textLayout.TextPoint.Y;
+                while (fillX < clipRect.Right)
+                {
+                    dc.DrawText(text, new Point(fillX, fillY));
+                    fillX += text.Width;
+                }
+                dc.Pop();
+                continue;
+            }
 
             var shouldClipText = ShouldClipText(wrapText, clipRect, text, textLayout);
             if (shouldClipText)

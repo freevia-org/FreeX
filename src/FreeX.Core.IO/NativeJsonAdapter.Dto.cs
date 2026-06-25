@@ -800,6 +800,10 @@ public sealed partial class NativeJsonAdapter
         public CellBorderDto? BorderRight { get; set; }
         public CellBorderDto? BorderBottom { get; set; }
         public CellBorderDto? BorderLeft { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellBorderDto? BorderDiagonalDown { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellBorderDto? BorderDiagonalUp { get; set; }
         public string NumberFormat { get; set; } = "General";
         public HorizontalAlignment HorizontalAlignment { get; set; } = HorizontalAlignment.General;
         public VerticalAlignment VerticalAlignment { get; set; } = VerticalAlignment.Bottom;

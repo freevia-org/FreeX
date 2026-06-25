@@ -173,6 +173,12 @@ internal static class XlsxClosedXmlCellMapper
             BorderRight = MapBorder(xlStyle.Border.RightBorder, xlStyle.Border.RightBorderColor, theme),
             BorderBottom = MapBorder(xlStyle.Border.BottomBorder, xlStyle.Border.BottomBorderColor, theme),
             BorderLeft = MapBorder(xlStyle.Border.LeftBorder, xlStyle.Border.LeftBorderColor, theme),
+            BorderDiagonalDown = xlStyle.Border.DiagonalDown
+                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme)
+                : default,
+            BorderDiagonalUp = xlStyle.Border.DiagonalUp
+                ? MapBorder(xlStyle.Border.DiagonalBorder, xlStyle.Border.DiagonalBorderColor, theme)
+                : default,
             NumberFormat = MapNumberFormat(xlStyle.NumberFormat),
             HorizontalAlignment = xlStyle.Alignment.Horizontal switch
             {
@@ -182,6 +188,7 @@ internal static class XlsxClosedXmlCellMapper
                 XLAlignmentHorizontalValues.Right => HorizontalAlignment.Right,
                 XLAlignmentHorizontalValues.Justify => HorizontalAlignment.Justify,
                 XLAlignmentHorizontalValues.Distributed => HorizontalAlignment.Distributed,
+                XLAlignmentHorizontalValues.Fill => HorizontalAlignment.Fill,
                 _ => HorizontalAlignment.General,
             },
             VerticalAlignment = xlStyle.Alignment.Vertical switch
@@ -288,6 +295,15 @@ internal static class XlsxClosedXmlCellMapper
             xlStyle.Border.LeftBorder = MapBorderStyleInverse(style.BorderLeft.Style);
             xlStyle.Border.LeftBorderColor = XLColor.FromArgb(255, style.BorderLeft.Color.R, style.BorderLeft.Color.G, style.BorderLeft.Color.B);
         }
+        if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
+        {
+            // OOXML: diagonal border style/color is shared; diagonalDown/diagonalUp flags select which lines to draw.
+            var diagBorder = style.BorderDiagonalDown.Style != BorderStyle.None ? style.BorderDiagonalDown : style.BorderDiagonalUp;
+            xlStyle.Border.DiagonalBorder = MapBorderStyleInverse(diagBorder.Style);
+            xlStyle.Border.DiagonalBorderColor = XLColor.FromArgb(255, diagBorder.Color.R, diagBorder.Color.G, diagBorder.Color.B);
+            xlStyle.Border.DiagonalDown = style.BorderDiagonalDown.Style != BorderStyle.None;
+            xlStyle.Border.DiagonalUp = style.BorderDiagonalUp.Style != BorderStyle.None;
+        }
 
         if (style.HorizontalAlignment != def.HorizontalAlignment)
             xlStyle.Alignment.Horizontal = style.HorizontalAlignment switch
@@ -297,6 +313,7 @@ internal static class XlsxClosedXmlCellMapper
                 HorizontalAlignment.Right => XLAlignmentHorizontalValues.Right,
                 HorizontalAlignment.Justify => XLAlignmentHorizontalValues.Justify,
                 HorizontalAlignment.Distributed => XLAlignmentHorizontalValues.Distributed,
+                HorizontalAlignment.Fill => XLAlignmentHorizontalValues.Fill,
                 _ => XLAlignmentHorizontalValues.General,
             };
 
@@ -444,6 +461,13 @@ internal static class XlsxClosedXmlCellMapper
             XLBorderStyleValues.Dashed => BorderStyle.Dashed,
             XLBorderStyleValues.Dotted => BorderStyle.Dotted,
             XLBorderStyleValues.Double => BorderStyle.Double,
+            XLBorderStyleValues.Hair => BorderStyle.Hair,
+            XLBorderStyleValues.SlantDashDot => BorderStyle.SlantDashDot,
+            XLBorderStyleValues.MediumDashed => BorderStyle.MediumDashed,
+            XLBorderStyleValues.DashDot => BorderStyle.DashDot,
+            XLBorderStyleValues.MediumDashDot => BorderStyle.MediumDashDot,
+            XLBorderStyleValues.DashDotDot => BorderStyle.DashDotDot,
+            XLBorderStyleValues.MediumDashDotDot => BorderStyle.MediumDashDotDot,
             _ => BorderStyle.None,
         };
         return new CellBorder(mapped, MapColor(color, theme));
@@ -457,6 +481,13 @@ internal static class XlsxClosedXmlCellMapper
         BorderStyle.Dashed => XLBorderStyleValues.Dashed,
         BorderStyle.Dotted => XLBorderStyleValues.Dotted,
         BorderStyle.Double => XLBorderStyleValues.Double,
+        BorderStyle.Hair => XLBorderStyleValues.Hair,
+        BorderStyle.SlantDashDot => XLBorderStyleValues.SlantDashDot,
+        BorderStyle.MediumDashed => XLBorderStyleValues.MediumDashed,
+        BorderStyle.DashDot => XLBorderStyleValues.DashDot,
+        BorderStyle.MediumDashDot => XLBorderStyleValues.MediumDashDot,
+        BorderStyle.DashDotDot => XLBorderStyleValues.DashDotDot,
+        BorderStyle.MediumDashDotDot => XLBorderStyleValues.MediumDashDotDot,
         _ => XLBorderStyleValues.None,
     };
 

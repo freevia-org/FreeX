@@ -60,12 +60,20 @@ internal static class XlsxCellBorderStyleReader
         XElement border,
         XNamespace workbookNs,
         WorkbookTheme theme,
-        WorkbookIndexedColorPalette indexedColors) =>
-        new(
+        WorkbookIndexedColorPalette indexedColors)
+    {
+        var diagEdge = border.Element(workbookNs + "diagonal");
+        var diagBorder = ReadBorderEdge(diagEdge, workbookNs, theme, indexedColors);
+        var diagonalDown = border.Attribute("diagonalDown")?.Value is "1" or "true";
+        var diagonalUp = border.Attribute("diagonalUp")?.Value is "1" or "true";
+        return new XlsxCellBorderStyle(
             ReadBorderEdge(border.Element(workbookNs + "top"), workbookNs, theme, indexedColors),
             ReadBorderEdge(border.Element(workbookNs + "right"), workbookNs, theme, indexedColors),
             ReadBorderEdge(border.Element(workbookNs + "bottom"), workbookNs, theme, indexedColors),
-            ReadBorderEdge(border.Element(workbookNs + "left"), workbookNs, theme, indexedColors));
+            ReadBorderEdge(border.Element(workbookNs + "left"), workbookNs, theme, indexedColors),
+            diagonalDown ? diagBorder : default,
+            diagonalUp ? diagBorder : default);
+    }
 
     private static CellBorder ReadBorderEdge(
         XElement? edge,
@@ -84,6 +92,13 @@ internal static class XlsxCellBorderStyleReader
             "dashed" => BorderStyle.Dashed,
             "dotted" => BorderStyle.Dotted,
             "double" => BorderStyle.Double,
+            "hair" => BorderStyle.Hair,
+            "slantDashDot" => BorderStyle.SlantDashDot,
+            "mediumDashed" => BorderStyle.MediumDashed,
+            "dashDot" => BorderStyle.DashDot,
+            "mediumDashDot" => BorderStyle.MediumDashDot,
+            "dashDotDot" => BorderStyle.DashDotDot,
+            "mediumDashDotDot" => BorderStyle.MediumDashDotDot,
             _ => BorderStyle.None
         };
         if (style == BorderStyle.None)
@@ -134,13 +149,17 @@ internal readonly record struct XlsxCellBorderStyle(
     CellBorder Top,
     CellBorder Right,
     CellBorder Bottom,
-    CellBorder Left)
+    CellBorder Left,
+    CellBorder DiagonalDown = default,
+    CellBorder DiagonalUp = default)
 {
     public bool HasVisibleBorder =>
         Top.Style != BorderStyle.None ||
         Right.Style != BorderStyle.None ||
         Bottom.Style != BorderStyle.None ||
-        Left.Style != BorderStyle.None;
+        Left.Style != BorderStyle.None ||
+        DiagonalDown.Style != BorderStyle.None ||
+        DiagonalUp.Style != BorderStyle.None;
 
     public void ApplyTo(CellStyle style)
     {
@@ -148,5 +167,7 @@ internal readonly record struct XlsxCellBorderStyle(
         style.BorderRight = Right;
         style.BorderBottom = Bottom;
         style.BorderLeft = Left;
+        style.BorderDiagonalDown = DiagonalDown;
+        style.BorderDiagonalUp = DiagonalUp;
     }
 }

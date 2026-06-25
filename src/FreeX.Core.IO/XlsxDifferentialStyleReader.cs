@@ -96,6 +96,12 @@ internal static class XlsxDifferentialStyleReader
             style.BorderRight = ReadBorder(border.Element(workbookNs + "right"), workbookNs);
             style.BorderBottom = ReadBorder(border.Element(workbookNs + "bottom"), workbookNs);
             style.BorderLeft = ReadBorder(border.Element(workbookNs + "left"), workbookNs);
+            var diagBorder = ReadBorder(border.Element(workbookNs + "diagonal"), workbookNs);
+            if (diagBorder.Style != BorderStyle.None)
+            {
+                style.BorderDiagonalDown = border.Attribute("diagonalDown")?.Value is "1" or "true" ? diagBorder : default;
+                style.BorderDiagonalUp = border.Attribute("diagonalUp")?.Value is "1" or "true" ? diagBorder : default;
+            }
         }
 
         var numberFormat = dxf.Element(workbookNs + "numFmt")?.Attribute("formatCode")?.Value;
@@ -171,6 +177,13 @@ internal static class XlsxDifferentialStyleReader
             "dashed" => BorderStyle.Dashed,
             "dotted" => BorderStyle.Dotted,
             "double" => BorderStyle.Double,
+            "hair" => BorderStyle.Hair,
+            "slantDashDot" => BorderStyle.SlantDashDot,
+            "mediumDashed" => BorderStyle.MediumDashed,
+            "dashDot" => BorderStyle.DashDot,
+            "mediumDashDot" => BorderStyle.MediumDashDot,
+            "dashDotDot" => BorderStyle.DashDotDot,
+            "mediumDashDotDot" => BorderStyle.MediumDashDotDot,
             _ => BorderStyle.None
         };
         if (style == BorderStyle.None)

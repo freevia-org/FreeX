@@ -77,16 +77,21 @@ public partial class GridView
 
         double thickness = border.Style switch
         {
+            BorderStyle.Hair => 0.25,
             BorderStyle.Thin => 0.5,
-            BorderStyle.Medium => 1.5,
+            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
             BorderStyle.Thick => 2.5,
             _ => 0.5
         };
 
         DashStyle dash = border.Style switch
         {
-            BorderStyle.Dashed => DashStyles.Dash,
+            BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
             BorderStyle.Dotted => DashStyles.Dot,
+            BorderStyle.DashDot or BorderStyle.MediumDashDot => DashStyles.DashDot,
+            BorderStyle.DashDotDot or BorderStyle.MediumDashDotDot => DashStyles.DashDotDot,
+            BorderStyle.SlantDashDot => DashStyles.DashDot,   // WPF approximation of slant dash-dot
+            BorderStyle.Hair => DashStyles.Solid,
             _ => DashStyles.Solid
         };
 
@@ -102,7 +107,9 @@ public partial class GridView
         style.BorderTop.Style != BorderStyle.None ||
         style.BorderBottom.Style != BorderStyle.None ||
         style.BorderLeft.Style != BorderStyle.None ||
-        style.BorderRight.Style != BorderStyle.None;
+        style.BorderRight.Style != BorderStyle.None ||
+        style.BorderDiagonalDown.Style != BorderStyle.None ||
+        style.BorderDiagonalUp.Style != BorderStyle.None;
 
     private static bool HasVisibleCellSurface(CellStyle style) =>
         style.FillColor.HasValue ||

@@ -76,6 +76,8 @@ public sealed partial class NativeJsonAdapter
             BorderRight = ToCellBorder(dto.BorderRight),
             BorderBottom = ToCellBorder(dto.BorderBottom),
             BorderLeft = ToCellBorder(dto.BorderLeft),
+            BorderDiagonalDown = ToCellBorder(dto.BorderDiagonalDown),
+            BorderDiagonalUp = ToCellBorder(dto.BorderDiagonalUp),
             NumberFormat = string.IsNullOrWhiteSpace(dto.NumberFormat) ? CellStyle.Default.NumberFormat : dto.NumberFormat,
             HorizontalAlignment = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.HorizontalAlignment, HorizontalAlignment.General),
             VerticalAlignment = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.VerticalAlignment, VerticalAlignment.Bottom),
@@ -117,6 +119,8 @@ public sealed partial class NativeJsonAdapter
             BorderRight = FromCellBorder(style.BorderRight),
             BorderBottom = FromCellBorder(style.BorderBottom),
             BorderLeft = FromCellBorder(style.BorderLeft),
+            BorderDiagonalDown = style.BorderDiagonalDown.Style != BorderStyle.None ? FromCellBorder(style.BorderDiagonalDown) : null,
+            BorderDiagonalUp = style.BorderDiagonalUp.Style != BorderStyle.None ? FromCellBorder(style.BorderDiagonalUp) : null,
             NumberFormat = style.NumberFormat,
             HorizontalAlignment = style.HorizontalAlignment,
             VerticalAlignment = style.VerticalAlignment,
@@ -151,6 +155,8 @@ public sealed partial class NativeJsonAdapter
             BorderRight = FromCellBorder(safeStyle.BorderRight),
             BorderBottom = FromCellBorder(safeStyle.BorderBottom),
             BorderLeft = FromCellBorder(safeStyle.BorderLeft),
+            BorderDiagonalDown = safeStyle.BorderDiagonalDown.Style != BorderStyle.None ? FromCellBorder(safeStyle.BorderDiagonalDown) : null,
+            BorderDiagonalUp = safeStyle.BorderDiagonalUp.Style != BorderStyle.None ? FromCellBorder(safeStyle.BorderDiagonalUp) : null,
             NumberFormat = safeStyle.NumberFormat,
             HorizontalAlignment = safeStyle.HorizontalAlignment,
             VerticalAlignment = safeStyle.VerticalAlignment,
@@ -206,6 +212,8 @@ public sealed partial class NativeJsonAdapter
                 && BorderEquals(x.BorderRight, y.BorderRight)
                 && BorderEquals(x.BorderBottom, y.BorderBottom)
                 && BorderEquals(x.BorderLeft, y.BorderLeft)
+                && BorderEquals(x.BorderDiagonalDown, y.BorderDiagonalDown)
+                && BorderEquals(x.BorderDiagonalUp, y.BorderDiagonalUp)
                 && string.Equals(x.NumberFormat, y.NumberFormat, StringComparison.Ordinal)
                 && x.HorizontalAlignment == y.HorizontalAlignment
                 && x.VerticalAlignment == y.VerticalAlignment
@@ -241,6 +249,8 @@ public sealed partial class NativeJsonAdapter
             AddBorderHash(ref hash, obj.BorderRight);
             AddBorderHash(ref hash, obj.BorderBottom);
             AddBorderHash(ref hash, obj.BorderLeft);
+            AddBorderHash(ref hash, obj.BorderDiagonalDown);
+            AddBorderHash(ref hash, obj.BorderDiagonalUp);
             hash.Add(obj.NumberFormat, StringComparer.Ordinal);
             hash.Add(obj.HorizontalAlignment);
             hash.Add(obj.VerticalAlignment);
