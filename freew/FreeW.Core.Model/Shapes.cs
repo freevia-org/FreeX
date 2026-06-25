@@ -1,4 +1,127 @@
-﻿namespace FreeW.Core.Model;
+﻿using System.Collections.Generic;
+
+namespace FreeW.Core.Model;
+
+// ── Custom Geometry (Edit Points / a:custGeom) ────────────────────────────────────────────────────
+
+/// <summary>
+/// A single edit-point on a freeform custom geometry path, in the shape's local coordinate space
+/// (0–21600 units, matching DrawingML's default 21600×21600 grid). Serialised as an <c>a:pt</c>
+/// element inside <c>a:custGeom/a:pathLst/a:path/a:lnTo</c> (or <c>a:moveTo</c> for the first point).
+/// </summary>
+public sealed record CustomPoint(long X, long Y);
+
+/// <summary>
+/// A freeform custom geometry path segment. The first point starts a move-to; subsequent points are
+/// line-to segments (a straight-line polygon). Cubic Bezier curves are not yet modelled (W25 roadmap).
+/// </summary>
+public enum CustomSegmentKind
+{
+    /// <summary>Move to the point without drawing (used for the first point of each sub-path).</summary>
+    MoveTo,
+    /// <summary>Draw a straight line from the current position to the point.</summary>
+    LineTo,
+    /// <summary>Close the sub-path back to the most recent move-to.</summary>
+    Close,
+}
+
+/// <summary>
+/// A single path segment in a <see cref="CustomGeometry"/> path list. <see cref="Close"/> segments
+/// carry no point (Point is irrelevant and may be null/default).
+/// </summary>
+public sealed record CustomSegment(CustomSegmentKind Kind, CustomPoint? Point = null);
+
+/// <summary>
+/// Freeform custom geometry for a <see cref="Shape"/>, replacing its preset geometry (<c>a:prstGeom</c>)
+/// with an explicit polygon defined by user-draggable edit points (<c>a:custGeom</c>). The geometry is
+/// expressed in a 21600×21600 local grid and serialised as a single <c>a:path</c> sub-path.
+///
+/// DOCX round-trip: writer emits <c>wps:spPr/a:custGeom/a:pathLst/a:path</c> with moveTo + lnTo +
+/// close segments; reader recovers them from the same structure and populates <see cref="Segments"/>.
+///
+/// When this property is set on a <see cref="Shape"/>, the writer emits <c>a:custGeom</c> instead of
+/// <c>a:prstGeom</c>; the renderer draws the polygon using WPF StreamGeometry.
+/// </summary>
+public sealed class CustomGeometry
+{
+    /// <summary>Local-coordinate bounding-box width (typically 21600). Used for a:path @w.</summary>
+    public long Width { get; set; } = 21600;
+
+    /// <summary>Local-coordinate bounding-box height (typically 21600). Used for a:path @h.</summary>
+    public long Height { get; set; } = 21600;
+
+    /// <summary>
+    /// Path segments forming the freeform polygon. The first segment should be a <see cref="CustomSegmentKind.MoveTo"/>
+    /// followed by one or more <see cref="CustomSegmentKind.LineTo"/> segments and an optional
+    /// <see cref="CustomSegmentKind.Close"/>.
+    /// </summary>
+    public List<CustomSegment> Segments { get; } = [];
+
+    /// <summary>All edit points (MoveTo / LineTo only; Close has no point).</summary>
+    public IEnumerable<CustomPoint> EditPoints =>
+        Segments.Where(s => s.Point is not null).Select(s => s.Point!);
+
+    /// <summary>
+    /// Convenience factory: builds a closed rectangular polygon from the four corners of a
+    /// given width×height bounding box in the 21600×21600 grid. Used by "Convert to Freeform".
+    /// </summary>
+    public static CustomGeometry RectanglePoly(long gridW = 21600, long gridH = 21600) => new()
+    {
+        Width = gridW,
+        Height = gridH,
+        Segments =
+        {
+            new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(0,    0)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW, 0)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW, gridH)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(0,    gridH)),
+            new CustomSegment(CustomSegmentKind.Close),
+        }
+    };
+
+    /// <summary>
+    /// Convenience factory: builds a closed ellipse approximated by 8 straight-line segments in the
+    /// 21600×21600 grid. Used by "Convert to Freeform" for ellipse shapes.
+    /// </summary>
+    public static CustomGeometry EllipsePoly(long gridW = 21600, long gridH = 21600)
+    {
+        var geo = new CustomGeometry { Width = gridW, Height = gridH };
+        long cx = gridW / 2, cy = gridH / 2;
+        int segments = 8;
+        for (int i = 0; i < segments; i++)
+        {
+            double angle = 2 * System.Math.PI * i / segments;
+            long x = cx + (long)(cx * System.Math.Cos(angle));
+            long y = cy + (long)(cy * System.Math.Sin(angle));
+            var kind = i == 0 ? CustomSegmentKind.MoveTo : CustomSegmentKind.LineTo;
+            geo.Segments.Add(new CustomSegment(kind, new CustomPoint(x, y)));
+        }
+        geo.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        return geo;
+    }
+
+    /// <summary>
+    /// Convenience factory: builds a rounded-rectangle approximation (rectangle with slightly cut
+    /// corners) in the 21600×21600 grid. Used by "Convert to Freeform" for rounded-rectangle shapes.
+    /// </summary>
+    public static CustomGeometry RoundedRectPoly(long gridW = 21600, long gridH = 21600)
+    {
+        long r = System.Math.Min(gridW, gridH) / 6; // corner inset
+        var geo = new CustomGeometry { Width = gridW, Height = gridH };
+        geo.Segments.AddRange([
+            new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(r,         0)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW - r, 0)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW,     r)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW,     gridH - r)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(gridW - r, gridH)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(r,         gridH)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(0,         gridH - r)),
+            new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(0,         r)),
+            new CustomSegment(CustomSegmentKind.Close),
+        ]);
+        return geo;
+    }
+}
 
 // ── Shape Fill union ─────────────────────────────────────────────────────────────────────────────
 
@@ -339,6 +462,20 @@ public sealed class Shape
     /// Maps onto <c>a:effectLst</c> (and <c>a:sp3d</c> for bevel) inside <c>wps:spPr</c>.
     /// </summary>
     public ShapeEffectLst? Effects { get; set; }
+
+    // ── W25: Custom Geometry (Edit Points) ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Optional freeform custom geometry replacing the preset shape outline. When non-null the writer
+    /// emits <c>a:custGeom</c> instead of <c>a:prstGeom</c> in <c>wps:spPr</c>, and the renderer
+    /// draws the polygon using WPF StreamGeometry. The "Convert to Freeform / Edit Points" command
+    /// sets this property. Null means the shape continues to use its <see cref="Kind"/> preset.
+    /// Round-trips via <c>a:custGeom/a:pathLst/a:path</c> in DOCX.
+    /// </summary>
+    public CustomGeometry? CustomGeometry { get; set; }
+
+    /// <summary>True when this shape has been converted to a freeform custom geometry.</summary>
+    public bool HasCustomGeometry => CustomGeometry is not null && CustomGeometry.Segments.Count > 0;
 
     public Shape() { }
 

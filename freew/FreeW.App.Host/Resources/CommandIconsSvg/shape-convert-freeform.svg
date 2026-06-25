@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Convert to Freeform">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="2" y="9" width="10" height="14" fill="none" stroke="#3060c0" stroke-width="1.6" rx="1"/>
+  <line x1="13" y1="16" x2="19" y2="16" stroke="#666" stroke-width="1.4"/>
+  <polygon points="19,13 23,16 19,19" fill="#666"/>
+  <path d="M24 10 Q28 9 30 13 Q31 17 28 20 Q25 24 22 22 Q19 20 21 17 Q23 14 24 10 Z" fill="none" stroke="#3060c0" stroke-width="1.6"/>
+</svg>

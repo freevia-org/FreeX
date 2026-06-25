@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Pastels">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="1" y="1" width="30" height="30" fill="#fdf8ee" rx="2"/>
+  <circle cx="11" cy="13" r="7" fill="#f9b8c8" opacity="0.65"/>
+  <circle cx="20" cy="11" r="6" fill="#c8b0e8" opacity="0.60"/>
+  <circle cx="14" cy="20" r="6" fill="#a8ddc8" opacity="0.65"/>
+  <circle cx="22" cy="20" r="5" fill="#f9d8a0" opacity="0.60"/>
+  <circle cx="8" cy="22" r="4" fill="#b8d8f0" opacity="0.55"/>
+</svg>

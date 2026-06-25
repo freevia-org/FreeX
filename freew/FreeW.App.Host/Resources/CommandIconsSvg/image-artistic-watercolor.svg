@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Watercolor">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="1" y="1" width="30" height="30" fill="#f8feff" rx="2"/>
+  <path d="M5 14 Q8 8 13 10 Q17 12 15 17 Q13 22 8 20 Q3 18 5 14 Z" fill="#80c0e0" opacity="0.55"/>
+  <path d="M13 8 Q18 4 22 8 Q26 12 24 17 Q22 21 17 19 Q12 17 13 8 Z" fill="#40a8c8" opacity="0.50"/>
+  <path d="M10 18 Q15 14 20 18 Q25 22 22 27 Q19 30 14 28 Q9 25 10 18 Z" fill="#60c8a0" opacity="0.55"/>
+  <path d="M20 16 Q24 12 28 16 Q32 20 28 24 Q25 28 21 25 Q17 22 20 16 Z" fill="#50b0d0" opacity="0.45"/>
+</svg>

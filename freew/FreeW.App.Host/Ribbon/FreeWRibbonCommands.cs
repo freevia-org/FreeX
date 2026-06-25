@@ -426,6 +426,28 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-bevel-2",    new ImageBevelPresetCommand(editor, 2));
         registry.Register("freew.image-bevel-3",    new ImageBevelPresetCommand(editor, 3));
         registry.Register("freew.image-bevel-4",    new ImageBevelPresetCommand(editor, 4));
+        // Picture Format tab — Adjust > Artistic Effects (W25).
+        // Each command sets InlineImage.ArtisticEffect and invalidates the render (non-destructive).
+        registry.Register("freew.image-artistic-none",          new ImageArtisticEffectCommand(editor, ImageArtisticEffect.None));
+        registry.Register("freew.image-artistic-blur",          new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Blur));
+        registry.Register("freew.image-artistic-glow-diffused", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.GlowDiffused));
+        registry.Register("freew.image-artistic-glow-edges",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.GlowEdges));
+        registry.Register("freew.image-artistic-pencil-gray",   new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PencilGrayscale));
+        registry.Register("freew.image-artistic-pencil-sketch", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PencilSketch));
+        registry.Register("freew.image-artistic-line-drawing",  new ImageArtisticEffectCommand(editor, ImageArtisticEffect.LineDrawing));
+        registry.Register("freew.image-artistic-paintbrush",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Paintbrush));
+        registry.Register("freew.image-artistic-paint-strokes", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PaintStrokes));
+        registry.Register("freew.image-artistic-photocopy",     new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Photocopy));
+        registry.Register("freew.image-artistic-posterize",     new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Posterize));
+        registry.Register("freew.image-artistic-pastels",       new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Pastels));
+        registry.Register("freew.image-artistic-watercolor",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Watercolor));
+        registry.Register("freew.image-artistic-film-grain",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.FilmGrain));
+        registry.Register("freew.image-artistic-mosaic",        new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Mosaic));
+        // Artistic Effects: top-level gallery opener.
+        registry.Register("freew.image-artistic",               new ActionCommand(() =>
+        {
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an artistic effect from the dropdown menu.", "Artistic Effects");
+        }));
         // Picture Format tab — Picture Styles gallery presets.
         foreach (var preset in PictureStyleCatalog.Catalog)
         {
@@ -597,6 +619,37 @@ internal static class FreeWRibbonCommands
             }));
         }
         // ── Drawing Format contextual tab — Shape/Drawing/TextBox/WordArt commands ─────────────────
+        // Edit Shape > Convert to Freeform / Edit Points (W25).
+        registry.Register("freew.shape-edit-shape", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose 'Convert to Freeform' or 'Edit Points' from the menu.", "Edit Shape");
+        }));
+        registry.Register("freew.shape-convert-freeform", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Convert to Freeform");
+                return;
+            }
+            editor.ConvertSelectedShapeToFreeform();
+        }));
+        registry.Register("freew.shape-edit-points", new ActionCommand(() =>
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Edit Points");
+                return;
+            }
+            // Convert to freeform first if not already, then show the edit-points mode.
+            if (!shape.HasCustomGeometry)
+                editor.ConvertSelectedShapeToFreeform();
+            editor.BeginShapeEditPoints();
+        }));
         // Change Shape: picker over ShapeKind; no model work — ShapeKind already exists.
         registry.Register("freew.shape-change-rectangle", new ActionCommand(() =>
         {
@@ -3708,6 +3761,21 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
                 image.ReflectionPreset, image.SoftEdgePt, preset);
+        }
+    }
+
+    // Picture Format > Adjust > Artistic Effects (W25): set the non-destructive artistic effect.
+    private sealed class ImageArtisticEffectCommand(DocumentView editor, ImageArtisticEffect effect) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Artistic Effects");
+                return;
+            }
+            editor.SetSelectedImageArtisticEffect(effect);
         }
     }
 

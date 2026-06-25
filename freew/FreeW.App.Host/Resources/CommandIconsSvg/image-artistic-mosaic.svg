@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Mosaic Bubbles">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="1" y="1" width="30" height="30" fill="#f0f0f0" rx="2"/>
+  <circle cx="7" cy="7" r="3.5" fill="#e04040"/>
+  <circle cx="14" cy="7" r="3.5" fill="#e08020"/>
+  <circle cx="21" cy="7" r="3.5" fill="#e0c020"/>
+  <circle cx="28" cy="7" r="3.5" fill="#40c040"/>
+  <circle cx="7" cy="14" r="3.5" fill="#4080e0"/>
+  <circle cx="14" cy="14" r="3.5" fill="#8040c0"/>
+  <circle cx="21" cy="14" r="3.5" fill="#e04080"/>
+  <circle cx="28" cy="14" r="3.5" fill="#20c0c0"/>
+  <circle cx="7" cy="21" r="3.5" fill="#40c080"/>
+  <circle cx="14" cy="21" r="3.5" fill="#e06040"/>
+  <circle cx="21" cy="21" r="3.5" fill="#6060e0"/>
+  <circle cx="28" cy="21" r="3.5" fill="#c04040"/>
+  <circle cx="7" cy="28" r="3.5" fill="#c08020"/>
+  <circle cx="14" cy="28" r="3.5" fill="#208040"/>
+  <circle cx="21" cy="28" r="3.5" fill="#2060c0"/>
+  <circle cx="28" cy="28" r="3.5" fill="#a030a0"/>
+</svg>

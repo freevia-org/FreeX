@@ -2902,6 +2902,11 @@ public static class DocxWriter
         if (image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None)
             blip.Add(new XAttribute(FreeWExt + "colorTemp", (long)Math.Round(image.ColorTemperature * 1000)));
 
+        // Artistic effect extension attribute: freew:artisticEffect = integer enum id.
+        // Emitted as a FreeW extension so it round-trips losslessly. When the effect is None it is omitted.
+        if (image.ArtisticEffect != ImageArtisticEffect.None)
+            blip.Add(new XAttribute(FreeWExt + "artisticEffect", (int)image.ArtisticEffect));
+
         // Standard blip adjustments — omitted when Washout/BlackWhite recolor has already emitted lum.
         if (image.RecolorMode is not (ImageRecolorMode.Washout or ImageRecolorMode.BlackWhite))
         {
@@ -3085,13 +3090,58 @@ public static class DocxWriter
         var docPrId = ids.NextShapeDrawingId();
         var name = $"{shape.Kind}{(uint)docPrId}";
 
-        // wps:spPr: position/size (a:xfrm), preset geometry, then fill, outline and effects.
+        // wps:spPr: position/size (a:xfrm), geometry (custGeom or prstGeom), then fill, outline and effects.
+        XElement geometryElement;
+        if (shape.HasCustomGeometry)
+        {
+            var cg = shape.CustomGeometry!;
+            // Build a:custGeom/a:pathLst/a:path with the freeform polygon segments.
+            var path = new XElement(A + "path",
+                new XAttribute("w", cg.Width),
+                new XAttribute("h", cg.Height));
+            foreach (var seg in cg.Segments)
+            {
+                switch (seg.Kind)
+                {
+                    case CustomSegmentKind.MoveTo when seg.Point is not null:
+                        path.Add(new XElement(A + "moveTo",
+                            new XElement(A + "pt",
+                                new XAttribute("x", seg.Point.X),
+                                new XAttribute("y", seg.Point.Y))));
+                        break;
+                    case CustomSegmentKind.LineTo when seg.Point is not null:
+                        path.Add(new XElement(A + "lnTo",
+                            new XElement(A + "pt",
+                                new XAttribute("x", seg.Point.X),
+                                new XAttribute("y", seg.Point.Y))));
+                        break;
+                    case CustomSegmentKind.Close:
+                        path.Add(new XElement(A + "close"));
+                        break;
+                }
+            }
+            geometryElement = new XElement(A + "custGeom",
+                new XElement(A + "avLst"),
+                new XElement(A + "gdLst"),
+                new XElement(A + "ahLst"),
+                new XElement(A + "cxnLst"),
+                new XElement(A + "rect",
+                    new XAttribute("l", "0"), new XAttribute("t", "0"),
+                    new XAttribute("r", cg.Width.ToString()), new XAttribute("b", cg.Height.ToString())),
+                new XElement(A + "pathLst", path));
+        }
+        else
+        {
+            geometryElement = new XElement(A + "prstGeom",
+                new XAttribute("prst", PresetGeometry(shape.Kind)),
+                new XElement(A + "avLst"));
+        }
+
         var spPr = new XElement(Wps + "spPr",
             new XElement(A + "xfrm",
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
-            new XElement(A + "prstGeom", new XAttribute("prst", PresetGeometry(shape.Kind)),
-                new XElement(A + "avLst")));
+            geometryElement);
 
         // Fill: extended fill takes priority over simple solid-colour FillColorHex.
         if (shape.ExtendedFill is { } extFill)
