@@ -95,6 +95,14 @@ internal static class DialogSourceTestSupport
     private static string ReadHostSource(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 
+    public static string ReadLocalizationSources(params string[] fileNames) =>
+        SourceTextTestSupport.ReadSources(ReadLocalizationSource, fileNames);
+
+    private static string ReadLocalizationSource(string fileName) =>
+        // The neutral Strings.resx (and satellite cultures) moved out of FreeX.App.Host into the
+        // shared FreeX.App.Localization project; resolve localization assets from there.
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Localization", fileName);
+
     public static string ReadPresentationSources(params string[] relativeParts) =>
         WorkspaceFileLocator.ReadAllText(
             new[] { "src", "FreeX.App.Presentation" }.Concat(relativeParts).ToArray());
