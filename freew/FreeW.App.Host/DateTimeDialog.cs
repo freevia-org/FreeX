@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.Core.Model;
@@ -18,7 +19,7 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private DateTimeDialogResult? _result;
 
-    private DateTimeDialog(Window? owner, DateTime moment)
+    private DateTimeDialog(Window? owner, DateTime moment, CultureInfo culture)
     {
         Owner = owner;
         Title = "Date and Time";
@@ -36,12 +37,12 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         var list = new ListBox { Height = 160 };
-        var formats = DateTimeFormats.Build(moment);
+        var formats = DateTimeFormats.Build(moment, culture);
         foreach (var format in formats)
             list.Items.Add(new FormatItem(format));
         list.SelectedIndex = 0;
         // Double-clicking a row inserts it immediately (matching the Word "Date and Time" dialog).
-        list.MouseDoubleClick += (_, _) => Accept(list, updateCheckBox: null, moment, formats);
+        list.MouseDoubleClick += (_, _) => Accept(list, updateCheckBox: null, culture, formats);
         panel.Children.Add(list);
 
         // "Update automatically" checkbox: when checked, inserts a DATE or TIME field instead
@@ -55,13 +56,13 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(updateCheckBox);
 
         panel.Children.Add(DialogButtonRowFactory.Create(
-            () => Accept(list, updateCheckBox, moment, formats), buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
+            () => Accept(list, updateCheckBox, culture, formats), buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
 
         Content = panel;
         list.Focus();
     }
 
-    private void Accept(ListBox list, CheckBox? updateCheckBox, DateTime moment, IReadOnlyList<DateTimeFormat> formats)
+    private void Accept(ListBox list, CheckBox? updateCheckBox, CultureInfo culture, IReadOnlyList<DateTimeFormat> formats)
     {
         if (list.SelectedItem is not FormatItem item)
             return;
@@ -71,21 +72,16 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             // Determine whether the chosen format is primarily time-based (the last two items,
             // "Short time" and "Long time"). Everything else maps to DATE; time-only maps to TIME.
-            // The field instruction includes a \@ picture that matches the selected format so the
-            // field renders with the user's chosen format pattern.
+            // The field instruction includes a \@ picture derived from the selected culture's
+            // DateTimeFormatInfo patterns so the field re-renders with the same format shown to
+            // the user, regardless of the system locale.
             var selectedIndex = list.SelectedIndex;
             // formats: 0=Short date, 1=Long date, 2=Short time, 3=Long time, 4=Date and time
             var isTimeOnly = selectedIndex >= 2 && selectedIndex <= 3;
             var keyword = isTimeOnly ? "TIME" : "DATE";
-            // Map .NET culture format specifiers to Word \@ picture strings for the five presets.
-            var picture = selectedIndex switch
-            {
-                0 => "M/d/yyyy",   // short date
-                1 => "dddd, MMMM d, yyyy", // long date
-                2 => "h:mm am/pm", // short time
-                3 => "h:mm:ss am/pm", // long time
-                _ => "M/d/yyyy h:mm am/pm" // date and time
-            };
+            // Derive the \@ picture from the culture's patterns via the shared pure helper so the
+            // field picture matches exactly what DateTimeFormats.Build displayed to the user.
+            var picture = DateTimeFormats.BuildFieldPicture(selectedIndex, culture);
             _result = new DateTimeDialogResult(item.Format.Text, IsField: true,
                 FieldInstruction: $@" {keyword} \@ ""{picture}"" ");
         }
@@ -104,11 +100,14 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     /// <summary>
-    /// Show the dialog (capturing <c>DateTime.Now</c>); returns the result, or null if cancelled.
+    /// Show the dialog (capturing <c>DateTime.Now</c> and <c>CultureInfo.CurrentCulture</c>);
+    /// returns the result, or null if cancelled.
     /// </summary>
     public static DateTimeDialogResult? Prompt(Window? owner)
     {
-        var dialog = new DateTimeDialog(owner, DateTime.Now);
+        // Capture both moment and culture together so the displayed text and the \@ picture
+        // string are derived from the same snapshot of the current locale.
+        var dialog = new DateTimeDialog(owner, DateTime.Now, CultureInfo.CurrentCulture);
         return dialog.ShowDialog() == true ? dialog._result : null;
     }
 }

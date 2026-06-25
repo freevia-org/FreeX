@@ -142,11 +142,34 @@ public sealed class FileLifecycleTests : IDisposable
         var original = Path.Combine(_tempDir, "Original.docx");
         var snapshot = WriteDocx("snapshot.docx", "Recovered content");
 
-        file.OpenSnapshot(snapshot, original);
+        var loaded = file.OpenSnapshot(snapshot, original);
 
+        Assert.True(loaded);
         Assert.True(file.IsDirty);
         Assert.Equal(original, file.CurrentPath);
         Assert.Equal("Original", file.DisplayName);
+    }
+
+    /// <summary>
+    /// Regression test for H2: OpenSnapshot must return false (not throw) when the snapshot file
+    /// is corrupt/missing, so the caller (OfferRecovery) can skip deleting the candidate and
+    /// preserve the user's only copy of their unsaved document.
+    /// </summary>
+    [StaFact]
+    public void OpenSnapshot_CorruptFile_ReturnsFalseAndDocumentIsUnchanged()
+    {
+        var (_, _, file, _) = CreateHarness();
+        var corruptPath = Path.Combine(_tempDir, "corrupt.docx");
+        // Write a file that is not a valid docx so DocxReader.Read throws.
+        File.WriteAllText(corruptPath, "this is not a valid docx");
+
+        var loaded = file.OpenSnapshot(corruptPath, originalPath: null);
+
+        // The load must report failure — OfferRecovery gates DeleteCandidate on this bool.
+        Assert.False(loaded);
+        // The document state must be untouched: still clean and untitled.
+        Assert.False(file.IsDirty);
+        Assert.Null(file.CurrentPath);
     }
 
     [StaFact]

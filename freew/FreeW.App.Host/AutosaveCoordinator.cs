@@ -68,8 +68,9 @@ internal sealed class AutosaveCoordinator
             {
                 // Open the snapshot; only delete it when the load succeeds so a failed recovery
                 // does not also lose the snapshot file.
-                _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
+                var loaded = _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
+                if (loaded)
+                    AutosaveSnapshotStore.DeleteCandidate(candidate);
             }
             // On decline ("No"): leave the candidate intact so it remains available for
             // "Recover Unsaved Documents" or the next startup prompt.

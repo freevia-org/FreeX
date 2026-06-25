@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -340,7 +341,13 @@ internal sealed class CrossCheckRunner
                 if (s.StartsWith("OF:", StringComparison.Ordinal)) { s = s[3..]; changed = true; }
             }
             // TRUE()/FALSE() vs 1()/0() vs 1/0 — collapse the boolean-literal spellings.
-            s = s.Replace("TRUE()", "1").Replace("FALSE()", "0").Replace("TRUE", "1").Replace("FALSE", "0");
+            // Use whole-word boundary matching to avoid corrupting identifiers that merely
+            // CONTAIN the substrings (e.g. "TRUEUP", "FALSESTART", or quoted string literals).
+            // Order matters: replace TRUE() / FALSE() before the bare-word forms.
+            s = Regex.Replace(s, @"\bTRUE\(\)", "1");
+            s = Regex.Replace(s, @"\bFALSE\(\)", "0");
+            s = Regex.Replace(s, @"\bTRUE\b", "1");
+            s = Regex.Replace(s, @"\bFALSE\b", "0");
             // An empty trailing arg LibreOffice sometimes appends to IF: ...,"") vs ...,"",1) — drop a
             // trailing ',1)' / ',0)' only when it mirrors a 2-arg/3-arg IF rewrite is too risky in general,
             // so we leave that to the (rare) residual mismatch; the prefix+bool fixes cover the bulk.

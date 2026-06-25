@@ -79,11 +79,14 @@ internal sealed class FileCommands
     public IReadOnlyList<FileFormatDescriptor> SaveFormats =>
         _adapters.SelectMany(adapter => adapter.Formats).Where(format => format.CanSave).ToArray();
 
-    /// <summary>Load a recovered autosave snapshot, targeting the original path and marking dirty.</summary>
-    public void OpenSnapshot(string snapshotPath, string? originalPath)
-    {
+    /// <summary>
+    /// Load a recovered autosave snapshot, targeting the original path and marking dirty.
+    /// Returns true when the snapshot was loaded successfully, false when the load failed (e.g.
+    /// corrupt or locked file). The caller must NOT delete the snapshot on false so the user's
+    /// only copy of the unsaved document is preserved.
+    /// </summary>
+    public bool OpenSnapshot(string snapshotPath, string? originalPath) =>
         OpenSnapshotCore(snapshotPath, originalPath);
-    }
 
     public bool RecoverSnapshot(string snapshotPath, string? originalPath) =>
         _workflow.Open(
