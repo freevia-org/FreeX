@@ -796,6 +796,8 @@ public sealed partial class NativeJsonAdapter
         public CellColor? FillColor { get; set; }
         public CellFillPatternStyle FillPatternStyle { get; set; }
         public CellColor? FillPatternColor { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CellGradientFillDto? GradientFill { get; set; }
         public CellBorderDto? BorderTop { get; set; }
         public CellBorderDto? BorderRight { get; set; }
         public CellBorderDto? BorderBottom { get; set; }
@@ -822,6 +824,27 @@ public sealed partial class NativeJsonAdapter
     private class CellBorderDto
     {
         public BorderStyle Style { get; set; }
+        public CellColor Color { get; set; }
+    }
+
+    private class CellGradientFillDto
+    {
+        public CellGradientFillType Type { get; set; }
+        public double Degree { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Left { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Right { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Top { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Bottom { get; set; }
+        public List<CellGradientStopDto> Stops { get; set; } = [];
+    }
+
+    private class CellGradientStopDto
+    {
+        public double Position { get; set; }
         public CellColor Color { get; set; }
     }
 

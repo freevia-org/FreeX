@@ -72,6 +72,7 @@ public sealed partial class NativeJsonAdapter
             FillColor = dto.FillColor,
             FillPatternStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.FillPatternStyle, CellFillPatternStyle.None),
             FillPatternColor = dto.FillPatternColor,
+            GradientFill = ToCellGradientFill(dto.GradientFill),
             BorderTop = ToCellBorder(dto.BorderTop),
             BorderRight = ToCellBorder(dto.BorderRight),
             BorderBottom = ToCellBorder(dto.BorderBottom),
@@ -115,6 +116,7 @@ public sealed partial class NativeJsonAdapter
             FillColor = style.FillColor,
             FillPatternStyle = style.FillPatternStyle,
             FillPatternColor = style.FillPatternColor,
+            GradientFill = FromCellGradientFill(style.GradientFill),
             BorderTop = FromCellBorder(style.BorderTop),
             BorderRight = FromCellBorder(style.BorderRight),
             BorderBottom = FromCellBorder(style.BorderBottom),
@@ -151,6 +153,7 @@ public sealed partial class NativeJsonAdapter
             FillColor = safeStyle.FillColor,
             FillPatternStyle = safeStyle.FillPatternStyle,
             FillPatternColor = safeStyle.FillPatternColor,
+            GradientFill = FromCellGradientFill(safeStyle.GradientFill),
             BorderTop = FromCellBorder(safeStyle.BorderTop),
             BorderRight = FromCellBorder(safeStyle.BorderRight),
             BorderBottom = FromCellBorder(safeStyle.BorderBottom),
@@ -184,6 +187,48 @@ public sealed partial class NativeJsonAdapter
         Color = border.Color
     };
 
+    private static CellGradientFill? ToCellGradientFill(CellGradientFillDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var stops = dto.Stops
+            .Select(s => new CellGradientStop(s.Position, s.Color))
+            .ToList();
+        if (stops.Count < 2)
+            return null; // degenerate
+
+        return new CellGradientFill
+        {
+            Type   = NativeJsonValueSanitizer.ValidEnumOrDefault(dto.Type, CellGradientFillType.Linear),
+            Degree = dto.Degree,
+            Left   = dto.Left,
+            Right  = dto.Right,
+            Top    = dto.Top,
+            Bottom = dto.Bottom,
+            Stops  = stops,
+        };
+    }
+
+    private static CellGradientFillDto? FromCellGradientFill(CellGradientFill? gradient)
+    {
+        if (gradient is null || gradient.Stops.Count < 2)
+            return null;
+
+        return new CellGradientFillDto
+        {
+            Type   = gradient.Type,
+            Degree = gradient.Degree,
+            Left   = gradient.Left,
+            Right  = gradient.Right,
+            Top    = gradient.Top,
+            Bottom = gradient.Bottom,
+            Stops  = gradient.Stops
+                .Select(s => new CellGradientStopDto { Position = s.Position, Color = s.Color })
+                .ToList(),
+        };
+    }
+
     private sealed class CellStyleDtoComparer : IEqualityComparer<CellStyleDto>
     {
         public static readonly CellStyleDtoComparer Instance = new();
@@ -208,6 +253,7 @@ public sealed partial class NativeJsonAdapter
                 && x.FillColor == y.FillColor
                 && x.FillPatternStyle == y.FillPatternStyle
                 && x.FillPatternColor == y.FillPatternColor
+                && GradientFillDtoEquals(x.GradientFill, y.GradientFill)
                 && BorderEquals(x.BorderTop, y.BorderTop)
                 && BorderEquals(x.BorderRight, y.BorderRight)
                 && BorderEquals(x.BorderBottom, y.BorderBottom)
@@ -245,6 +291,7 @@ public sealed partial class NativeJsonAdapter
             hash.Add(obj.FillColor);
             hash.Add(obj.FillPatternStyle);
             hash.Add(obj.FillPatternColor);
+            hash.Add(GetGradientFillDtoHashCode(obj.GradientFill));
             AddBorderHash(ref hash, obj.BorderTop);
             AddBorderHash(ref hash, obj.BorderRight);
             AddBorderHash(ref hash, obj.BorderBottom);
@@ -265,6 +312,34 @@ public sealed partial class NativeJsonAdapter
             hash.Add(GetListHashCode(obj.NativeDifferentialChildXmls));
             hash.Add(GetDictionaryHashCode(obj.NativeDifferentialElementXmls));
             return hash.ToHashCode();
+        }
+
+        private static bool GradientFillDtoEquals(CellGradientFillDto? x, CellGradientFillDto? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+            if (x.Type != y.Type || x.Degree != y.Degree ||
+                x.Left != y.Left || x.Right != y.Right ||
+                x.Top != y.Top || x.Bottom != y.Bottom)
+                return false;
+            if (x.Stops.Count != y.Stops.Count) return false;
+            for (int i = 0; i < x.Stops.Count; i++)
+            {
+                if (x.Stops[i].Position != y.Stops[i].Position ||
+                    x.Stops[i].Color != y.Stops[i].Color)
+                    return false;
+            }
+            return true;
+        }
+
+        private static int GetGradientFillDtoHashCode(CellGradientFillDto? dto)
+        {
+            if (dto is null) return 0;
+            var h = new HashCode();
+            h.Add(dto.Type);
+            h.Add(dto.Degree);
+            foreach (var stop in dto.Stops) { h.Add(stop.Position); h.Add(stop.Color); }
+            return h.ToHashCode();
         }
 
         private static bool BorderEquals(CellBorderDto? x, CellBorderDto? y) =>
