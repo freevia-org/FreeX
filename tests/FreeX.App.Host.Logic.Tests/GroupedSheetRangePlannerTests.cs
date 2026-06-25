@@ -89,7 +89,10 @@ public sealed class GroupedSheetRangePlannerTests
 
         clone.Should().BeEquivalentTo(source, options => options
             .Excluding(rule => rule.Id)
-            .Excluding(rule => rule.AppliesTo));
+            .Excluding(rule => rule.AppliesTo)
+            // AllRanges is a derived view over AppliesTo (+ AdditionalRanges); AppliesTo is
+            // intentionally remapped to the target sheet, so the derived view differs too.
+            .Excluding(rule => rule.AllRanges));
         clone.AppliesTo.Start.Sheet.Should().Be(targetSheet);
         clone.AppliesTo.End.Sheet.Should().Be(targetSheet);
     }
