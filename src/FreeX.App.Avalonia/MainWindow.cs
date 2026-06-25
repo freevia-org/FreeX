@@ -6043,6 +6043,17 @@ public sealed partial class MainWindow : Window
         var address = new CellAddress(_session.ActiveSheet.Id, row, col);
         var selected = IsSelectedCell(address);
 
+        // Resolve the sparkline layer early: sparkline cells are typically empty (no cell value),
+        // so the lookup must happen before the hasCell early-return guard below.
+        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparklineEntry)
+            ? new SparklineCellPanel(
+                sparklineEntry.Values,
+                sparklineEntry.Sparkline,
+                sparklineEntry.OverrideMin,
+                sparklineEntry.OverrideMax,
+                sparklineEntry.OverrideMaxAbs)
+            : null;
+
         if (!hasCell)
             return CreateInteractiveCellBorder(
                 "",
@@ -6059,7 +6070,8 @@ public sealed partial class MainWindow : Window
                 address,
                 zoomFactor: zoomFactor,
                 cellWidth: cellWidth,
-                cellHeight: cellHeight);
+                cellHeight: cellHeight,
+                sparklineLayer: sparklineLayer);
 
         var style = cell.Style;
         IBrush background;
@@ -6095,17 +6107,6 @@ public sealed partial class MainWindow : Window
         // a framework-neutral render instruction that the cell content layer draws.
         var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
         var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
-
-        // Sparklines live per-cell on the sheet (keyed by Location). When one anchors here, build a
-        // binding-free panel that paints the series geometry behind the cell text.
-        var sparklineLayer = _sparklinesByCell.TryGetValue((row, col), out var sparklineEntry)
-            ? new SparklineCellPanel(
-                sparklineEntry.Values,
-                sparklineEntry.Sparkline,
-                sparklineEntry.OverrideMin,
-                sparklineEntry.OverrideMax,
-                sparklineEntry.OverrideMaxAbs)
-            : null;
 
         return CreateInteractiveCellBorder(
             cell.DisplayText,

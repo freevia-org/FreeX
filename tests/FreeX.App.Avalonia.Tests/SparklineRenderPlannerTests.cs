@@ -1,6 +1,9 @@
 using FluentAssertions;
 using FreeX.App.Avalonia;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Services;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -179,6 +182,35 @@ public sealed class SparklineRenderPlannerTests
 
         layout.SinglePoint.Should().Be(new LayoutPoint(20, 10));
         layout.Segments.Should().BeEmpty();
+    }
+
+    // ── Integration smoke: verify sparklines load from the real fixture XLSX ──────────────────────
+
+    [Fact]
+    public void Fixture_LineMarkers_001_LoadsSparklineWithSevenValues()
+    {
+        var path = Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "docs", "planning", "wave4-sparklines-fixtures",
+            "generated-excel-sparklines",
+            "Excel_native_sparkline_line_markers_001.xlsx");
+        path = Path.GetFullPath(path);
+
+        if (!File.Exists(path))
+            return; // fixture not yet generated — skip silently in CI
+
+        using var stream = File.OpenRead(path);
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets[0];
+
+        sheet.Sparklines.Should().NotBeEmpty("fixture must contain at least one sparkline");
+
+        var sp = sheet.Sparklines[0];
+        var series = SparklineSeriesReader.ReadSeries(sheet, sp);
+        series.Should().HaveCount(7, "fixture data is A2:A8 = 7 values");
+        series.Should().Equal(3, 7, 2, 9, 5, 1, 8);
     }
 
     private static (Workbook Workbook, Sheet Sheet) BuildSheet()
