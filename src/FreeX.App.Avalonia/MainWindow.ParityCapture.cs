@@ -2935,6 +2935,14 @@ public sealed partial class MainWindow
         // captured grid image — this is the whole point of the --parity-grid harness for shapes.
         var tempSession = sessionFactory.Create(source, measureHeight, measureWidth, includeObjects: true);
 
+        // The range's sheet may not be the workbook's default-active sheet (e.g. an Excel file may
+        // mark a source-data sheet as active when saved, while the capture target is another sheet).
+        // Navigate to the range's sheet so the session viewport and BuildSheetGrid both see the
+        // correct sheet — without this, adornments (pivot dropdowns, sparklines, etc.) that read
+        // _session.ActiveSheet would silently resolve against the wrong sheet and produce no output.
+        if (tempSession.ActiveSheet.Id != sheet.Id)
+            tempSession.SelectSheet(sheet.Id);
+
         // Scroll viewport to the range origin so the range cells are the first ones materialised.
         tempSession.SetViewportOrigin(range.Start.Row, range.Start.Col);
 
