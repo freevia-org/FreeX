@@ -831,8 +831,8 @@ internal static class ParityCapture
 
     private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
     [
-        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 2, 3), "120", null),
-        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 3, 3), "85", null),
+        new WatchWindowEntry(sheetId, "Demo", new CellAddress(sheetId, 2, 3), "120", null),
+        new WatchWindowEntry(sheetId, "Demo", new CellAddress(sheetId, 3, 3), "85", null),
     ];
 
     private static ChartModel CreateChart(SheetId sheetId) =>

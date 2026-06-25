@@ -635,9 +635,10 @@ public sealed partial class MainWindow
             new CellAddress(_session.ActiveSheet.Id, 3, 3),
             async () =>
             {
-                // Seed watches on the Units cells (C2=120, C3=85) so the Watch Window has
-                // rows to compare — mirrors the WPF parity capture's seeded watch entries.
-                var watchSheetId = _session.ActiveSheet.Id;
+                // Seed watches on the "Demo" data sheet's Units cells (C2=120, C3=85) so the Watch
+                // Window has populated rows that match the WPF parity capture (same sheet name +
+                // values). The active sheet here is a later empty sheet, so target Sheets[0].
+                var watchSheetId = _session.Workbook.Sheets[0].Id;
                 WatchWindowService.AddWatches(
                     _session.Workbook,
                     new GridRange(
