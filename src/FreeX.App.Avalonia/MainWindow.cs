@@ -5422,9 +5422,13 @@ public sealed partial class MainWindow : Window
         var pointer = kind == HeaderResizeKind.Column
             ? args.GetPosition(this).X
             : args.GetPosition(this).Y;
+        // Defensive: drop any stale subscription left over from a drag that lost capture without a
+        // PointerReleased, so we never double-subscribe (which would run Continue/Commit twice per event).
+        DetachHeaderResizeCaptureHandlers();
         _headerResizeDrag = new HeaderResizeDrag(kind, index, _sheetGridHost, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
         _sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;
         _sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost += HeaderResizeCapturePointerCaptureLost;
         args.Pointer.Capture(_sheetGridHost);
         args.Handled = true;
     }
@@ -5434,6 +5438,18 @@ public sealed partial class MainWindow : Window
 
     private void HeaderResizeCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
         CommitHeaderResize(args);
+
+    // If the OS revokes pointer capture mid-drag (alt-tab, focus loss, a context menu), abort the resize
+    // and restore the original size — mirrors the chart-drag PointerCaptureLost cleanup. Without this the
+    // capture handlers stay subscribed and _headerResizeDrag stays set.
+    private void HeaderResizeCapturePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        // Detach FIRST so the Capture(null) inside CancelHeaderResizePreview cannot re-raise
+        // PointerCaptureLost back into this handler (which would re-enter the cancel path indefinitely).
+        DetachHeaderResizeCaptureHandlers();
+        if (_headerResizeDrag is not null)
+            CancelHeaderResizePreview();
+    }
 
     private void ContinueHeaderResize(PointerEventArgs args)
     {
@@ -5522,6 +5538,7 @@ public sealed partial class MainWindow : Window
     {
         _sheetGridHost.PointerMoved -= HeaderResizeCapturePointerMoved;
         _sheetGridHost.PointerReleased -= HeaderResizeCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost -= HeaderResizeCapturePointerCaptureLost;
     }
 
     private void RestoreHeaderResizeOriginal(HeaderResizeDrag drag)

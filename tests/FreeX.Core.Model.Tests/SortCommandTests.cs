@@ -497,6 +497,66 @@ public sealed class SortCommandTests
         sheet.GetStyleOnly(1, 2).Should().BeNull();
     }
 
+    [Fact]
+    public void SortCommand_Descending_KeepsBlanksLast()
+    {
+        // Regression: before the fix, negating the comparison for descending caused blank rows
+        // to bubble to the TOP. Excel always keeps blanks at the bottom regardless of direction.
+        // Ascending  [5, blank, 2] → [2, 5, blank]
+        // Descending [5, blank, 2] → [5, 2, blank]
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var sid = sheet.Id;
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new NumberValue(5));
+        // row 2 is intentionally blank (no cell set)
+        sheet.SetCell(new CellAddress(sid, 3, 1), new NumberValue(2));
+
+        var range = new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 3, 1));
+
+        // ── Ascending ────────────────────────────────────────────────────────
+        var ascCmd = new SortCommand(sid, range, [new SortKey(0, true)]);
+        ascCmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(2));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(5));
+        sheet.GetCell(3, 1).Should().BeNull("blank row must stay last after ascending sort");
+
+        ascCmd.Revert(ctx);
+
+        // ── Descending ───────────────────────────────────────────────────────
+        var descCmd = new SortCommand(sid, range, [new SortKey(0, false)]);
+        descCmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(5));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
+        sheet.GetCell(3, 1).Should().BeNull("blank row must stay last after descending sort");
+    }
+
+    [Fact]
+    public void SortCommand_Descending_KeepsErrorsLast()
+    {
+        // Errors (like blanks) must always sort to the bottom in both directions.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(workbook);
+        var sid = sheet.Id;
+
+        sheet.SetCell(new CellAddress(sid, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sid, 2, 1), ErrorValue.DivByZero);
+        sheet.SetCell(new CellAddress(sid, 3, 1), new NumberValue(1));
+
+        var range = new GridRange(new CellAddress(sid, 1, 1), new CellAddress(sid, 3, 1));
+
+        var cmd = new SortCommand(sid, range, [new SortKey(0, false)]);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(10));
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(1));
+        sheet.GetValue(3, 1).Should().Be(ErrorValue.DivByZero, "error must stay last after descending sort");
+    }
+
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
     {
         var keyCell = Cell.FromValue(new TextValue(label));

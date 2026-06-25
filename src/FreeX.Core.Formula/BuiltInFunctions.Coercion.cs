@@ -50,13 +50,21 @@ public static partial class BuiltInFunctions
     {
         DirectTextLiteralValue t => t.Value,
         TextValue t => t.Value,
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        NumberValue n => NumberToExcelText(n.Value),
         DateTimeValue d => d.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         BlankValue => "",
         ErrorValue e => e.Code,
         _ => v.ToString() ?? ""
     };
+
+    /// <summary>
+    /// Converts a number to its Excel General text representation: 15 significant digits
+    /// (matching Excel's &amp; concatenation and CONCATENATE/TEXTJOIN text coercion), with
+    /// integers serialized without a decimal point and trailing zeros stripped.
+    /// </summary>
+    internal static string NumberToExcelText(double value) =>
+        value.ToString("G15", System.Globalization.CultureInfo.InvariantCulture);
 
     private static bool TryDirectTextNumber(DirectTextLiteralValue value, out double number) =>
         ExcelTextNumberParser.TryParse(value.Value, out number);
