@@ -140,6 +140,18 @@ public sealed class AutosaveSnapshotCoordinator
             try
             {
                 source.WriteSnapshot(tempSnapshot);
+                // Flush the temp's data to physical storage BEFORE the rename. WriteSnapshot may return
+                // with bytes still in the OS write cache; without this, a power loss after File.Move could
+                // leave a renamed-but-truncated snapshot at the target path — the exact corruption that
+                // triggers "End of Central Directory record could not be found" on recovery. (Mirrors
+                // AtomicFileWriter; FlushFileBuffers via a write handle syncs the file's dirty pages.)
+                try
+                {
+                    using var fs = new FileStream(tempSnapshot, FileMode.Open, FileAccess.Write, FileShare.None);
+                    fs.Flush(flushToDisk: true);
+                }
+                catch { /* flush is best-effort hardening; the atomic move below is the primary guarantee */ }
+
                 File.Move(tempSnapshot, snapshotPath, overwrite: true);
             }
             finally

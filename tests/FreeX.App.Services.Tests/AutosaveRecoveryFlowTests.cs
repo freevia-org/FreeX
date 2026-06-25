@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using FluentAssertions;
 using FreeX.App.Services;
 
@@ -14,6 +15,14 @@ namespace FreeX.App.Services.Tests;
 /// </summary>
 public sealed class AutosaveRecoveryFlowTests
 {
+    // Real snapshots are OPC/ZIP packages; EnumerateCandidates validates that, so test snapshots
+    // must be readable archives (not plain text).
+    private static void WriteSnapshotZip(string path)
+    {
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        zip.CreateEntry("[Content_Types].xml");
+    }
+
     // ── PID-reuse / LaunchId uniqueness ───────────────────────────────────────
 
     [Fact]
@@ -72,7 +81,7 @@ public sealed class AutosaveRecoveryFlowTests
 
         // One valid candidate, one with a missing sidecar.
         WriteFakeSnapshot(store, "recovery-200-aabbccdd-w0", @"C:\work\good.xlsx", "Good");
-        File.WriteAllText(store.GetSnapshotPath("recovery-201-eeff0011-w0"), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath("recovery-201-eeff0011-w0"));
         // No sidecar for the second one.
 
         var candidates = store.EnumerateCandidates();
@@ -194,7 +203,7 @@ public sealed class AutosaveRecoveryFlowTests
         string originalPath,
         string displayName)
     {
-        File.WriteAllText(store.GetSnapshotPath(snapshotId), "placeholder");
+        WriteSnapshotZip(store.GetSnapshotPath(snapshotId));
         var sidecar = new AutosaveSidecar
         {
             SnapshotId = snapshotId,
