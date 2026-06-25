@@ -385,6 +385,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
 {
     private List<(int Row, TableCell Cell, bool WasSpanDecrement)>? _removed;
     private double _removedWidth;
+    private bool _widthRemoved;
 
     public string Label => "Delete Column";
 
@@ -434,6 +435,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
         if (table.ColumnWidthsPt.Count > columnIndex)
         {
             _removedWidth = table.ColumnWidthsPt[columnIndex];
+            _widthRemoved = true;
             table.ColumnWidthsPt.RemoveAt(columnIndex);
         }
     }
@@ -468,14 +470,16 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
                 cells.Insert(insertAt, cell);
             }
         }
-        // Restore the removed column width.
-        if (_removedWidth > 0 || table.ColumnWidthsPt.Count >= columnIndex)
+        // Restore the removed column width — ONLY if Apply actually removed one, else undo would add a
+        // phantom width and drift the ColumnWidthsPt<->grid-column invariant.
+        if (_widthRemoved)
         {
             var at = Math.Clamp(columnIndex, 0, table.ColumnWidthsPt.Count);
             table.ColumnWidthsPt.Insert(at, _removedWidth);
         }
         _removed = null;
         _removedWidth = 0;
+        _widthRemoved = false;
     }
 }
 

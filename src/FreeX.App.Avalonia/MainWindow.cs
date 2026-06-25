@@ -49,14 +49,6 @@ public sealed partial class MainWindow : Window
     private const string DirtyTitleSuffix = " *";
     private const string TitleSeparator = " - ";
 
-    private enum CellBorderEdge
-    {
-        Top,
-        Right,
-        Bottom,
-        Left
-    }
-
     private enum ColorPaletteTarget
     {
         Fill,
@@ -755,11 +747,13 @@ public sealed partial class MainWindow : Window
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
         _platformPrinter = platformPrinter;
-        // The headless --parity-capture mode renders the fixed parity demo workbook (the same content the WPF
-        // host adopts) so the cross-platform grid.demo comparison reflects only rendering differences, not the
-        // built-in macOS-preview demo. Every other startup path keeps the normal loader/fallback behavior.
+        // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
+        // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
+        // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
+        // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
+        // loader/fallback behavior.
         StartupWorkbookLoadResult? source = null;
-        if (App.ParityCaptureOptions is not null)
+        if (App.ParityCaptureOptions is not null || App.GridCaptureOptions is not null)
         {
             _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
@@ -5596,9 +5590,12 @@ public sealed partial class MainWindow : Window
             : GridResizeSizePlanner.ClampRowSize(requestedSize);
 
         RestoreHeaderResizeOriginal(drag);
-        drag.Pointer.Capture(null);
-        _headerResizeDrag = null;
+        // Detach BEFORE releasing capture: drag.Pointer.Capture(null) synchronously raises
+        // PointerCaptureLost, which would otherwise re-enter HeaderResizeCapturePointerCaptureLost (it sees
+        // _headerResizeDrag still set) and run CancelHeaderResizePreview mid-commit/cancel.
         DetachHeaderResizeCaptureHandlers();
+        _headerResizeDrag = null;
+        drag.Pointer.Capture(null);
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
@@ -5636,9 +5633,12 @@ public sealed partial class MainWindow : Window
             return;
 
         RestoreHeaderResizeOriginal(drag);
-        drag.Pointer.Capture(null);
-        _headerResizeDrag = null;
+        // Detach BEFORE releasing capture: drag.Pointer.Capture(null) synchronously raises
+        // PointerCaptureLost, which would otherwise re-enter HeaderResizeCapturePointerCaptureLost (it sees
+        // _headerResizeDrag still set) and run CancelHeaderResizePreview mid-commit/cancel.
         DetachHeaderResizeCaptureHandlers();
+        _headerResizeDrag = null;
+        drag.Pointer.Capture(null);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(_session.SelectedRange)));
     }
 
@@ -6885,10 +6885,10 @@ public sealed partial class MainWindow : Window
         if (style is not { } visibleStyle || !HasVisibleCellBorder(visibleStyle))
             return;
 
-        AddStyledCellBorderEdge(content, visibleStyle.BorderTop, CellBorderEdge.Top);
-        AddStyledCellBorderEdge(content, visibleStyle.BorderRight, CellBorderEdge.Right);
-        AddStyledCellBorderEdge(content, visibleStyle.BorderBottom, CellBorderEdge.Bottom);
-        AddStyledCellBorderEdge(content, visibleStyle.BorderLeft, CellBorderEdge.Left);
+        // CellBorderPanel draws all four edges plus optional diagonals as stroked Lines,
+        // supporting dash patterns and correct per-style thicknesses (replaces the old solid
+        // Border-strip approach that could not dash and had incorrect Hair/SlantDashDot thickness).
+        content.Children.Add(new CellBorderPanel(visibleStyle));
     }
 
     private static bool HasVisibleCellBorder(CellStyle? style) =>
@@ -6896,54 +6896,9 @@ public sealed partial class MainWindow : Window
         (style.BorderTop.Style != BorderStyle.None ||
          style.BorderRight.Style != BorderStyle.None ||
          style.BorderBottom.Style != BorderStyle.None ||
-         style.BorderLeft.Style != BorderStyle.None);
-
-    private static void AddStyledCellBorderEdge(AvaloniaGrid content, CellBorder border, CellBorderEdge edge)
-    {
-        if (border.Style == BorderStyle.None)
-            return;
-
-        var thickness = GetDisplayedCellBorderThickness(border.Style);
-        var edgeStrip = new Border
-        {
-            Background = Brush(border.Color),
-            IsHitTestVisible = false,
-        };
-
-        switch (edge)
-        {
-            case CellBorderEdge.Top:
-                edgeStrip.Height = thickness;
-                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-                break;
-            case CellBorderEdge.Right:
-                edgeStrip.Width = thickness;
-                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Right;
-                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
-                break;
-            case CellBorderEdge.Bottom:
-                edgeStrip.Height = thickness;
-                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Bottom;
-                break;
-            case CellBorderEdge.Left:
-                edgeStrip.Width = thickness;
-                edgeStrip.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
-                edgeStrip.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
-                break;
-        }
-
-        content.Children.Add(edgeStrip);
-    }
-
-    private static double GetDisplayedCellBorderThickness(BorderStyle style) =>
-        style switch
-        {
-            BorderStyle.Medium => 1.5,
-            BorderStyle.Thick => 2.5,
-            _ => 1
-        };
+         style.BorderLeft.Style != BorderStyle.None ||
+         style.BorderDiagonalDown.Style != BorderStyle.None ||
+         style.BorderDiagonalUp.Style != BorderStyle.None);
 
     private static string FormatTextForRotation(string text, int textRotation) =>
         CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);

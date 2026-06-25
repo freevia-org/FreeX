@@ -867,6 +867,62 @@ public partial class FunctionLibraryTests
         value.Should().BeApproximately(-2.0, 0.05);
     }
 
+    // Q10 regression: YEARFRAC basis 1 ≤1-year denominator (Excel actual/actual)
+
+    [Fact]
+    public void Yearfrac_Basis1_SubYearNonLeapSpan_Uses365Denominator()
+    {
+        // YEARFRAC(DATE(2015,3,1), DATE(2016,2,1), 1)
+        // Days = 337; no Feb 29 in [2015-03-01, 2016-02-01); denom = 365.
+        // Excel: 337/365 ≈ 0.92328767123...
+        double start = new DateTime(2015, 3, 1).ToOADate();
+        double end   = new DateTime(2016, 2, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
+        var result = ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,1)", sheet)).Value;
+        result.Should().BeApproximately(337.0 / 365.0, 1e-8);
+    }
+
+    [Fact]
+    public void Yearfrac_Basis1_SubYearLeapSpanWithFeb29_Uses366Denominator()
+    {
+        // YEARFRAC(DATE(2020,1,1), DATE(2020,7,1), 1)
+        // Within leap year 2020; Feb 29 2020 is in [2020-01-01, 2020-07-01); denom = 366.
+        // Excel: 182/366 ≈ 0.49726775956...
+        double start = new DateTime(2020, 1, 1).ToOADate();
+        double end   = new DateTime(2020, 7, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
+        var result = ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,1)", sheet)).Value;
+        result.Should().BeApproximately(182.0 / 366.0, 1e-8);
+    }
+
+    [Fact]
+    public void Yearfrac_Basis1_SubYearNonLeapFullYear_Uses365Denominator()
+    {
+        // YEARFRAC(DATE(2019,1,1), DATE(2019,7,1), 1)
+        // Non-leap year 2019; 181 days; denom = 365.
+        // Excel: 181/365 ≈ 0.49589041095...
+        double start = new DateTime(2019, 1, 1).ToOADate();
+        double end   = new DateTime(2019, 7, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
+        var result = ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,1)", sheet)).Value;
+        result.Should().BeApproximately(181.0 / 365.0, 1e-8);
+    }
+
+    [Fact]
+    public void Yearfrac_Basis1_MultiYearSpan_UsesAverageOfYears()
+    {
+        // YEARFRAC(DATE(2019,1,1), DATE(2022,1,1), 1) spans 3 full years.
+        // Years 2019(365) + 2020(366) + 2021(365) + 2022(365) = 1461 / 4 = 365.25 avg.
+        // Days = 3*365 + 1 = 1096; result = 1096 / 365.25 ≈ 2.9993...
+        // (Confirms the multi-year branch was not broken by the ≤1-year fix.)
+        double start = new DateTime(2019, 1, 1).ToOADate();
+        double end   = new DateTime(2022, 1, 1).ToOADate();
+        var sheet = MakeSheet((1, 1, new NumberValue(start)), (1, 2, new NumberValue(end)));
+        var result = ((NumberValue)_eval.Evaluate("=YEARFRAC(A1,B1,1)", sheet)).Value;
+        // avg denom = (365+366+365+365)/4 = 365.25; days = 1096
+        result.Should().BeApproximately(1096.0 / 365.25, 1e-6);
+    }
+
     // TODAY / WORKDAY.INTL / NETWORKDAYS.INTL
 
     [Fact]

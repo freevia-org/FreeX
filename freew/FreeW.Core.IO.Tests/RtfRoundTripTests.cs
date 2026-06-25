@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -63,5 +64,45 @@ public class RtfRoundTripTests
         adapter.Formats[0].Extension.Should().Be(".rtf");
         adapter.Formats[0].CanOpen.Should().BeTrue();
         adapter.Formats[0].CanSave.Should().BeTrue();
+    }
+
+    // P9 regression — \uN fallback skip over a control-word must consume the ENTIRE control word, not just 2
+    // chars.  Previously ☃\bullet emitted the ☃ char followed by "ullet" because the skip loop only
+    // advanced past "\b", leaving "ullet" to be emitted as literal text.
+    [Fact]
+    public void Unicode_FallbackControlWord_DoesNotLeakTail()
+    {
+        // \uc1 sets ucskip=1.  RTF \uN takes a DECIMAL code point, so SNOWMAN (U+2603) is 霱 (9731=0x2603).
+        // RTF writers that target legacy readers emit a control-word such as \bullet as the single fallback
+        // unit.  The import must yield only the unicode char — the fallback control word must NOT appear
+        // (even partially) as literal text.  All chars here are 7-bit ASCII so Encoding.ASCII is fine.
+        const string rtf = "{\\rtf1\\ansi\\uc1\\u9731\\bullet After}";
+        var doc = Load(Encoding.ASCII.GetBytes(rtf));
+        var text = string.Concat(doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText));
+        // The unicode char U+2603 (snowman ☃) must be present; "ullet" or "bullet" must NOT appear.
+        text.Should().Contain("☃");
+        text.Should().NotContain("ullet");
+        text.Should().Contain("After");
+    }
+
+    // P8 regression — \binN must skip exactly N raw bytes without emitting them as text, and must not let
+    // stray { } bytes in the binary payload unbalance group nesting and corrupt following text.
+    [Fact]
+    public void BinaryData_IsSkippedAndSurroundingTextPreserved()
+    {
+        // The binary payload contains { and } bytes that would corrupt group nesting if parsed as RTF.
+        // Surrounding plain text must still import correctly.
+        var header = Encoding.ASCII.GetBytes(@"{\rtf1\ansi Before\bin5 ");
+        var binary = new byte[] { 0x7B, 0xFF, 0x00, 0x7D, 0x01 }; // { + garbage + }
+        var trailer = Encoding.ASCII.GetBytes(" After}");
+        var rtf = header.Concat(binary).Concat(trailer).ToArray();
+
+        var doc = Load(rtf);
+        var text = string.Concat(doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText));
+        text.Should().Contain("Before");
+        text.Should().Contain("After");
+        // None of the binary payload bytes should appear as text characters.
+        text.Should().NotContain("{");
+        text.Should().NotContain("}");
     }
 }
