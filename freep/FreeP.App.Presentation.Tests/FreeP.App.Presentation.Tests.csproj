@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
   </ItemGroup>
 
 </Project>
