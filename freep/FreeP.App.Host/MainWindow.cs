@@ -102,6 +102,10 @@ public sealed class MainWindow : Window
     private Canvas _textOverlay = null!;
     private TextBlock _slideCountText = null!;
 
+    // Notes pane (Wave 7B)
+    private TextBox _notesBox = null!;
+    private bool _notesRefreshing;   // guard against re-entrant TextChanged → SetCurrentSlideNotesText
+
     // ── Constructors ──────────────────────────────────────────────────────────────
 
     public MainWindow() : this(new FreePOptions()) { }
@@ -184,6 +188,7 @@ public sealed class MainWindow : Window
 
         UpdateTitle();
         RefreshCanvas();
+        RefreshNotesPane();
         UpdateSlideCount();
     }
 
@@ -195,7 +200,7 @@ public sealed class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
 
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
-        Editor.CurrentSlideChanged += (_, _) => RefreshCanvas();
+        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); };
         // SelectionChanged: 3C subscribes directly to Editor.SelectionChanged.
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
@@ -232,6 +237,7 @@ public sealed class MainWindow : Window
         SlidePaneHost.Child = new SlidePane(Editor);
         RefreshCanvas();
         UpdateSlideCount();
+        RefreshNotesPane();
     }
 
     // ── Body layout ───────────────────────────────────────────────────────────────
@@ -283,13 +289,44 @@ public sealed class MainWindow : Window
         // Called here (after canvas is created) and again in RebuildEditor/LoadModel.
         AttachCanvasEditing();
 
+        // Notes pane — a slim strip below the slide canvas.
+        // Edits go through EditingSession so they are undoable and mark the file dirty.
+        _notesBox = new TextBox
+        {
+            AcceptsReturn       = true,
+            TextWrapping        = TextWrapping.Wrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MinHeight           = 60,
+            MaxHeight           = 120,
+            Padding             = new Thickness(8, 4, 8, 4),
+            FontSize            = 12,
+            Background          = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xF0)),
+            BorderThickness     = new Thickness(0, 1, 0, 0),
+            BorderBrush         = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            VerticalAlignment   = VerticalAlignment.Stretch,
+        };
+        _notesBox.TextChanged += (_, _) =>
+        {
+            if (_notesRefreshing) return;
+            Editor.SetCurrentSlideNotesText(_notesBox.Text);
+        };
+
+        // Right-side panel: canvas on top, notes strip below.
+        var rightPanel = new Grid();
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_canvasHost, 0);
+        Grid.SetRow(_notesBox,   1);
+        rightPanel.Children.Add(_canvasHost);
+        rightPanel.Children.Add(_notesBox);
+
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(SlidePaneHost, 0);
-        Grid.SetColumn(_canvasHost,   1);
+        Grid.SetColumn(rightPanel,    1);
         splitter.Children.Add(SlidePaneHost);
-        splitter.Children.Add(_canvasHost);
+        splitter.Children.Add(rightPanel);
 
         return splitter;
     }
@@ -301,6 +338,37 @@ public sealed class MainWindow : Window
         SlideCanvas.Presentation = _presentation;
         SlideCanvas.Slide        = Editor.CurrentSlide;
         SlideCanvas.Refresh();
+    }
+
+    // ── Notes pane refresh (Wave 7B) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Populates the notes TextBox from the current slide's Notes body.
+    /// The _notesRefreshing guard prevents the TextChanged handler from routing the
+    /// programmatic set back through EditingSession (which would create a spurious undo entry).
+    /// </summary>
+    private void RefreshNotesPane()
+    {
+        if (_notesBox is null) return;
+        _notesRefreshing = true;
+        try
+        {
+            var notes = Editor.CurrentSlideNotes;
+            if (notes is null)
+            {
+                _notesBox.Text = string.Empty;
+            }
+            else
+            {
+                _notesBox.Text = string.Join(
+                    Environment.NewLine,
+                    notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+            }
+        }
+        finally
+        {
+            _notesRefreshing = false;
+        }
     }
 
     // ── Status bar ────────────────────────────────────────────────────────────────
