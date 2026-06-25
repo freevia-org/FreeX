@@ -1,0 +1,369 @@
+using System.IO;
+using FreeP.Core.IO;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Wave 6B: master/layout full round-trip + txStyles tests.
+/// Validates that SlideMaster.TextStyles, SlideMaster.ColorMap, layout placeholder count/types,
+/// and slide→layout linkage survive a write→read cycle.
+/// </summary>
+public sealed class MasterLayoutRoundTripTests : IDisposable
+{
+    private readonly string _tempDir =
+        Path.Combine(Path.GetTempPath(), "FreeP.MasterTests", Guid.NewGuid().ToString("N"));
+
+    public MasterLayoutRoundTripTests() => Directory.CreateDirectory(_tempDir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Corpus round-trip: read 01-title-slide.pptx, write, read back, assert fidelity
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private static string CorpusPath(string filename)
+    {
+        // Walk up from test binary to find the corpus folder.
+        var dir = AppContext.BaseDirectory;
+        for (int i = 0; i < 8; i++)
+        {
+            var candidate = Path.Combine(dir, "tools", "FreeP.RenderCompare", "corpus", filename);
+            if (File.Exists(candidate)) return candidate;
+            var candidate2 = Path.Combine(dir, filename);
+            if (File.Exists(candidate2)) return candidate2;
+            dir = Path.GetDirectoryName(dir) ?? dir;
+        }
+        // Absolute fallback for dev machine paths
+        return Path.Combine(
+            @"C:\Users\quinn\Documents\GitHub\FreeX\.worktrees\freep-6b\tools\FreeP.RenderCompare\corpus",
+            filename);
+    }
+
+    /// <summary>Returns true and sets <paramref name="path"/> if corpus file exists; otherwise returns false.</summary>
+    private static bool TryGetCorpus(string filename, out string path)
+    {
+        path = CorpusPath(filename);
+        return File.Exists(path);
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_HasAtLeastOneMaster()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        pres.Masters.Should().NotBeEmpty("01-title-slide.pptx must have a slide master");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_HasAtLeastOneLayout()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        pres.Layouts.Should().NotBeEmpty("01-title-slide.pptx must have at least one layout");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_TxStylesParsed()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        var master = pres.Masters.First();
+        master.TextStyles.Should().NotBeNull("slideMaster1 should have p:txStyles");
+
+        // Title style level 0 should have a font size set in a real Office deck
+        var titleLvl0 = master.TextStyles!.TitleStyle[0];
+        titleLvl0.Should().NotBeNull("titleStyle/lvl1pPr should be present");
+        titleLvl0!.FontSizePt.Should().BeGreaterThan(0, "title font size should be > 0pt");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_ColorMapParsed()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        var master = pres.Masters.First();
+        master.ColorMap.Should().NotBeNull("slideMaster1 must have p:clrMap");
+        master.ColorMap.Should().ContainKey("bg1", "standard Office clrMap has bg1");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_LayoutLinkagePreserved_AfterRoundTrip()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        var originalMasterCount = pres.Masters.Count;
+        var originalLayoutCount = pres.Layouts.Count;
+
+        // Write and re-read
+        var outPath = Path.Combine(_tempDir, "rt-title-slide.pptx");
+        PptxPackageWriter.Write(pres, outPath);
+        var rt = PptxPackageReader.Read(outPath);
+
+        rt.Masters.Should().HaveCount(originalMasterCount, "master count must be preserved");
+        rt.Layouts.Should().HaveCount(originalLayoutCount, "layout count must be preserved");
+
+        // The first slide should still reference a valid layout
+        rt.Slides.Should().NotBeEmpty();
+        rt.Slides[0].LayoutId.Should().NotBeNullOrEmpty("slide layout linkage must survive round-trip");
+        var matchedLayout = rt.Layouts.Find(l => l.Id == rt.Slides[0].LayoutId);
+        matchedLayout.Should().NotBeNull("slide's LayoutId must match an existing layout after round-trip");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_TxStylesRoundTrip()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        var originalMaster = pres.Masters.First();
+        if (originalMaster.TextStyles is null) return; // no txStyles to round-trip
+
+        var originalTitleLvl0FontSize = originalMaster.TextStyles.TitleStyle[0]?.FontSizePt;
+
+        // Round-trip
+        var outPath = Path.Combine(_tempDir, "rt-txstyles.pptx");
+        PptxPackageWriter.Write(pres, outPath);
+        var rt = PptxPackageReader.Read(outPath);
+
+        rt.Masters.Should().NotBeEmpty();
+        var rtMaster = rt.Masters.First();
+        rtMaster.TextStyles.Should().NotBeNull("txStyles must survive round-trip");
+
+        var rtTitleLvl0 = rtMaster.TextStyles!.TitleStyle[0];
+        if (originalTitleLvl0FontSize.HasValue)
+        {
+            rtTitleLvl0.Should().NotBeNull("titleStyle/lvl1pPr must survive round-trip");
+            rtTitleLvl0!.FontSizePt.Should().Be(originalTitleLvl0FontSize,
+                "title font size must be preserved through round-trip");
+        }
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_ColorMapRoundTrip()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        var originalMaster = pres.Masters.First();
+        if (originalMaster.ColorMap is null) return; // no colorMap to round-trip
+
+        var originalBg1 = originalMaster.ColorMap["bg1"];
+
+        var outPath = Path.Combine(_tempDir, "rt-colormap.pptx");
+        PptxPackageWriter.Write(pres, outPath);
+        var rt = PptxPackageReader.Read(outPath);
+
+        rt.Masters.Should().NotBeEmpty();
+        var rtMaster = rt.Masters.First();
+        rtMaster.ColorMap.Should().NotBeNull("clrMap must survive round-trip");
+        rtMaster.ColorMap!.Should().ContainKey("bg1");
+        rtMaster.ColorMap["bg1"].Should().Be(originalBg1, "bg1 mapping must be preserved");
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_LayoutPlaceholderCountPreserved()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+        // Record placeholder counts per layout by name
+        var layoutPhCounts = pres.Layouts
+            .ToDictionary(l => l.Name + "_" + l.LayoutType, l => l.Placeholders.Count);
+
+        var outPath = Path.Combine(_tempDir, "rt-layouts.pptx");
+        PptxPackageWriter.Write(pres, outPath);
+        var rt = PptxPackageReader.Read(outPath);
+
+        foreach (var rtLayout in rt.Layouts)
+        {
+            var key = rtLayout.Name + "_" + rtLayout.LayoutType;
+            if (layoutPhCounts.TryGetValue(key, out var expected))
+            {
+                rtLayout.Placeholders.Should().HaveCount(expected,
+                    $"layout '{rtLayout.Name}' placeholder count must be preserved");
+            }
+        }
+    }
+
+    [Fact]
+    public void CorpusTitleSlide_LayoutLstStyleRoundTrip()
+    {
+        if (!TryGetCorpus("01-title-slide.pptx", out var path)) return;
+
+        var pres = PptxPackageReader.Read(path);
+
+        // Find any layout placeholder that has a non-null LstStyle, record its layout index
+        SlideShape? lstStylePh = null;
+        int lstStyleLayoutIdx = -1;
+        for (int li = 0; li < pres.Layouts.Count; li++)
+        {
+            var ph = pres.Layouts[li].Placeholders.Find(p => p.TextBody?.LstStyle is { } ls && ls.HasAny);
+            if (ph is not null) { lstStylePh = ph; lstStyleLayoutIdx = li; break; }
+        }
+        if (lstStylePh is null) return; // no layout placeholder with lstStyle in this corpus file
+
+        var origPh = lstStylePh.Placeholder!;
+        var originalAlign = lstStylePh.TextBody!.LstStyle![0]?.Align;
+
+        var outPath = Path.Combine(_tempDir, "rt-lstyle.pptx");
+        PptxPackageWriter.Write(pres, outPath);
+        var rt = PptxPackageReader.Read(outPath);
+
+        // Use same index (layout order is preserved by the writer)
+        rt.Layouts.Should().HaveCountGreaterThan(lstStyleLayoutIdx, "layout count must be preserved");
+        var rtLayout = rt.Layouts[lstStyleLayoutIdx];
+
+        // Find matching placeholder by type+idx
+        var rtPh = rtLayout.Placeholders.Find(p =>
+            p.Placeholder?.Type == origPh.Type && p.Placeholder?.Idx == origPh.Idx);
+        rtPh.Should().NotBeNull("layout placeholder must survive round-trip");
+        rtPh!.TextBody?.LstStyle.Should().NotBeNull("lstStyle must survive round-trip");
+
+        if (originalAlign.HasValue)
+            rtPh.TextBody!.LstStyle![0]?.Align.Should().Be(originalAlign,
+                "lstStyle level alignment must be preserved");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Synthetic round-trip: build a presentation with txStyles in code
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Synthetic_TxStyles_Roundtrip()
+    {
+        var pres = new Presentation();
+
+        var master = new SlideMaster { Id = "rId1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.TitleStyle[0] = new TextStyleLevel
+        {
+            FontSizePt = 36.0,
+            Bold = true,
+            Align = TextAlign.Center,
+            LatinFont = "+mj-lt"
+        };
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel
+        {
+            FontSizePt = 24.0,
+            Bold = false,
+            BulletKind = BulletKind.Char,
+            BulletChar = "•"
+        };
+        master.TextStyles.OtherStyle[0] = new TextStyleLevel { FontSizePt = 10.0 };
+        master.ColorMap = new Dictionary<string, string>
+        {
+            ["bg1"] = "lt1", ["tx1"] = "dk1", ["bg2"] = "lt2", ["tx2"] = "dk2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2",
+            ["accent3"] = "accent3", ["accent4"] = "accent4",
+            ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+        pres.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Title Slide", LayoutType = SlideLayoutType.Title };
+        // Add a placeholder with lstStyle
+        var titlePh = new SlideShape
+        {
+            Id = 1, Name = "Title 1",
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            OffsetXEmu = 457200, OffsetYEmu = 274638,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            TextBody = new TextBody
+            {
+                LstStyle = new TextStyleLevels()
+            }
+        };
+        titlePh.TextBody.LstStyle![0] = new TextStyleLevel { Align = TextAlign.Center, FontSizePt = 44.0 };
+        layout.Placeholders.Add(titlePh);
+        pres.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "rIdL1" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, Name = "Title 1",
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            TextBody = new TextBody()
+        });
+        slide.Shapes[0].TextBody!.Paragraphs.Add(new Paragraph());
+        slide.Shapes[0].TextBody!.Paragraphs[0].Runs.Add(new Run { Text = "Hello" });
+        pres.Slides.Add(slide);
+
+        var path = Path.Combine(_tempDir, "synthetic-txstyles.pptx");
+        PptxPackageWriter.Write(pres, path);
+
+        var rt = PptxPackageReader.Read(path);
+
+        rt.Masters.Should().HaveCount(1);
+        var rtMaster = rt.Masters[0];
+        rtMaster.TextStyles.Should().NotBeNull();
+        rtMaster.TextStyles!.TitleStyle[0].Should().NotBeNull();
+        rtMaster.TextStyles.TitleStyle[0]!.FontSizePt.Should().Be(36.0);
+        rtMaster.TextStyles.TitleStyle[0]!.Bold.Should().BeTrue();
+        rtMaster.TextStyles.TitleStyle[0]!.Align.Should().Be(TextAlign.Center);
+        rtMaster.TextStyles.TitleStyle[0]!.LatinFont.Should().Be("+mj-lt");
+
+        rtMaster.TextStyles.BodyStyle[0].Should().NotBeNull();
+        rtMaster.TextStyles.BodyStyle[0]!.BulletKind.Should().Be(BulletKind.Char);
+        rtMaster.TextStyles.BodyStyle[0]!.BulletChar.Should().Be("•");
+
+        rtMaster.TextStyles.OtherStyle[0].Should().NotBeNull();
+        rtMaster.TextStyles.OtherStyle[0]!.FontSizePt.Should().Be(10.0);
+
+        rtMaster.ColorMap.Should().ContainKey("bg1");
+        rtMaster.ColorMap["bg1"].Should().Be("lt1");
+
+        rt.Layouts.Should().HaveCount(1);
+        var rtLayout = rt.Layouts[0];
+        rtLayout.Placeholders.Should().HaveCount(1);
+        var rtTitlePh = rtLayout.Placeholders[0];
+        rtTitlePh.TextBody?.LstStyle.Should().NotBeNull();
+        rtTitlePh.TextBody!.LstStyle![0].Should().NotBeNull();
+        rtTitlePh.TextBody.LstStyle[0]!.Align.Should().Be(TextAlign.Center);
+        rtTitlePh.TextBody.LstStyle[0]!.FontSizePt.Should().Be(44.0);
+
+        rt.Slides.Should().HaveCount(1);
+        rt.Slides[0].LayoutId.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Synthetic_MultipleLayouts_AllPreserved()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1" };
+        pres.Masters.Add(master);
+
+        var layouts = new[]
+        {
+            new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Title Slide", LayoutType = SlideLayoutType.Title },
+            new SlideLayout { Id = "rIdL2", MasterId = "rId1", Name = "Title, Content", LayoutType = SlideLayoutType.TitleContent },
+            new SlideLayout { Id = "rIdL3", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank },
+        };
+        foreach (var l in layouts) pres.Layouts.Add(l);
+
+        var slide1 = new Slide { LayoutId = "rIdL1" };
+        var slide2 = new Slide { LayoutId = "rIdL2" };
+        pres.Slides.Add(slide1);
+        pres.Slides.Add(slide2);
+
+        var path = Path.Combine(_tempDir, "multi-layout.pptx");
+        PptxPackageWriter.Write(pres, path);
+        var rt = PptxPackageReader.Read(path);
+
+        rt.Layouts.Should().HaveCount(3, "all three layouts must round-trip");
+        rt.Layouts.Select(l => l.LayoutType).Should().Contain(SlideLayoutType.Title);
+        rt.Layouts.Select(l => l.LayoutType).Should().Contain(SlideLayoutType.TitleContent);
+        rt.Layouts.Select(l => l.LayoutType).Should().Contain(SlideLayoutType.Blank);
+
+        rt.Slides[0].LayoutId.Should().NotBeNullOrEmpty();
+        rt.Slides[1].LayoutId.Should().NotBeNullOrEmpty();
+    }
+}
