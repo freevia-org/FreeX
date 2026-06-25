@@ -483,6 +483,10 @@ public partial class GridView : FrameworkElement
     private const double OutlineGutterPadding = 6;
     private const double OutlineButtonSize = 13;
     private const double DefaultCellFontSizePoints = 11.0;
+    // Super/subscript rendering constants (match Excel's ~58% font shrink and baseline shift).
+    internal const double SuperSubFontSizeFactor  = 0.583;   // ~7/12 — Excel renders super/sub at ~58% of cell font size
+    internal const double SuperScriptBaselineRatio = 0.33;   // shift up by 33% of the NORMAL (pre-scaled) fontSize
+    internal const double SubScriptBaselineRatio   = 0.14;   // shift down by 14% of the NORMAL (pre-scaled) fontSize
     private const double PageMarginGuideHitZone = 5;
     private const int MarchingAntsPhaseCount = 16;
 

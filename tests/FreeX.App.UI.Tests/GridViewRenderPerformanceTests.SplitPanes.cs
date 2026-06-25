@@ -20,10 +20,10 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("TrimRenderCachesIfOversized();");
         source.Should().Contain("if (_underlinePenCache.Count >= RenderCacheSizeLimit)");
         source.Should().Contain("_underlinePenCache.Clear();");
-        renderSplitPaneCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);");
+        renderSplitPaneCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,");
         source.Should().Contain("if (style?.DoubleUnderline == true)");
         source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
-        source.Should().Contain("dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY), new Point(textLayout.TextPoint.X + text.Width, uY));");
+        source.Should().Contain("dc.DrawLine(underlinePen, new Point(drawPoint.X, uY), new Point(drawPoint.X + text.Width, uY));");
         renderSplitPaneCells.Should().NotContain("new Pen(textBrush");
     }
 
@@ -407,10 +407,10 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textLayout);");
         renderSplitPaneCells.IndexOf("dc.PushClip(GetCellClipGeometry(textClipRect));", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
+            .BeLessThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,", StringComparison.Ordinal));
         renderSplitPaneCells.LastIndexOf("dc.Pop();", StringComparison.Ordinal)
             .Should()
-            .BeGreaterThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
+            .BeGreaterThan(renderSplitPaneCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,", StringComparison.Ordinal));
     }
 
     [Fact]

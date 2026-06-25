@@ -292,6 +292,8 @@ public partial class GridView
                 pixelsPerDip);
         }
 
+        ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double splitSuperSubBaselineOffsetPx);
+
         var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
         var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
         var wrapTextAlignment = TextAlignment.Left;
@@ -353,7 +355,7 @@ public partial class GridView
         if (shouldClipText)
             dc.PushClip(GetCellClipGeometry(textClipRect));
 
-        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
+        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache, splitSuperSubBaselineOffsetPx);
 
         if (shouldClipText)
             dc.Pop();
@@ -585,6 +587,9 @@ public partial class GridView
                     pixelsPerDip);
             }
 
+            // Super/subscript: scale font to ~58% and apply a vertical baseline offset.
+            ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double superSubBaselineOffsetPx);
+
             var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
             var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
             var wrapTextAlignment = TextAlignment.Left;
@@ -665,7 +670,7 @@ public partial class GridView
             if (shouldClipText)
                 dc.PushClip(GetCellClipGeometry(clipRect));
 
-            DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
+            DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache, superSubBaselineOffsetPx);
 
             if (shouldClipText)
                 dc.Pop();
@@ -1082,19 +1087,24 @@ public partial class GridView
         CellTextRenderLayout textLayout,
         CellStyle? style,
         Brush textBrush,
-        Dictionary<Brush, Pen> underlinePenCache)
+        Dictionary<Brush, Pen> underlinePenCache,
+        double baselineOffsetPx = 0)
     {
-        if (textLayout.IsRotated)
-            dc.PushTransform(new RotateTransform(textLayout.TransformAngle, textLayout.TextPoint.X, textLayout.TextPoint.Y));
+        var drawPoint = baselineOffsetPx == 0
+            ? textLayout.TextPoint
+            : new Point(textLayout.TextPoint.X, textLayout.TextPoint.Y + baselineOffsetPx);
 
-        dc.DrawText(text, textLayout.TextPoint);
+        if (textLayout.IsRotated)
+            dc.PushTransform(new RotateTransform(textLayout.TransformAngle, drawPoint.X, drawPoint.Y));
+
+        dc.DrawText(text, drawPoint);
 
         if (style?.DoubleUnderline == true)
         {
-            double uY = textLayout.TextPoint.Y + text.Height + 1;
+            double uY = drawPoint.Y + text.Height + 1;
             var underlinePen = UnderlinePenForTextBrush(textBrush, underlinePenCache);
-            dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY), new Point(textLayout.TextPoint.X + text.Width, uY));
-            dc.DrawLine(underlinePen, new Point(textLayout.TextPoint.X, uY + 2), new Point(textLayout.TextPoint.X + text.Width, uY + 2));
+            dc.DrawLine(underlinePen, new Point(drawPoint.X, uY), new Point(drawPoint.X + text.Width, uY));
+            dc.DrawLine(underlinePen, new Point(drawPoint.X, uY + 2), new Point(drawPoint.X + text.Width, uY + 2));
         }
 
         if (textLayout.IsRotated)

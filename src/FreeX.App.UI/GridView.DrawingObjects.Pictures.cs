@@ -199,6 +199,8 @@ public partial class GridView
                 pixelsPerDip);
         }
 
+        ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double pictureSuperSubBaselineOffsetPx);
+
         var typefaceForText = CreateCellTypefaceWithTheme(style, _typefaceCache);
         if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
             textBrush = BrushForCellColor(fontColor, _brushCache);
@@ -245,7 +247,7 @@ public partial class GridView
             Math.Max(1, cellRect.Width - 4),
             Math.Max(1, cellRect.Height - 2));
         dc.PushClip(GetDrawingObjectClipGeometry(clipRect));
-        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);
+        DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache, pictureSuperSubBaselineOffsetPx);
         dc.Pop();
     }
 

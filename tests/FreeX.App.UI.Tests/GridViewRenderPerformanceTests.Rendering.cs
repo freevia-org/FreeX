@@ -160,7 +160,7 @@ public sealed partial class GridViewRenderPerformanceTests
         renderCells.IndexOf("rect.Left >= visibleRight", StringComparison.Ordinal)
             .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKeyWithTheme(style);", StringComparison.Ordinal));
         renderCells.IndexOf("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))", StringComparison.Ordinal)
-            .Should().BeLessThan(renderCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);", StringComparison.Ordinal));
+            .Should().BeLessThan(renderCells.IndexOf("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -897,7 +897,7 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache);");
+        renderCells.Should().Contain("DrawCellText(dc, text, textLayout, style, textBrush, _underlinePenCache,");
         source.Should().Contain("UnderlinePenForTextBrush(textBrush, underlinePenCache)");
         source.Should().Contain("private static Pen UnderlinePenForTextBrush");
         source.Should().Contain("pen.Freeze();");

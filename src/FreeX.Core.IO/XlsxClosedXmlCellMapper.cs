@@ -153,6 +153,8 @@ internal static class XlsxClosedXmlCellMapper
             Italic = xlStyle.Font.Italic,
             Underline = xlStyle.Font.Underline != XLFontUnderlineValues.None,
             Strikethrough = xlStyle.Font.Strikethrough,
+            Superscript = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Superscript,
+            Subscript   = xlStyle.Font.VerticalAlignment == XLFontVerticalTextAlignmentValues.Subscript,
             FontColor = MapColor(xlStyle.Font.FontColor, theme),
             FontScheme = xlStyle.Font.FontScheme switch
             {
@@ -233,6 +235,12 @@ internal static class XlsxClosedXmlCellMapper
             xlStyle.Font.Underline = style.Underline ? XLFontUnderlineValues.Single : XLFontUnderlineValues.None;
         if (style.Strikethrough != def.Strikethrough)
             xlStyle.Font.Strikethrough = style.Strikethrough;
+        if (style.Superscript != def.Superscript || style.Subscript != def.Subscript)
+            xlStyle.Font.VerticalAlignment = style.Superscript
+                ? XLFontVerticalTextAlignmentValues.Superscript
+                : style.Subscript
+                    ? XLFontVerticalTextAlignmentValues.Subscript
+                    : XLFontVerticalTextAlignmentValues.Baseline;
         if (style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize))
             xlStyle.Font.FontSize = style.FontSize;
         if (style.FontName != def.FontName) xlStyle.Font.FontName = style.FontName;

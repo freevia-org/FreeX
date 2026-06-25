@@ -234,6 +234,39 @@ public partial class GridView
     public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>
         CellTextDecorationPlanner.Build(style);
 
+    /// <summary>
+    /// Returns the adjusted font size and vertical baseline offset (in WPF device-independent pixels)
+    /// to apply when a cell has <see cref="CellStyle.Superscript"/> or <see cref="CellStyle.Subscript"/>
+    /// set. A negative <paramref name="baselineOffsetPx"/> shifts the text upward (superscript);
+    /// a positive value shifts it downward (subscript). Returns the unchanged values when neither flag is set.
+    /// </summary>
+    /// <param name="style">The cell style (may be null).</param>
+    /// <param name="displayFontSize">The already-resolved display font size (in WPF units) before any super/sub scaling.</param>
+    /// <param name="adjustedFontSize">The font size to use when creating <see cref="System.Windows.Media.FormattedText"/>.</param>
+    /// <param name="baselineOffsetPx">The Y-axis shift to apply to the text draw point.</param>
+    internal static void ResolveSuperSubFontAdjustment(
+        CellStyle? style,
+        double displayFontSize,
+        out double adjustedFontSize,
+        out double baselineOffsetPx)
+    {
+        if (style?.Superscript == true)
+        {
+            baselineOffsetPx = -displayFontSize * SuperScriptBaselineRatio;
+            adjustedFontSize = displayFontSize * SuperSubFontSizeFactor;
+        }
+        else if (style?.Subscript == true)
+        {
+            baselineOffsetPx = displayFontSize * SubScriptBaselineRatio;
+            adjustedFontSize = displayFontSize * SuperSubFontSizeFactor;
+        }
+        else
+        {
+            adjustedFontSize = displayFontSize;
+            baselineOffsetPx = 0;
+        }
+    }
+
     public static Typeface CreateCellTypeface(CellStyle? style)
     {
         var key = CreateCellTypefaceKey(style);

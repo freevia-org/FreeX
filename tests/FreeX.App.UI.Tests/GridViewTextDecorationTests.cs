@@ -309,4 +309,116 @@ public sealed class GridViewTextDecorationTests
             .Should()
             .Be("#FFC000");
     }
+
+    // ── Strikethrough ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildTextDecorations_Strikethrough_AddsStrikethroughDecoration()
+    {
+        var decorations = GridView.BuildTextDecorations(new CellStyle { Strikethrough = true });
+
+        decorations.Should().NotBeNull();
+        decorations!.Should().Contain(d => d.Location == TextDecorationLocation.Strikethrough);
+    }
+
+    [Fact]
+    public void BuildTextDecorations_Strikethrough_DoesNotAddUnderlineDecoration()
+    {
+        var decorations = GridView.BuildTextDecorations(new CellStyle { Strikethrough = true });
+
+        decorations.Should().NotBeNull();
+        decorations!.Should().NotContain(d => d.Location == TextDecorationLocation.Underline);
+    }
+
+    [Fact]
+    public void BuildTextDecorations_UnderlineAndStrikethrough_BothPresent()
+    {
+        var decorations = GridView.BuildTextDecorations(new CellStyle { Underline = true, Strikethrough = true });
+
+        decorations.Should().NotBeNull();
+        decorations!.Should().Contain(d => d.Location == TextDecorationLocation.Underline);
+        decorations.Should().Contain(d => d.Location == TextDecorationLocation.Strikethrough);
+    }
+
+    // ── Superscript / Subscript ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_Superscript_ReducesFontSizeAndShiftsUp()
+    {
+        const double inputFontSize = 20.0;
+        GridView.ResolveSuperSubFontAdjustment(
+            new CellStyle { Superscript = true },
+            inputFontSize,
+            out var adjustedFontSize,
+            out var baselineOffsetPx);
+
+        adjustedFontSize.Should().BeApproximately(inputFontSize * GridView.SuperSubFontSizeFactor, 0.001);
+        baselineOffsetPx.Should().BeNegative("superscript shifts text upward");
+        baselineOffsetPx.Should().BeApproximately(-(inputFontSize * GridView.SuperScriptBaselineRatio), 0.001);
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_Subscript_ReducesFontSizeAndShiftsDown()
+    {
+        const double inputFontSize = 20.0;
+        GridView.ResolveSuperSubFontAdjustment(
+            new CellStyle { Subscript = true },
+            inputFontSize,
+            out var adjustedFontSize,
+            out var baselineOffsetPx);
+
+        adjustedFontSize.Should().BeApproximately(inputFontSize * GridView.SuperSubFontSizeFactor, 0.001);
+        baselineOffsetPx.Should().BePositive("subscript shifts text downward");
+        baselineOffsetPx.Should().BeApproximately(inputFontSize * GridView.SubScriptBaselineRatio, 0.001);
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_NeitherFlag_ReturnsUnchangedValues()
+    {
+        const double inputFontSize = 20.0;
+        GridView.ResolveSuperSubFontAdjustment(
+            new CellStyle(),
+            inputFontSize,
+            out var adjustedFontSize,
+            out var baselineOffsetPx);
+
+        adjustedFontSize.Should().Be(inputFontSize);
+        baselineOffsetPx.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_NullStyle_ReturnsUnchangedValues()
+    {
+        const double inputFontSize = 15.0;
+        GridView.ResolveSuperSubFontAdjustment(
+            null,
+            inputFontSize,
+            out var adjustedFontSize,
+            out var baselineOffsetPx);
+
+        adjustedFontSize.Should().Be(inputFontSize);
+        baselineOffsetPx.Should().Be(0);
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_SuperscriptFontSizeFactor_IsApproximatelySixtyPercent()
+    {
+        // Excel shrinks super/sub text to approximately 58-60% of the original size.
+        GridView.SuperSubFontSizeFactor.Should().BeInRange(0.55, 0.65,
+            "Excel shrinks super/sub text to ~58% of original font size");
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_SuperscriptOffset_IsMeaningfulFractionOfFontSize()
+    {
+        // Superscript should visibly raise the text — offset should be at least 20% of fontSize.
+        GridView.SuperScriptBaselineRatio.Should().BeGreaterThan(0.15);
+    }
+
+    [Fact]
+    public void ResolveSuperSubFontAdjustment_SubscriptOffset_IsMeaningfulFractionOfFontSize()
+    {
+        // Subscript should visibly lower the text — offset should be at least 5% of fontSize.
+        GridView.SubScriptBaselineRatio.Should().BeGreaterThan(0.05);
+    }
 }
