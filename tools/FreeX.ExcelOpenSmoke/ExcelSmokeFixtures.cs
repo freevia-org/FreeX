@@ -154,6 +154,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_shapes_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeShapesCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -4755,6 +4761,1140 @@ internal static class ExcelSmokeFixtures
 
             ApplyExcelRangeFormat(worksheet, "A:B", r => { try { r.Columns.AutoFit(); } catch { } });
 
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // Drawing-objects (shapes) corpus fixtures
+    // =========================================================================
+
+    // msoAutoShape type constants (MsoAutoShapeType enum values from Office PIA)
+    private const int MsoShapeRectangle              = 1;    // msoBevelRectangle not needed; plain rect
+    private const int MsoShapeRoundedRectangle       = 5;
+    private const int MsoShapeOval                   = 9;
+    private const int MsoShapeIsoscelesTriangle      = 7;
+    private const int MsoShapeDiamond                = 4;
+    private const int MsoShapeRightArrow             = 13;
+    private const int MsoShapeLeftRightArrow         = 37;
+    private const int MsoShapePentagon               = 56;   // msoShapeChevron=52; pentagon=56
+    private const int MsoShapeChevron                = 52;
+    private const int MsoShapeFlowchartProcess       = 109;
+    private const int MsoShapeFlowchartDecision      = 110;
+    private const int MsoShape5PointStar             = 92;
+    private const int MsoShapeExplosion1             = 89;
+    private const int MsoShapeRectangularCallout     = 61;
+    private const int MsoShapeOvalCallout            = 107;
+
+    // MsoLineDashStyle
+    private const int MsoLineSolid               = 1;
+    private const int MsoLineDash                = 4;
+    private const int MsoLineDashDot             = 5;
+    private const int MsoLineLongDash            = 7;
+
+    // MsoTextOrientation (reuse existing MsoTextOrientationHorizontal = 1)
+
+    /// <summary>Returns output paths for all nine shapes corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelShapesCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_shapes_basic_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_arrows_flow_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_stars_callouts_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_fill_outline_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_rotation_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_text_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_line_conn_007.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_picture_008.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_wordart_009.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for shapes corpus fixtures.</summary>
+    private static void GenerateExcelNativeShapesCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("basic_001", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_Basic(workbooks, outputPath);
+        else if (fileName.Contains("arrows_flow_002", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_ArrowsFlow(workbooks, outputPath);
+        else if (fileName.Contains("stars_callouts_003", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_StarsCallouts(workbooks, outputPath);
+        else if (fileName.Contains("fill_outline_004", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_FillOutline(workbooks, outputPath);
+        else if (fileName.Contains("rotation_005", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_Rotation(workbooks, outputPath);
+        else if (fileName.Contains("text_006", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_Text(workbooks, outputPath);
+        else if (fileName.Contains("line_conn_007", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_LineConn(workbooks, outputPath);
+        else if (fileName.Contains("picture_008", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_Picture(workbooks, outputPath);
+        else if (fileName.Contains("wordart_009", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_WordArt(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown shapes corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared helper: open a blank workbook for shapes fixtures
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Writes a spacer string to cell (row, col) so that Excel's UsedRange covers
+    /// the entire shape region.  Without at least one cell with content at the
+    /// bottom-right of where shapes are placed, GetUsedRange() collapses to A1
+    /// and CopyPicture fails with 0x800A03EC.
+    /// </summary>
+    private static void AnchorShapeUsedRange(object worksheet, int row = 22, int col = 14)
+    {
+        // Write a zero-width-space so it registers as data without showing visually.
+        SetExcelCellValue(worksheet, row, col, " ");
+    }
+
+    private static object OpenShapesWorkbook(dynamic workbooks, string outputPath, string sheetName,
+        out object worksheet)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        var workbook = workbooks.Add();
+        worksheet = ((dynamic)workbook).Worksheets[1];
+        try { ((dynamic)worksheet).Name = sheetName; } catch { /* best effort */ }
+        return workbook;
+    }
+
+    /// <summary>
+    /// Add an AutoShape to the worksheet via Shapes.AddShape.
+    /// Returns the shape COM object (caller must ReleaseComObject).
+    /// left/top/width/height are in points (1 pt = 1/72 inch).
+    /// </summary>
+    private static object AddAutoShape(object worksheet, int msoShapeType, float left, float top, float width, float height)
+    {
+        object? shapes = null;
+        try
+        {
+            shapes = ((dynamic)worksheet).Shapes;
+            return ((dynamic)shapes).AddShape(msoShapeType, left, top, width, height);
+        }
+        finally
+        {
+            ReleaseComObject(shapes);
+        }
+    }
+
+    /// <summary>Set a solid RGB fill on a shape object (already obtained).</summary>
+    private static void SetShapeSolidFill(object shape, byte r, byte g, byte b)
+    {
+        object? fill = null;
+        try
+        {
+            fill = ((dynamic)shape).Fill;
+            ((dynamic)fill).Solid();
+            ((dynamic)fill).ForeColor.RGB = ToOleColor(r, g, b);
+        }
+        finally
+        {
+            ReleaseComObject(fill);
+        }
+    }
+
+    /// <summary>Set outline (line) color and weight on a shape.</summary>
+    private static void SetShapeOutline(object shape, byte r, byte g, byte b, float weight = 1.5f)
+    {
+        object? line = null;
+        try
+        {
+            line = ((dynamic)shape).Line;
+            ((dynamic)line).Visible = true;           // msoTrue = -1
+            ((dynamic)line).ForeColor.RGB = ToOleColor(r, g, b);
+            ((dynamic)line).Weight = weight;
+        }
+        finally
+        {
+            ReleaseComObject(line);
+        }
+    }
+
+    /// <summary>Remove the outline from a shape.</summary>
+    private static void SetShapeNoOutline(object shape)
+    {
+        object? line = null;
+        try
+        {
+            line = ((dynamic)shape).Line;
+            ((dynamic)line).Visible = false;          // msoFalse = 0
+        }
+        finally
+        {
+            ReleaseComObject(line);
+        }
+    }
+
+    // =========================================================================
+    // case 001 — basic shape geometry
+    // =========================================================================
+    private static void GenerateShapesFixture_Basic(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "Basic", out object ws);
+            worksheet = ws;
+
+            // Label row so capture region has something in cells
+            SetExcelCellValue(worksheet, 1, 1, "Basic Shapes");
+
+            // Rectangle — col A area, row 3 onward, 110x60 pts each, spaced 15 pts apart
+            float left = 10; float top = 36; float w = 110; float h = 60; float gap = 15;
+
+            // Rectangle
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "Rect";
+            SetShapeSolidFill(shape, 91, 155, 213);   // blue
+            SetShapeOutline(shape, 47, 85, 151);
+            ReleaseComObject(shape); shape = null;
+
+            // Rounded rectangle
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRoundedRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "RoundedRect";
+            SetShapeSolidFill(shape, 255, 192, 0);    // gold
+            SetShapeOutline(shape, 192, 144, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Ellipse
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeOval, left, top, w, h);
+            ((dynamic)shape).Name = "Ellipse";
+            SetShapeSolidFill(shape, 112, 173, 71);   // green
+            SetShapeOutline(shape, 84, 130, 53);
+            ReleaseComObject(shape); shape = null;
+
+            // Triangle
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeIsoscelesTriangle, left, top, w, h);
+            ((dynamic)shape).Name = "Triangle";
+            SetShapeSolidFill(shape, 255, 102, 0);    // orange
+            SetShapeOutline(shape, 200, 77, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Diamond
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeDiamond, left, top, w, h);
+            ((dynamic)shape).Name = "Diamond";
+            SetShapeSolidFill(shape, 155, 99, 178);   // purple
+            SetShapeOutline(shape, 116, 74, 133);
+            ReleaseComObject(shape); shape = null;
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 002 — arrows and flowchart shapes
+    // =========================================================================
+    private static void GenerateShapesFixture_ArrowsFlow(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "ArrowsFlow", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Arrows & Flowchart");
+
+            float left = 10; float top = 36; float w = 100; float h = 55; float gap = 15;
+
+            // Right arrow
+            shape = AddAutoShape(worksheet, MsoShapeRightArrow, left, top, w, h);
+            ((dynamic)shape).Name = "RightArrow";
+            SetShapeSolidFill(shape, 91, 155, 213);
+            SetShapeOutline(shape, 47, 85, 151);
+            ReleaseComObject(shape); shape = null;
+
+            // Left-right arrow
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeLeftRightArrow, left, top, w, h);
+            ((dynamic)shape).Name = "LeftRightArrow";
+            SetShapeSolidFill(shape, 255, 192, 0);
+            SetShapeOutline(shape, 192, 144, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Chevron (pentagon-like)
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeChevron, left, top, w, h);
+            ((dynamic)shape).Name = "Chevron";
+            SetShapeSolidFill(shape, 112, 173, 71);
+            SetShapeOutline(shape, 84, 130, 53);
+            ReleaseComObject(shape); shape = null;
+
+            // Flowchart process
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeFlowchartProcess, left, top, w, h);
+            ((dynamic)shape).Name = "FlowProcess";
+            SetShapeSolidFill(shape, 255, 102, 0);
+            SetShapeOutline(shape, 200, 77, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Flowchart decision
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeFlowchartDecision, left, top, w, h);
+            ((dynamic)shape).Name = "FlowDecision";
+            SetShapeSolidFill(shape, 155, 99, 178);
+            SetShapeOutline(shape, 116, 74, 133);
+            ReleaseComObject(shape); shape = null;
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 003 — stars and callouts
+    // =========================================================================
+    private static void GenerateShapesFixture_StarsCallouts(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "StarsCallouts", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Stars & Callouts");
+
+            float left = 10; float top = 36; float w = 100; float h = 80; float gap = 20;
+
+            // 5-point star
+            shape = AddAutoShape(worksheet, MsoShape5PointStar, left, top, w, h);
+            ((dynamic)shape).Name = "Star5";
+            SetShapeSolidFill(shape, 255, 192, 0);
+            SetShapeOutline(shape, 192, 144, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Explosion
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeExplosion1, left, top, w, h);
+            ((dynamic)shape).Name = "Explosion";
+            SetShapeSolidFill(shape, 255, 75, 75);
+            SetShapeOutline(shape, 192, 0, 0);
+            ReleaseComObject(shape); shape = null;
+
+            // Rectangular callout
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangularCallout, left, top, w, h);
+            ((dynamic)shape).Name = "RectCallout";
+            SetShapeSolidFill(shape, 91, 155, 213);
+            SetShapeOutline(shape, 47, 85, 151);
+            ReleaseComObject(shape); shape = null;
+
+            // Oval callout
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeOvalCallout, left, top, w, h);
+            ((dynamic)shape).Name = "OvalCallout";
+            SetShapeSolidFill(shape, 112, 173, 71);
+            SetShapeOutline(shape, 84, 130, 53);
+            ReleaseComObject(shape); shape = null;
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 004 — fill and outline variations
+    // =========================================================================
+    private static void GenerateShapesFixture_FillOutline(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "FillOutline", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Fill & Outline Variants");
+
+            float left = 10; float top = 36; float w = 100; float h = 60; float gap = 18;
+
+            // 1. Solid fill + medium outline
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "SolidFill";
+            SetShapeSolidFill(shape, 91, 155, 213);
+            SetShapeOutline(shape, 47, 85, 151, 2f);
+            ReleaseComObject(shape); shape = null;
+
+            // 2. Gradient fill (two-color linear)
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "GradientFill";
+            {
+                object? fill = null;
+                try
+                {
+                    fill = ((dynamic)shape).Fill;
+                    // TwoColorGradient: msoGradientHorizontal=1, msoGradientVariant=1
+                    ((dynamic)fill).TwoColorGradient(1 /*msoGradientHorizontal*/, 1);
+                    ((dynamic)fill).ForeColor.RGB = ToOleColor(91, 155, 213);
+                    ((dynamic)fill).BackColor.RGB = ToOleColor(255, 255, 255);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: gradient fill failed: {ex.Message}");
+                    // Fall back to solid
+                    try
+                    {
+                        object? f2 = ((dynamic)shape).Fill;
+                        try { ((dynamic)f2).Solid(); ((dynamic)f2).ForeColor.RGB = ToOleColor(91, 155, 213); }
+                        finally { ReleaseComObject(f2); }
+                    }
+                    catch { }
+                }
+                finally
+                {
+                    ReleaseComObject(fill);
+                }
+            }
+            SetShapeOutline(shape, 47, 85, 151, 1.5f);
+            ReleaseComObject(shape); shape = null;
+
+            // 3. No fill (transparent) + outline
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "NoFill";
+            {
+                object? fill = null;
+                try
+                {
+                    fill = ((dynamic)shape).Fill;
+                    ((dynamic)fill).Visible = false;  // msoFalse=0
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: no-fill failed: {ex.Message}");
+                }
+                finally
+                {
+                    ReleaseComObject(fill);
+                }
+            }
+            SetShapeOutline(shape, 47, 85, 151, 2f);
+            ReleaseComObject(shape); shape = null;
+
+            // 4. Thick colored outline (red, 4pt)
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "ThickOutline";
+            SetShapeSolidFill(shape, 255, 255, 255);
+            SetShapeOutline(shape, 255, 0, 0, 4f);
+            ReleaseComObject(shape); shape = null;
+
+            // 5. Dashed outline
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "DashedOutline";
+            SetShapeSolidFill(shape, 255, 255, 204);  // light yellow
+            {
+                object? line = null;
+                try
+                {
+                    line = ((dynamic)shape).Line;
+                    ((dynamic)line).Visible = true;
+                    ((dynamic)line).ForeColor.RGB = ToOleColor(0, 0, 0);
+                    ((dynamic)line).Weight = 1.5f;
+                    try { ((dynamic)line).DashStyle = MsoLineDash; }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"  COM note: DashStyle failed: {ex.Message}");
+                    }
+                }
+                finally
+                {
+                    ReleaseComObject(line);
+                }
+            }
+            ReleaseComObject(shape); shape = null;
+
+            // 6. No outline
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "NoOutline";
+            SetShapeSolidFill(shape, 112, 173, 71);
+            SetShapeNoOutline(shape);
+            ReleaseComObject(shape); shape = null;
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 005 — rotation and flip
+    // =========================================================================
+    private static void GenerateShapesFixture_Rotation(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "Rotation", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Rotation & Flip");
+
+            float left = 20; float top = 50; float w = 100; float h = 60; float gap = 25;
+
+            // 30 degrees
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "Rot30";
+            SetShapeSolidFill(shape, 91, 155, 213);
+            SetShapeOutline(shape, 47, 85, 151);
+            try { ((dynamic)shape).Rotation = 30f; } catch (Exception ex) { Console.Error.WriteLine($"  COM note: Rotation=30 failed: {ex.Message}"); }
+            ReleaseComObject(shape); shape = null;
+
+            // 45 degrees
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "Rot45";
+            SetShapeSolidFill(shape, 255, 192, 0);
+            SetShapeOutline(shape, 192, 144, 0);
+            try { ((dynamic)shape).Rotation = 45f; } catch (Exception ex) { Console.Error.WriteLine($"  COM note: Rotation=45 failed: {ex.Message}"); }
+            ReleaseComObject(shape); shape = null;
+
+            // 90 degrees
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, left, top, w, h);
+            ((dynamic)shape).Name = "Rot90";
+            SetShapeSolidFill(shape, 112, 173, 71);
+            SetShapeOutline(shape, 84, 130, 53);
+            try { ((dynamic)shape).Rotation = 90f; } catch (Exception ex) { Console.Error.WriteLine($"  COM note: Rotation=90 failed: {ex.Message}"); }
+            ReleaseComObject(shape); shape = null;
+
+            // Flip horizontal (right arrow so flip is visible)
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeRightArrow, left, top, w, h);
+            ((dynamic)shape).Name = "FlipH";
+            SetShapeSolidFill(shape, 255, 102, 0);
+            SetShapeOutline(shape, 200, 77, 0);
+            try { ((dynamic)shape).Flip(0 /* msoFlipHorizontal */); } catch (Exception ex) { Console.Error.WriteLine($"  COM note: FlipH failed: {ex.Message}"); }
+            ReleaseComObject(shape); shape = null;
+
+            // Flip vertical
+            left += w + gap;
+            shape = AddAutoShape(worksheet, MsoShapeIsoscelesTriangle, left, top, w, h);
+            ((dynamic)shape).Name = "FlipV";
+            SetShapeSolidFill(shape, 155, 99, 178);
+            SetShapeOutline(shape, 116, 74, 133);
+            try { ((dynamic)shape).Flip(1 /* msoFlipVertical */); } catch (Exception ex) { Console.Error.WriteLine($"  COM note: FlipV failed: {ex.Message}"); }
+            ReleaseComObject(shape); shape = null;
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 006 — shape text (rectangle, ellipse, textbox)
+    // =========================================================================
+    private static void GenerateShapesFixture_Text(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "Text", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Shape Text");
+
+            // Rectangle with text
+            shape = AddAutoShape(worksheet, MsoShapeRectangle, 10, 36, 160, 70);
+            ((dynamic)shape).Name = "RectText";
+            SetShapeSolidFill(shape, 91, 155, 213);
+            SetShapeOutline(shape, 47, 85, 151);
+            try
+            {
+                object? tf2 = null;
+                object? tr = null;
+                try
+                {
+                    tf2 = ((dynamic)shape).TextFrame2;
+                    tr  = ((dynamic)tf2).TextRange;
+                    ((dynamic)tr).Text = "Hello Shape";
+                    ((dynamic)tr).Font.Bold = true;
+                    ((dynamic)tr).Font.Size = 14;
+                    ((dynamic)tr).Font.Fill.ForeColor.RGB = ToOleColor(255, 255, 255);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: TextFrame2 on rect failed: {ex.Message}; trying TextFrame");
+                    // Fallback to legacy TextFrame
+                    try
+                    {
+                        object? tf = ((dynamic)shape).TextFrame;
+                        object? chars = null;
+                        try
+                        {
+                            chars = ((dynamic)tf).Characters();
+                            ((dynamic)chars).Text = "Hello Shape";
+                            ((dynamic)chars).Font.Bold = true;
+                            ((dynamic)chars).Font.Size = 14;
+                        }
+                        finally
+                        {
+                            ReleaseComObject(chars);
+                            ReleaseComObject(tf);
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        Console.Error.WriteLine($"  COM note: TextFrame fallback also failed: {ex2.Message}");
+                    }
+                }
+                finally
+                {
+                    ReleaseComObject(tr);
+                    ReleaseComObject(tf2);
+                }
+            }
+            catch { }
+            ReleaseComObject(shape); shape = null;
+
+            // Ellipse with text
+            shape = AddAutoShape(worksheet, MsoShapeOval, 185, 36, 160, 70);
+            ((dynamic)shape).Name = "EllipseText";
+            SetShapeSolidFill(shape, 112, 173, 71);
+            SetShapeOutline(shape, 84, 130, 53);
+            try
+            {
+                object? tf2 = null;
+                object? tr = null;
+                try
+                {
+                    tf2 = ((dynamic)shape).TextFrame2;
+                    tr  = ((dynamic)tf2).TextRange;
+                    ((dynamic)tr).Text = "Ellipse";
+                    ((dynamic)tr).Font.Bold = false;
+                    ((dynamic)tr).Font.Size = 12;
+                    ((dynamic)tr).Font.Fill.ForeColor.RGB = ToOleColor(255, 255, 255);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: TextFrame2 on ellipse failed: {ex.Message}");
+                    try
+                    {
+                        object? tf = ((dynamic)shape).TextFrame;
+                        object? chars = null;
+                        try
+                        {
+                            chars = ((dynamic)tf).Characters();
+                            ((dynamic)chars).Text = "Ellipse";
+                        }
+                        finally
+                        {
+                            ReleaseComObject(chars);
+                            ReleaseComObject(tf);
+                        }
+                    }
+                    catch { }
+                }
+                finally
+                {
+                    ReleaseComObject(tr);
+                    ReleaseComObject(tf2);
+                }
+            }
+            catch { }
+            ReleaseComObject(shape); shape = null;
+
+            // Textbox with text
+            {
+                object? shapes = null;
+                object? tb = null;
+                try
+                {
+                    shapes = ((dynamic)worksheet).Shapes;
+                    tb = ((dynamic)shapes).AddTextbox(MsoTextOrientationHorizontal, 360, 36, 160, 70);
+                    ((dynamic)tb).Name = "TextBox";
+                    object? tf = null;
+                    object? chars = null;
+                    try
+                    {
+                        tf = ((dynamic)tb).TextFrame;
+                        chars = ((dynamic)tf).Characters();
+                        ((dynamic)chars).Text = "Text Box content";
+                        ((dynamic)chars).Font.Size = 11;
+                        ((dynamic)chars).Font.Bold = false;
+                        ((dynamic)chars).Font.Color = ToOleColor(0, 0, 0);
+                    }
+                    finally
+                    {
+                        ReleaseComObject(chars);
+                        ReleaseComObject(tf);
+                    }
+                }
+                finally
+                {
+                    ReleaseComObject(tb);
+                    ReleaseComObject(shapes);
+                }
+            }
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(shape);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 007 — lines and connectors
+    // =========================================================================
+    private static void GenerateShapesFixture_LineConn(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "LinesConn", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Lines & Connectors");
+
+            object? shapes = null;
+            object? line1  = null;
+            object? line2  = null;
+            object? conn1  = null;
+            try
+            {
+                shapes = ((dynamic)worksheet).Shapes;
+
+                // Straight line (AddLine: x1,y1,x2,y2 in points)
+                line1 = ((dynamic)shapes).AddLine(10, 50, 200, 50);
+                ((dynamic)line1).Name = "StraightLine";
+                {
+                    object? ln = null;
+                    try
+                    {
+                        ln = ((dynamic)line1).Line;
+                        ((dynamic)ln).ForeColor.RGB = ToOleColor(0, 112, 192);
+                        ((dynamic)ln).Weight = 2.5f;
+                        // Arrowhead at end
+                        try { ((dynamic)ln).EndArrowheadStyle = 2; /* msoArrowheadOpen */ } catch { }
+                    }
+                    finally { ReleaseComObject(ln); }
+                }
+
+                // Second straight line — dashed, thicker
+                line2 = ((dynamic)shapes).AddLine(10, 90, 200, 90);
+                ((dynamic)line2).Name = "DashedLine";
+                {
+                    object? ln = null;
+                    try
+                    {
+                        ln = ((dynamic)line2).Line;
+                        ((dynamic)ln).ForeColor.RGB = ToOleColor(255, 0, 0);
+                        ((dynamic)ln).Weight = 2f;
+                        try { ((dynamic)ln).DashStyle = MsoLineDash; } catch { }
+                        try { ((dynamic)ln).BeginArrowheadStyle = 2; ((dynamic)ln).EndArrowheadStyle = 2; } catch { }
+                    }
+                    finally { ReleaseComObject(ln); }
+                }
+
+                // Elbow connector
+                try
+                {
+                    conn1 = ((dynamic)shapes).AddConnector(2 /*msoConnectorElbow*/, 250, 36, 400, 100);
+                    ((dynamic)conn1).Name = "ElbowConnector";
+                    {
+                        object? ln = null;
+                        try
+                        {
+                            ln = ((dynamic)conn1).Line;
+                            ((dynamic)ln).ForeColor.RGB = ToOleColor(112, 173, 71);
+                            ((dynamic)ln).Weight = 2f;
+                            try { ((dynamic)ln).EndArrowheadStyle = 2; } catch { }
+                        }
+                        finally { ReleaseComObject(ln); }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddConnector (elbow) failed: {ex.Message}");
+                }
+            }
+            finally
+            {
+                ReleaseComObject(conn1);
+                ReleaseComObject(line2);
+                ReleaseComObject(line1);
+                ReleaseComObject(shapes);
+            }
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 008 — picture insertion
+    // =========================================================================
+    private static void GenerateShapesFixture_Picture(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? picture   = null;
+        string? tempPng   = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "Picture", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Picture");
+
+            // Write a minimal 10x10 PNG to a temp file
+            tempPng = Path.Combine(Path.GetTempPath(), $"freex_smoke_shape_pic_{Guid.NewGuid():N}.png");
+            WriteTiny10x10Png(tempPng);
+
+            object? shapes = null;
+            try
+            {
+                shapes = ((dynamic)worksheet).Shapes;
+                // AddPicture(filename, linkToFile, saveWithDocument, left, top, width, height)
+                picture = ((dynamic)shapes).AddPicture(
+                    tempPng,
+                    false,   // LinkToFile = msoFalse
+                    true,    // SaveWithDocument = msoTrue
+                    10f,     // left
+                    36f,     // top
+                    120f,    // width
+                    80f);    // height
+                ((dynamic)picture).Name = "EmbeddedPicture";
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  COM note: AddPicture failed: {ex.Message}");
+            }
+            finally
+            {
+                ReleaseComObject(picture); picture = null;
+                ReleaseComObject(shapes);
+            }
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(picture);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+            if (tempPng is not null && File.Exists(tempPng))
+                try { File.Delete(tempPng); } catch { }
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    /// <summary>
+    /// Write a minimal valid 10×10 24-bit PNG to <paramref name="path"/>.
+    /// Uses raw bytes so we have no external dependency.
+    /// </summary>
+    private static void WriteTiny10x10Png(string path)
+    {
+        // Minimal 10x10 solid orange PNG (hand-crafted, valid for all PNG readers).
+        // Generated from Python: 10x10 RGB (255,102,0) PNG, zlib-compressed IDAT.
+        // Lengths and CRCs are pre-computed.
+        byte[] pngBytes =
+        [
+            // PNG signature
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            // IHDR chunk: 13 bytes — width=10, height=10, bit_depth=8, color_type=2 (RGB), ...
+            0x00, 0x00, 0x00, 0x0D,   // length = 13
+            0x49, 0x48, 0x44, 0x52,   // "IHDR"
+            0x00, 0x00, 0x00, 0x0A,   // width = 10
+            0x00, 0x00, 0x00, 0x0A,   // height = 10
+            0x08,                     // bit depth = 8
+            0x02,                     // color type = 2 (RGB)
+            0x00,                     // compression = 0 (deflate)
+            0x00,                     // filter = 0
+            0x00,                     // interlace = 0
+            0x8D, 0x5B, 0x4F, 0x5B,   // CRC32 of IHDR
+            // IDAT chunk
+            0x00, 0x00, 0x00, 0x25,   // length = 37
+            0x49, 0x44, 0x41, 0x54,   // "IDAT"
+            // zlib deflate: 10 rows, each: filter-byte=0, 10 pixels RGB(255,102,0)
+            0x78, 0x9C,               // zlib header (deflate, default compression)
+            0x62, 0xF8, 0xCF, 0xC0,
+            0x00, 0x00, 0x00, 0xFF,
+            0x00, 0xFE, 0xFF, 0xFF,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xFF, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x03, 0xFC,
+            0x00, 0xBD, 0xFE, 0xFB, 0x05,   // Adler-32
+            // CRC32 of IDAT  (may be wrong for the above — use the safe approach below)
+            0x00, 0x00, 0x00, 0x00,
+            // IEND
+            0x00, 0x00, 0x00, 0x00,
+            0x49, 0x45, 0x4E, 0x44,
+            0xAE, 0x42, 0x60, 0x82,
+        ];
+        // The embedded zlib/CRC bytes above are placeholder; build a proper PNG programmatically
+        // using System.IO.Compression so it is always valid, regardless of platform endianness.
+        using var ms = new System.IO.MemoryStream();
+        WritePngSignature(ms);
+        WritePngIhdr(ms, 10, 10);
+        WritePngIdat(ms, 10, 10, 255, 102, 0);
+        WritePngIend(ms);
+        File.WriteAllBytes(path, ms.ToArray());
+    }
+
+    private static void WritePngSignature(System.IO.Stream s)
+    {
+        s.Write([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    }
+
+    private static void WritePngIhdr(System.IO.Stream s, int width, int height)
+    {
+        var data = new byte[13];
+        // width
+        data[0] = (byte)(width >> 24); data[1] = (byte)(width >> 16);
+        data[2] = (byte)(width >> 8);  data[3] = (byte)width;
+        // height
+        data[4] = (byte)(height >> 24); data[5] = (byte)(height >> 16);
+        data[6] = (byte)(height >> 8);  data[7] = (byte)height;
+        data[8]  = 8;  // bit depth
+        data[9]  = 2;  // color type RGB
+        data[10] = 0;  // compression
+        data[11] = 0;  // filter
+        data[12] = 0;  // interlace
+        WritePngChunk(s, "IHDR"u8.ToArray(), data);
+    }
+
+    private static void WritePngIdat(System.IO.Stream s, int width, int height, byte r, byte g, byte b)
+    {
+        // Raw image data: for each row, a filter byte (0 = None) then RGB pixels
+        var raw = new byte[height * (1 + width * 3)];
+        for (var row = 0; row < height; row++)
+        {
+            var offset = row * (1 + width * 3);
+            raw[offset] = 0; // filter type None
+            for (var col = 0; col < width; col++)
+            {
+                raw[offset + 1 + col * 3]     = r;
+                raw[offset + 1 + col * 3 + 1] = g;
+                raw[offset + 1 + col * 3 + 2] = b;
+            }
+        }
+
+        using var compressed = new System.IO.MemoryStream();
+        using (var deflate = new System.IO.Compression.ZLibStream(compressed, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            deflate.Write(raw, 0, raw.Length);
+
+        WritePngChunk(s, "IDAT"u8.ToArray(), compressed.ToArray());
+    }
+
+    private static void WritePngIend(System.IO.Stream s) =>
+        WritePngChunk(s, "IEND"u8.ToArray(), []);
+
+    private static void WritePngChunk(System.IO.Stream s, byte[] type, byte[] data)
+    {
+        var length = data.Length;
+        s.Write([(byte)(length >> 24), (byte)(length >> 16), (byte)(length >> 8), (byte)length]);
+        s.Write(type);
+        s.Write(data);
+        // CRC32 over type + data
+        var crc = Crc32(type, data);
+        s.Write([(byte)(crc >> 24), (byte)(crc >> 16), (byte)(crc >> 8), (byte)crc]);
+    }
+
+    private static uint Crc32(byte[] type, byte[] data)
+    {
+        var table = BuildCrc32Table();
+        uint crc = 0xFFFFFFFFu;
+        foreach (var b in type) crc = (crc >> 8) ^ table[(crc ^ b) & 0xFF];
+        foreach (var b in data) crc = (crc >> 8) ^ table[(crc ^ b) & 0xFF];
+        return crc ^ 0xFFFFFFFFu;
+    }
+
+    private static uint[] BuildCrc32Table()
+    {
+        var table = new uint[256];
+        for (uint i = 0; i < 256; i++)
+        {
+            var c = i;
+            for (var k = 0; k < 8; k++)
+                c = (c & 1) != 0 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            table[i] = c;
+        }
+        return table;
+    }
+
+    // =========================================================================
+    // case 009 — WordArt
+    // =========================================================================
+    private static void GenerateShapesFixture_WordArt(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "WordArt", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "WordArt");
+
+            object? shapes = null;
+            object? wa     = null;
+            try
+            {
+                shapes = ((dynamic)worksheet).Shapes;
+                // AddTextEffect(PresetTextEffect, text, fontName, fontSize, fontBold, fontItalic, left, top)
+                // msoTextEffect1 = 1
+                try
+                {
+                    wa = ((dynamic)shapes).AddTextEffect(
+                        1,              // msoTextEffect1
+                        "FreeX",        // text
+                        "Arial Black",  // fontName
+                        36f,            // fontSize
+                        false,          // fontBold (msoFalse)
+                        false,          // fontItalic
+                        10f,            // left
+                        36f);           // top
+                    ((dynamic)wa).Name = "WordArt1";
+                    Console.WriteLine("  COM note: WordArt AddTextEffect succeeded.");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddTextEffect (WordArt) failed: {ex.Message}. Generating placeholder rectangle instead.");
+                    // Fall back: a plain rectangle as placeholder so the fixture is still valid
+                    try
+                    {
+                        var fallback = ((dynamic)shapes).AddShape(MsoShapeRectangle, 10f, 36f, 200f, 60f);
+                        try
+                        {
+                            ((dynamic)fallback).Name = "WordArtPlaceholder";
+                            object? fill = null;
+                            try { fill = ((dynamic)fallback).Fill; ((dynamic)fill).Solid(); ((dynamic)fill).ForeColor.RGB = ToOleColor(200, 200, 200); }
+                            finally { ReleaseComObject(fill); }
+                            object? tf2 = null; object? tr = null;
+                            try
+                            {
+                                tf2 = ((dynamic)fallback).TextFrame2;
+                                tr  = ((dynamic)tf2).TextRange;
+                                ((dynamic)tr).Text = "WordArt N/A";
+                            }
+                            catch
+                            {
+                                object? tf = null; object? chars = null;
+                                try
+                                {
+                                    tf = ((dynamic)fallback).TextFrame;
+                                    chars = ((dynamic)tf).Characters();
+                                    ((dynamic)chars).Text = "WordArt N/A";
+                                }
+                                finally { ReleaseComObject(chars); ReleaseComObject(tf); }
+                            }
+                            finally { ReleaseComObject(tr); ReleaseComObject(tf2); }
+                        }
+                        finally { ReleaseComObject(fallback); }
+                    }
+                    catch (Exception ex2)
+                    {
+                        Console.Error.WriteLine($"  COM note: placeholder fallback also failed: {ex2.Message}");
+                    }
+                }
+            }
+            finally
+            {
+                ReleaseComObject(wa);
+                ReleaseComObject(shapes);
+            }
+
+            AnchorShapeUsedRange(worksheet);
             SaveExcelWorkbook(workbook, outputPath);
             workbook = null;
         }
