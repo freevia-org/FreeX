@@ -86,11 +86,16 @@ public static class CaptureRunner
 
         // Mount linDir as /work: container sees _publish-linux-x64/, out/, run.sh.
         var mount = linDir.Replace('\\', '/') + ":/work";
+        const string containerName = "freex-parity-capture-linux";
+        TryRemoveContainer(containerName); // clear any stale container from a previous aborted run
         Log($"Running {image} (mount {mount})...");
+        // A named container + timeout is a safety net: if the captured app ever fails to exit, the
+        // run is force-killed (and the container removed) instead of hanging forever. The PNGs +
+        // manifest are written before the app shuts down, so the comparison can still proceed.
         Run("docker", new[]
         {
-            "run", "--rm", "-v", mount, image, "bash", "-c", "tr -d '\\r' < /work/run.sh | bash",
-        }, repoRoot);
+            "run", "--rm", "--name", containerName, "-v", mount, image, "bash", "-c", "tr -d '\\r' < /work/run.sh | bash",
+        }, repoRoot, timeout: TimeSpan.FromMinutes(10), killContainerName: containerName);
 
         EnsureManifest(outDir, "linux");
         Log($"Linux capture PNGs + manifest in {outDir}");
@@ -147,7 +152,12 @@ public static class CaptureRunner
         File.WriteAllText(manifestPath, json);
     }
 
-    private static void Run(string fileName, string[] args, string workingDir)
+    private static void Run(
+        string fileName,
+        string[] args,
+        string workingDir,
+        TimeSpan? timeout = null,
+        string? killContainerName = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -161,8 +171,48 @@ public static class CaptureRunner
 
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start process '{fileName}'");
-        proc.WaitForExit();
+
+        if (timeout is { } limit)
+        {
+            if (!proc.WaitForExit((int)limit.TotalMilliseconds))
+            {
+                Console.Error.WriteLine(
+                    $"[capture] '{fileName}' did not exit within {limit.TotalMinutes:0.#} min — force-killing.");
+                if (killContainerName is not null)
+                    TryRemoveContainer(killContainerName);
+                try { proc.Kill(entireProcessTree: true); } catch { /* best effort */ }
+                throw new TimeoutException($"'{fileName}' did not exit within {limit}.");
+            }
+        }
+        else
+        {
+            proc.WaitForExit();
+        }
+
         if (proc.ExitCode != 0)
             throw new InvalidOperationException($"'{fileName}' exited with code {proc.ExitCode}.");
+    }
+
+    /// <summary>Best-effort <c>docker rm -f &lt;name&gt;</c> so a named container can't linger.</summary>
+    private static void TryRemoveContainer(string name)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("docker")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            psi.ArgumentList.Add("rm");
+            psi.ArgumentList.Add("-f");
+            psi.ArgumentList.Add(name);
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(15000);
+        }
+        catch
+        {
+            // No docker / no such container — nothing to clean up.
+        }
     }
 }

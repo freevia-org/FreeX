@@ -19591,6 +19591,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Lets the headless parity-capture coordinator close the window without the dirty-workbook
+    /// save prompt. The capture seeds/edits the workbook (so it is dirty by the end); without this
+    /// the <see cref="MainWindow_Closing"/> handler would cancel the close and pop a modal that
+    /// never gets answered under Xvfb, hanging the capture process. Mirrors the WPF host's
+    /// <c>SuppressNextClosePrompt</c>.
+    /// </summary>
+    internal void AllowCloseWithoutDirtyPromptForParityCapture() => _allowCloseWithoutDirtyPrompt = true;
+
     private async Task TryQuitApplicationAsync()
     {
         if (_isOpening || _isSaving)
