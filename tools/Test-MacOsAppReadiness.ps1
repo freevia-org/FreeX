@@ -1749,7 +1749,6 @@ function Test-SourceWiring {
                 "HasNativeFormatCellsMenuItem:",
                 "private async Task ShowFindDialogAsync()",
                 "private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)",
-                "private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)",
                 "private void NavigateToFindAllMatch(WorkbookFindAllMatch match)",
                 "FindOptions? options = null,",
                 "private async Task ShowReplaceDialogAsync()",
@@ -1774,9 +1773,7 @@ function Test-SourceWiring {
                 "{automationPrefix}LookInBox",
                 "{automationPrefix}MatchCaseBox",
                 "{automationPrefix}MatchEntireCellBox",
-                "`"FindAllResultsStatusText`"",
-                "`"FindAllResultsList`"",
-                "`"FindAllCloseButton`"",
+                "`"FindReplaceResultsList`"",
                 "`"ReplaceFindTextBox`"",
                 "`"ReplaceWithTextBox`"",
                 "`"ReplaceButton`"",
@@ -1806,7 +1803,7 @@ function Test-SourceWiring {
                 "FindLookIn.Comments",
                 "var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);",
                 "var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);",
-                "await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);",
+                "resultsList.ItemsSource = result.Matches;",
                 "var result = _session.GoToCell(match.Address);",
                 "replacement.Action == ReplaceDialogAction.ReplaceAll",
                 "replacement.Options,",
@@ -3045,7 +3042,7 @@ function Test-SourceWiring {
             Path = "shared\Free.Shared.AppServices\AtomicFileWriter.cs"
             Markers = @(
                 "public static class AtomicFileWriter",
-                "File.WriteAllText(tempPath, content);",
+                "fs.Flush(flushToDisk: true);",
                 "File.Move(tempPath, path, overwrite: true);"
             )
             OrderedPairs = @()

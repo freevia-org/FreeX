@@ -666,8 +666,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateFindOptionsControls(`\"Find`\", defaultLookInIndex: 0)");
         script.Should().Contain("{automationPrefix}WithinBox");
         script.Should().Contain("{automationPrefix}LookInBox");
-        script.Should().Contain("`\"FindAllResultsStatusText`\"");
-        script.Should().Contain("`\"FindAllResultsList`\"");
+        script.Should().Contain("`\"FindReplaceResultsList`\"");
         script.Should().Contain("_session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell)");
         script.Should().Contain("public WorkbookFindAllResult FindAll(");
         script.Should().Contain("private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)");
@@ -2432,7 +2431,6 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, "Previous Comment", requireGesture: false)
                     private async Task ShowFindDialogAsync()
                     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
-                    private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
                     private async Task ShowReplaceDialogAsync()
@@ -2458,9 +2456,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     {automationPrefix}LookInBox
                     {automationPrefix}MatchCaseBox
                     {automationPrefix}MatchEntireCellBox
-                    "FindAllResultsStatusText"
-                    "FindAllResultsList"
-                    "FindAllCloseButton"
+                    "FindReplaceResultsList"
                     "ReplaceFindTextBox"
                     "ReplaceWithTextBox"
                     "ReplaceButton"
@@ -2491,7 +2487,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     FindLookIn.Comments
                     var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);
                     var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
-                    await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
+                    resultsList.ItemsSource = result.Matches;
                     var result = _session.GoToCell(match.Address);
                     replacement.Action == ReplaceDialogAction.ReplaceAll
                     replacement.Options,
@@ -3599,7 +3595,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static void WriteAllText(string path, string content)
                 {
-                    File.WriteAllText(tempPath, content);
+                    fs.Flush(flushToDisk: true);
                     File.Move(tempPath, path, overwrite: true);
                 }
             }

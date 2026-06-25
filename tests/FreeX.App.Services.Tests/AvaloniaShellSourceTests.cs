@@ -4631,7 +4631,6 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_goToSpecialMenuItem.IsEnabled = isIdle;");
         source.Should().Contain("private async Task ShowFindDialogAsync()");
         source.Should().Contain("private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)");
-        source.Should().Contain("private async Task ShowFindAllResultsDialogAsync(string searchText, IReadOnlyList<WorkbookFindAllMatch> matches)");
         source.Should().Contain("private void NavigateToFindAllMatch(WorkbookFindAllMatch match)");
         source.Should().Contain("FindOptions? options = null,");
         source.Should().Contain("private async Task ShowReplaceDialogAsync()");
@@ -4657,9 +4656,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("{automationPrefix}LookInBox");
         source.Should().Contain("{automationPrefix}MatchCaseBox");
         source.Should().Contain("{automationPrefix}MatchEntireCellBox");
-        source.Should().Contain("\"FindAllResultsStatusText\"");
-        source.Should().Contain("\"FindAllResultsList\"");
-        source.Should().Contain("\"FindAllCloseButton\"");
+        source.Should().Contain("\"FindReplaceResultsList\"");
         source.Should().Contain("\"ReplaceFindTextBox\"");
         source.Should().Contain("\"ReplaceWithTextBox\"");
         source.Should().Contain("\"ReplaceButton\"");
