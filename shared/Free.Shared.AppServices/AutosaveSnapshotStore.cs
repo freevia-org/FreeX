@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -166,7 +167,20 @@ public sealed class AutosaveSnapshotStore
                     if (sidecar is null)
                         continue;
 
-                    candidates.Add(new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar));
+                    var candidate = new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
+
+                    // A snapshot is an OPC/ZIP package (.docx/.xlsx/.pptx). If it is not a readable
+                    // archive (e.g. truncated by a crash mid-write), it can never be recovered — quarantine
+                    // it and skip, so it is NEVER offered. This stops the modal "Could not recover the
+                    // document: End of Central Directory record could not be found" error at the source,
+                    // rather than surfacing it once on the open attempt.
+                    if (!IsReadableArchive(snapshotPath))
+                    {
+                        QuarantineCandidate(candidate);
+                        continue;
+                    }
+
+                    candidates.Add(candidate);
                 }
                 catch
                 {
@@ -191,6 +205,25 @@ public sealed class AutosaveSnapshotStore
 
         try { File.Delete(candidate.SnapshotPath); } catch { /* best-effort */ }
         try { File.Delete(candidate.SidecarPath); } catch { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// True if <paramref name="path"/> is a readable ZIP/OPC archive. A snapshot that fails this check
+    /// is a truncated/corrupt package (e.g. the writing process was killed mid-write) and is
+    /// unrecoverable. Cheap — only opens the central directory, does not read entry contents.
+    /// </summary>
+    private static bool IsReadableArchive(string path)
+    {
+        try
+        {
+            using var archive = ZipFile.OpenRead(path);
+            _ = archive.Entries.Count;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

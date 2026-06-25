@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using Free.Shared.AppServices;
 using FreeW.App.Host;
 
@@ -33,7 +34,9 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         var snapshotPath = Path.Combine(_recoveryDir, id + ".fxl");
         var sidecarPath = Path.Combine(_recoveryDir, id + ".sidecar.json");
 
-        File.WriteAllText(snapshotPath, "dummy snapshot content");
+        // A real snapshot is an OPC/ZIP package; EnumerateCandidates now validates that, so the test
+        // snapshot must be a readable archive (not plain text) to be enumerated as a valid candidate.
+        WriteMinimalZip(snapshotPath);
         var sidecar = new AutosaveSidecar
         {
             DisplayName = displayName,
@@ -44,6 +47,43 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         File.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 
         return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
+    }
+
+    /// <summary>Writes a minimal but valid ZIP/OPC package so the snapshot passes the readable-archive check.</summary>
+    private static void WriteMinimalZip(string path)
+    {
+        using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
+        using var entry = zip.CreateEntry("[Content_Types].xml").Open();
+        var bytes = System.Text.Encoding.UTF8.GetBytes("<Types/>");
+        entry.Write(bytes, 0, bytes.Length);
+    }
+
+    /// <summary>
+    /// Regression for the "Could not recover the document: End of Central Directory record could not be
+    /// found" error: a corrupt/truncated snapshot (not a readable ZIP) must be skipped by
+    /// EnumerateCandidates entirely — so it is NEVER offered for recovery and no modal error fires —
+    /// and quarantined off to the side (bytes preserved, removed from the recovery dir).
+    /// </summary>
+    [Fact]
+    public void CorruptSnapshot_IsSkippedAndQuarantined_NeverEnumerated()
+    {
+        // A valid candidate and a corrupt one (plain text, not a ZIP) sharing the recovery dir.
+        var good = CreateCandidate("good-snap", "2026-06-25T09:00:00Z", "Good Doc");
+        var badSnapshot = Path.Combine(_recoveryDir, "bad-snap.fxl");
+        File.WriteAllText(badSnapshot, "not a zip — truncated mid-write");
+        File.WriteAllText(Path.Combine(_recoveryDir, "bad-snap.sidecar.json"),
+            AutosaveSnapshotStore.SerializeSidecar(new AutosaveSidecar
+            { DisplayName = "Corrupt Doc", TimestampUtc = "2026-06-25T10:00:00Z", SnapshotId = "bad-snap" }));
+
+        var store = new AutosaveSnapshotStore(_recoveryDir);
+        var candidates = store.EnumerateCandidates();
+
+        // Only the good candidate is enumerated; the corrupt one is silently skipped.
+        candidates.Should().ContainSingle(c => c.SnapshotPath == good.SnapshotPath);
+        candidates.Should().NotContain(c => c.SnapshotPath == badSnapshot);
+        // The corrupt snapshot is moved out of the recovery dir (quarantined), not left to retry.
+        File.Exists(badSnapshot).Should().BeFalse();
+        Directory.GetFiles(Path.Combine(_recoveryDir, "Quarantine")).Should().Contain(p => p.EndsWith(".fxl"));
     }
 
     [Fact]
