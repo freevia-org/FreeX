@@ -57,6 +57,7 @@
     <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
     <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
   </Folder>
@@ -73,6 +74,7 @@
     <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
+    <Project Path="tools/FreeP.RenderCompare/FreeP.RenderCompare.csproj" />
     <Project Path="tools/FreeX.SheetFidelity/FreeX.SheetFidelity.csproj" />
     <Project Path="tools/FreeX.SheetGridImageCompare/FreeX.SheetGridImageCompare.csproj" />
     <Project Path="tools/FreeX.SheetImageCompare/FreeX.SheetImageCompare.csproj" />

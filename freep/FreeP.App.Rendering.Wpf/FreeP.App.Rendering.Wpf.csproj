@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    WPF rasterisation library for FreeP.
+    Contains SlideCanvas (WPF FrameworkElement) that paints SlideCompositor draw ops.
+    Referenced by both FreeP.App.Host (live display) and tools/FreeP.RenderCompare
+    (off-screen PNG rasterisation for parity comparison).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
+    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+  </ItemGroup>
+
+</Project>

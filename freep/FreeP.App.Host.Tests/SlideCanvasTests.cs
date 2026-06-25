@@ -1,5 +1,6 @@
 using System.Windows;
 using FreeP.App.Host;
+using FreeP.App.Rendering.Wpf;
 
 namespace FreeP.App.Host.Tests;
 

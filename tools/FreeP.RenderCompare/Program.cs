@@ -7,21 +7,23 @@ using System.Linq;
 namespace FreeP.RenderCompare;
 
 /// <summary>
-/// FreeP Render Compare — interop harness for Wave 1E.
+/// FreeP Render Compare — interop harness for Wave 1F.
 ///
 /// Modes:
 ///   --powerpoint-export &lt;pptx&gt; &lt;outDir&gt; [--width W] [--height H]
 ///       Drive PowerPoint COM to export each slide to outDir/slide-NN.png.
 ///       Default size: 1280×720 (16:9).
 ///
-///   --freep-render &lt;pptx&gt; &lt;outDir&gt;
-///       STUB — reserved for FreeP renderer (Wave 1D).  Exits with code 3 and
-///       prints a TODO message.  Wire in a follow-up once FreeP.App.Presentation
-///       lands on the branch.
+///   --freep-render &lt;pptx&gt; &lt;outDir&gt; [--width W] [--height H]
+///       Render via FreeP WPF renderer (SlideCanvas) off-screen and save PNG per slide.
 ///
 ///   --diff &lt;a.png&gt; &lt;b.png&gt; [--heatmap &lt;out.png&gt;]
 ///       Pixel-diff two PNG files.  Reports mean channel diff % and max channel
 ///       diff value; optionally writes a false-colour heatmap PNG.
+///
+///   --compare &lt;deck.pptx&gt; &lt;outDir&gt; [--width W] [--height H]
+///       Convenience: runs both --powerpoint-export and --freep-render, then
+///       diffs every paired slide, prints a table, and writes diff heatmaps.
 ///
 ///   --generate-corpus &lt;outDir&gt;
 ///       Author four deterministic test decks via PowerPoint COM and save them to
@@ -51,8 +53,9 @@ internal static class Program
             return mode switch
             {
                 "--powerpoint-export" => RunPowerPointExport(args[1..]),
-                "--freep-render"      => RunFreePRenderStub(args[1..]),
+                "--freep-render"      => RunFreePRender(args[1..]),
                 "--diff"              => RunDiff(args[1..]),
+                "--compare"           => RunCompare(args[1..]),
                 "--generate-corpus"   => RunGenerateCorpus(args[1..]),
                 _                     => PrintUsageAndError($"Unknown mode: {args[0]}")
             };
@@ -79,13 +82,7 @@ internal static class Program
         var pptxPath = Path.GetFullPath(args[0]);
         var outDir   = Path.GetFullPath(args[1]);
 
-        int width  = 1280;
-        int height = 720;
-        for (var i = 2; i < args.Length - 1; i++)
-        {
-            if (args[i].Equals("--width",  StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var w)) { width  = w; i++; }
-            else if (args[i].Equals("--height", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var h)) { height = h; i++; }
-        }
+        (int width, int height) = ParseWidthHeight(args[2..], 1280, 720);
 
         if (!File.Exists(pptxPath))
         {
@@ -104,35 +101,28 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
-    // Mode: --freep-render  (STUB — Wave 1D seam)
+    // Mode: --freep-render
     // -----------------------------------------------------------------------
-    private static int RunFreePRenderStub(string[] args)
+    private static int RunFreePRender(string[] args)
     {
-        // TODO (Wave 1D follow-up): wire FreeP.App.Presentation compositor here.
-        //
-        // Contract the FreeP-render side must implement:
-        //   1. Load the .pptx via FreeP.Core.IO.PptxPackageReader -> FreeP.Core.Model.Presentation.
-        //   2. For each slide index N (1-based), call FreeP.App.Presentation.SlideRenderer
-        //      (or equivalent) to produce a BitmapSource at the requested resolution.
-        //   3. Save the BitmapSource as PNG to <outDir>/slide-NN.png (same naming as
-        //      PowerPoint export so --diff can pair them by filename).
-        //   4. Return 0 on full success, 1 on fatal failure, 2 on partial (some slides failed).
-        //
-        // Once wired, replace this method body with the real implementation and remove
-        // this comment block.  The --diff mode is already fully functional and will
-        // immediately start comparing the two sets.
-
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("usage: --freep-render <pptx> <outDir>");
+            Console.Error.WriteLine("usage: --freep-render <pptx> <outDir> [--width W] [--height H]");
             return 2;
         }
 
-        Console.Error.WriteLine("--freep-render is not yet implemented (Wave 1D stub).");
-        Console.Error.WriteLine("TODO: wire FreeP.App.Presentation.SlideRenderer here.");
-        Console.Error.WriteLine($"  input  : {args[0]}");
-        Console.Error.WriteLine($"  outDir : {args[1]}");
-        return 3;
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outDir   = Path.GetFullPath(args[1]);
+
+        (int width, int height) = ParseWidthHeight(args[2..], 1280, 720);
+
+        if (!File.Exists(pptxPath))
+        {
+            Console.Error.WriteLine($"File not found: {pptxPath}");
+            return 1;
+        }
+
+        return FreePRenderer.Render(pptxPath, outDir, width, height);
     }
 
     // -----------------------------------------------------------------------
@@ -179,6 +169,97 @@ internal static class Program
     }
 
     // -----------------------------------------------------------------------
+    // Mode: --compare  (convenience: pptx-export + freep-render + per-slide diff)
+    // -----------------------------------------------------------------------
+    private static int RunCompare(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --compare <deck.pptx> <outDir> [--width W] [--height H]");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outDir   = Path.GetFullPath(args[1]);
+
+        (int width, int height) = ParseWidthHeight(args[2..], 1280, 720);
+
+        if (!File.Exists(pptxPath))
+        {
+            Console.Error.WriteLine($"File not found: {pptxPath}");
+            return 1;
+        }
+
+        Directory.CreateDirectory(outDir);
+
+        var ppDir    = Path.Combine(outDir, "powerpoint");
+        var freepDir = Path.Combine(outDir, "freep");
+        Directory.CreateDirectory(ppDir);
+        Directory.CreateDirectory(freepDir);
+
+        Console.WriteLine("=== Step 1: PowerPoint export ===");
+        int rc1 = PowerPointInterop.ExportSlidesToPng(pptxPath, ppDir, width, height);
+        if (rc1 != 0)
+        {
+            Console.Error.WriteLine($"PowerPoint export failed (rc={rc1}). Aborting.");
+            return rc1;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("=== Step 2: FreeP render ===");
+        int rc2 = FreePRenderer.Render(pptxPath, freepDir, width, height);
+        if (rc2 == 1)
+        {
+            Console.Error.WriteLine($"FreeP render failed fatally (rc={rc2}). Aborting.");
+            return rc2;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("=== Step 3: Per-slide diff ===");
+
+        // Enumerate matched slide pairs.
+        var ppFiles = Directory.GetFiles(ppDir, "slide-*.png")
+            .OrderBy(f => f)
+            .ToList();
+
+        Console.WriteLine();
+        Console.WriteLine($"{"Slide",-8} {"Mean%",9} {"Max/255",9}");
+        Console.WriteLine(new string('-', 32));
+
+        var results = new List<(string slide, double mean, int max)>();
+
+        foreach (var ppFile in ppFiles)
+        {
+            string name      = Path.GetFileName(ppFile);           // "slide-01.png"
+            string slideId   = Path.GetFileNameWithoutExtension(name); // "slide-01"
+            string freepFile = Path.Combine(freepDir, name);
+            if (!File.Exists(freepFile))
+            {
+                Console.WriteLine($"{slideId,-8} {"(no FreeP output)",-20}");
+                continue;
+            }
+
+            string heatmapPath = Path.Combine(outDir, $"diff-{slideId[6..]}.png"); // e.g. diff-01.png
+            var diff = ImageDiff.Compare(ppFile, freepFile, heatmapPath);
+            results.Add((slideId, diff.MeanChannelDiffPercent, diff.MaxChannelDiff));
+            Console.WriteLine($"{slideId,-8} {diff.MeanChannelDiffPercent,9:F4} {diff.MaxChannelDiff,9}");
+        }
+
+        Console.WriteLine(new string('-', 32));
+        if (results.Count > 0)
+        {
+            double avgMean = results.Average(r => r.mean);
+            int    maxMax  = results.Max(r => r.max);
+            Console.WriteLine($"{"AVG",-8} {avgMean,9:F4} {maxMax,9}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Output directory: {outDir}");
+
+        return rc2; // 0 or 2 (partial)
+    }
+
+    // -----------------------------------------------------------------------
     // Mode: --generate-corpus
     // -----------------------------------------------------------------------
     private static int RunGenerateCorpus(string[] args)
@@ -199,19 +280,34 @@ internal static class Program
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+    private static (int width, int height) ParseWidthHeight(string[] args, int defaultWidth, int defaultHeight)
+    {
+        int width = defaultWidth;
+        int height = defaultHeight;
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals("--width",  StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var w)) { width  = w; i++; }
+            else if (args[i].Equals("--height", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out var h)) { height = h; i++; }
+        }
+        return (width, height);
+    }
+
     private static void PrintUsage()
     {
-        Console.WriteLine("FreeP.RenderCompare — PowerPoint interop harness (Wave 1E)");
+        Console.WriteLine("FreeP.RenderCompare — PowerPoint interop harness (Wave 1F)");
         Console.WriteLine();
         Console.WriteLine("Modes:");
         Console.WriteLine("  --powerpoint-export <pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      Export each slide via PowerPoint COM to PNG.");
         Console.WriteLine();
-        Console.WriteLine("  --freep-render <pptx> <outDir>   (stub — Wave 1D seam)");
-        Console.WriteLine("      Render via FreeP renderer. Not yet wired.");
+        Console.WriteLine("  --freep-render <pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("      Render via FreeP WPF renderer (SlideCanvas) off-screen.");
         Console.WriteLine();
         Console.WriteLine("  --diff <a.png> <b.png> [--heatmap <out.png>]");
         Console.WriteLine("      Pixel-diff two PNGs; report mean/max channel diff.");
+        Console.WriteLine();
+        Console.WriteLine("  --compare <deck.pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("      Run both exporters + diff all slides; print parity table.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");

@@ -12,6 +12,8 @@
   <Folder Name="/freep/">
     <Project Path="freep/FreeP.Core.Model/FreeP.Core.Model.csproj" />
     <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
     <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
   </Folder>

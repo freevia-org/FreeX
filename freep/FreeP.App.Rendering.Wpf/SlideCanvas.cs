@@ -1,4 +1,4 @@
-﻿using FreeP.App.Compositor;
+using FreeP.App.Compositor;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -6,21 +6,21 @@ using System.Windows.Media.Imaging;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
-namespace FreeP.App.Host;
+namespace FreeP.App.Rendering.Wpf;
 
 /// <summary>
 /// A WPF panel that renders a single <see cref="Slide"/> using the framework-free
 /// <see cref="SlideCompositor"/> to produce draw operations and converts them to WPF primitives.
 ///
 /// Usage: set <see cref="Presentation"/> and <see cref="Slide"/>, call <see cref="Refresh"/>
-/// or set the properties â€” the canvas redraws automatically.
+/// or set the properties — the canvas redraws automatically.
 ///
 /// The control uses OnRender (DrawingContext) to paint all operations directly, which avoids
 /// creating a large visual tree of WPF elements for each shape.
 /// </summary>
 public sealed class SlideCanvas : FrameworkElement
 {
-    // â”€â”€ Dependency properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Dependency properties ──────────────────────────────────────────────────
 
     public static readonly DependencyProperty PresentationProperty =
         DependencyProperty.Register(
@@ -53,7 +53,7 @@ public sealed class SlideCanvas : FrameworkElement
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((SlideCanvas)d).Refresh();
 
-    // â”€â”€ Cached draw ops (invalidated on model change) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;
     private double _slideWidthDip;
@@ -66,7 +66,7 @@ public sealed class SlideCanvas : FrameworkElement
         InvalidateVisual();
     }
 
-    // â”€â”€ Layout: maintain slide aspect ratio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Layout: maintain slide aspect ratio ────────────────────────────────────
 
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -88,7 +88,7 @@ public sealed class SlideCanvas : FrameworkElement
         return new Size(Math.Max(1, w), Math.Max(1, h));
     }
 
-    // â”€â”€ Rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Rendering ──────────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -103,7 +103,7 @@ public sealed class SlideCanvas : FrameworkElement
         double renderH = ActualHeight;
         if (renderW <= 0 || renderH <= 0) return;
 
-        // Scale slide DIP coordinates â†’ actual render pixels (uniform fit).
+        // Scale slide DIP coordinates → actual render pixels (uniform fit).
         double scale = Math.Min(renderW / _slideWidthDip, renderH / _slideHeightDip);
         double offsetX = (renderW - _slideWidthDip * scale) / 2;
         double offsetY = (renderH - _slideHeightDip * scale) / 2;
@@ -136,7 +136,7 @@ public sealed class SlideCanvas : FrameworkElement
         }
     }
 
-    // â”€â”€ Background â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Background ─────────────────────────────────────────────────────────────
 
     private static void RenderBackground(DrawingContext dc, DrawOp.Background bg)
     {
@@ -147,7 +147,7 @@ public sealed class SlideCanvas : FrameworkElement
             new Rect(bg.BoundsDip.X, bg.BoundsDip.Y, bg.BoundsDip.Width, bg.BoundsDip.Height));
     }
 
-    // â”€â”€ AutoShape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── AutoShape ──────────────────────────────────────────────────────────────
 
     private static void RenderShape(DrawingContext dc, DrawOp.Shape shape)
     {
@@ -198,7 +198,7 @@ public sealed class SlideCanvas : FrameworkElement
         return group;
     }
 
-    // â”€â”€ Picture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Picture ────────────────────────────────────────────────────────────────
 
     private static void RenderPicture(DrawingContext dc, DrawOp.Picture pic)
     {
@@ -237,7 +237,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (hasRotation) dc.Pop();
     }
 
-    // â”€â”€ Text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Text ────────────────────────────────────────────────────────────────────
 
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
@@ -363,7 +363,7 @@ public sealed class SlideCanvas : FrameworkElement
         return ft;
     }
 
-    // â”€â”€ WPF primitive helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── WPF primitive helpers ──────────────────────────────────────────────────
 
     private static Brush? MakeBrush(ResolvedFill fill, LayoutRect bounds) => fill switch
     {
@@ -376,13 +376,13 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static Brush MakeGradientBrush(ResolvedFill.Gradient g, LayoutRect bounds)
     {
-        // Angle: 0 = leftâ†’right, 90 = topâ†’bottom.
+        // Angle: 0 = left→right, 90 = top→bottom.
         double angleRad = g.AngleDegrees * Math.PI / 180.0;
         double cos = Math.Cos(angleRad);
         double sin = Math.Sin(angleRad);
 
         // Map angle to WPF start/end points (GradientBrush uses 0,0..1,1 relative space).
-        // 0Â° â†’ left to right; 90Â° â†’ top to bottom
+        // 0° → left to right; 90° → top to bottom
         var startPoint = new Point(
             cos >= 0 ? 0 : 1,
             sin >= 0 ? 0 : 1);
@@ -434,7 +434,7 @@ public sealed class SlideCanvas : FrameworkElement
         return brush;
     }
 
-    // â”€â”€ ShapeGeometry â†’ WPF StreamGeometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── ShapeGeometry → WPF StreamGeometry ─────────────────────────────────────
 
     private static System.Windows.Media.Geometry ContourListToGeometry(ShapeGeometry shape)
     {
@@ -479,7 +479,7 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static Point ToPoint(LayoutPoint p) => new(p.X, p.Y);
 
-    // â”€â”€ Composition helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Composition helper ──────────────────────────────────────────────────────
 
     private void EnsureOps()
     {
@@ -501,4 +501,3 @@ public sealed class SlideCanvas : FrameworkElement
         _cachedOps = SlideCompositor.Compose(presentation, slide);
     }
 }
-

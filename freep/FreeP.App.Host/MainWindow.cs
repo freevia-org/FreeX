@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
 using FreeP.App.Host.Backstage;
+using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
