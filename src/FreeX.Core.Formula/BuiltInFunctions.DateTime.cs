@@ -324,9 +324,17 @@ public static partial class BuiltInFunctions
     {
         try
         {
-            var anchor = new DateTime(end.Year, start.Month, start.Day);
-            var adjustedStart = anchor > end ? anchor.AddYears(-1) : anchor;
-            return new NumberValue(DateToSerial(end) - DateToSerial(adjustedStart));
+            // Clamp start.Day in case start is Feb 29 (leap) and anchor year is non-leap.
+            int anchorYear = end.Year;
+            int clampedDay = Math.Min(start.Day, DateTime.DaysInMonth(anchorYear, start.Month));
+            var anchor = new DateTime(anchorYear, start.Month, clampedDay);
+            if (anchor > end)
+            {
+                int prevYear = anchorYear - 1;
+                clampedDay = Math.Min(start.Day, DateTime.DaysInMonth(prevYear, start.Month));
+                anchor = new DateTime(prevYear, start.Month, clampedDay);
+            }
+            return new NumberValue(DateToSerial(end) - DateToSerial(anchor));
         }
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }
@@ -335,11 +343,13 @@ public static partial class BuiltInFunctions
     {
         try
         {
-            if (end.Day >= start.Day)
-                return new NumberValue(end.Day - start.Day);
+            // Clamp start.Day in case start is Feb 29 (leap) and end month is in a non-leap year.
+            int clampedStartDay = Math.Min(start.Day, DaysInExcelMonth(end.Year, end.Month));
+            if (end.Day >= clampedStartDay)
+                return new NumberValue(end.Day - clampedStartDay);
             int prevYear  = end.Month == 1 ? end.Year - 1 : end.Year;
             int prevMonth = end.Month == 1 ? 12 : end.Month - 1;
-            return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - start.Day);
+            return new NumberValue(end.Day + DaysInExcelMonth(prevYear, prevMonth) - clampedStartDay);
         }
         catch (ArgumentOutOfRangeException) { return ErrorValue.Num; }
     }

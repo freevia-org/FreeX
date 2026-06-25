@@ -192,4 +192,22 @@ public sealed class LocTests
         });
         frenchKeys.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public void Format_MismatchedPlaceholderCount_DoesNotThrow()
+    {
+        // Regression for F20: a localized string with more positional placeholders than supplied
+        // args (translation drift) must not throw FormatException; it should fall back to the
+        // raw template string.
+        //
+        // "PivotOptions_Title" has the template "PivotTable Options ({0})"; calling Format with
+        // zero args triggers FormatException in string.Format. The fix catches it and returns
+        // the raw template instead of throwing.
+        string? result = null;
+        var act = () => { result = WithUiCulture("en-US", () => Loc.Format("PivotOptions_Title" /* no {0} arg */)); };
+
+        act.Should().NotThrow();
+        // Falls back to the raw template, which is non-empty.
+        result.Should().NotBeNullOrWhiteSpace();
+    }
 }

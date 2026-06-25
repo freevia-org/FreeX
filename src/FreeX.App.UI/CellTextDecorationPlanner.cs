@@ -11,7 +11,10 @@ public static class CellTextDecorationPlanner
             return null;
 
         var decorations = new TextDecorationCollection();
-        if (style.Underline || style.DoubleUnderline)
+        // Single underline: apply via TextDecorations (WPF FormattedText).
+        // Double underline: do NOT add a TextDecoration here — the host's DrawCellText draws
+        // two manual strokes for double-underline, so adding one here would produce 3 lines total.
+        if (style.Underline)
             foreach (var decoration in TextDecorations.Underline)
                 decorations.Add(decoration);
         if (style.Strikethrough)

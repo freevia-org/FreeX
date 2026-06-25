@@ -103,8 +103,11 @@ public static class FormatCellsNumberFormatPlanner
             .Distinct()
             .ToArray();
 
-    public static string? ResolveNumberFormat(string text, int selectedIndex)
+    public static string? ResolveNumberFormat(string? text, int selectedIndex)
     {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
         var trimmedText = text.Trim();
         if (!string.IsNullOrWhiteSpace(trimmedText))
             return FindOption(trimmedText)?.Code ?? trimmedText;
@@ -480,6 +483,11 @@ public static class FormatCellsNumberFormatPlanner
 
     private static bool LooksLikeDateTimeFormat(string format)
     {
+        // LCID-only long-date/long-time codes: [$-F800] = system long date, [$-F400] = system long time.
+        if (format.Equals("[$-F800]", StringComparison.OrdinalIgnoreCase) ||
+            format.Equals("[$-F400]", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         var lower = format.ToLowerInvariant();
         return lower.Contains('y')
             || lower.Contains("am/pm", StringComparison.Ordinal)

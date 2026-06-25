@@ -914,9 +914,10 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         {
             hasStyle = true;
             style.FillPatternStyle = MapFillPattern(pattern.FillPattern);
-            if (pattern.FillForegroundColor != 0)
+            // Index 64 is the BIFF/HSSF automatic-color sentinel; index 0 is a real palette entry.
+            if (pattern.FillPattern != FillPattern.NoFill && pattern.FillForegroundColor != 64)
                 style.FillColor = GetIndexedColor(sourceWorkbook, pattern.FillForegroundColor);
-            if (pattern.FillBackgroundColor != 0)
+            if (pattern.FillBackgroundColor != 0 && pattern.FillBackgroundColor != 64)
                 style.FillPatternColor = GetIndexedColor(sourceWorkbook, pattern.FillBackgroundColor);
         }
 
@@ -2455,7 +2456,9 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             BorderLeft = new CellBorder(MapBorderStyle(sourceStyle.BorderLeft), GetIndexedColor(sourceWorkbook, sourceStyle.LeftBorderColor))
         };
 
-        if (sourceStyle.FillForegroundColor != 0)
+        // Index 64 is the BIFF/HSSF automatic-color sentinel (HSSFColor.Automatic.Index);
+        // index 0 is a real palette entry (black) and must not be excluded.
+        if (sourceStyle.FillPattern != FillPattern.NoFill && sourceStyle.FillForegroundColor != 64)
             style.FillColor = GetIndexedColor(sourceWorkbook, sourceStyle.FillForegroundColor);
 
         var font = sourceWorkbook.GetFontAt(sourceStyle.FontIndex);

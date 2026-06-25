@@ -50,6 +50,8 @@ internal static class XlsxXmlTextEscaper
     ///
     /// Characters that are valid XML chars (other than CR) are written verbatim; tab (U+0009),
     /// LF (U+000A), and the entire Basic Multilingual Plane printable range pass through unchanged.
+    /// Valid UTF-16 surrogate pairs (astral-plane characters such as emoji) are passed through
+    /// verbatim as a pair — only lone/unpaired surrogates are escaped.
     /// </summary>
     public static string EscapeForXml(string value)
     {
@@ -65,9 +67,24 @@ internal static class XlsxXmlTextEscaper
         var step1 = OoxmlEscapeSequencePattern.Replace(value, m => "_x005F_" + m.Value[1..]);
 
         // Step 2: encode CR and XML-invalid characters.
+        // Valid surrogate pairs are passed through verbatim (both code units together form a
+        // valid Unicode scalar value that XML 1.0 accepts).  Only lone/unpaired surrogates
+        // (which are not valid Unicode) are escaped as _xHHHH_.
         var sb = new StringBuilder(step1.Length + 16);
-        foreach (var ch in step1)
+        var len = step1.Length;
+        for (var i = 0; i < len; i++)
         {
+            var ch = step1[i];
+
+            // Detect a valid high+low surrogate pair — pass both code units through verbatim.
+            if (char.IsHighSurrogate(ch) && i + 1 < len && char.IsLowSurrogate(step1[i + 1]))
+            {
+                sb.Append(ch);
+                sb.Append(step1[i + 1]);
+                i++; // skip the low surrogate
+                continue;
+            }
+
             if (ch == '\r' || !XmlConvert.IsXmlChar(ch))
             {
                 sb.Append('_');
@@ -90,8 +107,19 @@ internal static class XlsxXmlTextEscaper
     /// </summary>
     private static bool NeedsEscaping(string value)
     {
-        foreach (var ch in value)
+        var len = value.Length;
+        for (var i = 0; i < len; i++)
         {
+            var ch = value[i];
+
+            // A valid surrogate pair represents a legal astral-plane code point — skip both
+            // code units; they do not need escaping.
+            if (char.IsHighSurrogate(ch) && i + 1 < len && char.IsLowSurrogate(value[i + 1]))
+            {
+                i++; // skip low surrogate
+                continue;
+            }
+
             if (ch == '\r' || !XmlConvert.IsXmlChar(ch))
                 return true;
         }

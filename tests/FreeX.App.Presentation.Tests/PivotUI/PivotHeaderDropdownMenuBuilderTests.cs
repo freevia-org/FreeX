@@ -200,4 +200,35 @@ public sealed class PivotHeaderDropdownMenuBuilderTests
 
         menu.Items.Single(i => i.Action == PivotHeaderMenuAction.ExpandField).IsEnabled.Should().BeFalse();
     }
+
+    [Fact]
+    public void BuildTargets_ValueFilterWithNullSourceFieldIndex_DoesNotMarkUnrelatedFieldActive()
+    {
+        // Regression for F15: a value filter with SourceFieldIndex == null (e.g. parsed from
+        // XLSX with no field attr) must NOT light up the active-state dot on every field.
+        var pivot = BuildPivot();
+        // Add a value filter that has no source field association (null SourceFieldIndex),
+        // e.g. parsed from XLSX <filter> with no field attribute. DataFieldIndex = 3 (Amount).
+        pivot.ValueFilters.Add(new PivotValueFilterModel(3, PivotValueFilterKind.GreaterThan, ComparisonValue: 100, SourceFieldIndex: null));
+
+        var targets = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers);
+
+        // No field should be marked active — the unbound value filter is not assigned to any field.
+        targets.Should().NotBeEmpty();
+        targets.Should().AllSatisfy(t => t.IsActive.Should().BeFalse());
+    }
+
+    [Fact]
+    public void BuildMenu_ValueFilterWithNullSourceFieldIndex_DoesNotEnableClearFilter()
+    {
+        // Regression for F15: "Clear Filter" must stay disabled when the only value filter is unbound.
+        var pivot = BuildPivot();
+        pivot.ValueFilters.Add(new PivotValueFilterModel(3, PivotValueFilterKind.GreaterThan, ComparisonValue: 100, SourceFieldIndex: null));
+        var target = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers)
+            .Single(t => t.Area == PivotHeaderArea.Row);
+
+        var menu = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
+
+        menu.Items.Single(i => i.Action == PivotHeaderMenuAction.ClearFilter).IsEnabled.Should().BeFalse();
+    }
 }

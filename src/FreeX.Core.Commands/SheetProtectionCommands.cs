@@ -85,6 +85,7 @@ public sealed class UnprotectSheetCommand : IWorkbookCommand
         _previousPermissions = sheet.ProtectionPermissions.ToList();
         sheet.IsProtected = false;
         sheet.ProtectionPassword = null;
+        sheet.ProtectionPermissions.Clear();
         return new CommandOutcome(true);
     }
 

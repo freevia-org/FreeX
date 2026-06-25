@@ -44,7 +44,12 @@ internal sealed class AutosaveCoordinator
         try { _coordinator.DeleteSnapshot(); } catch { /* best-effort cleanup */ }
     }
 
-    /// <summary>If a snapshot survives from a previous session, offer to recover it.</summary>
+    /// <summary>
+    /// If a snapshot survives from a previous session, offer to recover it. Only the single latest
+    /// candidate is offered; other candidates are left intact for a later "Recover Unsaved Documents"
+    /// invocation. The offered candidate is deleted only after a successful recovery (user accepted
+    /// and the file loaded). A declined prompt leaves the candidate on disk so the user can revisit it.
+    /// </summary>
     public void OfferRecovery(Window owner)
     {
         try
@@ -60,10 +65,14 @@ internal sealed class AutosaveCoordinator
                 "FreeW - Recover");
 
             if (recover)
+            {
+                // Open the snapshot; only delete it when the load succeeds so a failed recovery
+                // does not also lose the snapshot file.
                 _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-
-            foreach (var stale in candidates)
-                AutosaveSnapshotStore.DeleteCandidate(stale);
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+            }
+            // On decline ("No"): leave the candidate intact so it remains available for
+            // "Recover Unsaved Documents" or the next startup prompt.
         }
         catch
         {

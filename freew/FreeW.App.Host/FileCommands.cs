@@ -208,8 +208,7 @@ internal sealed class FileCommands
         try
         {
             _editor.CommitToModel();
-            using var fs = File.Create(path);
-            adapter.Save(_editor.Model, fs);
+            SaveAtomically(path, adapter);
             return true;
         }
         catch (Exception ex)
@@ -241,8 +240,7 @@ internal sealed class FileCommands
         try
         {
             _editor.CommitToModel();
-            using (var fs = File.Create(path))
-                adapter.Save(_editor.Model, fs);
+            SaveAtomically(path, adapter);
             SetSaved(path, suppressRecentFiles: false);
             return true;
         }
@@ -250,6 +248,30 @@ internal sealed class FileCommands
         {
             ShowError("Could not save the document", ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Writes the current model to <paramref name="path"/> atomically: the adapter serialises into a sibling
+    /// temp file, which is then moved into place via <see cref="ExportAtomicWriter.ReplaceTarget"/> so a
+    /// mid-write failure (disk full, serialization error, AV lock) never truncates the existing file.
+    /// </summary>
+    private void SaveAtomically(string path, IDocumentFileAdapter adapter)
+    {
+        var tempPath = ExportAtomicWriter.CreateTempPath(path);
+        try
+        {
+            using (var fs = File.Create(tempPath))
+                adapter.Save(_editor.Model, fs);
+            ExportAtomicWriter.ReplaceTarget(tempPath, path);
+        }
+        catch
+        {
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { /* best effort */ }
+            }
+            throw;
         }
     }
 

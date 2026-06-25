@@ -120,6 +120,21 @@ public sealed class AutosaveSnapshotCoordinator
 
             Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
 
+            // Write the sidecar BEFORE moving the snapshot into place.
+            // If the process is killed between the two operations, the recovery directory will
+            // contain a sidecar with no matching snapshot — EnumerateCandidates skips such
+            // entries (it requires the .fxl to exist), so no stale/corrupt candidate is surfaced.
+            // The reverse ordering (snapshot first, sidecar second) is worse: a snapshot with no
+            // sidecar is silently invisible to recovery, losing the latest autosaved data.
+            var sidecar = new AutosaveSidecar
+            {
+                OriginalFilePath = source.OriginalFilePath,
+                DisplayName = source.DisplayName,
+                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
+                SnapshotId = _snapshotId
+            };
+            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
+
             // Write the snapshot atomically: produce into a sibling temp file, then move into place.
             var tempSnapshot = snapshotPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
@@ -132,15 +147,6 @@ public sealed class AutosaveSnapshotCoordinator
                 if (File.Exists(tempSnapshot))
                     try { File.Delete(tempSnapshot); } catch { /* best-effort */ }
             }
-
-            var sidecar = new AutosaveSidecar
-            {
-                OriginalFilePath = source.OriginalFilePath,
-                DisplayName = source.DisplayName,
-                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
-                SnapshotId = _snapshotId
-            };
-            AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 
             _lastSnapshotGeneration = source.DirtyGeneration;
         }

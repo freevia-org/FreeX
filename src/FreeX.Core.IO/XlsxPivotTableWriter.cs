@@ -411,11 +411,14 @@ internal static partial class XlsxPivotTableWriter
                 var isAxisField =
                     pivot.RowFields.Any(field => field.SourceFieldIndex == index) ||
                     pivot.ColumnFields.Any(field => field.SourceFieldIndex == index);
+                var axisValue =
+                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? "axisRow" :
+                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? "axisCol" :
+                    pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? "axisPage" :
+                    null;
                 return new XElement(
                     workbookNs + "pivotField",
-                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
-                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
-                    pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
+                    axisValue is not null ? new XAttribute("axis", axisValue) : null,
                     dataFieldIndexes.Contains(index) ? new XAttribute("dataField", "1") : null,
                     // insertBlankRow is the per-field flag for a blank line after items in OOXML
                     // (CT_PivotField); it is not a pivotTableDefinition attribute. repeatItemLabels has no

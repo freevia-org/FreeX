@@ -4329,6 +4329,10 @@ public static class DocxReader
         var shdVal = shdEl?.Attribute(W + "val")?.Value;
         var vertAlign = rPr.Element(W + "vertAlign")?.Attribute(W + "val")?.Value;
 
+        // w:highlight — Word's standard highlighter element, e.g. <w:highlight w:val="yellow"/>.
+        // Takes precedence over w:shd when both are present, since w:highlight is the canonical Word marker.
+        var highlightNamedToken = rPr.Element(W + "highlight")?.Attribute(W + "val")?.Value;
+
         // Advanced typography (Z1). The three core elements use the standard unit conversions; the
         // w14:* extension elements use the shared token maps. Each is optional and maps a missing
         // element back to the model default so default runs read back unchanged.
@@ -4348,6 +4352,10 @@ public static class DocxReader
         var fillHex = highlight is null or "auto" ? null : "#" + highlight.TrimStart('#');
         string? highlightHex = isSolidHighlight ? fillHex : null;
         string? charShadingHex = !isSolidHighlight ? fillHex : null;
+
+        // w:highlight takes precedence over w:shd for the highlight field (but does not affect charShadingHex).
+        if (highlightNamedToken is not null && highlightNamedToken != "none")
+            highlightHex = HighlightTokenToHex(highlightNamedToken);
 
         // w:rBdr (character border) — same edge encoding as w:pBdr. ReadParagraphBorder reuses the same
         // structure so we delegate to it directly.
@@ -4635,4 +4643,30 @@ public static class DocxReader
 
         return group.Children.Count >= 2 ? group : null;
     }
+
+    /// <summary>
+    /// Maps Word's <c>w:highlight/@w:val</c> named color token to a <c>#RRGGBB</c> hex string, or
+    /// <c>null</c> for unrecognised/none tokens. The colors are the fixed sRGB values Word uses for its
+    /// highlight gallery (same across all themes).
+    /// </summary>
+    internal static string? HighlightTokenToHex(string? token) => token switch
+    {
+        "yellow"      => "#FFFF00",
+        "green"       => "#00FF00",
+        "cyan"        => "#00FFFF",
+        "magenta"     => "#FF00FF",
+        "blue"        => "#0000FF",
+        "red"         => "#FF0000",
+        "darkBlue"    => "#000080",
+        "darkCyan"    => "#008080",
+        "darkGreen"   => "#008000",
+        "darkMagenta" => "#800080",
+        "darkRed"     => "#800000",
+        "darkYellow"  => "#808000",
+        "darkGray"    => "#808080",
+        "lightGray"   => "#C0C0C0",
+        "black"       => "#000000",
+        "white"       => "#FFFFFF",
+        _ => null
+    };
 }

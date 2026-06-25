@@ -2092,7 +2092,7 @@ public static class DocxWriter
                 }
                 Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
                 Content(fieldRun, WithProps(new XElement(W + "instrText",
-                    new XAttribute(XNamespace.Xml + "space", "preserve"), complex.Instruction)));
+                    new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction))));
                 Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
                 if (fieldRun.Text.Length > 0)
                     Content(fieldRun, WithProps(new XElement(W + "t",
@@ -2153,13 +2153,18 @@ public static class DocxWriter
             pPr.Add(new XElement(W + "pStyle", new XAttribute(W + "val", paragraph.StyleId)));
 
         var f = paragraph.Formatting;
-        // Flow control toggles, in CT_PPr schema order: keepNext, keepLines, pageBreakBefore,
-        // widowControl. Each is a toggle element emitted only when its model flag is set, mirroring how
-        // w:pageBreakBefore round-trips.
-        // Keep this paragraph on the same page as the next (w:keepNext).
+        // Children MUST follow the CT_PPrBase schema sequence, otherwise Word's strict validator
+        // rejects the paragraph. The relevant slots, in order (subset emitted here), are:
+        //   pStyle, keepNext, keepLines, pageBreakBefore, framePr, widowControl, numPr,
+        //   suppressLineNumbers, pBdr, shd, tabs, suppressAutoHyphens, kinsoku, wordWrap,
+        //   overflowPunct, topLinePunct, autoSpaceDE, autoSpaceDN, bidi, adjustRightInd,
+        //   snapToGrid, spacing, ind, contextualSpacing, mirrorIndents, suppressOverlap,
+        //   jc, textDirection, textAlignment, textboxTightWrap, outlineLvl, divId, cnfStyle,
+        //   rPr, sectPr.
+
+        // Flow control toggles: keepNext, keepLines, pageBreakBefore, widowControl.
         if (f.KeepWithNext)
             pPr.Add(new XElement(W + "keepNext"));
-        // Keep all lines of this paragraph together on one page (w:keepLines).
         if (f.KeepLinesTogether)
             pPr.Add(new XElement(W + "keepLines"));
         // Force a page break before this paragraph (w:pageBreakBefore); Word honours it when paginating.
@@ -2168,9 +2173,7 @@ public static class DocxWriter
         // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));
-        // Right-to-left paragraph direction (w:bidi); emitted only when set, like the other pPr toggles.
-        if (f.Rtl)
-            pPr.Add(new XElement(W + "bidi"));
+        // numPr — list numbering (CT_PPrBase order: after widowControl, before suppressLineNumbers).
         if (f.ListKind != ListKind.None)
         {
             var baseNumId = f.ListKind switch
@@ -2204,26 +2207,51 @@ public static class DocxWriter
                 new XElement(W + "ilvl", new XAttribute(W + "val", pn.Ilvl)),
                 new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
         }
-        if (f.Alignment != TextAlignment.Left)
-            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
-            {
-                TextAlignment.Center => "center",
-                TextAlignment.Right => "right",
-                TextAlignment.Justify => "both",
-                _ => "left"
-            })));
-        // Tab stops (w:tabs): one w:tab per stop, position in dxa, alignment via w:val, and an
-        // optional w:leader fill. Mirrors how w:ind/w:spacing carry their dxa values.
+        // Paragraph border (w:pBdr) — CT_PPrBase order: after numPr, before shd.
+        // A box whose drawn edges are selected by the per-edge flags (all four = a box) with one shared
+        // colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the bottom-only case.
+        if (f.Border is { } border)
+        {
+            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
+            XElement Edge(string name) => new(W + name,
+                new XAttribute(W + "val", styleToken),
+                new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
+            // BottomOnly forces a bottom-only rule (the horizontal-rule case); otherwise honour the per-edge
+            // flags. An edge that is off is omitted entirely (a null is dropped by XElement) so the round-trip
+            // reads it back as off.
+            var drawBottom = border.BottomOnly || border.Bottom;
+            var drawTop = !border.BottomOnly && border.Top;
+            var drawLeft = !border.BottomOnly && border.Left;
+            var drawRight = !border.BottomOnly && border.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                pPr.Add(new XElement(W + "pBdr",
+                    drawTop ? Edge("top") : null,
+                    drawLeft ? Edge("left") : null,
+                    drawBottom ? Edge("bottom") : null,
+                    drawRight ? Edge("right") : null));
+        }
+        // Paragraph shading (background fill) — CT_PPrBase order: after pBdr, before tabs.
+        if (f.ShadingColorHex is { Length: > 0 } shading)
+            pPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", shading.TrimStart('#'))));
+        // Tab stops (w:tabs) — CT_PPrBase order: after shd, before suppressAutoHyphens.
         if (f.TabStops.Count > 0)
             pPr.Add(new XElement(W + "tabs",
                 f.TabStops.Select(BuildTabStop)));
-        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens); emitted only when set,
-        // like the other pPr toggles. In CT_PPr schema order it follows w:tabs.
+        // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens) — after w:tabs.
         if (f.SuppressAutoHyphens)
             pPr.Add(new XElement(W + "suppressAutoHyphens"));
-        // w:spacing carries before/after AND line spacing. Line spacing is emitted only when it differs
-        // from the model default (a multiple of 1.15), so paragraphs with inherited/default spacing stay
-        // byte-unchanged; explicit single/1.5/double (auto) and exact/atLeast heights round-trip.
+        // Right-to-left paragraph direction (w:bidi) — CT_PPrBase order: after suppressAutoHyphens
+        // (and several non-modelled toggles), before spacing/ind.
+        if (f.Rtl)
+            pPr.Add(new XElement(W + "bidi"));
+        // w:spacing carries before/after AND line spacing — CT_PPrBase order: after bidi, before ind.
+        // Line spacing is emitted only when it differs from the model default (a multiple of 1.15), so
+        // paragraphs with inherited/default spacing stay byte-unchanged.
         var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
             || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
         if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
@@ -2247,43 +2275,21 @@ public static class DocxWriter
             }
             pPr.Add(spacingEl);
         }
+        // w:ind (indents) — CT_PPrBase order: after spacing, before contextualSpacing/jc.
         if (f.IndentLeftPt > 0 || f.IndentRightPt > 0 || f.FirstLineIndentPt > 0)
             pPr.Add(new XElement(W + "ind",
                 new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)),
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
-        // Paragraph border (w:pBdr): a box whose drawn edges are selected by the per-edge flags (all four =
-        // a box) with one shared colour/width/line-style, analogous to w:tblBorders. A horizontal rule is the
-        // bottom-only case. Each drawn edge carries the model's line style (w:val).
-        if (f.Border is { } border)
-        {
-            var styleToken = BorderLineStyles.ToToken(border.LineStyle);
-            XElement Edge(string name) => new(W + name,
-                new XAttribute(W + "val", styleToken),
-                new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
-                new XAttribute(W + "space", 0),
-                new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            // BottomOnly forces a bottom-only rule (the horizontal-rule case); otherwise honour the per-edge
-            // flags. An edge that is off is omitted entirely (a null is dropped by XElement) so the round-trip
-            // reads it back as off.
-            var drawBottom = border.BottomOnly || border.Bottom;
-            var drawTop = !border.BottomOnly && border.Top;
-            var drawLeft = !border.BottomOnly && border.Left;
-            var drawRight = !border.BottomOnly && border.Right;
-            if (drawTop || drawLeft || drawBottom || drawRight)
-                pPr.Add(new XElement(W + "pBdr",
-                    drawTop ? Edge("top") : null,
-                    drawLeft ? Edge("left") : null,
-                    drawBottom ? Edge("bottom") : null,
-                    drawRight ? Edge("right") : null));
-        }
-        // Paragraph shading (background fill), mirroring run-level w:shd highlight. The pattern (w:val) comes
-        // from the model; the default Clear preserves the byte-unchanged round-trip of existing documents.
-        if (f.ShadingColorHex is { Length: > 0 } shading)
-            pPr.Add(new XElement(W + "shd",
-                new XAttribute(W + "val", ShadingPatterns.ToToken(f.ShadingPattern)),
-                new XAttribute(W + "color", "auto"),
-                new XAttribute(W + "fill", shading.TrimStart('#'))));
+        // w:jc (alignment) — CT_PPrBase order: after ind, before textDirection.
+        if (f.Alignment != TextAlignment.Left)
+            pPr.Add(new XElement(W + "jc", new XAttribute(W + "val", f.Alignment switch
+            {
+                TextAlignment.Center => "center",
+                TextAlignment.Right => "right",
+                TextAlignment.Justify => "both",
+                _ => "left"
+            })));
 
         // A section break carried by this paragraph: the section's w:sectPr is the LAST child of w:pPr
         // (schema order), marking this paragraph as the end of a non-final section. Each non-final section
@@ -2552,7 +2558,7 @@ public static class DocxWriter
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
             // all other runs use the ordinary w:t element.
             var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
-            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), run.Text));
+            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(run.Text)));
         }
         return r;
     }
@@ -4598,6 +4604,13 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
+        // w:highlight (Word's highlighter) precedes w:u in CT_RPr (EG_RPrBase). Emitted only for a
+        // HighlightColorHex that maps to a named gallery token, and only when CharacterShadingHex (which
+        // owns the single w:shd slot) is not set — Word's highlight gallery only recognises named tokens.
+        if (f.CharacterShadingHex is not { Length: > 0 }
+            && f.HighlightColorHex is { Length: > 0 } highlightToken
+            && HexToHighlightToken(highlightToken) is { } namedHighlight)
+            rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
         // w:shd on a run: CharacterShadingHex (pattern-aware, takes precedence) or HighlightColorHex
@@ -4609,10 +4622,15 @@ public static class DocxWriter
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", charShading.TrimStart('#'))));
         else if (f.HighlightColorHex is { Length: > 0 } highlight)
+        {
+            // Backward compatibility: also emit w:shd (w:val="clear") so FreeW's own reader round-trips
+            // the highlight even when the color has no named token. The matching w:highlight (when the
+            // color maps to a named token) is emitted before w:u above to satisfy CT_RPr ordering.
             rPr.Add(new XElement(W + "shd",
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", highlight.TrimStart('#'))));
+        }
         // w:rBdr (character border) — a box around the run's glyphs (rPr/w:rBdr). Schema order places
         // w:rBdr after w:shd and before w:vertAlign in CT_RPr (EG_RPrBase). Emitted only when set so
         // existing runs round-trip byte-unchanged. Reuses the same edge encoding as w:pBdr (per-edge
@@ -5748,5 +5766,109 @@ public static class DocxWriter
                 new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt))));
 
         return pPr.HasElements ? pPr : null;
+    }
+
+    /// <summary>
+    /// Strips XML-1.0-illegal characters from <paramref name="text"/> before it is written into a
+    /// <c>w:t</c>, <c>w:delText</c>, or <c>w:instrText</c> element. A control character in run text (e.g.
+    /// U+0001, which can arrive from RTF import) causes <see cref="XDocument.Save"/> to throw
+    /// <see cref="ArgumentException"/>, producing no file at all. This sanitizer removes the illegal code
+    /// points (U+0000–U+0008, U+000B, U+000C, U+000E–U+001F, U+FFFE, U+FFFF) and lone/unpaired surrogates,
+    /// while preserving tab (U+0009), LF (U+000A), CR (U+000D), and all valid BMP and supplementary
+    /// characters. Null and empty inputs are returned as-is.
+    /// </summary>
+    private static string SanitizeXmlText(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return text ?? string.Empty;
+
+        // Fast path: scan for any illegal character; return original when none found.
+        var needsSanitize = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (IsXmlIllegal(c, text, ref i))
+            {
+                needsSanitize = true;
+                break;
+            }
+        }
+        if (!needsSanitize)
+            return text;
+
+        var sb = new System.Text.StringBuilder(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (char.IsHighSurrogate(c))
+            {
+                // Keep a valid surrogate pair; drop a lone high surrogate.
+                if (i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                {
+                    sb.Append(c);
+                    sb.Append(text[++i]);
+                }
+                // else: lone high surrogate — drop it
+            }
+            else if (!char.IsLowSurrogate(c) && !IsXml10IllegalChar(c))
+            {
+                // Lone low surrogates are also illegal in XML; skip them.
+                sb.Append(c);
+            }
+            // else: illegal char (C0/C1 control or lone surrogate) — drop it
+        }
+        return sb.ToString();
+
+        // Returns true when position i contains an illegal XML 1.0 character (lone surrogate or C0/C1 control).
+        // The ref i allows advancing past the second char of a surrogate pair on the fast-path scan.
+        static bool IsXmlIllegal(char c, string s, ref int i)
+        {
+            if (char.IsHighSurrogate(c))
+            {
+                if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                {
+                    i++; // valid pair — skip
+                    return false;
+                }
+                return true; // lone high surrogate
+            }
+            if (char.IsLowSurrogate(c))
+                return true; // lone low surrogate
+            return IsXml10IllegalChar(c);
+        }
+
+        static bool IsXml10IllegalChar(char c) =>
+            // XML 1.0 legal: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
+            c != '\t' && c != '\n' && c != '\r' && (c < ' ' || c == '￾' || c == '￿');
+    }
+
+    /// <summary>
+    /// Maps a <c>#RRGGBB</c> hex color to the <c>w:highlight/@w:val</c> named token used by Word's
+    /// highlight gallery, or <c>null</c> when the color has no named equivalent. Comparison is
+    /// case-insensitive against the canonical uppercase hex values.
+    /// </summary>
+    private static string? HexToHighlightToken(string hex)
+    {
+        var normalized = hex.TrimStart('#').ToUpperInvariant();
+        return normalized switch
+        {
+            "FFFF00" => "yellow",
+            "00FF00" => "green",
+            "00FFFF" => "cyan",
+            "FF00FF" => "magenta",
+            "0000FF" => "blue",
+            "FF0000" => "red",
+            "000080" => "darkBlue",
+            "008080" => "darkCyan",
+            "008000" => "darkGreen",
+            "800080" => "darkMagenta",
+            "800000" => "darkRed",
+            "808000" => "darkYellow",
+            "808080" => "darkGray",
+            "C0C0C0" => "lightGray",
+            "000000" => "black",
+            "FFFFFF" => "white",
+            _ => null
+        };
     }
 }

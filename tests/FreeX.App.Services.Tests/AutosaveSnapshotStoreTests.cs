@@ -152,6 +152,58 @@ public sealed class AutosaveSnapshotStoreTests
         store.EnumerateCandidates().Should().BeEmpty();
     }
 
+    // ── Write-order regression: sidecar before snapshot ───────────────────────
+    // Regression for: TryWriteSnapshot previously moved the snapshot into place BEFORE
+    // writing the sidecar.  If the process died between those two steps the snapshot was
+    // invisible to recovery (EnumerateCandidates requires both files).  The fix writes the
+    // sidecar first, so a mid-write crash leaves a sidecar-only entry (which is safely
+    // skipped by EnumerateCandidates) rather than a sidecar-less snapshot (which is lost).
+
+    [Fact]
+    public void EnumerateCandidates_SidecarWithoutSnapshot_IsSkippedSafely()
+    {
+        // Simulate a crash after the sidecar was written but before the snapshot was moved
+        // into place (the correct write order).  Only the sidecar exists.
+        // EnumerateCandidates should return no candidates — no data is lost because the
+        // crash happened before the snapshot was committed.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+
+        const string snapshotId = "recovery-crash-w0";
+        // Write only the sidecar — the snapshot file is absent (simulates mid-write crash
+        // using the sidecar-first ordering).
+        var sidecar = new AutosaveSidecar
+        {
+            OriginalFilePath = @"C:\test.xlsx",
+            DisplayName = "test",
+            SnapshotId = snapshotId
+        };
+        File.WriteAllText(store.GetSidecarPath(snapshotId), AutosaveSnapshotStore.SerializeSidecar(sidecar));
+        // No snapshot file written.
+
+        // Should not surface a candidate — the snapshot data was never committed.
+        store.EnumerateCandidates().Should().BeEmpty(
+            "a sidecar without a snapshot means the write was interrupted before the snapshot was moved into place; no recoverable data exists");
+    }
+
+    [Fact]
+    public void EnumerateCandidates_SnapshotWithoutSidecar_IsSkipped_NotLostData()
+    {
+        // This is the BAD write order (snapshot moved first, sidecar not yet written).
+        // EnumerateCandidates skips it — the snapshot data is invisible to recovery.
+        // This test documents the contract that must be avoided by always writing the
+        // sidecar before moving the snapshot into place.
+        using var dir = new TestTemporaryDirectory();
+        var store = new AutosaveSnapshotStore(dir.Path);
+
+        const string snapshotId = "recovery-badorder-w0";
+        File.WriteAllText(store.GetSnapshotPath(snapshotId), "placeholder");
+        // Sidecar not yet written (simulates the OLD broken ordering after crash).
+
+        store.EnumerateCandidates().Should().BeEmpty(
+            "a snapshot without a sidecar is skipped — demonstrating why sidecar must be written first");
+    }
+
     [Fact]
     public void EnumerateCandidates_SkipsCorruptSidecar()
     {

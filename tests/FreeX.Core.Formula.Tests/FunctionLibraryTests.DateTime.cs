@@ -538,6 +538,36 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=DATEDIF(A1,B1,\"D\")", sheet).Should().Be(new NumberValue(1));
     }
 
+    [Fact]
+    public void Datedif_LeapDayStart_YD_DoesNotThrow()
+    {
+        // DATEDIF(DATE(2020,2,29), DATE(2021,3,1), "YD") — start is Feb 29 in leap year 2020,
+        // anchor year 2021 is non-leap: constructing new DateTime(2021,2,29) would throw.
+        // Excel returns 1 (days from Feb 28 2021 to Mar 1 2021).
+        var sheet = MakeSheet();
+        var s1 = new DateTime(2020, 2, 29).ToOADate();
+        var s2 = new DateTime(2021, 3, 1).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(s1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(s2));
+        var result = _eval.Evaluate("=DATEDIF(A1,B1,\"YD\")", sheet);
+        result.Should().NotBe(ErrorValue.Num, "leap-day start in non-leap anchor year must not throw #NUM!");
+        result.Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Datedif_LeapDayStart_MD_DoesNotThrow()
+    {
+        // DATEDIF(DATE(2020,2,29), DATE(2021,3,1), "MD") — Excel returns 0.
+        var sheet = MakeSheet();
+        var s1 = new DateTime(2020, 2, 29).ToOADate();
+        var s2 = new DateTime(2021, 3, 1).ToOADate();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(s1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(s2));
+        var result = _eval.Evaluate("=DATEDIF(A1,B1,\"MD\")", sheet);
+        result.Should().NotBe(ErrorValue.Num, "leap-day start in non-leap anchor year must not throw #NUM!");
+        result.Should().Be(new NumberValue(0));
+    }
+
     // TIMEVALUE / DATEVALUE / WORKDAY / YEARFRAC
 
     [Fact] public void Time_HMS_ReturnsFraction()

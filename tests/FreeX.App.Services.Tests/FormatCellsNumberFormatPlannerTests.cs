@@ -124,4 +124,59 @@ public sealed class FormatCellsNumberFormatPlannerTests
             .Should()
             .Be(expected);
     }
+
+    // ── F16: long-date / long-time LCID-only codes preview as date/time ──────────────────────
+
+    [Fact]
+    public void PreviewForFormat_LongDateCode_ProducesDateLikePreview()
+    {
+        // Regression for F16: [$-F800] must preview as a date string, not empty/garbage.
+        // The preview value should contain a 4-digit year (2026) and look date-like.
+        var preview = FormatCellsNumberFormatPlanner.PreviewForFormat("[$-F800]");
+
+        preview.Should().NotBeNullOrWhiteSpace();
+        preview.Should().NotBe("1234.56");   // was the broken "fell through to numeric" result
+        preview.Should().Contain("2026");    // sample serial is 2026-05-21
+    }
+
+    [Fact]
+    public void PreviewForFormat_LongDatePresetLabel_ProducesDateLikePreview()
+    {
+        // Regression for F16: looking up by label should also produce a date preview.
+        var preview = FormatCellsNumberFormatPlanner.PreviewForFormat("Long date ([$-F800])");
+
+        preview.Should().NotBeNullOrWhiteSpace();
+        preview.Should().NotBe("1234.56");
+        preview.Should().Contain("2026");
+    }
+
+    [Fact]
+    public void PreviewForFormat_LongTimeCode_ProducesTimeLikePreview()
+    {
+        // Regression for F16: [$-F400] must preview as a time string, not empty/garbage.
+        var preview = FormatCellsNumberFormatPlanner.PreviewForFormat("[$-F400]");
+
+        preview.Should().NotBeNullOrWhiteSpace();
+        preview.Should().NotBe("1234.56");
+        // Sample serial is 2026-05-21 13:30 — time preview must contain digits with a colon.
+        preview.Should().MatchRegex(@"\d+:\d+");
+    }
+
+    // ── F17: ResolveNumberFormat null-safety ──────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveNumberFormat_NullText_ReturnsNull()
+    {
+        // Regression for F17: null must not throw NullReferenceException.
+        var result = FormatCellsNumberFormatPlanner.ResolveNumberFormat((string?)null, 0);
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void ResolveNumberFormat_WhitespaceText_ReturnsNull()
+    {
+        // Regression for F17: whitespace-only must return null, same as sibling methods.
+        var result = FormatCellsNumberFormatPlanner.ResolveNumberFormat("   ", 0);
+        result.Should().BeNull();
+    }
 }

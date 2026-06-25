@@ -155,7 +155,12 @@ internal sealed class FileCommands
     {
         try
         {
-            FxpFormat.Write(_getModel(), path);
+            // Write through a sibling temp file and atomically replace the target, mirroring the
+            // ExportPdf path — so a mid-write failure (disk full, serialization error, AV lock)
+            // never truncates the previously-saved presentation.
+            var json = FxpFormat.Serialize(_getModel());
+            var bytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
+            ExportAtomicWriter.WriteAllBytes(path, bytes);
             SetSaved(path, suppressRecentFiles: false);
             return true;
         }

@@ -28,7 +28,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
     private readonly bool _useTopRowLabels;
     private readonly bool _useLeftColumnLabels;
     private readonly bool _createLinksToSourceData;
-    private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Consolidate";
 
@@ -119,7 +119,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
                     _destination.Sheet,
                     _destination.Row + rowOffset,
                     _destination.Col + colOffset);
-                _snapshot.Add((destinationAddress, destinationSheet.GetCell(destinationAddress)?.Clone()));
+                _snapshot.Add((destinationAddress, destinationSheet.GetCell(destinationAddress)?.Clone(), destinationSheet.GetStyleOnly(destinationAddress.Row, destinationAddress.Col)));
 
                 var newCell = Cell.FromValue(new NumberValue(ConsolidationRules.Aggregate(values, nonEmptyCount, _function)));
                 if (_createLinksToSourceData)
@@ -174,7 +174,7 @@ public sealed class ConsolidateCommand : IWorkbookCommand
         var affected = new List<CellAddress>();
         foreach (var (address, value, formulaText) in writes)
         {
-            _snapshot.Add((address, destinationSheet.GetCell(address)?.Clone()));
+            _snapshot.Add((address, destinationSheet.GetCell(address)?.Clone(), destinationSheet.GetStyleOnly(address.Row, address.Col)));
             var newCell = Cell.FromValue(value);
             if (!string.IsNullOrWhiteSpace(formulaText))
                 newCell.FormulaText = formulaText;
@@ -193,12 +193,20 @@ public sealed class ConsolidateCommand : IWorkbookCommand
             return;
 
         var destinationSheet = ctx.GetSheet(_destination.Sheet);
-        foreach (var (address, oldCell) in _snapshot)
+        foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
+            {
                 destinationSheet.ClearCell(address);
+                if (oldStyleOnly.HasValue)
+                    destinationSheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                else
+                    destinationSheet.ClearStyleOnly(address.Row, address.Col);
+            }
             else
+            {
                 destinationSheet.SetCell(address, oldCell.Clone());
+            }
         }
     }
 }

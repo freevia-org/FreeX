@@ -94,7 +94,7 @@ public class DocxRoundTripTests
         var names = rPr.Elements().Select(e => e.Name.LocalName).ToList();
 
         // Canonical EG_RPrBase order for the elements FreeW emits.
-        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "color", "sz", "szCs", "u", "shd", "vertAlign" };
+        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "color", "sz", "szCs", "highlight", "u", "shd", "vertAlign" };
         var expected = canonical.Where(names.Contains).ToList();
         names.Should().Equal(expected);
     }

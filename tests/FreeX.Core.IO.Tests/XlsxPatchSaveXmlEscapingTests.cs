@@ -361,6 +361,46 @@ public sealed class XlsxPatchSaveXmlEscapingTests
         element.Value.Should().Be("_x005F_x000D_");
     }
 
+    [Fact]
+    public void EscapeForXml_ValidSurrogatePair_PassesThroughVerbatim()
+    {
+        // U+1F600 GRINNING FACE (😀) is encoded in UTF-16 as the surrogate pair D83D+DE00.
+        // Previously each code unit was tested by XmlConvert.IsXmlChar independently, and lone
+        // surrogates return false — so the emoji was corrupted to _xD83D__xDE00_.
+        // After the fix a valid high+low pair must pass through unchanged.
+        var emoji = "\U0001F600"; // 😀 — two UTF-16 code units: D83D DE00
+        emoji.Should().HaveLength(2, "emoji is a UTF-16 surrogate pair");
+
+        var escaped = XlsxXmlTextEscaper.EscapeForXml(emoji);
+
+        escaped.Should().Be(emoji, "a valid surrogate pair must not be escaped");
+    }
+
+    [Fact]
+    public void EscapeForXml_SurrogatePairRoundTrips_WithinLargerString()
+    {
+        // Surrogates embedded in a larger string should pass through verbatim while
+        // surrounding problematic characters are still escaped correctly.
+        var input = "A\U0001F600B\vC"; // A + emoji + B + VT (XML-invalid) + C
+        var escaped = XlsxXmlTextEscaper.EscapeForXml(input);
+
+        escaped.Should().Contain("\U0001F600", "emoji must not be encoded");
+        escaped.Should().Contain("_x000B_", "vertical tab must still be escaped");
+        escaped.Should().StartWith("A");
+        escaped.Should().EndWith("C");
+    }
+
+    [Fact]
+    public void EscapeForXml_LoneSurrogate_IsEscaped()
+    {
+        // A lone high surrogate (not followed by a low surrogate) is not a valid Unicode
+        // scalar and must be escaped as _xHHHH_.
+        var loneSurrogate = "\uD83D"; // high surrogate with no following low surrogate
+        var escaped = XlsxXmlTextEscaper.EscapeForXml(loneSurrogate);
+
+        escaped.Should().Be("_xD83D_", "a lone surrogate is not a valid XML character and must be escaped");
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

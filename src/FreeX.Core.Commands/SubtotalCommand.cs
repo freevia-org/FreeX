@@ -153,13 +153,19 @@ public sealed class SubtotalCommand : IWorkbookCommand
         List<CellAddress> affected)
     {
         if (!ApplyInsertions(ctx, plan.GroupRows, affected))
+        {
+            Revert(ctx);
             return CommandGuards.RejectCouldNotInsertSubtotalRow();
+        }
 
         if (_summaryBelowData)
             AddPlannedPageBreaks(sheet, plan);
 
         if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
+        {
+            Revert(ctx);
             return CommandGuards.RejectCouldNotInsertSubtotalRow();
+        }
 
         if (!_summaryBelowData)
             AddPlannedPageBreaks(sheet, plan);

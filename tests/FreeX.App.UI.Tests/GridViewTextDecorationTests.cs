@@ -29,6 +29,28 @@ public sealed class GridViewTextDecorationTests
     }
 
     [Fact]
+    public void BuildTextDecorations_SingleUnderline_AddsExactlyOneUnderlineDecoration()
+    {
+        // Regression for F18: single underline must produce exactly 1 decoration (not 0 or 2+).
+        var decorations = GridView.BuildTextDecorations(new CellStyle { Underline = true });
+
+        decorations.Should().NotBeNull();
+        decorations!.Should().ContainSingle(d => d.Location == TextDecorationLocation.Underline);
+    }
+
+    [Fact]
+    public void BuildTextDecorations_DoubleUnderline_DoesNotAddTextDecorationUnderline()
+    {
+        // Regression for F18: DoubleUnderline must NOT produce a TextDecoration here, because
+        // GridView.DrawCellText already draws two manual strokes. Adding one here would give 3 lines.
+        var decorations = GridView.BuildTextDecorations(new CellStyle { DoubleUnderline = true });
+
+        // Either null (no other decorations) or no underline decoration entry.
+        if (decorations is not null)
+            decorations.Should().NotContain(d => d.Location == TextDecorationLocation.Underline);
+    }
+
+    [Fact]
     public void CreateCellTypeface_UsesStyleFontNameAndWeight()
     {
         var typeface = GridView.CreateCellTypeface(new CellStyle

@@ -13,6 +13,9 @@ public partial class MainWindow : IAutosaveWorkbookSource
 {
     // One snapshot per window session — deterministic ID so a crash and re-open produces the
     // same file path for the same window session (process id + window index within the registry).
+    // _autosaveWindowId is assigned in the constructor so it is unique per instance regardless
+    // of when AttachAutosaveService is called relative to registry registration.
+    private readonly Guid _autosaveWindowId = Guid.NewGuid();
     private AutosaveService? _autosaveService;
     private DispatcherTimer? _autosaveTimer;
     private string _autosaveSnapshotId = string.Empty;
@@ -29,12 +32,17 @@ public partial class MainWindow : IAutosaveWorkbookSource
 
     internal void AttachAutosaveService(AutosaveService service, AutosaveSnapshotStore store)
     {
-        var windowIndex = _windowRegistry?.IndexOf(this) ?? 0;
+        // Use the per-instance window Guid rather than the registry index so the snapshot ID
+        // is unique even when AttachAutosaveService runs before RegisterWithWindowRegistry
+        // (e.g. on startup and crash-recovery paths). The registry IndexOf returns -1 before
+        // the Loaded handler fires, which previously caused all windows to share "w0" and
+        // overwrite each other's autosave.
         // Include the per-launch GUID so a recycled OS PID never clobbers a prior session's
         // unrecovered snapshot. The GUID is stable for the lifetime of this process.
         var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
+        var windowTag = _autosaveWindowId.ToString("N")[..8];
         _autosaveSnapshotId = FormattableString.Invariant(
-            $"recovery-{Environment.ProcessId}-{launchTag}-w{Math.Max(0, windowIndex)}");
+            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
 
         _autosaveService = service;
         _autosaveService.Attach(this, _autosaveSnapshotId);

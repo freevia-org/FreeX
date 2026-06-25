@@ -35,8 +35,20 @@ public sealed class LocalizedTextCatalog(ResourceManager resourceManager)
         return _resourceManager.GetString(key, CultureInfo.InvariantCulture) ?? CreateMissingText(key);
     }
 
-    public string Format(string key, params object?[] args) =>
-        string.Format(CultureInfo.CurrentCulture, Get(key), args);
+    public string Format(string key, params object?[] args)
+    {
+        var template = Get(key);
+        try
+        {
+            return string.Format(CultureInfo.CurrentCulture, template, args);
+        }
+        catch (FormatException)
+        {
+            // Translation drift: the localized string has more placeholders than supplied args.
+            // Fall back to the raw template rather than crashing on a localized build.
+            return template;
+        }
+    }
 
     public IReadOnlySet<string> GetNeutralResourceKeys()
     {

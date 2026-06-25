@@ -170,8 +170,7 @@ public static class PivotHeaderDropdownMenuBuilder
 
     private static bool HasActiveFilter(PivotTableModel pivotTable, int sourceFieldIndex) =>
         pivotTable.LabelFilters.Any(filter => filter.SourceFieldIndex == sourceFieldIndex) ||
-        pivotTable.ValueFilters.Any(filter =>
-            filter.SourceFieldIndex is null || filter.SourceFieldIndex == sourceFieldIndex);
+        pivotTable.ValueFilters.Any(filter => filter.SourceFieldIndex == sourceFieldIndex);
 
     private static PivotSortModel? FindSort(PivotTableModel pivotTable, int sourceFieldIndex) =>
         pivotTable.Sorts.FirstOrDefault(sort => sort.FieldIndex == sourceFieldIndex);
