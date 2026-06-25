@@ -19,8 +19,6 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
-    private static readonly IBrush AutoFilterButtonTopBrush = new SolidColorBrush(Color.FromRgb(252, 252, 252));
-    private static readonly IBrush AutoFilterButtonBottomBrush = new SolidColorBrush(Color.FromRgb(225, 232, 238));
     private static readonly IBrush AutoFilterBorderBrush = new SolidColorBrush(Color.FromRgb(142, 153, 166));
     private static readonly IBrush AutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(45, 55, 65));
     private static readonly IBrush ActiveAutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(15, 109, 140));
