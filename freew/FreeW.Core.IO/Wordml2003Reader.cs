@@ -178,6 +178,14 @@ public static class Wordml2003Reader
 
         string? colorHex = NormalizeColor((string?)rPr.Element(W + "color")?.Attribute(W + "val"));
 
+        var vertAlignVal = (string?)rPr.Element(W + "vertAlign")?.Attribute(W + "val");
+        var verticalAlign = vertAlignVal switch
+        {
+            "superscript" => VerticalAlign.Superscript,
+            "subscript" => VerticalAlign.Subscript,
+            _ => VerticalAlign.Baseline,
+        };
+
         return new RunFormatting
         {
             Bold = bold,
@@ -187,6 +195,7 @@ public static class Wordml2003Reader
             FontFamily = string.IsNullOrEmpty(fontFamily) ? null : fontFamily,
             FontSizePt = fontSizePt,
             ColorHex = colorHex,
+            VerticalAlign = verticalAlign,
         };
     }
 

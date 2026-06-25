@@ -207,6 +207,42 @@ public class Wordml2003WriteTests
     }
 
     // -----------------------------------------------------------------------
+    // R18 — super/subscript round-trip
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void RoundTrip_PreservesSuperscriptRun()
+    {
+        // R18: VerticalAlign.Superscript must survive WordML 2003 writer → reader round-trip.
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("sup", new RunFormatting { VerticalAlign = VerticalAlign.Superscript }));
+        source.Blocks.Add(p);
+
+        var result = RoundTrip(source);
+
+        result.Blocks.OfType<Paragraph>().First().Runs.First()
+            .Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesSubscriptRun()
+    {
+        // R18: VerticalAlign.Subscript must survive WordML 2003 writer → reader round-trip.
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("sub", new RunFormatting { VerticalAlign = VerticalAlign.Subscript }));
+        source.Blocks.Add(p);
+
+        var result = RoundTrip(source);
+
+        result.Blocks.OfType<Paragraph>().First().Runs.First()
+            .Formatting.VerticalAlign.Should().Be(VerticalAlign.Subscript);
+    }
+
+    // -----------------------------------------------------------------------
     // Paragraph formatting
     // -----------------------------------------------------------------------
 

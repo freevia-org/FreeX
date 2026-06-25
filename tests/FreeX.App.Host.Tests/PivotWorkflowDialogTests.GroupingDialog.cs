@@ -130,11 +130,49 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("string.IsNullOrWhiteSpace(value)");
-        source.Should().Contain("!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)");
+        source.Should().Contain("NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out interval)");
         source.Should().Contain("interval <= 0");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_AcceptsCommaDecimalIntervalInCommaDecimalLocale()
+    {
+        using var _ = TestCultureScope.CurrentCulture("de-DE");
+
+        var result = PivotFieldGroupingDialog.CreateResult(
+            "Value",
+            sourceFieldIndex: 0,
+            PivotFieldGrouping.NumberRange,
+            "0,5",
+            "10,5",
+            "2,5",
+            ungroup: false);
+
+        result.GroupInterval.Should().Be(2.5);
+        result.GroupStart.Should().Be(0.5);
+        result.GroupEnd.Should().Be(10.5);
+    }
+
+    [Fact]
+    public void PivotFieldGroupingDialog_CreateResult_AcceptsDotDecimalAsInvariantFallbackInCommaDecimalLocale()
+    {
+        using var _ = TestCultureScope.CurrentCulture("de-DE");
+
+        var result = PivotFieldGroupingDialog.CreateResult(
+            "Value",
+            sourceFieldIndex: 0,
+            PivotFieldGrouping.NumberRange,
+            "0.5",
+            "10.5",
+            "2.5",
+            ungroup: false);
+
+        result.GroupInterval.Should().Be(2.5);
+        result.GroupStart.Should().Be(0.5);
+        result.GroupEnd.Should().Be(10.5);
     }
 
     [Fact]
@@ -149,6 +187,6 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"PivotFieldGrouping_EnterValidEndingValue\"), _endBox);");
         source.Should().Contain("TryParseOptionalFiniteDouble(_startBox.Text, out _)");
         source.Should().Contain("TryParseOptionalFiniteDouble(_endBox.Text, out _)");
-        source.Should().Contain("double.IsFinite(parsed)");
+        source.Should().Contain("NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed)");
     }
 }

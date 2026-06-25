@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -717,7 +718,7 @@ public sealed partial class MainWindow
     }
 
     private static string FormatNullableDouble(double? value) =>
-        value is { } v ? v.ToString(CultureInfo.InvariantCulture) : string.Empty;
+        value is { } v ? v.ToString(CultureInfo.CurrentCulture) : string.Empty;
 
     private static string DescribeColor(string label, CellColor? color) =>
         color is { } c
@@ -731,7 +732,7 @@ public sealed partial class MainWindow
         if (string.IsNullOrWhiteSpace(text))
             return true;
 
-        if (double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && double.IsFinite(parsed))
+        if (NumericInputParser.TryParseFiniteDouble(text.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
         {
             value = parsed;
             return true;

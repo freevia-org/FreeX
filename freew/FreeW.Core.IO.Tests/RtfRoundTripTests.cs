@@ -118,6 +118,21 @@ public class RtfRoundTripTests
         }
     }
 
+    // P10 regression — \'XX hex-byte escapes inside \fonttbl font names must be decoded against the active
+    // code page and stored in the font table, not discarded.  A font name containing \'e9 (= é in
+    // Windows-1252) was previously truncated at the first escaped byte, so any run using that \fN got an
+    // empty/wrong FontFamily.
+    [Fact]
+    public void FontTable_HexEscapedName_IsDecoded()
+    {
+        // {\fonttbl{\f0\froman\fcharset0 Caf\'e9;}} — font name "Café" in Windows-1252.
+        // A following run uses \f0 and must resolve to "Café".
+        const string rtf = @"{\rtf1\ansi\ansicpg1252{\fonttbl{\f0\froman\fcharset0 Caf\'e9;}}{\f0 text}}";
+        var doc = Load(Encoding.ASCII.GetBytes(rtf));
+        var run = doc.Blocks.OfType<Paragraph>().First().Runs.First();
+        run.Formatting.FontFamily.Should().Be("Café");
+    }
+
     // P8 regression — \binN must skip exactly N raw bytes without emitting them as text, and must not let
     // stray { } bytes in the binary payload unbalance group nesting and corrupt following text.
     [Fact]
