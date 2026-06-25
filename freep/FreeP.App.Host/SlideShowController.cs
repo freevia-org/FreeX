@@ -124,6 +124,9 @@ public sealed class SlideShowController
 
     /// <summary>
     /// Groups a slide's flat animation list into click-steps.
+    /// ONLY includes animations that are in the main sequence (TriggerShapeId == null).
+    /// Trigger animations are excluded from the advance chain — they are fired by
+    /// <see cref="FireTrigger"/> when the user clicks the trigger shape.
     /// Rule: an OnClick animation begins a new step; WithPrevious and AfterPrevious
     /// animations join the current step and will play together with it.
     /// </summary>
@@ -135,6 +138,9 @@ public sealed class SlideShowController
         List<ShapeAnimation>? current = null;
         foreach (var anim in slide.Animations)
         {
+            // Skip trigger animations — they are not part of the main advance chain.
+            if (anim.TriggerShapeId is not null) continue;
+
             if (anim.Trigger == AnimationTrigger.OnClick || current is null)
             {
                 current = new List<ShapeAnimation> { anim };
@@ -143,6 +149,47 @@ public sealed class SlideShowController
             else
             {
                 // WithPrevious / AfterPrevious: join the current step
+                current.Add(anim);
+            }
+        }
+        return steps;
+    }
+
+    /// <summary>
+    /// Returns the animations that should fire when the shape with <paramref name="triggerShapeId"/>
+    /// is clicked, grouped into steps exactly like <see cref="BuildSteps"/>.
+    /// Returns empty when no trigger group is registered for that shape.
+    /// </summary>
+    public IReadOnlyList<AnimationStep> FireTrigger(uint triggerShapeId)
+    {
+        var slide = CurrentSlide;
+        if (slide is null) return Array.Empty<AnimationStep>();
+
+        var triggerAnims = slide.Animations
+            .Where(a => a.TriggerShapeId == triggerShapeId)
+            .ToList();
+
+        return BuildTriggerSteps(triggerAnims);
+    }
+
+    /// <summary>
+    /// Groups a flat list of trigger animations into click-steps (same rules as BuildSteps).
+    /// </summary>
+    public static IReadOnlyList<AnimationStep> BuildTriggerSteps(IReadOnlyList<ShapeAnimation> anims)
+    {
+        var steps = new List<AnimationStep>();
+        if (anims.Count == 0) return steps;
+
+        List<ShapeAnimation>? current = null;
+        foreach (var anim in anims)
+        {
+            if (anim.Trigger == AnimationTrigger.OnClick || current is null)
+            {
+                current = new List<ShapeAnimation> { anim };
+                steps.Add(new AnimationStep(current));
+            }
+            else
+            {
                 current.Add(anim);
             }
         }

@@ -137,7 +137,7 @@ public sealed class SlideShowWindow : Window
 
         // ── Event wiring ───────────────────────────────────────────────────────
         KeyDown     += OnKeyDown;
-        MouseLeftButtonDown += (_, _) => DoAdvance();
+        MouseLeftButtonDown += OnMouseLeftButtonDown;
         Loaded      += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
         Closed      += (_, _) => Teardown();
     }
@@ -223,6 +223,73 @@ public sealed class SlideShowWindow : Window
     }
 
     // ── Navigation helpers ────────────────────────────────────────────────────────
+
+    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Check if the click lands on a trigger shape first.
+        var slide = _controller.CurrentSlide;
+        if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
+        {
+            var clickPt = e.GetPosition(_slideCanvas);
+            var triggerShapeId = HitTestTriggerShape(slide, clickPt.X, clickPt.Y);
+            if (triggerShapeId is not null)
+            {
+                PlayTriggerGroup(triggerShapeId.Value);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Not a trigger — regular advance.
+        DoAdvance();
+    }
+
+    /// <summary>
+    /// Hit-tests the click point (in slide-canvas DIP coords) against trigger shapes on the slide.
+    /// Returns the TriggerShapeId if a trigger shape was hit, null otherwise.
+    /// </summary>
+    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
+    {
+        // Convert canvas DIP coords to slide DIP coords.
+        // The canvas renders the slide at the canonical slide size (_slideDipW x _slideDipH)
+        // scaled to fit _slideCanvas.ActualWidth x _slideCanvas.ActualHeight.
+        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        double scaleX = _slideDipW / cw;
+        double scaleY = _slideDipH / ch;
+        double slideX = canvasX * scaleX;
+        double slideY = canvasY * scaleY;
+
+        // Get all unique trigger shape ids.
+        var triggerShapeIds = slide.Animations
+            .Where(a => a.TriggerShapeId is not null)
+            .Select(a => a.TriggerShapeId!.Value)
+            .Distinct();
+
+        foreach (var spid in triggerShapeIds)
+        {
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == spid);
+            if (shape is null) continue;
+
+            double shapeX  = shape.OffsetXEmu / 9525.0;
+            double shapeY  = shape.OffsetYEmu / 9525.0;
+            double shapeCx = shape.ExtentCxEmu / 9525.0;
+            double shapeCy = shape.ExtentCyEmu / 9525.0;
+
+            if (slideX >= shapeX && slideX <= shapeX + shapeCx &&
+                slideY >= shapeY && slideY <= shapeY + shapeCy)
+                return spid;
+        }
+        return null;
+    }
+
+    /// <summary>Fires all animation steps registered for the given trigger shape.</summary>
+    private void PlayTriggerGroup(uint triggerShapeId)
+    {
+        var steps = _controller.FireTrigger(triggerShapeId);
+        foreach (var step in steps)
+            PlayAnimationStep(step);
+    }
 
     private void DoAdvance()
     {
@@ -454,7 +521,7 @@ public sealed class SlideShowWindow : Window
         _revealedShapes.Clear();
 
         _entranceShapeIds = slide.Animations
-            .Where(a => a.Kind == AnimationKind.Entrance)
+            .Where(a => a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();
@@ -560,6 +627,15 @@ public sealed class SlideShowWindow : Window
         int delayMs    = Math.Max(0,  anim.DelayMs);
 
         var sb = new Storyboard();
+
+        // Motion-path animation takes priority over preset.
+        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+        {
+            MotionPathEffect(sb, element, anim.Motion, durationMs, delayMs);
+            _pendingStoryboards.Add(sb);
+            sb.Begin(element, isControllable: true);
+            return;
+        }
 
         switch (anim.Preset)
         {
@@ -816,6 +892,55 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    /// <summary>
+    /// Motion-path animation: translates the shape along the normalized path in DIP space.
+    /// The path coords (0..1 relative to shape center) are scaled to actual slide DIP dimensions.
+    /// We sample the path using DoubleAnimationUsingKeyFrames at 20 discrete frames.
+    /// The element must be visible (Opacity=1) from the start.
+    /// </summary>
+    private void MotionPathEffect(Storyboard sb, FrameworkElement element,
+        MotionPath path, int durationMs, int delayMs)
+    {
+        double slideW = _slideDipW > 0 ? _slideDipW : 960;
+        double slideH = _slideDipH > 0 ? _slideDipH : 540;
+
+        // Ensure visible
+        element.Opacity = 1;
+
+        var translate = new TranslateTransform(0, 0);
+        element.RenderTransform = translate;
+
+        var dur      = new Duration(TimeSpan.FromMilliseconds(durationMs));
+        var delay    = TimeSpan.FromMilliseconds(delayMs);
+        const int frames = 30;
+
+        var animX = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+        var animY = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+
+        for (int f = 0; f <= frames; f++)
+        {
+            double t = f / (double)frames;
+            var (dx, dy) = MotionPathEvaluator.Sample(path, t);
+
+            double dxDip = dx * slideW;
+            double dyDip = dy * slideH;
+
+            var keyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs * t));
+            animX.KeyFrames.Add(new LinearDoubleKeyFrame(dxDip, keyTime));
+            animY.KeyFrames.Add(new LinearDoubleKeyFrame(dyDip, keyTime));
+        }
+
+        Storyboard.SetTarget(animX, element);
+        Storyboard.SetTarget(animY, element);
+        Storyboard.SetTargetProperty(animX,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(animY,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+        sb.Children.Add(animX);
+        sb.Children.Add(animY);
     }
 
     /// <summary>
