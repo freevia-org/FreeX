@@ -277,7 +277,7 @@ foreach ($workflow in $workflows) {
         }
     }
 
-    if ($workflow.Name -in @("freew-ci.yml", "freep-ci.yml")) {
+    if ($workflow.Name -in @("freep-ci.yml")) {
         $pushBlock = Get-IndentedYamlBlock `
             -Lines $lines `
             -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"

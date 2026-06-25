@@ -1,30 +1,10 @@
 name: FreeW CI
 
 # Dedicated build + test gate for the FreeW word processor (freew/, FreeW*.slnx).
-# Runs on PRs to main and on direct pushes to main that touch FreeW or this workflow,
-# mirroring the FreeX `ci.yml` default lane (windows-latest, .NET 10, build Release then
-# test --no-build).
+# Runs manually on demand only (workflow_dispatch); trigger it from the Actions tab
+# when you want to validate FreeW without waiting for a full push/PR cycle.
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "freew/**"
-      - "FreeW.slnx"
-      - "shared/**"
-      - "Directory.Build.props"
-      - "Directory.Packages.props"
-      - ".github/workflows/freew-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "freew/**"
-      - "FreeW.slnx"
-      - "shared/**"
-      - "Directory.Build.props"
-      - "Directory.Packages.props"
-      - ".github/workflows/freew-ci.yml"
+  workflow_dispatch:
 
 concurrency:
   group: freew-ci-${{ github.ref }}

@@ -121,9 +121,9 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreeWAndFreePWorkflows_RunOnCentralPropsPushes()
+    public void FreePWorkflow_RunsOnCentralPropsPushes()
     {
-        foreach (var workflowName in new[] { "freew-ci.yml", "freep-ci.yml" })
+        foreach (var workflowName in new[] { "freep-ci.yml" })
         {
             var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", workflowName);
             var pushBlock = ExtractRequiredYamlBlock(workflow, "push:");
