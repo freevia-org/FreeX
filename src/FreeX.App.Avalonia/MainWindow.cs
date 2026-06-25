@@ -6094,7 +6094,7 @@ public sealed partial class MainWindow : Window
         var alignment = MapCellTextAlignment(horizontalAlignment, isNumeric);
         var verticalAlignment = MapCellVerticalAlignment(verticalAlignmentModel);
         var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;
-        var weight = style?.Bold == true ? FontWeight.SemiBold : FontWeight.Normal;
+        var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;
         var textDecorations = BuildTextDecorations(style);
