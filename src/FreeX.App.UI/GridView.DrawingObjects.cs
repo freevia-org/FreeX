@@ -398,7 +398,7 @@ public partial class GridView
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
         var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
         var shapeThemeEffect = ResolveDrawingShapeThemeEffect(shape, themeEffect);
-        var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
+        var pen = GetDrawingShapeOutlinePen(colors.Outline, shape);
         var fill = shape.HasFill ? CreateDrawingShapeFill(shape, colors.Fill) : null;
         DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
@@ -1623,6 +1623,47 @@ public partial class GridView
 
         var pen = CreateFrozenPen(GetDrawingObjectBrush(alpha, r, g, b), thickness);
         _drawingObjectPenCache.Add(key, pen);
+        return pen;
+    }
+
+    /// <summary>
+    /// Builds the outline <see cref="Pen"/> for a drawing shape, honouring the model's
+    /// <see cref="DrawingShapeModel.OutlineWidthPoints"/>, <see cref="DrawingShapeModel.OutlineHasNoFill"/>,
+    /// and <see cref="DrawingShapeModel.OutlineDash"/> properties.
+    /// Returns <see langword="null"/> when the shape explicitly has no border.
+    /// </summary>
+    private Pen? GetDrawingShapeOutlinePen(CellColor outlineColor, DrawingShapeModel shape)
+    {
+        if (shape.OutlineHasNoFill)
+            return null;
+
+        // Convert points → WPF DIPs (96 DPI screen): 1 pt = 96/72 DIP
+        const double PtToDip = 96.0 / 72.0;
+        var thicknessDip = shape.OutlineWidthPoints > 0
+            ? shape.OutlineWidthPoints * PtToDip
+            : 1.5; // preserve legacy default when width not stored
+
+        // For solid outlines use the cached pen path (fast path).
+        if (shape.OutlineDash == DrawingShapeOutlineDash.Solid)
+            return GetDrawingObjectPen(255, outlineColor, thicknessDip);
+
+        // Dashed pens are rare; build without caching to keep cache key simple.
+        var brush = GetDrawingObjectBrush(255, outlineColor);
+        var dashStyle = shape.OutlineDash switch
+        {
+            DrawingShapeOutlineDash.Dash => DashStyles.Dash,
+            DrawingShapeOutlineDash.Dot => DashStyles.Dot,
+            DrawingShapeOutlineDash.DashDot => DashStyles.DashDot,
+            DrawingShapeOutlineDash.LongDash => DashStyles.DashDot, // closest WPF built-in
+            DrawingShapeOutlineDash.LongDashDot => DashStyles.DashDotDot,
+            DrawingShapeOutlineDash.LongDashDotDot => DashStyles.DashDotDot,
+            DrawingShapeOutlineDash.SystemDash => DashStyles.Dash,
+            DrawingShapeOutlineDash.SystemDot => DashStyles.Dot,
+            DrawingShapeOutlineDash.SystemDashDot => DashStyles.DashDot,
+            _ => DashStyles.Solid
+        };
+        var pen = new Pen(brush, thicknessDip) { DashStyle = dashStyle };
+        pen.Freeze();
         return pen;
     }
 
