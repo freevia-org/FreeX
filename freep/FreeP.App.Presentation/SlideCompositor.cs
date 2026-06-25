@@ -400,14 +400,34 @@ public static class SlideCompositor
             shape.ExtentCxEmu / EmuPerDip,
             shape.ExtentCyEmu / EmuPerDip);
 
-        // Resolve one concrete sRGB color per series (using theme color resolution)
-        var seriesColors = new SrgbColor[chart.Series.Count];
-        for (int i = 0; i < chart.Series.Count; i++)
+        SrgbColor[] seriesColors;
+
+        if (chart.ChartType == ChartType.Pie && chart.Series.Count > 0)
         {
-            var fillColor = chart.Series[i].FillColor;
-            seriesColors[i] = fillColor is not null
-                ? ThemeColorResolver.Resolve(fillColor, theme)
-                : DefaultAccentColor(i, theme);
+            // For pie charts emit one color per data POINT (cycling accent1-6) so the
+            // renderer can pick the right slice fill without re-resolving the theme.
+            var firstSeries = chart.Series[0];
+            int ptCount = firstSeries.Values.Count;
+            seriesColors = new SrgbColor[ptCount];
+            for (int pi = 0; pi < ptCount; pi++)
+            {
+                if (firstSeries.PointColors.TryGetValue(pi, out var ptColor))
+                    seriesColors[pi] = ThemeColorResolver.Resolve(ptColor, theme);
+                else
+                    seriesColors[pi] = DefaultAccentColor(pi, theme);
+            }
+        }
+        else
+        {
+            // Resolve one concrete sRGB color per series (using theme color resolution)
+            seriesColors = new SrgbColor[chart.Series.Count];
+            for (int i = 0; i < chart.Series.Count; i++)
+            {
+                var fillColor = chart.Series[i].FillColor;
+                seriesColors[i] = fillColor is not null
+                    ? ThemeColorResolver.Resolve(fillColor, theme)
+                    : DefaultAccentColor(i, theme);
+            }
         }
 
         ops.Add(new DrawOp.Chart

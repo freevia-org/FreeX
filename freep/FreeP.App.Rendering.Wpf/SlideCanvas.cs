@@ -354,7 +354,8 @@ public sealed class SlideCanvas : FrameworkElement
         const double titleH       = 18.0;
         const double legendH      = 14.0;
         const double axisLabelW   = 40.0;  // value axis label area (left for column; bottom for bar)
-        const double catLabelH    = 16.0;  // category label area height
+        const double catLabelH    = 16.0;  // category label area height (bottom for column, bottom for bar value axis)
+        const double barCatLabelW = 44.0;  // category label width for horizontal bar (left side)
         const double gridlinePad  = 2.0;
 
         double titleAreaH  = chart.Title is not null ? titleH + margin : 0;
@@ -381,7 +382,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (hasLegend)
         {
             if (legendRight)
-                legendAreaW = Math.Min(80, bounds.Width * 0.22);
+                legendAreaW = Math.Min(90, bounds.Width * 0.20);
             else
                 legendAreaH = legendH + margin;
         }
@@ -389,7 +390,7 @@ public sealed class SlideCanvas : FrameworkElement
         // For horizontal bar charts: category labels are on the left (Y axis),
         // value axis labels are on the bottom (X axis).
         // For column/line/area: category labels on bottom, value labels on left.
-        double plotLeft   = bounds.X + margin + (isPie ? 0 : (isBar ? catLabelH : axisLabelW));
+        double plotLeft   = bounds.X + margin + (isPie ? 0 : (isBar ? barCatLabelW : axisLabelW));
         double plotTop    = bounds.Y + margin + titleAreaH;
         double plotRight  = bounds.X + bounds.Width  - margin - legendAreaW;
         double plotBottom = bounds.Y + bounds.Height - margin - legendAreaH
@@ -478,12 +479,15 @@ public sealed class SlideCanvas : FrameworkElement
         {
             if (isBar)
             {
-                // For bar charts: category labels on left (Y axis), one per category row
-                double catStep = plotH / Math.Max(1, chart.Categories.Count);
-                for (int ci = 0; ci < chart.Categories.Count; ci++)
+                // For bar charts: category labels on left (Y axis), one per category row.
+                // PowerPoint reverses category order: index 0 at bottom, last at top.
+                int catN = chart.Categories.Count;
+                double catStep = plotH / Math.Max(1, catN);
+                for (int ci = 0; ci < catN; ci++)
                 {
-                    double ly = plotY + ci * catStep;
-                    var labelRect = new Rect(bounds.X + margin, ly, catLabelH - 2, catStep);
+                    int renderRow = catN - 1 - ci;
+                    double ly = plotY + renderRow * catStep;
+                    var labelRect = new Rect(bounds.X + margin, ly, barCatLabelW - 4, catStep);
                     DrawChartLabel(dc, chart.Categories[ci], labelRect, isBold: false, fontSize: 6.5,
                         align: TextAlignment.Right);
                 }
@@ -553,36 +557,80 @@ public sealed class SlideCanvas : FrameworkElement
             }
 
             double itemH = legendH;
-            int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
-            int itemsToShow = Math.Min(chart.Series.Count, maxItems);
 
-            for (int si = 0; si < itemsToShow; si++)
+            if (isPie)
             {
-                var sc = si < chartOp.SeriesColors.Count
-                    ? chartOp.SeriesColors[si]
-                    : new SrgbColor(0x4F, 0x81, 0xBD);
+                // Pie chart legend: one entry per category (slice), not per series
+                int catItems = chart.Categories.Count > 0 ? chart.Categories.Count
+                    : (chart.Series[0].Values.Count > 0 ? chart.Series[0].Values.Count : 0);
+                int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
+                int itemsToShow = Math.Min(catItems, maxItems);
 
-                if (legendRight)
+                for (int ci = 0; ci < itemsToShow; ci++)
                 {
-                    double iy = ly + si * itemH;
-                    dc.DrawRectangle(
-                        FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                        null,
-                        new Rect(lx, iy + 3, 8, 8));
-                    DrawChartLabel(dc, chart.Series[si].Name,
-                        new Rect(lx + 10, iy, lw - 10, itemH),
-                        isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    var sc = ci < chartOp.SeriesColors.Count
+                        ? chartOp.SeriesColors[ci]
+                        : new SrgbColor(0x4F, 0x81, 0xBD);
+                    string label = ci < chart.Categories.Count ? chart.Categories[ci] : $"Point {ci + 1}";
+
+                    if (legendRight)
+                    {
+                        double iy = ly + ci * itemH;
+                        dc.DrawRectangle(
+                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                            null,
+                            new Rect(lx, iy + 3, 8, 8));
+                        DrawChartLabel(dc, label,
+                            new Rect(lx + 10, iy, lw - 10, itemH),
+                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    }
+                    else
+                    {
+                        double ix = lx + ci * 80.0;
+                        dc.DrawRectangle(
+                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                            null,
+                            new Rect(ix, ly + 3, 8, 8));
+                        DrawChartLabel(dc, label,
+                            new Rect(ix + 10, ly, 70, itemH),
+                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    }
                 }
-                else
+            }
+            else
+            {
+                // Column/bar/line/area: one entry per series
+                int maxItems = (int)Math.Max(1, legendRight ? plotH / itemH : lw / 80);
+                int itemsToShow = Math.Min(chart.Series.Count, maxItems);
+
+                for (int si = 0; si < itemsToShow; si++)
                 {
-                    double ix = lx + si * 80.0;
-                    dc.DrawRectangle(
-                        FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
-                        null,
-                        new Rect(ix, ly + 3, 8, 8));
-                    DrawChartLabel(dc, chart.Series[si].Name,
-                        new Rect(ix + 10, ly, 70, itemH),
-                        isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    var sc = si < chartOp.SeriesColors.Count
+                        ? chartOp.SeriesColors[si]
+                        : new SrgbColor(0x4F, 0x81, 0xBD);
+
+                    if (legendRight)
+                    {
+                        double iy = ly + si * itemH;
+                        dc.DrawRectangle(
+                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                            null,
+                            new Rect(lx, iy + 3, 8, 8));
+                        DrawChartLabel(dc, chart.Series[si].Name,
+                            new Rect(lx + 10, iy, lw - 10, itemH),
+                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    }
+                    else
+                    {
+                        double ix = lx + si * 80.0;
+                        dc.DrawRectangle(
+                            FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B))),
+                            null,
+                            new Rect(ix, ly + 3, 8, 8));
+                        DrawChartLabel(dc, chart.Series[si].Name,
+                            new Rect(ix + 10, ly, 70, itemH),
+                            isBold: false, fontSize: 7.0, align: TextAlignment.Left);
+                    }
                 }
             }
         }
@@ -682,10 +730,13 @@ public sealed class SlideCanvas : FrameworkElement
         int    serCount        = Math.Max(1, chart.Series.Count);
         double serH            = stacked ? clusterH : clusterH / serCount;
 
+        // PowerPoint renders bar chart categories in REVERSE order:
+        // category index 0 is at the BOTTOM, last category at the TOP.
         for (int ci = 0; ci < catCount; ci++)
         {
-            double catTop   = plotY + ci * catH + halfGap;
-            double stackedX = plotX;
+            int    renderRow = catCount - 1 - ci;        // reversed
+            double catTop    = plotY + renderRow * catH + halfGap;
+            double stackedX  = plotX;
 
             for (int si = 0; si < chart.Series.Count; si++)
             {
@@ -697,8 +748,11 @@ public sealed class SlideCanvas : FrameworkElement
                 double barW = Math.Abs((val - minVal) / range * plotW);
                 if (barW < 0.5) barW = 0.5;
 
-                double barY = stacked ? catTop : catTop + si * serH;
-                double barX = stacked ? stackedX : plotX;
+                // PowerPoint also reverses series order within each cluster:
+                // series index 0 is at the BOTTOM of the cluster.
+                int    renderSer = stacked ? si : (serCount - 1 - si);
+                double barY      = stacked ? catTop : catTop + renderSer * serH;
+                double barX      = stacked ? stackedX : plotX;
 
                 var color = GetSeriesColor(chart, si, ci, seriesColors);
                 var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
@@ -781,38 +835,18 @@ public sealed class SlideCanvas : FrameworkElement
         double cy = plotY + plotH / 2;
         double r  = Math.Min(plotW, plotH) / 2 * 0.85;
 
-        double startAngle = -Math.PI / 2; // start at top
-
-        // Accent colors for pie slices (cycle if more slices than theme colors)
-        var accentPalette = new[]
-        {
-            Color.FromRgb(0x4F, 0x81, 0xBD),
-            Color.FromRgb(0xC0, 0x50, 0x4D),
-            Color.FromRgb(0x9B, 0xBB, 0x59),
-            Color.FromRgb(0x80, 0x64, 0xA2),
-            Color.FromRgb(0x4B, 0xAC, 0xC6),
-            Color.FromRgb(0xF7, 0x96, 0x46)
-        };
+        double startAngle = -Math.PI / 2; // start at top (12 o'clock, clockwise)
 
         for (int i = 0; i < values.Count; i++)
         {
             double sweepAngle = values[i] / total * 2 * Math.PI;
             double endAngle   = startAngle + sweepAngle;
 
-            // Resolve slice color: per-point override → series color → accent palette
-            SrgbColor sc;
-            if (firstSeries.PointColors.TryGetValue(i, out var pointColor))
-                sc = new SrgbColor(pointColor.Resolved.R, pointColor.Resolved.G, pointColor.Resolved.B);
-            else if (seriesColors.Count > 0)
-                sc = new SrgbColor(
-                    accentPalette[i % accentPalette.Length].R,
-                    accentPalette[i % accentPalette.Length].G,
-                    accentPalette[i % accentPalette.Length].B);
-            else
-                sc = new SrgbColor(
-                    accentPalette[i % accentPalette.Length].R,
-                    accentPalette[i % accentPalette.Length].G,
-                    accentPalette[i % accentPalette.Length].B);
+            // Resolve slice color: seriesColors is pre-expanded per-point by the compositor
+            // (cycling accent1-6 from the theme) so index i gives the correct slice fill.
+            SrgbColor sc = i < seriesColors.Count
+                ? seriesColors[i]
+                : new SrgbColor(0x4F, 0x81, 0xBD);
 
             var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B)));
 
@@ -954,6 +988,11 @@ public sealed class SlideCanvas : FrameworkElement
         // Round max up to next multiple of majorUnit
         double niceMax = Math.Ceiling(max / majorUnit) * majorUnit;
         double niceMin = min >= 0 ? 0 : Math.Floor(min / majorUnit) * majorUnit;
+
+        // PowerPoint adds one more tick of headroom when the data max exactly equals the
+        // computed niceMax (it never draws data touching the top gridline).
+        if (Math.Abs(niceMax - max) < majorUnit * 1e-9)
+            niceMax += majorUnit;
 
         return (niceMin, niceMax, majorUnit);
     }
