@@ -170,6 +170,20 @@ public sealed class Slide
     /// </summary>
     public ShapeFill? Background { get; set; }
 
+    // ── Transitions + Animations ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Slide transition played when this slide enters during a slideshow.
+    /// Null means no transition (or inherit from template). Maps to p:transition in slide XML.
+    /// </summary>
+    public SlideTransition? Transition { get; set; }
+
+    /// <summary>
+    /// Ordered list of shape animation build steps for this slide.
+    /// Playback order matches the list order. Maps to the main sequence in p:timing.
+    /// </summary>
+    public List<ShapeAnimation> Animations { get; } = new();
+
     // ── Legacy title accessor ─────────────────────────────────────────────────────
 
     /// <summary>

@@ -31,6 +31,10 @@ public static class SlideCloner
         foreach (var shape in slide.Shapes)
             copy.Shapes.Add(CloneShape(shape));
 
+        copy.Transition = slide.Transition is null ? null : CloneTransition(slide.Transition);
+        foreach (var anim in slide.Animations)
+            copy.Animations.Add(CloneAnimation(anim));
+
         return copy;
     }
 
@@ -205,5 +209,25 @@ public static class SlideCloner
         Max               = a.Max,
         HasMajorGridlines = a.HasMajorGridlines,
         Delete            = a.Delete,
+    };
+
+    private static SlideTransition CloneTransition(SlideTransition t) => new()
+    {
+        Kind            = t.Kind,
+        Direction       = t.Direction,
+        DurationMs      = t.DurationMs,
+        AdvanceOnClick  = t.AdvanceOnClick,
+        AdvanceAfterMs  = t.AdvanceAfterMs,
+    };
+
+    private static ShapeAnimation CloneAnimation(ShapeAnimation a) => new()
+    {
+        ShapeId    = a.ShapeId,
+        Kind       = a.Kind,
+        Preset     = a.Preset,
+        Trigger    = a.Trigger,
+        DelayMs    = a.DelayMs,
+        DurationMs = a.DurationMs,
+        Direction  = a.Direction,
     };
 }
