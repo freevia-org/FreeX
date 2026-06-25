@@ -3173,10 +3173,19 @@ public static class DocxWriter
                 new XElement(A + "avLst"));
         }
 
+        // a:xfrm: carry @rot/@flipH/@flipV only when non-default (mirrors picture xfrm handling).
+        var shapeXfrm = new XElement(A + "xfrm");
+        if (shape.RotationAngle != 0)
+            shapeXfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationAngle * 60000)));
+        if (shape.FlipH)
+            shapeXfrm.Add(new XAttribute("flipH", 1));
+        if (shape.FlipV)
+            shapeXfrm.Add(new XAttribute("flipV", 1));
+        shapeXfrm.Add(new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)));
+        shapeXfrm.Add(new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy)));
+
         var spPr = new XElement(Wps + "spPr",
-            new XElement(A + "xfrm",
-                new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
+            shapeXfrm,
             geometryElement);
 
         // Fill: extended fill takes priority over simple solid-colour FillColorHex.

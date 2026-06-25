@@ -2222,6 +2222,51 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set the wrapping mode on the currently selected shape. Undoable. No-op without a shape selection.
+    /// Mirrors <see cref="SetSelectedImageWrapping"/> for shapes (routes through
+    /// <see cref="FloatingPlacement.Wrapping"/>).
+    /// </summary>
+    public void SetSelectedShapeWrapping(ImageWrapping wrapping)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeWrappingCommand(blockIndex, runIndex, wrapping));
+        Render();
+    }
+
+    /// <summary>
+    /// Set rotation angle (degrees) and flip flags on the currently selected shape. Undoable.
+    /// No-op without a shape selection.
+    /// </summary>
+    public void SetSelectedShapeRotation(double angleDeg, bool flipH, bool flipV)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapeRotationCommand(blockIndex, runIndex, angleDeg, flipH, flipV));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the floating position offsets and anchors for the currently selected shape. Undoable.
+    /// No-op without a shape selection. Mirrors <see cref="SetSelectedImagePosition"/> for shapes.
+    /// </summary>
+    public void SetSelectedShapePosition(double horizontalOffsetPt, double verticalOffsetPt,
+        HorizontalAnchor horizontalAnchor = HorizontalAnchor.Column,
+        VerticalAnchor verticalAnchor = VerticalAnchor.Paragraph)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        _commands.Execute(new SetShapePositionCommand(
+            blockIndex, runIndex,
+            horizontalOffsetPt, verticalOffsetPt,
+            horizontalAnchor, verticalAnchor));
+        Render();
+    }
+
+    /// <summary>
     /// Set the text warp on the selected WordArt. Undoable. No-op without a WordArt selection.
     /// </summary>
     public void SetSelectedWordArtWarp(WordArtWarp warp)
@@ -4884,6 +4929,20 @@ public sealed class DocumentView : RichTextBox
             Child = textBlock,
             Tag = modelObject
         };
+
+        // Apply rotation and/or flip for Shape objects (mirrors the image rotation/flip render).
+        if (modelObject is Shape floatShape && (floatShape.RotationAngle != 0 || floatShape.FlipH || floatShape.FlipV))
+        {
+            var group = new System.Windows.Media.TransformGroup();
+            if (floatShape.FlipH || floatShape.FlipV)
+                group.Children.Add(new System.Windows.Media.ScaleTransform(
+                    floatShape.FlipH ? -1 : 1, floatShape.FlipV ? -1 : 1,
+                    widthPx / 2, heightPx / 2));
+            if (floatShape.RotationAngle != 0)
+                group.Children.Add(new System.Windows.Media.RotateTransform(
+                    floatShape.RotationAngle, widthPx / 2, heightPx / 2));
+            root.RenderTransform = group;
+        }
 
         root.Cursor = Cursors.SizeAll;
         root.MouseLeftButtonDown += (_, e) =>

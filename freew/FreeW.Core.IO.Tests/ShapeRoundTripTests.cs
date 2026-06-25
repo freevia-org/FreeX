@@ -426,6 +426,100 @@ public class ShapeRoundTripTests
         finalShape.Kind.Should().Be(ShapeKind.Ellipse);
     }
 
+    // ── W26: Body rotation / flip round-trip ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Shape_RotationAngle_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.RotationAngle = 45;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.RotationAngle.Should().BeApproximately(45, 0.001, "rotation angle must survive write→read");
+    }
+
+    [Fact]
+    public void Shape_FlipH_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.FlipH = true;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.FlipH.Should().BeTrue("FlipH must survive write→read");
+        read.FlipV.Should().BeFalse("FlipV must remain false when only FlipH was set");
+    }
+
+    [Fact]
+    public void Shape_FlipV_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.FlipV = true;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.FlipV.Should().BeTrue("FlipV must survive write→read");
+        read.FlipH.Should().BeFalse("FlipH must remain false when only FlipV was set");
+    }
+
+    [Fact]
+    public void Shape_RotationAndFlip_SurviveRoundTripTogether()
+    {
+        var shape = Shape.Preset(ShapeKind.Ellipse, widthPt: 80, heightPt: 80);
+        shape.RotationAngle = 90;
+        shape.FlipH = true;
+        shape.FlipV = true;
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.RotationAngle.Should().BeApproximately(90, 0.001);
+        read.FlipH.Should().BeTrue();
+        read.FlipV.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_DefaultRotation_DoesNotEmitXfrmAttributes()
+    {
+        // When RotationAngle == 0 and FlipH/FlipV are false, the a:xfrm element must not carry
+        // @rot, @flipH or @flipV (keeps output clean and identical to previous behaviour).
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        var xfrm = xml.Descendants(A + "xfrm").FirstOrDefault();
+        xfrm.Should().NotBeNull("a:xfrm must always be emitted");
+        xfrm!.Attribute("rot").Should().BeNull("@rot must not be emitted when RotationAngle is 0");
+        xfrm.Attribute("flipH").Should().BeNull("@flipH must not be emitted when FlipH is false");
+        xfrm.Attribute("flipV").Should().BeNull("@flipV must not be emitted when FlipV is false");
+    }
+
+    [Fact]
+    public void Shape_Rotation90_EmitsXfrmRotAttribute()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.RotationAngle = 90;
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        var xfrm = xml.Descendants(A + "xfrm").First();
+        var rotValue = long.Parse(xfrm.Attribute("rot")!.Value);
+        rotValue.Should().Be(5400000L, "90 degrees × 60000 = 5400000 DrawingML units");
+    }
+
+    // ── W26: Shape wrap / position via FloatingPlacement ─────────────────────────────────────────
+
+    [Fact]
+    public void Shape_FloatingWrapping_SurvivesRoundTrip()
+    {
+        // A floating shape (non-inline) with Square wrapping round-trips through FloatingPlacement.
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.Square };
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.IsFloating.Should().BeTrue("shape with Square wrapping must be floating");
+        read.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside shapes.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

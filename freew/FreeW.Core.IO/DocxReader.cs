@@ -2949,6 +2949,16 @@ public static class DocxReader
 
         var shape = new Shape(kind, widthPt, heightPt);
 
+        // a:xfrm: rotation (degrees, stored as integer × 60000), flipH, flipV.
+        var shapeXfrm = spPr?.Element(A + "xfrm");
+        if (shapeXfrm is not null)
+        {
+            if (shapeXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, out var rotEmu))
+                shape.RotationAngle = rotEmu / 60000.0;
+            shape.FlipH = shapeXfrm.Attribute("flipH")?.Value is "1" or "true";
+            shape.FlipV = shapeXfrm.Attribute("flipV")?.Value is "1" or "true";
+        }
+
         // Custom geometry (a:custGeom): recover freeform polygon segments.
         if (custGeomEl is not null)
         {

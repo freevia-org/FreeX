@@ -810,6 +810,20 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-align-to-margin", new FloatingAlignCommand(editor, FloatingAlignTarget.Margin));
         registry.Register("freew.shape-distribute-h", new FloatingDistributeCommand(editor, vertical: false));
         registry.Register("freew.shape-distribute-v", new FloatingDistributeCommand(editor, vertical: true));
+        // Drawing Tools > Arrange — Wrap Text (6 modes for shapes, mirrors image-wrap-* pattern).
+        registry.Register("freew.shape-wrap-inline",     new ShapeWrapCommand(editor, ImageWrapping.Inline));
+        registry.Register("freew.shape-wrap-square",     new ShapeWrapCommand(editor, ImageWrapping.Square));
+        registry.Register("freew.shape-wrap-tight",      new ShapeWrapCommand(editor, ImageWrapping.Tight));
+        registry.Register("freew.shape-wrap-top-bottom", new ShapeWrapCommand(editor, ImageWrapping.TopAndBottom));
+        registry.Register("freew.shape-wrap-behind",     new ShapeWrapCommand(editor, ImageWrapping.Behind));
+        registry.Register("freew.shape-wrap-front",      new ShapeWrapCommand(editor, ImageWrapping.InFront));
+        // Drawing Tools > Arrange — Rotate / Flip (mirrors image-rotate-* / image-flip-* pattern).
+        registry.Register("freew.shape-rotate-right90",  new ShapeRotateStepCommand(editor, +90));
+        registry.Register("freew.shape-rotate-left90",   new ShapeRotateStepCommand(editor, -90));
+        registry.Register("freew.shape-flip-vertical",   new ShapeFlipCommand(editor, vertical: true));
+        registry.Register("freew.shape-flip-horizontal", new ShapeFlipCommand(editor, vertical: false));
+        // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
+        registry.Register("freew.shape-position", new ShapePositionCommand(editor));
 
         // ── Shape Styles gallery (W24) ────────────────────────────────────────────────────────────
         registry.Register("freew.shape-styles-gallery", new ActionCommand(() =>
@@ -8641,6 +8655,79 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.SetSelectedShapeAlignment(alignment);
+        }
+    }
+
+    // Drawing Format > Arrange > Wrap Text: set the wrapping mode on the selected shape.
+    private sealed class ShapeWrapCommand(DocumentView editor, ImageWrapping wrapping) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Wrap Text");
+                return;
+            }
+            editor.SetSelectedShapeWrapping(wrapping);
+        }
+    }
+
+    // Drawing Format > Arrange > Rotate: rotate the selected shape by a fixed step (relative to current).
+    private sealed class ShapeRotateStepCommand(DocumentView editor, double stepDeg) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Rotate");
+                return;
+            }
+            var newAngle = (shape.RotationAngle + stepDeg + 360) % 360;
+            editor.SetSelectedShapeRotation(newAngle, shape.FlipH, shape.FlipV);
+        }
+    }
+
+    // Drawing Format > Arrange > Flip Vertical / Flip Horizontal.
+    private sealed class ShapeFlipCommand(DocumentView editor, bool vertical) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Flip");
+                return;
+            }
+            if (vertical)
+                editor.SetSelectedShapeRotation(shape.RotationAngle, shape.FlipH, !shape.FlipV);
+            else
+                editor.SetSelectedShapeRotation(shape.RotationAngle, !shape.FlipH, shape.FlipV);
+        }
+    }
+
+    // Drawing Format > Arrange > Position: open the position dialog for the selected shape's floating offset + anchors.
+    private sealed class ShapePositionCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Position");
+                return;
+            }
+            var hOff = shape.Placement?.HorizontalOffsetPt ?? 0;
+            var vOff = shape.Placement?.VerticalOffsetPt ?? 0;
+            var hAnchor = shape.Placement?.HorizontalAnchor ?? HorizontalAnchor.Column;
+            var vAnchor = shape.Placement?.VerticalAnchor ?? VerticalAnchor.Paragraph;
+            var result = ImagePositionDialog.Prompt(Window.GetWindow(editor), hOff, vOff, hAnchor, vAnchor);
+            if (result is { } r)
+                editor.SetSelectedShapePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
         }
     }
 

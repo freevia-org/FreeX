@@ -477,6 +477,24 @@ public sealed class Shape
     /// <summary>True when this shape has been converted to a freeform custom geometry.</summary>
     public bool HasCustomGeometry => CustomGeometry is not null && CustomGeometry.Segments.Count > 0;
 
+    // ── W26: Body rotation / flip ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clockwise rotation of the entire shape body in degrees (0–359).
+    /// Maps onto <c>a:xfrm/@rot</c> (degrees × 60 000 = DrawingML angle). Defaults to 0.
+    /// </summary>
+    public double RotationAngle { get; set; }
+
+    /// <summary>
+    /// Mirror the shape horizontally (<c>a:xfrm/@flipH="1"</c>). Defaults to false.
+    /// </summary>
+    public bool FlipH { get; set; }
+
+    /// <summary>
+    /// Mirror the shape vertically (<c>a:xfrm/@flipV="1"</c>). Defaults to false.
+    /// </summary>
+    public bool FlipV { get; set; }
+
     public Shape() { }
 
     public Shape(ShapeKind kind, double widthPt, double heightPt, string? fillColorHex = null)
