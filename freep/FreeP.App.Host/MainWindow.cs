@@ -360,6 +360,35 @@ public sealed class MainWindow : Window
         var dupSlideCommand = new RoutedCommand("DuplicateSlide", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(dupSlideCommand, (_, _) => Editor.DuplicateCurrentSlide()));
         InputBindings.Add(new KeyBinding(dupSlideCommand, new KeyGesture(Key.D, ModifierKeys.Control)));
+
+        // F5: Start slide show from the beginning.
+        var slideShowFromStart = new RoutedCommand("SlideShowFromStart", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(slideShowFromStart, (_, _) => StartSlideShow(fromStart: true)));
+        InputBindings.Add(new KeyBinding(slideShowFromStart, new KeyGesture(Key.F5)));
+
+        // Shift+F5: Start slide show from the current slide.
+        var slideShowFromCurrent = new RoutedCommand("SlideShowFromCurrent", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(slideShowFromCurrent, (_, _) => StartSlideShow(fromStart: false)));
+        InputBindings.Add(new KeyBinding(slideShowFromCurrent, new KeyGesture(Key.F5, ModifierKeys.Shift)));
+    }
+
+    // ── Slide show (Wave 4B) ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Launches the fullscreen slide show playback.
+    /// Called by F5 (fromStart=true) and Shift+F5 (fromStart=false).
+    /// Wave 4C adds ribbon buttons that call this method; keep internal/public + discoverable.
+    /// </summary>
+    internal void StartSlideShow(bool fromStart)
+    {
+        if (_presentation.Slides.Count == 0) return;
+
+        int startIndex = fromStart ? 0 : Editor.CurrentSlideIndex;
+        var window = new SlideShowWindow(_presentation, startIndex);
+        // Owner can only be set when the main window is already shown (not during unit tests).
+        if (IsVisible)
+            window.Owner = this;
+        window.Show();
     }
 
     // ── Backstage ─────────────────────────────────────────────────────────────────
