@@ -8384,27 +8384,287 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var search = await ShowFindInputDialogAsync();
-        if (search is null)
-            return;
+        await ShowFindReplaceTabbedDialogAsync();
+    }
 
-        if (search.Action == FindDialogAction.FindNext)
+    /// <summary>
+    /// The tabbed Find &amp; Replace dialog used by the Find command (Ctrl/Cmd+F) — the Avalonia equivalent of the
+    /// WPF <c>FindReplaceDialog</c>. A <see cref="TabControl"/> exposes a "Find" tab and a "Replace" tab that share
+    /// the Options area (Within / Search / Look in / Match case / Match entire cell contents) and a results list.
+    /// The Replace tab adds a "Replace with:" box; the Replace and Replace All buttons are only visible on that tab.
+    /// The dialog stays open so multiple Find Next / Replace operations can run, matching Excel. Find actions route
+    /// through <see cref="WorkbookSession.FindNext"/>/<c>FindAll</c>; replace actions through
+    /// <see cref="WorkbookSession.ReplaceNextValue"/>/<c>ReplaceAllValues</c>.
+    /// </summary>
+    private async Task ShowFindReplaceTabbedDialogAsync()
+    {
+        var dialog = new Window
         {
-            FindNext(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
-            return;
+            Title = UiText.Get("FindReplace_FindAndReplace"),
+            Width = 720,
+            Height = 440,
+            MinWidth = 520,
+            MinHeight = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "FindReplaceDialog");
+
+        // Resolve a localized caption, stripping the WPF access-key marker ('_') so labels read cleanly.
+        string Fr(string key, string fallback) =>
+            (UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback)
+                .Replace("_", string.Empty, StringComparison.Ordinal);
+
+        // ── Find tab: "Find what" box ───────────────────────────────────────────
+        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        AutomationProperties.SetName(findBox, "Find what");
+        AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
+        ApplyDialogTextBoxChrome(findBox);
+
+        // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
+        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = 300 };
+        AutomationProperties.SetName(replaceFindBox, "Find what");
+        AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
+        ApplyDialogTextBoxChrome(replaceFindBox);
+
+        var replaceWithBox = new TextBox { Text = "", MinWidth = 300 };
+        AutomationProperties.SetName(replaceWithBox, "Replace with");
+        AutomationProperties.SetAutomationId(replaceWithBox, "FindReplaceReplaceWithBox");
+        ApplyDialogTextBoxChrome(replaceWithBox);
+
+        // Keep the two "Find what" boxes in sync so switching tabs preserves the term.
+        var syncing = false;
+        findBox.TextChanged += (_, _) =>
+        {
+            if (syncing) return;
+            syncing = true;
+            replaceFindBox.Text = findBox.Text;
+            syncing = false;
+        };
+        replaceFindBox.TextChanged += (_, _) =>
+        {
+            if (syncing) return;
+            syncing = true;
+            findBox.Text = replaceFindBox.Text;
+            syncing = false;
+        };
+
+        var findTabGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Thickness(10),
+        };
+        var findLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(findLabel, 0);
+        Grid.SetColumn(findBox, 1);
+        findTabGrid.Children.Add(findLabel);
+        findTabGrid.Children.Add(findBox);
+
+        var replaceTabPanel = new StackPanel { Spacing = 8, Margin = new Thickness(10) };
+        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var replaceFindLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(replaceFindLabel, 0);
+        Grid.SetColumn(replaceFindBox, 1);
+        replaceFindRow.Children.Add(replaceFindLabel);
+        replaceFindRow.Children.Add(replaceFindBox);
+        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var replaceWithLabel = new TextBlock { Text = Fr("FindReplace_ReplaceWith", "Replace with:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Grid.SetColumn(replaceWithLabel, 0);
+        Grid.SetColumn(replaceWithBox, 1);
+        replaceWithRow.Children.Add(replaceWithLabel);
+        replaceWithRow.Children.Add(replaceWithBox);
+        replaceTabPanel.Children.Add(replaceFindRow);
+        replaceTabPanel.Children.Add(replaceWithRow);
+
+        var findTabItem = new TabItem { Header = Fr("FindReplace_Find", "Find"), Content = findTabGrid };
+        AutomationProperties.SetAutomationId(findTabItem, "FindReplaceFindTab");
+        var replaceTabItem = new TabItem { Header = Fr("FindReplace_Replace", "Replace"), Content = replaceTabPanel };
+        AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
+
+        var tabs = new TabControl
+        {
+            Items = { findTabItem, replaceTabItem },
+            SelectedIndex = 0,
+        };
+        AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
+
+        // ── Shared options ──────────────────────────────────────────────────────
+        var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
+
+        // ── Results list ────────────────────────────────────────────────────────
+        var resultsList = new ListBox { MinHeight = 120 };
+        AutomationProperties.SetName(resultsList, "Find all results");
+        AutomationProperties.SetAutomationId(resultsList, "FindReplaceResultsList");
+        resultsList.SelectionChanged += (_, _) =>
+        {
+            if (resultsList.SelectedItem is WorkbookFindAllMatch match)
+                NavigateToFindAllMatch(match);
+        };
+        var resultsBorder = new Border
+        {
+            BorderBrush = FormulaBarControlBorder,
+            BorderThickness = new Thickness(1),
+            Child = resultsList,
+        };
+
+        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
+        AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
+
+        // ── Buttons ─────────────────────────────────────────────────────────────
+        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
+        ApplyDialogButtonChrome(findAllButton);
+
+        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), MinWidth = 84, Padding = new Thickness(10, 4) };
+        AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
+        ApplyDialogButtonChrome(findNextButton, isDefault: true);
+
+        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), MinWidth = 84, Padding = new Thickness(10, 4), IsVisible = false };
+        AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
+        ApplyDialogButtonChrome(replaceButton);
+
+        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), MinWidth = 96, Padding = new Thickness(10, 4), IsVisible = false };
+        AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
+        ApplyDialogButtonChrome(replaceAllButton);
+
+        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), MinWidth = 84, Padding = new Thickness(10, 4), IsCancel = true };
+        AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
+        ApplyDialogButtonChrome(closeButton);
+
+        bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
+        string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
+
+        void UpdateButtonVisibility()
+        {
+            var replaceMode = OnReplaceTab();
+            replaceButton.IsVisible = replaceMode;
+            replaceAllButton.IsVisible = replaceMode;
+        }
+        tabs.SelectionChanged += (_, _) => UpdateButtonVisibility();
+        UpdateButtonVisibility();
+
+        var options = optionsControls;
+
+        FindOptions BuildOptions() => CreateFindOptions(options);
+        bool MatchCase() => options.MatchCaseBox.IsChecked == true;
+        bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
+
+        void DoFindNext()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_FindFailed");
+                return;
+            }
+            statusLabel.Text = UiText.Format("MainLoc_FoundRangeOfCount", FormatRangeReference(r.SelectedRange!.Value), r.MatchIndex, r.MatchCount);
+            RefreshShell(statusLabel.Text);
         }
 
-        var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
-        if (!result.Success)
+        void DoFindAll()
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed"));
-            return;
+            if (!TryCommitPendingFormulaEdit()) return;
+            var search = new FindDialogResult(CurrentFindText(), FindDialogAction.FindAll, BuildOptions(), MatchCase(), MatchEntire());
+            var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
+            if (!result.Success)
+            {
+                statusLabel.Text = result.ErrorMessage ?? UiText.Get("MainLoc_FindAllFailed");
+                return;
+            }
+            resultsList.ItemsSource = result.Matches;
+            statusLabel.Text = result.MatchCount == 0
+                ? UiText.Get("MainLoc_NoMatchesFound")
+                : UiText.Format("MainLoc_FoundCells", result.MatchCount);
+            RefreshShell(statusLabel.Text);
         }
 
-        RefreshShell(result.MatchCount == 0
-            ? UiText.Get("MainLoc_NoMatchesFound")
-            : UiText.Format("MainLoc_FoundCells", result.MatchCount));
-        await ShowFindAllResultsDialogAsync(search.FindText, result.Matches);
+        void DoReplace()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                return;
+            }
+            statusLabel.Text = r.ReplacedCount == 0
+                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
+                : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(r.ReplacedRange!.Value), r.MatchIndex, r.MatchCount);
+            RefreshShell(statusLabel.Text);
+        }
+
+        void DoReplaceAll()
+        {
+            if (!TryCommitPendingFormulaEdit()) return;
+            var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            if (!r.Success)
+            {
+                statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
+                return;
+            }
+            statusLabel.Text = r.ReplacedCount == 0
+                ? (r.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch"))
+                : UiText.Format("MainLoc_ReplacedCells", r.ReplacedCount);
+            RefreshShell(statusLabel.Text);
+        }
+
+        findNextButton.Click += (_, _) => DoFindNext();
+        findAllButton.Click += (_, _) => DoFindAll();
+        replaceButton.Click += (_, _) => DoReplace();
+        replaceAllButton.Click += (_, _) => DoReplaceAll();
+        closeButton.Click += (_, _) => dialog.Close();
+
+        void HandleEnter(KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                if (OnReplaceTab()) DoReplace(); else DoFindNext();
+            }
+            else if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                dialog.Close();
+            }
+        }
+        findBox.KeyDown += (_, e) => HandleEnter(e);
+        replaceFindBox.KeyDown += (_, e) => HandleEnter(e);
+        replaceWithBox.KeyDown += (_, e) => HandleEnter(e);
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
+        };
+
+        var root = new DockPanel { Margin = new Thickness(12) };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        DockPanel.SetDock(statusLabel, Dock.Bottom);
+        DockPanel.SetDock(tabs, Dock.Top);
+        DockPanel.SetDock(options.Panel, Dock.Top);
+
+        tabs.Margin = new Thickness(0, 0, 0, 10);
+        options.Panel.Margin = new Thickness(0, 0, 0, 10);
+        statusLabel.Margin = new Thickness(0, 8, 0, 8);
+        buttonRow.Margin = new Thickness(0, 8, 0, 0);
+
+        root.Children.Add(tabs);
+        root.Children.Add(options.Panel);
+        root.Children.Add(buttonRow);
+        root.Children.Add(statusLabel);
+        root.Children.Add(resultsBorder); // fills remaining space
+
+        dialog.Content = root;
+        dialog.Opened += (_, _) =>
+        {
+            findBox.Focus();
+            findBox.SelectAll();
+        };
+
+        await dialog.ShowDialog(this);
     }
 
     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
@@ -9780,7 +10040,7 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
     {
-        var statisticsBox = new TextBox
+        var statisticsBlock = new TextBox
         {
             Text = FormatWorkbookStatistics(statistics),
             IsReadOnly = true,
@@ -9792,9 +10052,9 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(6, 4),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(statisticsBox, "Workbook Statistics");
-        AutomationProperties.SetAutomationId(statisticsBox, "WorkbookStatisticsSummary");
-        AutomationProperties.SetHelpText(statisticsBox, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
+        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
 
         var buttonRow = new StackPanel
         {
@@ -9813,7 +10073,7 @@ public sealed partial class MainWindow : Window
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
-        root.Children.Add(statisticsBox);
+        root.Children.Add(statisticsBlock);
 
         return root;
     }

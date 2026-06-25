@@ -17,7 +17,13 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get(RecommendedPivotTablesDialogPlanner.TitleKey),
             Width = RecommendedPivotTablesDialogPlanner.Width,
+            // Match the Windows dialog's compact proportions: size to the content's natural height
+            // (a short left list of layouts + a preview area) instead of stretching tall. The fixed
+            // height keeps the empty-state preview from leaving a large blank region below it.
+            Height = RecommendedPivotTablesDialogPlanner.MinHeight,
             MinHeight = RecommendedPivotTablesDialogPlanner.MinHeight,
+            MaxHeight = RecommendedPivotTablesDialogPlanner.MinHeight,
+            SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

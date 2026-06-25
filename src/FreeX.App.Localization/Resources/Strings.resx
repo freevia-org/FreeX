@@ -19496,4 +19496,52 @@ and {0} more.</value>
   <data name="AccessibilityChecker_HowOther" xml:space="preserve">
     <value>Follow the guidance for this issue to improve accessibility.</value>
   </data>
+  <data name="ShellLoc_PasswordGroupHeader" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="ShellLoc_ProtectWorksheetContentsHeader" xml:space="preserve">
+    <value>Protect worksheet and contents of locked cells</value>
+  </data>
+  <data name="ShellLoc_CautionPasswordsCannotBeRecovered" xml:space="preserve">
+    <value>Caution: lost or forgotten passwords cannot be recovered.</value>
+  </data>
+  <data name="Backstage_Account_LocalInfoHeading" xml:space="preserve">
+    <value>Local account information</value>
+  </data>
+  <data name="Backstage_Account_FreeXUserNameLabel" xml:space="preserve">
+    <value>FreeX user name</value>
+  </data>
+  <data name="Backstage_Account_LocalOSAccountLabel" xml:space="preserve">
+    <value>Local OS account</value>
+  </data>
+  <data name="Backstage_Account_DeviceRowLabel" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Backstage_Account_AppVersionLabel" xml:space="preserve">
+    <value>App version</value>
+  </data>
+  <data name="Backstage_Account_OptionsFileLabel" xml:space="preserve">
+    <value>Options file</value>
+  </data>
+  <data name="Backstage_Account_OptionsFileLocalProfile" xml:space="preserve">
+    <value>Local profile settings</value>
+  </data>
+  <data name="Backstage_Account_CurrentWorkbookLabel" xml:space="preserve">
+    <value>Current workbook</value>
+  </data>
+  <data name="Backstage_Account_CurrentWorkbookNotSaved" xml:space="preserve">
+    <value>Parity Demo (not saved yet)</value>
+  </data>
+  <data name="Backstage_Account_SharingLabel" xml:space="preserve">
+    <value>Sharing</value>
+  </data>
+  <data name="Backstage_Account_SharingSaveAsRequired" xml:space="preserve">
+    <value>Save As is required before local share can send the workbook.</value>
+  </data>
+  <data name="Backstage_Account_ExportLabel" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Backstage_Account_ExportReadyLocal" xml:space="preserve">
+    <value>Ready for local PDF/XPS export to a chosen local path.</value>
+  </data>
 </root>

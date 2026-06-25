@@ -230,13 +230,18 @@ public sealed partial class MainWindow
         var fileNameBox = new TextBox
         {
             Text = plan.FileName,
-            Width = 300,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 26,
+            MinHeight = 26,
+            Padding = new Thickness(4, 3, 4, 3),
         };
         AutomationProperties.SetAutomationId(fileNameBox, WorkbookFileDialogSurfacePlanner.FileNameBoxAutomationId);
 
         var fileTypeBox = new ComboBox
         {
-            Width = 300,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 26,
+            MinHeight = 26,
             ItemsSource = plan.FileTypes.Select(type => $"{type.DisplayName} ({string.Join("; ", type.Patterns)})").ToArray(),
             SelectedIndex = 0,
         };
@@ -318,28 +323,28 @@ public sealed partial class MainWindow
         var workbookButton = new RadioButton { Content = UiText.Get("ExportOptions_Workbook") };
         var allPagesButton = new RadioButton { Content = UiText.Get("ExportOptions_All"), GroupName = "PageRange", IsChecked = true };
         var pagesButton = new RadioButton { Content = UiText.Get("ExportOptions_Pages"), GroupName = "PageRange" };
-        var fromPageBox = new TextBox { Width = 56, IsEnabled = false };
-        var toPageBox = new TextBox { Width = 56, IsEnabled = false };
+        var fromPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
+        var toPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
         var documentPropertiesBox = new CheckBox { Content = UiText.Get("ExportOptions_IncludeDocumentProperties") };
         var ignorePrintAreasBox = new CheckBox { Content = UiText.Get("ExportOptions_IgnorePrintAreas") };
         var bookmarksBox = new CheckBox { Content = UiText.Get("ExportOptions_CreatePdfBookmarks") };
-        var bookmarkModeBox = new ComboBox { Width = 180, IsEnabled = false };
+        var bookmarkModeBox = new ComboBox { Width = 180, Height = 24, MinHeight = 24, IsEnabled = false };
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_SheetNames"));
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PageNumbers"));
         bookmarkModeBox.SelectedIndex = 0;
-        var initialViewBox = new ComboBox { Width = 180, IsEnabled = availability.PdfInitialViewEnabled };
+        var initialViewBox = new ComboBox { Width = 180, Height = 24, MinHeight = 24, IsEnabled = availability.PdfInitialViewEnabled };
         initialViewBox.Items.Add(UiText.Get("ExportOptions_SinglePage"));
         initialViewBox.Items.Add(UiText.Get("ExportOptions_OneContinuousColumn"));
         initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesLeft"));
         initialViewBox.Items.Add(UiText.Get("ExportOptions_TwoColumnsOddPagesRight"));
         initialViewBox.SelectedIndex = 0;
-        var openModeBox = new ComboBox { Width = 180, IsEnabled = availability.PdfOpenModeEnabled };
+        var openModeBox = new ComboBox { Width = 180, Height = 24, MinHeight = 24, IsEnabled = availability.PdfOpenModeEnabled };
         openModeBox.Items.Add(UiText.Get("ExportOptions_Normal"));
         openModeBox.Items.Add(UiText.Get("ExportOptions_BookmarksVisible"));
         openModeBox.Items.Add(UiText.Get("ExportOptions_FullScreen"));
         openModeBox.SelectedIndex = 0;
-        var pdfLanguageBox = new TextBox { Width = 88, Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
+        var pdfLanguageBox = new TextBox { Width = 88, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
         var bitmapTextBox = new CheckBox
         {
             Content = UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded"),
@@ -349,7 +354,7 @@ public sealed partial class MainWindow
         var structureTagsBox = new CheckBox { Content = UiText.Get("ExportOptions_DocumentStructureTagsNotSupported"), IsEnabled = false };
         var standardQualityButton = new RadioButton { Content = UiText.Get("ExportOptions_Standard"), IsChecked = true };
         var minimumSizeButton = new RadioButton { Content = UiText.Get("ExportOptions_MinimumSize"), IsEnabled = availability.MinimumSizeEnabled };
-        var openAfterPublishBox = new CheckBox { Content = UiText.Get("ExportOptions_OpenAfterPublishing"), Margin = new Thickness(0, 8, 0, 18) };
+        var openAfterPublishBox = new CheckBox { Content = UiText.Get("ExportOptions_OpenAfterPublishing"), Margin = new Thickness(0, 8, 0, 0) };
 
         bookmarksBox.IsEnabled = availability.PdfBookmarksEnabled;
         bookmarksBox.IsCheckedChanged += (_, _) => bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
@@ -395,19 +400,29 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 80 };
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
-        stack.Children.Add(new StackPanel
+
+        // Buttons live in their own row docked to the bottom of the dialog so they stay fully
+        // visible even when the option list is tall — mirrors the compact WPF layout where the
+        // whole dialog sizes to content and OK/Cancel are never clipped.
+        var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 8, 16, 12),
             Spacing = 8,
             Children = { okButton, cancelButton },
-        });
+        };
 
-        dialog.Content = new ScrollViewer
+        var root = new DockPanel();
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        root.Children.Add(buttonRow);
+        root.Children.Add(new ScrollViewer
         {
             Content = stack,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        };
+        });
+
+        dialog.Content = root;
         dialog.Opened += (_, _) => activeSheetButton.Focus();
         await dialog.ShowDialog(this);
     }
@@ -763,12 +778,16 @@ public sealed partial class MainWindow
         if (pivot is null)
             return;
 
+        var field = FirstParityPivotField(pivot);
         await ShowPivotControlPickerParityDialogAsync(
-            title: UiText.Get("PivotLoc_InsertSlicersTitle"),
+            title: UiText.Get("PivotSlicerTimeline_InsertSlicer"),
             automationId: "InsertSlicerDialog",
             fieldListAutomationId: "InsertSlicerFieldList",
-            prompt: UiText.Format("PivotLoc_ChooseFieldsForSlicers", pivot.Name),
-            selectAll: false);
+            groupResourceKey: "PivotSlicerTimeline_ChooseFieldsGroup",
+            fieldLabelResourceKey: "PivotSlicerTimeline_FieldToConnectLabel",
+            captionLabelResourceKey: "PivotSlicerTimeline_SlicerCaptionLabel",
+            selectedField: field,
+            captionText: UiText.Format("PivotSlicerTimeline_DefaultSlicerName", field));
     }
 
     private async Task ShowInsertTimelineParityDialogAsync()
@@ -777,53 +796,110 @@ public sealed partial class MainWindow
         if (pivot is null)
             return;
 
+        var field = FirstParityPivotField(pivot);
         await ShowPivotControlPickerParityDialogAsync(
-            title: UiText.Get("PivotLoc_InsertTimelinesTitle"),
+            title: UiText.Get("PivotSlicerTimeline_InsertTimeline"),
             automationId: "InsertTimelineDialog",
             fieldListAutomationId: "InsertTimelineFieldList",
-            prompt: UiText.Format("PivotLoc_ChooseDateFieldsForTimelines", pivot.Name),
-            selectAll: false);
+            groupResourceKey: "PivotSlicerTimeline_ChooseDateFieldsGroup",
+            fieldLabelResourceKey: "PivotSlicerTimeline_DateFieldToConnectLabel",
+            captionLabelResourceKey: "PivotSlicerTimeline_TimelineCaptionLabel",
+            selectedField: field,
+            captionText: UiText.Format("PivotSlicerTimeline_DefaultTimelineName", field));
     }
 
+    private string FirstParityPivotField(PivotTableModel pivot)
+    {
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        return headers.FirstOrDefault(h => !string.IsNullOrWhiteSpace(h)) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Mirrors the WPF <c>InsertSlicerDialog</c> / <c>InsertTimelineDialog</c>: a "Choose fields"
+    /// group box holding an editable "Field to connect" combo and a caption text box, with the
+    /// OK/Cancel row beneath — instead of the old plain checkbox list.
+    /// </summary>
     private async Task ShowPivotControlPickerParityDialogAsync(
         string title,
         string automationId,
         string fieldListAutomationId,
-        string prompt,
-        bool selectAll)
+        string groupResourceKey,
+        string fieldLabelResourceKey,
+        string captionLabelResourceKey,
+        string selectedField,
+        string captionText)
     {
         var pivot = EnsureParityPivot();
         if (pivot is null)
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
-        if (headers.Count == 0)
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .ToArray();
+        if (headers.Length == 0)
             return;
 
         var dialog = new Window
         {
             Title = title,
-            Width = 320,
-            Height = 420,
-            MinWidth = 280,
-            MinHeight = 320,
+            Width = 410,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
 
-        var fieldStack = new StackPanel { Spacing = 4 };
-        foreach (var header in headers)
-            fieldStack.Children.Add(new CheckBox { Content = header, IsChecked = selectAll });
-        var fieldList = new Border
+        var fieldBox = new ComboBox
         {
+            ItemsSource = headers,
+            SelectedIndex = Math.Max(0, Array.IndexOf(headers, selectedField)),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 24,
+            MinHeight = 24,
+        };
+        AutomationProperties.SetAutomationId(fieldBox, fieldListAutomationId);
+
+        var captionBox = new TextBox
+        {
+            Text = captionText,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 24,
+            MinHeight = 24,
+            Padding = new Thickness(4, 2, 4, 2),
+        };
+
+        var groupBody = new StackPanel { Spacing = 4 };
+        groupBody.Children.Add(new TextBlock
+        {
+            Text = UiText.Get(groupResourceKey).Replace("_", string.Empty),
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+        groupBody.Children.Add(new Label
+        {
+            Content = UiText.Get(fieldLabelResourceKey),
+            Target = fieldBox,
+            Padding = new Thickness(0, 0, 0, 2),
+        });
+        groupBody.Children.Add(fieldBox);
+        groupBody.Children.Add(new Label
+        {
+            Content = UiText.Get(captionLabelResourceKey),
+            Target = captionBox,
+            Margin = new Thickness(0, 8, 0, 0),
+            Padding = new Thickness(0, 0, 0, 2),
+        });
+        groupBody.Children.Add(captionBox);
+
+        var group = new Border
+        {
+            Child = groupBody,
             BorderBrush = Brush(200, 200, 200),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8),
-            Height = 250,
-            Child = fieldStack,
+            CornerRadius = new CornerRadius(2),
+            Padding = new Thickness(12, 10, 12, 12),
         };
-        AutomationProperties.SetAutomationId(fieldList, fieldListAutomationId);
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
@@ -833,23 +909,22 @@ public sealed partial class MainWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Spacing = 8,
+            Spacing = 12,
             Children =
             {
-                new TextBlock { Text = prompt, TextWrapping = TextWrapping.Wrap },
-                fieldList,
+                group,
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
                     Spacing = 8,
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Margin = new Thickness(0, 8, 0, 0),
                     // WPF order: [OK] [Cancel]
                     Children = { okButton, cancelButton },
                 },
             },
         };
 
+        dialog.Opened += (_, _) => fieldBox.Focus();
         await dialog.ShowDialog(this);
     }
 
@@ -2145,9 +2220,12 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         });
+        // Windows shows an "Account" page subtitled "Local account information" (not "Product
+        // information"): a two-column label/value table of the local app + OS identity, version, and
+        // local workbook/sharing/export readiness — and no cloud-account note. Mirror that here.
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("Backstage_Account_ProductSectionHeader"),
+            Text = BackstageAccountText("Backstage_Account_LocalInfoHeading"),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
@@ -2161,13 +2239,13 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
-        var rows = FreeXBackstagePaneCatalog.BuildAccountDetails();
-        for (var i = 0; i < rows.Count; i++)
+        var rows = BuildParityCapturedBackstageAccountRows();
+        for (var i = 0; i < rows.Length; i++)
         {
             details.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             AddGridChild(details, new TextBlock
             {
-                Text = UiText.Get(rows[i].LabelKey),
+                Text = rows[i].Label,
                 FontSize = 12,
                 Foreground = new SolidColorBrush(Color.FromRgb(95, 99, 104)),
                 Margin = new Thickness(0, 0, 18, 10),
@@ -2176,7 +2254,7 @@ public sealed partial class MainWindow
             }, i, 0);
             AddGridChild(details, new TextBlock
             {
-                Text = ResolveParityCapturedBackstageAccountDetailValue(rows[i].Id),
+                Text = rows[i].Value,
                 FontSize = 13,
                 Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
                 Margin = new Thickness(0, 0, 0, 10),
@@ -2187,14 +2265,6 @@ public sealed partial class MainWindow
             }, i, 1);
         }
         root.Children.Add(details);
-        root.Children.Add(new TextBlock
-        {
-            Text = UiText.Get("Backstage_Account_LocalOnlyNote"),
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(64, 64, 64)),
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 560,
-        });
 
         return new Border
         {
@@ -2203,16 +2273,65 @@ public sealed partial class MainWindow
         };
     }
 
-    private static string ResolveParityCapturedBackstageAccountDetailValue(
-        FreeXBackstageAccountDetailId id) =>
-        id switch
+    private static (string Label, string Value)[] BuildParityCapturedBackstageAccountRows()
+    {
+        var osAccount = Environment.UserName;
+        // Personalized FreeX user name falls back to the OS account when no override is configured —
+        // matching the Windows page, which shows the configured user name for both rows by default.
+        var freeXUser = string.IsNullOrWhiteSpace(osAccount) ? "Unknown" : osAccount;
+
+        return new[]
         {
-            FreeXBackstageAccountDetailId.Product => AppHelpInfo.ProductName,
-            FreeXBackstageAccountDetailId.Version => AppHelpInfo.GetBuildVersionText(typeof(MainWindow).Assembly),
-            FreeXBackstageAccountDetailId.Device => Environment.MachineName,
-            FreeXBackstageAccountDetailId.User => Environment.UserName,
-            _ => throw new ArgumentOutOfRangeException(nameof(id), id, null)
+            (BackstageAccountText("Backstage_Account_FreeXUserNameLabel"), freeXUser),
+            (BackstageAccountText("Backstage_Account_LocalOSAccountLabel"), osAccount),
+            (BackstageAccountText("Backstage_Account_DeviceRowLabel"), Environment.MachineName),
+            (BackstageAccountText("Backstage_Account_AppVersionLabel"),
+                AppHelpInfo.GetBuildVersionText(typeof(MainWindow).Assembly)),
+            (BackstageAccountText("Backstage_Account_OptionsFileLabel"),
+                BackstageAccountText("Backstage_Account_OptionsFileLocalProfile")),
+            (BackstageAccountText("Backstage_Account_CurrentWorkbookLabel"),
+                BackstageAccountText("Backstage_Account_CurrentWorkbookNotSaved")),
+            (BackstageAccountText("Backstage_Account_SharingLabel"),
+                BackstageAccountText("Backstage_Account_SharingSaveAsRequired")),
+            (BackstageAccountText("Backstage_Account_ExportLabel"),
+                BackstageAccountText("Backstage_Account_ExportReadyLocal")),
         };
+    }
+
+    /// <summary>
+    /// Resolves a backstage Account string, falling back to the canonical English text when the
+    /// localization key has not yet been authored (so the page renders at parity before the resx
+    /// keys land). These labels are colon-free to match the Windows backstage page styling, so they
+    /// use fresh keys rather than the existing colon-suffixed Backstage_Account_*Label keys.
+    /// </summary>
+    private static string BackstageAccountText(string resourceKey)
+    {
+        var localized = UiText.Get(resourceKey);
+        if (!string.IsNullOrEmpty(localized) &&
+            !(localized.StartsWith("[[", StringComparison.Ordinal) && localized.EndsWith("]]", StringComparison.Ordinal)) &&
+            !string.Equals(localized, resourceKey, StringComparison.Ordinal))
+        {
+            return localized;
+        }
+
+        return resourceKey switch
+        {
+            "Backstage_Account_LocalInfoHeading" => "Local account information",
+            "Backstage_Account_FreeXUserNameLabel" => "FreeX user name",
+            "Backstage_Account_LocalOSAccountLabel" => "Local OS account",
+            "Backstage_Account_DeviceRowLabel" => "Device",
+            "Backstage_Account_AppVersionLabel" => "App version",
+            "Backstage_Account_OptionsFileLabel" => "Options file",
+            "Backstage_Account_OptionsFileLocalProfile" => "Local profile settings",
+            "Backstage_Account_CurrentWorkbookLabel" => "Current workbook",
+            "Backstage_Account_CurrentWorkbookNotSaved" => "Parity Demo (not saved yet)",
+            "Backstage_Account_SharingLabel" => "Sharing",
+            "Backstage_Account_SharingSaveAsRequired" => "Save As is required before local share can send the workbook.",
+            "Backstage_Account_ExportLabel" => "Export",
+            "Backstage_Account_ExportReadyLocal" => "Ready for local PDF/XPS export to a chosen local path.",
+            _ => resourceKey,
+        };
+    }
 
     private static void PlaceBackstage(Canvas canvas, Control child, double left, double top)
     {

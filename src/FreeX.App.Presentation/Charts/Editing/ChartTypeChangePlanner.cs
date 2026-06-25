@@ -12,9 +12,9 @@ public sealed record ChartTypeChoice(ChartType Type, string DisplayName);
 /// <summary>
 /// A "Change Chart Type" category for the left-hand category list (Column, Line, Pie, …): the
 /// localization key for the category name (so each shell resolves it through its own UiText) and the
-/// authorable subtype choices that belong to it, in catalog order. Mirrors the WPF
-/// <c>ChartTypePickerCategory</c> grouping so the Avalonia category-list + subtype-gallery dialog
-/// matches the Windows "Change Chart Type" layout.
+/// authorable subtype choices that belong to it, in catalog order. Mirrors the host
+/// <c>ChartTypePickerCategory</c> grouping so each shell's category-list + subtype-gallery dialog
+/// matches the "Change Chart Type" layout.
 /// </summary>
 public sealed record ChartTypeCategory(string NameKey, IReadOnlyList<ChartTypeChoice> Choices);
 
