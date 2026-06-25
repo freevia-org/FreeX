@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
+    <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

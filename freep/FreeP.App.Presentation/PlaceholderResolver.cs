@@ -1,0 +1,163 @@
+﻿using FreeP.Core.Model;
+using PresentationModel = FreeP.Core.Model.Presentation;
+
+namespace FreeP.App.Compositor;
+
+/// <summary>
+/// Resolves placeholder inheritance for a <see cref="SlideShape"/>.
+/// A shape that is a placeholder and has missing geometry or text properties inherits them from
+/// the matching placeholder on the slide's layout and then on the layout's master.
+/// "Matching" = same Type and Idx as the placeholder tag on the shape.
+/// </summary>
+public static class PlaceholderResolver
+{
+    // â”€â”€â”€ Public entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /// <summary>
+    /// Given a slide shape and the full presentation context, returns the effective resolved
+    /// geometry (position/size) for the shape.  If the shape has its own xfrm (non-zero extents),
+    /// its own values are returned unchanged.  Otherwise the matching layout placeholder is tried,
+    /// then the matching master placeholder.
+    /// </summary>
+    public static ResolvedAnchor ResolveAnchor(
+        SlideShape shape,
+        PresentationModel presentation)
+    {
+        // Shape has its own geometry â€” use it directly.
+        if (shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0)
+            return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                      shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                      shape.RotationDeg, shape.FlipH, shape.FlipV);
+
+        // Not a placeholder â€” nothing to inherit.
+        if (shape.Placeholder is null)
+            return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                      shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                      shape.RotationDeg, shape.FlipH, shape.FlipV);
+
+        // Try layout then master.
+        var layoutPh = FindLayoutPlaceholder(shape.Placeholder, presentation);
+        if (layoutPh is not null && (layoutPh.ExtentCxEmu > 0 || layoutPh.ExtentCyEmu > 0))
+            return new ResolvedAnchor(layoutPh.OffsetXEmu, layoutPh.OffsetYEmu,
+                                      layoutPh.ExtentCxEmu, layoutPh.ExtentCyEmu,
+                                      layoutPh.RotationDeg, layoutPh.FlipH, layoutPh.FlipV);
+
+        var masterPh = FindMasterPlaceholder(shape.Placeholder, presentation);
+        if (masterPh is not null && (masterPh.ExtentCxEmu > 0 || masterPh.ExtentCyEmu > 0))
+            return new ResolvedAnchor(masterPh.OffsetXEmu, masterPh.OffsetYEmu,
+                                      masterPh.ExtentCxEmu, masterPh.ExtentCyEmu,
+                                      masterPh.RotationDeg, masterPh.FlipH, masterPh.FlipV);
+
+        // No inherited geometry â€” fall back to the shape's own (possibly zero) values.
+        return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                  shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                  shape.RotationDeg, shape.FlipH, shape.FlipV);
+    }
+
+    /// <summary>
+    /// Resolves inherited run-level text defaults for a shape.
+    /// Returns the placeholder from layout/master that carries text defaults (font, size, color).
+    /// </summary>
+    public static SlideShape? FindInheritedTextSource(SlideShape shape, PresentationModel presentation)
+    {
+        if (shape.Placeholder is null) return null;
+        return FindLayoutPlaceholder(shape.Placeholder, presentation)
+            ?? FindMasterPlaceholder(shape.Placeholder, presentation);
+    }
+
+    // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    private static SlideShape? FindLayoutPlaceholder(Placeholder ph, PresentationModel presentation)
+    {
+        // We need the slide's layout.  We don't have a direct reference to the slide here, but
+        // callers can use the overload that takes the slide directly.  As a fallback, search all layouts.
+        foreach (var layout in presentation.Layouts)
+            foreach (var lph in layout.Placeholders)
+                if (MatchesPlaceholder(lph, ph))
+                    return lph;
+        return null;
+    }
+
+    private static SlideShape? FindMasterPlaceholder(Placeholder ph, PresentationModel presentation)
+    {
+        foreach (var master in presentation.Masters)
+            foreach (var mph in master.Placeholders)
+                if (MatchesPlaceholder(mph, ph))
+                    return mph;
+        return null;
+    }
+
+    /// <summary>
+    /// Finds the layout placeholder for a shape on a specific slide.
+    /// </summary>
+    internal static SlideShape? FindLayoutPlaceholder(Placeholder ph, Slide slide, PresentationModel presentation)
+    {
+        var layout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
+        if (layout is null) return null;
+        return layout.Placeholders.Find(lph => MatchesPlaceholder(lph, ph));
+    }
+
+    /// <summary>
+    /// Finds the master placeholder for a shape on a specific slide.
+    /// </summary>
+    internal static SlideShape? FindMasterPlaceholder(Placeholder ph, Slide slide, PresentationModel presentation)
+    {
+        var layout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
+        if (layout is null)
+            return FindMasterPlaceholder(ph, presentation);
+
+        var master = presentation.Masters.Find(m => m.Id == layout.MasterId);
+        if (master is null) return null;
+        return master.Placeholders.Find(mph => MatchesPlaceholder(mph, ph));
+    }
+
+    /// <summary>
+    /// Resolves anchor for a specific slide's context (preferred; uses exact layout/master linkage).
+    /// </summary>
+    public static ResolvedAnchor ResolveAnchor(SlideShape shape, Slide slide, PresentationModel presentation)
+    {
+        if (shape.ExtentCxEmu > 0 || shape.ExtentCyEmu > 0)
+            return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                      shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                      shape.RotationDeg, shape.FlipH, shape.FlipV);
+
+        if (shape.Placeholder is null)
+            return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                      shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                      shape.RotationDeg, shape.FlipH, shape.FlipV);
+
+        var layoutPh = FindLayoutPlaceholder(shape.Placeholder, slide, presentation);
+        if (layoutPh is not null && (layoutPh.ExtentCxEmu > 0 || layoutPh.ExtentCyEmu > 0))
+            return new ResolvedAnchor(layoutPh.OffsetXEmu, layoutPh.OffsetYEmu,
+                                      layoutPh.ExtentCxEmu, layoutPh.ExtentCyEmu,
+                                      layoutPh.RotationDeg, layoutPh.FlipH, layoutPh.FlipV);
+
+        var masterPh = FindMasterPlaceholder(shape.Placeholder, slide, presentation);
+        if (masterPh is not null && (masterPh.ExtentCxEmu > 0 || masterPh.ExtentCyEmu > 0))
+            return new ResolvedAnchor(masterPh.OffsetXEmu, masterPh.OffsetYEmu,
+                                      masterPh.ExtentCxEmu, masterPh.ExtentCyEmu,
+                                      masterPh.RotationDeg, masterPh.FlipH, masterPh.FlipV);
+
+        return new ResolvedAnchor(shape.OffsetXEmu, shape.OffsetYEmu,
+                                  shape.ExtentCxEmu, shape.ExtentCyEmu,
+                                  shape.RotationDeg, shape.FlipH, shape.FlipV);
+    }
+
+    private static bool MatchesPlaceholder(SlideShape candidate, Placeholder target)
+    {
+        if (candidate.Placeholder is null) return false;
+        return candidate.Placeholder.Type == target.Type &&
+               candidate.Placeholder.Idx == target.Idx;
+    }
+}
+
+/// <summary>Fully-resolved anchor for a shape: EMU absolute coordinates.</summary>
+public readonly record struct ResolvedAnchor(
+    long OffsetXEmu,
+    long OffsetYEmu,
+    long ExtentCxEmu,
+    long ExtentCyEmu,
+    double RotationDeg,
+    bool FlipH,
+    bool FlipV);
+
