@@ -3,6 +3,12 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+// Paste offset: ~0.2 inches in EMU  (914400 EMU = 1 inch)
+file static class PasteOffset
+{
+    internal const long Emu = 182880L; // 0.2 inch
+}
+
 /// <summary>
 /// Framework-free view-model for an active editing session.
 ///
@@ -22,6 +28,26 @@ public sealed class EditingSession
 
     private int _currentSlideIndex;
     private readonly List<uint> _selectedShapeIds = new();
+
+    // ── Clipboard state ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Internal shape clipboard.  Each entry is a deep-clone captured at copy/cut time.
+    /// Non-null + non-empty → <see cref="CanPaste"/> is true and <see cref="Paste"/> will paste shapes.
+    /// </summary>
+    private List<SlideShape>? _shapeClipboard;
+
+    /// <summary>
+    /// Internal slide clipboard.  Non-null → <see cref="Paste"/> will paste a slide when
+    /// <see cref="_shapeClipboard"/> is empty.
+    /// </summary>
+    private Slide? _slideClipboard;
+
+    // ── Format-painter clipboard ──────────────────────────────────────────────────
+
+    private ShapeFill?          _fmtFill;
+    private ShapeOutline?       _fmtOutline;
+    private RunFormatSnapshot?  _fmtRun;
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -497,6 +523,334 @@ public sealed class EditingSession
         };
         AddShape(shape);
         return shape;
+    }
+
+    // ── Clipboard — shapes ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when there is something on the internal clipboard that can be pasted.
+    /// </summary>
+    public bool CanPaste =>
+        (_shapeClipboard is { Count: > 0 }) || _slideClipboard is not null;
+
+    /// <summary>
+    /// Copies the currently selected shapes to the internal shape clipboard (deep-clones).
+    /// Does nothing if there is no current slide or no selection.
+    /// </summary>
+    public void CopySelectedShapes()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return;
+
+        _shapeClipboard = _selectedShapeIds
+            .Select(id => slide.Shapes.FirstOrDefault(s => s.Id == id))
+            .Where(s => s is not null)
+            .Select(s => SlideCloner.CloneShape(s!))
+            .ToList();
+
+        // Shape clipboard wins — clear any stale slide clipboard.
+        _slideClipboard = null;
+    }
+
+    /// <summary>
+    /// Copies the selected shapes to the clipboard, then deletes them from the slide (cut).
+    /// </summary>
+    public void CutSelectedShapes()
+    {
+        CopySelectedShapes();
+        DeleteSelected();
+    }
+
+    /// <summary>
+    /// Pastes the shape clipboard onto the current slide.  Each pasted shape gets:
+    /// <list type="bullet">
+    ///   <item>A fresh unique Id (max existing Id + 1, assigned in order).</item>
+    ///   <item>An offset of +0.2" in both X and Y relative to its original position.</item>
+    /// </list>
+    /// The pasted shapes become the new selection.  Undoable via a single <see cref="PasteShapesCommand"/>.
+    /// Does nothing if <see cref="_shapeClipboard"/> is null or empty.
+    /// </summary>
+    public void PasteShapes()
+    {
+        if (CurrentSlide is null) return;
+        if (_shapeClipboard is not { Count: > 0 }) return;
+
+        // Deep-clone again so repeated Paste produces independent copies.
+        var clones = _shapeClipboard.Select(s => SlideCloner.CloneShape(s)).ToList();
+
+        // Assign fresh Ids and apply paste offset.
+        uint nextId = CurrentSlide.Shapes.Count == 0
+            ? 1u
+            : CurrentSlide.Shapes.Max(s => s.Id) + 1u;
+
+        foreach (var c in clones)
+        {
+            c.Id          = nextId++;
+            c.OffsetXEmu += PasteOffset.Emu;
+            c.OffsetYEmu += PasteOffset.Emu;
+        }
+
+        Bus.Execute(new PasteShapesCommand(_currentSlideIndex, clones));
+
+        // Select the pasted shapes.
+        _selectedShapeIds.Clear();
+        foreach (var c in clones)
+            _selectedShapeIds.Add(c.Id);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ── Clipboard — slides ────────────────────────────────────────────────────────
+
+    /// <summary>Copies the current slide to the internal slide clipboard (deep-clone).</summary>
+    public void CopyCurrentSlide()
+    {
+        if (CurrentSlide is null) return;
+        _slideClipboard = SlideCloner.CloneSlide(CurrentSlide);
+        _shapeClipboard = null; // slide clipboard takes precedence
+    }
+
+    /// <summary>Copies then deletes the current slide (cut slide).</summary>
+    public void CutCurrentSlide()
+    {
+        CopyCurrentSlide();
+        DeleteCurrentSlide();
+    }
+
+    /// <summary>
+    /// Pastes the slide clipboard as a new slide inserted immediately after the current slide.
+    /// Undoable.  Does nothing if <see cref="_slideClipboard"/> is null.
+    /// </summary>
+    public void PasteSlide()
+    {
+        if (_slideClipboard is null) return;
+        // Clone again for independent copy.
+        var clone    = SlideCloner.CloneSlide(_slideClipboard);
+        var insertAt = _currentSlideIndex < 0 ? 0 : _currentSlideIndex + 1;
+        Bus.Execute(new PasteSlideCommand(insertAt, clone));
+        CurrentSlideIndex = insertAt;
+    }
+
+    // ── Clipboard — unified paste ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Unified paste: if the shape clipboard is non-empty, calls <see cref="PasteShapes"/>;
+    /// otherwise calls <see cref="PasteSlide"/>.
+    /// </summary>
+    public void Paste()
+    {
+        if (_shapeClipboard is { Count: > 0 })
+            PasteShapes();
+        else if (_slideClipboard is not null)
+            PasteSlide();
+    }
+
+    // ── Theme ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Replaces the presentation theme with <paramref name="theme"/>. Undoable.
+    /// Shapes that reference scheme-color slots will re-resolve automatically because
+    /// the renderer reads the live <see cref="Presentation.Theme"/> via
+    /// <see cref="ThemeColorResolver"/>.
+    /// </summary>
+    public void SetTheme(PresentationTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        Bus.Execute(new SetThemeCommand(theme));
+    }
+
+    /// <summary>
+    /// Looks up a theme by its built-in id and applies it.
+    /// Throws <see cref="ArgumentException"/> if <paramref name="themeId"/> is not recognised.
+    /// </summary>
+    public void SetTheme(string themeId)
+    {
+        var theme = BuiltInThemes.GetById(themeId)
+            ?? throw new ArgumentException($"Unknown built-in theme id '{themeId}'.", nameof(themeId));
+        SetTheme(theme);
+    }
+
+    // ── Slide size ────────────────────────────────────────────────────────────────
+
+    /// <summary>Sets the slide size to an arbitrary custom EMU extent. Undoable.</summary>
+    public void SetSlideSizeCustom(long cxEmu, long cyEmu)
+        => Bus.Execute(new SetSlideSizeCommand(cxEmu, cyEmu));
+
+    /// <summary>Sets the slide size to 16:9 widescreen (12192000 × 6858000 EMU). Undoable.</summary>
+    public void SetSlideSize16x9()
+        => SetSlideSizeCustom(12192000L, 6858000L);
+
+    /// <summary>Sets the slide size to 4:3 standard (9144000 × 6858000 EMU). Undoable.</summary>
+    public void SetSlideSize4x3()
+        => SetSlideSizeCustom(9144000L, 6858000L);
+
+    /// <summary>
+    /// Overload alias — same as <see cref="SetSlideSizeCustom"/> but named per the spec contract.
+    /// </summary>
+    public void SetSlideSize(long cxEmu, long cyEmu)
+        => SetSlideSizeCustom(cxEmu, cyEmu);
+
+    // ── Insert table ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates and inserts a default <see cref="TableShape"/> with <paramref name="rows"/> rows
+    /// and <paramref name="cols"/> columns onto the current slide, approximately half the slide
+    /// width, centered.  Undoable.
+    /// </summary>
+    public SlideShape InsertTable(int rows, int cols)
+    {
+        if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
+        if (cols < 1) throw new ArgumentOutOfRangeException(nameof(cols));
+
+        // Size: ~60 % of slide width, ~30 % height, centered.
+        const double widthFrac  = 0.60;
+        const double heightFrac = 0.30;
+        long cx = (long)(Presentation.SlideSizeCxEmu * widthFrac);
+        long cy = (long)(Presentation.SlideSizeCyEmu * heightFrac);
+        long x  = (Presentation.SlideSizeCxEmu - cx) / 2;
+        long y  = (Presentation.SlideSizeCyEmu - cy) / 2;
+
+        long colWidth = cols > 0 ? cx / cols : cx;
+        long rowHeight = rows > 0 ? cy / rows : cy;
+
+        var table = new TableShape
+        {
+            TableStyleId = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", // Office default style GUID
+            Flags        = new TableStyleFlags { FirstRow = true, BandRow = true }
+        };
+
+        for (int c = 0; c < cols; c++)
+            table.ColumnWidthsEmu.Add(colWidth);
+
+        for (int r = 0; r < rows; r++)
+        {
+            var row = new TableRow { HeightEmu = rowHeight };
+            for (int c = 0; c < cols; c++)
+                row.Cells.Add(new TableCell());
+            table.Rows.Add(row);
+        }
+
+        var shape = new SlideShape
+        {
+            Id          = NextShapeId(),
+            Name        = $"Table {rows}×{cols}",
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = x,
+            OffsetYEmu  = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Table       = table
+        };
+
+        AddShape(shape);
+        return shape;
+    }
+
+    // ── Insert chart ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates and inserts a default <see cref="ChartShape"/> of the given
+    /// <paramref name="chartType"/> with three sample categories and two series so it
+    /// renders immediately.  Undoable.
+    /// </summary>
+    public SlideShape InsertChart(ChartType chartType = ChartType.ColumnClustered)
+    {
+        var (x, y, cx, cy) = DefaultShapeBounds();
+
+        var chart = new ChartShape
+        {
+            ChartType = chartType,
+            Title     = "Chart Title",
+            Legend    = LegendPosition.Bottom,
+        };
+
+        // Default sample data — 3 categories, 2 series.
+        chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
+
+        var s1 = new ChartSeries { Name = "Series 1" };
+        s1.Values.AddRange([4.3, 2.5, 3.5]);
+        chart.Series.Add(s1);
+
+        var s2 = new ChartSeries { Name = "Series 2" };
+        s2.Values.AddRange([2.4, 4.4, 1.8]);
+        chart.Series.Add(s2);
+
+        var shape = new SlideShape
+        {
+            Id          = NextShapeId(),
+            Name        = "Chart",
+            Kind        = SlideShapeKind.Chart,
+            OffsetXEmu  = x,
+            OffsetYEmu  = y,
+            ExtentCxEmu = cx,
+            ExtentCyEmu = cy,
+            Chart       = chart
+        };
+
+        AddShape(shape);
+        return shape;
+    }
+
+    // ── Font family (named overload matching 5B contract) ─────────────────────────
+
+    /// <summary>
+    /// Sets the font family on every run in all selected shapes. Undoable.
+    /// (Delegates to the existing <see cref="SetFontOnSelection"/> which already does this;
+    /// exposed here under the canonical 5B-facing name for clarity.)
+    /// </summary>
+    public void SetFontFamilyOnSelection(string? family)
+        => SetFontOnSelection(family);
+
+    // ── Format painter ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Captures the fill, outline, and run-format defaults from the first selected shape
+    /// into the format clipboard.  Does nothing if there is no selection.
+    /// </summary>
+    public void CopyFormatting()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return;
+
+        var source = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        if (source is null) return;
+
+        _fmtFill    = source.Fill;
+        _fmtOutline = source.Outline;
+
+        // Capture first run defaults.
+        var firstRun = source.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault();
+        _fmtRun = firstRun is null ? null : new RunFormatSnapshot
+        {
+            FontFamily = firstRun.FontFamily,
+            FontSizePt = firstRun.FontSizePt,
+            Color      = firstRun.Color,
+            Bold       = firstRun.Bold,
+            Italic     = firstRun.Italic,
+        };
+    }
+
+    /// <summary>
+    /// True when format-painter clipboard has been populated via <see cref="CopyFormatting"/>.
+    /// </summary>
+    public bool HasFormatClipboard => _fmtFill is not null || _fmtOutline is not null || _fmtRun is not null;
+
+    /// <summary>
+    /// Applies the captured fill/outline/run-format to all currently selected shapes.
+    /// A single undoable <see cref="ApplyFormatPainterCommand"/> is issued.
+    /// Does nothing if the format clipboard is empty or there is no selection.
+    /// </summary>
+    public void ApplyFormattingToSelection()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return;
+        if (!HasFormatClipboard) return;
+
+        Bus.Execute(new ApplyFormatPainterCommand(
+            _currentSlideIndex,
+            _selectedShapeIds.ToList(),
+            _fmtFill,
+            _fmtOutline,
+            _fmtRun));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
