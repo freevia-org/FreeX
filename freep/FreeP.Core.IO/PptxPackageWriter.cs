@@ -733,11 +733,22 @@ public static class PptxPackageWriter
 
     // ── Zip helpers ───────────────────────────────────────────────────────────────
 
+    // OOXML requires UTF-8 WITHOUT BOM. XDocument.Save(Stream) emits a BOM by default;
+    // use XmlWriter with explicit UTF8 (no-BOM) encoding to comply.
+    private static readonly System.Xml.XmlWriterSettings XmlSettings = new()
+    {
+        Encoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        Indent = true,
+        OmitXmlDeclaration = false,
+        CloseOutput = false
+    };
+
     private static void WriteEntry(ZipArchive archive, string path, XDocument doc)
     {
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
-        doc.Save(stream);
+        using var writer = System.Xml.XmlWriter.Create(stream, XmlSettings);
+        doc.Save(writer);
     }
 
     private static void WriteRels(ZipArchive archive, string partPath, RelsDoc rels)
