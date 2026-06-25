@@ -1,46 +1,29 @@
-using System.IO;
+using Free.Shared.Shell.Wpf;
 using System.Reflection;
-using System.Text;
 
 namespace FreeW.App.Host;
 
-internal sealed record FreeWLegalNoticeDocument(string Title, string ResourceName, string Text);
-
+/// <summary>
+/// FreeW legal-notice provider. Supplies the resource list to the shared loader and returns
+/// neutral (Title, Text) tuples. The embedded .txt/.md resources stay in FreeW.App.Host's
+/// assembly; only the loading logic is shared via <see cref="SharedLegalNoticeLoader"/>.
+/// </summary>
 internal static class FreeWLegalNoticeProvider
 {
-    private static readonly FreeWLegalNoticeResource[] Resources =
+    private static readonly (string Title, string ResourceName)[] Resources =
     [
-        new("Project License", "FreeW.Legal.ProjectLicense.txt"),
-        new("Legal Notices", "FreeW.Legal.LegalNotices.md"),
-        new("Privacy Notice", "FreeW.Legal.PrivacyNotice.md"),
-        new("Third-Party Notices", "FreeW.Legal.ThirdPartyNotices.md"),
-        new("Third-Party License Texts", "FreeW.Legal.ThirdPartyLicenses.md")
+        ("Project License", "FreeW.Legal.ProjectLicense.txt"),
+        ("Legal Notices", "FreeW.Legal.LegalNotices.md"),
+        ("Privacy Notice", "FreeW.Legal.PrivacyNotice.md"),
+        ("Third-Party Notices", "FreeW.Legal.ThirdPartyNotices.md"),
+        ("Third-Party License Texts", "FreeW.Legal.ThirdPartyLicenses.md")
     ];
 
-    internal static IReadOnlyList<FreeWLegalNoticeResource> ExpectedEmbeddedResources => Resources;
+    internal static IReadOnlyList<(string Title, string ResourceName)> ExpectedEmbeddedResources => Resources;
 
-    public static IReadOnlyList<FreeWLegalNoticeDocument> GetDocuments() =>
+    public static IReadOnlyList<(string Title, string Text)> GetDocuments() =>
         GetDocuments(typeof(FreeWLegalNoticeProvider).Assembly);
 
-    internal static IReadOnlyList<FreeWLegalNoticeDocument> GetDocuments(Assembly assembly)
-    {
-        ArgumentNullException.ThrowIfNull(assembly);
-
-        return Resources
-            .Select(resource => new FreeWLegalNoticeDocument(
-                resource.Title,
-                resource.ResourceName,
-                ReadResourceText(assembly, resource.ResourceName)))
-            .ToList();
-    }
-
-    private static string ReadResourceText(Assembly assembly, string resourceName)
-    {
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded legal notice resource '{resourceName}' was not found.");
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
-    }
+    internal static IReadOnlyList<(string Title, string Text)> GetDocuments(Assembly assembly) =>
+        SharedLegalNoticeLoader.GetDocuments(assembly, Resources);
 }
-
-internal sealed record FreeWLegalNoticeResource(string Title, string ResourceName);

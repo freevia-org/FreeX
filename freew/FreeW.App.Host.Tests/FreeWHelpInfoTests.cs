@@ -57,8 +57,8 @@ public sealed class FreeWHelpInfoTests
     {
         var dialog = new LegalNoticesDialog(
         [
-            new FreeWLegalNoticeDocument("Project License", "test", "license text"),
-            new FreeWLegalNoticeDocument("Privacy Notice", "test", "privacy text")
+            ("Project License", "license text"),
+            ("Privacy Notice", "privacy text")
         ]);
 
         dialog.Title.Should().Be("Legal Notices");
