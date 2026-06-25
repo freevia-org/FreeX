@@ -179,8 +179,11 @@ public sealed partial class MainWindow
         ("dialog.Options", () => ShowOptionsDialogAsync()),
     ];
 
-    private Task ShowPrintPreviewParityDialogAsync() =>
-        ShowPrintPreviewDialogAsync();
+    private Task ShowPrintPreviewParityDialogAsync()
+    {
+        SeedPrintPreviewParityReport();
+        return ShowPrintPreviewDialogAsync();
+    }
 
     private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>
         WorkbookFileDialogSurfacePlanner.CreateOpenPlan(
