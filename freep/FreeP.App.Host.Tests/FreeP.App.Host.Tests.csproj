@@ -23,10 +23,12 @@
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="FreeP.Core.Model" />
+    <Using Include="FreeP.Core.IO" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FreeP.App.Host\FreeP.App.Host.csproj" />
+    <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
   </ItemGroup>
 
 </Project>
