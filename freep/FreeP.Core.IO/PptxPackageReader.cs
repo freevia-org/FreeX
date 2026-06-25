@@ -888,10 +888,13 @@ public static class PptxPackageReader
 
         if (tcTxStyle is not null)
         {
-            // Text color from solidFill inside tcTxStyle.
+            // Text color: first try solidFill wrapper, then direct schemeClr/srgbClr child
+            // (DrawingML allows direct color child of tcTxStyle without a solidFill wrapper).
             var solidFill = tcTxStyle.Element(A + "solidFill");
             if (solidFill is not null)
                 textColor = PptxColorReader.TryReadColor(solidFill, scheme);
+            else
+                textColor = PptxColorReader.TryReadColor(tcTxStyle, scheme);
         }
 
         if (fill is null && border is null && textColor is null)

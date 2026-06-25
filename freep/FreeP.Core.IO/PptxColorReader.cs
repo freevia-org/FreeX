@@ -38,14 +38,28 @@ internal static class PptxColorReader
                 var lumMod = ReadPercentage(schemeClr.Element(A + "lumMod")?.Attribute("val")?.Value) ?? 1.0;
                 var lumOff = ReadPercentage(schemeClr.Element(A + "lumOff")?.Attribute("val")?.Value) ?? 0.0;
 
+                // a:tint val: blend toward white; val=100000=original, val=0=white
+                var tintRaw = ReadPercentage(schemeClr.Element(A + "tint")?.Attribute("val")?.Value);
+                double tintFraction = tintRaw.HasValue ? tintRaw.Value : 1.0;
+
+                // a:shade val: blend toward black; val=100000=original, val=0=black
+                var shadeRaw = ReadPercentage(schemeClr.Element(A + "shade")?.Attribute("val")?.Value);
+                double shadeFraction = shadeRaw.HasValue ? shadeRaw.Value : 1.0;
+
                 var baseColor = scheme[slot];
                 var resolved = ApplyLumModOff(baseColor, lumMod, lumOff);
+                if (tintFraction < 1.0)
+                    resolved = ApplyTint(resolved, tintFraction);
+                if (shadeFraction < 1.0)
+                    resolved = ApplyShade(resolved, shadeFraction);
 
                 return new ThemeAwareColor(resolved, new SchemeColorRef
                 {
-                    Slot = slot,
-                    LumMod = lumMod,
-                    LumOff = lumOff
+                    Slot    = slot,
+                    LumMod  = lumMod,
+                    LumOff  = lumOff,
+                    Tint    = tintFraction,
+                    Shade   = shadeFraction,
                 });
             }
         }
@@ -198,6 +212,42 @@ internal static class PptxColorReader
         l = Math.Clamp(l * lumMod + lumOff, 0.0, 1.0);
 
         return HlsToRgb(h, l, s);
+    }
+
+    /// <summary>
+    /// Apply DrawingML tint. OOXML tint val=100000 = original color (no tinting);
+    /// tint val=0 = fully white. tintFraction = val/100000 in [0,1].
+    /// Formula (in sRGB): R_new = R * tintFraction + 255 * (1 - tintFraction)
+    /// </summary>
+    internal static SrgbColor ApplyTint(SrgbColor baseColor, double tintFraction)
+    {
+        if (tintFraction >= 1.0) return baseColor;
+        if (tintFraction <= 0.0) return new SrgbColor(255, 255, 255);
+        double r = baseColor.R * tintFraction + 255.0 * (1.0 - tintFraction);
+        double g = baseColor.G * tintFraction + 255.0 * (1.0 - tintFraction);
+        double b = baseColor.B * tintFraction + 255.0 * (1.0 - tintFraction);
+        return new SrgbColor(
+            (byte)Math.Clamp(Math.Round(r), 0, 255),
+            (byte)Math.Clamp(Math.Round(g), 0, 255),
+            (byte)Math.Clamp(Math.Round(b), 0, 255));
+    }
+
+    /// <summary>
+    /// Apply DrawingML shade. OOXML shade val=100000 = original color (no shading);
+    /// shade val=0 = fully black. shadeFraction = val/100000 in [0,1].
+    /// Formula (in sRGB): R_new = R * shadeFraction
+    /// </summary>
+    internal static SrgbColor ApplyShade(SrgbColor baseColor, double shadeFraction)
+    {
+        if (shadeFraction >= 1.0) return baseColor;
+        if (shadeFraction <= 0.0) return new SrgbColor(0, 0, 0);
+        double r = baseColor.R * shadeFraction;
+        double g = baseColor.G * shadeFraction;
+        double b = baseColor.B * shadeFraction;
+        return new SrgbColor(
+            (byte)Math.Clamp(Math.Round(r), 0, 255),
+            (byte)Math.Clamp(Math.Round(g), 0, 255),
+            (byte)Math.Clamp(Math.Round(b), 0, 255));
     }
 
     private static void RgbToHls(SrgbColor c, out double h, out double l, out double s)

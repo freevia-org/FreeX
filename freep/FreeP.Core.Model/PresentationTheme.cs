@@ -53,6 +53,18 @@ public sealed class SchemeColorRef
 
     /// <summary>Luminance offset (0–100000 in OOXML; stored normalized 0.0–1.0 here; 0.0 = no change).</summary>
     public double LumOff { get; init; } = 0.0;
+
+    /// <summary>
+    /// DrawingML tint (blend toward white). 0–100000 in OOXML; stored normalized here.
+    /// val=100000 (1.0) = original color; val=0 (0.0) = fully white. Default 1.0 = no tint.
+    /// </summary>
+    public double Tint { get; init; } = 1.0;
+
+    /// <summary>
+    /// DrawingML shade (blend toward black). 0–100000 in OOXML; stored normalized here.
+    /// val=100000 (1.0) = original color; val=0 (0.0) = fully black. Default 1.0 = no shade.
+    /// </summary>
+    public double Shade { get; init; } = 1.0;
 }
 
 /// <summary>
