@@ -154,6 +154,28 @@ public sealed class SparklineLayoutPlannerTests
         }
     }
 
+    // K1: verify that an explicit overrideMaxAbs (fed by ResolveAxisMaxAbs when a Custom bound is
+    // present) takes precedence over the in-data maxAbs.  With values [2, -2] the natural maxAbs
+    // is 2; injecting overrideMaxAbs=4 should halve every bar height relative to the no-override
+    // case, confirming the custom bound is honored rather than silently discarded.
+    [Fact]
+    public void VisitColumnLayout_OverrideMaxAbs_ScalesBarsToRequestedBound()
+    {
+        var rect = new Rect(0, 0, 100, 40);
+
+        // Natural scale: maxAbs derived from data (2) → bar height fills full half.
+        var defaultLayout = SparklineLayoutPlanner.CalculateColumnLayout([2, -2], rect, winLoss: false);
+        var defaultBarHeight = defaultLayout.Bars[0].Rect.Height;
+
+        // Override scale: maxAbs forced to 4 (double the data max) → bars should be half as tall.
+        var consumer = new BarCollectingConsumer();
+        SparklineLayoutPlanner.VisitColumnLayout([2, -2], rect, winLoss: false, ref consumer, overrideMaxAbs: 4.0);
+        var overrideBarHeight = consumer.FirstBarHeight;
+
+        overrideBarHeight.Should().BeApproximately(defaultBarHeight / 2.0, precision: 0.01,
+            because: "doubling the maxAbs bound should halve the bar height");
+    }
+
     [Fact]
     public void SparklineLayoutPlanner_IsAThinAdapterOverTheSharedEngineAndKeepsTheStreamingPath()
     {
@@ -172,6 +194,22 @@ public sealed class SparklineLayoutPlannerTests
         source.Should().NotContain(".Select(");
         source.Should().NotContain(".ToArray(");
         source.Should().NotContain(".DefaultIfEmpty(");
+    }
+
+    // Minimal ISparklineColumnLayoutConsumer implementation used by the K1 overrideMaxAbs test.
+    // Declared as a private struct inside the test class so it can satisfy the generic constraint
+    // `where TConsumer : struct, ISparklineColumnLayoutConsumer` on VisitColumnLayout.
+    private struct BarCollectingConsumer : ISparklineColumnLayoutConsumer
+    {
+        public BarCollectingConsumer() { }
+
+        public double FirstBarHeight { get; private set; } = double.NaN;
+
+        public void AcceptBar(Rect rect, bool isNegative)
+        {
+            if (double.IsNaN(FirstBarHeight))
+                FirstBarHeight = rect.Height;
+        }
     }
 
 }

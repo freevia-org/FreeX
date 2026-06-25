@@ -15,12 +15,20 @@ public static partial class BuiltInFunctions
 
     private static double CalcIpmt(double rate, double per, double nper, double pv, double fv, int type)
     {
-        double pmt = CalcPmt(rate, nper, pv, fv, type);
         if (Math.Abs(rate) < 1e-14) return 0.0;
+        // Excel: for type=1 (annuity-due), interest in period 1 is always 0 because
+        // the first payment is made at the start before any interest accrues; for later
+        // periods, the interest equals the type=0 interest of the preceding period.
+        if (type == 1)
+        {
+            if (per == 1) return 0.0;
+            return CalcIpmt(rate, per - 1, nper, pv, fv, 0);
+        }
+        double pmt = CalcPmt(rate, nper, pv, fv, 0);
         double pvAtPer = pv * Math.Pow(1 + rate, per - 1)
-                       + pmt * (1 + rate * type) * (Math.Pow(1 + rate, per - 1) - 1) / rate;
+                       + pmt * (Math.Pow(1 + rate, per - 1) - 1) / rate;
         // Interest payment matches PMT sign convention: negative = outflow (borrower)
-        return type == 0 ? -(pvAtPer * rate) : -((pvAtPer - pmt) * rate);
+        return -(pvAtPer * rate);
     }
 
     private static ScalarValue Ispmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

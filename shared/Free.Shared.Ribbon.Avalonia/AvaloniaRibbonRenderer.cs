@@ -409,13 +409,31 @@ public static class AvaloniaRibbonRenderer
                 tabControl.Items.RemoveAt(i);
         }
 
-        // Insert missing tabs at their resolved (declaration-order) index.
+        // Insert missing tabs at their resolved (declaration-order) position.
+        // We compute each insertion index against the LIVE TabControl by finding the desired
+        // tab's closest predecessor (in the desired list) that is already present, then inserting
+        // immediately after it.  This avoids the off-by-N shift that results from using the
+        // desired-list ordinal (i+1) after earlier insertions have already moved indices forward.
         for (var i = 0; i < desired.Count; i++)
         {
             var tab = desired[i];
             var existingIndex = IndexOfTab(tabControl, tab.Id);
-            if (existingIndex < 0)
-                tabControl.Items.Insert(Math.Min(i + 1, tabControl.Items.Count), BuildTabItem(tab, registry, afterExecute));
+            if (existingIndex >= 0)
+                continue;
+
+            // Find the closest predecessor in the desired list that already lives in the control.
+            var insertAfter = 0; // default: insert after the File tab (index 0)
+            for (var p = i - 1; p >= 0; p--)
+            {
+                var predecessorIndex = IndexOfTab(tabControl, desired[p].Id);
+                if (predecessorIndex >= 0)
+                {
+                    insertAfter = predecessorIndex;
+                    break;
+                }
+            }
+
+            tabControl.Items.Insert(Math.Min(insertAfter + 1, tabControl.Items.Count), BuildTabItem(tab, registry, afterExecute));
         }
 
         // Preserve selection if still visible; otherwise select the first tab.

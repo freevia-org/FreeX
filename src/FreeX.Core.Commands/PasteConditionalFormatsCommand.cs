@@ -54,8 +54,15 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
 
     private ConditionalFormat CloneRuleForDestination(ConditionalFormat source)
     {
-        var start = MapDestination(source.AppliesTo.Start);
-        var end = MapDestination(source.AppliesTo.End);
+        // Clip the rule to the copied source range before mapping. Rules are selected by Overlaps (not
+        // Contains), so a rule that starts above/left of the source range would otherwise make
+        // MapDestination compute a negative offset that underflows the uint cell coordinate into a
+        // multi-billion-row garbage range (hang/OOM in AllCells()). Mirrors PasteDataValidationCommand.
+        var clipped = GridRange.TryIntersect(source.AppliesTo, _sourceRange, out var intersection)
+            ? intersection
+            : source.AppliesTo;
+        var start = MapDestination(clipped.Start);
+        var end = MapDestination(clipped.End);
         var clone = new ConditionalFormat
         {
             AppliesTo = new GridRange(start, end),

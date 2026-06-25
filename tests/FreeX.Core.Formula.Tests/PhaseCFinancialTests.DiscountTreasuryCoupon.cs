@@ -170,6 +170,48 @@ public partial class PhaseCFinancialTests
         EvalWithData("TBILLEQ(A1:A2,B1:C1,0.05)", cells).Should().Be(ErrorValue.Value);
     }
 
+    // ── TBILL >1-year maturity guard (J4) ────────────────────────────────
+
+    [Fact]
+    public void Tbillprice_MaturityBeyondOneYear_ReturnsNumError()
+    {
+        // Settlement = 43831 (Jan 1 2020), maturity = 44562 (≈Jan 1 2022, 731 days)
+        // Excel: #NUM! when DSM > 365
+        CalcError("TBILLPRICE(43831,44562,0.05)").Should().Be("#NUM!");
+    }
+
+    [Fact]
+    public void Tbillyield_MaturityBeyondOneYear_ReturnsNumError()
+    {
+        // Same 2-year span, price=98
+        CalcError("TBILLYIELD(43831,44562,98)").Should().Be("#NUM!");
+    }
+
+    [Fact]
+    public void Tbillprice_ValidLessThanOneYear_StillComputes()
+    {
+        // 90-day bill (< 365 days) must not be rejected by the new guard
+        // TBILLPRICE(43831, 43921, 0.05) ≈ 98.75 (verified by existing test)
+        double result = Calc("TBILLPRICE(43831,43921,0.05)");
+        result.Should().BeApproximately(98.75, 0.01);
+    }
+
+    [Fact]
+    public void Tbillyield_ValidLessThanOneYear_StillComputes()
+    {
+        // TBILLYIELD(43831, 43921, 98.75) ≈ 0.05063
+        double result = Calc("TBILLYIELD(43831,43921,98.75)");
+        result.Should().BeApproximately(0.05063, 0.0001);
+    }
+
+    [Fact]
+    public void Tbilleq_MaturityBeyondOneYear_ReturnsNumError()
+    {
+        // Excel TBILLEQ returns #NUM! for DSM > 365 (not 182).
+        // Settlement = 43831, maturity = 44562 (731 days)
+        CalcError("TBILLEQ(43831,44562,0.05)").Should().Be("#NUM!");
+    }
+
     [Fact]
     public void Coupnum_SemiAnnual_FiveYearBond()
     {

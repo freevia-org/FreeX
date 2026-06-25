@@ -29,7 +29,8 @@ public static class RibbonDefinitionValidator
                 foreach (var dup in Duplicates(group.Controls
                              .Where(c => c is not RibbonSeparator)
                              .Select(c => c.KeyTip)
-                             .Where(k => !string.IsNullOrEmpty(k))!))
+                             .Where(k => !string.IsNullOrEmpty(k))!,
+                             StringComparer.OrdinalIgnoreCase))
                     items.Add(new RibbonDiagnostic("RBN004", RibbonDiagnosticSeverity.Warning,
                         $"Duplicate keytip '{dup}' in group '{group.Id}'."));
             }
@@ -39,7 +40,10 @@ public static class RibbonDefinitionValidator
     }
 
     private static IEnumerable<string> Duplicates(IEnumerable<string> values) =>
-        values.GroupBy(v => v, StringComparer.Ordinal)
+        Duplicates(values, StringComparer.Ordinal);
+
+    private static IEnumerable<string> Duplicates(IEnumerable<string> values, StringComparer comparer) =>
+        values.GroupBy(v => v, comparer)
               .Where(g => g.Count() > 1)
               .Select(g => g.Key);
 }

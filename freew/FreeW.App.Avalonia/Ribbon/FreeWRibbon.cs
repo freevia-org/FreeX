@@ -64,12 +64,24 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.undo", "Undo");
                     g.Button("freew.redo", "Redo");
+                    g.Button("freew.find-replace-dialog", "Find & Replace");
                 });
             })
             .Tab("insert", "Insert", "I", tab =>
                 tab.Group("tables", "Tables", null, 100, g =>
                 {
                     g.Button("freew.insert-table", "Table");
+                }))
+            .Tab("view", "View", "V", tab =>
+                tab.Group("show", "Show", null, 100, g =>
+                {
+                    g.Toggle("freew.navigationpane", "Navigation Pane");
+                    g.Toggle("freew.reveal-formatting", "Reveal Formatting");
+                }))
+            .Tab("review", "Review", "R", tab =>
+                tab.Group("tracking", "Tracking", null, 100, g =>
+                {
+                    g.Toggle("freew.reviewingpane", "Reviewing Pane");
                 }))
             .Build();
 
@@ -110,6 +122,10 @@ internal static class FreeWRibbon
         registry.Register("freew.cut", new RelayCommand(callbacks.Cut));
         registry.Register("freew.copy", new RelayCommand(callbacks.Copy));
         registry.Register("freew.paste", new RelayCommand(callbacks.Paste));
+        registry.Register("freew.navigationpane", new RelayCommand(callbacks.ToggleNavigationPane));
+        registry.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
+        registry.Register("freew.reveal-formatting", new RelayCommand(callbacks.ToggleRevealFormatting));
+        registry.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
         return registry;
     }
 }
@@ -120,7 +136,11 @@ internal sealed record RibbonHostCallbacks(
     Action Cut,
     Action Copy,
     Action Paste,
-    Action Backstage);
+    Action Backstage,
+    Action ToggleNavigationPane,
+    Action ToggleReviewingPane,
+    Action ToggleRevealFormatting,
+    Action OpenFindReplaceDialog);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

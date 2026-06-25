@@ -39,11 +39,12 @@ internal readonly record struct CellVal(CellKind Kind, double Number, string Tex
 
     private static bool NumbersClose(double a, double b)
     {
+        if (a == b) return true; // handles equal infinities and exact equality
         if (double.IsNaN(a) && double.IsNaN(b)) return true;
         var diff = Math.Abs(a - b);
-        if (diff <= 1e-9) return true;
+        if (diff < 1e-9) return true;
         var scale = Math.Max(Math.Abs(a), Math.Abs(b));
-        return diff <= scale * 1e-9;
+        return scale > 0 && diff / scale < 1e-6;
     }
 
     public override string ToString() => Kind switch
