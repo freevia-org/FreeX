@@ -148,6 +148,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_cellstyle_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeCellStyleCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -3864,5 +3870,866 @@ internal static class ExcelSmokeFixtures
         foreach (var c in col.ToUpperInvariant())
             index = index * 26 + (c - 'A' + 1);
         return index;
+    }
+
+    // =========================================================================
+    // Cell-style baseline corpus fixtures
+    // =========================================================================
+    //
+    // Excel COM constants used below (not already declared at the class level):
+    //
+    // XlLineStyle (cell.Borders.LineStyle):
+    //   xlContinuous   = 1      → Thin (with Weight=XlThin) or Medium/Thick via weight
+    //   xlDash         = -4115  → Dashed
+    //   xlDashDot      = 4      → DashDot
+    //   xlDashDotDot   = 5      → DashDotDot
+    //   xlDot          = -4118  → Dotted
+    //   xlDouble       = -4119  → Double
+    //   xlSlantDashDot = 13     → SlantDashDot
+    //   xlLineStyleNone= -4142  → No border
+    //
+    // XlBorderWeight:
+    //   xlHairline = 1   → Hair (thinnest; only meaningful with xlContinuous)
+    //   xlThin     = 2   → Thin
+    //   xlMedium   = -4138 → Medium
+    //   xlThick    = 4   → Thick
+    //
+    // XlBordersIndex (for individual sides):
+    //   xlEdgeLeft   = 7
+    //   xlEdgeTop    = 8
+    //   xlEdgeBottom = 9
+    //   xlEdgeRight  = 10
+    //   xlDiagonalDown = 5
+    //   xlDiagonalUp   = 6
+    //
+    // Interior.Pattern (XlPattern):
+    //   xlPatternNone           = -4142
+    //   xlPatternSolid          = 1
+    //   xlPatternGray16         = 17
+    //   xlPatternGray25         = -4124
+    //   xlPatternGray50         = -4125
+    //   xlPatternGray75         = -4126
+    //   xlPatternGray8          = 18
+    //   xlPatternHorizontal     = -4128
+    //   xlPatternVertical       = -4166
+    //   xlPatternDown           = -4121
+    //   xlPatternUp             = -4162
+    //   xlPatternChecker        = 9
+    //   xlPatternSemiGray75     = 10
+    //   xlPatternLightHorizontal= 11
+    //   xlPatternLightVertical  = 12
+    //   xlPatternLightDown      = 13
+    //   xlPatternLightUp        = 14
+    //   xlPatternGrid           = 15
+    //   xlPatternCrissCross     = 16
+    //
+    // HorizontalAlignment (XlHAlign):
+    //   xlHAlignGeneral    = 1
+    //   xlHAlignLeft       = -4131
+    //   xlHAlignCenter     = -4108
+    //   xlHAlignRight      = -4152
+    //   xlHAlignFill       = 5
+    //   xlHAlignJustify    = -4130
+    //   xlHAlignCenterAcrossSelection = 7   (= CenterContinuous in OOXML)
+    //   xlHAlignDistributed = -4117
+    //
+    // VerticalAlignment (XlVAlign):
+    //   xlVAlignTop        = -4160
+    //   xlVAlignCenter     = -4108
+    //   xlVAlignBottom     = -4107
+    //
+    // Orientation (text rotation encoded as degrees or special constant):
+    //   xlVertical         = -4166  → stacked vertical (each char on its own line)
+    //   positive degrees   = counterclockwise rotation
+    //   negative degrees   → passed as 90+abs(degrees) via OOXML mapping, but COM
+    //                        accepts negative integers directly for clockwise rotation
+    //
+    // Underline (XlUnderlineStyle):
+    //   xlUnderlineStyleSingle       = 2
+    //   xlUnderlineStyleDouble       = -4119
+    //   xlUnderlineStyleNone         = -4142
+
+    private const int XlContinuous      = 1;
+    private const int XlDash            = -4115;
+    private const int XlDashDot         = 4;
+    private const int XlDashDotDot      = 5;
+    private const int XlDot             = -4118;
+    private const int XlDouble          = -4119;
+    private const int XlSlantDashDot    = 13;
+    private const int XlHairline        = 1;
+    private const int XlThin            = 2;
+    private const int XlMedium          = -4138;
+    private const int XlThick           = 4;
+    private const int XlEdgeLeft        = 7;
+    private const int XlEdgeTop         = 8;
+    private const int XlEdgeBottom      = 9;
+    private const int XlEdgeRight       = 10;
+    private const int XlDiagonalDown    = 5;
+    private const int XlDiagonalUp      = 6;
+
+    private const int XlPatternNone            = -4142;
+    private const int XlPatternSolid           = 1;
+    private const int XlPatternGray16          = 17;
+    private const int XlPatternGray25          = -4124;
+    private const int XlPatternGray50          = -4125;
+    private const int XlPatternGray75          = -4126;
+    private const int XlPatternGray8           = 18;
+    private const int XlPatternHorizontal      = -4128;
+    private const int XlPatternVertical        = -4166;
+    private const int XlPatternDown            = -4121;
+    private const int XlPatternUp              = -4162;
+    private const int XlPatternChecker         = 9;
+    private const int XlPatternLightHorizontal = 11;
+    private const int XlPatternLightVertical   = 12;
+    private const int XlPatternGrid            = 15;
+    private const int XlPatternCrissCross      = 16;
+
+    private const int XlHAlignLeft                    = -4131;
+    private const int XlHAlignCenter                  = -4108;
+    private const int XlHAlignRight                   = -4152;
+    private const int XlHAlignFill                    = 5;
+    private const int XlHAlignJustify                 = -4130;
+    private const int XlHAlignCenterAcrossSelection   = 7;
+    private const int XlHAlignDistributed             = -4117;
+    private const int XlVAlignTop                     = -4160;
+    private const int XlVAlignCenter                  = -4108;
+    private const int XlVertical                      = -4166;
+
+    private const int XlUnderlineStyleSingle = 2;
+    private const int XlUnderlineStyleDouble = -4119;
+    private const int XlUnderlineStyleNone   = -4142;
+
+    /// <summary>Returns the output paths for all seven cell-style corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelCellStyleCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_borders_styles_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_borders_diagonal_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_fills_patterns_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_fills_gradient_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_align_rotation_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_merged_006.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_cellstyle_fonts_007.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for cell-style corpus fixtures.</summary>
+    private static void GenerateExcelNativeCellStyleCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("borders_styles_001", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_BordersStyles(workbooks, outputPath);
+        else if (fileName.Contains("borders_diagonal_002", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_BordersDiagonal(workbooks, outputPath);
+        else if (fileName.Contains("fills_patterns_003", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_FillsPatterns(workbooks, outputPath);
+        else if (fileName.Contains("fills_gradient_004", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_FillsGradient(workbooks, outputPath);
+        else if (fileName.Contains("align_rotation_005", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_AlignRotation(workbooks, outputPath);
+        else if (fileName.Contains("merged_006", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_Merged(workbooks, outputPath);
+        else if (fileName.Contains("fonts_007", StringComparison.OrdinalIgnoreCase))
+            GenerateCellStyleFixture_Fonts(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown cell-style corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared helper: open a blank workbook for cell-style fixtures
+    // -------------------------------------------------------------------------
+    private static object OpenCellStyleWorkbook(dynamic workbooks, string outputPath, string sheetName,
+        out object worksheet)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        var workbook = workbooks.Add();
+        worksheet = ((dynamic)workbook).Worksheets[1];
+        try { ((dynamic)worksheet).Name = sheetName; } catch { /* best effort */ }
+        return workbook;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helper: apply border (lineStyle + weight) to all four edges of a range
+    // -------------------------------------------------------------------------
+    private static void ApplyAllEdgeBorder(object worksheet, string address,
+        int lineStyle, int weight, int color = 0 /*black*/)
+    {
+        ApplyExcelRangeFormat(worksheet, address, range =>
+        {
+            foreach (var idx in new[] { XlEdgeLeft, XlEdgeTop, XlEdgeBottom, XlEdgeRight })
+            {
+                object? border = null;
+                try
+                {
+                    border = range.Borders[idx];
+                    ((dynamic)border).LineStyle = lineStyle;
+                    ((dynamic)border).Weight    = weight;
+                    if (color != 0)
+                        ((dynamic)border).Color = color;
+                }
+                finally
+                {
+                    ReleaseComObject(border);
+                }
+            }
+        });
+    }
+
+    // =========================================================================
+    // case 001 — border style matrix
+    // =========================================================================
+    private static void GenerateCellStyleFixture_BordersStyles(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Borders", out object ws);
+            worksheet = ws;
+
+            // Column A = style label, Column B = styled cell
+            // Rows 1-13 = each named border style; row 14 = colored border
+            (string Label, int LineStyle, int Weight)[] styles =
+            [
+                ("Hair",            XlContinuous,   XlHairline),
+                ("Thin",            XlContinuous,   XlThin),
+                ("Medium",          XlContinuous,   XlMedium),
+                ("Thick",           XlContinuous,   XlThick),
+                ("Double",          XlDouble,        XlThin),
+                ("Dashed",          XlDash,          XlThin),
+                ("Dotted",          XlDot,           XlThin),
+                ("DashDot",         XlDashDot,       XlThin),
+                ("DashDotDot",      XlDashDotDot,    XlThin),
+                ("MediumDashed",    XlDash,          XlMedium),
+                ("MediumDashDot",   XlDashDot,       XlMedium),
+                ("MediumDashDotDot",XlDashDotDot,    XlMedium),
+                ("SlantDashDot",    XlSlantDashDot,  XlMedium),
+            ];
+
+            SetExcelCellValue(worksheet, 1, 1, "Style Name");
+            SetExcelCellValue(worksheet, 1, 2, "Sample");
+            ApplyExcelRangeFormat(worksheet, "A1:B1", r => r.Font.Bold = true);
+
+            for (var i = 0; i < styles.Length; i++)
+            {
+                var row = i + 2;
+                SetExcelCellValue(worksheet, row, 1, styles[i].Label);
+                SetExcelCellValue(worksheet, row, 2, styles[i].Label);
+                var address = $"B{row}";
+                try
+                {
+                    ApplyAllEdgeBorder(worksheet, address, styles[i].LineStyle, styles[i].Weight);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(
+                        $"  COM note: {styles[i].Label} border (lineStyle={styles[i].LineStyle}, weight={styles[i].Weight}) failed: {ex.Message}");
+                }
+            }
+
+            // Row after styles: colored Thin border (red)
+            var colorRow = styles.Length + 2;
+            SetExcelCellValue(worksheet, colorRow, 1, "Thin Red Border");
+            SetExcelCellValue(worksheet, colorRow, 2, "Red");
+            ApplyAllEdgeBorder(worksheet, $"B{colorRow}", XlContinuous, XlThin, ToOleColor(255, 0, 0));
+
+            // Auto-fit columns A and B for readability
+            ApplyExcelRangeFormat(worksheet, "A:B", r => { try { r.Columns.AutoFit(); } catch { } });
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 002 — diagonal borders
+    // =========================================================================
+    private static void GenerateCellStyleFixture_BordersDiagonal(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "DiagBorders", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Diagonal Down");
+            SetExcelCellValue(worksheet, 1, 2, "Diagonal Up");
+            SetExcelCellValue(worksheet, 1, 3, "Both");
+            ApplyExcelRangeFormat(worksheet, "A1:C1", r => r.Font.Bold = true);
+
+            // Row 2: diagonal down only
+            SetExcelCellValue(worksheet, 2, 1, "DiagDown");
+            ApplyExcelRangeFormat(worksheet, "A2", r =>
+            {
+                object? b = null;
+                try
+                {
+                    b = r.Borders[XlDiagonalDown];
+                    ((dynamic)b).LineStyle = XlContinuous;
+                    ((dynamic)b).Weight    = XlMedium;
+                    ((dynamic)b).Color     = ToOleColor(0, 0, 200);
+                }
+                finally { ReleaseComObject(b); }
+            });
+
+            // Row 2, col 2: diagonal up only
+            SetExcelCellValue(worksheet, 2, 2, "DiagUp");
+            ApplyExcelRangeFormat(worksheet, "B2", r =>
+            {
+                object? b = null;
+                try
+                {
+                    b = r.Borders[XlDiagonalUp];
+                    ((dynamic)b).LineStyle = XlContinuous;
+                    ((dynamic)b).Weight    = XlMedium;
+                    ((dynamic)b).Color     = ToOleColor(200, 0, 0);
+                }
+                finally { ReleaseComObject(b); }
+            });
+
+            // Row 2, col 3: both diagonals
+            SetExcelCellValue(worksheet, 2, 3, "Both");
+            ApplyExcelRangeFormat(worksheet, "C2", r =>
+            {
+                object? bd = null;
+                object? bu = null;
+                try
+                {
+                    bd = r.Borders[XlDiagonalDown];
+                    ((dynamic)bd).LineStyle = XlContinuous;
+                    ((dynamic)bd).Weight    = XlMedium;
+                    ((dynamic)bd).Color     = ToOleColor(0, 150, 0);
+
+                    bu = r.Borders[XlDiagonalUp];
+                    ((dynamic)bu).LineStyle = XlContinuous;
+                    ((dynamic)bu).Weight    = XlMedium;
+                    ((dynamic)bu).Color     = ToOleColor(150, 0, 150);
+                }
+                finally
+                {
+                    ReleaseComObject(bd);
+                    ReleaseComObject(bu);
+                }
+            });
+
+            // Row 3: dashed diagonals (down only)
+            SetExcelCellValue(worksheet, 3, 1, "Dashed DiagDown");
+            ApplyExcelRangeFormat(worksheet, "A3", r =>
+            {
+                object? b = null;
+                try
+                {
+                    b = r.Borders[XlDiagonalDown];
+                    ((dynamic)b).LineStyle = XlDash;
+                    ((dynamic)b).Weight    = XlThin;
+                }
+                finally { ReleaseComObject(b); }
+            });
+
+            ApplyExcelRangeFormat(worksheet, "A:C", r => { try { r.Columns.AutoFit(); } catch { } });
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 003 — pattern fills
+    // =========================================================================
+    private static void GenerateCellStyleFixture_FillsPatterns(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Patterns", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Pattern Name");
+            SetExcelCellValue(worksheet, 1, 2, "Sample");
+            ApplyExcelRangeFormat(worksheet, "A1:B1", r => r.Font.Bold = true);
+
+            // Foreground color = navy; background color = light yellow
+            var fgColor = ToOleColor(0, 0, 128);
+            var bgColor = ToOleColor(255, 255, 153);
+
+            (string Name, int Pattern)[] patterns =
+            [
+                ("Solid",            XlPatternSolid),
+                ("Gray75",           XlPatternGray75),
+                ("Gray50",           XlPatternGray50),
+                ("Gray25",           XlPatternGray25),
+                ("Gray16",           XlPatternGray16),
+                ("Gray8",            XlPatternGray8),
+                ("Horizontal",       XlPatternHorizontal),
+                ("Vertical",         XlPatternVertical),
+                ("Down",             XlPatternDown),
+                ("Up",               XlPatternUp),
+                ("Checker",          XlPatternChecker),
+                ("LightHorizontal",  XlPatternLightHorizontal),
+                ("LightVertical",    XlPatternLightVertical),
+                ("Grid",             XlPatternGrid),
+                ("CrissCross",       XlPatternCrissCross),
+            ];
+
+            for (var i = 0; i < patterns.Length; i++)
+            {
+                var row = i + 2;
+                SetExcelCellValue(worksheet, row, 1, patterns[i].Name);
+                SetExcelCellValue(worksheet, row, 2, patterns[i].Name);
+                var address = $"B{row}";
+                try
+                {
+                    ApplyExcelRangeFormat(worksheet, address, r =>
+                    {
+                        r.Interior.Pattern         = patterns[i].Pattern;
+                        r.Interior.PatternColor    = fgColor;
+                        // PatternColorIndex vs Color: for named patterns the fg is PatternColor
+                        // and the cell background fill is Color (bg).
+                        r.Interior.Color           = bgColor;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: pattern {patterns[i].Name} failed: {ex.Message}");
+                }
+            }
+
+            ApplyExcelRangeFormat(worksheet, "A:B", r => { try { r.Columns.AutoFit(); } catch { } });
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 004 — gradient fill (Interior.Gradient)
+    // =========================================================================
+    private static void GenerateCellStyleFixture_FillsGradient(dynamic workbooks, string outputPath)
+    {
+        object? workbook   = null;
+        object? worksheet  = null;
+        object? range      = null;
+        object? interior   = null;
+        object? gradient   = null;
+        object? gradStops  = null;
+        object? stop1      = null;
+        object? stop2      = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Gradient", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "2-stop linear gradient (blue → orange)");
+            SetExcelCellValue(worksheet, 3, 1, "2-stop linear gradient (green → white, 90°)");
+
+            // Gradient 1: blue→orange, 0° (left→right)
+            range    = ((dynamic)worksheet).Range("B2:E5");
+            interior = ((dynamic)range).Interior;
+            try
+            {
+                // xlGradientFill = 2; setting Pattern to 2 switches to gradient mode.
+                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                gradient  = ((dynamic)interior).Gradient;
+                ((dynamic)gradient).Degree = 0.0;    // horizontal
+                gradStops = ((dynamic)gradient).ColorStops;
+                stop1 = ((dynamic)gradStops).Add(0.0);
+                ((dynamic)stop1).Color = ToOleColor(0, 70, 200);
+                stop2 = ((dynamic)gradStops).Add(1.0);
+                ((dynamic)stop2).Color = ToOleColor(255, 140, 0);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  COM note: gradient fill (linear blue→orange) failed: {ex.Message}");
+            }
+            finally
+            {
+                ReleaseComObject(stop2);
+                ReleaseComObject(stop1);
+                ReleaseComObject(gradStops);
+                ReleaseComObject(gradient);
+                ReleaseComObject(interior);
+                ReleaseComObject(range);
+                stop1 = stop2 = gradStops = gradient = interior = range = null;
+            }
+
+            // Gradient 2: green→white, 90° (top→bottom)
+            range    = ((dynamic)worksheet).Range("B7:E10");
+            interior = ((dynamic)range).Interior;
+            try
+            {
+                ((dynamic)interior).Pattern = 2; // xlPatternLinearGradient
+                gradient  = ((dynamic)interior).Gradient;
+                ((dynamic)gradient).Degree = 90.0;
+                gradStops = ((dynamic)gradient).ColorStops;
+                stop1 = ((dynamic)gradStops).Add(0.0);
+                ((dynamic)stop1).Color = ToOleColor(0, 160, 0);
+                stop2 = ((dynamic)gradStops).Add(1.0);
+                ((dynamic)stop2).Color = ToOleColor(255, 255, 255);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  COM note: gradient fill (linear green→white) failed: {ex.Message}");
+            }
+            finally
+            {
+                ReleaseComObject(stop2);
+                ReleaseComObject(stop1);
+                ReleaseComObject(gradStops);
+                ReleaseComObject(gradient);
+                ReleaseComObject(interior);
+                ReleaseComObject(range);
+                stop1 = stop2 = gradStops = gradient = interior = range = null;
+            }
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(stop2);
+            ReleaseComObject(stop1);
+            ReleaseComObject(gradStops);
+            ReleaseComObject(gradient);
+            ReleaseComObject(interior);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 005 — alignment, rotation, indent, wrap, shrink-to-fit, Fill, CenterContinuous
+    // =========================================================================
+    private static void GenerateCellStyleFixture_AlignRotation(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "AlignRotate", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Feature");
+            SetExcelCellValue(worksheet, 1, 2, "Sample");
+            ApplyExcelRangeFormat(worksheet, "A1:B1", r => r.Font.Bold = true);
+
+            // Make column B wider so rotation / wrap are clearly visible
+            ApplyExcelRangeFormat(worksheet, "B:B", r => { try { r.ColumnWidth = 18; } catch { } });
+            ApplyExcelRangeFormat(worksheet, "A:A", r => { try { r.ColumnWidth = 24; } catch { } });
+
+            // Row 2: 45° rotation
+            SetExcelCellValue(worksheet, 2, 1, "Rotation 45°");
+            SetExcelCellValue(worksheet, 2, 2, "Hello 45");
+            ApplyExcelRangeFormat(worksheet, "B2", r => r.Orientation = 45);
+
+            // Row 3: 90° rotation
+            SetExcelCellValue(worksheet, 3, 1, "Rotation 90°");
+            SetExcelCellValue(worksheet, 3, 2, "Hello 90");
+            ApplyExcelRangeFormat(worksheet, "B3", r => r.Orientation = 90);
+
+            // Row 4: -90° rotation (clockwise)
+            SetExcelCellValue(worksheet, 4, 1, "Rotation -90°");
+            SetExcelCellValue(worksheet, 4, 2, "Hello -90");
+            ApplyExcelRangeFormat(worksheet, "B4", r => r.Orientation = -90);
+
+            // Row 5: vertical stacked (xlVertical = -4166)
+            SetExcelCellValue(worksheet, 5, 1, "Vertical stacked");
+            SetExcelCellValue(worksheet, 5, 2, "ABC");
+            ApplyExcelRangeFormat(worksheet, "B5", r => r.Orientation = XlVertical);
+
+            // Row 6: indent level 3
+            SetExcelCellValue(worksheet, 6, 1, "Indent 3");
+            SetExcelCellValue(worksheet, 6, 2, "Indented");
+            ApplyExcelRangeFormat(worksheet, "B6", r => r.IndentLevel = 3);
+
+            // Row 7: wrap text
+            SetExcelCellValue(worksheet, 7, 1, "Wrap text");
+            SetExcelCellValue(worksheet, 7, 2, "This is a long text that should wrap inside the cell");
+            ApplyExcelRangeFormat(worksheet, "B7", r => r.WrapText = true);
+
+            // Row 8: shrink-to-fit
+            SetExcelCellValue(worksheet, 8, 1, "Shrink to fit");
+            SetExcelCellValue(worksheet, 8, 2, "ShrinkThisVeryLongTextIntoCell");
+            ApplyExcelRangeFormat(worksheet, "B8", r => r.ShrinkToFit = true);
+
+            // Row 9: horizontal Fill
+            SetExcelCellValue(worksheet, 9, 1, "HAlign Fill");
+            SetExcelCellValue(worksheet, 9, 2, "=");
+            ApplyExcelRangeFormat(worksheet, "B9", r => r.HorizontalAlignment = XlHAlignFill);
+
+            // Row 10: CenterAcrossSelection (CenterContinuous) across B10:D10
+            SetExcelCellValue(worksheet, 10, 1, "CenterAcrossSelection");
+            SetExcelCellValue(worksheet, 10, 2, "Centered across B:D");
+            ApplyExcelRangeFormat(worksheet, "B10:D10", r =>
+            {
+                r.HorizontalAlignment = XlHAlignCenterAcrossSelection;
+            });
+
+            // Row 11: vertical top + horizontal right
+            SetExcelCellValue(worksheet, 11, 1, "VAlign Top + HAlign Right");
+            SetExcelCellValue(worksheet, 11, 2, "Top-Right");
+            ApplyExcelRangeFormat(worksheet, "B11", r =>
+            {
+                r.HorizontalAlignment = XlHAlignRight;
+                r.VerticalAlignment   = XlVAlignTop;
+                r.RowHeight = 40;
+            });
+
+            // Row 12: Justify alignment
+            SetExcelCellValue(worksheet, 12, 1, "HAlign Justify");
+            SetExcelCellValue(worksheet, 12, 2, "Justified text content here wide");
+            ApplyExcelRangeFormat(worksheet, "B12", r =>
+            {
+                r.HorizontalAlignment = XlHAlignJustify;
+                r.WrapText = true;
+            });
+
+            // Row 13: Distributed alignment
+            SetExcelCellValue(worksheet, 13, 1, "HAlign Distributed");
+            SetExcelCellValue(worksheet, 13, 2, "Dist text");
+            ApplyExcelRangeFormat(worksheet, "B13", r => r.HorizontalAlignment = XlHAlignDistributed);
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 006 — merged cells
+    // =========================================================================
+    private static void GenerateCellStyleFixture_Merged(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Merged", out object ws);
+            worksheet = ws;
+
+            // --- Horizontal merge (A1:D1) ---
+            SetExcelCellValue(worksheet, 1, 1, "Horizontal merge A1:D1");
+            ApplyExcelRangeFormat(worksheet, "A1:D1", r =>
+            {
+                r.Merge();
+                r.HorizontalAlignment = XlHAlignCenter;
+                r.VerticalAlignment   = XlVAlignCenter;
+                r.Font.Bold = true;
+                r.Interior.Color = ToOleColor(173, 216, 230); // light blue
+            });
+            ApplyAllEdgeBorder(worksheet, "A1:D1", XlContinuous, XlMedium, ToOleColor(0, 70, 130));
+
+            // --- Vertical merge (A3:A6) ---
+            SetExcelCellValue(worksheet, 3, 1, "Vertical A3:A6");
+            ApplyExcelRangeFormat(worksheet, "A3:A6", r =>
+            {
+                r.Merge();
+                r.HorizontalAlignment = XlHAlignCenter;
+                r.VerticalAlignment   = XlVAlignCenter;
+                r.Orientation = 90;
+                r.Interior.Color = ToOleColor(255, 228, 196); // bisque
+            });
+            ApplyAllEdgeBorder(worksheet, "A3:A6", XlContinuous, XlMedium);
+
+            // Fill adjacent cells so the merge is clearly visible
+            for (var row = 3; row <= 6; row++)
+                SetExcelCellValue(worksheet, row, 2, $"Row {row}");
+
+            // --- Block merge (C3:E5) ---
+            SetExcelCellValue(worksheet, 3, 3, "Block C3:E5");
+            ApplyExcelRangeFormat(worksheet, "C3:E5", r =>
+            {
+                r.Merge();
+                r.HorizontalAlignment = XlHAlignCenter;
+                r.VerticalAlignment   = XlVAlignCenter;
+                r.Interior.Color = ToOleColor(255, 255, 153); // light yellow
+            });
+            ApplyAllEdgeBorder(worksheet, "C3:E5", XlContinuous, XlThick, ToOleColor(180, 90, 0));
+
+            // --- Merge with borders around the region ---
+            SetExcelCellValue(worksheet, 8, 1, "Merge + all-edge border (B8:D9)");
+            SetExcelCellValue(worksheet, 8, 2, "Bordered merge");
+            ApplyExcelRangeFormat(worksheet, "B8:D9", r =>
+            {
+                r.Merge();
+                r.HorizontalAlignment = XlHAlignCenter;
+                r.VerticalAlignment   = XlVAlignCenter;
+            });
+            ApplyAllEdgeBorder(worksheet, "B8:D9", XlDash, XlMedium, ToOleColor(128, 0, 128));
+
+            ApplyExcelRangeFormat(worksheet, "A:E", r => { try { r.Columns.AutoFit(); } catch { } });
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 007 — font styles
+    // =========================================================================
+    private static void GenerateCellStyleFixture_Fonts(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        try
+        {
+            workbook  = OpenCellStyleWorkbook(workbooks, outputPath, "Fonts", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Feature");
+            SetExcelCellValue(worksheet, 1, 2, "Sample");
+            ApplyExcelRangeFormat(worksheet, "A1:B1", r => r.Font.Bold = true);
+
+            // Row 2: Bold
+            SetExcelCellValue(worksheet, 2, 1, "Bold");
+            SetExcelCellValue(worksheet, 2, 2, "Bold text");
+            ApplyExcelRangeFormat(worksheet, "B2", r => r.Font.Bold = true);
+
+            // Row 3: Italic
+            SetExcelCellValue(worksheet, 3, 1, "Italic");
+            SetExcelCellValue(worksheet, 3, 2, "Italic text");
+            ApplyExcelRangeFormat(worksheet, "B3", r => r.Font.Italic = true);
+
+            // Row 4: Bold + Italic
+            SetExcelCellValue(worksheet, 4, 1, "Bold + Italic");
+            SetExcelCellValue(worksheet, 4, 2, "Bold italic");
+            ApplyExcelRangeFormat(worksheet, "B4", r =>
+            {
+                r.Font.Bold   = true;
+                r.Font.Italic = true;
+            });
+
+            // Row 5: Single underline
+            SetExcelCellValue(worksheet, 5, 1, "Single underline");
+            SetExcelCellValue(worksheet, 5, 2, "Underlined");
+            ApplyExcelRangeFormat(worksheet, "B5", r => r.Font.Underline = XlUnderlineStyleSingle);
+
+            // Row 6: Double underline
+            SetExcelCellValue(worksheet, 6, 1, "Double underline");
+            SetExcelCellValue(worksheet, 6, 2, "Dbl Underline");
+            ApplyExcelRangeFormat(worksheet, "B6", r => r.Font.Underline = XlUnderlineStyleDouble);
+
+            // Row 7: Strikethrough
+            SetExcelCellValue(worksheet, 7, 1, "Strikethrough");
+            SetExcelCellValue(worksheet, 7, 2, "Struck through");
+            ApplyExcelRangeFormat(worksheet, "B7", r => r.Font.Strikethrough = true);
+
+            // Row 8: Superscript — use formula text so it's visible; COM sets per-char via Characters
+            SetExcelCellValue(worksheet, 8, 1, "Superscript (char)");
+            SetExcelCellValue(worksheet, 8, 2, "X2");
+            // Apply superscript only to the "2" character (index 2, length 1)
+            try
+            {
+                ApplyExcelRangeFormat(worksheet, "B8", r =>
+                {
+                    object? chars = null;
+                    object? font  = null;
+                    try
+                    {
+                        chars = r.Characters(2, 1);
+                        font  = ((dynamic)chars).Font;
+                        ((dynamic)font).Superscript = true;
+                    }
+                    finally
+                    {
+                        ReleaseComObject(font);
+                        ReleaseComObject(chars);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  COM note: superscript character failed: {ex.Message}");
+            }
+
+            // Row 9: Subscript — cell-level (applies to all chars)
+            SetExcelCellValue(worksheet, 9, 1, "Subscript (cell)");
+            SetExcelCellValue(worksheet, 9, 2, "H2O");
+            ApplyExcelRangeFormat(worksheet, "B9", r => r.Font.Subscript = true);
+
+            // Row 10: Colored font (red)
+            SetExcelCellValue(worksheet, 10, 1, "Red font");
+            SetExcelCellValue(worksheet, 10, 2, "Red text");
+            ApplyExcelRangeFormat(worksheet, "B10", r => r.Font.Color = ToOleColor(255, 0, 0));
+
+            // Row 11: Font size 18
+            SetExcelCellValue(worksheet, 11, 1, "Size 18");
+            SetExcelCellValue(worksheet, 11, 2, "Large text");
+            ApplyExcelRangeFormat(worksheet, "B11", r => r.Font.Size = 18);
+
+            // Row 12: Font size 8
+            SetExcelCellValue(worksheet, 12, 1, "Size 8");
+            SetExcelCellValue(worksheet, 12, 2, "Small text");
+            ApplyExcelRangeFormat(worksheet, "B12", r => r.Font.Size = 8);
+
+            // Row 13: Different font name (Courier New)
+            SetExcelCellValue(worksheet, 13, 1, "Courier New");
+            SetExcelCellValue(worksheet, 13, 2, "Monospace text");
+            ApplyExcelRangeFormat(worksheet, "B13", r => r.Font.Name = "Courier New");
+
+            // Row 14: All combined — bold+italic+underline+red+size14
+            SetExcelCellValue(worksheet, 14, 1, "Combined styles");
+            SetExcelCellValue(worksheet, 14, 2, "Bold Italic Red U/L 14pt");
+            ApplyExcelRangeFormat(worksheet, "B14", r =>
+            {
+                r.Font.Bold      = true;
+                r.Font.Italic    = true;
+                r.Font.Underline = XlUnderlineStyleSingle;
+                r.Font.Color     = ToOleColor(180, 0, 0);
+                r.Font.Size      = 14;
+            });
+
+            ApplyExcelRangeFormat(worksheet, "A:B", r => { try { r.Columns.AutoFit(); } catch { } });
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
     }
 }

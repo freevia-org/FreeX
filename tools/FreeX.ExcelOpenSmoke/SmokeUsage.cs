@@ -24,6 +24,10 @@ internal static class SmokeUsage
               --generate-excel-pivot-corpus-fixtures
                                             Generate Excel-authored native PivotTable fixtures through COM,
                                             excluding external, Data Model, and OLAP pivots.
+              --generate-excel-cellstyle-corpus-fixtures
+                                            Generate Excel-authored cell-styling baseline fixtures through
+                                            COM (borders, diagonal, fills/gradients, alignment/rotation,
+                                            merged cells, fonts). Writes to generated-excel-cellstyle/.
               --freex-resave-before-excel   For user inputs, corpus rows, and generated FreeX fixtures,
                                             load/save through FreeX before Excel validation.
               --corpus-manifest <csv>       Add existing .xlsx/.xlsm rows from the XLSX corpus manifest.

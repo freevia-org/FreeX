@@ -388,6 +388,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelCellStyleCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelCellStyleCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-cellstyle")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored cell-style baseline corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
