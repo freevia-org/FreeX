@@ -124,6 +124,11 @@ public static class SlideCompositor
                     ComposeChart(shape, theme, ops);
                 break;
 
+            case SlideShapeKind.SmartArt:
+                if (shape.SmartArt is not null)
+                    ComposeSmartArt(shape, slide, presentation, theme, ops);
+                break;
+
             default:
                 ComposeAutoShape(shape, slide, presentation, theme, ops);
                 break;
@@ -463,6 +468,48 @@ public static class SlideCompositor
             ChartShape   = chart,
             SeriesColors = seriesColors
         });
+    }
+
+    // ─── SmartArt ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Composes a SmartArt shape as a flat group of its fallback (dsp:drawing) shapes.
+    /// Each fallback shape is already positioned in slide-coordinate space so they are
+    /// composed identically to ordinary AutoShapes — no new rendering primitives needed.
+    /// If the dsp:drawing was missing (empty FallbackShapes), emits a placeholder grey rectangle.
+    /// </summary>
+    private static void ComposeSmartArt(
+        SlideShape shape,
+        Slide slide,
+        PresentationModel presentation,
+        PresentationTheme theme,
+        List<DrawOp> ops)
+    {
+        var smart = shape.SmartArt!;
+
+        if (smart.FallbackShapes.Count > 0)
+        {
+            // Render each fallback shape as an ordinary AutoShape.
+            foreach (var fallback in smart.FallbackShapes)
+                ComposeShape(fallback, slide, presentation, theme, ops);
+        }
+        else
+        {
+            // No cached drawing — emit a grey placeholder rectangle at the frame bounds.
+            var placeholder = new SlideShape
+            {
+                Id            = shape.Id,
+                Name          = shape.Name,
+                Kind          = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu    = shape.OffsetXEmu,
+                OffsetYEmu    = shape.OffsetYEmu,
+                ExtentCxEmu   = shape.ExtentCxEmu,
+                ExtentCyEmu   = shape.ExtentCyEmu,
+                Fill          = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0xCC, 0xCC, 0xCC)))
+            };
+            ComposeAutoShape(placeholder, slide, presentation, theme, ops);
+        }
     }
 
     /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>
