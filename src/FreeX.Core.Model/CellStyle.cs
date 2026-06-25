@@ -119,6 +119,105 @@ public enum VerticalAlignment
 }
 
 /// <summary>
+/// The type of a gradient cell fill.
+/// </summary>
+public enum CellGradientFillType
+{
+    /// <summary>Linear gradient along a given degree angle (Excel default).</summary>
+    Linear,
+    /// <summary>Radial gradient emanating from a rectangular origin point.</summary>
+    Path,
+}
+
+/// <summary>
+/// One color stop in a gradient fill.
+/// </summary>
+public readonly record struct CellGradientStop(double Position, CellColor Color);
+
+/// <summary>
+/// A gradient fill for a cell, as specified by OOXML <c>&lt;gradientFill&gt;</c>.
+/// Supports both linear (degree-based) and path (inset-based) gradient types with
+/// an arbitrary list of color stops.
+/// </summary>
+public sealed class CellGradientFill : IEquatable<CellGradientFill>
+{
+    /// <summary>Gradient type: linear or path.</summary>
+    public CellGradientFillType Type { get; set; } = CellGradientFillType.Linear;
+
+    /// <summary>
+    /// Rotation angle in degrees for a linear gradient. Excel measures clockwise from the left edge.
+    /// 0 = left→right, 90 = top→bottom (default Excel vertical), 180 = right→left, 270 = bottom→top.
+    /// Ignored for path gradients.
+    /// </summary>
+    public double Degree { get; set; }
+
+    /// <summary>Color stops ordered by position (0.0 = start, 1.0 = end).</summary>
+    public IReadOnlyList<CellGradientStop> Stops { get; set; } = [];
+
+    // Path-gradient insets (0.0–1.0 fractions of cell size). Ignored for linear gradients.
+    /// <summary>Left inset for path gradient.</summary>
+    public double Left { get; set; }
+    /// <summary>Right inset for path gradient.</summary>
+    public double Right { get; set; }
+    /// <summary>Top inset for path gradient.</summary>
+    public double Top { get; set; }
+    /// <summary>Bottom inset for path gradient.</summary>
+    public double Bottom { get; set; }
+
+    /// <summary>Deep-copy.</summary>
+    public CellGradientFill Clone() => new()
+    {
+        Type   = Type,
+        Degree = Degree,
+        Stops  = [.. Stops],
+        Left   = Left,
+        Right  = Right,
+        Top    = Top,
+        Bottom = Bottom,
+    };
+
+    /// <inheritdoc/>
+    public override bool Equals(object? obj) => obj is CellGradientFill other && Equals(other);
+
+    /// <summary>Structural equality.</summary>
+    public bool Equals(CellGradientFill? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return Type   == other.Type
+            && Degree == other.Degree
+            && Left   == other.Left
+            && Right  == other.Right
+            && Top    == other.Top
+            && Bottom == other.Bottom
+            && StopsEqual(Stops, other.Stops);
+    }
+
+    private static bool StopsEqual(IReadOnlyList<CellGradientStop> a, IReadOnlyList<CellGradientStop> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+            if (a[i] != b[i]) return false;
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var h = new HashCode();
+        h.Add(Type);
+        h.Add(Degree);
+        h.Add(Left);
+        h.Add(Right);
+        h.Add(Top);
+        h.Add(Bottom);
+        foreach (var stop in Stops)
+            h.Add(stop);
+        return h.ToHashCode();
+    }
+}
+
+/// <summary>
 /// Complete style definition for a cell, covering font, fill, borders, and alignment.
 /// </summary>
 public sealed class CellStyle : IEquatable<CellStyle>
@@ -167,6 +266,12 @@ public sealed class CellStyle : IEquatable<CellStyle>
 
     /// <summary>Theme-backed pattern foreground color. When present, resolves against the workbook theme before falling back to <see cref="FillPatternColor"/>.</summary>
     public WorkbookThemeColorReference? FillPatternThemeColor { get; set; }
+
+    /// <summary>
+    /// Gradient fill definition. When non-null this cell uses a gradient fill rather than a solid/pattern fill.
+    /// Corresponds to OOXML <c>&lt;gradientFill&gt;</c> inside <c>&lt;fill&gt;</c>.
+    /// </summary>
+    public CellGradientFill? GradientFill { get; set; }
 
     /// <summary>Top border.</summary>
     public CellBorder BorderTop { get; set; }
@@ -252,6 +357,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         FillPatternStyle = FillPatternStyle,
         FillPatternColor = FillPatternColor,
         FillPatternThemeColor = FillPatternThemeColor,
+        GradientFill = GradientFill?.Clone(),
         BorderTop = BorderTop,
         BorderRight = BorderRight,
         BorderBottom = BorderBottom,
@@ -297,6 +403,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && FillPatternStyle == other.FillPatternStyle
             && FillPatternColor == other.FillPatternColor
             && FillPatternThemeColor == other.FillPatternThemeColor
+            && GradientFillEquals(GradientFill, other.GradientFill)
             && BorderTop == other.BorderTop
             && BorderRight == other.BorderRight
             && BorderBottom == other.BorderBottom
@@ -317,6 +424,13 @@ public sealed class CellStyle : IEquatable<CellStyle>
             && DictionaryEquals(NativeDifferentialAttributes, other.NativeDifferentialAttributes)
             && ListEquals(NativeDifferentialChildXmls, other.NativeDifferentialChildXmls)
             && DictionaryEquals(NativeDifferentialElementXmls, other.NativeDifferentialElementXmls);
+    }
+
+    private static bool GradientFillEquals(CellGradientFill? a, CellGradientFill? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        return a.Equals(b);
     }
 
     private static bool DictionaryEquals(IReadOnlyDictionary<string, string>? a, IReadOnlyDictionary<string, string>? b)
@@ -363,6 +477,7 @@ public sealed class CellStyle : IEquatable<CellStyle>
         h.Add(FillPatternStyle);
         h.Add(FillPatternColor);
         h.Add(FillPatternThemeColor);
+        h.Add(GradientFill?.GetHashCode() ?? 0);
         h.Add(BorderTop);
         h.Add(BorderRight);
         h.Add(BorderBottom);
@@ -565,6 +680,7 @@ public record StyleDiff(
             s.FillPatternStyle = CellFillPatternStyle.None;
             s.FillPatternColor = null;
             s.FillPatternThemeColor = null;
+            s.GradientFill = null;
         }
         if (FillPatternStyle is not null) s.FillPatternStyle = FillPatternStyle.Value;
         if (FillPatternColor is not null)
