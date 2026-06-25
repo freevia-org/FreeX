@@ -118,34 +118,37 @@ public class AutosaveRecoveryDeletionTests : IDisposable
     }
 
     /// <summary>
-    /// Regression test for H2: when the snapshot load fails the caller must NOT delete the
-    /// candidate. This test exercises the contract at the store level: if the load-result bool
-    /// is respected (false → skip DeleteCandidate) the snapshot file survives intact.
-    /// The matching FileCommands-level assertion (OpenSnapshot returns false for a corrupt file)
-    /// lives in FileLifecycleTests.OpenSnapshot_CorruptFile_ReturnsFalseAndSnapshotFileSurvives.
+    /// Regression test for the "Could not recover the document" error loop: when a snapshot fails to
+    /// load (structurally corrupt — e.g. a truncated ZIP from a crashed write), the fixed
+    /// OfferRecovery/RecoverUnsavedDocuments QUARANTINE the candidate. The bytes are preserved (moved
+    /// into a Quarantine subfolder, not deleted), but the candidate is no longer enumerable, so it is
+    /// not re-offered on the next launch and the error cannot loop.
     /// </summary>
     [Fact]
-    public void FailedLoad_DoesNotDeleteOfferedCandidate()
+    public void FailedLoad_QuarantinesCandidate_PreservesBytes_NotReEnumerated()
     {
-        // Arrange: one candidate whose "load" will fail (simulated by returning false)
+        // Arrange: one candidate whose load fails.
         var candidate = CreateCandidate("failing-snap", "2026-06-20T10:00:00Z", "Corrupt Doc");
 
         var store = new AutosaveSnapshotStore(_recoveryDir);
         store.EnumerateCandidates().Should().HaveCount(1);
 
-        // Act: simulate the fixed OfferRecovery when the user accepts but OpenSnapshot returns false.
-        // The fixed code: var loaded = _file.OpenSnapshot(...); if (loaded) DeleteCandidate(candidate);
-        // Here we simulate loaded = false → do NOT call DeleteCandidate.
-        bool loaded = false; // simulate a corrupt-file load failure
+        // Act: simulate the fixed recovery flow when OpenSnapshot returns false (corrupt file).
+        bool loaded = false;
         if (loaded)
             AutosaveSnapshotStore.DeleteCandidate(candidate);
+        else
+            AutosaveSnapshotStore.QuarantineCandidate(candidate);
 
-        // Assert: the snapshot is still on disk because the failed load was not deleted
-        File.Exists(candidate.SnapshotPath).Should().BeTrue(
-            "a snapshot whose load failed must NOT be deleted so the user's unsaved work is preserved");
-        File.Exists(candidate.SidecarPath).Should().BeTrue(
-            "the sidecar for a failed-load snapshot must also survive");
-        store.EnumerateCandidates().Should().HaveCount(1,
-            "the candidate must remain enumerable after a failed load");
+        // Assert: original snapshot+sidecar moved out of the recovery dir (not deleted) ...
+        File.Exists(candidate.SnapshotPath).Should().BeFalse("the corrupt snapshot is moved aside, not left to re-prompt");
+        File.Exists(candidate.SidecarPath).Should().BeFalse("the sidecar is moved aside with its snapshot");
+        var quarantine = Path.Combine(_recoveryDir, "Quarantine");
+        Directory.Exists(quarantine).Should().BeTrue();
+        Directory.GetFiles(quarantine).Should().Contain(p => p.EndsWith(".fxl"),
+            "the snapshot bytes are preserved in the Quarantine subfolder for diagnostics");
+        // ... and the candidate is no longer enumerable, so it cannot loop the recovery error.
+        store.EnumerateCandidates().Should().BeEmpty(
+            "a quarantined corrupt snapshot must not be re-offered on the next launch");
     }
 }
