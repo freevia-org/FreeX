@@ -34,6 +34,7 @@ public static class PptxPackageWriter
     private const string PresPropsRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/presProps";
     private const string ViewPropsRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps";
     private const string TableStylesRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
+    private const string ChartRelType       = PptxChartWriter.ChartRelType;
 
     // ── Content types ─────────────────────────────────────────────────────────────
     private const string PresentationCT  = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
@@ -46,6 +47,7 @@ public static class PptxPackageWriter
     private const string TableStylesCT   = "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml";
     private const string CorePropsCT     = "application/vnd.openxmlformats-package.core-properties+xml";
     private const string RelsCT          = "application/vnd.openxmlformats-package.relationships+xml";
+    private const string ChartCT         = PptxChartWriter.ChartCT;
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -79,8 +81,22 @@ public static class PptxPackageWriter
                 new SlideLayout { Id = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank, MasterId = masters[0].Id }
             };
 
+        // Collect media extensions used across all slides (for Q2 content-type Defaults).
+        var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
+                {
+                    var ct = shape.Picture.ContentType ?? "image/png";
+                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+            }
+        }
+
         // --- 1. [Content_Types].xml ---
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts);
+        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -160,6 +176,7 @@ public static class PptxPackageWriter
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
 
+        int globalChartIndex = 1; // monotonically increasing across all slides
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
             var slide = presentation.Slides[si];
@@ -173,14 +190,24 @@ public static class PptxPackageWriter
             // Write media (images) into the archive, get back rel-id map
             var mediaRelIds = WriteSlideMedia(archive, slide, si + 1);
 
-            // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaRelIds));
+            // Write charts into the archive, get back rel-id map
+            var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
 
-            // Slide rels: rId1=layout, rIdMedia1..=images
+            // Combined shapeId→relId map for shape element building (images + charts)
+            var mediaById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
+            foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
+
+            // Slide xml
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById));
+
+            // Slide rels: rId1=layout, images, charts
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
-            foreach (var (shapeName, mediaRelId, mediaPath) in mediaRelIds)
+            foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, chartRelId, chartPath) in chartRelIds)
+                slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
             WriteRels(archive, slidePath, slideRels);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
@@ -213,10 +240,41 @@ public static class PptxPackageWriter
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
 
+    // Maps a file extension to its IANA media type for [Content_Types].xml Default entries.
+    private static readonly Dictionary<string, string> ExtensionToContentType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["png"]  = "image/png",
+            ["jpg"]  = "image/jpeg",
+            ["jpeg"] = "image/jpeg",
+            ["gif"]  = "image/gif",
+            ["bmp"]  = "image/bmp",
+            ["tiff"] = "image/tiff",
+            ["svg"]  = "image/svg+xml",
+            ["wmf"]  = "image/x-wmf",
+            ["emf"]  = "image/x-emf",
+        };
+
     private static XDocument BuildContentTypesXml(
-        Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts)
+        Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
+        HashSet<string> mediaExtensions)
     {
         var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+
+        var defaults = new List<XElement>
+        {
+            new XElement(CT + "Default", new XAttribute("Extension", "rels"), new XAttribute("ContentType", RelsCT)),
+            new XElement(CT + "Default", new XAttribute("Extension", "xml"),  new XAttribute("ContentType", "application/xml")),
+        };
+
+        // Emit a Default entry for every media extension actually written (covers all paths correctly).
+        foreach (var ext in mediaExtensions.OrderBy(e => e))
+        {
+            if (ExtensionToContentType.TryGetValue(ext, out var imgCt))
+                defaults.Add(new XElement(CT + "Default",
+                    new XAttribute("Extension", ext),
+                    new XAttribute("ContentType", imgCt)));
+        }
 
         var overrides = new List<XElement>
         {
@@ -237,17 +295,16 @@ public static class PptxPackageWriter
         for (int si = 0; si < p.Slides.Count; si++)
             overrides.Add(Override(CT, $"/ppt/slides/slide{si + 1}.xml", SlideCT));
 
-        // Collect image content types
+        // Collect chart content types
+        int chartGlobalIdx = 1;
         foreach (var slide in p.Slides)
         {
             foreach (var shape in AllShapes(slide.Shapes))
             {
-                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
+                if (shape.Kind == SlideShapeKind.Chart && shape.Chart is not null)
                 {
-                    var ext = ContentTypeToExtension(shape.Picture.ContentType ?? "image/png");
-                    var ct = shape.Picture.ContentType ?? "image/png";
-                    // add defaults as needed
-                    overrides.Add(Override(CT, $"/ppt/media/media_{GetShapeId(shape)}.{ext}", ct));
+                    overrides.Add(Override(CT, $"/ppt/charts/chart{chartGlobalIdx}.xml", ChartCT));
+                    chartGlobalIdx++;
                 }
             }
         }
@@ -255,11 +312,7 @@ public static class PptxPackageWriter
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(CT + "Types",
-                new XElement(CT + "Default", new XAttribute("Extension", "rels"), new XAttribute("ContentType", RelsCT)),
-                new XElement(CT + "Default", new XAttribute("Extension", "xml"), new XAttribute("ContentType", "application/xml")),
-                new XElement(CT + "Default", new XAttribute("Extension", "png"), new XAttribute("ContentType", "image/png")),
-                new XElement(CT + "Default", new XAttribute("Extension", "jpg"), new XAttribute("ContentType", "image/jpeg")),
-                new XElement(CT + "Default", new XAttribute("Extension", "jpeg"), new XAttribute("ContentType", "image/jpeg")),
+                defaults,
                 overrides));
     }
 
@@ -297,23 +350,22 @@ public static class PptxPackageWriter
 
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
-        List<(string shapeName, string relId, string mediaPath)> mediaRelIds)
+        Dictionary<uint, string> mediaById)
     {
-        var mediaByName = mediaRelIds.ToDictionary(m => m.shapeName, m => m.relId);
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(P + "sld",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
-                slide.Background is not null
-                    ? new XElement(P + "bg",
-                        new XElement(P + "bgPr",
-                            BuildFillEl(slide.Background, scheme),
-                            new XElement(A + "effectLst")))
-                    : null,
                 new XElement(P + "cSld",
+                    slide.Background is not null
+                        ? new XElement(P + "bg",
+                            new XElement(P + "bgPr",
+                                BuildFillEl(slide.Background, scheme),
+                                new XElement(A + "effectLst")))
+                        : null,
                     new XElement(P + "spTree",
                         GrpSpHeader(),
-                        slide.Shapes.Select(s => BuildShapeEl(s, scheme, mediaByName))))));
+                        slide.Shapes.Select(s => BuildShapeEl(s, scheme, mediaById))))));
     }
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
@@ -455,12 +507,14 @@ public static class PptxPackageWriter
     // ── Shape elements ────────────────────────────────────────────────────────────
 
     private static XElement BuildShapeEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<string, string> mediaByName) =>
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
         shape.Kind switch
         {
-            SlideShapeKind.Picture => BuildPicEl(shape, mediaByName),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaByName),
+            SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
+            SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
+            SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
             _ => BuildSpEl(shape, scheme)
         };
 
@@ -482,10 +536,11 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme));
 
-    private static XElement BuildPicEl(SlideShape shape, Dictionary<string, string> mediaByName)
+    private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
     {
-        mediaByName.TryGetValue(shape.Name, out var embedRelId);
-        embedRelId ??= mediaByName.Values.FirstOrDefault() ?? "rIdMedia1";
+        // Look up by shape Id (collision-safe); fall back to a placeholder only if somehow missing.
+        mediaById.TryGetValue(shape.Id, out var embedRelId);
+        embedRelId ??= "rIdMedia1";
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
@@ -499,14 +554,34 @@ public static class PptxPackageWriter
     }
 
     private static XElement BuildGrpSpEl(
-        SlideShape shape, PresentationColorScheme scheme, Dictionary<string, string> mediaByName) =>
+        SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvGrpSpPr"),
                 new XElement(P + "nvPr")),
-            BuildSpPrEl(shape, scheme),
-            shape.Children.Select(c => BuildShapeEl(c, scheme, mediaByName)));
+            BuildGrpSpPrEl(shape),
+            shape.Children.Select(c => BuildShapeEl(c, scheme, mediaById)));
+
+    /// <summary>
+    /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
+    /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
+    /// </summary>
+    private static XElement BuildGrpSpPrEl(SlideShape shape)
+    {
+        var xfrm = new XElement(A + "xfrm");
+        if (shape.RotationDeg != 0)
+            xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
+        if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
+        if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+        xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        // Child coordinate space: use the group's own extent as the identity child space.
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "grpSpPr", xfrm);
+    }
 
     private static XElement BuildSpPrEl(SlideShape shape, PresentationColorScheme scheme, string? forcePrst = null)
     {
@@ -525,6 +600,203 @@ public static class PptxPackageWriter
                 new XElement(A + "avLst")),
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null);
+    }
+
+    // ── Table / graphicFrame elements ─────────────────────────────────────────────
+
+    private const string DrawingTableUri = "http://schemas.openxmlformats.org/drawingml/2006/table";
+
+    private static XElement BuildGraphicFrameEl(SlideShape shape, PresentationColorScheme scheme)
+    {
+        var table = shape.Table!;
+
+        // xfrm
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr",
+                    new XElement(A + "graphicFrameLocks",
+                        new XAttribute("noGrp", "1"))),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingTableUri),
+                    BuildTableEl(table, scheme))));
+    }
+
+    // ── Chart / graphicFrame elements ─────────────────────────────────────────────
+
+    private const string DrawingChartUri = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace CChartNs =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    /// <summary>
+    /// Builds the p:graphicFrame element for a chart shape.
+    /// <paramref name="mediaById"/> carries chart rel IDs added by
+    /// <see cref="WriteSlideCharts"/> (keyed by shape.Id).
+    /// </summary>
+    private static XElement BuildChartGraphicFrameEl(
+        SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        mediaById.TryGetValue(shape.Id, out var chartRelId);
+        chartRelId ??= "rIdChart1"; // fallback (should not happen)
+
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        return new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr",
+                    new XElement(A + "graphicFrameLocks",
+                        new XAttribute("noGrp", "1"))),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingChartUri),
+                    new XElement(CChartNs + "chart",
+                        // Declare the c: prefix so PowerPoint sees <c:chart .../>
+                        new XAttribute(XNamespace.Xmlns + "c", DrawingChartUri),
+                        new XAttribute(R + "id", chartRelId)))));
+    }
+
+    private static XElement BuildTableEl(TableShape table, PresentationColorScheme scheme)
+    {
+        // tblPr
+        var tblPr = new XElement(A + "tblPr");
+        if (table.Flags.FirstRow) tblPr.Add(new XAttribute("firstRow", "1"));
+        if (table.Flags.LastRow)  tblPr.Add(new XAttribute("lastRow", "1"));
+        if (table.Flags.FirstCol) tblPr.Add(new XAttribute("firstCol", "1"));
+        if (table.Flags.LastCol)  tblPr.Add(new XAttribute("lastCol", "1"));
+        if (table.Flags.BandRow)  tblPr.Add(new XAttribute("bandRow", "1"));
+        if (table.Flags.BandCol)  tblPr.Add(new XAttribute("bandCol", "1"));
+        if (!string.IsNullOrWhiteSpace(table.TableStyleId))
+            tblPr.Add(new XElement(A + "tableStyleId", table.TableStyleId));
+
+        // tblGrid
+        var tblGrid = new XElement(A + "tblGrid",
+            table.ColumnWidthsEmu.Select(w =>
+                new XElement(A + "gridCol", new XAttribute("w", w))));
+
+        // rows
+        var rowEls = table.Rows.Select(row => BuildTableRowEl(row, scheme));
+
+        return new XElement(A + "tbl", tblPr, tblGrid, rowEls);
+    }
+
+    private static XElement BuildTableRowEl(TableRow row, PresentationColorScheme scheme) =>
+        new XElement(A + "tr",
+            new XAttribute("h", row.HeightEmu),
+            row.Cells.Select(cell => BuildTableCellEl(cell, scheme)));
+
+    private static XElement BuildTableCellEl(TableCell cell, PresentationColorScheme scheme)
+    {
+        // txBody (a:txBody inside a cell uses A namespace directly)
+        XElement? txBody = null;
+        if (cell.TextBody is not null)
+        {
+            var bodyPr = new XElement(A + "bodyPr");
+            if (cell.TextBody.Anchor.HasValue)
+                bodyPr.Add(new XAttribute("anchor", cell.TextBody.Anchor.Value switch
+                {
+                    VerticalAnchor.Middle => "ctr",
+                    VerticalAnchor.Bottom => "b",
+                    _ => "t"
+                }));
+
+            txBody = new XElement(A + "txBody",
+                bodyPr,
+                new XElement(A + "lstStyle"),
+                cell.TextBody.Paragraphs.Select(p => BuildParaEl(p)));
+        }
+        else
+        {
+            // Empty txBody is required by spec.
+            txBody = new XElement(A + "txBody",
+                new XElement(A + "bodyPr"),
+                new XElement(A + "lstStyle"),
+                new XElement(A + "p"));
+        }
+
+        // tcPr
+        var tcPr = new XElement(A + "tcPr");
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", (long)Math.Round(cell.InsetLeftPt.Value * 12700)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", (long)Math.Round(cell.InsetRightPt.Value * 12700)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", (long)Math.Round(cell.InsetTopPt.Value * 12700)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", (long)Math.Round(cell.InsetBottomPt.Value * 12700)));
+        if (cell.Anchor.HasValue)
+            tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
+            {
+                TableCellAnchor.Middle => "ctr",
+                TableCellAnchor.Bottom => "b",
+                _ => "t"
+            }));
+
+        // Per-side borders
+        if (cell.Borders?.Left   is { } bl) tcPr.Add(new XElement(A + "lnL",   BuildBorderAttrs(bl)));
+        if (cell.Borders?.Right  is { } br) tcPr.Add(new XElement(A + "lnR",   BuildBorderAttrs(br)));
+        if (cell.Borders?.Top    is { } bt) tcPr.Add(new XElement(A + "lnT",   BuildBorderAttrs(bt)));
+        if (cell.Borders?.Bottom is { } bb) tcPr.Add(new XElement(A + "lnB",   BuildBorderAttrs(bb)));
+
+        // Explicit fill
+        if (cell.Fill is not null)
+        {
+            var fillEl = BuildFillEl(cell.Fill, scheme);
+            if (fillEl is not null)
+                tcPr.Add(new XElement(A + "fill", fillEl));
+        }
+
+        // Build the tc element.
+        var tc = new XElement(A + "tc");
+
+        // Merge attributes.
+        if (cell.GridSpan > 1) tc.Add(new XAttribute("gridSpan", cell.GridSpan));
+        if (cell.RowSpan > 1)  tc.Add(new XAttribute("rowSpan", cell.RowSpan));
+        if (cell.HMerge) tc.Add(new XAttribute("hMerge", "1"));
+        if (cell.VMerge) tc.Add(new XAttribute("vMerge", "1"));
+
+        tc.Add(txBody);
+        tc.Add(tcPr);
+        return tc;
+    }
+
+    private static object[] BuildBorderAttrs(ShapeOutline outline)
+    {
+        if (outline is ShapeOutline.None)
+            return new object[] { new XElement(A + "noFill") };
+
+        if (outline is ShapeOutline.Visible v)
+        {
+            var children = new List<object>
+            {
+                new XAttribute("w", (long)Math.Round(v.WidthPt * 12700)),
+                new XElement(A + "solidFill", BuildColorEl(v.Color))
+            };
+            if (v.Dash != OutlineDash.Solid)
+                children.Add(new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash))));
+            return children.ToArray();
+        }
+
+        return Array.Empty<object>();
     }
 
     // ── Fill elements ─────────────────────────────────────────────────────────────
@@ -559,6 +831,11 @@ public static class PptxPackageWriter
                 el.Add(new XElement(A + "lumMod", new XAttribute("val", (long)Math.Round(sc.LumMod * 100000))));
             if (Math.Abs(sc.LumOff) > 1e-9)
                 el.Add(new XElement(A + "lumOff", new XAttribute("val", (long)Math.Round(sc.LumOff * 100000))));
+            // Tint and shade default to 1.0 (= no modifier); only emit when a modifier is present.
+            if (Math.Abs(sc.Tint - 1.0) > 1e-9)
+                el.Add(new XElement(A + "tint",  new XAttribute("val", (long)Math.Round(sc.Tint  * 100000))));
+            if (Math.Abs(sc.Shade - 1.0) > 1e-9)
+                el.Add(new XElement(A + "shade", new XAttribute("val", (long)Math.Round(sc.Shade * 100000))));
             return el;
         }
         return new XElement(A + "srgbClr", new XAttribute("val", FmtColor(color.Resolved)));
@@ -709,10 +986,10 @@ public static class PptxPackageWriter
 
     // ── Media writing ─────────────────────────────────────────────────────────────
 
-    private static List<(string shapeName, string relId, string mediaPath)> WriteSlideMedia(
+    private static List<(uint shapeId, string relId, string mediaPath)> WriteSlideMedia(
         ZipArchive archive, Slide slide, int slideIndex)
     {
-        var result = new List<(string, string, string)>();
+        var result = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
         foreach (var shape in AllShapes(slide.Shapes))
@@ -729,8 +1006,34 @@ public static class PptxPackageWriter
                 es.Write(bytes);
 
             var relId = $"rIdMedia{mediaIdx}";
-            result.Add((shape.Name, relId, mediaPath));
+            result.Add((shape.Id, relId, mediaPath));
             mediaIdx++;
+        }
+
+        return result;
+    }
+
+    // ── Chart writing ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes chart parts for all Chart shapes in the slide. Uses and increments
+    /// <paramref name="globalChartIndex"/> so chart file names are unique across slides.
+    /// Returns (shapeName, relId, chartPartPath) tuples for wiring into slide rels.
+    /// </summary>
+    private static List<(uint shapeId, string relId, string chartPath)> WriteSlideCharts(
+        ZipArchive archive, Slide slide, ref int globalChartIndex)
+    {
+        var result = new List<(uint, string, string)>();
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Chart || shape.Chart is null)
+                continue;
+
+            var chartPath = PptxChartWriter.WriteChartPart(archive, shape.Chart, globalChartIndex);
+            var relId = $"rIdChart{globalChartIndex}";
+            result.Add((shape.Id, relId, chartPath));
+            globalChartIndex++;
         }
 
         return result;
@@ -860,8 +1163,9 @@ public static class PptxPackageWriter
         public XDocument ToXDocument() =>
             new XDocument(
                 new XDeclaration("1.0", "UTF-8", "yes"),
+                // OPC spec §9.3: Relationships element MUST use the default namespace,
+                // not a prefixed namespace (PowerPoint rejects r:Relationships).
                 new XElement(PkgRels + "Relationships",
-                    new XAttribute(XNamespace.Xmlns + "r", PkgRels),
                     _rels.Select(r =>
                         new XElement(PkgRels + "Relationship",
                             new XAttribute("Id", r.id),

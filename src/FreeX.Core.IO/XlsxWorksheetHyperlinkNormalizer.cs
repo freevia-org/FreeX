@@ -161,7 +161,30 @@ internal static class XlsxWorksheetHyperlinkNormalizer
                 : $"{range.Start.ToA1()}:{range.End.ToA1()}";
         }
 
+        // Pass through whole-column (A:A) and whole-row (3:3) references unchanged —
+        // these are valid sqref forms that Excel supports but CellAddress.TryParse
+        // cannot represent.  Returning the original trimmed value preserves them.
+        if (parts.Length == 2 && IsWholeColumnOrRowRef(parts[0], parts[1]))
+            return trimmed;
+
         return null;
+    }
+
+    private static bool IsWholeColumnOrRowRef(string left, string right)
+    {
+        // Whole-column: both sides are a single column letter sequence with no digits (e.g. A, AA).
+        // Whole-row:    both sides are a positive integer with no letters (e.g. 3, 10).
+        if (left.Length == 0 || right.Length == 0)
+            return false;
+
+        var leftIsLetters = left.All(char.IsAsciiLetter);
+        var rightIsLetters = right.All(char.IsAsciiLetter);
+        if (leftIsLetters && rightIsLetters)
+            return true;
+
+        var leftIsDigits = left.All(char.IsAsciiDigit);
+        var rightIsDigits = right.All(char.IsAsciiDigit);
+        return leftIsDigits && rightIsDigits;
     }
 
     private static bool RemoveUnknownHyperlinkAttributes(XElement element)

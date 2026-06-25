@@ -519,7 +519,14 @@ internal static class ParityCapture
             new ZoomDialog(100));
 
         CaptureDialog(results, "dialog.CustomViews", outDir, () =>
-            new CustomViewsDialog(workbook, new CommandBus(_ => new WorkbookCommandContext(workbook))));
+        {
+            // Seed a couple of named views so the dialog has meaningful rows to compare
+            // (mirrors the Avalonia parity wrapper, which seeds the same view names).
+            workbook.CustomViews.Clear();
+            workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
+            workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
+            return new CustomViewsDialog(workbook, new CommandBus(_ => new WorkbookCommandContext(workbook)));
+        });
 
         CaptureDialog(results, "dialog.PrintPreview", outDir, () =>
             new PrintPreviewDialog(
@@ -824,8 +831,8 @@ internal static class ParityCapture
 
     private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
     [
-        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 2, 4), "120", "=C2*D2"),
-        new WatchWindowEntry(sheetId, "Sheet1", new CellAddress(sheetId, 3, 4), "85", null),
+        new WatchWindowEntry(sheetId, "Demo", new CellAddress(sheetId, 2, 3), "120", null),
+        new WatchWindowEntry(sheetId, "Demo", new CellAddress(sheetId, 3, 3), "85", null),
     ];
 
     private static ChartModel CreateChart(SheetId sheetId) =>

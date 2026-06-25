@@ -22,14 +22,15 @@ internal static class AvaloniaDrawingShapeGeometryFactory
         if (width <= 0 || height <= 0)
             return null;
 
-        // Ellipse, Line and plain Rectangle stay on the dedicated control path. The portable builder
+        // Ellipse and plain Rectangle stay on the dedicated control path. The portable builder
         // emits real geometry for these too, so the adapter must opt out explicitly to preserve the
         // call site's null-means-use-the-dedicated-control contract.
+        // Line previously lived here too, but is now routed through the geometry path so that it
+        // renders at the correct angle and length (the stub Border approach had no angle/length).
         switch (kind)
         {
             case DrawingShapeKind.Rectangle:
             case DrawingShapeKind.Ellipse:
-            case DrawingShapeKind.Line:
                 return null;
         }
 

@@ -339,6 +339,14 @@ public static class RtfReader
                 case "sb": _state.Paragraph = _state.Paragraph with { SpaceBeforePt = TwipsToPt(param ?? 0) }; break;
                 case "sa": _state.Paragraph = _state.Paragraph with { SpaceAfterPt = TwipsToPt(param ?? 0) }; break;
 
+                // ---- binary data ----
+                // \binN is followed by exactly N raw binary bytes that must be skipped wholesale;
+                // they are not RTF text and must not be parsed as characters or control words.
+                case "bin":
+                    if (param is { } binCount && binCount > 0)
+                        _pos = Math.Min(_pos + binCount, _rtf.Length);
+                    break;
+
                 // ---- breaks / structure ----
                 case "par": ParPlain(); break;
                 case "line": AppendChar('\n'); break;
@@ -548,11 +556,34 @@ public static class RtfReader
                 var c = _rtf[_pos];
                 if (c == '\\')
                 {
-                    // A \'XX hex escape or other control symbol/word counts as one unit.
-                    if (_pos + 1 < _rtf.Length && _rtf[_pos + 1] == '\'')
-                        _pos += 4; // \'XX
+                    if (_pos + 1 >= _rtf.Length)
+                    {
+                        _pos++;
+                    }
+                    else if (_rtf[_pos + 1] == '\'')
+                    {
+                        // \'XX hex escape — always exactly 4 chars: \  '  H  H
+                        _pos += 4;
+                    }
+                    else if (char.IsLetter(_rtf[_pos + 1]))
+                    {
+                        // Control word: consume backslash + letter-run + optional signed numeric param + optional trailing space.
+                        // This mirrors ParseControl's lexing so every control-word fallback counts as ONE unit.
+                        _pos++; // consume backslash
+                        while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
+                            _pos++;
+                        if (_pos < _rtf.Length && _rtf[_pos] == '-')
+                            _pos++;
+                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                            _pos++;
+                        if (_pos < _rtf.Length && _rtf[_pos] == ' ')
+                            _pos++;
+                    }
                     else
-                        _pos += 2; // \x control symbol (approximation: one fallback char)
+                    {
+                        // Control symbol (e.g. \\ \{ \} \~ \- \'): always exactly 2 chars: \  X
+                        _pos += 2;
+                    }
                 }
                 else if (c == '{' || c == '}')
                 {

@@ -223,6 +223,98 @@ public sealed class DrawingObjectRenderPlannerTests
             bounds => bounds.FlipHorizontal && bounds.FlipVertical);
     }
 
+    // ── Wave 3: outline width/dash/no-fill + shape text projection ──────────────────────────────
+
+    [Fact]
+    public void GetViewport_ShapeBoundsExposeOutlineWidthAndDash()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            OutlineWidthPoints = 3.0,
+            OutlineDash = DrawingShapeOutlineDash.Dash,
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.OutlineWidthPoints.Should().Be(3.0);
+        bounds.OutlineDash.Should().Be(DrawingShapeOutlineDash.Dash);
+        bounds.OutlineHasNoFill.Should().BeFalse();
+    }
+
+    [Fact]
+    public void GetViewport_ShapeBoundsExposeOutlineHasNoFill()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            OutlineHasNoFill = true,
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.OutlineHasNoFill.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetViewport_ShapeBoundsExposeShapeText()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            ShapeText = "Hello",
+            ShapeTextFontSizePoints = 14.0,
+            ShapeTextBold = true,
+            ShapeTextItalic = false,
+            ShapeTextUnderline = true,
+            ShapeTextHAlign = DrawingShapeTextHAlign.Center,
+            ShapeTextVAnchor = DrawingShapeTextVAnchor.Bottom,
+            ShapeTextWrap = false,
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var viewport = new ViewportService().GetViewport(
+            workbook, sheet.Id, new ViewportRequest(1, 1, 120, 120));
+
+        var bounds = viewport.DrawingObjects.Single(b => b.Id == shape.Id);
+        bounds.ShapeText.Should().Be("Hello");
+        bounds.ShapeTextFontSizePoints.Should().Be(14.0);
+        bounds.ShapeTextBold.Should().BeTrue();
+        bounds.ShapeTextItalic.Should().BeFalse();
+        bounds.ShapeTextUnderline.Should().BeTrue();
+        bounds.ShapeTextHAlign.Should().Be(DrawingShapeTextHAlign.Center);
+        bounds.ShapeTextVAnchor.Should().Be(DrawingShapeTextVAnchor.Bottom);
+        bounds.ShapeTextWrap.Should().BeFalse();
+    }
+
+    [Fact]
+    public void DrawingObjectBounds_OutlineDefaults_MatchLegacyBehavior()
+    {
+        // Fields default to 0/Solid/false so existing callers that don't set them
+        // continue to get the legacy 1.5 px solid stroke (handled by the renderer).
+        var bounds = new DrawingObjectBounds(
+            SelectionPaneObjectKind.Shape,
+            Guid.NewGuid(), "S", 1, 1, 0, 0, 80, 40,
+            ShapeKind: DrawingShapeKind.Rectangle);
+
+        bounds.OutlineWidthPoints.Should().Be(0);
+        bounds.OutlineDash.Should().Be(DrawingShapeOutlineDash.Solid);
+        bounds.OutlineHasNoFill.Should().BeFalse();
+        bounds.ShapeText.Should().BeNull();
+    }
+
     private static DrawingObjectBounds PictureBounds(
         PictureKind pictureKind = PictureKind.Image,
         byte[]? imageBytes = null,

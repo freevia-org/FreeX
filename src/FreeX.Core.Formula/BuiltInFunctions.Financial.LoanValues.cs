@@ -203,6 +203,10 @@ public static partial class BuiltInFunctions
             double rnF = Math.Pow(1 + rFinal, nper);
             fResidual = pv * rnF + pmt * (1 + rFinal * type) * (rnF - 1) / rFinal + fv;
         }
-        return Math.Abs(fResidual) > 1e-7 ? ErrorValue.Num : new NumberValue(r);
+        // Scale the convergence tolerance by the dominant cash-flow magnitude so that
+        // large-loan inputs (pv ~ 1e7) are not wrongly rejected due to absolute residual
+        // exceeding 1e-7, while genuinely non-converged iterates are still caught.
+        double scale = Math.Max(1.0, Math.Max(Math.Abs(pv), Math.Max(Math.Abs(fv), Math.Abs(pmt * nper))));
+        return Math.Abs(fResidual) > 1e-7 * scale ? ErrorValue.Num : new NumberValue(r);
     }
 }

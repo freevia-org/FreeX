@@ -27,7 +27,9 @@ public static class PptxPackageReader
     private const string SlideLayoutRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
     private const string ThemeRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     private const string ImageRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
-    private const string CorePropsRelType   = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string CorePropsRelType     = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
+    private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -89,6 +91,15 @@ public static class PptxPackageReader
         // Rels for presentation.xml
         var presRels = LoadRels(archive, GetRelsPath(presPath));
 
+        // Table styles (keyed by style GUID)
+        var tableStyles = new Dictionary<string, TableStyleData>(StringComparer.OrdinalIgnoreCase);
+        var tableStylesTarget = GetRelTarget(presRels, TableStylesRelType);
+        if (tableStylesTarget is not null)
+        {
+            var tableStylesPath = ResolvePath(presDir, tableStylesTarget);
+            ReadTableStyles(archive, tableStylesPath, presentation.Theme.ColorScheme, tableStyles);
+        }
+
         // Slide masters → layouts
         var masterRelEntries = presRels.Where(r => r.type == SlideMasterRelType).ToList();
         foreach (var (masterId, _, masterTarget) in masterRelEntries)
@@ -122,7 +133,7 @@ public static class PptxPackageReader
             if (slideRel.type != SlideRelType) continue;
 
             var slidePath = ResolvePath(presDir, slideRel.target);
-            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts);
+            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles);
             presentation.Slides.Add(slide);
         }
 
@@ -261,7 +272,8 @@ public static class PptxPackageReader
 
     private static Slide ReadSlide(
         ZipArchive archive, string slidePath, string slideId,
-        PresentationColorScheme scheme, List<SlideLayout> layouts)
+        PresentationColorScheme scheme, List<SlideLayout> layouts,
+        Dictionary<string, TableStyleData>? tableStyles = null)
     {
         var slide = new Slide { Id = slideId };
 
@@ -284,7 +296,7 @@ public static class PptxPackageReader
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles))
                 slide.Shapes.Add(shape);
         }
 
@@ -311,7 +323,8 @@ public static class PptxPackageReader
     // ── Shape tree ───────────────────────────────────────────────────────────────
 
     private static IEnumerable<SlideShape> ReadShapesFromTree(
-        XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme)
+        XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
+        Dictionary<string, TableStyleData>? tableStyles = null)
     {
         foreach (var child in spTree.Elements())
         {
@@ -320,13 +333,220 @@ public static class PptxPackageReader
                 "sp" => ReadSp(child, scheme),
                 "pic" => ReadPic(child, archive, partPath, scheme),
                 "cxnSp" => ReadCxnSp(child, scheme),
-                "grpSp" => ReadGrpSp(child, archive, partPath, scheme),
+                "grpSp" => ReadGrpSp(child, archive, partPath, scheme, tableStyles),
+                "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
                 _ => null
             };
 
             if (shape is not null)
                 yield return shape;
         }
+    }
+
+    // ── p:graphicFrame (table, chart, etc.) ───────────────────────────────────────
+
+    private const string DrawingTableUri =
+        "http://schemas.openxmlformats.org/drawingml/2006/table";
+
+    private const string DrawingChartUri =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    // c: namespace for c:chart element inside graphicData
+    private static readonly XNamespace CChart =
+        "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    private static SlideShape? ReadGraphicFrame(
+        XElement gfEl, ZipArchive archive, string partPath,
+        PresentationColorScheme scheme,
+        Dictionary<string, TableStyleData>? tableStyles)
+    {
+        var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
+
+        // Read xfrm for position/size.
+        var xfrmEl = gfEl.Element(P + "xfrm");
+        long offX = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("x")?.Value);
+        long offY = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("y")?.Value);
+        long extCx = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cx")?.Value);
+        long extCy = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cy")?.Value);
+
+        // Detect graphic type from URI.
+        var graphicData = gfEl
+            .Element(A + "graphic")
+            ?.Element(A + "graphicData");
+
+        if (graphicData is null)
+            return null;
+
+        var uri = graphicData.Attribute("uri")?.Value;
+
+        // ── Table ──────────────────────────────────────────────────────────────
+        if (string.Equals(uri, DrawingTableUri, StringComparison.OrdinalIgnoreCase))
+        {
+            var tblEl = graphicData.Element(A + "tbl");
+            if (tblEl is null) return null;
+
+            var tableShape = ReadTable(tblEl, scheme, tableStyles);
+
+            return new SlideShape
+            {
+                Id = ParseUint(cNvPr?.Attribute("id")?.Value),
+                Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                Kind = SlideShapeKind.Table,
+                OffsetXEmu = offX,
+                OffsetYEmu = offY,
+                ExtentCxEmu = extCx,
+                ExtentCyEmu = extCy,
+                Table = tableShape
+            };
+        }
+
+        // ── Chart ──────────────────────────────────────────────────────────────
+        if (string.Equals(uri, DrawingChartUri, StringComparison.OrdinalIgnoreCase))
+        {
+            var chartRelId = graphicData.Element(CChart + "chart")?.Attribute(R + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(chartRelId)) return null;
+
+            // Resolve the chart part path via the slide's rels
+            var partRels = LoadRels(archive, GetRelsPath(partPath));
+            var chartTarget = partRels
+                .FirstOrDefault(r => r.id == chartRelId && r.type == ChartRelType).target;
+            if (string.IsNullOrWhiteSpace(chartTarget)) return null;
+
+            var chartPath = ResolvePath(GetDirectory(partPath), chartTarget);
+            var chartShape = PptxChartReader.ReadChartPart(archive, chartPath, scheme);
+            if (chartShape is null) return null;
+
+            return new SlideShape
+            {
+                Id = ParseUint(cNvPr?.Attribute("id")?.Value),
+                Name = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+                Kind = SlideShapeKind.Chart,
+                OffsetXEmu = offX,
+                OffsetYEmu = offY,
+                ExtentCxEmu = extCx,
+                ExtentCyEmu = extCy,
+                Chart = chartShape
+            };
+        }
+
+        // Unknown graphicFrame type — skip for now.
+        return null;
+    }
+
+    // ── a:tbl table parsing ───────────────────────────────────────────────────────
+
+    private static TableShape ReadTable(
+        XElement tblEl, PresentationColorScheme scheme,
+        Dictionary<string, TableStyleData>? tableStyles)
+    {
+        var table = new TableShape();
+
+        // tblPr — flags + styleId
+        var tblPr = tblEl.Element(A + "tblPr");
+        if (tblPr is not null)
+        {
+            table.Flags.FirstRow = tblPr.Attribute("firstRow")?.Value is "1" or "true";
+            table.Flags.LastRow  = tblPr.Attribute("lastRow")?.Value  is "1" or "true";
+            table.Flags.FirstCol = tblPr.Attribute("firstCol")?.Value is "1" or "true";
+            table.Flags.LastCol  = tblPr.Attribute("lastCol")?.Value  is "1" or "true";
+            // OOXML default for bandRow/bandCol is false; treat absent attribute as false.
+            table.Flags.BandRow  = tblPr.Attribute("bandRow")?.Value  is "1" or "true";
+            table.Flags.BandCol  = tblPr.Attribute("bandCol")?.Value  is "1" or "true";
+
+            var styleId = tblPr.Element(A + "tableStyleId")?.Value?.Trim();
+            if (!string.IsNullOrWhiteSpace(styleId))
+            {
+                table.TableStyleId = styleId;
+                if (tableStyles?.TryGetValue(styleId, out var styleData) == true)
+                    table.StyleData = styleData;
+            }
+        }
+
+        // tblGrid — column widths
+        foreach (var gridCol in tblEl.Element(A + "tblGrid")?.Elements(A + "gridCol") ?? Enumerable.Empty<XElement>())
+        {
+            if (long.TryParse(gridCol.Attribute("w")?.Value,
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var colW))
+                table.ColumnWidthsEmu.Add(colW);
+        }
+
+        // tr — rows
+        foreach (var trEl in tblEl.Elements(A + "tr"))
+        {
+            long rowH = ParseLong(trEl.Attribute("h")?.Value);
+            var row = new TableRow { HeightEmu = rowH };
+
+            foreach (var tcEl in trEl.Elements(A + "tc"))
+                row.Cells.Add(ReadTableCell(tcEl, scheme));
+
+            table.Rows.Add(row);
+        }
+
+        return table;
+    }
+
+    private static TableCell ReadTableCell(XElement tcEl, PresentationColorScheme scheme)
+    {
+        var cell = new TableCell();
+
+        // Merge attributes.
+        if (int.TryParse(tcEl.Attribute("gridSpan")?.Value, out var gs) && gs > 1)
+            cell.GridSpan = gs;
+        if (int.TryParse(tcEl.Attribute("rowSpan")?.Value, out var rs) && rs > 1)
+            cell.RowSpan = rs;
+        cell.HMerge = tcEl.Attribute("hMerge")?.Value is "1" or "true";
+        cell.VMerge = tcEl.Attribute("vMerge")?.Value is "1" or "true";
+
+        // txBody
+        var txBody = tcEl.Element(A + "txBody");
+        if (txBody is not null)
+            cell.TextBody = ReadTxBodyFromA(txBody, scheme);
+
+        // tcPr
+        var tcPr = tcEl.Element(A + "tcPr");
+        if (tcPr is not null)
+        {
+            // Insets (EMU -> points)
+            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = ml / 12700.0;
+            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = mr / 12700.0;
+            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = mt / 12700.0;
+            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = mb / 12700.0;
+
+            // Vertical anchor
+            cell.Anchor = tcPr.Attribute("anchor")?.Value switch
+            {
+                "ctr"  => TableCellAnchor.Middle,
+                "b"    => TableCellAnchor.Bottom,
+                "t"    => TableCellAnchor.Top,
+                _      => (TableCellAnchor?)null
+            };
+
+            // Explicit fill
+            cell.Fill = PptxColorReader.TryReadFill(tcPr, scheme);
+
+            // Per-side borders
+            var borders = new TableCellBorders
+            {
+                Left   = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnL"), scheme),
+                Right  = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnR"), scheme),
+                Top    = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnT"), scheme),
+                Bottom = PptxColorReader.TryReadOutline(tcPr.Element(A + "lnB"), scheme)
+            };
+
+            if (borders.Left is not null || borders.Right is not null ||
+                borders.Top is not null  || borders.Bottom is not null)
+                cell.Borders = borders;
+        }
+
+        return cell;
+    }
+
+    // Reads a:txBody (used inside table cells — same element structure as p:txBody but already in A: namespace).
+    private static TextBody ReadTxBodyFromA(XElement txBody, PresentationColorScheme scheme)
+    {
+        // Reuse the existing ReadTxBody but it expects the inner A: elements which is exactly what a:txBody has.
+        return ReadTxBody(txBody, scheme);
     }
 
     // ── p:sp ─────────────────────────────────────────────────────────────────────
@@ -427,7 +647,8 @@ public static class PptxPackageReader
 
     // ── p:grpSp ──────────────────────────────────────────────────────────────────
 
-    private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath, PresentationColorScheme scheme)
+    private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath,
+        PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null)
     {
         var cNvPr = grpSp.Element(P + "nvGrpSpPr")?.Element(P + "cNvPr");
 
@@ -440,7 +661,7 @@ public static class PptxPackageReader
 
         ReadSpPr(grpSp.Element(P + "grpSpPr"), shape, scheme);
 
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme))
+        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles))
             shape.Children.Add(child);
 
         return shape;
@@ -636,6 +857,95 @@ public static class PptxPackageReader
             "pictx" or "picandcaption" => SlideLayoutType.PictureCaption,
             _ => SlideLayoutType.Custom
         };
+
+    // ── tableStyles.xml reading ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads ppt/tableStyles.xml and populates the <paramref name="tableStyles"/> dictionary
+    /// keyed by style GUID string (e.g. "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}").
+    /// Only fills/borders/text-color from the regions we care about for rendering are captured.
+    /// </summary>
+    private static void ReadTableStyles(
+        ZipArchive archive, string path, PresentationColorScheme scheme,
+        Dictionary<string, TableStyleData> tableStyles)
+    {
+        var xml = LoadXml(archive, path);
+        if (xml?.Root is null) return;
+
+        foreach (var styleEl in xml.Root.Elements(A + "tblStyle"))
+        {
+            var styleId = styleEl.Attribute("styleId")?.Value;
+            if (string.IsNullOrWhiteSpace(styleId)) continue;
+
+            var data = new TableStyleData { StyleId = styleId };
+
+            data.WholeTbl = ReadTableStyleEntry(styleEl.Element(A + "wholeTbl"), scheme);
+            data.FirstRow = ReadTableStyleEntry(styleEl.Element(A + "firstRow"), scheme);
+            data.LastRow  = ReadTableStyleEntry(styleEl.Element(A + "lastRow"),  scheme);
+            data.FirstCol = ReadTableStyleEntry(styleEl.Element(A + "firstCol"), scheme);
+            data.LastCol  = ReadTableStyleEntry(styleEl.Element(A + "lastCol"),  scheme);
+            data.Band1H   = ReadTableStyleEntry(styleEl.Element(A + "band1H"),   scheme);
+            data.Band2H   = ReadTableStyleEntry(styleEl.Element(A + "band2H"),   scheme);
+            data.Band1V   = ReadTableStyleEntry(styleEl.Element(A + "band1V"),   scheme);
+            data.Band2V   = ReadTableStyleEntry(styleEl.Element(A + "band2V"),   scheme);
+
+            tableStyles[styleId] = data;
+        }
+    }
+
+    private static TableStyleEntry? ReadTableStyleEntry(XElement? regionEl, PresentationColorScheme scheme)
+    {
+        if (regionEl is null) return null;
+
+        var tcStyle = regionEl.Element(A + "tcStyle");
+        var tcTxStyle = regionEl.Element(A + "tcTxStyle");
+
+        ShapeFill? fill = null;
+        ShapeOutline? border = null;
+        ThemeAwareColor? textColor = null;
+
+        if (tcStyle is not null)
+        {
+            // Fill comes from tcStyle/fill or tcStyle/fillRef (theme fill reference).
+            var fillEl = tcStyle.Element(A + "fill");
+            if (fillEl is not null)
+                fill = PptxColorReader.TryReadFill(fillEl, scheme);
+
+            // Border: use tcBdr/insideH and insideV for interior, or lnB for bottom etc.
+            // Each side element (a:bottom etc.) wraps an a:ln child — pass the ln to TryReadOutline.
+            var tcBdr = tcStyle.Element(A + "tcBdr");
+            if (tcBdr is not null)
+            {
+                // Try common border elements: insideH/insideV for interior grid, then outer sides.
+                // Each side is structured as: a:bottom/a:ln, a:left/a:ln, etc.
+                static XElement? Ln(XElement? side) => side?.Element(
+                    XName.Get("ln", "http://schemas.openxmlformats.org/drawingml/2006/main"));
+
+                border = PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "insideH")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "insideV")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "bottom")), scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "left")),   scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "top")),    scheme)
+                      ?? PptxColorReader.TryReadOutline(Ln(tcBdr.Element(A + "right")),  scheme);
+            }
+        }
+
+        if (tcTxStyle is not null)
+        {
+            // Text color: first try solidFill wrapper, then direct schemeClr/srgbClr child
+            // (DrawingML allows direct color child of tcTxStyle without a solidFill wrapper).
+            var solidFill = tcTxStyle.Element(A + "solidFill");
+            if (solidFill is not null)
+                textColor = PptxColorReader.TryReadColor(solidFill, scheme);
+            else
+                textColor = PptxColorReader.TryReadColor(tcTxStyle, scheme);
+        }
+
+        if (fill is null && border is null && textColor is null)
+            return null;
+
+        return new TableStyleEntry { Fill = fill, BorderOutline = border, TextColor = textColor };
+    }
 
     // ── OPC / Rels helpers ────────────────────────────────────────────────────────
 

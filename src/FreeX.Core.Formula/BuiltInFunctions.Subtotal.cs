@@ -33,7 +33,14 @@ public static partial class BuiltInFunctions
                         uint absCol = rv.StartCol + (uint)c;
                         if (IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
                         var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue err) return err;
+                        if (cell is ErrorValue err)
+                        {
+                            // COUNT (2) ignores error cells; COUNTA (3) counts them as non-blank.
+                            // All other aggregating functions propagate the error immediately.
+                            if (baseFunc == 2) continue;
+                            if (baseFunc == 3) { countaCount++; continue; }
+                            return err;
+                        }
                         if (TryCellNumber(cell, out double value))
                         {
                             numeric.Add(value, baseFunc);

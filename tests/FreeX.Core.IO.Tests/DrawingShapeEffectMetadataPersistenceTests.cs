@@ -755,4 +755,25 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
 
         return workbook;
     }
+
+    [Fact]
+    public void XlsxAdapter_LoadsShapesFromExcelCorpusFixture_FillOutline()
+    {
+        // Verify that FreeX correctly reads shapes from the Excel-authored fill/outline corpus
+        // fixture.  This fixture was generated via Excel COM and has 6 twoCellAnchor <xdr:sp>
+        // shapes with rect geometry.  If FreeX returns 0 shapes here, the parity-grid
+        // capture will also render nothing.
+        var fixturePath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "Fixtures",
+            "Excel_native_shapes_fill_outline_004.xlsx");
+
+        using var fs = File.OpenRead(fixturePath);
+        var workbook = new XlsxFileAdapter().Load(fs);
+
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+        sheet.DrawingShapes.Should().HaveCountGreaterThan(0,
+            $"fill-outline fixture has 6 rect shapes; FreeX should read them. " +
+            $"Sheet has {sheet.DrawingShapes.Count} shapes, {sheet.TextBoxes.Count} text boxes.");
+    }
 }

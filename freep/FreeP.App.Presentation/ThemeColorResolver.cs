@@ -19,9 +19,42 @@ public static class ThemeColorResolver
         if (color.SchemeColor is { } schemeRef && theme is not null)
         {
             var baseColor = theme.ColorScheme[schemeRef.Slot];
-            return ApplyLumModOff(baseColor, schemeRef.LumMod, schemeRef.LumOff);
+            var resolved = ApplyLumModOff(baseColor, schemeRef.LumMod, schemeRef.LumOff);
+            if (schemeRef.Tint < 1.0)
+                resolved = ApplyTint(resolved, schemeRef.Tint);
+            if (schemeRef.Shade < 1.0)
+                resolved = ApplyShade(resolved, schemeRef.Shade);
+            return resolved;
         }
         return color.Resolved;
+    }
+
+    /// <summary>
+    /// DrawingML tint: result = base * tintFraction + white * (1 - tintFraction).
+    /// tintFraction=1.0 → original color; tintFraction=0.0 → white.
+    /// </summary>
+    private static SrgbColor ApplyTint(SrgbColor c, double tint)
+    {
+        if (tint >= 1.0) return c;
+        if (tint <= 0.0) return new SrgbColor(255, 255, 255);
+        return new SrgbColor(
+            (byte)Math.Clamp(Math.Round(c.R * tint + 255.0 * (1.0 - tint)), 0, 255),
+            (byte)Math.Clamp(Math.Round(c.G * tint + 255.0 * (1.0 - tint)), 0, 255),
+            (byte)Math.Clamp(Math.Round(c.B * tint + 255.0 * (1.0 - tint)), 0, 255));
+    }
+
+    /// <summary>
+    /// DrawingML shade: result = base * shadeFraction.
+    /// shadeFraction=1.0 → original color; shadeFraction=0.0 → black.
+    /// </summary>
+    private static SrgbColor ApplyShade(SrgbColor c, double shade)
+    {
+        if (shade >= 1.0) return c;
+        if (shade <= 0.0) return new SrgbColor(0, 0, 0);
+        return new SrgbColor(
+            (byte)Math.Clamp(Math.Round(c.R * shade), 0, 255),
+            (byte)Math.Clamp(Math.Round(c.G * shade), 0, 255),
+            (byte)Math.Clamp(Math.Round(c.B * shade), 0, 255));
     }
 
     // â”€â”€â”€ HLS luminance adjustments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

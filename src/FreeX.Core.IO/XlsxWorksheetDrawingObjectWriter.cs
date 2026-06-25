@@ -41,7 +41,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return false;
     }
 
-    public static void Save(Stream xlsxStream, Workbook workbook)
+    public static void Save(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null,
+        HashSet<string>? usedDrawingPaths = null,
+        int startPictureIndex = 1)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -66,8 +71,19 @@ internal static class XlsxWorksheetDrawingObjectWriter
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
 
-        var drawingIndex = 1;
-        var pictureIndex = 1;
+        // Every drawing part that any source sheet already owns is off-limits for fresh allocation; a sheet
+        // may only reuse its own. Drawing parts already claimed by the chart writer (which runs before us and
+        // has written them into the archive) are excluded by the archive.GetEntry check in AllocateFreshDrawingPath.
+        var sourceDrawingPaths = sourceDrawingPathsBySheet ?? EmptyDrawingPathsBySheet;
+        var reservedDrawingPaths = sourceDrawingPaths.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var localUsedPaths = usedDrawingPaths ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Start picture numbering from startPictureIndex (default 1) to avoid claiming a media
+        // file name that the source package already uses for a different picture.  SavePostProcessing
+        // passes max(source freexPictureN indices) + 1 so authored pictures land beyond the
+        // source-preserved range.  Additionally, AllocateFreshPictureIndex bumps past any
+        // freexPictureN files already present in the generated archive.
+        var pictureIndex = AllocateFreshPictureIndex(archive, startPictureIndex);
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
         {
             var name = sheetElement.Attribute("name")?.Value;
@@ -86,8 +102,56 @@ internal static class XlsxWorksheetDrawingObjectWriter
             if (pictures.Count == 0 && textBoxes.Count == 0 && shapes.Count == 0)
                 continue;
 
-            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingIndex++, ref pictureIndex);
+            // Reuse the sheet's own source drawing part when it has one (so authored objects land on
+            // the same drawing as any source-preserved content for that sheet); otherwise allocate the
+            // next drawing{N}.xml that is not reserved by another sheet's source drawing, not already
+            // present in the archive (catches parts written by the chart writer in this same save), and
+            // not already claimed by a previous sheet in this loop.
+            var drawingPath = sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) &&
+                              localUsedPaths.Add(ownDrawingPath)
+                ? ownDrawingPath
+                : AllocateFreshDrawingPath(archive, reservedDrawingPaths, localUsedPaths);
+            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingPath, ref pictureIndex);
         }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyDrawingPathsBySheet =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    // Picks the next xl/drawings/drawingN.xml part name that is free: not reserved by a source-package
+    // drawing (those get restored at their original paths), not already present in the archive (covers
+    // parts written by the chart writer earlier in the same save pass), and not already claimed by
+    // another sheet's drawing object set in this loop.
+    private static string AllocateFreshDrawingPath(ZipArchive archive, IReadOnlySet<string> reserved, HashSet<string> used)
+    {
+        var index = 1;
+        while (true)
+        {
+            var path = $"xl/drawings/drawing{index}.xml";
+            if (!reserved.Contains(path) && !used.Contains(path) && archive.GetEntry(path) is null)
+            {
+                used.Add(path);
+                return path;
+            }
+
+            index++;
+        }
+    }
+
+    // Returns the first picture index >= startIndex such that xl/media/freexPictureN.* does not
+    // already exist in the archive.  startIndex is set by the caller (via SavePostProcessing) to
+    // max(source freexPictureN index) + 1, so authored pictures land in a range that the source
+    // package's preservation copy cannot collide with.
+    private static int AllocateFreshPictureIndex(ZipArchive archive, int startIndex = 1)
+    {
+        var index = Math.Max(1, startIndex);
+        while (archive.Entries.Any(e =>
+                   e.FullName.StartsWith($"xl/media/freexPicture{index}.", StringComparison.OrdinalIgnoreCase)))
+        {
+            index++;
+        }
+
+        return index;
     }
 
     private static void WriteWorksheetDrawingObjects(
@@ -97,7 +161,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         IReadOnlyList<PictureModel> pictures,
         IReadOnlyList<TextBoxModel> textBoxes,
         IReadOnlyList<DrawingShapeModel> shapes,
-        int drawingIndex,
+        string drawingPath,
         ref int pictureIndex)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
@@ -110,7 +174,6 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 
-        var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();

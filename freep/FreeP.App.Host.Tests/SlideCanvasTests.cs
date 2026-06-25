@@ -1,6 +1,7 @@
 using System.Windows;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
 
@@ -129,5 +130,79 @@ public sealed class SlideCanvasTests
         {
             window.Close();
         }
+    }
+
+    // ── ComputeNiceAxisRange unit tests ───────────────────────────────────────
+
+    private static ChartShape MakeChart(params double[] values)
+    {
+        var chart = new ChartShape();
+        var series = new ChartSeries();
+        series.Values.AddRange(values.Select(v => (double?)v));
+        chart.Series.Add(series);
+        return chart;
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_ZeroToHundred_NiceTicksAndCoversMax()
+    {
+        var chart = MakeChart(0, 25, 50, 75, 100);
+        var (min, max, unit) = SlideCanvas.ComputeNiceAxisRange(chart);
+        min.Should().Be(0);
+        max.Should().BeGreaterThanOrEqualTo(100, "must cover data max");
+        unit.Should().BeGreaterThan(0);
+        // The important invariant: max is exactly divisible by unit
+        (max % unit).Should().BeApproximately(0, 1e-9);
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_Values0To200_MaxIsNiceMultiple()
+    {
+        var chart = MakeChart(120, 200, 150, 180, 130, 170, 160, 190);
+        var (min, max, unit) = SlideCanvas.ComputeNiceAxisRange(chart);
+        min.Should().Be(0, "data is non-negative so floor is 0");
+        max.Should().BeGreaterThanOrEqualTo(200, "max must cover data max");
+        (max % unit).Should().BeApproximately(0, 1e-9, "max must be a multiple of majorUnit");
+        unit.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_SmallValues_MajorUnitIsPositive()
+    {
+        var chart = MakeChart(1.2, 3.5, 2.8, 4.1);
+        var (_, _, unit) = SlideCanvas.ComputeNiceAxisRange(chart);
+        unit.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_LargeValues_MajorUnitIsHumanReadable()
+    {
+        // Revenue data in thousands: 50, 80, 65, 90, 75, 110
+        var chart = MakeChart(50, 80, 65, 90, 75, 110);
+        var (min, max, unit) = SlideCanvas.ComputeNiceAxisRange(chart);
+        unit.Should().BeOneOf(new double[] { 10, 20, 25, 50 });
+        max.Should().BeGreaterThanOrEqualTo(110);
+        (max % unit).Should().BeApproximately(0, 1e-9);
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_ExplicitAxisMax_IsRespected()
+    {
+        var chart = MakeChart(50, 100);
+        chart.ValueAxis.Max = 200;
+        var (_, max, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        max.Should().BeGreaterThanOrEqualTo(200);
+    }
+
+    [Fact]
+    public void ComputeNiceAxisRange_MajorUnitDividesRangeCleanly()
+    {
+        // Typical bar chart data
+        var chart = MakeChart(80, 100, 60, 90, 90, 110, 70, 100);
+        var (min, max, unit) = SlideCanvas.ComputeNiceAxisRange(chart);
+        double range = max - min;
+        // Number of intervals should be 3-7
+        int intervals = (int)Math.Round(range / unit);
+        intervals.Should().BeInRange(3, 7, "nice axis should have 3-7 gridline intervals");
     }
 }

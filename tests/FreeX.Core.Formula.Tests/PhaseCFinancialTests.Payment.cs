@@ -154,25 +154,24 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
-    public void Ipmt_Type1_Period2_EqualsType0Period1()
+    public void Ipmt_Type1_Period2_EqualsType0Period1DividedBy1PlusRate()
     {
-        // Excel: =IPMT(0.05/12,2,60,10000,0,1) = IPMT(0.05/12,1,60,10000,0,0)
-        // = -(10000 * 0.05/12) ≈ -41.6667
+        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2.
+        // Excel: =IPMT(0.05/12,2,60,10000,0,1) = IPMT(0.05/12,1,60,10000,0,0) / (1+0.05/12)
+        // = -(10000 * 0.05/12) / 1.004167 ≈ -41.4938
         double type1per2 = Calc("IPMT(0.05/12,2,60,10000,0,1)");
         double type0per1 = Calc("IPMT(0.05/12,1,60,10000,0,0)");
-        type1per2.Should().BeApproximately(type0per1, 1e-9);
-        type1per2.Should().BeApproximately(-41.6666666666667, 1e-6);
+        type1per2.Should().BeApproximately(type0per1 / (1 + 0.05 / 12), 1e-9);
     }
 
     [Fact]
-    public void Ipmt_Type1_Period30_EqualsType0Period29()
+    public void Ipmt_Type1_Period30_EqualsType0Period29DividedBy1PlusRate()
     {
-        // Excel: =IPMT(0.05/12,30,60,10000,0,1) = IPMT(0.05/12,29,60,10000,0,0)
-        // ≈ -23.5106
+        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2.
+        // Excel: =IPMT(0.05/12,30,60,10000,0,1) = IPMT(0.05/12,29,60,10000,0,0) / (1+0.05/12)
         double type1per30 = Calc("IPMT(0.05/12,30,60,10000,0,1)");
         double type0per29 = Calc("IPMT(0.05/12,29,60,10000,0,0)");
-        type1per30.Should().BeApproximately(type0per29, 1e-9);
-        type1per30.Should().BeApproximately(-23.510578647465, 1e-7);
+        type1per30.Should().BeApproximately(type0per29 / (1 + 0.05 / 12), 1e-9);
     }
 
     [Fact]
@@ -238,5 +237,50 @@ public partial class PhaseCFinancialTests
         double pv = 10000;
         double cumprinc = Calc($"CUMPRINC({rate},{nper},{pv},1,12,0)");
         cumprinc.Should().BeApproximately(-pv, 0.01);
+    }
+
+    // ── P1 regression: IPMT type=1 must divide by (1+rate) ─────────────────
+
+    [Fact]
+    public void Ipmt_Type1_Per2_Rate10Pct_ExcelValue()
+    {
+        // Excel: =IPMT(0.1,2,10,10000,0,1) = IPMT(0.1,1,10,10000,0,0) / 1.1
+        // IPMT(0.1,1,10,10000,0,0) = -(10000 * 0.1) = -1000
+        // So IPMT(0.1,2,10,10000,0,1) = -1000 / 1.1 = -909.090909...
+        double ipmt = Calc("IPMT(0.1,2,10,10000,0,1)");
+        ipmt.Should().BeApproximately(-909.0909091, 1e-6);
+    }
+
+    [Fact]
+    public void Ipmt_Type1_Per1_Rate10Pct_IsZero()
+    {
+        // Excel: =IPMT(0.1,1,10,10000,0,1) = 0
+        // First payment in annuity-due is at period start; no interest has accrued yet.
+        double ipmt = Calc("IPMT(0.1,1,10,10000,0,1)");
+        ipmt.Should().Be(0.0);
+    }
+
+    [Fact]
+    public void Ppmt_Type1_Per2_Rate10Pct_EqualsPmtMinusIpmt()
+    {
+        // Excel identity: PPMT = PMT - IPMT for all periods.
+        // PMT(0.1,10,10000,0,1) is the annuity-due payment.
+        // IPMT(0.1,2,10,10000,0,1) = -909.090909...
+        // PPMT should equal PMT(type=1) - IPMT(type=1, per=2).
+        double pmt  = Calc("PMT(0.1,10,10000,0,1)");
+        double ipmt = Calc("IPMT(0.1,2,10,10000,0,1)");
+        double ppmt = Calc("PPMT(0.1,2,10,10000,0,1)");
+        ppmt.Should().BeApproximately(pmt - ipmt, 1e-9);
+    }
+
+    [Fact]
+    public void Ipmt_Type1_Per24_SmallRate_DerivedFromType0()
+    {
+        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)
+        // Derive expected from type=0 per=23, then divide by 1.005.
+        double type0per23 = Calc("IPMT(0.005,23,60,50000,0,0)");
+        double expected   = type0per23 / 1.005;
+        double actual     = Calc("IPMT(0.005,24,60,50000,0,1)");
+        actual.Should().BeApproximately(expected, 1e-6);
     }
 }

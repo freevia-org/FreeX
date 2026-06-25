@@ -39,6 +39,17 @@ internal static class Program
             return 1;
         }
 
+        // Additive headless grid-range capture mode (--parity-grid <xlsx> <range> <outDir>).
+        if (!GridCaptureOptions.TryParse(
+                startupArguments,
+                out var gridCaptureOptions,
+                out startupArguments,
+                out var gridCaptureError))
+        {
+            Console.Error.WriteLine(gridCaptureError);
+            return 1;
+        }
+
         var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
         diagnostics.RegisterUnhandledExceptionHandlers();
         diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
@@ -51,6 +62,7 @@ internal static class Program
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmokeOptions;
         App.ParityCaptureOptions = parityCaptureOptions;
+        App.GridCaptureOptions = gridCaptureOptions;
         App.Diagnostics = diagnostics;
         try
         {

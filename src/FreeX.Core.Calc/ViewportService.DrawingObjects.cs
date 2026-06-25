@@ -80,7 +80,19 @@ public sealed partial class ViewportService
             ShapeKind: shape.Kind,
             FillColor: ResolveShapeFillColor(shape, theme),
             OutlineColor: ResolveShapeOutlineColor(shape, theme),
-            Effect: BuildShapeEffect(shape)));
+            Effect: BuildShapeEffect(shape),
+            OutlineWidthPoints: shape.OutlineWidthPoints,
+            OutlineDash: shape.OutlineDash,
+            OutlineHasNoFill: shape.OutlineHasNoFill,
+            ShapeText: shape.ShapeText,
+            ShapeTextFontSizePoints: shape.ShapeTextFontSizePoints,
+            ShapeTextBold: shape.ShapeTextBold,
+            ShapeTextItalic: shape.ShapeTextItalic,
+            ShapeTextUnderline: shape.ShapeTextUnderline,
+            ShapeTextColor: shape.ResolveShapeTextColor(theme),
+            ShapeTextHAlign: shape.ShapeTextHAlign,
+            ShapeTextVAnchor: shape.ShapeTextVAnchor,
+            ShapeTextWrap: shape.ShapeTextWrap));
     }
 
     // Projects the authored shape effect preset into the render plan using the same parameter

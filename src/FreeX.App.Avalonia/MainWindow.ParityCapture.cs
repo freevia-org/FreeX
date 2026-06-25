@@ -633,7 +633,19 @@ public sealed partial class MainWindow
         ShowWithParitySelectionAsync(
             new CellAddress(_session.ActiveSheet.Id, 2, 2),
             new CellAddress(_session.ActiveSheet.Id, 3, 3),
-            ShowWatchWindowDialogAsync);
+            async () =>
+            {
+                // Seed watches on the "Demo" data sheet's Units cells (C2=120, C3=85) so the Watch
+                // Window has populated rows that match the WPF parity capture (same sheet name +
+                // values). The active sheet here is a later empty sheet, so target Sheets[0].
+                var watchSheetId = _session.Workbook.Sheets[0].Id;
+                WatchWindowService.AddWatches(
+                    _session.Workbook,
+                    new GridRange(
+                        new CellAddress(watchSheetId, 2, 3),
+                        new CellAddress(watchSheetId, 3, 3)));
+                await ShowWatchWindowDialogAsync();
+            });
 
     private Task ShowAddWatchParityDialogAsync() =>
         ShowAddWatchDialogAsync("Sheet1!$B$2");
@@ -934,6 +946,10 @@ public sealed partial class MainWindow
     private async Task ShowCustomViewsParityDialogAsync()
     {
         _session.Workbook.CustomViews.Clear();
+        // Seed named views so the manager has meaningful rows to compare (mirrors the WPF
+        // parity capture, which seeds the same view names).
+        _session.Workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
+        _session.Workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
         await ShowCustomViewsManagerDialogAsync();
     }
 
@@ -2713,6 +2729,91 @@ public sealed partial class MainWindow
         bitmap.Save(stream);
     }
 
+    /// <summary>
+    /// Variant of <see cref="RenderVisualToPng"/> used for the parity-grid capture.  When
+    /// <paramref name="visual"/> is a composite <c>AvaloniaGrid</c> that contains a
+    /// <c>Canvas</c> overlay child (the drawing-object layer), <c>RenderTargetBitmap.Render</c>
+    /// in Avalonia's headless platform does not reliably paint the Canvas sibling.
+    /// <para/>
+    /// This method works around that by using a two-pass render: first the cell-grid child is
+    /// rendered into the primary bitmap; then any remaining children (the overlay Canvas) are
+    /// rendered into a scratch bitmap and blitted on top via
+    /// <c>RenderTargetBitmap.CreateDrawingContext</c> (which is additive, not clearing).
+    /// </summary>
+    private static void RenderVisualToPngWithOverlay(Visual visual, int width, int height, string path)
+    {
+        var pixelWidth  = Math.Max(1, width);
+        var pixelHeight = Math.Max(1, height);
+        var pixelSize   = new PixelSize(pixelWidth, pixelHeight);
+        var dpi         = new Vector(96, 96);
+        var fullRect    = new Rect(0, 0, pixelWidth, pixelHeight);
+
+        // ── Layout pass ──────────────────────────────────────────────────────────────────────────
+        if (visual is Layoutable root)
+        {
+            root.Measure(new Size(pixelWidth, pixelHeight));
+            root.Arrange(fullRect);
+        }
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+        // ── Check whether we have a composite Grid with a Canvas overlay sibling ───────────────
+        // If so, identify the cell-grid child and the overlay-canvas children separately.
+        var compositeGrid = visual as AvaloniaGrid;
+        var layerSeparation = compositeGrid is not null &&
+                              compositeGrid.Children.Count >= 2 &&
+                              compositeGrid.Children[compositeGrid.Children.Count - 1] is Canvas;
+
+        if (!layerSeparation)
+        {
+            // Plain visual — render directly as before.
+            using var bitmap = new RenderTargetBitmap(pixelSize, dpi);
+            bitmap.Render(visual);
+            SaveBitmap(bitmap, path);
+            return;
+        }
+
+        // ── Two-pass composite render ─────────────────────────────────────────────────────────
+        // Pass 1: render the cell grid (first child) into the primary bitmap.
+        var cellGrid = compositeGrid!.Children[0];
+        if (cellGrid is Layoutable cellLayoutable)
+        {
+            cellLayoutable.Measure(new Size(pixelWidth, pixelHeight));
+            cellLayoutable.Arrange(fullRect);
+        }
+
+        using var primaryBitmap = new RenderTargetBitmap(pixelSize, dpi);
+        primaryBitmap.Render(cellGrid);
+
+        // Pass 2: render each overlay child onto a scratch bitmap and blit.
+        // CreateDrawingContext is additive (does not clear the primary bitmap).
+        for (var i = 1; i < compositeGrid.Children.Count; i++)
+        {
+            var overlay = compositeGrid.Children[i];
+            if (overlay is Layoutable overlayLayoutable)
+            {
+                overlayLayoutable.Measure(new Size(pixelWidth, pixelHeight));
+                overlayLayoutable.Arrange(fullRect);
+            }
+
+            using var overlayBitmap = new RenderTargetBitmap(pixelSize, dpi);
+            overlayBitmap.Render(overlay);
+
+            using var ctx = primaryBitmap.CreateDrawingContext();
+            ctx.DrawImage(overlayBitmap, fullRect, fullRect);
+        }
+
+        SaveBitmap(primaryBitmap, path);
+    }
+
+    private static void SaveBitmap(RenderTargetBitmap bitmap, string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+        using var stream = File.Create(path);
+        bitmap.Save(stream);
+    }
+
     private static RenderTargetBitmap RenderVisualToBitmap(Visual visual, int width, int height)
     {
         var pixelWidth = Math.Max(1, width);
@@ -2728,5 +2829,242 @@ public sealed partial class MainWindow
         var bitmap = new RenderTargetBitmap(new PixelSize(pixelWidth, pixelHeight), new Vector(96, 96));
         bitmap.Render(visual);
         return bitmap;
+    }
+
+    // ── Grid-range capture (--parity-grid) ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Headless grid-range capture. Loads <paramref name="workbookPath"/>, sets the viewport origin to
+    /// the top-left of <paramref name="rangeText"/>, builds the sheet-grid sub-tree (no ribbon/chrome),
+    /// sizes the render canvas to the exact pixel extent of the range at zoom=1 with no row/column header
+    /// gutter, renders to a PNG in <paramref name="outputDirectory"/>, and returns a <see cref="GridCaptureResult"/>
+    /// whose <see cref="GridCaptureResult.JsonLog"/> summarises the outcome on one line.
+    ///
+    /// Mirroring Excel's <c>CopyPicture-of-range</c> and the WPF <c>--capture-range</c> harness:
+    /// <list type="bullet">
+    ///   <item>ShowHeadings = false — no row numbers or column letters in the output image.</item>
+    ///   <item>Zoom = 1.0 — the pixel extents of the range cells are used verbatim.</item>
+    ///   <item>ShowGridlines = true — matches Excel CopyPicture default.</item>
+    /// </list>
+    /// The output file is named <c>&lt;sheetName&gt;_&lt;range&gt;.png</c> with characters unsafe for file
+    /// names replaced by underscores.
+    /// </summary>
+    internal Task<GridCaptureResult> CaptureGridRangeAsync(
+        string workbookPath,
+        string rangeText,
+        string outputDirectory)
+    {
+        // All rendering must happen on the UI thread; we are called from the coordinator which already
+        // runs on it via the Opened event, so there is nothing to marshal. Return a completed task so the
+        // coordinator can await us uniformly.
+        return Task.FromResult(CaptureGridRangeCore(workbookPath, rangeText, outputDirectory));
+    }
+
+    private GridCaptureResult CaptureGridRangeCore(
+        string workbookPath,
+        string rangeText,
+        string outputDirectory)
+    {
+        // ── 1. Load the workbook ───────────────────────────────────────────────────────────────────
+        // StartupWorkbookLoader silently falls back to the sample workbook for a missing/unsupported
+        // path (it filters its arguments through File.Exists), so a non-existent fixture would otherwise
+        // be "captured" against sample content. Fail explicitly here so the caller gets a real error.
+        if (!File.Exists(workbookPath))
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory,
+                $"Workbook file not found: {workbookPath}");
+
+        StartupWorkbookLoadResult source;
+        try
+        {
+            source = new StartupWorkbookLoader().Load([workbookPath]);
+        }
+        catch (Exception ex)
+        {
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory,
+                $"Failed to load workbook: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        var workbook = source.Workbook;
+        var sheet = workbook.Sheets.FirstOrDefault(s => !s.IsHidden && !s.IsVeryHidden);
+        if (sheet is null)
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory, "Workbook has no visible sheet.");
+
+        // ── 2. Parse the cell range ────────────────────────────────────────────────────────────────
+        GridRange range;
+        try
+        {
+            var normalizedRange = rangeText.Replace("$", "", StringComparison.Ordinal).Trim();
+            range = GridRange.ParseCellOrRange(normalizedRange, sheet.Id);
+        }
+        catch (Exception ex)
+        {
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory,
+                $"Could not parse range '{rangeText}': {ex.GetType().Name}: {ex.Message}");
+        }
+
+        // ── 3. Size the session viewport to exactly cover the range ───────────────────────────────
+        // Create a temporary session whose viewport is bounded to the requested range's own extent.
+        //
+        // IMPORTANT: we must NOT use a giant sentinel viewport here.  The ViewportService materializes
+        // a RowMetric/ColMetric (and BuildSheetGrid then a cell visual) for every row/col that fits in
+        // AvailableHeight/Width — a 32 000-DIP viewport produces ~1 600 rows × ~500 cols ≈ 800 000 cell
+        // visuals, which deadlocks / crashes the headless render.  Instead we size the viewport in two
+        // passes: first a bound just large enough to span the requested range (rowCount × a generous
+        // per-row cap, colCount × per-col cap), measure the range's true extent from those metrics, then
+        // resize the viewport to exactly that extent so only the range cells are materialised.
+        const double ZoomFactor = 1.0;
+        const double MaxRowHeightDip = 409.5;   // Excel's max row height in points ≈ DIP at 96 DPI
+        const double MaxColWidthDip = 2000.0;   // generous upper bound for a single column's width
+
+        var rangeRowCount = (int)(range.End.Row - range.Start.Row + 1);
+        var rangeColCount = (int)(range.End.Col - range.Start.Col + 1);
+
+        // Add one extra cell of slack so the metrics loop (which breaks once the offset exceeds the
+        // available extent) emits the final range row/col rather than stopping one short.
+        var measureHeight = (rangeRowCount + 1) * MaxRowHeightDip;
+        var measureWidth = (rangeColCount + 1) * MaxColWidthDip;
+
+        // Use the shared WorkbookSessionFactory so the session is wired identically to the live app.
+        var sessionFactory = new WorkbookSessionFactory();
+        // includeObjects: true so that drawing shapes, pictures and text boxes appear in the
+        // captured grid image — this is the whole point of the --parity-grid harness for shapes.
+        var tempSession = sessionFactory.Create(source, measureHeight, measureWidth, includeObjects: true);
+
+        // Scroll viewport to the range origin so the range cells are the first ones materialised.
+        tempSession.SetViewportOrigin(range.Start.Row, range.Start.Col);
+
+        var viewport = tempSession.Viewport;
+
+        // ── 4. Compute pixel size of the range ────────────────────────────────────────────────────
+        // Filter the viewport metrics to only the rows/cols inside the requested range.
+        var rangeRowMetrics = viewport.RowMetrics
+            .Where(m => m.Row >= range.Start.Row && m.Row <= range.End.Row)
+            .ToList();
+        var rangeColMetrics = viewport.ColMetrics
+            .Where(m => m.Col >= range.Start.Col && m.Col <= range.End.Col)
+            .ToList();
+
+        // Use the same display-width/height helpers as BuildSheetGrid so sizes are consistent.
+        var pixelWidth = (int)Math.Ceiling(
+            rangeColMetrics.Sum(m => Math.Max(MinimumDisplayedColumnWidth, m.Width) * ZoomFactor));
+        var pixelHeight = (int)Math.Ceiling(
+            rangeRowMetrics.Sum(m => Math.Max(MinimumDisplayedRowHeight, m.Height) * ZoomFactor));
+
+        pixelWidth = Math.Max(1, pixelWidth);
+        pixelHeight = Math.Max(1, pixelHeight);
+
+        // Resize the viewport so it materialises just past the range (range extent + one row/col of
+        // slack). This keeps BuildSheetGrid's cell count tiny while guaranteeing every range cell is
+        // present; cells beyond the range render outside the exact-extent canvas and are cropped away.
+        // (We deliberately do NOT resize to the EXACT extent: the metrics break-condition can then drop
+        // the final range row/col, leaving the grid one cell short.)
+        var slackHeight = pixelHeight + MaxRowHeightDip;
+        var slackWidth = pixelWidth + MaxColWidthDip;
+        tempSession.UpdateViewportSize(slackHeight, slackWidth);
+        tempSession.SetViewportOrigin(range.Start.Row, range.Start.Col);
+
+        // ── 5. Build a standalone grid control for the range ──────────────────────────────────────
+        // Temporarily swap the main window's session to the range-loaded session, configure
+        // ShowHeadings=false + ShowGridlines=true, rebuild the grid, then restore.
+        var previousSession = _session;
+        try
+        {
+            _session = tempSession;
+
+            // Ensure ShowHeadings is off and ShowGridlines matches sheet setting (default true).
+            // The sheet's own flags are already loaded from the workbook; we only override headings.
+            sheet.ShowHeadings = false;
+
+            // Rebuild the grid sub-tree using the existing BuildSheetGrid() path — this produces
+            // exactly the same cell rendering the live app uses.
+            var gridControl = BuildSheetGrid();
+
+            // ── 6. Render to PNG ───────────────────────────────────────────────────────────────────
+            Directory.CreateDirectory(outputDirectory);
+
+            var safeName = MakeSafeFileName($"{sheet.Name}_{rangeText}");
+            var pngFileName = $"{safeName}.png";
+            var pngPath = Path.Combine(outputDirectory, pngFileName);
+
+            // Render the detached grid sub-tree directly to a PNG sized to the exact range extent. This
+            // matches the surface-capture path's RenderVisualToPng usage on a freshly-built (unparented)
+            // visual, which the headless drawing platform renders to a valid bitmap.
+            //
+            // Drawing-object overlay (shapes, pictures, text boxes): RenderTargetBitmap.Render on a
+            // composite AvaloniaGrid doesn't always paint the Canvas sibling in headless mode.  We
+            // use a two-pass approach: render the cell grid first, then render the Canvas overlay into
+            // a second bitmap and blit it on top via CreateDrawingContext (additive draw).
+            RenderVisualToPngWithOverlay(gridControl, pixelWidth, pixelHeight, pngPath);
+
+            // ── 7. Write the JSON log file alongside the PNG ──────────────────────────────────────
+            var result = new GridCaptureResult(
+                Captured: true,
+                PngPath: pngPath,
+                PngFileName: pngFileName,
+                WidthPx: pixelWidth,
+                HeightPx: pixelHeight,
+                SheetName: sheet.Name,
+                RangeText: rangeText,
+                Note: "");
+
+            File.WriteAllText(
+                Path.Combine(outputDirectory, Path.ChangeExtension(pngFileName, ".json")),
+                result.JsonLog);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return GridCaptureFailure(workbookPath, rangeText, outputDirectory,
+                $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _session = previousSession;
+        }
+    }
+
+    /// <summary>
+    /// Computes the pixel extent (width × height) of a cell range using the same display-width/height
+    /// helpers as the live sheet grid, at zoom=1 with no header gutter. This is the sizing helper unit
+    /// tests exercise to verify the formula before any full headless render is needed.
+    /// </summary>
+    internal static (int WidthPx, int HeightPx) ComputeRangePixelExtent(
+        ViewportModel viewport, GridRange range, double zoomFactor = 1.0)
+    {
+        var w = viewport.ColMetrics
+            .Where(m => m.Col >= range.Start.Col && m.Col <= range.End.Col)
+            .Sum(m => Math.Max(MinimumDisplayedColumnWidth, m.Width) * zoomFactor);
+        var h = viewport.RowMetrics
+            .Where(m => m.Row >= range.Start.Row && m.Row <= range.End.Row)
+            .Sum(m => Math.Max(MinimumDisplayedRowHeight, m.Height) * zoomFactor);
+        return (Math.Max(1, (int)Math.Ceiling(w)), Math.Max(1, (int)Math.Ceiling(h)));
+    }
+
+    private static GridCaptureResult GridCaptureFailure(
+        string workbookPath,
+        string rangeText,
+        string outputDirectory,
+        string note)
+    {
+        var pngFileName = MakeSafeFileName($"capture_{rangeText}") + ".png";
+        return new GridCaptureResult(
+            Captured: false,
+            PngPath: Path.Combine(outputDirectory, pngFileName),
+            PngFileName: pngFileName,
+            WidthPx: 0,
+            HeightPx: 0,
+            SheetName: Path.GetFileNameWithoutExtension(workbookPath),
+            RangeText: rangeText,
+            Note: note);
+    }
+
+    private static string MakeSafeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (var ch in name)
+            sb.Append(Array.IndexOf(invalid, ch) >= 0 ? '_' : ch);
+        return sb.ToString();
     }
 }
