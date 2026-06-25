@@ -7837,11 +7837,9 @@ public sealed partial class MainWindow : Window
         {
             Title = "Zoom",
             Width = 300,
-            Height = 420,
             MinWidth = 300,
-            MinHeight = 420,
             MaxWidth = 300,
-            MaxHeight = 420,
+            SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -8332,8 +8330,8 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
-                cancelButton,
                 okButton,
+                cancelButton,
             },
         };
 
@@ -9760,21 +9758,28 @@ public sealed partial class MainWindow : Window
 
     private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
     {
-        var statisticsBlock = new TextBlock
+        var statisticsBox = new TextBox
         {
             Text = FormatWorkbookStatistics(statistics),
+            IsReadOnly = true,
+            AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            LineHeight = 22,
+            Background = Brushes.White,
+            BorderBrush = Brush(171, 171, 171),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(6, 4),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
-        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
-        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        AutomationProperties.SetName(statisticsBox, "Workbook Statistics");
+        AutomationProperties.SetAutomationId(statisticsBox, "WorkbookStatisticsSummary");
+        AutomationProperties.SetHelpText(statisticsBox, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
 
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 12, 0, 0),
         };
         if (copyToClipboardButton is not null)
             buttonRow.Children.Add(copyToClipboardButton);
@@ -9786,12 +9791,7 @@ public sealed partial class MainWindow : Window
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
-        root.Children.Add(new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = statisticsBlock,
-        });
+        root.Children.Add(statisticsBox);
 
         return root;
     }
