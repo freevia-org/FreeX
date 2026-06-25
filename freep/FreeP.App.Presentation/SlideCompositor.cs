@@ -101,7 +101,7 @@ public static class SlideCompositor
         switch (shape.Kind)
         {
             case SlideShapeKind.Picture:
-                ComposePicture(shape, slide, presentation, ops);
+                ComposePicture(shape, slide, presentation, theme, ops);
                 break;
 
             case SlideShapeKind.Group:
@@ -146,8 +146,19 @@ public static class SlideCompositor
         ResolvedTextLayout? text = null;
         if (shape.TextBody is not null && shape.TextBody.Paragraphs.Count > 0)
         {
-            var textSource = PlaceholderResolver.FindInheritedTextSource(shape, presentation);
-            text = ResolveTextLayout(shape.TextBody, textSource, shape.Placeholder, theme);
+            // P0: Walk shape → layout placeholder → master placeholder to resolve
+            // the effective vertical anchor and default paragraph alignment.
+            var layoutPh = shape.Placeholder is not null
+                ? PlaceholderResolver.FindLayoutPlaceholder(shape.Placeholder, slide, presentation)
+                : null;
+            var masterPh = shape.Placeholder is not null
+                ? PlaceholderResolver.FindMasterPlaceholder(shape.Placeholder, slide, presentation)
+                : null;
+
+            var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
+            var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
+
+            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme);
         }
 
         ops.Add(new DrawOp.Shape
@@ -163,12 +174,55 @@ public static class SlideCompositor
         });
     }
 
+    /// <summary>
+    /// Resolves the effective vertical anchor for a text body by walking the inheritance chain:
+    /// shape → layout placeholder → master placeholder → placeholder-type default.
+    /// </summary>
+    private static VerticalAnchor ResolveVerticalAnchor(
+        TextBody body,
+        TextBody? layoutBody,
+        TextBody? masterBody,
+        Placeholder? ph)
+    {
+        // Shape's own txBody anchor wins if explicitly set.
+        if (body.Anchor.HasValue) return body.Anchor.Value;
+
+        // Layout placeholder's txBody anchor.
+        if (layoutBody?.Anchor.HasValue == true) return layoutBody.Anchor!.Value;
+
+        // Master placeholder's txBody anchor.
+        if (masterBody?.Anchor.HasValue == true) return masterBody.Anchor!.Value;
+
+        // OOXML default: centered-title → middle, body → top, others → top.
+        return ph?.Type switch
+        {
+            PlaceholderType.CenteredTitle => VerticalAnchor.Middle,
+            _ => VerticalAnchor.Top
+        };
+    }
+
+    /// <summary>
+    /// Resolves the effective default paragraph alignment from the lstStyle inheritance chain:
+    /// shape → layout placeholder → master placeholder.
+    /// </summary>
+    private static TextAlign? ResolveDefaultParaAlign(
+        TextBody body,
+        TextBody? layoutBody,
+        TextBody? masterBody)
+    {
+        if (body.DefaultParaAlign.HasValue) return body.DefaultParaAlign.Value;
+        if (layoutBody?.DefaultParaAlign.HasValue == true) return layoutBody.DefaultParaAlign!.Value;
+        if (masterBody?.DefaultParaAlign.HasValue == true) return masterBody.DefaultParaAlign!.Value;
+        return null;
+    }
+
     // â”€â”€â”€ Picture â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private static void ComposePicture(
         SlideShape shape,
         Slide slide,
         PresentationModel presentation,
+        PresentationTheme theme,
         List<DrawOp> ops)
     {
         if (shape.Picture is null) return;
@@ -176,12 +230,18 @@ public static class SlideCompositor
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 
+        // P3: resolve picture outline from shape's spPr a:ln.
+        var outline = shape.Outline is not null
+            ? ResolveOutline(shape.Outline, theme)
+            : ResolvedOutline.None.Instance;
+
         ops.Add(new DrawOp.Picture
         {
             Bytes = shape.Picture.Bytes,
             ContentType = shape.Picture.ContentType,
             DestDip = boundsDip,
-            RotationDeg = anchor.RotationDeg
+            RotationDeg = anchor.RotationDeg,
+            Outline = outline
         });
     }
 
@@ -228,7 +288,8 @@ public static class SlideCompositor
 
     private static ResolvedTextLayout ResolveTextLayout(
         TextBody body,
-        SlideShape? inheritedSource,
+        VerticalAnchor effectiveAnchor,
+        TextAlign? effectiveDefaultAlign,
         Placeholder? placeholder,
         PresentationTheme theme)
     {
@@ -246,6 +307,15 @@ public static class SlideCompositor
         {
             PlaceholderType.Title or PlaceholderType.CenteredTitle => defaultMajorFont,
             _ => defaultMinorFont
+        };
+
+        // The inherited default paragraph alignment (from lstStyle chain or placeholder type).
+        // When not set anywhere, centered-title defaults to center, others to left.
+        TextAlign fallbackAlign = effectiveDefaultAlign ?? placeholder?.Type switch
+        {
+            PlaceholderType.CenteredTitle => TextAlign.Center,
+            PlaceholderType.SubTitle => TextAlign.Center,
+            _ => TextAlign.Left
         };
 
         var resolvedParas = new List<ResolvedParagraph>(body.Paragraphs.Count);
@@ -276,7 +346,8 @@ public static class SlideCompositor
             resolvedParas.Add(new ResolvedParagraph
             {
                 Runs = resolvedRuns,
-                Align = para.Align ?? TextAlign.Left,
+                // P0: use the inherited default alignment when the paragraph has no explicit align.
+                Align = para.Align ?? fallbackAlign,
                 Level = para.Level,
                 BulletKind = para.BulletKind,
                 BulletChar = para.BulletChar,
@@ -288,7 +359,8 @@ public static class SlideCompositor
         return new ResolvedTextLayout
         {
             Paragraphs = resolvedParas,
-            Anchor = body.Anchor,
+            // P0: use the resolved effective anchor (from shape → layout → master chain).
+            Anchor = effectiveAnchor,
             InsetLeftDip = body.InsetLeftPt.HasValue ? PointsToDip(body.InsetLeftPt.Value) : DefaultInsetHorzDip,
             InsetRightDip = body.InsetRightPt.HasValue ? PointsToDip(body.InsetRightPt.Value) : DefaultInsetHorzDip,
             InsetTopDip = body.InsetTopPt.HasValue ? PointsToDip(body.InsetTopPt.Value) : DefaultInsetVertDip,

@@ -180,6 +180,9 @@ public abstract class DrawOp
 
         /// <summary>Rotation around the picture center, in degrees clockwise.</summary>
         public double RotationDeg { get; init; }
+
+        /// <summary>Optional outline drawn around the picture frame (None if no outline).</summary>
+        public ResolvedOutline Outline { get; init; } = ResolvedOutline.None.Instance;
     }
 
     // â”€â”€ Background draw op â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
