@@ -21,9 +21,10 @@ namespace FreeW.App.Avalonia.Editing;
 public sealed class DocumentView : Control
 {
     private const double PxPerPoint = 96.0 / 72.0;
-    private const double LeftMargin = 56;
-    private const double RightMargin = 56;
-    private const double TopMargin = 40;
+    // Print-layout chrome: grey "desk" gap above (and below) the white page surface.
+    private const double DeskPadding = 24;
+    // Minimum horizontal gap between the control edge and the page left/right edge.
+    private const double MinHorzGutter = 24;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
     private const double ListIndentStep = 24;
@@ -46,6 +47,9 @@ public sealed class DocumentView : Control
     private double _pageWidth;
     private double _contentLeft;
     private double _contentWidth;
+    // Top/bottom margins in DIP (from PageSettings, recomputed on each Relayout).
+    private double _marginTopDip;
+    private double _marginBottomDip;
 
     public DocumentView()
     {
@@ -268,8 +272,10 @@ public sealed class DocumentView : Control
 
             // Convert px -> pt and flip to PDF y-up. The glyph Y is the top of the line box; the text
             // baseline sits roughly at top + fontSize, so the PDF baseline (y-up) is page bottom minus that.
+            // runY is in print-layout coords (includes DeskPadding + _marginTopDip origin); strip that first.
             var xPt = (runStartX - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
-            var yWithinPagePx = runY - (runPageIndex * pageHeightPx);
+            var docYPx = runY - (DeskPadding + _marginTopDip);
+            var yWithinPagePx = docYPx - (runPageIndex * pageHeightPx);
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
@@ -280,9 +286,13 @@ public sealed class DocumentView : Control
             runFmt = null;
         }
 
+        // Content in _placed starts at DeskPadding + _marginTopDip (print-layout origin).
+        // Strip that offset so page bucketing is in document-space coordinates.
+        var contentOriginY = DeskPadding + _marginTopDip;
         foreach (var g in glyphs)
         {
-            var pageIndex = (int)(g.Y / pageHeightPx);
+            var docY = g.Y - contentOriginY; // 0-based document Y (within content area, below top margin)
+            var pageIndex = (int)(docY / pageHeightPx);
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
@@ -356,13 +366,17 @@ public sealed class DocumentView : Control
         _cellHits.Clear();
         // Page geometry from the document's PageSettings: a centred page with its own margins.
         _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
-        var marginLeft = Math.Max(0, _doc.Page.MarginLeftPt) * PxPerPoint;
-        var marginRight = Math.Max(0, _doc.Page.MarginRightPt) * PxPerPoint;
-        _pageLeft = Math.Max(LeftMargin, (width - _pageWidth) / 2);
+        var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
+        var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
+        _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
+        _marginBottomDip = Math.Max(0, _doc.Page.MarginBottomPt) * PxPerPoint;
+        // Centre the page in the available width, never closer than MinHorzGutter to the edge.
+        _pageLeft = Math.Max(MinHorzGutter, (width - _pageWidth) / 2);
         _contentLeft = _pageLeft + marginLeft;
         _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
         var textWidth = _contentWidth;
-        double y = TopMargin;
+        // Content starts after the desk gap + the document's own top margin.
+        double y = DeskPadding + _marginTopDip;
 
         var listNumber = 0;
         var prevList = ListKind.None;
@@ -415,7 +429,8 @@ public sealed class DocumentView : Control
             }
         }
 
-        _contentHeight = y + TopMargin;
+        // Add bottom margin + desk padding so the page has breathing room below the last line.
+        _contentHeight = y + _marginBottomDip + DeskPadding;
         _laidOutWidth = width;
     }
 
@@ -738,8 +753,9 @@ public sealed class DocumentView : Control
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
-    private static IBrush PageDeskBrush { get; } = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
-    private static Pen PageBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)), 1);
+    private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
+    private static IBrush PageShadowBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
+    private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -748,9 +764,15 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
-        // Desk behind the page, then the white page itself (PageSettings-driven width).
+        // Grey desk fills the full control area, then a white page surface sits atop it.
+        // The page starts at DeskPadding from the top so grey is visible above the page.
         context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
-        var pageRect = new Rect(_pageLeft, 0, _pageWidth, Math.Max(_contentHeight, Bounds.Height));
+        var pageTop    = DeskPadding;
+        var pageHeight = Math.Max(_contentHeight - DeskPadding, Bounds.Height - DeskPadding);
+        var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, pageHeight);
+        // Subtle drop-shadow: a slightly-offset dark rect drawn behind the page.
+        var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, pageHeight);
+        context.FillRectangle(PageShadowBrush, shadowRect);
         context.FillRectangle(Brushes.White, pageRect);
         context.DrawRectangle(null, PageBorderPen, pageRect);
 
