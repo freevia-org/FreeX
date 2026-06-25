@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.Core.Model;
+using System.Linq;
 
 namespace FreeX.App.UI;
 
@@ -113,7 +114,8 @@ public partial class GridView
 
     private static bool HasVisibleCellSurface(CellStyle style) =>
         style.FillColor.HasValue ||
-        style.FillPatternStyle != CellFillPatternStyle.None;
+        style.FillPatternStyle != CellFillPatternStyle.None ||
+        style.GradientFill is not null;
 
     private static SolidColorBrush BrushForCellColor(
         CellColor color,
@@ -236,6 +238,67 @@ public partial class GridView
                 : new Point(rect.Left + offset + rect.Height, rect.Top);
             dc.DrawLine(pen, start, end);
         }
+    }
+
+    /// <summary>
+    /// Builds a WPF <see cref="Brush"/> for a cell gradient fill.
+    /// <para>
+    /// Excel's <c>degree</c> attribute measures the angle clockwise from the left edge (3 o'clock position).
+    /// WPF <see cref="LinearGradientBrush"/> uses a Start/End point in [0,1]×[0,1] coordinates where (0,0)
+    /// is top-left and (1,1) is bottom-right.
+    /// </para>
+    /// <para>
+    /// Conversion: let θ = degree in radians. The gradient axis passes through the cell center (0.5, 0.5).
+    /// StartPoint = center − 0.5 × (cos θ, sin θ), EndPoint = center + 0.5 × (cos θ, sin θ).
+    /// Y is inverted because WPF's Y axis points down while math convention points up.
+    /// </para>
+    /// For path gradients we fall back to a radial brush centred on the fill origin insets.
+    /// </summary>
+    private static Brush BuildCellGradientBrush(CellGradientFill gradient)
+    {
+        if (gradient.Type == CellGradientFillType.Path)
+        {
+            // Path gradient: approximate as a radial gradient from the inset origin
+            var originX = gradient.Left + (1.0 - gradient.Left - gradient.Right) / 2.0;
+            var originY = gradient.Top  + (1.0 - gradient.Top  - gradient.Bottom) / 2.0;
+            var brush = new RadialGradientBrush
+            {
+                Center   = new Point(originX, originY),
+                GradientOrigin = new Point(originX, originY),
+                RadiusX  = Math.Max(originX, 1.0 - originX),
+                RadiusY  = Math.Max(originY, 1.0 - originY),
+                MappingMode = BrushMappingMode.RelativeToBoundingBox,
+            };
+            foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+            {
+                brush.GradientStops.Add(new GradientStop(
+                    Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B),
+                    stop.Position));
+            }
+            if (brush.CanFreeze) brush.Freeze();
+            return brush;
+        }
+
+        // Linear gradient — convert Excel degree to WPF StartPoint/EndPoint.
+        // Excel degree: 0 = left→right, 90 = top→bottom, 180 = right→left, 270 = bottom→top.
+        // WPF: (0,0)=top-left, (1,1)=bottom-right. Y increases downward.
+        // Math (Y-down): angle from +X-right axis clockwise = degree.
+        // cos(degree), sin(degree) give the direction vector in Y-down space.
+        var radians = gradient.Degree * Math.PI / 180.0;
+        var dx = Math.Cos(radians);
+        var dy = Math.Sin(radians); // positive = downward in WPF
+        var start = new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy);
+        var end   = new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy);
+
+        var lgBrush = new LinearGradientBrush { StartPoint = start, EndPoint = end };
+        foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+        {
+            lgBrush.GradientStops.Add(new GradientStop(
+                Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B),
+                stop.Position));
+        }
+        if (lgBrush.CanFreeze) lgBrush.Freeze();
+        return lgBrush;
     }
 
     public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>

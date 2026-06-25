@@ -233,12 +233,19 @@ public partial class GridView
 
         var style = cell.Style;
         Brush? fill = WorksheetBackground == null ? Brushes.White : null;
-        if (style?.FillColor is { } fillColor)
+        if (style?.GradientFill is { } cellGradFill)
+        {
+            fill = BuildCellGradientBrush(cellGradFill);
+        }
+        else if (style?.FillColor is { } fillColor)
+        {
             fill = BrushForCellColor(fillColor, _brushCache);
+        }
 
         if (fill is not null || gridPen is not null)
             dc.DrawRectangle(fill, gridPen, rect);
-        DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+        if (style?.GradientFill is null)
+            DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
         if (cell.ConditionalDataBar is { } splitDataBar)
             DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache);
 
@@ -789,7 +796,11 @@ public partial class GridView
             return;
 
         Brush? fill = null;
-        if (bg?.FillColor.HasValue == true)
+        if (bg?.GradientFill is { } gradFill)
+        {
+            fill = BuildCellGradientBrush(gradFill);
+        }
+        else if (bg?.FillColor.HasValue == true)
         {
             fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
         }
@@ -801,7 +812,7 @@ public partial class GridView
 
         if (fill is not null || isMerged)
             dc.DrawRectangle(fill, isMerged ? GridPen : null, rect);
-        if (bg is not null)
+        if (bg is not null && bg.GradientFill is null)
             DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
     }
 
