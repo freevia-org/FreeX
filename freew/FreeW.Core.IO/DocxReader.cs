@@ -3821,6 +3821,9 @@ public static class DocxReader
 
         if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
             page.LineNumberCountBy = countBy;
+
+        if (int.TryParse(lnNumType.Attribute(W + "start")?.Value, out var startAt) && startAt >= 1)
+            page.LineNumberStartAt = startAt;
     }
 
     /// <summary>

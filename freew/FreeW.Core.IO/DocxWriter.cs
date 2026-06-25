@@ -4322,7 +4322,7 @@ public static class DocxWriter
         return new XElement(W + "lnNumType",
             new XAttribute(W + "countBy", Math.Max(1, page.LineNumberCountBy)),
             new XAttribute(W + "restart", restart),
-            new XAttribute(W + "start", 1));
+            new XAttribute(W + "start", Math.Max(1, page.LineNumberStartAt)));
     }
 
     /// <summary>

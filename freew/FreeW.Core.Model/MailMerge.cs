@@ -1632,6 +1632,7 @@ public static class MailMerge
         to.Watermark = from.Watermark;
         to.LineNumberMode = from.LineNumberMode;
         to.LineNumberCountBy = from.LineNumberCountBy;
+        to.LineNumberStartAt = from.LineNumberStartAt;
         to.AutoHyphenation = from.AutoHyphenation;
         to.VerticalAlignment = from.VerticalAlignment;
         to.DifferentFirstPage = from.DifferentFirstPage;

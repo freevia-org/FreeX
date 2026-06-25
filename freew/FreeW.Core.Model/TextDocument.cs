@@ -1932,6 +1932,13 @@ public sealed class PageSettings
     public int LineNumberCountBy { get; set; } = 1;
 
     /// <summary>
+    /// The starting number for the first line number shown (w:lnNumType/@w:start). Defaults to 1
+    /// (Word's default). Only meaningful when <see cref="LineNumberMode"/> is not
+    /// <see cref="LineNumberMode.None"/>. Always at least 1.
+    /// </summary>
+    public int LineNumberStartAt { get; set; } = 1;
+
+    /// <summary>
     /// Whether automatic hyphenation is enabled for the document (word/settings.xml's
     /// w:autoHyphenation toggle). Defaults to false so existing documents are unaffected — no
     /// w:autoHyphenation is emitted (and the settings part is only emitted when something needs it).
@@ -2037,6 +2044,7 @@ public sealed class PageSettings
         Watermark = Watermark,
         LineNumberMode = LineNumberMode,
         LineNumberCountBy = LineNumberCountBy,
+        LineNumberStartAt = LineNumberStartAt,
         AutoHyphenation = AutoHyphenation,
         HyphenationZonePt = HyphenationZonePt,
         ConsecutiveHyphenLimit = ConsecutiveHyphenLimit,

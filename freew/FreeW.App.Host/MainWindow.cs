@@ -218,6 +218,11 @@ public sealed class MainWindow : Window
     // for its reading column and restores on exit, so the two view toggles don't fight over the surface.
     private double _editorWidthBeforeReadMode = double.NaN;
     private Effect? _editorEffectBeforeReadMode;
+    private System.Windows.Media.Brush? _editorBackgroundBeforeReadMode;
+
+    // Feature 4 — Read Mode options: column width token ("narrow"/"default"/"wide") and page color token.
+    private string _readModeColumnWidth = "default";
+    private string _readModePageColor   = "none";
 
     // FreeW's persisted settings (shared JsonSettingsStore). Defaults are used when none are supplied,
     // so the window stays constructible in isolation; Program.Main passes the loaded options + the store
@@ -304,7 +309,11 @@ public sealed class MainWindow : Window
             onOpenHeaderFooterPane: OpenHeaderFooterPane,
             onCloseHeaderFooterPane: CloseHeaderFooterPane,
             onTogglePagedEditView: TogglePagedEditView,
-            isPagedEditViewActive: () => _pagedEditMode);
+            isPagedEditViewActive: () => _pagedEditMode,
+            onReadModeColumnWidth: ApplyReadModeColumnWidth,
+            onReadModePageColor: ApplyReadModePageColor,
+            onNewWindow: OpenNewWindow,
+            onArrangeAll: ArrangeAllWindows);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) =>
         {
@@ -1835,6 +1844,7 @@ public sealed class MainWindow : Window
             _editorAlignmentBeforeReadMode = _editor.HorizontalAlignment;
             _editorWidthBeforeReadMode = _editor.Width;
             _editorEffectBeforeReadMode = _editor.Effect;
+            _editorBackgroundBeforeReadMode = _editor.Background;
 
             _titleBar.Visibility = Visibility.Collapsed;
             _ribbon.Visibility = Visibility.Collapsed;
@@ -1855,11 +1865,26 @@ public sealed class MainWindow : Window
 
             // A centered, comfortable reading column: cap the width and add generous breathing room.
             // Drop any Print-Layout page sizing/shadow so the reading column owns the surface width.
+            // Column width respects the user's last-chosen token (Feature 4).
             _editor.HorizontalAlignment = HorizontalAlignment.Center;
             _editor.Width = double.NaN;
             _editor.Effect = null;
-            _editor.MaxWidth = 760;
+            _editor.MaxWidth = _readModeColumnWidth switch
+            {
+                "narrow" => 560,
+                "wide"   => 1024,
+                _        => 760
+            };
             _editor.Margin = new Thickness(40, 40, 40, 40);
+            // Apply saved page color (Feature 4).
+            _editor.Background = _readModePageColor switch
+            {
+                "sepia"   => new System.Windows.Media.SolidColorBrush(
+                                 System.Windows.Media.Color.FromRgb(0xF0, 0xE0, 0xC0)),
+                "inverse" => new System.Windows.Media.SolidColorBrush(
+                                 System.Windows.Media.Color.FromRgb(0x1E, 0x1E, 0x1E)),
+                _         => System.Windows.Media.Brushes.White
+            };
         }
         else
         {
@@ -1875,6 +1900,7 @@ public sealed class MainWindow : Window
             _editor.Margin = _editorMarginBeforeReadMode;
             _editor.Width = _editorWidthBeforeReadMode;
             _editor.Effect = _editorEffectBeforeReadMode;
+            _editor.Background = _editorBackgroundBeforeReadMode;
 
             // Restore the navigation pane to whatever it was before entering read mode.
             _navPane.Visibility = _navPaneVisibleBeforeReadMode ? Visibility.Visible : Visibility.Collapsed;
@@ -1887,6 +1913,89 @@ public sealed class MainWindow : Window
         }
 
         _stateStore.SetChecked("freew.read-mode", _readMode);
+    }
+
+    // Feature 4 — Read Mode column width: Narrow (560 px) / Default (760 px) / Wide (1024 px).
+    // Stores the token and, if read mode is currently active, applies the new max-width immediately.
+    private void ApplyReadModeColumnWidth(string token)
+    {
+        _readModeColumnWidth = token;
+        if (!_readMode) return;
+        _editor.MaxWidth = token switch
+        {
+            "narrow" => 560,
+            "wide"   => 1024,
+            _        => 760
+        };
+    }
+
+    // Feature 4 — Read Mode page color: None (white), Sepia (#F0E0C0), or Inverse (dark #1E1E1E).
+    // Stores the token and, if read mode is currently active, tints the editor background immediately.
+    private void ApplyReadModePageColor(string token)
+    {
+        _readModePageColor = token;
+        if (!_readMode) return;
+        _editor.Background = token switch
+        {
+            "sepia"   => new System.Windows.Media.SolidColorBrush(
+                             System.Windows.Media.Color.FromRgb(0xF0, 0xE0, 0xC0)),
+            "inverse" => new System.Windows.Media.SolidColorBrush(
+                             System.Windows.Media.Color.FromRgb(0x1E, 0x1E, 0x1E)),
+            _         => System.Windows.Media.Brushes.White
+        };
+    }
+
+    // Feature 5 — New Window: open a fresh MainWindow. If the current document has a saved path, load it
+    // into the new window (read-only by design — both windows can edit independently, last-save wins).
+    // If the document is new/unsaved, just open a new blank window. The note in the title makes it clear.
+    private void OpenNewWindow()
+    {
+        var newWindow = new MainWindow(_options);
+        var path = _file.CurrentPath;
+        if (path is not null && System.IO.File.Exists(path))
+        {
+            newWindow.Show();
+            newWindow._file.OpenRecentPath(path);
+            newWindow.Title = $"FreeW — {System.IO.Path.GetFileName(path)} (second view)";
+        }
+        else
+        {
+            newWindow.Title = "FreeW — (second view)";
+            newWindow.Show();
+        }
+    }
+
+    // Feature 5 — Arrange All: tile all open FreeW windows across the work area.
+    // Uses SystemParameters.WorkArea so the taskbar is not covered.
+    private static void ArrangeAllWindows()
+    {
+        var freeWWindows = System.Windows.Application.Current.Windows
+            .OfType<MainWindow>()
+            .Where(w => w.IsVisible)
+            .ToList();
+
+        if (freeWWindows.Count == 0) return;
+
+        var area = System.Windows.SystemParameters.WorkArea;
+        var count = freeWWindows.Count;
+
+        // Tile in a single row for 1–3 windows, two rows for 4+.
+        var cols = Math.Min(count, 3);
+        var rows = (int)Math.Ceiling((double)count / cols);
+        var tileW = area.Width  / cols;
+        var tileH = area.Height / rows;
+
+        for (var i = 0; i < count; i++)
+        {
+            var col = i % cols;
+            var row = i / cols;
+            var w = freeWWindows[i];
+            w.WindowState = System.Windows.WindowState.Normal;
+            w.Left   = area.Left + col * tileW;
+            w.Top    = area.Top  + row * tileH;
+            w.Width  = tileW;
+            w.Height = tileH;
+        }
     }
 
     // View > Views: switch the editing surface to one of the three mutually-exclusive print-family view
