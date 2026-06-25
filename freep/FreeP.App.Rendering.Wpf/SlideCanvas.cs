@@ -200,6 +200,10 @@ public sealed class SlideCanvas : FrameworkElement
             dc.PushTransform(BuildShapeTransform(shape));
         }
 
+        // Effects: draw before the shape (painter's algorithm — shadow behind shape)
+        if (shape.Effects is not null)
+            RenderShapeEffects(dc, shape);
+
         // Draw geometry
         if (shape.Geometry.Contours.Count > 0)
         {
@@ -215,6 +219,78 @@ public sealed class SlideCanvas : FrameworkElement
 
         if (hasTransform)
             dc.Pop();
+    }
+
+    private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
+    {
+        var fx = shape.Effects!;
+
+        if (shape.Geometry.Contours.Count == 0) return;
+
+        if (fx.HasOuterShadow)
+        {
+            // Compute shadow offset from direction and distance
+            double rad = fx.OuterShadowDirDeg * Math.PI / 180.0;
+            double dx  = Math.Cos(rad) * fx.OuterShadowDistDip;
+            double dy  = Math.Sin(rad) * fx.OuterShadowDistDip;
+
+            // Push offset transform, draw geometry with shadow color
+            dc.PushTransform(new TranslateTransform(dx, dy));
+
+            byte a = fx.OuterShadowAlpha;
+            var shadowBrush = new SolidColorBrush(
+                Color.FromArgb(a, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
+            if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+
+            var shadowGeo = ContourListToGeometry(shape.Geometry);
+
+            if (fx.OuterShadowBlurDip > 1.0)
+            {
+                // Approximate blur by drawing multiple offset copies at decreasing opacity
+                int passes = Math.Min(4, (int)Math.Ceiling(fx.OuterShadowBlurDip / 2));
+                for (int i = passes; i >= 1; i--)
+                {
+                    double spread = fx.OuterShadowBlurDip * i / passes;
+                    byte passAlpha = (byte)(a / (passes + 1));
+                    var passBrush = new SolidColorBrush(
+                        Color.FromArgb(passAlpha, fx.OuterShadowColor.R, fx.OuterShadowColor.G, fx.OuterShadowColor.B));
+                    if (passBrush.CanFreeze) passBrush.Freeze();
+
+                    for (int ox = -1; ox <= 1; ox++)
+                    for (int oy = -1; oy <= 1; oy++)
+                    {
+                        if (ox == 0 && oy == 0) continue;
+                        dc.PushTransform(new TranslateTransform(ox * spread, oy * spread));
+                        dc.DrawGeometry(passBrush, null, shadowGeo);
+                        dc.Pop();
+                    }
+                }
+                dc.DrawGeometry(shadowBrush, null, shadowGeo);
+            }
+            else
+            {
+                dc.DrawGeometry(shadowBrush, null, shadowGeo);
+            }
+
+            dc.Pop(); // pop TranslateTransform
+        }
+
+        if (fx.HasGlow)
+        {
+            var glowGeo = ContourListToGeometry(shape.Geometry);
+            int passes = Math.Min(5, (int)Math.Ceiling(fx.GlowRadiusDip / 2));
+            for (int i = passes; i >= 1; i--)
+            {
+                double r = fx.GlowRadiusDip * i / passes;
+                byte passAlpha = (byte)(fx.GlowAlpha / (passes + 1));
+                var glowBrush = new SolidColorBrush(
+                    Color.FromArgb(passAlpha, fx.GlowColor.R, fx.GlowColor.G, fx.GlowColor.B));
+                if (glowBrush.CanFreeze) glowBrush.Freeze();
+                var glowPen = new Pen(glowBrush, r * 2);
+                if (glowPen.CanFreeze) glowPen.Freeze();
+                dc.DrawGeometry(null, glowPen, glowGeo);
+            }
+        }
     }
 
     private static Transform BuildShapeTransform(DrawOp.Shape shape)

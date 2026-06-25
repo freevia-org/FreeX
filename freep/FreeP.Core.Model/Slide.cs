@@ -3,6 +3,75 @@ using Free.Shared.Drawing;
 namespace FreeP.Core.Model;
 
 /// <summary>
+/// One segment in a custom geometry path. Uses normalized path-space coordinates (not yet
+/// scaled to shape bounds) so the path can be stored independently of the shape's size.
+/// </summary>
+public enum CustomSegmentKind { MoveTo, LineTo, CubicBezTo, QuadBezTo, ArcTo, Close }
+
+public sealed record CustomSegment(
+    CustomSegmentKind Kind,
+    double X = 0, double Y = 0,
+    double X1 = 0, double Y1 = 0,
+    double X2 = 0, double Y2 = 0,
+    double X3 = 0, double Y3 = 0,
+    // ArcTo params (angles in degrees, radii in path-space units)
+    double WR = 0, double HR = 0,
+    double StAng = 0, double SwAng = 0);
+
+/// <summary>
+/// One path within a custom geometry's path list. Coordinates are in the path's own w×h space.
+/// Multiple paths = multiple contours.
+/// </summary>
+public sealed class CustomGeometryPath
+{
+    /// <summary>Path-space width (from a:path w= attribute). 0 means use shape extent.</summary>
+    public long PathW { get; set; }
+    /// <summary>Path-space height (from a:path h= attribute). 0 means use shape extent.</summary>
+    public long PathH { get; set; }
+    /// <summary>Whether this path should be filled.</summary>
+    public bool Fill { get; set; } = true;
+    /// <summary>Whether this path should be stroked.</summary>
+    public bool Stroke { get; set; } = true;
+    /// <summary>Segments for this path.</summary>
+    public List<CustomSegment> Segments { get; } = new();
+}
+
+/// <summary>
+/// Shape effects carried on a SlideShape. All distances/radii are in EMU.
+/// </summary>
+public sealed class ShapeEffects
+{
+    // ── Outer shadow ──────────────────────────────────────────────────────────
+    public bool HasOuterShadow { get; set; }
+    public SrgbColor OuterShadowColor { get; set; }
+    public byte OuterShadowAlpha { get; set; } = 0x80;      // 0-255
+    public long OuterShadowBlurRadEmu { get; set; }
+    public long OuterShadowDistEmu { get; set; }
+    public double OuterShadowDirDeg { get; set; }
+
+    // ── Inner shadow ──────────────────────────────────────────────────────────
+    public bool HasInnerShadow { get; set; }
+    public SrgbColor InnerShadowColor { get; set; }
+    public byte InnerShadowAlpha { get; set; } = 0x80;
+    public long InnerShadowBlurRadEmu { get; set; }
+    public long InnerShadowDistEmu { get; set; }
+    public double InnerShadowDirDeg { get; set; }
+
+    // ── Glow ──────────────────────────────────────────────────────────────────
+    public bool HasGlow { get; set; }
+    public SrgbColor GlowColor { get; set; }
+    public byte GlowAlpha { get; set; } = 0xA0;
+    public long GlowRadiusEmu { get; set; }
+
+    // ── Soft edge ─────────────────────────────────────────────────────────────
+    public bool HasSoftEdge { get; set; }
+    public long SoftEdgeRadEmu { get; set; }
+
+    // ── Bevel (best-effort flag only) ─────────────────────────────────────────
+    public bool HasBevel { get; set; }
+}
+
+/// <summary>
 /// An image part referenced by a <see cref="SlideShape"/> with <see cref="SlideShapeKind.Picture"/>.
 /// Stores the raw bytes and MIME content type so the IO layer can embed it into a .pptx package.
 /// </summary>
@@ -72,6 +141,19 @@ public sealed class SlideShape
 
     /// <summary>Shape outline (border/stroke). Null means inherit.</summary>
     public ShapeOutline? Outline { get; set; }
+
+    // ── Custom geometry ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Custom geometry paths. When non-empty and Kind==AutoShape, these override the preset.
+    /// Each entry corresponds to one a:path in a:custGeom/a:pathLst.
+    /// </summary>
+    public List<CustomGeometryPath> CustomGeometry { get; } = new();
+
+    // ── Shape effects ─────────────────────────────────────────────────────────
+
+    /// <summary>Shadow, glow, soft-edge, and bevel effects. Null if no effects are set.</summary>
+    public ShapeEffects? Effects { get; set; }
 
     // ── Text ─────────────────────────────────────────────────────────────────────
 

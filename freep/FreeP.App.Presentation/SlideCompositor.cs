@@ -144,7 +144,9 @@ public static class SlideCompositor
         var boundsDip = AnchorToBounds(anchor);
 
         // Build geometry from the resolved bounds.
-        var geometry = ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip);
+        var geometry = shape.CustomGeometry.Count > 0
+            ? CustomGeometryBuilder.BuildCustom(shape.CustomGeometry, boundsDip)
+            : ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip);
 
         // Resolve fill.
         var fill = shape.Fill is not null
@@ -184,8 +186,33 @@ public static class SlideCompositor
             FlipH = anchor.FlipH,
             FlipV = anchor.FlipV,
             BoundsDip = boundsDip,
-            Text = text
+            Text = text,
+            Effects = ResolveEffects(shape.Effects)
         });
+    }
+
+    private static ResolvedShapeEffects? ResolveEffects(ShapeEffects? fx)
+    {
+        if (fx is null) return null;
+        if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge) return null;
+
+        return new ResolvedShapeEffects
+        {
+            HasOuterShadow     = fx.HasOuterShadow,
+            OuterShadowColor   = fx.OuterShadowColor,
+            OuterShadowAlpha   = fx.OuterShadowAlpha,
+            OuterShadowBlurDip = fx.OuterShadowBlurRadEmu / EmuPerDip,
+            OuterShadowDistDip = fx.OuterShadowDistEmu    / EmuPerDip,
+            OuterShadowDirDeg  = fx.OuterShadowDirDeg,
+
+            HasGlow       = fx.HasGlow,
+            GlowColor     = fx.GlowColor,
+            GlowAlpha     = fx.GlowAlpha,
+            GlowRadiusDip = fx.GlowRadiusEmu / EmuPerDip,
+
+            HasSoftEdge       = fx.HasSoftEdge,
+            SoftEdgeRadiusDip = fx.SoftEdgeRadEmu / EmuPerDip
+        };
     }
 
     /// <summary>

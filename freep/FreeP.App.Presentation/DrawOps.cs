@@ -113,6 +113,33 @@ public abstract class ResolvedOutline
     }
 }
 
+// ─── Resolved shape effects ───────────────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Resolved shape effects with concrete DIP values for the renderer.</summary>
+public sealed class ResolvedShapeEffects
+{
+    // Outer shadow
+    public bool HasOuterShadow { get; init; }
+    public SrgbColor OuterShadowColor { get; init; }
+    public byte OuterShadowAlpha { get; init; }
+    /// <summary>Blur radius in DIP.</summary>
+    public double OuterShadowBlurDip { get; init; }
+    /// <summary>Offset distance in DIP.</summary>
+    public double OuterShadowDistDip { get; init; }
+    /// <summary>Direction in degrees (clockwise from right).</summary>
+    public double OuterShadowDirDeg  { get; init; }
+
+    // Glow
+    public bool HasGlow { get; init; }
+    public SrgbColor GlowColor { get; init; }
+    public byte GlowAlpha { get; init; }
+    public double GlowRadiusDip { get; init; }
+
+    // Soft edge
+    public bool HasSoftEdge { get; init; }
+    public double SoftEdgeRadiusDip { get; init; }
+}
+
 // ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
@@ -160,6 +187,9 @@ public abstract class DrawOp
 
         /// <summary>Text to render over the shape, or null if the shape has no text.</summary>
         public ResolvedTextLayout? Text { get; init; }
+
+        /// <summary>Resolved shape effects (shadow, glow, soft-edge), or null if none.</summary>
+        public ResolvedShapeEffects? Effects { get; init; }
     }
 
     // ── Picture draw op ───────────────────────────────────────────────────────────────────────────────────────────
