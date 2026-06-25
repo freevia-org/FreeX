@@ -88,7 +88,10 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         if (_addedPivotTable is not null)
+        {
+            PivotTableRefreshService.ClearRenderedRange(sheet, _addedPivotTable.LastRenderedRange);
             sheet.PivotTables.Remove(_addedPivotTable);
+        }
         if (_addedCache is not null)
             ctx.Workbook.PivotCaches.Remove(_addedCache);
         Restore(sheet, _targetSnapshot);
