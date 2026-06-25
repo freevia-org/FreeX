@@ -66,6 +66,9 @@
     <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
+    <!-- Bundled English thesaurus: compact Moby II derivative (~3 000 headwords, public domain).
+         Embedded so the lookup works with no file I/O and ships as a single DLL with no deploy steps. -->
+    <EmbeddedResource Include="Resources\thesaurus-en.txt" LogicalName="FreeW.App.Host.Resources.thesaurus-en.txt" />
   </ItemGroup>
 
   <ItemGroup>

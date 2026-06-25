@@ -1,0 +1,250 @@
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using FreeW.App.Host.Editing;
+using FreeW.Core.Model;
+
+namespace FreeW.App.Host;
+
+/// <summary>
+/// Right-margin balloon overlay for Review > Show Markup > Show Revisions in Balloons.
+///
+/// Architecture: a 200px-wide Canvas strip placed to the RIGHT of the DocumentView (hosted in the
+/// same workspace Grid row, added as a sibling column). Each balloon is a rounded rectangle with a
+/// leader line drawn to the text's horizontal midpoint in the editor. The strip is rebuild on every
+/// TextChanged event when Balloons mode is active. When inactive the strip has Width=0 and no children.
+///
+/// Balloon sources (in document order):
+///   1. Comments — from TextDocument.Comments (author, first paragraph of content).
+///   2. Tracked-change revisions — from DocumentView.ListRevisions() (author, kind, text).
+///
+/// Layout rule: balloons are stacked top-to-bottom with 8px gaps; each balloon has a fixed height
+/// (60px) and fills the strip width (180px). The leader line connects the balloon's left edge midpoint
+/// to the center of the editor at a fixed horizontal offset (the strip's left edge = the editor's right
+/// edge). Actual text-position Y is approximated via a per-item ordinal mapping (proportional to the
+/// sorted order in the document) since WPF FlowDocument doesn't expose per-range screen coordinates
+/// without a full measure pass — the vertical position tracks the relative order faithfully even if
+/// not pixel-exact.
+///
+/// State flag: <see cref="BalloonsEnabled"/> toggles the mode; consumers call <see cref="Rebuild"/>
+/// whenever the document changes or the flag is toggled.
+/// </summary>
+internal sealed class BalloonOverlay
+{
+    // ── Constants ────────────────────────────────────────────────────────────────────────────────
+    private const double StripWidth      = 200;
+    private const double BalloonWidth    = 176;
+    private const double BalloonHeight   = 56;
+    private const double BalloonGap      = 8;
+    private const double BalloonX        = 12;
+    private const double BalloonCorner   = 4;
+    private const double LeaderThickness = 1.0;
+
+    private static readonly Brush CommentFill    = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)));
+    private static readonly Brush CommentStroke  = Freeze(new SolidColorBrush(Color.FromRgb(0xE5, 0xC3, 0x65)));
+    private static readonly Brush InsertFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xD9, 0xF0, 0xE0)));
+    private static readonly Brush InsertStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0x60, 0xA9, 0x70)));
+    private static readonly Brush DeleteFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xFD, 0xDE, 0xDE)));
+    private static readonly Brush DeleteStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0xC5, 0x50, 0x50)));
+    private static readonly Brush FormatFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF8)));
+    private static readonly Brush FormatStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0xC8)));
+    private static readonly Brush LeaderBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)));
+    private static readonly Brush AuthorBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)));
+    private static readonly Brush TextBrush      = Freeze(new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30)));
+
+    private static Brush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+
+    // ── Fields ───────────────────────────────────────────────────────────────────────────────────
+    private readonly DocumentView _editor;
+    private readonly Canvas       _canvas;
+
+    /// <summary>When true the strip is shown and rebuilt on document changes; when false it collapses.</summary>
+    public bool BalloonsEnabled { get; private set; }
+
+    // ── Constructor ──────────────────────────────────────────────────────────────────────────────
+
+    public BalloonOverlay(DocumentView editor)
+    {
+        _editor = editor;
+        _canvas = new Canvas
+        {
+            Width = 0,               // collapsed until enabled
+            Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF8)),
+            ClipToBounds = true
+        };
+    }
+
+    /// <summary>The visual to place as the right-sibling column of the editor.</summary>
+    public UIElement Visual => _canvas;
+
+    // ── Toggle ───────────────────────────────────────────────────────────────────────────────────
+
+    public void Toggle()
+    {
+        BalloonsEnabled = !BalloonsEnabled;
+        _canvas.Width = BalloonsEnabled ? StripWidth : 0;
+        Rebuild();
+    }
+
+    public void Enable()  { BalloonsEnabled = true;  _canvas.Width = StripWidth; Rebuild(); }
+    public void Disable() { BalloonsEnabled = false; _canvas.Width = 0;          _canvas.Children.Clear(); }
+
+    // ── Rebuild ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clears and redraws all balloons from the live document state. No-op when not enabled.
+    /// Should be called whenever the document changes (TextChanged) or balloons mode is toggled.
+    /// </summary>
+    public void Rebuild()
+    {
+        _canvas.Children.Clear();
+        if (!BalloonsEnabled) return;
+
+        var items = CollectItems();
+        var canvasHeight = _canvas.ActualHeight > 0 ? _canvas.ActualHeight : 800;
+
+        var totalSlots = Math.Max(items.Count, 1);
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+
+            // Y position: stack from the top, capped so we don't overflow the visible strip.
+            var balloonY = BalloonGap + i * (BalloonHeight + BalloonGap);
+            // The proportional anchor Y on the editor is approximated by ordinal fraction of doc length.
+            var anchorY  = canvasHeight * (i + 0.5) / totalSlots;
+
+            DrawBalloon(item, BalloonX, balloonY, anchorY);
+        }
+    }
+
+    // ── Data collection ──────────────────────────────────────────────────────────────────────────
+
+    private sealed record BalloonItem(
+        string Kind,          // "comment" | "insert" | "delete" | "format"
+        string Author,
+        string Preview,
+        int    Ordinal);
+
+    private List<BalloonItem> CollectItems()
+    {
+        var result = new List<BalloonItem>();
+        int ordinal = 0;
+
+        // 1. Tracked-change revisions (from model via DocumentView.ListRevisions).
+        var revisions = _editor.ListRevisions();
+        foreach (var rev in revisions)
+        {
+            var kind = rev.Kind switch
+            {
+                RevisionEntryKind.Insertion  => "insert",
+                RevisionEntryKind.Deletion   => "delete",
+                _                            => "format"
+            };
+            var preview = TruncatePreview(rev.Text.Replace('\r', ' ').Replace('\n', ' ').Trim(), 60);
+            var author  = string.IsNullOrWhiteSpace(rev.Author) ? "Author" : rev.Author;
+            result.Add(new BalloonItem(kind, author, preview, ordinal++));
+        }
+
+        // 2. Comments (from TextDocument.Comments dictionary, keyed by id, in id order).
+        foreach (var (_, comment) in _editor.Model.Comments.OrderBy(kv => kv.Key))
+        {
+            var author  = string.IsNullOrWhiteSpace(comment.Author) ? "Commenter" : comment.Author;
+            var firstPara = comment.Content.FirstOrDefault();
+            var preview = firstPara is not null
+                ? TruncatePreview(string.Join("", firstPara.Runs.Select(r => r.Text ?? "")).Trim(), 60)
+                : string.Empty;
+            result.Add(new BalloonItem("comment", author, preview, ordinal++));
+        }
+
+        return result;
+    }
+
+    private static string TruncatePreview(string text, int maxLen) =>
+        text.Length <= maxLen ? text : text[..maxLen] + "…";
+
+    // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
+
+    private void DrawBalloon(BalloonItem item, double x, double y, double anchorY)
+    {
+        // Choose colours by kind.
+        var (fill, stroke) = item.Kind switch
+        {
+            "insert" => (InsertFill, InsertStroke),
+            "delete" => (DeleteFill, DeleteStroke),
+            "format" => (FormatFill, FormatStroke),
+            _        => (CommentFill, CommentStroke)   // "comment" default
+        };
+
+        // Leader line: from left edge of balloon midpoint to the edge of the strip.
+        var balloonMidY = y + BalloonHeight / 2;
+        var leader = new Line
+        {
+            X1 = 0,           Y1 = anchorY,
+            X2 = x,           Y2 = balloonMidY,
+            Stroke = LeaderBrush,
+            StrokeThickness = LeaderThickness,
+            StrokeDashArray = new DoubleCollection { 3, 2 }
+        };
+        _canvas.Children.Add(leader);
+
+        // Balloon rectangle.
+        var rect = new Rectangle
+        {
+            Width           = BalloonWidth,
+            Height          = BalloonHeight,
+            Fill            = fill,
+            Stroke          = stroke,
+            StrokeThickness = 1.2,
+            RadiusX         = BalloonCorner,
+            RadiusY         = BalloonCorner
+        };
+        Canvas.SetLeft(rect, x);
+        Canvas.SetTop(rect,  y);
+        _canvas.Children.Add(rect);
+
+        // Kind badge (small coloured dot).
+        var kindLabel = item.Kind switch
+        {
+            "insert" => "Inserted",
+            "delete" => "Deleted",
+            "format" => "Formatted",
+            _        => "Comment"
+        };
+
+        // Author + kind header.
+        var header = new TextBlock
+        {
+            Text            = $"{item.Author} – {kindLabel}",
+            Foreground      = AuthorBrush,
+            FontWeight      = FontWeights.SemiBold,
+            FontSize        = 10,
+            Width           = BalloonWidth - 8,
+            TextTrimming    = TextTrimming.CharacterEllipsis,
+            Margin          = new Thickness(0)
+        };
+        Canvas.SetLeft(header, x + 4);
+        Canvas.SetTop(header,  y + 4);
+        _canvas.Children.Add(header);
+
+        // Preview text.
+        if (!string.IsNullOrEmpty(item.Preview))
+        {
+            var preview = new TextBlock
+            {
+                Text         = item.Preview,
+                Foreground   = TextBrush,
+                FontSize     = 10,
+                Width        = BalloonWidth - 8,
+                TextWrapping = TextWrapping.Wrap,
+                MaxHeight    = BalloonHeight - 22,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin       = new Thickness(0)
+            };
+            Canvas.SetLeft(preview, x + 4);
+            Canvas.SetTop(preview,  y + 18);
+            _canvas.Children.Add(preview);
+        }
+    }
+}

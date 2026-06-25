@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Thesaurus">
+  <rect width="32" height="32" fill="none"/>
+  <!-- Book outline -->
+  <path d="M7 4h13c1.1 0 2 .9 2 2v20c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="#EEF4FB" stroke="#1565C0" stroke-width="1.5"/>
+  <!-- Spine line -->
+  <line x1="11" y1="4" x2="11" y2="28" stroke="#1565C0" stroke-width="1.2"/>
+  <!-- Text lines suggesting synonyms -->
+  <path d="M14 10h6M14 14h5M14 18h6M14 22h4" stroke="#4285C0" stroke-width="1.1" stroke-linecap="round"/>
+  <!-- Small "=" synonym equal sign -->
+  <path d="M7.5 13h2M7.5 15h2" stroke="#217346" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

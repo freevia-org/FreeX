@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows.Threading;
+using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit.Sdk;
@@ -158,6 +159,18 @@ internal static class WpfTestWarmUp
         Dispatcher.Run();   // blocks forever; keeper thread is a background thread
     }
 
+    // Keep a reference to the pre-warmed ribbon definition and command registry alive for the process
+    // lifetime.  Pre-building the ribbon on the keeper STA thread during warm-up exercises all
+    // WPF-creation paths (RibbonDefinitionBuilder, icon factory, command registry) on the long-lived
+    // STA apartment before the first ribbon-parity test class creates its own STA thread.  This
+    // eliminates the cold-start JIT spike that caused intermittent failures in tests such as
+    // InsertPages_ExposesBackedWordStyleBlankPage when the very first ribbon Build() call raced with
+    // WPF's STA initialisation path.
+#pragma warning disable IDE0052
+    private static RibbonDefinition?    _keepAliveRibbonDefinition;
+    private static RibbonCommandRegistry? _keepAliveRibbonCommands;
+#pragma warning restore IDE0052
+
     private static void DoWarmUp()
     {
         try
@@ -173,6 +186,15 @@ internal static class WpfTestWarmUp
             var dv = new DocumentView();
             dv.LoadModel(TextDocument.CreateEmpty());
             _keepAliveDocumentView = dv;
+
+            // Pre-construct the ribbon definition + command registry on the keeper STA thread.
+            // This warms up the RibbonDefinitionBuilder's static field initialisers, the
+            // icon-factory slug resolution cache, and any WPF resource resolution that FreeWRibbon
+            // or FreeWRibbonCommands touch on first call.  After this point the first real ribbon-
+            // parity test (which runs on its own per-class STA thread) skips the cold-JIT path
+            // entirely and runs from cached types — eliminating the intermittent cold-start flake.
+            _keepAliveRibbonDefinition = FreeWRibbon.Build();
+            _keepAliveRibbonCommands   = FreeWRibbonCommands.Build(dv, new RibbonStateStore());
         }
         catch (Exception ex)
         {

@@ -386,6 +386,100 @@ public sealed class DocumentView : RichTextBox
         return string.IsNullOrEmpty(word) ? null : word;
     }
 
+    /// <summary>
+    /// Returns the word at or adjacent to the caret (or the selected text if a word-length selection exists).
+    /// Uses WPF TextPointer word-boundary navigation to extract the token. Returns null when the caret
+    /// is not inside a text run (e.g. sits between paragraphs or on an image).
+    /// </summary>
+    public string? GetCaretWord()
+    {
+        // If the selection is a non-empty single word, use it directly.
+        if (!Selection.IsEmpty)
+        {
+            var sel = Selection.Text?.Trim();
+            if (!string.IsNullOrEmpty(sel) && !sel.Contains(' ') && !sel.Contains('\n'))
+                return sel;
+        }
+
+        var caret = CaretPosition;
+        if (caret is null) return null;
+
+        // Walk backward to the start of the word, then forward to its end.
+        var wordStart = caret.GetPositionAtOffset(0, LogicalDirection.Backward);
+        if (wordStart is null) return null;
+
+        // Scan backward while we are inside a letter/digit run.
+        while (true)
+        {
+            var prev = wordStart.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null) break;
+            var ch = new TextRange(prev, wordStart).Text;
+            if (ch.Length != 1 || (!char.IsLetterOrDigit(ch[0]) && ch[0] != '\''))
+                break;
+            wordStart = prev;
+        }
+
+        var wordEnd = caret.GetPositionAtOffset(0, LogicalDirection.Forward);
+        if (wordEnd is null) return null;
+
+        // Scan forward while we are inside a letter/digit run.
+        while (true)
+        {
+            var next = wordEnd.GetNextInsertionPosition(LogicalDirection.Forward);
+            if (next is null) break;
+            var ch = new TextRange(wordEnd, next).Text;
+            if (ch.Length != 1 || (!char.IsLetterOrDigit(ch[0]) && ch[0] != '\''))
+                break;
+            wordEnd = next;
+        }
+
+        var word = new TextRange(wordStart, wordEnd).Text?.Trim();
+        return string.IsNullOrEmpty(word) ? null : word;
+    }
+
+    /// <summary>
+    /// Replaces the word at the caret with <paramref name="replacement"/> (the word is determined by the same
+    /// word-boundary walk as <see cref="GetCaretWord"/>). If a word is found it is selected and replaced
+    /// through the standard <see cref="InsertText"/> path so the action is undoable. A no-op when the
+    /// caret is not on a word.
+    /// </summary>
+    public void ReplaceCaretWord(string replacement)
+    {
+        if (string.IsNullOrEmpty(replacement)) return;
+        var caret = CaretPosition;
+        if (caret is null) return;
+
+        // Find word start (backward).
+        var wordStart = caret.GetPositionAtOffset(0, LogicalDirection.Backward);
+        if (wordStart is null) return;
+        while (true)
+        {
+            var prev = wordStart.GetNextInsertionPosition(LogicalDirection.Backward);
+            if (prev is null) break;
+            var ch = new TextRange(prev, wordStart).Text;
+            if (ch.Length != 1 || (!char.IsLetterOrDigit(ch[0]) && ch[0] != '\''))
+                break;
+            wordStart = prev;
+        }
+
+        // Find word end (forward).
+        var wordEnd = caret.GetPositionAtOffset(0, LogicalDirection.Forward);
+        if (wordEnd is null) return;
+        while (true)
+        {
+            var next = wordEnd.GetNextInsertionPosition(LogicalDirection.Forward);
+            if (next is null) break;
+            var ch = new TextRange(wordEnd, next).Text;
+            if (ch.Length != 1 || (!char.IsLetterOrDigit(ch[0]) && ch[0] != '\''))
+                break;
+            wordEnd = next;
+        }
+
+        // Select the word then insert the replacement.
+        Selection.Select(wordStart, wordEnd);
+        InsertText(replacement);
+    }
+
     /// <summary>Raised whenever <see cref="ZoomLevel"/> changes; carries the new factor (1.0 == 100%).</summary>
     public event EventHandler<double>? ZoomChanged;
 
