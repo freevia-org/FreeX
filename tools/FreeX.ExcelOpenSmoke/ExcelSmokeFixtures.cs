@@ -160,6 +160,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_viewfeat_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeViewfeatCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -5900,6 +5906,329 @@ internal static class ExcelSmokeFixtures
         }
         finally
         {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // View-feature baseline corpus fixtures
+    // (hyperlinks_001, formcontrols_002, grouping_003)
+    // =========================================================================
+
+    public static IReadOnlyList<string> GetExcelViewfeatCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_viewfeat_hyperlinks_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_viewfeat_formcontrols_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_viewfeat_grouping_003.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for view-feature corpus fixtures.</summary>
+    private static void GenerateExcelNativeViewfeatCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("hyperlinks_001", StringComparison.OrdinalIgnoreCase))
+            GenerateViewfeatFixture_Hyperlinks(workbooks, outputPath);
+        else if (fileName.Contains("formcontrols_002", StringComparison.OrdinalIgnoreCase))
+            GenerateViewfeatFixture_FormControls(workbooks, outputPath);
+        else if (fileName.Contains("grouping_003", StringComparison.OrdinalIgnoreCase))
+            GenerateViewfeatFixture_Grouping(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown viewfeat corpus fixture: {fileName}");
+    }
+
+    /// <summary>
+    /// hyperlinks_001: web link + in-workbook link. Cells render blue+underlined in Excel.
+    /// </summary>
+    private static void GenerateViewfeatFixture_Hyperlinks(dynamic workbooks, string outputPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        object? workbook = null;
+        object? worksheet = null;
+        object? range = null;
+        object? hyperlinks = null;
+        object? hyperlink = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            try { ((dynamic)worksheet).Name = "Hyperlinks"; } catch { /* best effort */ }
+
+            // Header
+            SetExcelCellValue(worksheet, 1, 1, "Address");
+            SetExcelCellValue(worksheet, 1, 2, "Kind");
+            SetExcelCellValue(worksheet, 1, 3, "Display Text");
+
+            // Row 2: web link
+            SetExcelCellValue(worksheet, 2, 1, "A2");
+            SetExcelCellValue(worksheet, 2, 2, "Web URL");
+            SetExcelCellValue(worksheet, 2, 3, "Visit FreeX");
+            range = ((dynamic)worksheet).Range("A2");
+            hyperlinks = ((dynamic)worksheet).Hyperlinks;
+            hyperlink = ((dynamic)hyperlinks).Add(range, "https://example.com/freex", Type.Missing, "Opens example.com", "Visit FreeX");
+            ReleaseComObject(hyperlink); hyperlink = null;
+            ReleaseComObject(hyperlinks); hyperlinks = null;
+            ReleaseComObject(range); range = null;
+
+            // Row 3: another web link
+            SetExcelCellValue(worksheet, 3, 2, "Web URL");
+            SetExcelCellValue(worksheet, 3, 3, "Open Docs");
+            range = ((dynamic)worksheet).Range("A3");
+            hyperlinks = ((dynamic)worksheet).Hyperlinks;
+            hyperlink = ((dynamic)hyperlinks).Add(range, "https://docs.example.com/api", Type.Missing, "Opens docs", "Open Docs");
+            ReleaseComObject(hyperlink); hyperlink = null;
+            ReleaseComObject(hyperlinks); hyperlinks = null;
+            ReleaseComObject(range); range = null;
+
+            // Row 4: in-workbook link (place in this document)
+            SetExcelCellValue(worksheet, 4, 2, "In-workbook");
+            SetExcelCellValue(worksheet, 4, 3, "Jump to C8");
+            range = ((dynamic)worksheet).Range("A4");
+            hyperlinks = ((dynamic)worksheet).Hyperlinks;
+            // SubAddress = sheet!cell for internal links
+            hyperlink = ((dynamic)hyperlinks).Add(range, "", "Hyperlinks!C8", "Jumps to C8 on this sheet", "Jump to C8");
+            ReleaseComObject(hyperlink); hyperlink = null;
+            ReleaseComObject(hyperlinks); hyperlinks = null;
+            ReleaseComObject(range); range = null;
+
+            // Row 5: mailto
+            SetExcelCellValue(worksheet, 5, 2, "Email");
+            SetExcelCellValue(worksheet, 5, 3, "Send mail");
+            range = ((dynamic)worksheet).Range("A5");
+            hyperlinks = ((dynamic)worksheet).Hyperlinks;
+            hyperlink = ((dynamic)hyperlinks).Add(range, "mailto:test@example.com", Type.Missing, "Opens mail client", "Send mail");
+            ReleaseComObject(hyperlink); hyperlink = null;
+            ReleaseComObject(hyperlinks); hyperlinks = null;
+            ReleaseComObject(range); range = null;
+
+            // Rows 6-8: plain data (no hyperlink)
+            SetExcelCellValue(worksheet, 6, 1, "Normal text");
+            SetExcelCellValue(worksheet, 7, 1, "No link here");
+            SetExcelCellValue(worksheet, 8, 1, "Anchor target");  // A4's in-workbook link targets C8
+            SetExcelCellValue(worksheet, 8, 3, "Target cell");
+
+            AutoFitExcelColumns(worksheet, "A:C");
+
+            ((dynamic)workbook).SaveAs(outputPath, 51 /* xlOpenXmlWorkbook */,
+                Type.Missing, Type.Missing, false, false, 1 /* xlNoChange */,
+                Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+        }
+        finally
+        {
+            ReleaseComObject(hyperlink);
+            ReleaseComObject(hyperlinks);
+            ReleaseComObject(range);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    /// <summary>
+    /// formcontrols_002: button, checkbox, option button, spinner, scrollbar, dropdown (legacy form controls).
+    /// Any COM control kind that fails is skipped with a warning — not all Excel installations support all kinds.
+    /// </summary>
+    private static void GenerateViewfeatFixture_FormControls(dynamic workbooks, string outputPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        object? workbook = null;
+        object? worksheet = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            try { ((dynamic)worksheet).Name = "FormControls"; } catch { /* best effort */ }
+
+            SetExcelCellValue(worksheet, 1, 1, "Form Controls Baseline");
+            SetExcelCellValue(worksheet, 2, 1, "Button:");
+            SetExcelCellValue(worksheet, 4, 1, "CheckBox:");
+            SetExcelCellValue(worksheet, 6, 1, "OptionButton:");
+            SetExcelCellValue(worksheet, 8, 1, "Spinner:");
+            SetExcelCellValue(worksheet, 10, 1, "ScrollBar:");
+            SetExcelCellValue(worksheet, 12, 1, "DropDown:");
+
+            // Button (row 2, col B area: left=80, top=30, w=120, h=24 in points)
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).Buttons,
+                80f, 30f, 120f, 24f,
+                btn => { try { ((dynamic)btn).Characters().Text = "Click Me"; } catch { /* best effort */ } },
+                "Buttons");
+
+            // CheckBox (row 4)
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).CheckBoxes,
+                80f, 75f, 120f, 18f,
+                chk =>
+                {
+                    try { ((dynamic)chk).Characters().Text = "Option A"; } catch { /* best effort */ }
+                    try { ((dynamic)chk).Value = 1; } catch { /* best effort */ }
+                },
+                "CheckBoxes");
+
+            // OptionButton (row 6)
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).OptionButtons,
+                80f, 115f, 120f, 18f,
+                opt =>
+                {
+                    try { ((dynamic)opt).Characters().Text = "Choice 1"; } catch { /* best effort */ }
+                    try { ((dynamic)opt).Value = 1; } catch { /* best effort */ }
+                },
+                "OptionButtons");
+
+            // Spinner (row 8)
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).Spinners,
+                80f, 155f, 40f, 28f,
+                sp =>
+                {
+                    try { ((dynamic)sp).Min = 0; } catch { /* best effort */ }
+                    try { ((dynamic)sp).Max = 100; } catch { /* best effort */ }
+                    try { ((dynamic)sp).Value = 42; } catch { /* best effort */ }
+                },
+                "Spinners");
+
+            // ScrollBar (row 10)
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).ScrollBars,
+                80f, 195f, 150f, 18f,
+                sb =>
+                {
+                    try { ((dynamic)sb).Min = 0; } catch { /* best effort */ }
+                    try { ((dynamic)sb).Max = 100; } catch { /* best effort */ }
+                    try { ((dynamic)sb).Value = 25; } catch { /* best effort */ }
+                },
+                "ScrollBars");
+
+            // DropDown (row 12): add source data first, then the control
+            SetExcelCellValue(worksheet, 14, 4, "Alpha");
+            SetExcelCellValue(worksheet, 15, 4, "Beta");
+            SetExcelCellValue(worksheet, 16, 4, "Gamma");
+            TryAddViewfeatFormControl(
+                () => ((dynamic)worksheet).DropDowns,
+                80f, 235f, 120f, 18f,
+                dd =>
+                {
+                    try { ((dynamic)dd).ListFillRange = "D14:D16"; } catch { /* best effort */ }
+                    try { ((dynamic)dd).Value = 2; } catch { /* best effort */ } // selects "Beta"
+                },
+                "DropDowns");
+
+            // Spacer cell so usedrange covers the control area
+            SetExcelCellValue(worksheet, 18, 6, " ");
+
+            ((dynamic)workbook).SaveAs(outputPath, 51 /* xlOpenXmlWorkbook */,
+                Type.Missing, Type.Missing, false, false, 1 /* xlNoChange */,
+                Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    /// <summary>
+    /// Try adding a legacy form control via the worksheet's named collection property (e.g. Buttons, CheckBoxes).
+    /// Skips silently if the control kind is unavailable on this Excel installation.
+    /// <paramref name="getCollection"/> should return e.g. <c>((dynamic)ws).Buttons</c>.
+    /// </summary>
+    private static void TryAddViewfeatFormControl(
+        Func<object?> getCollection,
+        float left, float top, float width, float height,
+        Action<dynamic> configure,
+        string label)
+    {
+        object? collection = null;
+        object? control = null;
+        try
+        {
+            collection = getCollection();
+            if (collection is null)
+            {
+                Console.WriteLine($"  [WARN] FormControl {label} collection is null, skipped.");
+                return;
+            }
+            control = ((dynamic)collection).Add(left, top, width, height);
+            configure((dynamic)control);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  [WARN] FormControl {label} skipped: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            ReleaseComObject(control);
+            ReleaseComObject(collection);
+        }
+    }
+
+    /// <summary>
+    /// grouping_003: group rows 3:6 and cols C:E (expanded), showing gutter bars and level buttons.
+    /// </summary>
+    private static void GenerateViewfeatFixture_Grouping(dynamic workbooks, string outputPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+
+        object? workbook = null;
+        object? worksheet = null;
+        object? rowRange = null;
+        object? colRange = null;
+        try
+        {
+            workbook = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            try { ((dynamic)worksheet).Name = "Grouping"; } catch { /* best effort */ }
+
+            // Header row
+            SetExcelCellValue(worksheet, 1, 1, "Section");
+            SetExcelCellValue(worksheet, 1, 2, "ColA");
+            SetExcelCellValue(worksheet, 1, 3, "ColB (grouped)");
+            SetExcelCellValue(worksheet, 1, 4, "ColC (grouped)");
+            SetExcelCellValue(worksheet, 1, 5, "ColD (grouped)");
+            SetExcelCellValue(worksheet, 1, 6, "ColE");
+
+            // Data rows
+            for (var r = 2; r <= 8; r++)
+            {
+                SetExcelCellValue(worksheet, r, 1, $"Row{r}");
+                for (var c = 2; c <= 6; c++)
+                    SetExcelCellValue(worksheet, r, c, (r - 1) * 10 + c);
+            }
+
+            // Group rows 3:6
+            rowRange = ((dynamic)worksheet).Rows("3:6");
+            ((dynamic)rowRange).Group();
+            ReleaseComObject(rowRange); rowRange = null;
+
+            // Group cols C:E (columns 3-5)
+            colRange = ((dynamic)worksheet).Columns("C:E");
+            ((dynamic)colRange).Group();
+            ReleaseComObject(colRange); colRange = null;
+
+            AutoFitExcelColumns(worksheet, "A:F");
+
+            ((dynamic)workbook).SaveAs(outputPath, 51 /* xlOpenXmlWorkbook */,
+                Type.Missing, Type.Missing, false, false, 1 /* xlNoChange */,
+                Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+        }
+        finally
+        {
+            ReleaseComObject(rowRange);
+            ReleaseComObject(colRange);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);

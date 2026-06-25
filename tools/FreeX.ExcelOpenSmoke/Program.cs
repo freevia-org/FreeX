@@ -412,6 +412,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelViewfeatCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelViewfeatCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-viewfeat")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored view-feature baseline corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))
