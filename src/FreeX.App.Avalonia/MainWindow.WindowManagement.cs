@@ -174,6 +174,9 @@ public sealed partial class MainWindow : Window
         // otherwise the closed window (and its whole WorkbookSession/document graph) leaks for the
         // rest of the session.
         HiddenWindows.Remove(this);
+        // If this window was part of a side-by-side pair, clear the pair so the partner window
+        // is not left broadcasting to a closed window.
+        CleanUpSideBySideOnClose();
         base.OnClosed(e);
     }
 

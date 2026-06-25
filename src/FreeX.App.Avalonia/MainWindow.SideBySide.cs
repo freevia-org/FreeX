@@ -1,0 +1,260 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Free.Shared.Ribbon;
+using Free.Shared.Shell;
+using FreeX.App.Services;
+
+namespace FreeX.App.Avalonia;
+
+// Avalonia (Linux/macOS) implementation of View ▸ Window ▸ View Side by Side + Synchronous Scrolling.
+//
+// Design mirrors the WPF host's WorkbookWindowRegistry approach, but without that registry (which is a
+// WPF-only DI singleton that depends on IWorkbookWindow/Rect/SystemParameters).  Instead we keep a
+// lightweight static state machine directly in the Avalonia shell:
+//
+//   _sideBySidePrimary   — the window that activated Side by Side (or null when inactive)
+//   _sideBySidePartner   — the other window in the pair (or null when inactive)
+//   _synchronousScroll   — true when scroll sync is on (only meaningful while a pair is active)
+//   _suppressScrollBroadcast — re-entrancy guard: prevents the receiving window from echoing back
+//
+// Scroll sync is hooked into the two places that change the viewport origin in the Avalonia shell:
+//   1. WorksheetScrollBar_ValueChanged (scrollbar drag / click)
+//   2. SheetScrollViewer_PointerWheelChanged (mouse-wheel pan)
+//
+// Both paths call RefreshShell() which triggers _refreshRibbonToggleStates. We broadcast via
+// BroadcastScrollOffsetToSideBySidePartner() which is called from the two scroll handlers
+// after they update the session viewport.  The broadcast is suppressed when the partner is
+// applying an incoming scroll position to avoid infinite feedback loops.
+//
+// Window positioning uses SideBySideLayoutPlanner (Free.Shared.Shell) — the same WPF-free geometry
+// helper the WPF host uses — so the geometry behaviour is identical on all platforms.
+
+public sealed partial class MainWindow : Window
+{
+    // ── Static side-by-side pair state ────────────────────────────────────────
+    // Static so that both windows in a pair can observe each other's state.
+    // (The Avalonia shell does not have a shared DI registry like the WPF host; the pairing is
+    // stored as object references directly into the two MainWindow instances.)
+    private static MainWindow? _sideBySidePrimary;
+    private static MainWindow? _sideBySidePartner;
+    private static bool _synchronousScroll;
+
+    // Per-instance guard: this window is currently applying an incoming scroll offset and must
+    // not echo it back to the partner.
+    private bool _suppressScrollBroadcast;
+
+    // ── State queries ─────────────────────────────────────────────────────────
+
+    private static bool IsSideBySideActive =>
+        _sideBySidePrimary is not null && _sideBySidePartner is not null;
+
+    private static bool IsSynchronousScrollActive =>
+        IsSideBySideActive && _synchronousScroll;
+
+    private bool IsInSideBySidePair =>
+        IsSideBySideActive &&
+        (ReferenceEquals(this, _sideBySidePrimary) || ReferenceEquals(this, _sideBySidePartner));
+
+    // ── View Side by Side toggle ──────────────────────────────────────────────
+
+    // Command handler for "View Side by Side"
+    private void ToggleViewSideBySide()
+    {
+        if (IsSideBySideActive)
+        {
+            // Toggle off: clear the pair (leave windows where they are, matching WPF).
+            DisableSideBySide();
+        }
+        else
+        {
+            // Toggle on: find another visible window to pair with.
+            var partner = FindSideBySidePartner();
+            if (partner is null)
+            {
+                // No second window available: show the same message the WPF host shows.
+                RefreshShell(UiText.Get("MainWindowMessage_SideBySideNeedsSecondWindow"));
+                return;
+            }
+
+            EnableSideBySide(partner);
+        }
+
+        // Refresh the ribbon toggle state in both windows of the (former) pair.
+        RefreshSideBySideRibbonState();
+    }
+
+    private void EnableSideBySide(MainWindow partner)
+    {
+        var workArea = GetPrimaryWorkArea();
+        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workArea.Width, workArea.Height);
+
+        _sideBySidePrimary = this;
+        _sideBySidePartner = partner;
+
+        // Restore Normal state and position both windows.
+        TileThisWindowToWorkArea(workArea, primaryBounds);
+        partner.TileThisWindowToWorkArea(workArea, partnerBounds);
+    }
+
+    private static void DisableSideBySide()
+    {
+        _sideBySidePrimary = null;
+        _sideBySidePartner = null;
+        _synchronousScroll = false;
+    }
+
+    // ── Synchronous Scrolling toggle ──────────────────────────────────────────
+
+    // Command handler for "Synchronous Scrolling"
+    private void ToggleSynchronousScrolling()
+    {
+        if (!IsSideBySideActive)
+            return; // Guard: sync scrolling requires an active side-by-side pair.
+
+        _synchronousScroll = !_synchronousScroll;
+        RefreshSideBySideRibbonState();
+    }
+
+    // ── Scroll broadcasting ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called after every scroll operation in this window.  When sync scrolling is active and this
+    /// window is one half of the current pair, pushes the current scroll position to the partner.
+    /// The partner sets <see cref="_suppressScrollBroadcast"/> before applying it so it cannot loop.
+    /// </summary>
+    internal void BroadcastScrollOffsetToSideBySidePartner()
+    {
+        if (!IsSynchronousScrollActive || _suppressScrollBroadcast)
+            return;
+
+        var partner = SideBySidePartnerOf(this);
+        if (partner is null)
+            return;
+
+        var row = _verticalWorksheetScrollBar.Value;
+        var col = _horizontalWorksheetScrollBar.Value;
+        partner.ApplySynchronizedScrollOffset(row, col);
+    }
+
+    private void ApplySynchronizedScrollOffset(double row, double col)
+    {
+        _suppressScrollBroadcast = true;
+        try
+        {
+            // Clamp to the partner's own scroll range so differing content sizes never throw.
+            var clampedRow = Math.Clamp(row, _verticalWorksheetScrollBar.Minimum, _verticalWorksheetScrollBar.Maximum);
+            var clampedCol = Math.Clamp(col, _horizontalWorksheetScrollBar.Minimum, _horizontalWorksheetScrollBar.Maximum);
+
+            // Only update if there is actually a meaningful change (avoids a no-op RefreshShell round-trip).
+            var rowChanged = Math.Abs(_verticalWorksheetScrollBar.Value - clampedRow) > 0.001;
+            var colChanged = Math.Abs(_horizontalWorksheetScrollBar.Value - clampedCol) > 0.001;
+            if (!rowChanged && !colChanged)
+                return;
+
+            // Drive the session viewport directly, mirroring WorksheetScrollBar_ValueChanged.
+            var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
+                _session.ActiveSheet,
+                clampedRow,
+                clampedCol);
+            if (_session.SetViewportOrigin(topRow, leftCol))
+                RefreshShell("Ready");
+        }
+        finally
+        {
+            _suppressScrollBroadcast = false;
+        }
+    }
+
+    // ── Ribbon toggle-state helpers ───────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the ribbon state for "View Side by Side".
+    /// Enabled when a pair is active OR when a second visible window exists.
+    /// Checked when a pair is active.
+    /// </summary>
+    private RibbonCommandState GetSideBySideRibbonState()
+    {
+        var active = IsSideBySideActive;
+        var canActivate = active || VisibleWorkbookWindowCount() > 1;
+        return new RibbonCommandState(IsEnabled: canActivate, IsChecked: active);
+    }
+
+    /// <summary>
+    /// Returns the ribbon state for "Synchronous Scrolling".
+    /// Enabled only when Side by Side is active. Checked when sync scrolling is on.
+    /// </summary>
+    private RibbonCommandState GetSynchronousScrollingRibbonState() =>
+        new(IsEnabled: IsSideBySideActive, IsChecked: IsSynchronousScrollActive);
+
+    // ── Window cleanup ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Call from OnClosed (via the existing WindowManagement OnClosed override) to ensure
+    /// that if this window is part of a side-by-side pair the pair is cleared, so the partner
+    /// is not left trying to broadcast to a closed window.
+    /// </summary>
+    private void CleanUpSideBySideOnClose()
+    {
+        if (IsInSideBySidePair)
+        {
+            var wasPartner = SideBySidePartnerOf(this);
+            DisableSideBySide();
+            // Notify the remaining window to refresh its ribbon state.
+            wasPartner?._refreshRibbonToggleStates?.Invoke();
+        }
+    }
+
+    // ── Private geometry / utility helpers ────────────────────────────────────
+
+    /// <summary>
+    /// Finds the best window to pair with for Side by Side: the first visible MainWindow
+    /// that is not this window.
+    /// </summary>
+    private MainWindow? FindSideBySidePartner()
+    {
+        foreach (var w in VisibleMainWindows())
+        {
+            if (!ReferenceEquals(w, this))
+                return w;
+        }
+        return null;
+    }
+
+    private static MainWindow? SideBySidePartnerOf(MainWindow window)
+    {
+        if (!IsSideBySideActive)
+            return null;
+        if (ReferenceEquals(window, _sideBySidePrimary))
+            return _sideBySidePartner;
+        if (ReferenceEquals(window, _sideBySidePartner))
+            return _sideBySidePrimary;
+        return null;
+    }
+
+    /// <summary>Positions this window using work-area-relative SideBySideLayoutPlanner bounds.</summary>
+    private void TileThisWindowToWorkArea(PixelRect workArea, ShellRect bounds)
+    {
+        WindowState = WindowState.Normal;
+        Position = new PixelPoint(workArea.X + (int)bounds.X, workArea.Y + (int)bounds.Y);
+        Width = Math.Max(MinWidth, bounds.Width);
+        Height = Math.Max(MinHeight, bounds.Height);
+    }
+
+    private IReadOnlyList<MainWindow> VisibleMainWindows() =>
+        (DesktopLifetime?.Windows ?? Array.Empty<Window>())
+            .OfType<MainWindow>()
+            .Where(static w => w.IsVisible)
+            .ToList();
+
+    private int VisibleWorkbookWindowCount() =>
+        (int)(DesktopLifetime?.Windows.Count(static w => w.IsVisible) ?? 1);
+
+    private void RefreshSideBySideRibbonState()
+    {
+        // Trigger a ribbon-toggle-state refresh in this window so the ribbon buttons update.
+        _refreshRibbonToggleStates?.Invoke();
+        // Also refresh the partner window's ribbon state if a pair is still active.
+        SideBySidePartnerOf(this)?._refreshRibbonToggleStates?.Invoke();
+    }
+}

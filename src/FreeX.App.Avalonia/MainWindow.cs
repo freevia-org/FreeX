@@ -891,6 +891,9 @@ public sealed partial class MainWindow : Window
                     ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
                     ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
                     ["view.hide"] = HideActiveWindow,
+                    // View ▸ Window ▸ Side by Side + Synchronous Scrolling.
+                    ["View Side by Side"] = ToggleViewSideBySide,
+                    ["Synchronous Scrolling"] = ToggleSynchronousScrolling,
                     // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
                     ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
                     ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
@@ -1349,6 +1352,9 @@ public sealed partial class MainWindow : Window
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
                     ["pictureFormat.crop"] = () => new RibbonCommandState(IsEnabled: HasSelectedPictureForRibbonCommand()),
+                    // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
+                    ["View Side by Side"] = GetSideBySideRibbonState,
+                    ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
                 },
             };
 
@@ -18994,7 +19000,10 @@ public sealed partial class MainWindow : Window
             return;
 
         if (_session.PanViewport(rowDelta * 3, colDelta * 3))
+        {
             RefreshShell("Ready");
+            BroadcastScrollOffsetToSideBySidePartner();
+        }
 
         e.Handled = true;
     }
@@ -19018,7 +19027,10 @@ public sealed partial class MainWindow : Window
             _verticalWorksheetScrollBar.Value,
             _horizontalWorksheetScrollBar.Value);
         if (_session.SetViewportOrigin(topRow, leftCol))
+        {
             RefreshShell("Ready");
+            BroadcastScrollOffsetToSideBySidePartner();
+        }
     }
 
     private async Task OpenWorkbookAsync()
