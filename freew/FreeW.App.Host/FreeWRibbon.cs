@@ -836,6 +836,14 @@ internal static class FreeWRibbon
                     g.Medium("freew.object-group",   "Group",   RibbonCommandIconKind.Generic);
                     g.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Generic);
                 });
+                // ── Picture Styles gallery group ──────────────────────────────────────────────────────────
+                // Gallery injection (MainWindow.InjectGallery) keys on group id "picture-styles".
+                // Each style preset command sets bundled border+effect fields.
+                tab.Group("picture-styles", "Picture Styles", "Y", 98, g =>
+                {
+                    foreach (var preset in PictureStyleCatalog.Catalog)
+                        g.Medium($"freew.image-style-{preset.Id}", preset.Name, RibbonCommandIconKind.Border);
+                });
                 tab.Group("picture-adjust", "Adjust", "J", 95, g =>
                 {
                     g.Medium("freew.image-corrections", "Corrections", RibbonCommandIconKind.Effects, menu: m =>
@@ -854,6 +862,16 @@ internal static class FreeWRibbon
                         m.Item("freew.image-saturation-50",       "Saturation: 50%",              "H");
                         m.Item("freew.image-saturation-200",      "Saturation: 200%",             "J");
                         m.Item("freew.image-color-dialog",        "Color…",                       "C");
+                        m.Separator();
+                        m.Item("freew.image-recolor-grayscale",   "Recolor: Grayscale",           "1");
+                        m.Item("freew.image-recolor-sepia",       "Recolor: Sepia",               "2");
+                        m.Item("freew.image-recolor-washout",     "Recolor: Washout",             "3");
+                        m.Item("freew.image-recolor-blackwhite",  "Recolor: Black and White",     "4");
+                        m.Item("freew.image-recolor-none",        "Recolor: No Recolor",          "N");
+                        m.Separator();
+                        m.Item("freew.image-colortemp-warm",      "Color Tone: Warm (3000K)",     "W");
+                        m.Item("freew.image-colortemp-cool",      "Color Tone: Cool (8000K)",     "L");
+                        m.Item("freew.image-colortemp-neutral",   "Color Tone: Neutral",          "T");
                     });
                     g.Medium("freew.image-transparency", "Transparency", RibbonCommandIconKind.View, menu: m =>
                     {
@@ -861,6 +879,41 @@ internal static class FreeWRibbon
                         m.Item("freew.image-transparency-50",     "Transparency: 50%",    "B");
                         m.Item("freew.image-transparency-75",     "Transparency: 75%",    "C");
                         m.Item("freew.image-transparency-dialog", "Transparency…",        "D");
+                    });
+                    // Picture Effects sub-menus: Shadow, Reflection, Glow, Soft Edges, Bevel.
+                    g.Medium("freew.image-effects", "Picture Effects", RibbonCommandIconKind.Effects, menu: m =>
+                    {
+                        m.Item("freew.image-shadow-none",    "Shadow: No Shadow",              "N");
+                        m.Item("freew.image-shadow-1",       "Shadow: Offset Diagonal",        "1");
+                        m.Item("freew.image-shadow-2",       "Shadow: Offset Diagonal Medium", "2");
+                        m.Item("freew.image-shadow-3",       "Shadow: Perspective",            "3");
+                        m.Item("freew.image-shadow-4",       "Shadow: Offset Bottom",          "4");
+                        m.Item("freew.image-shadow-5",       "Shadow: Large",                  "5");
+                        m.Separator();
+                        m.Item("freew.image-reflection-none","Reflection: No Reflection",      "R");
+                        m.Item("freew.image-reflection-1",   "Reflection: Tight, Touching",    "A");
+                        m.Item("freew.image-reflection-2",   "Reflection: Tight, 4pt",         "B");
+                        m.Item("freew.image-reflection-3",   "Reflection: Tight, 8pt",         "C");
+                        m.Item("freew.image-reflection-4",   "Reflection: Half, Touching",     "D");
+                        m.Item("freew.image-reflection-5",   "Reflection: Half, 4pt",          "E");
+                        m.Separator();
+                        m.Item("freew.image-glow-none",      "Glow: No Glow",                  "G");
+                        m.Item("freew.image-glow-5",         "Glow: 5 pt",                     "H");
+                        m.Item("freew.image-glow-8",         "Glow: 8 pt",                     "I");
+                        m.Item("freew.image-glow-11",        "Glow: 11 pt",                    "J");
+                        m.Item("freew.image-glow-18",        "Glow: 18 pt",                    "K");
+                        m.Separator();
+                        m.Item("freew.image-softedge-none",  "Soft Edges: None",               "S");
+                        m.Item("freew.image-softedge-1",     "Soft Edges: 1 pt",               "T");
+                        m.Item("freew.image-softedge-2pt5",  "Soft Edges: 2.5 pt",             "U");
+                        m.Item("freew.image-softedge-5",     "Soft Edges: 5 pt",               "V");
+                        m.Item("freew.image-softedge-10",    "Soft Edges: 10 pt",              "X");
+                        m.Separator();
+                        m.Item("freew.image-bevel-none",     "Bevel: No Bevel",                "O");
+                        m.Item("freew.image-bevel-1",        "Bevel: Circle",                  "P");
+                        m.Item("freew.image-bevel-2",        "Bevel: Relaxed Inset",           "Q");
+                        m.Item("freew.image-bevel-3",        "Bevel: Cross",                   "F");
+                        m.Item("freew.image-bevel-4",        "Bevel: Cool Slant",              "M");
                     });
                     g.Medium("freew.image-crop", "Crop", RibbonCommandIconKind.Scale);
                     g.Medium("freew.image-reset", "Reset Picture", RibbonCommandIconKind.Refresh);

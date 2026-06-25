@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+
 namespace FreeW.Core.Model;
 
 /// <summary>
@@ -57,6 +60,25 @@ public enum ImageFormat
     Tiff,
     Emf,
     Wmf
+}
+
+/// <summary>
+/// Recolor mode applied non-destructively to a picture. <see cref="None"/> means the original colour is
+/// used. Each mode is rendered at display time via the ImageAdjustHelper pixel pipeline and round-trips
+/// through the matching DrawingML element on <c>a:blip</c>.
+/// </summary>
+public enum ImageRecolorMode
+{
+    /// <summary>No recolor — original colours.</summary>
+    None,
+    /// <summary>Greyscale desaturation (a:grayscl).</summary>
+    Grayscale,
+    /// <summary>Sepia warm-tone duotone effect (a:duotone with brown/white tones).</summary>
+    Sepia,
+    /// <summary>Washout: very bright, low-contrast, semi-transparent (a:lum + a:alphaModFix).</summary>
+    Washout,
+    /// <summary>Black and white: greyscale with maximum contrast (a:grayscl + a:lum @contrast).</summary>
+    BlackWhite
 }
 
 /// <summary>
@@ -331,6 +353,156 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// <summary>True when any pixel adjustment deviates from the neutral defaults.</summary>
     public bool HasAdjustments =>
         BrightnessPct != 0 || ContrastPct != 0 || SaturationPct != 100 || TransparencyPct != 0;
+
+    // ── Recolor ───────────────────────────────────────────────────────────────────────────────────────
+    // Picture Format > Color > Recolor presets and Color Tone (temperature).
+    // IO paths:
+    //   RecolorMode Grayscale  → a:blip child a:grayscl (empty element)
+    //   RecolorMode Sepia      → a:blip child a:duotone (brown+white fixed tones) — FreeW extension
+    //   RecolorMode Washout    → a:blip child a:alphaModFix @amt 50000 + a:lum @bright 40000
+    //                           (half-transparent + bright, matches Word washout preset)
+    //   RecolorMode BlackWhite → a:blip child a:grayscl + a:lum @contrast 100000
+    //   ColorTemperature       → a:blip child a:clrChange (identity map with a warm/cool overlay tint)
+    //                           expressed as w14:colorTemperature in w14 extension block when present,
+    //                           or as a FreeW custom attribute on a:blip otherwise.
+
+    /// <summary>
+    /// Recolor mode applied to the image. <see cref="ImageRecolorMode.None"/> (default) means no recolor.
+    /// Round-trips as <c>a:grayscl</c>, <c>a:duotone</c>, or a combination of existing blip children.
+    /// Non-destructive: <see cref="Bytes"/> is never modified.
+    /// </summary>
+    public ImageRecolorMode RecolorMode { get; set; }
+
+    /// <summary>
+    /// Color temperature offset for warming/cooling the image: -100 (cool/blue) to +100 (warm/orange).
+    /// 0 = neutral (no temperature shift). Serialised as a FreeW extension attribute on <c>a:blip</c>
+    /// (<c>freew:colorTemp</c> in the FreeW extension namespace) to avoid conflicting with standard OOXML.
+    /// Non-destructive: applied at render time via the existing pixel-pipeline in ImageAdjustHelper.
+    /// </summary>
+    public double ColorTemperature { get; set; }
+
+    /// <summary>True when any recolor or temperature adjustment is active.</summary>
+    public bool HasRecolor => RecolorMode != ImageRecolorMode.None || ColorTemperature != 0;
+
+    // ── Picture Effects (a:effectLst) ─────────────────────────────────────────────────────────────────
+    // Picture Format > Picture Effects group. Values are non-destructive — Bytes is always the original;
+    // effects are applied at render time and round-tripped through DOCX as a:effectLst children.
+    //
+    // IO paths (see DocxWriter/DocxReader):
+    //   Shadow      → a:effectLst/a:outerShdw (blurRad, dist, dir, color a:srgbClr)
+    //   Glow        → a:effectLst/a:glow (rad, color a:srgbClr with alpha)
+    //   Reflection  → a:effectLst/a:reflection (blurRad, stA/stPos/endA/endPos, dist)
+    //   SoftEdge    → a:effectLst/a:softEdge (rad)
+    //   Bevel       → a:effectLst/a:innerShdw (approximation; bevel requires sp3d which is complex)
+
+    /// <summary>
+    /// Shadow effect: 0 = no shadow, 1..5 = outer-shadow presets (increasing distance/blur).
+    /// Round-trips as <c>a:effectLst/a:outerShdw</c>.
+    /// </summary>
+    public int ShadowPreset { get; set; }
+
+    /// <summary>
+    /// Glow effect size in points (0 = no glow). Color is stored in <see cref="GlowColorHex"/>.
+    /// Round-trips as <c>a:effectLst/a:glow</c>.
+    /// </summary>
+    public double GlowSizePt { get; set; }
+
+    /// <summary>
+    /// Color for the glow effect as a 6-digit RGB hex string (e.g. "4472C4"), or null to use a default
+    /// blue accent. Only meaningful when <see cref="GlowSizePt"/> &gt; 0.
+    /// </summary>
+    public string? GlowColorHex { get; set; }
+
+    /// <summary>
+    /// Reflection preset: 0 = no reflection, 1..5 = presets (tight half / full, 4pt/8pt/half-transparent).
+    /// Round-trips as <c>a:effectLst/a:reflection</c>.
+    /// </summary>
+    public int ReflectionPreset { get; set; }
+
+    /// <summary>
+    /// Soft-edge radius in points (0 = no soft edge). Round-trips as <c>a:effectLst/a:softEdge</c>.
+    /// </summary>
+    public double SoftEdgePt { get; set; }
+
+    /// <summary>
+    /// Bevel preset: 0 = none, 1 = circle bevel, 2 = relaxed inset, 3 = cross, 4 = cool slant.
+    /// Approximated in WPF via an inner-shadow highlight; round-trips as <c>a:effectLst/a:innerShdw</c>
+    /// with a distinguishing @dir attribute.
+    /// </summary>
+    public int BevelPreset { get; set; }
+
+    /// <summary>True when any picture effect is active.</summary>
+    public bool HasEffects =>
+        ShadowPreset != 0 || GlowSizePt > 0 || ReflectionPreset != 0 || SoftEdgePt > 0 || BevelPreset != 0;
+
+    // ── Picture Style ─────────────────────────────────────────────────────────────────────────────────
+    // A Picture Style preset bundles border + effect settings. The integer is the preset id (0 = none).
+    // Applying a style just sets the individual model fields above, so it's purely a UI convenience;
+    // the IO round-trips through those individual fields without needing a separate "style" attribute.
+
+    /// <summary>
+    /// The last applied picture-style preset id (0 = none / custom). This is advisory only — the actual
+    /// styling is stored in <see cref="BorderColorHex"/>, <see cref="BorderWidthPt"/>,
+    /// <see cref="ShadowPreset"/>, etc. It is NOT persisted to DOCX (it's a UI state hint).
+    /// </summary>
+    public int PictureStylePreset { get; set; }
+}
+
+/// <summary>
+/// A named picture-style preset that bundles border + effect settings, matching Word's Picture Styles
+/// gallery (the 28 presets on the Picture Format contextual tab). Applying a preset calls
+/// <see cref="FreeW.Core.Model.InlineImage"/> property setters — it does not add a new persistence field;
+/// the individual fields carry the data through DOCX IO as before.
+/// </summary>
+public sealed record PictureStylePreset(
+    /// <summary>Stable id (1-based). Used as the command-id suffix: freew.image-style-{Id}.</summary>
+    int Id,
+    /// <summary>Gallery display name (shown as tooltip/label).</summary>
+    string Name,
+    /// <summary>Border colour hex (6-digit RGB), or null for no border.</summary>
+    string? BorderColorHex,
+    /// <summary>Border width in points. Ignored when BorderColorHex is null.</summary>
+    double BorderWidthPt,
+    /// <summary>Border dash style token (null/"solid"/dash/dot/etc).</summary>
+    string? BorderDash,
+    /// <summary>Shadow preset (0=none).</summary>
+    int ShadowPreset,
+    /// <summary>Reflection preset (0=none).</summary>
+    int ReflectionPreset,
+    /// <summary>Soft-edge radius in points (0=none).</summary>
+    double SoftEdgePt);
+
+/// <summary>
+/// Static catalog of the 12 Picture Style presets displayed in the Picture Styles gallery on the
+/// Picture Format ribbon tab. Each preset bundles a border + optional shadow/reflection/soft-edge.
+/// The gallery uses IDs 1–12 to match the <c>freew.image-style-{id}</c> command convention.
+/// </summary>
+public static class PictureStyleCatalog
+{
+    /// <summary>All built-in picture-style presets, in gallery display order.</summary>
+    public static readonly IReadOnlyList<PictureStylePreset> Catalog =
+    [
+        // ── Row 1: Simple borders ─────────────────────────────────────────────────────────────────────
+        new(1,  "Simple Frame, White",          "FFFFFF", 2.25, "solid",  0, 0, 0),
+        new(2,  "Simple Frame, Black",          "000000", 2.25, "solid",  0, 0, 0),
+        new(3,  "Thick Matte, Black",           "000000", 6.0,  "solid",  0, 0, 0),
+        new(4,  "Double Frame, Black",          "000000", 1.5,  "solid",  0, 0, 0),
+        // ── Row 2: Soft frames ───────────────────────────────────────────────────────────────────────
+        new(5,  "Soft Edge Rectangle",          null,     0,    null,     0, 0, 5.0),
+        new(6,  "Soft Edge Oval",               null,     0,    null,     0, 0, 10.0),
+        // ── Row 3: Shadow styles ─────────────────────────────────────────────────────────────────────
+        new(7,  "Drop Shadow Rectangle",        null,     0,    null,     1, 0, 0),
+        new(8,  "Drop Shadow White",            "FFFFFF", 2.25, "solid",  1, 0, 0),
+        new(9,  "Perspective Shadow",           null,     0,    null,     3, 0, 0),
+        // ── Row 4: Reflection styles ─────────────────────────────────────────────────────────────────
+        new(10, "Reflected Rounded Rectangle",  null,     0,    null,     0, 1, 0),
+        new(11, "Reflected Bevel, White",       "FFFFFF", 2.25, "solid",  0, 4, 0),
+        new(12, "Metal Rounded Rectangle",      "4472C4", 3.0,  "solid",  2, 0, 0),
+    ];
+
+    /// <summary>Find a preset by id, or null if not found.</summary>
+    public static PictureStylePreset? FindById(int id) =>
+        Catalog.FirstOrDefault(p => p.Id == id);
 }
 
 /// <summary>

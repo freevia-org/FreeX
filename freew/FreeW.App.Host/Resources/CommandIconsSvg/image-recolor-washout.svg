@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Recolor Washout">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="14" rx="1" fill="#e8f0ff" stroke="#aac0ff" stroke-width="1.5" opacity=".7"/>
+  <circle cx="11" cy="12" r="2" fill="#aac0ff"/>
+  <path d="M7.5 18l4-4 3 3 2.5-2.5 4 4.5" fill="none" stroke="#aac0ff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="16" y="27" font-size="5" text-anchor="middle" fill="#7090cc" font-family="sans-serif">Wash</text>
+</svg>

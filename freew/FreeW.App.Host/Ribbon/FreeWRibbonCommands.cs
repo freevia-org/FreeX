@@ -373,6 +373,54 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.image-crop",   new ImageCropCommand(editor));
         registry.Register("freew.image-reset",  new ImageResetCommand(editor));
         registry.Register("freew.image-border", new ImageBorderCommand(editor));
+        // Picture Format tab — Adjust > Color > Recolor presets.
+        registry.Register("freew.image-recolor-grayscale",  new ImageRecolorPresetCommand(editor, ImageRecolorMode.Grayscale));
+        registry.Register("freew.image-recolor-sepia",      new ImageRecolorPresetCommand(editor, ImageRecolorMode.Sepia));
+        registry.Register("freew.image-recolor-washout",    new ImageRecolorPresetCommand(editor, ImageRecolorMode.Washout));
+        registry.Register("freew.image-recolor-blackwhite", new ImageRecolorPresetCommand(editor, ImageRecolorMode.BlackWhite));
+        registry.Register("freew.image-recolor-none",       new ImageRecolorPresetCommand(editor, ImageRecolorMode.None));
+        // Picture Format tab — Adjust > Color > Color Tone presets.
+        registry.Register("freew.image-colortemp-warm",    new ImageColorTempCommand(editor, +60));
+        registry.Register("freew.image-colortemp-cool",    new ImageColorTempCommand(editor, -60));
+        registry.Register("freew.image-colortemp-neutral", new ImageColorTempCommand(editor, 0));
+        // Picture Format tab — Adjust > Picture Effects: Shadow presets.
+        registry.Register("freew.image-shadow-none", new ImageShadowPresetCommand(editor, 0));
+        registry.Register("freew.image-shadow-1",    new ImageShadowPresetCommand(editor, 1));
+        registry.Register("freew.image-shadow-2",    new ImageShadowPresetCommand(editor, 2));
+        registry.Register("freew.image-shadow-3",    new ImageShadowPresetCommand(editor, 3));
+        registry.Register("freew.image-shadow-4",    new ImageShadowPresetCommand(editor, 4));
+        registry.Register("freew.image-shadow-5",    new ImageShadowPresetCommand(editor, 5));
+        // Picture Format tab — Adjust > Picture Effects: Reflection presets.
+        registry.Register("freew.image-reflection-none", new ImageReflectionPresetCommand(editor, 0));
+        registry.Register("freew.image-reflection-1",    new ImageReflectionPresetCommand(editor, 1));
+        registry.Register("freew.image-reflection-2",    new ImageReflectionPresetCommand(editor, 2));
+        registry.Register("freew.image-reflection-3",    new ImageReflectionPresetCommand(editor, 3));
+        registry.Register("freew.image-reflection-4",    new ImageReflectionPresetCommand(editor, 4));
+        registry.Register("freew.image-reflection-5",    new ImageReflectionPresetCommand(editor, 5));
+        // Picture Format tab — Adjust > Picture Effects: Glow presets.
+        registry.Register("freew.image-glow-none", new ImageGlowPresetCommand(editor, 0));
+        registry.Register("freew.image-glow-5",    new ImageGlowPresetCommand(editor, 5));
+        registry.Register("freew.image-glow-8",    new ImageGlowPresetCommand(editor, 8));
+        registry.Register("freew.image-glow-11",   new ImageGlowPresetCommand(editor, 11));
+        registry.Register("freew.image-glow-18",   new ImageGlowPresetCommand(editor, 18));
+        // Picture Format tab — Adjust > Picture Effects: Soft Edges presets.
+        registry.Register("freew.image-softedge-none",  new ImageSoftEdgeCommand(editor, 0));
+        registry.Register("freew.image-softedge-1",     new ImageSoftEdgeCommand(editor, 1));
+        registry.Register("freew.image-softedge-2pt5",  new ImageSoftEdgeCommand(editor, 2.5));
+        registry.Register("freew.image-softedge-5",     new ImageSoftEdgeCommand(editor, 5));
+        registry.Register("freew.image-softedge-10",    new ImageSoftEdgeCommand(editor, 10));
+        // Picture Format tab — Adjust > Picture Effects: Bevel presets.
+        registry.Register("freew.image-bevel-none", new ImageBevelPresetCommand(editor, 0));
+        registry.Register("freew.image-bevel-1",    new ImageBevelPresetCommand(editor, 1));
+        registry.Register("freew.image-bevel-2",    new ImageBevelPresetCommand(editor, 2));
+        registry.Register("freew.image-bevel-3",    new ImageBevelPresetCommand(editor, 3));
+        registry.Register("freew.image-bevel-4",    new ImageBevelPresetCommand(editor, 4));
+        // Picture Format tab — Picture Styles gallery presets.
+        foreach (var preset in PictureStyleCatalog.Catalog)
+        {
+            var p = preset;
+            registry.Register($"freew.image-style-{p.Id}", new ImageStylePresetCommand(editor, p));
+        }
         // Picture Format tab — Arrange > Z-order (floating images only).
         registry.Register("freew.image-bring-to-front",  new ImageZOrderCommand(editor, ZOrderOperation.BringToFront));
         registry.Register("freew.image-send-to-back",    new ImageZOrderCommand(editor, ZOrderOperation.SendToBack));
@@ -3308,6 +3356,139 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.ChangeSelectedImageZOrder(operation);
+        }
+    }
+
+    // Picture Format > Color > Recolor preset: set the recolor mode (grayscale/sepia/washout/blackwhite/none).
+    private sealed class ImageRecolorPresetCommand(DocumentView editor, ImageRecolorMode mode) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Recolor");
+                return;
+            }
+            editor.SetSelectedImageRecolor(mode);
+        }
+    }
+
+    // Picture Format > Color > Color Tone preset: warm/cool/neutral temperature shift.
+    private sealed class ImageColorTempCommand(DocumentView editor, double temperaturePct) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color Tone");
+                return;
+            }
+            editor.SetSelectedImageRecolor(ImageRecolorMode.None, temperaturePct);
+        }
+    }
+
+    // Picture Format > Picture Effects > Shadow preset: set the shadow preset (0=none, 1-5=presets).
+    private sealed class ImageShadowPresetCommand(DocumentView editor, int preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Shadow");
+                return;
+            }
+            editor.SetSelectedImageEffect(preset, image.GlowSizePt, image.GlowColorHex,
+                image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset);
+        }
+    }
+
+    // Picture Format > Picture Effects > Reflection preset: set the reflection preset (0=none, 1-5=presets).
+    private sealed class ImageReflectionPresetCommand(DocumentView editor, int preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Reflection");
+                return;
+            }
+            editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                preset, image.SoftEdgePt, image.BevelPreset);
+        }
+    }
+
+    // Picture Format > Picture Effects > Glow preset: set the glow size in points (0=no glow).
+    private sealed class ImageGlowPresetCommand(DocumentView editor, double glowPt) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Glow");
+                return;
+            }
+            editor.SetSelectedImageEffect(image.ShadowPreset, glowPt, image.GlowColorHex,
+                image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset);
+        }
+    }
+
+    // Picture Format > Picture Effects > Soft Edges: set the soft-edge radius in points (0=none).
+    private sealed class ImageSoftEdgeCommand(DocumentView editor, double radiusPt) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Soft Edges");
+                return;
+            }
+            editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                image.ReflectionPreset, radiusPt, image.BevelPreset);
+        }
+    }
+
+    // Picture Format > Picture Effects > Bevel preset: set the bevel preset (0=none, 1-4=presets).
+    private sealed class ImageBevelPresetCommand(DocumentView editor, int preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var image = editor.SelectedImage();
+            if (image is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Bevel");
+                return;
+            }
+            editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
+                image.ReflectionPreset, image.SoftEdgePt, preset);
+        }
+    }
+
+    // Picture Format > Picture Styles: apply a bundled border + effect style preset.
+    private sealed class ImageStylePresetCommand(DocumentView editor, PictureStylePreset preset) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            if (editor.SelectedImage() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Styles");
+                return;
+            }
+            editor.ApplySelectedImageStyle(
+                preset.Id,
+                preset.BorderColorHex, preset.BorderWidthPt, preset.BorderDash,
+                preset.ShadowPreset, preset.ReflectionPreset, preset.SoftEdgePt);
         }
     }
 

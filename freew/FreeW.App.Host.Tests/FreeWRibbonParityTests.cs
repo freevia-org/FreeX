@@ -1298,7 +1298,7 @@ public sealed class FreeWRibbonParityTests
         picture.Context.Color.Should().Be(RibbonContextColor.Orange);
         picture.Groups.Select(group => group.Id)
             .Should()
-            .Equal("picture-arrange", "picture-adjust", "picture-size");
+            .Equal("picture-arrange", "picture-styles", "picture-adjust", "picture-size");
 
         CommandIds(picture.FindGroup("picture-arrange")!)
             .Should()
@@ -1318,6 +1318,13 @@ public sealed class FreeWRibbonParityTests
                 "freew.object-group",
                 "freew.object-ungroup");
 
+        // W24: Picture Styles gallery group.
+        CommandIds(picture.FindGroup("picture-styles")!)
+            .Should()
+            .ContainInOrder(
+                "freew.image-style-1",
+                "freew.image-style-12");
+
         CommandIds(picture.FindGroup("picture-adjust")!)
             .Should()
             .Equal(
@@ -1325,6 +1332,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-corrections",
                 "freew.image-color",
                 "freew.image-transparency",
+                // W24: Picture Effects menu.
+                "freew.image-effects",
                 "freew.image-crop",
                 "freew.image-reset",
                 "freew.image-border");
@@ -1361,10 +1370,16 @@ public sealed class FreeWRibbonParityTests
         {
             // Pure menu-opener dropdowns with no direct command action — they only open the sub-menu.
             if (commandId is "freew.image-wrap" or "freew.image-rotate"
-                or "freew.image-corrections" or "freew.image-color" or "freew.image-transparency")
+                or "freew.image-corrections" or "freew.image-color" or "freew.image-transparency"
+                or "freew.image-effects")
                 continue;
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from Picture Format");
         }
+
+        // W24: All Picture Style preset commands must be backed.
+        foreach (var preset in PictureStyleCatalog.Catalog)
+            registry.TryGet($"freew.image-style-{preset.Id}", out _)
+                .Should().BeTrue($"freew.image-style-{preset.Id} must be backed");
     }
 
     [StaFact]
