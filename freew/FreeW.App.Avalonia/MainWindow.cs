@@ -44,6 +44,7 @@ public sealed class MainWindow : Window
     private readonly ScaleTransform _zoom = new(1, 1);
     private readonly FileCommandWorkflow _fileWorkflow;
     private readonly AutosaveAdapter _autosave;
+    private readonly NavigationPane _navPane;
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
@@ -69,6 +70,7 @@ public sealed class MainWindow : Window
             promptSaveChanges: action => PromptSaveChangesSync(action),
             save: () => SaveAsync().GetAwaiter().GetResult());
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
+        _navPane = new NavigationPane(_editor);
 
         var root = new DockPanel();
 
@@ -98,10 +100,17 @@ public sealed class MainWindow : Window
             Padding = new Thickness(48, 24),
             Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = _editor },
         };
+        _navPane.ScrollerRef = _scroller;
+
+        // Nav pane docked to the left; the workspace fills the remaining space.
+        DockPanel.SetDock(_navPane, Dock.Left);
+        root.Children.Add(_navPane);
+
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
+        _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CellEditRequested += async req =>
         {
@@ -130,6 +139,22 @@ public sealed class MainWindow : Window
     public DocumentView Editor => _editor;
     public bool HasToolbar { get; private set; }
 
+    /// <summary>
+    /// Exposes the navigation pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal NavigationPane NavPane => _navPane;
+
+    /// <summary>
+    /// Show or hide the navigation pane and refresh its heading list when making it visible.
+    /// Wired to <c>freew.navigationpane</c> ribbon toggle.
+    /// </summary>
+    internal void ToggleNavigationPane()
+    {
+        _navPane.IsVisible = !_navPane.IsVisible;
+        if (_navPane.IsVisible)
+            _navPane.Refresh();
+    }
+
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
     {
         var path = startupArguments.FirstOrDefault(a => a.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) && File.Exists(a));
@@ -153,7 +178,8 @@ public sealed class MainWindow : Window
             Cut: () => _ = CutAsync(),
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
-            Backstage: () => _ = ShowBackstageAsync());
+            Backstage: () => _ = ShowBackstageAsync(),
+            ToggleNavigationPane: ToggleNavigationPane);
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(

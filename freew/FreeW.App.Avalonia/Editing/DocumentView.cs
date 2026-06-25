@@ -124,6 +124,26 @@ public sealed class DocumentView : Control
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
     public double CaretTop => TryGetCaretRect(out var rect) ? rect.Y : 0;
 
+    /// <summary>
+    /// Returns the Y coordinate (top edge) of the first placed character in <paramref name="blockIndex"/>,
+    /// in control coordinates. Returns -1 when the block is not found in the current layout (e.g. out of
+    /// range, or not yet laid out). Used by the navigation pane to scroll a heading into view.
+    /// </summary>
+    public double GetBlockTop(int blockIndex)
+    {
+        // Ensure at least one layout pass has happened (headless / not-yet-rendered).
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        foreach (var pc in _placed)
+        {
+            if (pc.Block == blockIndex)
+                return pc.Y;
+        }
+
+        return -1;
+    }
+
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
     public bool ReplaceNext(string query, string replacement)
     {
