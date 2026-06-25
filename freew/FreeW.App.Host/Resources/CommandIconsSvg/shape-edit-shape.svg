@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Edit Shape">
+  <rect width="32" height="32" fill="none"/>
+  <polygon points="2,10 16,2 30,10 30,22 16,30 2,22" fill="none" stroke="#3060c0" stroke-width="1.8"/>
+  <polygon points="18,20 22,21 21,25 19,23" fill="#333" stroke="#333" stroke-width="0.5"/>
+  <line x1="14" y1="14" x2="19" y2="20" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="13" y="12" width="3" height="3" fill="#555" transform="rotate(45 14.5 13.5)"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Blur">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="18" height="14" rx="1.5" fill="#dde8f0" stroke="#5090b0" stroke-width="1.5" opacity="0.5"/>
+  <rect x="7" y="8" width="16" height="12" rx="1" fill="#b8d0e8" opacity="0.6"/>
+  <circle cx="12" cy="13" r="3.5" fill="#8ab0d0" opacity="0.5"/>
+  <circle cx="12" cy="13" r="2" fill="#6090c0" opacity="0.7"/>
+  <path d="M7 24 Q10 22 13 24 Q16 26 19 24 Q22 22 25 24" fill="none" stroke="#5090b0" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M7 27 Q10 25 13 27 Q16 29 19 27 Q22 25 25 27" fill="none" stroke="#5090b0" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+</svg>

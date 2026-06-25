@@ -63,6 +63,47 @@ public enum ImageFormat
 }
 
 /// <summary>
+/// Artistic effect applied non-destructively to a picture, matching Word's Picture Format &gt; Adjust &gt;
+/// Artistic Effects gallery. <see cref="None"/> means no artistic effect. Each value is rendered at
+/// display time via the pixel pipeline in <c>ImageAdjustHelper.ApplyArtistic</c> and round-trips through
+/// DOCX as a <c>freew:artisticEffect</c> extension attribute on <c>a:blip</c> (the standard
+/// <c>a:extLst/a14:artisticEffect</c> element is also read when present, mapping to the nearest value).
+/// </summary>
+public enum ImageArtisticEffect
+{
+    /// <summary>No artistic effect — original image.</summary>
+    None,
+    /// <summary>Gaussian blur, matching Word's "Blur" artistic effect.</summary>
+    Blur,
+    /// <summary>Soft glow diffusion (smoothing + halo), matching Word's "Glow Diffused".</summary>
+    GlowDiffused,
+    /// <summary>Edge-detection glow with dark fill, matching Word's "Glow Edges".</summary>
+    GlowEdges,
+    /// <summary>Pencil sketch in greyscale, matching Word's "Pencil Grayscale".</summary>
+    PencilGrayscale,
+    /// <summary>Colour pencil sketch (edge-detect + saturation boost), matching Word's "Pencil Sketch".</summary>
+    PencilSketch,
+    /// <summary>Black-and-white line drawing (hard edge-detection), matching Word's "Line Drawing".</summary>
+    LineDrawing,
+    /// <summary>Paintbrush strokes (median-filter approximation), matching Word's "Paint Brush".</summary>
+    Paintbrush,
+    /// <summary>Broad paint strokes with saturation boost, matching Word's "Paint Strokes".</summary>
+    PaintStrokes,
+    /// <summary>High-contrast photocopy threshold, matching Word's "Photocopy".</summary>
+    Photocopy,
+    /// <summary>Colour posterisation (level quantise), matching Word's "Posterize".</summary>
+    Posterize,
+    /// <summary>Pastel-chalk smoothing (soften + desaturate), matching Word's "Pastels".</summary>
+    Pastels,
+    /// <summary>Watercolour look (smooth + gentle saturation boost), matching Word's "Watercolor Sponge".</summary>
+    Watercolor,
+    /// <summary>Film grain noise overlay, matching Word's "Film Grain".</summary>
+    FilmGrain,
+    /// <summary>Block-average mosaic (pixelate), matching Word's "Mosaic Bubbles".</summary>
+    Mosaic,
+}
+
+/// <summary>
 /// Recolor mode applied non-destructively to a picture. <see cref="None"/> means the original colour is
 /// used. Each mode is rendered at display time via the ImageAdjustHelper pixel pipeline and round-trips
 /// through the matching DrawingML element on <c>a:blip</c>.
@@ -434,6 +475,23 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// <summary>True when any picture effect is active.</summary>
     public bool HasEffects =>
         ShadowPreset != 0 || GlowSizePt > 0 || ReflectionPreset != 0 || SoftEdgePt > 0 || BevelPreset != 0;
+
+    // ── Artistic Effects (a14:artisticEffect / freew:artisticEffect) ─────────────────────────────────
+    // Picture Format > Adjust > Artistic Effects gallery. Non-destructive: applied at render time by
+    // ImageAdjustHelper.ApplyArtistic; Bytes is never modified. Round-trips via a FreeW extension
+    // attribute freew:artisticEffect on a:blip (integer id = (int)ArtisticEffect enum value). Standard
+    // a:extLst/a14:artisticEffect is read when present and mapped to the nearest enum member.
+
+    /// <summary>
+    /// Artistic filter to apply non-destructively. <see cref="ImageArtisticEffect.None"/> (default) means
+    /// no artistic effect. Applied at render time by the pixel pipeline; original <see cref="Bytes"/> are
+    /// always preserved.
+    /// Round-trips as a <c>freew:artisticEffect</c> extension attribute on <c>a:blip</c>.
+    /// </summary>
+    public ImageArtisticEffect ArtisticEffect { get; set; } = ImageArtisticEffect.None;
+
+    /// <summary>True when an artistic effect other than None is set.</summary>
+    public bool HasArtisticEffect => ArtisticEffect != ImageArtisticEffect.None;
 
     // ── Picture Style ─────────────────────────────────────────────────────────────────────────────────
     // A Picture Style preset bundles border + effect settings. The integer is the preset id (0 = none).

@@ -1340,6 +1340,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.image-transparency",
                 // W24: Picture Effects menu.
                 "freew.image-effects",
+                // W25: Artistic Effects menu.
+                "freew.image-artistic",
                 "freew.image-crop",
                 "freew.image-reset",
                 "freew.image-border");

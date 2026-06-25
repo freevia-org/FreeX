@@ -766,6 +766,12 @@ internal static class FreeWRibbon
                         m.Item("freew.shape-change-rounded", "Rounded Rectangle", "U");
                         m.Item("freew.shape-change-ellipse", "Oval", "O");
                     });
+                    // Edit Shape > Edit Points (W25): converts preset to freeform custom geometry.
+                    g.Medium("freew.shape-edit-shape", "Edit Shape", RibbonCommandIconKind.Generic, menu: m =>
+                    {
+                        m.Item("freew.shape-convert-freeform", "Convert to Freeform", "F");
+                        m.Item("freew.shape-edit-points",      "Edit Points",          "E");
+                    });
                 });
                 tab.Group("drawing-styles", "Shape Styles", "H", 100, g =>
                 {
@@ -986,6 +992,25 @@ internal static class FreeWRibbon
                         m.Item("freew.image-bevel-2",        "Bevel: Relaxed Inset",           "Q");
                         m.Item("freew.image-bevel-3",        "Bevel: Cross",                   "F");
                         m.Item("freew.image-bevel-4",        "Bevel: Cool Slant",              "M");
+                    });
+                    // Artistic Effects gallery (W25): named menu items, one per ImageArtisticEffect value.
+                    g.Medium("freew.image-artistic", "Artistic Effects", RibbonCommandIconKind.Effects, menu: m =>
+                    {
+                        m.Item("freew.image-artistic-none",          "No Artistic Effect",   "N");
+                        m.Item("freew.image-artistic-blur",          "Blur",                 "B");
+                        m.Item("freew.image-artistic-glow-diffused", "Glow Diffused",        "G");
+                        m.Item("freew.image-artistic-glow-edges",    "Glow Edges",           "E");
+                        m.Item("freew.image-artistic-pencil-gray",   "Pencil Grayscale",     "A");
+                        m.Item("freew.image-artistic-pencil-sketch", "Pencil Sketch",        "K");
+                        m.Item("freew.image-artistic-line-drawing",  "Line Drawing",         "L");
+                        m.Item("freew.image-artistic-paintbrush",    "Paint Brush",          "P");
+                        m.Item("freew.image-artistic-paint-strokes", "Paint Strokes",        "T");
+                        m.Item("freew.image-artistic-photocopy",     "Photocopy",            "H");
+                        m.Item("freew.image-artistic-posterize",     "Posterize",            "O");
+                        m.Item("freew.image-artistic-pastels",       "Pastels",              "S");
+                        m.Item("freew.image-artistic-watercolor",    "Watercolor Sponge",    "W");
+                        m.Item("freew.image-artistic-film-grain",    "Film Grain",           "F");
+                        m.Item("freew.image-artistic-mosaic",        "Mosaic Bubbles",       "M");
                     });
                     g.Medium("freew.image-crop", "Crop", RibbonCommandIconKind.Scale);
                     g.Medium("freew.image-reset", "Reset Picture", RibbonCommandIconKind.Refresh);

@@ -2625,6 +2625,12 @@ public static class DocxReader
             if (tempAttr is not null && long.TryParse(tempAttr.Value, out var tempVal))
                 image.ColorTemperature = tempVal / 1000.0;
 
+            // Artistic effect extension attribute: freew:artisticEffect = integer enum id.
+            var artisticAttr = blip.Attribute(FreeWExt + "artisticEffect");
+            if (artisticAttr is not null && int.TryParse(artisticAttr.Value, out var artisticId)
+                && Enum.IsDefined(typeof(ImageArtisticEffect), artisticId))
+                image.ArtisticEffect = (ImageArtisticEffect)artisticId;
+
             // Standard adjustments — only when no recolor mode already consumed lum/alphaModFix.
             if (image.RecolorMode == ImageRecolorMode.None)
             {
@@ -2937,10 +2943,48 @@ public static class DocxReader
 
         var spPr = wsp.Element(Wps + "spPr");
         var preset = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+        var custGeomEl = spPr?.Element(A + "custGeom");
         var hasTextBody = wsp.Element(Wps + "txbx")?.Element(W + "txbxContent") is not null;
         var kind = ShapeKindFromPreset(preset, hasTextBody);
 
         var shape = new Shape(kind, widthPt, heightPt);
+
+        // Custom geometry (a:custGeom): recover freeform polygon segments.
+        if (custGeomEl is not null)
+        {
+            var custGeo = new CustomGeometry();
+            var pathEl = custGeomEl.Descendants(A + "path").FirstOrDefault();
+            if (pathEl is not null)
+            {
+                if (long.TryParse(pathEl.Attribute("w")?.Value, out var cgW) && cgW > 0) custGeo.Width = cgW;
+                if (long.TryParse(pathEl.Attribute("h")?.Value, out var cgH) && cgH > 0) custGeo.Height = cgH;
+                foreach (var seg in pathEl.Elements())
+                {
+                    if (seg.Name == A + "moveTo")
+                    {
+                        var pt = seg.Element(A + "pt");
+                        if (pt is not null
+                            && long.TryParse(pt.Attribute("x")?.Value, out var mx)
+                            && long.TryParse(pt.Attribute("y")?.Value, out var my))
+                            custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, new CustomPoint(mx, my)));
+                    }
+                    else if (seg.Name == A + "lnTo")
+                    {
+                        var pt = seg.Element(A + "pt");
+                        if (pt is not null
+                            && long.TryParse(pt.Attribute("x")?.Value, out var lx)
+                            && long.TryParse(pt.Attribute("y")?.Value, out var ly))
+                            custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, new CustomPoint(lx, ly)));
+                    }
+                    else if (seg.Name == A + "close")
+                    {
+                        custGeo.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+                    }
+                }
+            }
+            if (custGeo.Segments.Count > 0)
+                shape.CustomGeometry = custGeo;
+        }
 
         // Fill: extended fills (gradient / pattern / no-fill) take priority over solid.
         var solidFillEl = spPr?.Element(A + "solidFill");

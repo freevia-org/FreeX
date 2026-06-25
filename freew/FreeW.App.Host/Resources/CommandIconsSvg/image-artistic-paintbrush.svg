@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Paintbrush">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="1" y="1" width="30" height="30" fill="#fafafa" rx="2"/>
+  <path d="M4 26 Q8 22 14 20 Q20 18 22 14" fill="none" stroke="#f5a623" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+  <path d="M4 26 Q8 23 14 22 Q20 21 22 14" fill="none" stroke="#f7c948" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <line x1="22" y1="14" x2="29" y2="4" stroke="#8B5A2B" stroke-width="2.5" stroke-linecap="round"/>
+  <ellipse cx="22" cy="14" rx="2.5" ry="2" fill="#555" transform="rotate(-50 22 14)"/>
+  <circle cx="28" cy="5" r="1.5" fill="#ccc" stroke="#999" stroke-width="0.8"/>
+</svg>

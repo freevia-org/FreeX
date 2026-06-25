@@ -1950,3 +1950,112 @@ public sealed class UngroupFloatingObjectsCommand(int paragraphIndex, int runInd
         return Run.FromWordArt(wa);
     }
 }
+
+// ── W25: Artistic Effects + Edit Points commands ──────────────────────────────────────────────────
+
+/// <summary>
+/// Set the <see cref="ImageArtisticEffect"/> on the inline image at the given paragraph/run indices,
+/// snapshotting the prior value for undo. Non-destructive: original <see cref="InlineImage.Bytes"/> are
+/// never modified; the effect is applied at render time by the pixel pipeline.
+/// </summary>
+public sealed class SetImageArtisticEffectCommand(
+    int paragraphIndex, int runIndex, ImageArtisticEffect effect) : IDocumentCommand
+{
+    private ImageArtisticEffect _previous;
+    private bool _applied;
+
+    public string Label => "Artistic Effect";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { } image) return;
+        _previous = image.ArtisticEffect;
+        image.ArtisticEffect = effect;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { } image) return;
+        image.ArtisticEffect = _previous;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Set or replace the <see cref="CustomGeometry"/> on the inline shape at the given paragraph/run indices,
+/// snapshotting the prior geometry (and kind) for undo. Used by "Convert to Freeform" and drag-point edits.
+/// </summary>
+public sealed class SetShapeCustomGeometryCommand(
+    int paragraphIndex, int runIndex, CustomGeometry? geometry) : IDocumentCommand
+{
+    private CustomGeometry? _previousGeometry;
+    private ShapeKind _previousKind;
+    private bool _applied;
+
+    public string Label => geometry is null ? "Remove Freeform" : "Edit Points";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previousGeometry = shape.CustomGeometry;
+        _previousKind     = shape.Kind;
+        shape.CustomGeometry = geometry;
+        // When converting to freeform, lock the Kind to Freeform-as-rectangle (no visual change).
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.CustomGeometry = _previousGeometry;
+        shape.Kind           = _previousKind;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Move a single edit point (vertex) on the inline shape's custom geometry. Snaps prior coordinates
+/// for undo. No-op if the shape has no <see cref="CustomGeometry"/> or the index is out of range.
+/// </summary>
+public sealed class MoveShapeEditPointCommand(
+    int paragraphIndex, int runIndex, int segmentIndex, long newX, long newY) : IDocumentCommand
+{
+    private long _prevX, _prevY;
+    private bool _applied;
+
+    public string Label => "Move Edit Point";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context)?.CustomGeometry is not { } geo) return;
+        if (segmentIndex < 0 || segmentIndex >= geo.Segments.Count) return;
+        var seg = geo.Segments[segmentIndex];
+        if (seg.Point is null) return;
+        _prevX = seg.Point.X;
+        _prevY = seg.Point.Y;
+        geo.Segments[segmentIndex] = seg with { Point = new CustomPoint(newX, newY) };
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context)?.CustomGeometry is not { } geo) return;
+        if (segmentIndex < 0 || segmentIndex >= geo.Segments.Count) return;
+        var seg = geo.Segments[segmentIndex];
+        geo.Segments[segmentIndex] = seg with { Point = new CustomPoint(_prevX, _prevY) };
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}

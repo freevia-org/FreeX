@@ -1959,6 +1959,50 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Convert the currently selected preset shape to a freeform polygon (custom geometry). The polygon
+    /// is derived from the preset kind (rectangle, ellipse, rounded-rectangle) using the matching
+    /// <see cref="CustomGeometry"/> factory. Undoable. No-op without a shape selection.
+    /// </summary>
+    public void ConvertSelectedShapeToFreeform()
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        if (shape.HasCustomGeometry) return; // already freeform
+
+        // Build the matching freeform polygon from the current preset kind.
+        CustomGeometry poly = shape.Kind switch
+        {
+            ShapeKind.Ellipse          => CustomGeometry.EllipsePoly(),
+            ShapeKind.RoundedRectangle => CustomGeometry.RoundedRectPoly(),
+            _                          => CustomGeometry.RectanglePoly(),
+        };
+        _commands.Execute(new SetShapeCustomGeometryCommand(blockIndex, runIndex, poly));
+        Render();
+    }
+
+    /// <summary>
+    /// Enter edit-points mode for the currently selected shape (converts to freeform first if needed).
+    /// Currently shows an informational notice; full drag-handle UI is a future enhancement.
+    /// Backed: confirms the command bus integration for the Edit Points ribbon action.
+    /// </summary>
+    public void BeginShapeEditPoints()
+    {
+        CommitToModel();
+        var (_, _, shape) = SelectedShapeLocation();
+        if (shape is null) return;
+        // Ensure the shape has been converted to freeform.
+        if (!shape.HasCustomGeometry)
+            ConvertSelectedShapeToFreeform();
+        // TODO: show interactive drag-handle overlay for edit points (W25 scope limitation:
+        // interactive point-dragging requires an adorner layer not yet in DocumentView).
+        DialogMessageHelper.ShowInfo(
+            System.Windows.Window.GetWindow(this),
+            "Shape converted to freeform. Drag edit points by re-applying 'Edit Points' when the adorner layer is available.",
+            "Edit Points");
+    }
+
+    /// <summary>
     /// Set the fill color of the selected shape. Pass null to remove fill. Undoable. No-op without a shape.
     /// </summary>
     public void SetSelectedShapeFill(string? colorHex)
@@ -2609,6 +2653,20 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null) return;
         _commands.Execute(new SetImageRecolorCommand(blockIndex, runIndex, mode, colorTemperature));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the artistic filter on the currently selected image. Undoable. Non-destructive: original bytes
+    /// are never modified; the effect is applied at render time by the pixel pipeline.
+    /// No-op without an image selection.
+    /// </summary>
+    public void SetSelectedImageArtisticEffect(ImageArtisticEffect effect)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
+        if (image is null) return;
+        _commands.Execute(new SetImageArtisticEffectCommand(blockIndex, runIndex, effect));
         Render();
     }
 
@@ -7828,7 +7886,64 @@ public sealed class DocumentView : RichTextBox
             : strokeThickness;
 
         FrameworkElement element;
-        if (shape.Kind == ShapeKind.Ellipse)
+        if (shape.HasCustomGeometry && shape.CustomGeometry is { } cg)
+        {
+            // W25: Render custom (freeform) geometry using a WPF Path with StreamGeometry.
+            var geo = new System.Windows.Media.StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                // Collect all segments, tracking whether we need to close the current figure.
+                bool inFigure = false;
+                bool closeFigure = false;
+                System.Windows.Point startPt = default;
+                var linePoints = new System.Collections.Generic.List<System.Windows.Point>();
+
+                void FlushFigure()
+                {
+                    if (!inFigure) return;
+                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
+                    foreach (var lp in linePoints) ctx.LineTo(lp, isStroked: true, isSmoothJoin: false);
+                    linePoints.Clear();
+                    inFigure = false;
+                    closeFigure = false;
+                }
+
+                foreach (var seg in cg.Segments)
+                {
+                    if (seg.Kind == CustomSegmentKind.MoveTo && seg.Point is not null)
+                    {
+                        FlushFigure();
+                        startPt = new System.Windows.Point(
+                            seg.Point.X / (double)cg.Width  * widthPx,
+                            seg.Point.Y / (double)cg.Height * heightPx);
+                        inFigure = true;
+                    }
+                    else if (seg.Kind == CustomSegmentKind.LineTo && seg.Point is not null && inFigure)
+                    {
+                        linePoints.Add(new System.Windows.Point(
+                            seg.Point.X / (double)cg.Width  * widthPx,
+                            seg.Point.Y / (double)cg.Height * heightPx));
+                    }
+                    else if (seg.Kind == CustomSegmentKind.Close && inFigure)
+                    {
+                        closeFigure = true;
+                    }
+                }
+                FlushFigure();
+            }
+            geo.Freeze();
+            element = new System.Windows.Shapes.Path
+            {
+                Width = widthPx,
+                Height = heightPx,
+                Data = geo,
+                Fill = fill,
+                Stroke = stroke,
+                StrokeThickness = outlineThickness,
+                Stretch = System.Windows.Media.Stretch.None,
+            };
+        }
+        else if (shape.Kind == ShapeKind.Ellipse)
         {
             element = new System.Windows.Shapes.Ellipse
             {
