@@ -5,9 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Portable, UI-framework-agnostic localization catalog owned by the shared layer.
-         Self-contained: does not reference the WPF host catalog (FreeX.App.Host.Resources.Strings),
-         which is under heavy concurrent change. -->
+         This is the single authoritative resource catalog for all FreeX apps and platforms. -->
   </PropertyGroup>
+
+  <!-- Strip non-English satellite resx files from the tester-release single-file build to
+       keep the artifact small. Propagated from FreeX.App.Host via -p:FreeXTesterReleaseEnglishOnly=true. -->
+  <ItemGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true'">
+    <EmbeddedResource Remove="Resources\Strings.*.resx" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />

@@ -13,7 +13,7 @@ internal static class AppLanguageCatalog
     public const string EnglishUnitedStatesCultureName = "en-US";
     public const string PseudoLocalizationCultureName = "qps-ploc";
 
-    private const string SatelliteAssemblyName = "FreeX.App.Host.resources.dll";
+    private const string SatelliteAssemblyName = "FreeX.App.Localization.resources.dll";
 
     public static IReadOnlyList<AppLanguageOption> GetAvailableLanguages() =>
         CreateOptions(EnumerateSatelliteCultureNames(GetResourceProbeDirectory()));

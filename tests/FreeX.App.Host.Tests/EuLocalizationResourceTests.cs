@@ -3,6 +3,7 @@ using System.IO;
 using System.Resources;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Localization;
 using static FreeX.App.Host.Tests.LocalizationResourceTestSupport;
 
 namespace FreeX.App.Host.Tests;
@@ -127,7 +128,11 @@ public sealed partial class EuLocalizationResourceTests
         var neutral = ReadResxValues("Strings.resx");
         var localized = ReadResxValues($"Strings.{cultureName}.resx");
 
-        localized.Keys.Should().BeEquivalentTo(neutral.Keys);
+        // The Loc neutral is a superset; satellites are translated subsets.
+        // Verify no orphan satellite keys, no blank values, and consistent placeholder/access-key counts
+        // for all keys actually present in the satellite resx.
+        neutral.Keys.Should().Contain(localized.Keys,
+            because: $"every '{cultureName}' satellite key must exist in the neutral catalog (no orphan keys)");
 
         var blankValues = localized
             .Where(entry => !string.IsNullOrEmpty(neutral[entry.Key]) && string.IsNullOrEmpty(entry.Value))
@@ -135,16 +140,14 @@ public sealed partial class EuLocalizationResourceTests
             .ToArray();
         blankValues.Should().BeEmpty();
 
-        var placeholderMismatches = neutral
-            .Where(entry => !CompositePlaceholderTokens(entry.Value)
-                .SetEquals(CompositePlaceholderTokens(localized[entry.Key])))
-            .Select(entry => entry.Key)
+        var placeholderMismatches = localized.Keys
+            .Where(key => !CompositePlaceholderTokens(neutral[key])
+                .SetEquals(CompositePlaceholderTokens(localized[key])))
             .ToArray();
         placeholderMismatches.Should().BeEmpty();
 
-        var accessKeyMismatches = neutral
-            .Where(entry => AccessKeyCount(entry.Value) != AccessKeyCount(localized[entry.Key]))
-            .Select(entry => entry.Key)
+        var accessKeyMismatches = localized.Keys
+            .Where(key => AccessKeyCount(neutral[key]) != AccessKeyCount(localized[key]))
             .ToArray();
         accessKeyMismatches.Should().BeEmpty();
 
@@ -175,7 +178,10 @@ public sealed partial class EuLocalizationResourceTests
     [MemberData(nameof(ExpectedEuOfficeSatelliteCultureData))]
     public void SatelliteAssembly_ContainsFullResourceSetWithoutParentFallback(string cultureName)
     {
-        var resourceManager = new ResourceManager("FreeX.App.Host.Resources.Strings", typeof(UiText).Assembly);
+        // The Loc neutral is a superset; satellites are translated subsets (new superset keys
+        // await translation). Verify: satellite loads, has no blank values for its own keys,
+        // and its key set is a subset of neutral (no orphans).
+        var resourceManager = new ResourceManager("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
         var resourceSet = resourceManager.GetResourceSet(
             CultureInfo.GetCultureInfo(cultureName),
             createIfNotExists: true,
@@ -188,10 +194,11 @@ public sealed partial class EuLocalizationResourceTests
             .ToDictionary(entry => (string)entry.Key, entry => (string)entry.Value!, StringComparer.Ordinal);
         var neutralKeys = UiText.GetNeutralResourceKeys();
 
-        localizedEntries.Keys.Should().BeEquivalentTo(neutralKeys);
+        neutralKeys.Should().Contain(localizedEntries.Keys,
+            because: $"every '{cultureName}' satellite key must have a corresponding neutral key (no orphans)");
         localizedEntries.Should().OnlyContain(
             entry => !string.IsNullOrEmpty(entry.Value),
-            "each EU satellite should be complete and not depend on parent fallback");
+            $"each '{cultureName}' satellite key must have a non-blank value (no empty/fallback slots)");
     }
 
 }

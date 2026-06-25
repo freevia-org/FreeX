@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Resources;
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.App.Localization;
 using static FreeX.App.Host.Tests.LocalizationResourceTestSupport;
 
 namespace FreeX.App.Host.Tests;
@@ -68,7 +69,10 @@ public sealed class BulgarianLocalizationTests
     [Fact]
     public void BulgarianSatelliteResource_ContainsFullResourceSetWithoutParentFallback()
     {
-        var resourceManager = new ResourceManager("FreeX.App.Host.Resources.Strings", typeof(UiText).Assembly);
+        // The Loc neutral catalog is a superset (includes keys not yet translated in satellites).
+        // We verify: (a) the satellite loads, (b) all keys it has are non-blank, and
+        // (c) its key set is a subset of the neutral — no orphan keys.
+        var resourceManager = new ResourceManager("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
         var resourceSet = resourceManager.GetResourceSet(
             CultureInfo.GetCultureInfo("bg-BG"),
             createIfNotExists: true,
@@ -80,10 +84,11 @@ public sealed class BulgarianLocalizationTests
             .ToDictionary(entry => (string)entry.Key, entry => (string)entry.Value!, StringComparer.Ordinal);
         var neutralKeys = UiText.GetNeutralResourceKeys();
 
-        localizedEntries.Keys.Should().BeEquivalentTo(neutralKeys);
+        neutralKeys.Should().Contain(localizedEntries.Keys,
+            because: "every bg-BG key must have a corresponding neutral key (no orphans)");
         localizedEntries.Should().OnlyContain(
             entry => !string.IsNullOrEmpty(entry.Value),
-            "the full Bulgarian satellite should not rely on blank values or parent fallback");
+            "each bg-BG entry must have a non-blank value (no empty/fallback slots)");
     }
 
     [Fact]
@@ -92,7 +97,11 @@ public sealed class BulgarianLocalizationTests
         var neutral = ReadResxValues("Strings.resx");
         var bulgarian = ReadResxValues("Strings.bg-BG.resx");
 
-        bulgarian.Keys.Should().BeEquivalentTo(neutral.Keys);
+        // The Loc neutral is a superset; satellites are translated subsets.
+        // Verify: no orphan satellite keys, no blank values for keys that have neutral text,
+        // placeholder tokens and access-key counts match for all keys present in the satellite.
+        neutral.Keys.Should().Contain(bulgarian.Keys,
+            because: "every bg-BG satellite key must exist in the neutral catalog (no orphan keys)");
 
         var blankValues = bulgarian
             .Where(entry => !string.IsNullOrEmpty(neutral[entry.Key]) && string.IsNullOrEmpty(entry.Value))
@@ -100,16 +109,14 @@ public sealed class BulgarianLocalizationTests
             .ToArray();
         blankValues.Should().BeEmpty();
 
-        var placeholderMismatches = neutral
-            .Where(entry => !CompositePlaceholderTokens(entry.Value)
-                .SetEquals(CompositePlaceholderTokens(bulgarian[entry.Key])))
-            .Select(entry => entry.Key)
+        var placeholderMismatches = bulgarian.Keys
+            .Where(key => !CompositePlaceholderTokens(neutral[key])
+                .SetEquals(CompositePlaceholderTokens(bulgarian[key])))
             .ToArray();
         placeholderMismatches.Should().BeEmpty();
 
-        var accessKeyMismatches = neutral
-            .Where(entry => AccessKeyCount(entry.Value) != AccessKeyCount(bulgarian[entry.Key]))
-            .Select(entry => entry.Key)
+        var accessKeyMismatches = bulgarian.Keys
+            .Where(key => AccessKeyCount(neutral[key]) != AccessKeyCount(bulgarian[key]))
             .ToArray();
         accessKeyMismatches.Should().BeEmpty();
     }

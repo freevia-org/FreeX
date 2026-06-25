@@ -1,11 +1,15 @@
+using System.IO;
+
 namespace FreeX.App.Host.Tests;
 
 // FreeX-specific shim: binds the app-neutral resx/placeholder mechanics
-// (ResxResourceTestSupport, shared) to FreeX's own Resources directory.
+// (ResxResourceTestSupport, shared) to the shared FreeX.App.Localization Resources directory.
 internal static class LocalizationResourceTestSupport
 {
     public static string ResourceDirectory =>
-        DialogSourceTestSupport.FindHostSourceDirectory("Resources", "Strings.resx");
+        Path.GetDirectoryName(
+            WorkspaceFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.resx"))
+        ?? throw new DirectoryNotFoundException("Could not locate FreeX.App.Localization Resources directory.");
 
     public static Dictionary<string, string> ReadResxValues(string fileName) =>
         ResxResourceTestSupport.ReadResxValues(ResourceDirectory, fileName);

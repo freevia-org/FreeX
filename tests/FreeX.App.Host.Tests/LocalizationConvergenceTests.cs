@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Resources;
-using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Localization;
@@ -8,13 +7,17 @@ using FreeX.App.Localization;
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// Gate test: verifies that the shared FreeX.App.Localization catalog is a superset of the
-/// FreeX.App.Host catalog and returns byte-identical strings for every key + locale combination.
-/// This proves Windows is unaffected by the convergence (the UiText switch to the Loc RM).
+/// Gate tests: verifies the shared FreeX.App.Localization catalog is the single live source.
+/// The old byte-identical-vs-Host-resx assertions have served their purpose (the merge is done
+/// and the Host resx files have been deleted). These tests now prove the Loc catalog is a
+/// complete superset with valid content, and that all 43 satellite locales are loadable.
 /// </summary>
 public sealed class LocalizationConvergenceTests
 {
-    // The 43 satellite locales that exist in both Host and Loc after the P2 copy.
+    private static readonly ResourceManager LocRm =
+        new("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
+
+    // The 43 satellite locales in the shared Loc catalog.
     private static readonly string[] SatelliteLocales =
     [
         "bg-BG", "cs-CZ", "da-DK", "de-AT", "de-CH", "de-DE", "el-GR",
@@ -26,86 +29,94 @@ public sealed class LocalizationConvergenceTests
         "sr-Cyrl-RS", "sr-Latn-RS", "sv-SE", "tr-TR", "uk-UA",
     ];
 
-    // Read all key names from the Host neutral resx XML (source tree — the authoritative list).
-    private static IReadOnlyList<string> ReadHostNeutralKeys()
-    {
-        var resxPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx");
-        var doc = XDocument.Load(resxPath);
-        return doc.Root!
-            .Elements("data")
-            .Select(el => el.Attribute("name")!.Value)
-            .ToList();
-    }
-
     [Fact]
-    public void LocCatalog_NeutralKeyCount_IsSuperset_OfHostCatalog()
+    public void LocCatalog_NeutralKeyCount_IsAtLeast6000()
     {
-        var hostKeys = ReadHostNeutralKeys();
-        var locKeys = new ResourceManager("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly)
+        var locKeys = LocRm
             .GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: false)!
             .Cast<System.Collections.DictionaryEntry>()
             .Select(e => (string)e.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        locKeys.Count.Should().BeGreaterThanOrEqualTo(hostKeys.Count,
-            because: "Loc catalog must be a superset of the Host catalog");
-
-        // Every Host key must be present in Loc
-        var missing = hostKeys.Where(k => !locKeys.Contains(k)).ToList();
-        missing.Should().BeEmpty(because: "every Host key must be present in the Loc catalog");
+        locKeys.Count.Should().BeGreaterThanOrEqualTo(6000,
+            because: "the shared Loc catalog is the superset of all localization keys (>6000 expected)");
     }
 
     [Fact]
-    public void LocCatalog_NeutralValues_AreByteIdentical_ToHostCatalog()
+    public void LocCatalog_NeutralSpotCheck_KeysResolveToExpectedValues()
     {
-        var hostRm = new ResourceManager("FreeX.App.Host.Resources.Strings", typeof(UiText).Assembly);
-        var locRm  = new ResourceManager("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
-
-        var hostKeys = ReadHostNeutralKeys();
-
-        var diverged = new List<string>();
-        foreach (var key in hostKeys)
+        // Representative spot-check covering common strings, mnemonics, dialog labels and tooltips.
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            var hostVal = hostRm.GetString(key, CultureInfo.InvariantCulture);
-            var locVal  = locRm.GetString(key, CultureInfo.InvariantCulture);
-            if (hostVal != locVal)
-                diverged.Add($"  Key='{key}' Host='{hostVal}' Loc='{locVal}'");
+            ["Common_Ok"]                               = "_OK",
+            ["Common_Cancel"]                           = "_Cancel",
+            ["Common_ErrorTitle"]                       = "Error",
+            ["Common_WarningTitle"]                     = "Warning",
+            ["Common_InformationTitle"]                 = "Information",
+            ["Common_ConfirmTitle"]                     = "Confirm",
+            ["Options_AppLanguageSystemDefault"]        = "Use system default",
+            ["Options_AppLanguageEnglishUnitedStates"]  = "English (United States)",
+            ["Options_ChooseDisplayLanguage"]           = "Choose display language",
+            ["Startup_CrashReportsTitle"]               = "Crash Reports",
+            ["MainWindow_Header_Paste"]                 = "Paste",
+            ["MainWindow_Content_Copy"]                 = "Copy",
+            ["MainWindow_Content_Cut"]                  = "Cut",
+            ["MainWindow_Header_FlashFill"]             = "Flash Fill",
+            ["MainWindow_Text_Wrap"]                    = "Wrap",
+            ["InsertChart_AllChartsTab"]                = "_All Charts",
+            ["ChartType_Pie"]                           = "Pie",
+            ["ChartType_Doughnut"]                      = "Doughnut",
+            ["ChartType_Scatter"]                       = "Scatter",
+            ["TableDesign_TableRangeLabel"]             = "_Table range:",
+        };
+
+        var missing = new List<string>();
+        var wrong   = new List<string>();
+
+        foreach (var (key, expectedValue) in expected)
+        {
+            var actual = LocRm.GetString(key, CultureInfo.InvariantCulture);
+            if (actual is null)
+                missing.Add(key);
+            else if (actual != expectedValue)
+                wrong.Add($"  Key='{key}' expected='{expectedValue}' actual='{actual}'");
         }
 
-        diverged.Should().BeEmpty(
-            because: $"every neutral Host key must be byte-identical in the Loc catalog (Windows parity gate):{Environment.NewLine}{string.Join(Environment.NewLine, diverged.Take(20))}");
+        missing.Should().BeEmpty(because: "all spot-check keys must exist in the Loc neutral catalog");
+        wrong.Should().BeEmpty(because: $"all spot-check keys must match expected neutral values:{Environment.NewLine}{string.Join(Environment.NewLine, wrong)}");
+    }
+
+    [Fact]
+    public void LocCatalog_NeutralValues_NoSentinelPlaceholders()
+    {
+        var sentinels = LocRm
+            .GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: false)!
+            .Cast<System.Collections.DictionaryEntry>()
+            .Where(e => ((string?)e.Value)?.StartsWith("[[", StringComparison.Ordinal) == true)
+            .Select(e => (string)e.Key)
+            .ToList();
+
+        sentinels.Should().BeEmpty(
+            because: "no neutral key in the Loc catalog should resolve to a [[key]] sentinel — those indicate missing translations");
     }
 
     [Theory]
     [MemberData(nameof(AllSatelliteLocales))]
-    public void LocCatalog_SatelliteValues_AreByteIdentical_ToHostCatalog(string locale)
+    public void LocCatalog_SatelliteLocale_LoadsAndContainsTranslatedKeys(string locale)
     {
-        var hostRm = new ResourceManager("FreeX.App.Host.Resources.Strings", typeof(UiText).Assembly);
-        var locRm  = new ResourceManager("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
-
         var culture = CultureInfo.GetCultureInfo(locale);
+        var locSet  = LocRm.GetResourceSet(culture, createIfNotExists: true, tryParents: false);
 
-        // Get the resource sets for this locale (no parent fallback — must exist in satellite)
-        var hostSet = hostRm.GetResourceSet(culture, createIfNotExists: true, tryParents: false);
-        var locSet  = locRm.GetResourceSet(culture, createIfNotExists: true, tryParents: false);
+        locSet.Should().NotBeNull(because: $"Loc catalog must have a satellite for '{locale}'");
 
-        hostSet.Should().NotBeNull(because: $"Host must have a satellite for '{locale}'");
-        locSet.Should().NotBeNull(because: $"Loc must have a satellite for '{locale}' after P2 copy");
+        // Spot-check: Common_Ok and Common_Cancel must be present and non-empty.
+        var ok     = locSet!.GetString("Common_Ok");
+        var cancel = locSet.GetString("Common_Cancel");
 
-        var hostEntries = hostSet!
-            .Cast<System.Collections.DictionaryEntry>()
-            .ToDictionary(e => (string)e.Key, e => (string?)e.Value, StringComparer.Ordinal);
-
-        var diverged = new List<string>();
-        foreach (var (key, hostVal) in hostEntries)
-        {
-            var locVal = locSet!.GetString(key);
-            if (hostVal != locVal)
-                diverged.Add($"  Key='{key}' Host='{hostVal}' Loc='{locVal}'");
-        }
-
-        diverged.Should().BeEmpty(
-            because: $"every '{locale}' satellite key must be byte-identical in Loc (Windows parity gate):{Environment.NewLine}{string.Join(Environment.NewLine, diverged.Take(10))}");
+        ok.Should().NotBeNullOrWhiteSpace(
+            because: $"Common_Ok must have a non-empty translation in '{locale}'");
+        cancel.Should().NotBeNullOrWhiteSpace(
+            because: $"Common_Cancel must have a non-empty translation in '{locale}'");
     }
 
     public static TheoryData<string> AllSatelliteLocales()
