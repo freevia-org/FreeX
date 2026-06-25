@@ -84,13 +84,32 @@ public readonly record struct PageGridLine(LayoutPoint Start, LayoutPoint End);
 public sealed record PageHeadingCell(LayoutRect Bounds, string Label, LayoutPoint TextOrigin);
 
 /// <summary>
+/// One formatted text run within a header or footer band section.  Each run carries its own styling
+/// that was decoded from the Excel format-code sequence (e.g. <c>&amp;B</c> bold, <c>&amp;I</c>
+/// italic, <c>&amp;"Arial,Bold"</c> font override, <c>&amp;14</c> size, <c>&amp;Krrggbb</c> color).
+/// Multiple runs are concatenated left-to-right to form the visible section text.
+/// </summary>
+public sealed record HeaderFooterFormattedRun(
+    string Text,
+    bool Bold,
+    bool Italic,
+    bool Underline,
+    bool DoubleUnderline,
+    bool Strikethrough,
+    string? FontName,
+    double? FontSize,
+    PresentationRgb? Color);
+
+/// <summary>
 /// One header- or footer-band run: its pixel rectangle (one of the three left/center/right thirds),
-/// the substituted text, the horizontal alignment within the band, and a vertically-centered text
-/// origin (top-left of the text block) the renderer can draw from.
+/// the plain concatenated text (for sizing / PDF overlay), the formatted sub-runs that carry
+/// per-run font/style overrides from Excel format codes, the horizontal alignment within the band,
+/// and a vertically-centered text origin (top-left of the text block) the renderer can draw from.
 /// </summary>
 public sealed record PageHeaderFooterRun(
     LayoutRect Bounds,
     string Text,
+    IReadOnlyList<HeaderFooterFormattedRun> FormattedRuns,
     PageTextAlignment Alignment,
     LayoutPoint TextOrigin);
 

@@ -191,11 +191,11 @@ public sealed class PrintPreviewInstructionBuilderTests
         {
             HeaderRuns =
             [
-                new PageHeaderFooterRun(new LayoutRect(48, 4, 240, 16), "Title", PageTextAlignment.Center, new LayoutPoint(50, 6)),
+                new PageHeaderFooterRun(new LayoutRect(48, 4, 240, 16), "Title", [], PageTextAlignment.Center, new LayoutPoint(50, 6)),
             ],
             FooterRuns =
             [
-                new PageHeaderFooterRun(new LayoutRect(48, 1000, 240, 16), "Page 1", PageTextAlignment.Right, new LayoutPoint(50, 1002)),
+                new PageHeaderFooterRun(new LayoutRect(48, 1000, 240, 16), "Page 1", [], PageTextAlignment.Right, new LayoutPoint(50, 1002)),
             ],
         };
 
@@ -265,6 +265,7 @@ public sealed class PrintPreviewInstructionBuilderTests
         var header = new PageHeaderFooterRun(
             new LayoutRect(48, 4, 240, 16),
             "Header",
+            [],
             PageTextAlignment.Center,
             new LayoutPoint(50, 6));
         var layout = EmptyLayout() with

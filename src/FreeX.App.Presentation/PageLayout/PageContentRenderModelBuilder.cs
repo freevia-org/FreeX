@@ -52,13 +52,19 @@ public static class PageContentRenderModelBuilder
     /// <param name="pagePlan">The page grid from <see cref="PagePaginationPlanner.Paginate"/>.</param>
     /// <param name="pageIndex">0-based index of the page within the page grid.</param>
     /// <param name="textMeasurer">Text measurer used to vertically center cell/heading/band text.</param>
+    /// <param name="now">Snapshot timestamp for date/time tokens; defaults to <see cref="DateTime.Now"/>.</param>
+    /// <param name="workbookDirectory">
+    /// Directory that contains the workbook file, with a trailing path separator (e.g. <c>C:\Docs\</c>).
+    /// Substituted for <c>&amp;Z</c> / <c>&amp;[Path]</c>. Pass an empty string when the workbook is unsaved.
+    /// </param>
     public static PageContentLayout? Build(
         Workbook workbook,
         Sheet sheet,
         PagePaginationResult pagePlan,
         int pageIndex,
         ITextMeasurer textMeasurer,
-        DateTime? now = null)
+        DateTime? now = null,
+        string workbookDirectory = "")
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
@@ -149,6 +155,7 @@ public static class PageContentRenderModelBuilder
             sheet.HeaderMargin * Dpi,
             sheet.FooterMargin * Dpi,
             workbook.Name,
+            workbookDirectory,
             sheet.Name,
             pageNumber,
             totalPages,
@@ -384,6 +391,7 @@ public static class PageContentRenderModelBuilder
         double headerMargin,
         double footerMargin,
         string workbookName,
+        string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
@@ -401,10 +409,10 @@ public static class PageContentRenderModelBuilder
 
         var headerRuns = BuildBandRuns(
             header, pageW, leftInset, rightInset, headerY, lineHeight,
-            workbookName, sheetName, pageNumber, totalPages, now, textMeasurer);
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         var footerRuns = BuildBandRuns(
             footer, pageW, leftInset, rightInset, footerY, lineHeight,
-            workbookName, sheetName, pageNumber, totalPages, now, textMeasurer);
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return (headerRuns, footerRuns);
     }
 
@@ -416,6 +424,7 @@ public static class PageContentRenderModelBuilder
         double y,
         double lineHeight,
         string workbookName,
+        string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
@@ -427,11 +436,11 @@ public static class PageContentRenderModelBuilder
         var runs = new List<PageHeaderFooterRun>(3);
 
         AddBandRun(runs, value.Left, new LayoutRect(leftInset, y, sectionWidth, lineHeight),
-            PageTextAlignment.Left, workbookName, sheetName, pageNumber, totalPages, now, textMeasurer);
+            PageTextAlignment.Left, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         AddBandRun(runs, value.Center, new LayoutRect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight),
-            PageTextAlignment.Center, workbookName, sheetName, pageNumber, totalPages, now, textMeasurer);
+            PageTextAlignment.Center, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         AddBandRun(runs, value.Right, new LayoutRect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight),
-            PageTextAlignment.Right, workbookName, sheetName, pageNumber, totalPages, now, textMeasurer);
+            PageTextAlignment.Right, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return runs;
     }
 
@@ -441,20 +450,38 @@ public static class PageContentRenderModelBuilder
         LayoutRect bounds,
         PageTextAlignment alignment,
         string workbookName,
+        string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
         DateTime now,
         ITextMeasurer textMeasurer)
     {
-        var text = ExpandHeaderFooterText(raw, pageNumber, totalPages, workbookName, sheetName, now);
+        var formattedRuns = PagePrintTextPlanner.TokenizeSectionText(
+            raw, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
+        if (formattedRuns.Count == 0)
+            return;
+
+        // Flatten the text from all runs for sizing and PDF overlay purposes.
+        var text = formattedRuns.Count == 1
+            ? formattedRuns[0].Text
+            : string.Concat(formattedRuns.Select(r => r.Text));
         if (string.IsNullOrEmpty(text))
             return;
 
+        // Use the first run's style for the baseline vertical-centering measurement.
+        var firstRun = formattedRuns[0];
         var origin = VerticallyCenteredOrigin(
-            textMeasurer, text, PrintFontFamily, PrintFontSize, bold: false, italic: false,
-            bounds.Left + 2, bounds.Top, bounds.Height);
-        runs.Add(new PageHeaderFooterRun(bounds, text, alignment, origin));
+            textMeasurer,
+            text,
+            firstRun.FontName ?? PrintFontFamily,
+            firstRun.FontSize ?? PrintFontSize,
+            firstRun.Bold,
+            firstRun.Italic,
+            bounds.Left + 2,
+            bounds.Top,
+            bounds.Height);
+        runs.Add(new PageHeaderFooterRun(bounds, text, formattedRuns, alignment, origin));
     }
 
     /// <summary>
@@ -462,8 +489,8 @@ public static class PageContentRenderModelBuilder
     /// the bracketed <c>&amp;[Page]</c>/<c>&amp;[Pages]</c>/<c>&amp;[Date]</c>/<c>&amp;[Time]</c>/
     /// <c>&amp;[File]</c>/<c>&amp;[Path]</c>/<c>&amp;[Tab]</c> forms and the short
     /// <c>&amp;P</c>/<c>&amp;N</c>/<c>&amp;D</c>/<c>&amp;T</c>/<c>&amp;F</c>/<c>&amp;Z</c>/<c>&amp;A</c>
-    /// forms (page number, page count, date, time, file name, path, and sheet name). Picture tokens are
-    /// stripped (pictures are out of scope for this content model).
+    /// forms (page number, page count, date, time, file name, path, and sheet name). Format-style codes
+    /// are stripped and picture tokens are removed (pictures are out of scope for this content model).
     /// </summary>
     public static string ExpandHeaderFooterText(
         string text,
@@ -477,6 +504,7 @@ public static class PageContentRenderModelBuilder
             pageNumber,
             totalPages,
             workbookName,
+            workbookDirectory: "",
             sheetName,
             now);
 

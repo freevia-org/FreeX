@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -27,15 +28,14 @@ public static partial class PrintRenderer
         int totalPages,
         bool draftQuality)
     {
-        var typeface = new Typeface("Segoe UI");
         var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality);
         var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality);
         var headerY = Math.Max(4, headerMargin - headerHeight);
         var footerY = Math.Max(4, pageH - footerMargin - footerHeight);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
-        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, typeface, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality);
+        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality);
     }
 
     private static void DrawHeaderFooterLine(
@@ -48,64 +48,128 @@ public static partial class PrintRenderer
         double rightInset,
         double y,
         double lineHeight,
-        Typeface typeface,
         int pageNumber,
         int totalPages,
         string workbookName,
         string sheetName,
         bool draftQuality)
     {
-        var left = ExpandHeaderFooterText(value.Left, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
-        var center = ExpandHeaderFooterText(value.Center, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
-        var right = ExpandHeaderFooterText(value.Right, pageNumber, totalPages, workbookName, sheetName, DateTime.Now);
+        // Tokenize each section into formatted runs.  workbookDirectory is not available in
+        // the legacy PrintRenderer path; pass empty string so &Z expands to "".
+        var leftRuns   = PagePrintTextPlanner.TokenizeSectionText(value.Left,   pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
+        var centerRuns = PagePrintTextPlanner.TokenizeSectionText(value.Center, pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
+        var rightRuns  = PagePrintTextPlanner.TokenizeSectionText(value.Right,  pageNumber, totalPages, workbookName, "", sheetName, DateTime.Now);
+
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);
 
-        var leftRect = new Rect(leftInset, y, sectionWidth, lineHeight);
+        var leftRect   = new Rect(leftInset, y, sectionWidth, lineHeight);
         var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight);
-        var rightRect = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
+        var rightRect  = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
 
-        var leftPicture = !draftQuality && HasHeaderFooterPictureToken(value.Left) ? pictures.Left : null;
+        var leftPicture   = !draftQuality && HasHeaderFooterPictureToken(value.Left)   ? pictures.Left   : null;
         var centerPicture = !draftQuality && HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;
-        var rightPicture = !draftQuality && HasHeaderFooterPictureToken(value.Right) ? pictures.Right : null;
+        var rightPicture  = !draftQuality && HasHeaderFooterPictureToken(value.Right)  ? pictures.Right  : null;
 
-        DrawHeaderFooterPicture(dc, leftPicture, leftRect, TextAlignment.Left);
+        DrawHeaderFooterPicture(dc, leftPicture,   leftRect,   TextAlignment.Left);
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
-        DrawHeaderFooterPicture(dc, rightPicture, rightRect, TextAlignment.Right);
-        DrawHeaderFooterText(dc, textOverlays, left, CalculateHeaderFooterTextRect(leftRect, leftPicture, TextAlignment.Left), typeface, TextAlignment.Left);
-        DrawHeaderFooterText(dc, textOverlays, center, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), typeface, TextAlignment.Center);
-        DrawHeaderFooterText(dc, textOverlays, right, CalculateHeaderFooterTextRect(rightRect, rightPicture, TextAlignment.Right), typeface, TextAlignment.Right);
+        DrawHeaderFooterPicture(dc, rightPicture,  rightRect,  TextAlignment.Right);
+
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, leftRuns,   CalculateHeaderFooterTextRect(leftRect,   leftPicture,   TextAlignment.Left),   TextAlignment.Left);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, centerRuns, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), TextAlignment.Center);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, rightRuns,  CalculateHeaderFooterTextRect(rightRect,  rightPicture,  TextAlignment.Right),  TextAlignment.Right);
     }
 
-    private static void DrawHeaderFooterText(
+    /// <summary>
+    /// Draws a sequence of formatted runs within the given rect, advancing x as each run is drawn.
+    /// Each run may carry its own font family, size, weight, style, and color from the Excel format codes.
+    /// </summary>
+    private static void DrawHeaderFooterFormattedRuns(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
-        string text,
+        IReadOnlyList<HeaderFooterFormattedRun> runs,
         Rect rect,
-        Typeface typeface,
         TextAlignment alignment)
     {
-        if (string.IsNullOrEmpty(text))
-            return;
+        if (runs.Count == 0) return;
 
-        var ft = new FormattedText(
-            text,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            typeface,
-            PrintFontSize,
-            Brushes.Black,
-            1.0)
+        // Measure the total text width so we can compute the correct starting x for center/right.
+        var totalWidth = MeasureTotalRunsWidth(runs);
+        var maxWidth = Math.Max(1, rect.Width - 4);
+
+        // Clamp so we don't overflow the rect (match the single-run CharacterEllipsis behaviour
+        // at a coarse level — we skip runs that are fully outside).
+        var startX = alignment switch
         {
-            MaxTextWidth = Math.Max(1, rect.Width - 4),
-            MaxLineCount = 1,
-            Trimming = TextTrimming.CharacterEllipsis,
-            TextAlignment = alignment
+            TextAlignment.Center => rect.Left + 2 + Math.Max(0, (maxWidth - totalWidth) / 2),
+            TextAlignment.Right  => rect.Left + 2 + Math.Max(0, maxWidth - totalWidth),
+            _                    => rect.Left + 2
         };
 
-        var textPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
-        dc.DrawText(ft, textPoint);
-        AddHeaderFooterTextOverlay(textOverlays, text, textPoint, ft.MaxTextWidth, typeface, alignment);
+        var x = startX;
+        var rightBoundary = rect.Left + 2 + maxWidth;
+
+        foreach (var run in runs)
+        {
+            if (string.IsNullOrEmpty(run.Text)) continue;
+            if (x >= rightBoundary) break; // no room left
+
+            var typeface = ResolveRunTypeface(run);
+            var fontSize = run.FontSize ?? PrintFontSize;
+            var brush = run.Color is { } c ? new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)) : Brushes.Black;
+            var remainingWidth = Math.Max(1, rightBoundary - x);
+
+            var ft = new FormattedText(
+                run.Text,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                fontSize,
+                brush,
+                1.0)
+            {
+                MaxTextWidth = remainingWidth,
+                MaxLineCount = 1,
+                Trimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Left // per-run is always left; we position x manually
+            };
+
+            if (run.Underline)
+                ft.SetTextDecorations(TextDecorations.Underline);
+            else if (run.Strikethrough)
+                ft.SetTextDecorations(TextDecorations.Strikethrough);
+            // Double-underline: no WPF built-in, render as Underline as a best-effort.
+            else if (run.DoubleUnderline)
+                ft.SetTextDecorations(TextDecorations.Underline);
+
+            var textPoint = new Point(x, rect.Top + (rect.Height - ft.Height) / 2);
+            dc.DrawText(ft, textPoint);
+
+            // PDF overlay for this run
+            AddHeaderFooterTextOverlay(textOverlays, run.Text, textPoint, remainingWidth, typeface, TextAlignment.Left);
+
+            x += ft.WidthIncludingTrailingWhitespace;
+        }
+    }
+
+    private static double MeasureTotalRunsWidth(IReadOnlyList<HeaderFooterFormattedRun> runs)
+    {
+        var total = 0.0;
+        foreach (var run in runs)
+        {
+            if (string.IsNullOrEmpty(run.Text)) continue;
+            var typeface = ResolveRunTypeface(run);
+            total += MeasurePrintedSingleLineText(run.Text, typeface).WidthIncludingTrailingWhitespace;
+        }
+        return total;
+    }
+
+    private static Typeface ResolveRunTypeface(HeaderFooterFormattedRun run)
+    {
+        var family = new FontFamily(run.FontName ?? "Segoe UI");
+        var weight = run.Bold ? FontWeights.Bold : FontWeights.Normal;
+        var style  = run.Italic ? FontStyles.Italic : FontStyles.Normal;
+        return new Typeface(family, style, weight, FontStretches.Normal);
     }
 
     private static void AddHeaderFooterTextOverlay(
