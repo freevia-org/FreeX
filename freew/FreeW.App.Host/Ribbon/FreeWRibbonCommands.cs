@@ -681,24 +681,161 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.shape-align-left",   new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Left));
         registry.Register("freew.shape-align-center", new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Center));
         registry.Register("freew.shape-align-right",  new ShapeAlignCommand(editor, FreeW.Core.Model.TextAlignment.Right));
-        // WordArt style gallery — four existing presets.
+        // ── Shape Styles gallery (W24) ────────────────────────────────────────────────────────────
+        registry.Register("freew.shape-styles-gallery", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a shape style from the gallery.", "Shape Styles");
+        }));
+        // Register one command per style preset (40 presets) so the parity test can back each.
+        foreach (var stylePreset in ShapeStylePreset.Catalog)
+        {
+            var sp = stylePreset;
+            registry.Register($"freew.{sp.Id}", new ActionCommand(() =>
+            {
+                editor.Focus();
+                if (editor.SelectedShape() is null)
+                {
+                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Style");
+                    return;
+                }
+                editor.ApplySelectedShapeStyle(sp);
+            }));
+        }
+
+        // ── Shape fill extensions (W24) ───────────────────────────────────────────────────────────
+        registry.Register("freew.shape-fill-gradient-blue", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Fill");
+                return;
+            }
+            editor.SetSelectedShapeExtendedFill(ShapeFill.LinearGradient(5400000,
+                new FreeW.Core.Model.GradientStop(0, "#4472C4"), new FreeW.Core.Model.GradientStop(100000, "#1F4E79")));
+        }));
+        registry.Register("freew.shape-fill-gradient-orange", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Fill");
+                return;
+            }
+            editor.SetSelectedShapeExtendedFill(ShapeFill.LinearGradient(5400000,
+                new FreeW.Core.Model.GradientStop(0, "#ED7D31"), new FreeW.Core.Model.GradientStop(100000, "#C55A11")));
+        }));
+        registry.Register("freew.shape-fill-pattern-diag", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Fill");
+                return;
+            }
+            editor.SetSelectedShapeExtendedFill(ShapeFill.Patterned("diagCross", "#4472C4", "#FFFFFF"));
+        }));
+
+        // ── Shape Effects (W24) ───────────────────────────────────────────────────────────────────
+        registry.Register("freew.shape-effects", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an effect from the dropdown.", "Shape Effects");
+        }));
+        registry.Register("freew.shape-effects-none", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(null);
+        }));
+        registry.Register("freew.shape-effect-shadow", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(new ShapeEffectLst { HasShadow = true });
+        }));
+        registry.Register("freew.shape-effect-glow", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(new ShapeEffectLst { HasGlow = true });
+        }));
+        registry.Register("freew.shape-effect-soft-edge", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(new ShapeEffectLst { HasSoftEdge = true });
+        }));
+        registry.Register("freew.shape-effect-reflection", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(new ShapeEffectLst { HasReflection = true });
+        }));
+        registry.Register("freew.shape-effect-bevel", new ActionCommand(() =>
+        {
+            editor.Focus();
+            if (editor.SelectedShape() is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Shape Effects");
+                return;
+            }
+            editor.SetSelectedShapeEffects(new ShapeEffectLst { HasBevel = true });
+        }));
+
+        // ── WordArt style gallery — original four + extended eleven (W24) ─────────────────────────
         registry.Register("freew.wordart-style", new ActionCommand(() =>
         {
             editor.Focus();
             DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a WordArt style from the dropdown.", "WordArt Style");
         }));
-        foreach (WordArtStyle preset in Enum.GetValues<WordArtStyle>())
+
+        // Map each WordArtStyle to its ribbon command id (original four by legacy name, extended by slug).
+        static string WordArtStyleId(WordArtStyle s) => s switch
         {
-            var p = preset;
-            var id = p switch
-            {
-                WordArtStyle.FillBlue    => "freew.wordart-style-fill-blue",
-                WordArtStyle.GradientFill => "freew.wordart-style-gradient",
-                WordArtStyle.Outline     => "freew.wordart-style-outline",
-                WordArtStyle.Shadow      => "freew.wordart-style-shadow",
-                _ => $"freew.wordart-style-{p.ToString().ToLowerInvariant()}"
-            };
-            registry.Register(id, new ActionCommand(() =>
+            WordArtStyle.FillBlue      => "freew.wordart-style-fill-blue",
+            WordArtStyle.GradientFill  => "freew.wordart-style-gradient",
+            WordArtStyle.Outline       => "freew.wordart-style-outline",
+            WordArtStyle.Shadow        => "freew.wordart-style-shadow",
+            WordArtStyle.FillGold      => "freew.wordart-style-fill-gold",
+            WordArtStyle.FillWhite     => "freew.wordart-style-fill-white",
+            WordArtStyle.GradFillMulti => "freew.wordart-style-grad-multi",
+            WordArtStyle.ChromeOne     => "freew.wordart-style-chrome-one",
+            WordArtStyle.ChromeTwo     => "freew.wordart-style-chrome-two",
+            WordArtStyle.ShadowOrange  => "freew.wordart-style-shadow-orange",
+            WordArtStyle.GlowBlue      => "freew.wordart-style-glow-blue",
+            WordArtStyle.GlowGold      => "freew.wordart-style-glow-gold",
+            WordArtStyle.Reflection    => "freew.wordart-style-reflection",
+            WordArtStyle.Bevel         => "freew.wordart-style-bevel",
+            WordArtStyle.PatternFill   => "freew.wordart-style-pattern",
+            _                          => $"freew.wordart-style-{s.ToString().ToLowerInvariant()}"
+        };
+
+        foreach (WordArtStyle wapresent in Enum.GetValues<WordArtStyle>())
+        {
+            var p = wapresent;
+            registry.Register(WordArtStyleId(p), new ActionCommand(() =>
             {
                 editor.Focus();
                 if (editor.SelectedWordArt() is null)
@@ -707,6 +844,49 @@ internal static class FreeWRibbonCommands
                     return;
                 }
                 editor.SetSelectedWordArtStyle(p);
+            }));
+        }
+
+        // ── WordArt Transform / Warp (W24) ────────────────────────────────────────────────────────
+        registry.Register("freew.wordart-transform", new ActionCommand(() =>
+        {
+            editor.Focus();
+            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text transform from the dropdown.", "Text Effects: Transform");
+        }));
+
+        static string WarpId(WordArtWarp w) => w switch
+        {
+            WordArtWarp.None          => "freew.wordart-warp-none",
+            WordArtWarp.ArchUp        => "freew.wordart-warp-arch-up",
+            WordArtWarp.ArchDown      => "freew.wordart-warp-arch-down",
+            WordArtWarp.Circle        => "freew.wordart-warp-circle",
+            WordArtWarp.Button        => "freew.wordart-warp-button",
+            WordArtWarp.Wave1         => "freew.wordart-warp-wave1",
+            WordArtWarp.Wave2         => "freew.wordart-warp-wave2",
+            WordArtWarp.Inflate       => "freew.wordart-warp-inflate",
+            WordArtWarp.Deflate       => "freew.wordart-warp-deflate",
+            WordArtWarp.InflateBottom => "freew.wordart-warp-inflate-bottom",
+            WordArtWarp.ChevronUp     => "freew.wordart-warp-chevron-up",
+            WordArtWarp.ChevronDown   => "freew.wordart-warp-chevron-down",
+            WordArtWarp.FadeRight     => "freew.wordart-warp-fade-right",
+            WordArtWarp.FadeLeft      => "freew.wordart-warp-fade-left",
+            WordArtWarp.SlantUp       => "freew.wordart-warp-slant-up",
+            WordArtWarp.SlantDown     => "freew.wordart-warp-slant-down",
+            _                         => $"freew.wordart-warp-{w.ToString().ToLowerInvariant()}"
+        };
+
+        foreach (WordArtWarp warp in Enum.GetValues<WordArtWarp>())
+        {
+            var w = warp;
+            registry.Register(WarpId(w), new ActionCommand(() =>
+            {
+                editor.Focus();
+                if (editor.SelectedWordArt() is null)
+                {
+                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select WordArt first.", "Text Effects: Transform");
+                    return;
+                }
+                editor.SetSelectedWordArtWarp(w);
             }));
         }
         // ── End Drawing Format commands ───────────────────────────────────────────────────────────

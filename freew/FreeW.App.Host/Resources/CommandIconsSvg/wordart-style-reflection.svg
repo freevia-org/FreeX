@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="WordArt Reflection">
+  <rect width="32" height="32" fill="none"/>
+  <text x="16" y="17" font-size="16" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="800" text-anchor="middle">A</text>
+  <text x="16" y="27" font-size="12" fill="#1F4E79" opacity="0.3" font-family="Segoe UI,Arial,sans-serif" font-weight="800" text-anchor="middle" transform="scale(1,-1) translate(0,-44)">A</text>
+</svg>

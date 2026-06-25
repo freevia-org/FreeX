@@ -2008,6 +2008,54 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a <see cref="ShapeStylePreset"/> to the selected shape. Undoable. No-op without a shape selection.
+    /// </summary>
+    public void ApplySelectedShapeStyle(ShapeStylePreset preset)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, _) = SelectedShapeLocation();
+        if (blockIndex < 0) return;
+        _commands.Execute(new ApplyShapeStyleCommand(blockIndex, runIndex, preset));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the extended fill (gradient / pattern / no-fill) on the selected shape. Undoable.
+    /// </summary>
+    public void SetSelectedShapeExtendedFill(ShapeFill? fill)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, _) = SelectedShapeLocation();
+        if (blockIndex < 0) return;
+        _commands.Execute(new SetShapeExtendedFillCommand(blockIndex, runIndex, fill));
+        Render();
+    }
+
+    /// <summary>
+    /// Set (or clear) the effects bundle on the selected shape. Undoable. No-op without a shape.
+    /// </summary>
+    public void SetSelectedShapeEffects(ShapeEffectLst? effects)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, _) = SelectedShapeLocation();
+        if (blockIndex < 0) return;
+        _commands.Execute(new SetShapeEffectsCommand(blockIndex, runIndex, effects));
+        Render();
+    }
+
+    /// <summary>
+    /// Set the text warp on the selected WordArt. Undoable. No-op without a WordArt selection.
+    /// </summary>
+    public void SetSelectedWordArtWarp(WordArtWarp warp)
+    {
+        CommitToModel();
+        var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
+        if (wordArt is null) return;
+        _commands.Execute(new SetWordArtWarpCommand(blockIndex, runIndex, warp));
+        Render();
+    }
+
+    /// <summary>
     /// Set the alt text on the selected WordArt. Undoable. No-op without a WordArt selection.
     /// </summary>
     public void SetSelectedWordArtAltText(string? altText)
@@ -7447,9 +7495,24 @@ public sealed class DocumentView : RichTextBox
         var heightPx = shape.HeightPt * PxPerPoint;
         var strokeThickness = EffectLineThickness(effectSet);
 
-        System.Windows.Media.Brush fill = TryParseColor(shape.FillColorHex, out var fillColor)
-            ? new SolidColorBrush(fillColor)
-            : System.Windows.Media.Brushes.Transparent;
+        // Fill: extended fill (gradient/pattern/no-fill) takes priority over solid FillColorHex.
+        System.Windows.Media.Brush fill;
+        if (shape.ExtendedFill is { } extFill)
+        {
+            fill = extFill.Kind switch
+            {
+                ShapeFillKind.NoFill   => System.Windows.Media.Brushes.Transparent,
+                ShapeFillKind.Gradient => BuildGradientBrush(extFill),
+                ShapeFillKind.Pattern  => BuildPatternBrush(extFill),
+                _                      => System.Windows.Media.Brushes.Transparent,
+            };
+        }
+        else
+        {
+            fill = TryParseColor(shape.FillColorHex, out var fillColor)
+                ? new SolidColorBrush(fillColor)
+                : System.Windows.Media.Brushes.Transparent;
+        }
 
         // Outline: use model OutlineColorHex/OutlineWidthPt when set; fall back to a faint grey hairline.
         System.Windows.Media.Brush stroke = TryParseColor(shape.OutlineColorHex, out var strokeColor)
@@ -7501,9 +7564,100 @@ public sealed class DocumentView : RichTextBox
             element = border;
         }
 
-        ApplyObjectEffect(element, effectSet);
+        // Shape effects: apply model-level effects (shadow/glow/bevel) on top of the document theme effect.
+        ApplyShapeModelEffects(element, shape.Effects, effectSet);
         element.Tag = shape; // carries the model shape so CommitToModel can round-trip it
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
+    }
+
+    /// <summary>
+    /// Applies model-level <see cref="ShapeEffectLst"/> to a rendered shape element, compositing with the
+    /// document theme effect. Shadow wins if both are present (model shadow is more specific). Glow is
+    /// approximated as a second DropShadow with ShadowDepth=0. Bevel / 3-D is rendered as a bright
+    /// border highlight (best-effort). Soft-edge and reflection have no lightweight WPF equivalent; they
+    /// are preserved in the model / DOCX but not visually rendered.
+    /// </summary>
+    private static void ApplyShapeModelEffects(FrameworkElement element, ShapeEffectLst? fx, DocumentEffectSet effectSet)
+    {
+        if (fx is null)
+        {
+            ApplyObjectEffect(element, effectSet);
+            return;
+        }
+
+        if (fx.HasShadow)
+        {
+            element.Effect = new DropShadowEffect
+            {
+                Color      = TryParseColor("#" + fx.ShadowColorHex, out var sc) ? sc : Colors.Black,
+                Opacity    = fx.ShadowAlpha / 100000.0,
+                BlurRadius = fx.ShadowBlurRad / 12700.0,
+                ShadowDepth = fx.ShadowDist / 12700.0,
+                Direction  = (fx.ShadowDir / 60000.0) % 360,
+                RenderingBias = RenderingBias.Performance,
+            };
+        }
+        else if (fx.HasGlow)
+        {
+            // WPF has no glow effect; approximate with a zero-depth blurred shadow.
+            element.Effect = new DropShadowEffect
+            {
+                Color      = TryParseColor("#" + fx.GlowColorHex, out var gc) ? gc : Colors.Blue,
+                Opacity    = fx.GlowAlpha / 100000.0,
+                BlurRadius = fx.GlowRad / 12700.0,
+                ShadowDepth = 0,
+                RenderingBias = RenderingBias.Performance,
+            };
+        }
+        else
+        {
+            ApplyObjectEffect(element, effectSet);
+        }
+
+        // Bevel: add a highlight border on the Border element.
+        if (fx.HasBevel && element is Border bevelBorder)
+            bevelBorder.BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE8, 0xFF));
+    }
+
+    /// <summary>Builds a WPF LinearGradientBrush from a <see cref="ShapeFill"/> gradient descriptor.</summary>
+    private static System.Windows.Media.LinearGradientBrush BuildGradientBrush(ShapeFill fill)
+    {
+        // GradientAngle in 60k-degree units; 0 = left-to-right, 5400000 = top-to-bottom.
+        var angleDeg = fill.GradientAngle / 60000.0;
+        var brush = new System.Windows.Media.LinearGradientBrush();
+        brush.StartPoint = new System.Windows.Point(0, 0);
+        brush.EndPoint   = new System.Windows.Point(
+            Math.Cos(angleDeg * Math.PI / 180.0),
+            Math.Sin(angleDeg * Math.PI / 180.0));
+        foreach (var stop in fill.GradientStops)
+        {
+            if (TryParseColor(stop.ColorHex, out var c))
+                brush.GradientStops.Add(new System.Windows.Media.GradientStop(c, stop.Position / 100000.0));
+        }
+        return brush;
+    }
+
+    /// <summary>Renders a pattern fill as a hatched DrawingBrush (best-effort; only "diagCross" patterned distinctly).</summary>
+    private static System.Windows.Media.DrawingBrush BuildPatternBrush(ShapeFill fill)
+    {
+        TryParseColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
+        TryParseColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
+        // Simple cross-hatch tile regardless of exact preset — renders distinctly from solid fills.
+        var drawing = new System.Windows.Media.DrawingGroup();
+        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(
+            new SolidColorBrush(bg), null,
+            new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, 8, 8))));
+        var linePen = new System.Windows.Media.Pen(new SolidColorBrush(fg), 1);
+        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
+            new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
+        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
+            new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
+        return new System.Windows.Media.DrawingBrush(drawing)
+        {
+            TileMode   = System.Windows.Media.TileMode.Tile,
+            Viewport   = new System.Windows.Rect(0, 0, 8, 8),
+            ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
+        };
     }
 
     /// <summary>
@@ -7538,28 +7692,78 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static InlineUIContainer BuildWordArtRun(WordArt wordArt, DocumentEffectSet effectSet)
     {
-        var fill = wordArt.Style switch
-        {
-            WordArtStyle.Outline => System.Windows.Media.Brushes.Transparent,
-            WordArtStyle.GradientFill => new SolidColorBrush(Color.FromRgb(0x2E, 0x74, 0xB5)),
-            WordArtStyle.Shadow => new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
-            _ => new SolidColorBrush(Color.FromRgb(0x1F, 0x49, 0x7D)),
-        };
+        // Derive foreground colour and optional WPF effect from the style preset.
+        var (foreground, wpfEffect) = WordArtRenderStyle(wordArt.Style, effectSet);
+
+        // Warp hint: when a warp is set, add a slight italic skew as a best-effort visual cue
+        // (WPF has no built-in text-path warp; full geometry warp is deferred).
         var element = new TextBlock
         {
-            Text = wordArt.Text,
-            FontSize = wordArt.FontSizePt * PxPerPoint,
+            Text       = wordArt.Text,
+            FontSize   = wordArt.FontSizePt * PxPerPoint,
             FontWeight = FontWeights.Bold,
-            Foreground = fill,
-            Tag = wordArt // carries the model WordArt so CommitToModel can round-trip it
+            Foreground = foreground,
+            Effect     = wpfEffect,
+            Tag        = wordArt, // carries the model WordArt so CommitToModel can round-trip it
         };
-        if (wordArt.Style == WordArtStyle.Outline)
-        {
-            element.Foreground = System.Windows.Media.Brushes.White;
-            element.Effect = null;
-        }
-        ApplyObjectEffect(element, effectSet);
+        // Apply warp visual hint
+        if (wordArt.Warp != WordArtWarp.None)
+            element.FontStyle = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
+                ? FontStyles.Normal : FontStyles.Italic;
+
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    /// <summary>
+    /// Returns the foreground brush + optional WPF effect for a given <see cref="WordArtStyle"/> preset.
+    /// The 15-preset set maps each style to a distinctive colour so they render visually distinct.
+    /// </summary>
+    private static (System.Windows.Media.Brush Foreground, System.Windows.Media.Effects.Effect? Effect)
+        WordArtRenderStyle(WordArtStyle style, DocumentEffectSet effectSet)
+    {
+        DropShadowEffect Shadow(Color c, double radius = 4, double depth = 3) =>
+            new() { Color = c, BlurRadius = radius, ShadowDepth = depth, Opacity = 0.5, RenderingBias = RenderingBias.Performance };
+
+        return style switch
+        {
+            WordArtStyle.FillBlue    => (new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)), CreateObjectEffect(effectSet)),
+            WordArtStyle.GradientFill=> (new System.Windows.Media.LinearGradientBrush(
+                                            Color.FromRgb(0x44, 0x72, 0xC4), Color.FromRgb(0xED, 0x7D, 0x31), 90), null),
+            WordArtStyle.Outline     => (System.Windows.Media.Brushes.White,
+                                            Shadow(Color.FromRgb(0x1F, 0x4E, 0x79), 0, 0)),
+            WordArtStyle.Shadow      => (new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)),
+                                            Shadow(Color.FromRgb(0x24, 0x24, 0x24))),
+            WordArtStyle.FillGold    => (new System.Windows.Media.LinearGradientBrush(
+                                            Color.FromRgb(0xC0, 0x90, 0x00), Color.FromRgb(0x8B, 0x62, 0x00), 90), null),
+            WordArtStyle.FillWhite   => (new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+                                            Shadow(Color.FromRgb(0x24, 0x24, 0x24), 2, 1)),
+            WordArtStyle.GradFillMulti=> (new System.Windows.Media.LinearGradientBrush(
+                                             new System.Windows.Media.GradientStopCollection
+                                             {
+                                                 new(Color.FromRgb(0xFF, 0x60, 0x00), 0),
+                                                 new(Color.FromRgb(0xC0, 0x00, 0x00), 0.5),
+                                                 new(Color.FromRgb(0x70, 0x30, 0xA0), 1),
+                                             }, 90), null),
+            WordArtStyle.ChromeOne   => (System.Windows.Media.Brushes.Transparent, null),
+            WordArtStyle.ChromeTwo   => (System.Windows.Media.Brushes.White,
+                                            Shadow(Color.FromRgb(0x1F, 0x4E, 0x79))),
+            WordArtStyle.ShadowOrange=> (new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
+                                            Shadow(Color.FromRgb(0xED, 0x7D, 0x31))),
+            WordArtStyle.GlowBlue    => (new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24)),
+                                            new DropShadowEffect { Color = Color.FromRgb(0x2E, 0x75, 0xB6),
+                                                BlurRadius = 10, ShadowDepth = 0, Opacity = 0.85,
+                                                RenderingBias = RenderingBias.Performance }),
+            WordArtStyle.GlowGold    => (new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24)),
+                                            new DropShadowEffect { Color = Color.FromRgb(0xC0, 0x90, 0x00),
+                                                BlurRadius = 10, ShadowDepth = 0, Opacity = 0.85,
+                                                RenderingBias = RenderingBias.Performance }),
+            WordArtStyle.Reflection  => (new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)), null),
+            WordArtStyle.Bevel       => (new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
+                                            Shadow(Color.FromRgb(0x80, 0x40, 0x00), 2, 2)),
+            WordArtStyle.PatternFill => (new System.Windows.Media.LinearGradientBrush(
+                                            Color.FromRgb(0x44, 0x72, 0xC4), Color.FromRgb(0xFF, 0xFF, 0xFF), 45), null),
+            _                        => (new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)), null),
+        };
     }
 
     // ChartPalette removed: the palette is now resolved per-chart from ChartColorScheme.Default/FindById.

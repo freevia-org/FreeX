@@ -1412,6 +1412,150 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
             ? p.Runs[runIndex].WordArt : null;
 }
 
+// ── New W24 Shape commands (effects, extended fill, style preset) ─────────────────────────────────
+
+/// <summary>
+/// Apply a <see cref="ShapeStylePreset"/> to the inline shape at the given paragraph/run indices.
+/// Snapshots fill, outline and effect for undo.
+/// </summary>
+public sealed class ApplyShapeStyleCommand(int paragraphIndex, int runIndex, ShapeStylePreset preset) : IDocumentCommand
+{
+    private string? _prevFill;
+    private ShapeFill? _prevExtFill;
+    private string? _prevOutlineColor;
+    private double _prevOutlineWidth;
+    private string? _prevOutlineDash;
+    private ShapeEffectLst? _prevEffect;
+    private bool _applied;
+
+    public string Label => "Shape Style";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevFill        = shape.FillColorHex;
+        _prevExtFill     = shape.ExtendedFill;
+        _prevOutlineColor = shape.OutlineColorHex;
+        _prevOutlineWidth = shape.OutlineWidthPt;
+        _prevOutlineDash  = shape.OutlineDash;
+        _prevEffect       = shape.Effects;
+
+        shape.FillColorHex  = preset.FillColorHex;
+        shape.ExtendedFill  = preset.Fill;
+        shape.OutlineColorHex = preset.OutlineColorHex;
+        shape.OutlineWidthPt  = preset.OutlineWidthPt;
+        shape.OutlineDash     = preset.OutlineDash;
+        shape.Effects         = preset.Effect;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.FillColorHex  = _prevFill;
+        shape.ExtendedFill  = _prevExtFill;
+        shape.OutlineColorHex = _prevOutlineColor;
+        shape.OutlineWidthPt  = _prevOutlineWidth;
+        shape.OutlineDash     = _prevOutlineDash;
+        shape.Effects         = _prevEffect;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the extended fill (gradient / pattern / no-fill) on the inline shape. Snapshots prior fill for undo.
+/// </summary>
+public sealed class SetShapeExtendedFillCommand(int paragraphIndex, int runIndex, ShapeFill? fill) : IDocumentCommand
+{
+    private string? _prevSolid;
+    private ShapeFill? _prevExt;
+    private bool _applied;
+
+    public string Label => "Shape Fill";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevSolid = shape.FillColorHex; _prevExt = shape.ExtendedFill;
+        shape.ExtendedFill = fill;
+        if (fill is not null) shape.FillColorHex = null; // ExtendedFill takes precedence
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.FillColorHex = _prevSolid; shape.ExtendedFill = _prevExt;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set (or clear) the effects bundle on the inline shape. Snapshots prior effects for undo.
+/// </summary>
+public sealed class SetShapeEffectsCommand(int paragraphIndex, int runIndex, ShapeEffectLst? effects) : IDocumentCommand
+{
+    private ShapeEffectLst? _previous;
+    private bool _applied;
+
+    public string Label => "Shape Effects";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _previous = shape.Effects;
+        shape.Effects = effects;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.Effects = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>Set the text warp preset on the WordArt at the given paragraph/run indices.</summary>
+public sealed class SetWordArtWarpCommand(int paragraphIndex, int runIndex, WordArtWarp warp) : IDocumentCommand
+{
+    private WordArtWarp _previous;
+    private bool _applied;
+
+    public string Label => "WordArt Transform";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (WordArtAt(context) is not { } wordArt) return;
+        _previous = wordArt.Warp;
+        wordArt.Warp = warp;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || WordArtAt(context) is not { } wordArt) return;
+        wordArt.Warp = _previous;
+        _applied = false;
+    }
+
+    private WordArt? WordArtAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].WordArt : null;
+}
+
 // ── Group / Ungroup commands (Phase 4 — floating multi-select) ──────────────────────────────────
 
 /// <summary>

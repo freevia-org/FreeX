@@ -2945,16 +2945,21 @@ public static class DocxWriter
         var docPrId = ids.NextShapeDrawingId();
         var name = $"{shape.Kind}{(uint)docPrId}";
 
-        // wps:spPr: position/size (a:xfrm), preset geometry, then optional solid fill and/or outline.
+        // wps:spPr: position/size (a:xfrm), preset geometry, then fill, outline and effects.
         var spPr = new XElement(Wps + "spPr",
             new XElement(A + "xfrm",
                 new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
                 new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
             new XElement(A + "prstGeom", new XAttribute("prst", PresetGeometry(shape.Kind)),
                 new XElement(A + "avLst")));
-        if (shape.FillColorHex is { Length: > 0 } fill)
+
+        // Fill: extended fill takes priority over simple solid-colour FillColorHex.
+        if (shape.ExtendedFill is { } extFill)
+            spPr.Add(BuildShapeFillElement(extFill));
+        else if (shape.FillColorHex is { Length: > 0 } fill)
             spPr.Add(new XElement(A + "solidFill",
                 new XElement(A + "srgbClr", new XAttribute("val", fill.TrimStart('#')))));
+
         // Outline: a:ln carries the stroke width (in EMU) and, inside, a:solidFill + optional a:prstDash.
         if (shape.OutlineColorHex is { Length: > 0 } outlineColor)
         {
@@ -2968,6 +2973,10 @@ public static class DocxWriter
                 ln.Add(new XElement(A + "prstDash", new XAttribute("val", dash)));
             spPr.Add(ln);
         }
+
+        // Effects: a:effectLst (shadow / glow / soft-edge / reflection) and a:sp3d (bevel).
+        if (shape.Effects is { } fx)
+            spPr.Add(BuildShapeEffects(fx));
 
         var wsp = new XElement(Wps + "wsp",
             new XElement(Wps + "cNvSpPr"),
@@ -3023,6 +3032,87 @@ public static class DocxWriter
                 graphic));
     }
 
+    // ── Shape fill / effect helpers (W24) ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Converts a <see cref="ShapeFill"/> to the appropriate DrawingML fill element
+    /// (a:noFill / a:gradFill / a:pattFill). Solid fills are handled by the caller via FillColorHex.
+    /// </summary>
+    private static XElement BuildShapeFillElement(ShapeFill fill) => fill.Kind switch
+    {
+        ShapeFillKind.NoFill => new XElement(A + "noFill"),
+
+        ShapeFillKind.Gradient => new XElement(A + "gradFill",
+            new XElement(A + "gsLst",
+                fill.GradientStops.Select(s =>
+                    new XElement(A + "gs", new XAttribute("pos", s.Position),
+                        new XElement(A + "srgbClr", new XAttribute("val", s.ColorHex.TrimStart('#')))))),
+            new XElement(A + "lin",
+                new XAttribute("ang", fill.GradientAngle),
+                new XAttribute("scaled", 0))),
+
+        ShapeFillKind.Pattern => BuildPatternFill(fill),
+
+        _ => new XElement(A + "noFill"), // fallback
+    };
+
+    private static XElement BuildPatternFill(ShapeFill fill)
+    {
+        var el = new XElement(A + "pattFill");
+        if (fill.PatternPreset is { Length: > 0 } prst)
+            el.Add(new XAttribute("prst", prst));
+        if (fill.PatternFgColorHex is { Length: > 0 } fg)
+            el.Add(new XElement(A + "fgClr",
+                new XElement(A + "srgbClr", new XAttribute("val", fg.TrimStart('#')))));
+        if (fill.PatternBgColorHex is { Length: > 0 } bg)
+            el.Add(new XElement(A + "bgClr",
+                new XElement(A + "srgbClr", new XAttribute("val", bg.TrimStart('#')))));
+        return el;
+    }
+
+    /// <summary>
+    /// Emits a:effectLst (shadow / glow / soft-edge / reflection) and, when bevel is set, a:sp3d.
+    /// Returns only the non-empty elements so callers can add them directly to spPr.
+    /// </summary>
+    private static IEnumerable<XElement> BuildShapeEffects(ShapeEffectLst fx)
+    {
+        var effectLst = new XElement(A + "effectLst");
+
+        if (fx.HasReflection)
+            effectLst.Add(new XElement(A + "reflection",
+                new XAttribute("blurRad", fx.ReflectionBlurRad),
+                new XAttribute("alpha", fx.ReflectionAlpha),
+                new XAttribute("dir", fx.ReflectionDir),
+                new XAttribute("dist", fx.ReflectionDist),
+                new XAttribute("rotWithShape", 0)));
+
+        if (fx.HasGlow)
+            effectLst.Add(new XElement(A + "glow", new XAttribute("rad", fx.GlowRad),
+                new XElement(A + "srgbClr", new XAttribute("val", fx.GlowColorHex.TrimStart('#')),
+                    new XElement(A + "alpha", new XAttribute("val", fx.GlowAlpha)))));
+
+        if (fx.HasSoftEdge)
+            effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRad)));
+
+        if (fx.HasShadow)
+            effectLst.Add(new XElement(A + "outerShdw",
+                new XAttribute("blurRad", fx.ShadowBlurRad),
+                new XAttribute("dist",    fx.ShadowDist),
+                new XAttribute("dir",     fx.ShadowDir),
+                new XElement(A + "srgbClr", new XAttribute("val", fx.ShadowColorHex.TrimStart('#')),
+                    new XElement(A + "alpha", new XAttribute("val", fx.ShadowAlpha)))));
+
+        if (effectLst.HasElements)
+            yield return effectLst;
+
+        if (fx.HasBevel)
+            yield return new XElement(A + "sp3d",
+                new XElement(A + "bevelT",
+                    new XAttribute("w", fx.BevelW),
+                    new XAttribute("h", fx.BevelH),
+                    new XAttribute("prst", fx.BevelPresetType)));
+    }
+
     /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     /// <summary>Empty hyperlink map for building text-box body paragraphs (they carry no document rels).</summary>
     private static readonly Dictionary<string, string> EmptyHyperlinks = new();
@@ -3060,12 +3150,19 @@ public static class DocxWriter
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
                 new XElement(A + "avLst")));
 
+        // wps:bodyPr: required; carries the optional a:prstTxWarp warp preset (W24).
+        var wordArtBodyPr = new XElement(Wps + "bodyPr");
+        if (wordArt.Warp != WordArtWarp.None)
+            wordArtBodyPr.Add(new XElement(A + "prstTxWarp",
+                new XAttribute("prst", WordArtWarpToken(wordArt.Warp)),
+                new XElement(A + "avLst")));
+
         var wsp = new XElement(Wps + "wsp",
             new XElement(Wps + "cNvSpPr"),
             spPr,
             new XElement(Wps + "txbx",
                 new XElement(W + "txbxContent", BuildWordArtParagraph(wordArt))),
-            new XElement(Wps + "bodyPr"));
+            wordArtBodyPr);
 
         // wp:docPr carries the accessibility description (@descr) when AltText is set.
         var wordArtDocPr = new XElement(Wp + "docPr",
@@ -3122,10 +3219,19 @@ public static class DocxWriter
     /// WordArt run's w:rPr. The reader infers the preset back from which of these are present:
     /// gradient → GradientFill, outline (a:ln) → Outline, shadow (a:effectLst) → Shadow, else FillBlue.
     /// </summary>
+    // Additional WordArt colour constants for the expanded style set.
+    private const string WordArtGoldColor    = "C09000";  // gold / dark-yellow fill
+    private const string WordArtWhiteColor   = "FFFFFF";  // white fill
+    private const string WordArtOrangeColor  = "ED7D31";  // orange accent
+    private const string WordArtDarkColor    = "242424";  // near-black
+    private const string WordArtGlowBlue     = "2E75B6";  // glow blue
+    private const string WordArtGlowGold     = "C09000";  // glow gold/amber
+
     private static IEnumerable<XElement> WordArtEffects(WordArtStyle style)
     {
         switch (style)
         {
+            // ── Original four ─────────────────────────────────────────────────────────────────
             case WordArtStyle.GradientFill:
                 yield return new XElement(A + "gradFill",
                     new XElement(A + "gsLst",
@@ -3144,14 +3250,120 @@ public static class DocxWriter
 
             case WordArtStyle.Shadow:
                 yield return SolidFill(WordArtFillColor);
+                yield return OuterShadow(WordArtOutlineColor, 50800, 38100, 2700000, 40000);
+                break;
+
+            // ── Extended set ──────────────────────────────────────────────────────────────────
+            case WordArtStyle.FillGold:
+                // discriminator: gradFill with 2-stop gold gradient (start == gold, end == gold → solid-ish)
+                yield return new XElement(A + "gradFill",
+                    new XElement(A + "gsLst",
+                        new XElement(A + "gs", new XAttribute("pos", 0),
+                            new XElement(A + "srgbClr", new XAttribute("val", WordArtGoldColor))),
+                        new XElement(A + "gs", new XAttribute("pos", 100000),
+                            new XElement(A + "srgbClr", new XAttribute("val", "8B6200")))),
+                    new XElement(A + "lin", new XAttribute("ang", 5400000), new XAttribute("scaled", 0)));
+                break;
+
+            case WordArtStyle.FillWhite:
+                // discriminator: solidFill white + thin dark outline (ln w=9525 val=dark)
+                yield return SolidFill(WordArtWhiteColor);
+                yield return new XElement(A + "ln", new XAttribute("w", 9525),
+                    SolidFill(WordArtDarkColor));
+                yield return new XElement(A + "effectLst"); // present but empty → FillWhite marker
+                break;
+
+            case WordArtStyle.GradFillMulti:
+                // discriminator: 3-stop gradient (orange→red→purple)
+                yield return new XElement(A + "gradFill",
+                    new XElement(A + "gsLst",
+                        new XElement(A + "gs", new XAttribute("pos", 0),
+                            new XElement(A + "srgbClr", new XAttribute("val", "FF6000"))),
+                        new XElement(A + "gs", new XAttribute("pos", 50000),
+                            new XElement(A + "srgbClr", new XAttribute("val", "C00000"))),
+                        new XElement(A + "gs", new XAttribute("pos", 100000),
+                            new XElement(A + "srgbClr", new XAttribute("val", "7030A0")))),
+                    new XElement(A + "lin", new XAttribute("ang", 5400000), new XAttribute("scaled", 0)));
+                break;
+
+            case WordArtStyle.ChromeOne:
+                // discriminator: noFill + dark thick outline (no solidFill before a:ln)
+                yield return new XElement(A + "noFill");
+                yield return new XElement(A + "ln", new XAttribute("w", 19050),
+                    SolidFill(WordArtDarkColor));
+                break;
+
+            case WordArtStyle.ChromeTwo:
+                // discriminator: white solidFill + coloured ln + outerShdw (triple combo)
+                yield return SolidFill(WordArtWhiteColor);
+                yield return new XElement(A + "ln", new XAttribute("w", 12700),
+                    SolidFill(WordArtFillColor));
+                yield return OuterShadow(WordArtFillColor, 38100, 25400, 2700000, 30000);
+                break;
+
+            case WordArtStyle.ShadowOrange:
+                // discriminator: orange solidFill + outerShdw orange
+                yield return SolidFill(WordArtOrangeColor);
+                yield return OuterShadow(WordArtOrangeColor, 50800, 38100, 2700000, 50000);
+                break;
+
+            case WordArtStyle.GlowBlue:
+                // discriminator: dark solidFill + glow blue (a:effectLst/a:glow)
+                yield return SolidFill(WordArtDarkColor);
                 yield return new XElement(A + "effectLst",
-                    new XElement(A + "outerShdw",
-                        new XAttribute("blurRad", 50800),
-                        new XAttribute("dist", 38100),
-                        new XAttribute("dir", 2700000),
-                        new XAttribute("algn", "tl"),
-                        new XElement(A + "srgbClr", new XAttribute("val", WordArtOutlineColor),
-                            new XElement(A + "alpha", new XAttribute("val", 40000)))));
+                    new XElement(A + "glow", new XAttribute("rad", 101600),
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtGlowBlue),
+                            new XElement(A + "alpha", new XAttribute("val", 60000)))));
+                break;
+
+            case WordArtStyle.GlowGold:
+                // discriminator: dark solidFill + glow gold
+                yield return SolidFill(WordArtDarkColor);
+                yield return new XElement(A + "effectLst",
+                    new XElement(A + "glow", new XAttribute("rad", 101600),
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtGlowGold),
+                            new XElement(A + "alpha", new XAttribute("val", 60000)))));
+                break;
+
+            case WordArtStyle.Reflection:
+                // discriminator: blue solidFill + reflection (a:effectLst/a:reflection)
+                yield return SolidFill(WordArtFillColor);
+                yield return new XElement(A + "effectLst",
+                    new XElement(A + "reflection",
+                        new XAttribute("blurRad", 6350),
+                        new XAttribute("stA", 55000),
+                        new XAttribute("endA", 300),
+                        new XAttribute("endPos", 90000),
+                        new XAttribute("dir", 5400000),
+                        new XAttribute("sy", -100000),
+                        new XAttribute("algn", "bl"),
+                        new XAttribute("rotWithShape", 0)));
+                break;
+
+            case WordArtStyle.Bevel:
+                // discriminator: orange solidFill + sp3d bevel in rPr (using effectLst marker)
+                yield return SolidFill(WordArtOrangeColor);
+                yield return new XElement(A + "effectLst");      // marker
+                yield return new XElement(A + "latin", new XAttribute("typeface", "+mj-lt"));
+                // Bevel is on the textBody's a:sp3d; the reader uses glow-free effectLst + sp3d absence here
+                // as discriminator. We emit sp3d on the wsp:spPr in BuildWordArtParagraph caller context;
+                // for now emit a custom attribute that survives round-trip as a:sp3d child marker.
+                yield return new XElement(A + "sp3d",
+                    new XElement(A + "bevelT",
+                        new XAttribute("w", 63500),
+                        new XAttribute("h", 63500),
+                        new XAttribute("prst", "circle")));
+                break;
+
+            case WordArtStyle.PatternFill:
+                // discriminator: pattFill + dark outline
+                yield return new XElement(A + "pattFill", new XAttribute("prst", "diagCross"),
+                    new XElement(A + "fgClr",
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtFillColor))),
+                    new XElement(A + "bgClr",
+                        new XElement(A + "srgbClr", new XAttribute("val", WordArtWhiteColor))));
+                yield return new XElement(A + "ln", new XAttribute("w", 9525),
+                    SolidFill(WordArtFillColor));
                 break;
 
             default: // FillBlue
@@ -3159,6 +3371,58 @@ public static class DocxWriter
                 break;
         }
     }
+
+    private static XElement OuterShadow(string colorHex, int blurRad, int dist, int dir, int alpha) =>
+        new(A + "effectLst",
+            new XElement(A + "outerShdw",
+                new XAttribute("blurRad", blurRad),
+                new XAttribute("dist",    dist),
+                new XAttribute("dir",     dir),
+                new XAttribute("algn",    "tl"),
+                new XElement(A + "srgbClr", new XAttribute("val", colorHex.TrimStart('#')),
+                    new XElement(A + "alpha", new XAttribute("val", alpha)))));
+
+    /// <summary>Maps a <see cref="WordArtWarp"/> enum value to the DrawingML <c>a:prstTxWarp/@prst</c> token.</summary>
+    private static string WordArtWarpToken(WordArtWarp warp) => warp switch
+    {
+        WordArtWarp.ArchUp        => "textArchUp",
+        WordArtWarp.ArchDown      => "textArchDown",
+        WordArtWarp.Circle        => "textCircle",
+        WordArtWarp.Button        => "textButton",
+        WordArtWarp.Wave1         => "textWave1",
+        WordArtWarp.Wave2         => "textWave2",
+        WordArtWarp.Inflate       => "textInflate",
+        WordArtWarp.Deflate       => "textDeflate",
+        WordArtWarp.InflateBottom => "textInflateBottom",
+        WordArtWarp.ChevronUp     => "textChevron",
+        WordArtWarp.ChevronDown   => "textChevronInverted",
+        WordArtWarp.FadeRight     => "textFadeRight",
+        WordArtWarp.FadeLeft      => "textFadeLeft",
+        WordArtWarp.SlantUp       => "textSlantUp",
+        WordArtWarp.SlantDown     => "textSlantDown",
+        _                         => "textNoShape",
+    };
+
+    /// <summary>Parses a <c>a:prstTxWarp/@prst</c> token back to a <see cref="WordArtWarp"/> enum value.</summary>
+    private static WordArtWarp WordArtWarpFromToken(string? token) => token switch
+    {
+        "textArchUp"         => WordArtWarp.ArchUp,
+        "textArchDown"       => WordArtWarp.ArchDown,
+        "textCircle"         => WordArtWarp.Circle,
+        "textButton"         => WordArtWarp.Button,
+        "textWave1"          => WordArtWarp.Wave1,
+        "textWave2"          => WordArtWarp.Wave2,
+        "textInflate"        => WordArtWarp.Inflate,
+        "textDeflate"        => WordArtWarp.Deflate,
+        "textInflateBottom"  => WordArtWarp.InflateBottom,
+        "textChevron"        => WordArtWarp.ChevronUp,
+        "textChevronInverted"=> WordArtWarp.ChevronDown,
+        "textFadeRight"      => WordArtWarp.FadeRight,
+        "textFadeLeft"       => WordArtWarp.FadeLeft,
+        "textSlantUp"        => WordArtWarp.SlantUp,
+        "textSlantDown"      => WordArtWarp.SlantDown,
+        _                    => WordArtWarp.None,
+    };
 
     /// <summary>Builds an a:solidFill wrapping an a:srgbClr of the given RRGGBB hex value.</summary>
     private static XElement SolidFill(string hex) =>

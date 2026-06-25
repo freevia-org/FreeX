@@ -1729,8 +1729,11 @@ public sealed class FreeWRibbonParityTests
             .Contain("freew.shape-change")
             .And.Contain("freew.shape-fill")
             .And.Contain("freew.shape-outline")
+            .And.Contain("freew.shape-effects")        // W24
+            .And.Contain("freew.shape-styles-gallery") // W24
             .And.Contain("freew.shape-text-direction")
             .And.Contain("freew.wordart-style")
+            .And.Contain("freew.wordart-transform")    // W24
             .And.Contain("freew.shape-align-left")
             .And.Contain("freew.shape-align-center")
             .And.Contain("freew.shape-align-right")
@@ -1757,7 +1760,7 @@ public sealed class FreeWRibbonParityTests
             .Should()
             .Equal("freew.shape-text-horizontal", "freew.shape-text-rotate90", "freew.shape-text-rotate270");
 
-        // Menu items for WordArt Style gallery
+        // Menu items for WordArt Style gallery — 15 presets (W24 expanded from 4)
         var wordArtStyle = drawing.FindGroup("drawing-wordart")!.Controls
             .OfType<RibbonDropdown>()
             .Single(c => c.CommandId.Value == "freew.wordart-style");
@@ -1766,18 +1769,44 @@ public sealed class FreeWRibbonParityTests
             .Select(item => item.CommandId!.Value)
             .Should()
             .Equal("freew.wordart-style-fill-blue", "freew.wordart-style-gradient",
-                   "freew.wordart-style-outline", "freew.wordart-style-shadow");
+                   "freew.wordart-style-outline", "freew.wordart-style-shadow",
+                   // W24 extended eleven
+                   "freew.wordart-style-fill-gold", "freew.wordart-style-fill-white",
+                   "freew.wordart-style-grad-multi", "freew.wordart-style-chrome-one",
+                   "freew.wordart-style-chrome-two", "freew.wordart-style-shadow-orange",
+                   "freew.wordart-style-glow-blue", "freew.wordart-style-glow-gold",
+                   "freew.wordart-style-reflection", "freew.wordart-style-bevel",
+                   "freew.wordart-style-pattern");
+
+        // Menu items for WordArt Transform — 14 warp presets (W24)
+        var wordArtTransform = drawing.FindGroup("drawing-wordart")!.Controls
+            .OfType<RibbonDropdown>()
+            .Single(c => c.CommandId.Value == "freew.wordart-transform");
+        wordArtTransform.Menu.Items
+            .Where(item => item.Kind == RibbonMenuItemKind.Command)
+            .Select(item => item.CommandId!.Value)
+            .Should()
+            .Equal("freew.wordart-warp-none",
+                   "freew.wordart-warp-arch-up", "freew.wordart-warp-arch-down",
+                   "freew.wordart-warp-circle",
+                   "freew.wordart-warp-wave1", "freew.wordart-warp-wave2",
+                   "freew.wordart-warp-inflate", "freew.wordart-warp-deflate",
+                   "freew.wordart-warp-chevron-up", "freew.wordart-warp-chevron-down",
+                   "freew.wordart-warp-fade-right", "freew.wordart-warp-fade-left",
+                   "freew.wordart-warp-slant-up", "freew.wordart-warp-slant-down");
 
         // Every command id in the tab + menus must be registered (backed).
         var allIds = CommandIds(drawing)
             .Concat(MenuCommandIds(changeShape))
             .Concat(MenuCommandIds(textDir))
             .Concat(MenuCommandIds(wordArtStyle))
+            .Concat(MenuCommandIds(wordArtTransform))
             .Concat(drawing.FindGroup("drawing-styles")!.Controls.OfType<RibbonDropdown>()
                 .SelectMany(MenuCommandIds))
             .Distinct()
             .Where(id => id is not ("freew.shape-change" or "freew.shape-fill" or "freew.shape-outline"
-                or "freew.shape-text-direction" or "freew.wordart-style"));
+                or "freew.shape-effects" or "freew.shape-styles-gallery"
+                or "freew.shape-text-direction" or "freew.wordart-style" or "freew.wordart-transform"));
 
         foreach (var commandId in allIds)
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must be backed");
