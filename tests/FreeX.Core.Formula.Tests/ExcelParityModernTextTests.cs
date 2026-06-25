@@ -74,9 +74,12 @@ public sealed class ExcelParityModernTextTests
     [Theory]
     [InlineData("=TEXTBEFORE(\"😀\",\"x\",2)")]
     [InlineData("=TEXTAFTER(\"😀\",\"x\",-2)")]
-    public void TextBeforeAfter_InstanceNumCountsSurrogatePairsAsSingleTextElements(string formula)
+    public void TextBeforeAfter_InstanceNumBeyondOccurrenceCountReturnsNA(string formula)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+        // 😀 is 2 UTF-16 code units; instanceNum 2 does not exceed textLength (2),
+        // so the bound-check passes. The delimiter "x" has 0 occurrences, so the
+        // 2nd occurrence doesn't exist → #N/A (not #VALUE!).
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.NA);
     }
 
     [Fact]

@@ -86,7 +86,7 @@ public static partial class BuiltInFunctions
         if (text.Length == 0)
             return TextResult("");
 
-        var textLength = ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length;
+        var textLength = text.Length;
         if (Math.Abs(options.InstanceNum) > textLength) return ErrorValue.Value;
 
         if (options.Delimiters.Any(delimiter => delimiter.Length == 0))

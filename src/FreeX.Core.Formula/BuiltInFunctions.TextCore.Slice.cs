@@ -29,7 +29,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue LenScalar(ScalarValue value)
     {
         var text = ToText(value);
-        return new NumberValue(ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length);
+        return new NumberValue(text.Length);
     }
 
     private static ScalarValue LenB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -74,8 +74,6 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         count = Math.Min(count, text.Length);
-        if (ContainsSurrogatePair(text))
-            return TextResult(text[..AdvanceTextElements(text, 0, count)]);
         return TextResult(text[..count]);
     }
 
@@ -109,10 +107,7 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         count = Math.Min(count, text.Length);
-        int start = ContainsSurrogatePair(text)
-            ? AdvanceTextElements(text, 0, Math.Max(0, CountTextElements(text) - count))
-            : text.Length - count;
-        return TextResult(text[start..]);
+        return TextResult(text[(text.Length - count)..]);
     }
 
     private static ScalarValue LeftBScalarWithCount(ScalarValue value, ScalarValue countValue) =>
@@ -163,8 +158,6 @@ public static partial class BuiltInFunctions
         if (rawStart < 1 || rawLen < 0 || rawStart > int.MaxValue || rawLen > int.MaxValue) return ErrorValue.Value;
         if (args[0] is RangeValue range) return MapMidRange(range, (int)rawStart, (int)rawLen);
         var text    = ToText(args[0]);
-        if (ContainsSurrogatePair(text))
-            return MidTextWithSurrogatePairs(text, (int)rawStart, (int)rawLen);
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
         if (start >= text.Length) return new TextValue("");
@@ -219,21 +212,10 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue MidText(string text, int startNum, int numChars)
     {
-        if (ContainsSurrogatePair(text))
-            return MidTextWithSurrogatePairs(text, startNum, numChars);
         int start = startNum - 1;
         if (start >= text.Length) return new TextValue("");
         int actualLen = Math.Min(numChars, text.Length - start);
         return TextResult(text.Substring(start, actualLen));
-    }
-
-    private static ScalarValue MidTextWithSurrogatePairs(string text, int startNum, int numChars)
-    {
-        int start = TextElementIndexFromOneBasedPosition(text, startNum);
-        if (start >= text.Length) return new TextValue("");
-
-        int end = AdvanceTextElements(text, start, numChars);
-        return TextResult(text[start..end]);
     }
 
 }

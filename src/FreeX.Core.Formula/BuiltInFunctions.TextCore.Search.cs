@@ -48,18 +48,15 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue FindText(string findText, string withinText, int startNum)
     {
-        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
-        int startIdx = hasSurrogatePair
-            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
-            : startNum - 1;
+        int startIdx = startNum - 1;
         if (findText.Length == 0)
-            return startNum <= (hasSurrogatePair ? CountTextElements(withinText) : withinText.Length) + 1
+            return startNum <= withinText.Length + 1
                 ? new NumberValue(startNum)
                 : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
         int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
         if (pos < 0) return ErrorValue.Value;
-        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, pos) : pos + 1);
+        return new NumberValue(pos + 1);
     }
 
     private static ScalarValue Search(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -132,12 +129,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue SearchText(string findText, string withinText, int startNum)
     {
-        bool hasSurrogatePair = ContainsSurrogatePair(withinText);
-        int startIdx = hasSurrogatePair
-            ? TextElementIndexFromOneBasedPosition(withinText, startNum)
-            : startNum - 1;
+        int startIdx = startNum - 1;
         if (findText.Length == 0)
-            return startNum <= (hasSurrogatePair ? CountTextElements(withinText) : withinText.Length) + 1
+            return startNum <= withinText.Length + 1
                 ? new NumberValue(startNum)
                 : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
@@ -154,7 +148,7 @@ public static partial class BuiltInFunctions
         }
 
         if (!match.Success) return ErrorValue.Value;
-        return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, match.Index) : match.Index + 1);
+        return new NumberValue(match.Index + 1);
     }
 
     private static ScalarValue FindBText(string findText, string withinText, int startByte)

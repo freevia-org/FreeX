@@ -83,8 +83,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ReptText(string text, int times)
     {
-        var characterCount = ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length;
-        var outputCharacterCount = (long)characterCount * times;
+        var outputCharacterCount = (long)text.Length * times;
         if (outputCharacterCount > 32767) return ErrorValue.Value;
         if (outputCharacterCount == 0) return new TextValue("");
 

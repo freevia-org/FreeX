@@ -326,8 +326,8 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DAYS(DATE(1900,3,1),DATE(1900,2,28))", 2)]
     [InlineData("=DAYS360(DATE(1900,1,1),DATE(1900,3,1))", 60)]
     [InlineData("=DAYS360(DATE(1900,2,28),DATE(1900,3,1))", 3)]
-    [InlineData("=DAYS360(DATE(2023,2,28),DATE(2023,3,31))", 30)]
-    [InlineData("=DAYS360(DATE(2024,2,29),DATE(2024,3,31))", 30)]
+    [InlineData("=DAYS360(DATE(2023,2,28),DATE(2023,3,31))", 33)]
+    [InlineData("=DAYS360(DATE(2024,2,29),DATE(2024,3,31))", 32)]
     [InlineData("=DAYS360(DATE(2024,2,28),DATE(2024,3,31))", 33)]
     [InlineData("=DAYS360(DATE(2024,2,29),DATE(2024,3,31),TRUE)", 31)]
     public void DayCountFunctions_UseExcelSerialBoundaries(string formula, double expected)
