@@ -75,6 +75,10 @@ public sealed partial class MainWindow
             };
 
         // WPF uses a solid light-blue-grey background (PivotHeaderDropdownButtonBrush = RGB 228,233,240).
+        // Use a styled Border+PointerPressed rather than Button so the chevron renders in headless
+        // captures (Avalonia Button needs its ContentPresenter template to display its Content in
+        // headless-platform mode; the autofilter Button works because the live-app theme is loaded,
+        // but in --parity-grid headless captures only the intrinsic layout/render pipeline runs).
         var buttonBorder = new Border
         {
             Width = 15,
@@ -88,29 +92,24 @@ public sealed partial class MainWindow
             Child = chevronPath,
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };
-
-        var button = new Button
-        {
-            Content = buttonBorder,
-            Padding = new Thickness(0),
-            MinWidth = 0,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
-        };
-        AutomationProperties.SetAutomationId(button, $"PivotDropdown_{address.Row}_{address.Col}");
-        AutomationProperties.SetName(button, "Pivot field dropdown");
+        AutomationProperties.SetAutomationId(buttonBorder, $"PivotDropdown_{address.Row}_{address.Col}");
+        AutomationProperties.SetName(buttonBorder, "Pivot field dropdown");
 
         // Capture menuTarget for the click lambda (avoids repeated dictionary lookup).
         var capturedTarget = menuTarget;
-        button.Click += (_, _) => OpenPivotHeaderDropdownMenuFromCell(button, capturedTarget);
+        buttonBorder.PointerPressed += (_, args) =>
+        {
+            if (args.GetCurrentPoint(buttonBorder).Properties.IsLeftButtonPressed)
+            {
+                OpenPivotHeaderDropdownMenuFromCell(buttonBorder, capturedTarget);
+                args.Handled = true;
+            }
+        };
 
         var grid = new AvaloniaGrid { ClipToBounds = true };
         if (content is Control existing)
             grid.Children.Add(existing);
-        grid.Children.Add(button);
+        grid.Children.Add(buttonBorder);
         cellBorder.Child = grid;
         return cellBorder;
     }
