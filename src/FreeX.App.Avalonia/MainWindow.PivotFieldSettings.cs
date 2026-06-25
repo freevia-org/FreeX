@@ -178,7 +178,7 @@ public sealed partial class MainWindow
         };
         var customNameLabel = new TextBlock
         {
-            Text = UiText.Get("PivotValueFieldSettings_CustomName"),
+            Text = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_CustomName")),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
@@ -192,18 +192,18 @@ public sealed partial class MainWindow
 
         // ── Tab 1: Summarize Values By ─────────────────────────────────────────
         var summarizePanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
-        summarizePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_SummarizeValueFieldBy"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        summarizePanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_SummarizeValueFieldBy")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         summarizePanel.Children.Add(summaryBox);
 
         // ── Tab 2: Show Values As ──────────────────────────────────────────────
         var showValuesAsPanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
-        showValuesAsPanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_ShowValuesAs2"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        showValuesAsPanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_ShowValuesAs2")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         showValuesAsPanel.Children.Add(showValuesAsBox);
         showValuesAsPanel.Children.Add(basePanel);
 
         // ── Tab 3: Number Format ───────────────────────────────────────────────
         var numberFormatPanel = new StackPanel { Spacing = 6, Margin = new Thickness(10) };
-        numberFormatPanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueFieldSettings_NumberFormat2"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        numberFormatPanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_NumberFormat2")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         numberFormatPanel.Children.Add(numberFormatButton);
 
         var tabs = new TabControl

@@ -8574,7 +8574,7 @@ public sealed partial class MainWindow : Window
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("UnhideSheet_UnhideSheet2").Replace("_", string.Empty) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("UnhideSheet_UnhideSheet2")).Replace("_", string.Empty) },
                 sheetBox,
                 buttonRow,
             },
@@ -11488,7 +11488,7 @@ public sealed partial class MainWindow : Window
         // Number tab body: a two-column Grid so the Category list stretches to the full
         // height of the right-hand controls column (matches the Windows screenshot, where
         // the Category list fills the entire dialog body vertically).
-        var numberCategoryLabel = new TextBlock { Text = UiText.Get("FormatCells_Category"), Margin = new Thickness(0, 0, 0, 4) };
+        var numberCategoryLabel = new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Category")), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(numberCategoryLabel, Dock.Top);
         var numberCategoryField = new DockPanel
         {
@@ -16371,7 +16371,7 @@ public sealed partial class MainWindow : Window
                         : showSecondFormula
                             ? "Minimum value for the validation rule."
                             : "Value for the validation rule.");
-            formula2Label.Text = UiText.Get("DataValidation_Maximum");
+            formula2Label.Text = StripDisplayMnemonic(UiText.Get("DataValidation_Maximum"));
             operatorField.IsVisible = !isList && !isCustom && !isAny;
             formula1Field.IsVisible = !isAny;
             formula2Field.IsVisible = showSecondFormula;

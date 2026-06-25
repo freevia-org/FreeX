@@ -107,7 +107,7 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartDataLabels_PositionLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartDataLabels_PositionLabel")), FontSize = 12 },
                 positionCombo,
                 new TextBlock { Text = UiText.Get("ChartDataLabels_ContainsLabel"), FontSize = 12, Margin = new Thickness(0, 6, 0, 0) },
                 valueCheck,
@@ -510,11 +510,11 @@ public sealed partial class MainWindow
             Children =
             {
                 showCheck,
-                new TextBlock { Text = UiText.Get("ChartTrendline_TypeLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_TypeLabel")), FontSize = 12 },
                 typeCombo,
-                new TextBlock { Text = UiText.Get("ChartTrendline_PeriodLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_PeriodLabel")), FontSize = 12 },
                 periodBox,
-                new TextBlock { Text = UiText.Get("ChartTrendline_OrderLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartTrendline_OrderLabel")), FontSize = 12 },
                 orderBox,
                 equationCheck,
                 rSquaredCheck,
@@ -625,9 +625,9 @@ public sealed partial class MainWindow
                 showCheck,
                 new TextBlock { Text = UiText.Get("ChartErrorBars_KindLabel"), FontSize = 12 },
                 kindCombo,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_DirectionLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartErrorBars_DirectionLabel")), FontSize = 12 },
                 directionCombo,
-                new TextBlock { Text = UiText.Get("ChartErrorBars_ValueLabel"), FontSize = 12 },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("ChartErrorBars_ValueLabel")), FontSize = 12 },
                 valueBox,
                 endCapsCheck,
                 buttonRow,

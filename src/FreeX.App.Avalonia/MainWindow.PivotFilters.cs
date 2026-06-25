@@ -124,7 +124,7 @@ public sealed partial class MainWindow
         var searchBox = new TextBox
         {
             MinWidth = 200,
-            PlaceholderText = UiText.Get("PivotFieldFilter_Search"),
+            PlaceholderText = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_Search")),
         };
         ApplyPivotTextBoxChrome(searchBox);
         AutomationProperties.SetAutomationId(searchBox, "PivotItemFilterSearchBox");
@@ -203,7 +203,7 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         });
-        selectItemsPanel.Children.Add(new TextBlock { Text = UiText.Get("PivotFieldFilter_Search"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
+        selectItemsPanel.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_Search")), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
         selectItemsPanel.Children.Add(searchBox);
         selectItemsPanel.Children.Add(selectAll);
         selectItemsPanel.Children.Add(clearItemFilterBtn);

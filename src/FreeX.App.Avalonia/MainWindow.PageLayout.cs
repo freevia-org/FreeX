@@ -803,7 +803,7 @@ public sealed partial class MainWindow
                     {
                         PageSetupLabel(UiText.Get("PageSetup_HeaderPreset")),
                         headerPresetBox,
-                        new TextBlock { Text = UiText.Get("PageSetup_CustomHeader"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
+                        new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PageSetup_CustomHeader")), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
                         new StackPanel
                         {
                             Orientation = Orientation.Horizontal,
@@ -812,7 +812,7 @@ public sealed partial class MainWindow
                         },
                         PageSetupLabel(UiText.Get("PageSetup_FooterPreset")),
                         footerPresetBox,
-                        new TextBlock { Text = UiText.Get("PageSetup_CustomFooter"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
+                        new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PageSetup_CustomFooter")), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
                         new StackPanel
                         {
                             Orientation = Orientation.Horizontal,

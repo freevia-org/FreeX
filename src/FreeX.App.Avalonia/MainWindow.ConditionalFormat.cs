@@ -1162,7 +1162,7 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal),
+                    Text = StripDisplayMnemonic(UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor")).Replace("_", string.Empty, StringComparison.Ordinal),
                     VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
                     Margin = new Thickness(0, 0, 6, 0),
                     FontSize = 12,
@@ -1254,7 +1254,7 @@ public sealed partial class MainWindow
                     {
                         new TextBlock
                         {
-                            Text = UiText.Get("ManageConditionalFormats_Rules").Replace("_", string.Empty, StringComparison.Ordinal),
+                            Text = StripDisplayMnemonic(UiText.Get("ManageConditionalFormats_Rules")).Replace("_", string.Empty, StringComparison.Ordinal),
                             FontSize = 12,
                             FontFamily = FormulaBarFontFamily,
                             Margin = new Thickness(0, 0, 0, 4),
