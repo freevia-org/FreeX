@@ -172,10 +172,12 @@ public sealed class ModelUnitTests
     // ── TextBody ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void TextBody_DefaultAnchor_IsTop()
+    public void TextBody_DefaultAnchor_IsNull()
     {
+        // Anchor = null means "not explicitly set; inherit from layout/master".
+        // The compositor resolves this to Top by default (or Middle for CenteredTitle).
         var tb = new TextBody();
-        tb.Anchor.Should().Be(VerticalAnchor.Top);
+        tb.Anchor.Should().BeNull("default anchor is unset so the compositor can inherit from the layout/master");
         tb.Wrap.Should().BeTrue();
         tb.AutoFit.Should().BeFalse();
     }

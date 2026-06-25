@@ -681,6 +681,200 @@ public sealed class SlideCompositorTests
         var act = () => SlideCompositor.Compose(p, null!);
         act.Should().Throw<ArgumentNullException>();
     }
+
+    // â"€â"€â"€ P0: Placeholder text alignment + anchor inheritance (Wave 1G) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+    [Fact]
+    public void Compose_CenteredTitle_NoExplicitAlign_InheritsCenter_FromLayoutLstStyle()
+    {
+        // Arrange: presentation with a layout placeholder that carries lstStyle algn="ctr".
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutTitleBody = new TextBody { DefaultParaAlign = TextAlign.Center, Anchor = VerticalAnchor.Bottom };
+        var layoutTitlePara = new Paragraph();
+        layoutTitlePara.Runs.Add(new Run { Text = "Click to edit" });
+        layoutTitleBody.Paragraphs.Add(layoutTitlePara);
+
+        var layoutTitle = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutTitleBody
+        };
+        layout.Placeholders.Add(layoutTitle);
+        p.Layouts.Add(layout);
+
+        // Slide shape has no explicit geometry, no explicit align.
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            // No xfrm — inherits from layout.
+        };
+        var titleBody = new TextBody();  // Anchor = null, DefaultParaAlign = null
+        var titlePara = new Paragraph();  // Align = null — should inherit ctr from layout
+        titlePara.Runs.Add(new Run { Text = "My Title" });
+        titleBody.Paragraphs.Add(titlePara);
+        titleShape.TextBody = titleBody;
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: paragraph should be centered (inherited from layout lstStyle).
+        shapeOp.Text.Should().NotBeNull();
+        shapeOp.Text!.Paragraphs[0].Align.Should().Be(TextAlign.Center,
+            "ctrTitle placeholder inherits algn=ctr from layout lstStyle");
+    }
+
+    [Fact]
+    public void Compose_CenteredTitle_NoLayoutLstStyle_DefaultsToCenter()
+    {
+        // Arrange: a CenteredTitle placeholder with no layout lstStyle — should still default to Center.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutTitle = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600
+            // No TextBody — so DefaultParaAlign is not set
+        };
+        layout.Placeholders.Add(layoutTitle);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+        };
+        var titleBody = new TextBody();
+        var titlePara = new Paragraph();
+        titlePara.Runs.Add(new Run { Text = "Title" });
+        titleBody.Paragraphs.Add(titlePara);
+        titleShape.TextBody = titleBody;
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: ctrTitle placeholder type triggers center default even without explicit lstStyle.
+        shapeOp.Text!.Paragraphs[0].Align.Should().Be(TextAlign.Center,
+            "ctrTitle placeholder type defaults to Center alignment");
+    }
+
+    [Fact]
+    public void Compose_CenteredTitle_ExplicitAlignWins_OverInherited()
+    {
+        // Arrange: layout says ctr, but slide paragraph has explicit Left — explicit wins.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { DefaultParaAlign = TextAlign.Center };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "placeholder" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutTitle = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutTitle);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+        };
+        var titleBody = new TextBody();
+        var titlePara = new Paragraph { Align = TextAlign.Left }; // Explicit Left
+        titlePara.Runs.Add(new Run { Text = "Title" });
+        titleBody.Paragraphs.Add(titlePara);
+        titleShape.TextBody = titleBody;
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: explicit Left wins over inherited Center.
+        shapeOp.Text!.Paragraphs[0].Align.Should().Be(TextAlign.Left,
+            "explicit paragraph alignment overrides inherited default");
+    }
+
+    [Fact]
+    public void Compose_CenteredTitle_VerticalAnchor_InheritedFromLayout()
+    {
+        // Arrange: layout placeholder has anchor=Bottom in its bodyPr.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        var layoutBody = new TextBody { Anchor = VerticalAnchor.Bottom };
+        var layoutPara = new Paragraph();
+        layoutPara.Runs.Add(new Run { Text = "ph" });
+        layoutBody.Paragraphs.Add(layoutPara);
+        var layoutTitle = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            OffsetXEmu = 1524000, OffsetYEmu = 1122363,
+            ExtentCxEmu = 9144000, ExtentCyEmu = 2387600,
+            TextBody = layoutBody
+        };
+        layout.Placeholders.Add(layoutTitle);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var titleShape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+        };
+        var titleBody = new TextBody(); // Anchor = null → inherit
+        var titlePara = new Paragraph();
+        titlePara.Runs.Add(new Run { Text = "Title" });
+        titleBody.Paragraphs.Add(titlePara);
+        titleShape.TextBody = titleBody;
+        slide.Shapes.Add(titleShape);
+        p.Slides.Add(slide);
+
+        // Act
+        var ops = SlideCompositor.Compose(p, slide);
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: vertical anchor comes from the layout placeholder.
+        shapeOp.Text!.Anchor.Should().Be(VerticalAnchor.Bottom,
+            "vertical anchor is inherited from layout placeholder bodyPr");
+    }
 }
 
 
