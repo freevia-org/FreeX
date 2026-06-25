@@ -4,6 +4,21 @@ using Free.Shared.AppServices;
 namespace Free.Shared.Shell;
 
 /// <summary>
+/// Test/headless seam for shared WPF message boxes. When <see cref="Handler"/> is set, the shared
+/// realizer returns its result instead of calling the blocking <see cref="MessageBox"/>. Production
+/// leaves this null so real dialogs show; test hosts install a handler so prompts (e.g. the
+/// Save-on-exit confirmation fired from a window's Closing handler) never deadlock the STA thread.
+/// </summary>
+public static class HeadlessMessageBox
+{
+    /// <summary>
+    /// Non-interactive responder: given the message text and the button set, returns the result the
+    /// dialog would have produced. Null (default) = show the real modal dialog.
+    /// </summary>
+    public static Func<string?, UserMessageButtons, UserMessageResult>? Handler { get; set; }
+}
+
+/// <summary>
 /// Single WPF renderer for shared message dialog abstractions.
 /// </summary>
 internal static class WpfMessageBoxRealizer
@@ -20,6 +35,10 @@ internal static class WpfMessageBoxRealizer
         UserMessageButtons buttons,
         UserMessageIcon icon)
     {
+        // Test/headless override — answer without showing a blocking modal (avoids STA-teardown deadlocks).
+        if (HeadlessMessageBox.Handler is { } handler)
+            return handler(message, buttons);
+
         var result = MessageBox.Show(
             owner,
             message ?? string.Empty,
