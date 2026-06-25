@@ -125,6 +125,7 @@ public sealed class MainWindow : Window
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
+        _editor.CaretMoved += UpdateStatus;
         _editor.CellEditRequested += async req =>
         {
             var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
@@ -664,7 +665,9 @@ public sealed class MainWindow : Window
         var text = _editor.PlainText;
         var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
         var chars = text.Length;
-        _status.Text = $"{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
+        var pageNum = _editor.CaretPageIndex + 1;
+        var pageTotal = _editor.PageCount;
+        _status.Text = $"Page {pageNum} of {pageTotal}   {words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
             + (_editor.CanUndo ? "   • edited" : "");
     }
 

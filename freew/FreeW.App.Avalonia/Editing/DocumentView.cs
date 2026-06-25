@@ -23,6 +23,8 @@ public sealed class DocumentView : Control
     private const double PxPerPoint = 96.0 / 72.0;
     // Print-layout chrome: grey "desk" gap above (and below) the white page surface.
     private const double DeskPadding = 24;
+    // Gap between consecutive page rectangles (grey desk visible between them).
+    private const double PageGap = 20;
     // Minimum horizontal gap between the control edge and the page left/right edge.
     private const double MinHorzGutter = 24;
     private const double DefaultFontSizePt = 11;
@@ -50,6 +52,10 @@ public sealed class DocumentView : Control
     // Top/bottom margins in DIP (from PageSettings, recomputed on each Relayout).
     private double _marginTopDip;
     private double _marginBottomDip;
+    // Page height in DIP (from PageSettings, recomputed on each Relayout).
+    private double _pageHeightPx;
+    // Number of discrete pages after the last layout pass.
+    private int _pageCount = 1;
 
     public DocumentView()
     {
@@ -63,6 +69,9 @@ public sealed class DocumentView : Control
 
     /// <summary>Raised when a Find result moves the caret, so the shell can scroll it into view.</summary>
     public event Action? ScrollToCaretRequested;
+
+    /// <summary>Raised when the caret moves (key navigation, click, find) so the shell can update the page indicator.</summary>
+    public event Action? CaretMoved;
 
     /// <summary>Raised when a table cell is double-clicked, so the shell can open a cell editor.</summary>
     public event Action<CellEditRequest>? CellEditRequested;
@@ -123,6 +132,34 @@ public sealed class DocumentView : Control
         InvalidateVisual();
         ScrollToCaretRequested?.Invoke();
         return true;
+    }
+
+    /// <summary>Number of discrete pages in the current layout (at least 1).</summary>
+    public int PageCount
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+            return _pageCount;
+        }
+    }
+
+    /// <summary>Zero-based page index of the current caret position (for "Page X of Y" in the status bar).</summary>
+    public int CaretPageIndex
+    {
+        get
+        {
+            if (_laidOutWidth < 0)
+                Relayout(FallbackWidth);
+            // Find the placed char at the caret and derive its page from its page-space Y.
+            foreach (var pc in _placed)
+            {
+                if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
+                    return PageIndexFromPageSpaceY(pc.Y);
+            }
+            return 0;
+        }
     }
 
     /// <summary>Top of the current caret in control coordinates (0 when not resolvable).</summary>
@@ -272,10 +309,12 @@ public sealed class DocumentView : Control
 
             // Convert px -> pt and flip to PDF y-up. The glyph Y is the top of the line box; the text
             // baseline sits roughly at top + fontSize, so the PDF baseline (y-up) is page bottom minus that.
-            // runY is in print-layout coords (includes DeskPadding + _marginTopDip origin); strip that first.
+            // runY is in page-space Y (discrete multi-page layout); invert to get within-page offset.
             var xPt = (runStartX - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
-            var docYPx = runY - (DeskPadding + _marginTopDip);
-            var yWithinPagePx = docYPx - (runPageIndex * pageHeightPx);
+            // Offset within this page's page-space rectangle:
+            //   pageTop(pageSpace) = DeskPadding + pageIndex*(pageHeightPx+PageGap)
+            //   yWithinPagePx = runY - pageTop(pageSpace) = runY - DeskPadding - pageIndex*(pageHeightPx+PageGap)
+            var yWithinPagePx = runY - DeskPadding - runPageIndex * (_pageHeightPx + PageGap);
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
@@ -286,13 +325,15 @@ public sealed class DocumentView : Control
             runFmt = null;
         }
 
-        // Content in _placed starts at DeskPadding + _marginTopDip (print-layout origin).
-        // Strip that offset so page bucketing is in document-space coordinates.
-        var contentOriginY = DeskPadding + _marginTopDip;
+        // Glyphs are now in page-space Y (discrete multi-page layout).
+        // Derive page index and within-page Y directly from the page-space Y.
+        var pageStride = _pageHeightPx + PageGap; // distance between page tops in page space
         foreach (var g in glyphs)
         {
-            var docY = g.Y - contentOriginY; // 0-based document Y (within content area, below top margin)
-            var pageIndex = (int)(docY / pageHeightPx);
+            // Invert ContentYToPageSpaceY:
+            //   pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+PageGap) + marginTopDip + offsetWithinPage
+            var rel = g.Y - DeskPadding;
+            var pageIndex = Math.Max(0, (int)(rel / pageStride));
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
@@ -366,6 +407,7 @@ public sealed class DocumentView : Control
         _cellHits.Clear();
         // Page geometry from the document's PageSettings: a centred page with its own margins.
         _pageWidth = Math.Max(320, _doc.Page.WidthPt * PxPerPoint);
+        _pageHeightPx = Math.Max(400, _doc.Page.HeightPt * PxPerPoint);
         var marginLeft  = Math.Max(0, _doc.Page.MarginLeftPt)   * PxPerPoint;
         var marginRight = Math.Max(0, _doc.Page.MarginRightPt)  * PxPerPoint;
         _marginTopDip    = Math.Max(0, _doc.Page.MarginTopPt)    * PxPerPoint;
@@ -375,8 +417,14 @@ public sealed class DocumentView : Control
         _contentLeft = _pageLeft + marginLeft;
         _contentWidth = Math.Max(120, _pageWidth - marginLeft - marginRight);
         var textWidth = _contentWidth;
-        // Content starts after the desk gap + the document's own top margin.
-        double y = DeskPadding + _marginTopDip;
+        // Available text-area height per page (between top and bottom margin).
+        var textAreaHeight = Math.Max(40, _pageHeightPx - _marginTopDip - _marginBottomDip);
+
+        // _layoutContentY tracks the "content Y" — the offset within the flowing text area
+        // (0 = start of the first text area). This gets converted to page-space Y via
+        // ContentYToPageSpaceY() when placing glyphs.
+        _layoutContentY = 0;
+        _layoutTextAreaHeight = textAreaHeight;
 
         var listNumber = 0;
         var prevList = ListKind.None;
@@ -389,7 +437,7 @@ public sealed class DocumentView : Control
                 {
                     listNumber = 0;
                     prevList = ListKind.None;
-                    y = LayoutImageParagraph(blockIndex, paragraph, textWidth, y);
+                    LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                     continue;
                 }
 
@@ -417,24 +465,73 @@ public sealed class DocumentView : Control
                 }
 
                 prevList = kind;
-                y = LayoutParagraph(blockIndex, paragraph, textWidth, y, inset, marker);
+                LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
             }
             else if (block is Table table)
             {
-                y = LayoutTable(blockIndex, table, textWidth, y);
+                LayoutTablePaged(blockIndex, table, textWidth);
             }
             else
             {
-                y = LayoutReadOnlyBlock(blockIndex, block, textWidth, y);
+                LayoutReadOnlyBlockPaged(blockIndex, block, textWidth);
             }
         }
 
-        // Add bottom margin + desk padding so the page has breathing room below the last line.
-        _contentHeight = y + _marginBottomDip + DeskPadding;
+        // The number of pages = pageIndex of the last content Y + 1.
+        var lastPageIndex = (int)(_layoutContentY / _layoutTextAreaHeight);
+        _pageCount = Math.Max(1, lastPageIndex + 1);
+        // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
+        _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
         _laidOutWidth = width;
     }
 
-    private double LayoutParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y, double leftInset = 0, string? marker = null)
+    // Layout-pass mutable state for paged layout (reset at start of Relayout).
+    private double _layoutContentY;
+    private double _layoutTextAreaHeight;
+
+    /// <summary>
+    /// Converts a content-space Y (0 = first line of text area, increasing downward) to a
+    /// page-space Y (the actual pixel Y in the control's coordinate system).
+    /// Content wraps line-granularly: a line that starts past the current page's bottom
+    /// margin is pushed to the top of the next page.
+    /// Formula: pageIndex = floor(contentY / textAreaHeight)
+    ///          pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+gap) + marginTopDip + (contentY - pageIndex*textAreaHeight)
+    /// </summary>
+    private double ContentYToPageSpaceY(double contentY)
+    {
+        var pageIndex = (int)(contentY / _layoutTextAreaHeight);
+        var offsetWithinPage = contentY - pageIndex * _layoutTextAreaHeight;
+        return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
+    }
+
+    /// <summary>
+    /// Derives the zero-based page index from a page-space Y coordinate.
+    /// Inverse of <see cref="ContentYToPageSpaceY"/>.
+    /// </summary>
+    private int PageIndexFromPageSpaceY(double pageSpaceY)
+    {
+        // Each page occupies (pageHeightPx + PageGap) in page space, starting at DeskPadding.
+        var rel = pageSpaceY - DeskPadding;
+        if (rel < 0) return 0;
+        return Math.Max(0, (int)(rel / (_pageHeightPx + PageGap)));
+    }
+
+    /// <summary>
+    /// Advances _layoutContentY to the next page boundary if the line of <paramref name="lineHeight"/>
+    /// would overflow the current page's text area. Returns the content Y at which the line should start.
+    /// </summary>
+    private double ReserveContentY(double lineHeight)
+    {
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+        {
+            // Push to the top of the next page.
+            _layoutContentY += (_layoutTextAreaHeight - posInPage);
+        }
+        return _layoutContentY;
+    }
+
+    private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
@@ -445,13 +542,15 @@ public sealed class DocumentView : Control
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
         var availableWidth = Math.Max(60, textWidth - leftInset);
-        y += pf.SpaceBeforePt * PxPerPoint;
+        _layoutContentY += pf.SpaceBeforePt * PxPerPoint;
 
         if (marker is not null)
         {
             var markerFmt = paragraph.Runs.Count > 0 ? paragraph.Runs[0].Formatting : RunFormatting.Default;
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
-            _markers.Add((_contentLeft + leftInset - markerWidth - 6, y, marker, markerFmt));
+            // Place the marker at the current content-space Y converted to page-space.
+            var markerY = ContentYToPageSpaceY(_layoutContentY);
+            _markers.Add((_contentLeft + leftInset - markerWidth - 6, markerY, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.
@@ -476,7 +575,7 @@ public sealed class DocumentView : Control
             if (lineWidth + measured[i] > availableWidth && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
-                y = EmitLine(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, availableWidth, y, leftInset);
+                EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, availableWidth, leftInset);
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -488,11 +587,11 @@ public sealed class DocumentView : Control
             i++;
         }
 
-        y = EmitLine(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, availableWidth, y, leftInset, isLast: true);
-        return y + spaceAfter;
+        EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, availableWidth, leftInset, isLast: true);
+        _layoutContentY += spaceAfter;
     }
 
-    private double EmitLine(
+    private void EmitLinePaged(
         int blockIndex,
         IReadOnlyList<Cell> cells,
         double[] measured,
@@ -501,7 +600,6 @@ public sealed class DocumentView : Control
         int to,
         TextAlignment alignment,
         double availableWidth,
-        double y,
         double leftInset = 0,
         bool isLast = false)
     {
@@ -514,18 +612,22 @@ public sealed class DocumentView : Control
                 lineHeight = heights[c];
         }
 
+        // Ensure the whole line fits on one page (push to next page if it overflows).
+        var contentY = ReserveContentY(lineHeight);
+        var pageSpaceY = ContentYToPageSpaceY(contentY);
+
         var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
         for (var c = from; c < to; c++)
         {
-            _placed.Add(new PlacedChar(blockIndex, c, x, y, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
             x += measured[c];
         }
 
         // End-of-line / end-of-paragraph sentinel carries the caret slot after the last char.
         if (isLast)
-            _placed.Add(new PlacedChar(blockIndex, to, x, y, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
+            _placed.Add(new PlacedChar(blockIndex, to, x, pageSpaceY, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
 
-        return y + lineHeight;
+        _layoutContentY = contentY + lineHeight;
     }
 
     private static double AlignmentOffset(TextAlignment alignment, double textWidth, double lineWidth) => alignment switch
@@ -535,7 +637,7 @@ public sealed class DocumentView : Control
         _ => 0,
     };
 
-    private double LayoutReadOnlyBlock(int blockIndex, Block block, double textWidth, double y)
+    private void LayoutReadOnlyBlockPaged(int blockIndex, Block block, double textWidth)
     {
         var text = block is Table table ? TablePlainText(table) : block.ToString() ?? "";
         var cells = FallbackCells(text);
@@ -548,7 +650,7 @@ public sealed class DocumentView : Control
             heights[c] = ft.Height;
         }
 
-        return EmitLine(blockIndex, cells, measured, heights, 0, cells.Count, TextAlignment.Left, textWidth, y, isLast: true);
+        EmitLinePaged(blockIndex, cells, measured, heights, 0, cells.Count, TextAlignment.Left, textWidth, isLast: true);
     }
 
     private static string TablePlainText(Table table) =>
@@ -556,7 +658,7 @@ public sealed class DocumentView : Control
 
     // ---- Table rendering (grid + modal cell text editing) ----------------------------------------
 
-    private double LayoutTable(int blockIndex, Table table, double textWidth, double y)
+    private void LayoutTablePaged(int blockIndex, Table table, double textWidth)
     {
         var cols = Math.Max(1, table.ColumnCount);
         var colWidths = ComputeColumnWidths(table, cols, textWidth);
@@ -607,17 +709,21 @@ public sealed class DocumentView : Control
                 col += span;
             }
 
+            // Treat the row as a unit: reserve space on the current page (or push to next).
+            var rowContentY = ReserveContentY(rowHeight);
+            var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
+
             foreach (var (startCol, span, lines, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
-                var rect = new Rect(columnLeft[startCol], y, cellWidth, rowHeight);
+                var rect = new Rect(columnLeft[startCol], rowPageSpaceY, cellWidth, rowHeight);
                 IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
                 _rects.Add((rect, fill, borders));
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
-                var ty = y + pad;
+                var ty = rowPageSpaceY + pad;
                 foreach (var (lineHeight, chars) in lines)
                 {
                     var tx = columnLeft[startCol] + pad;
@@ -631,13 +737,13 @@ public sealed class DocumentView : Control
                 }
             }
 
-            y += rowHeight;
+            _layoutContentY = rowContentY + rowHeight;
         }
 
-        return y + 8;
+        _layoutContentY += 8;
     }
 
-    private double LayoutImageParagraph(int blockIndex, Paragraph paragraph, double textWidth, double y)
+    private void LayoutImageParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth)
     {
         const double gap = 6;
         var alignment = paragraph.Formatting.Alignment;
@@ -655,12 +761,12 @@ public sealed class DocumentView : Control
                 height *= scale;
             }
 
+            var imgContentY = ReserveContentY(height);
+            var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
             var x = _contentLeft + AlignmentOffset(alignment, textWidth, width);
-            _images.Add((new Rect(x, y, width, height), DecodeBitmap(image)));
-            y += height + gap;
+            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeBitmap(image)));
+            _layoutContentY = imgContentY + height + gap;
         }
-
-        return y;
     }
 
     private Bitmap? DecodeBitmap(InlineImage image)
@@ -764,17 +870,19 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
-        // Grey desk fills the full control area, then a white page surface sits atop it.
-        // The page starts at DeskPadding from the top so grey is visible above the page.
+        // Grey desk fills the full control area.
         context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
-        var pageTop    = DeskPadding;
-        var pageHeight = Math.Max(_contentHeight - DeskPadding, Bounds.Height - DeskPadding);
-        var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, pageHeight);
-        // Subtle drop-shadow: a slightly-offset dark rect drawn behind the page.
-        var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, pageHeight);
-        context.FillRectangle(PageShadowBrush, shadowRect);
-        context.FillRectangle(Brushes.White, pageRect);
-        context.DrawRectangle(null, PageBorderPen, pageRect);
+
+        // Draw each discrete page rectangle: white page with drop-shadow + border.
+        for (var pi = 0; pi < _pageCount; pi++)
+        {
+            var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+            var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
+            var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
+            context.FillRectangle(PageShadowBrush, shadowRect);
+            context.FillRectangle(Brushes.White, pageRect);
+            context.DrawRectangle(null, PageBorderPen, pageRect);
+        }
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border) in _rects)
@@ -871,6 +979,7 @@ public sealed class DocumentView : Control
             if ((e.KeyModifiers & KeyModifiers.Shift) == 0)
                 _selectionAnchor = pos;
             InvalidateVisual();
+            CaretMoved?.Invoke();
         }
     }
 
@@ -1244,6 +1353,7 @@ public sealed class DocumentView : Control
         if (!extend)
             _selectionAnchor = _caret;
         InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     private void MoveToLineEdge(bool toStart, bool extend)
@@ -1252,6 +1362,7 @@ public sealed class DocumentView : Control
         if (!extend)
             _selectionAnchor = _caret;
         InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     private void MoveCaretVertical(int direction, bool extend)
@@ -1265,6 +1376,7 @@ public sealed class DocumentView : Control
             if (!extend)
                 _selectionAnchor = _caret;
             InvalidateVisual();
+            CaretMoved?.Invoke();
         }
     }
 

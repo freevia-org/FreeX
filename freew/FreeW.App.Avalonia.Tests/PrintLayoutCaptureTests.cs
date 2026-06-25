@@ -32,7 +32,8 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class PrintLayoutCaptureTests
 {
     private const int WindowWidth  = 960;
-    private const int WindowHeight = 1100;
+    // Tall enough to capture 2-3 discrete page rects with gaps between them.
+    private const int WindowHeight = 3300;
     private const int MinPngBytes  = 5_000;
 
     private static readonly HeadlessUnitTestSession Session =
@@ -160,6 +161,10 @@ public sealed class PrintLayoutCaptureTests
         }
     }
 
+    /// <summary>
+    /// Builds a long document that spans at least 2 pages, so the PNG capture shows
+    /// discrete page rectangles with grey desk gaps between them.
+    /// </summary>
     private static TextDocument BuildSampleDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -172,57 +177,35 @@ public sealed class PrintLayoutCaptureTests
             Run       = RunFormatting.Default with { Bold = true, FontSizePt = 18, ColorHex = "#2B5797" },
             Paragraph = ParagraphFormatting.Default with { SpaceBeforePt = 12, SpaceAfterPt = 6 },
         };
-        doc.Styles["Heading2"] = new DocumentStyle
-        {
-            Id        = "Heading2",
-            Name      = "Heading 2",
-            Run       = RunFormatting.Default with { Bold = true, FontSizePt = 14, ColorHex = "#2E6DA4" },
-            Paragraph = ParagraphFormatting.Default with { SpaceBeforePt = 10, SpaceAfterPt = 4 },
-        };
+
+        var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
 
         var h1 = new Paragraph { StyleId = "Heading1" };
-        h1.Runs.Add(new Run("FreeW — Avalonia Print Layout"));
+        h1.Runs.Add(new Run("FreeW — Discrete Multi-Page Pagination (test capture)"));
         doc.Blocks.Add(h1);
 
-        var intro = new Paragraph();
-        intro.Runs.Add(new Run(
-            "This document demonstrates the Word-style print-layout chrome in the FreeW Avalonia " +
-            "editing surface. The content is laid out on a white page surface set to the document's " +
-            "page width, centred on a neutral grey desk background. Real top and bottom margins from " +
-            "the PageSettings model are applied so text begins and ends at the correct inset.",
-            RunFormatting.Default with { FontSizePt = 12 }));
-        doc.Blocks.Add(intro);
+        // Add enough paragraphs to overflow page 1 and produce a visible page 2.
+        for (var i = 1; i <= 55; i++)
+        {
+            var p = new Paragraph();
+            p.Runs.Add(new Run(
+                $"Line {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+                "The quick brown fox jumps over the lazy dog. Pack my box with five dozen " +
+                "liquor jugs. Sphinx of black quartz judge my vow.",
+                bodyFmt));
+            doc.Blocks.Add(p);
+        }
 
-        var para2 = new Paragraph();
-        para2.Runs.Add(new Run(
-            "A subtle drop-shadow sits behind the white page to lift it visually off the desk, " +
-            "matching the look of Microsoft Word's Print Layout view. Editing behaviour — caret " +
-            "movement, click hit-testing, selection, find/replace, undo/redo — is preserved because " +
-            "the coordinate shift is applied uniformly to every placed glyph and sentinel.",
-            RunFormatting.Default with { FontSizePt = 12 }));
-        doc.Blocks.Add(para2);
-
-        var h2 = new Paragraph { StyleId = "Heading2" };
-        h2.Runs.Add(new Run("Coordinate model"));
+        var h2 = new Paragraph { StyleId = "Heading1" };
+        h2.Runs.Add(new Run("Page 2 starts here"));
         doc.Blocks.Add(h2);
 
-        var para3 = new Paragraph();
-        para3.Runs.Add(new Run(
-            "All placed glyph Y-coordinates start at DeskPadding + MarginTopDip rather than zero. " +
-            "The page rectangle in Render() is drawn at DeskPadding from the top so the grey desk " +
-            "is always visible above the page. The PDF export subtracts the same origin before " +
-            "computing page index and baseline position, so export fidelity is maintained.",
-            RunFormatting.Default with { FontSizePt = 12 }));
-        doc.Blocks.Add(para3);
-
-        var mixed = new Paragraph();
-        mixed.Runs.Add(new Run("Key properties: ", RunFormatting.Default with { FontSizePt = 12 }));
-        mixed.Runs.Add(new Run("page width", RunFormatting.Default with { FontSizePt = 12, Bold = true }));
-        mixed.Runs.Add(new Run(" = 612pt, ", RunFormatting.Default with { FontSizePt = 12 }));
-        mixed.Runs.Add(new Run("margins", RunFormatting.Default with { FontSizePt = 12, Italic = true }));
-        mixed.Runs.Add(new Run(" = 72pt on each side (1 inch), desk padding = 24px.",
-            RunFormatting.Default with { FontSizePt = 12 }));
-        doc.Blocks.Add(mixed);
+        for (var i = 1; i <= 10; i++)
+        {
+            var p = new Paragraph();
+            p.Runs.Add(new Run($"Page-2 paragraph {i}: content flowing after the first page break.", bodyFmt));
+            doc.Blocks.Add(p);
+        }
 
         return doc;
     }

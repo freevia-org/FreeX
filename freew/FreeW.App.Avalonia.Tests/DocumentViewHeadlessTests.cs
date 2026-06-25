@@ -239,6 +239,121 @@ public sealed class DocumentViewHeadlessTests
             return;
     }
 
+    // ---- Pagination tests -----------------------------------------------------------------------
+
+    /// <summary>
+    /// A short document (a few paragraphs) should produce PageCount == 1.
+    /// </summary>
+    [Fact]
+    public async Task Short_document_has_one_page()
+    {
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(SampleDocument.Create());
+            view.Measure(new Size(800, 4000));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+        pageCount.Should().Be(1, "the default sample document is short enough to fit on one page");
+    }
+
+    /// <summary>
+    /// A document with enough body text to overflow a US-Letter page must produce PageCount > 1.
+    /// </summary>
+    [Fact]
+    public async Task Long_document_produces_multiple_pages()
+    {
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+        pageCount.Should().BeGreaterThan(1, "the long document must span more than one page");
+    }
+
+    /// <summary>
+    /// The scroll height of a multi-page document must be greater than two US-Letter pages tall
+    /// (each page is ~1056px at 96dpi). This confirms that page rects are stacked vertically.
+    /// </summary>
+    [Fact]
+    public async Task Multi_page_document_scroll_height_exceeds_two_letter_pages()
+    {
+        var scrollHeight = 0.0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, double.PositiveInfinity));
+            // After Measure, DesiredSize.Height is the total scroll height.
+            scrollHeight = view.DesiredSize.Height;
+        });
+
+        if (!ran)
+            return;
+        // Two US-Letter pages at 96dpi = 2 * 1056 = 2112 px minimum.
+        scrollHeight.Should().BeGreaterThan(2112,
+            "a multi-page document must have a total height greater than two letter-size pages");
+    }
+
+    /// <summary>
+    /// CaretPageIndex is 0 at the start of a multi-page document (caret on page 1).
+    /// PageCount reports the total page count correctly.
+    /// </summary>
+    [Fact]
+    public async Task Caret_starts_on_page_0_and_page_count_is_correct()
+    {
+        var initialPage = -1;
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = BuildLongDocument();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 9000));
+
+            initialPage = view.CaretPageIndex;
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+        initialPage.Should().Be(0, "caret starts at block 0 which is on page 0");
+        pageCount.Should().BeGreaterThan(1, "long document must have multiple pages");
+    }
+
+    private static TextDocument BuildLongDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+        // US-Letter page = 792pt tall; 1-inch margins = 648pt text area (~865 px at 96dpi).
+        // At 12pt/96dpi body text (~20px line height with 1.3 leading) that's ~43 lines per page.
+        // Add 60 paragraphs of 2 lines each to guarantee > 1 page.
+        for (var i = 1; i <= 60; i++)
+        {
+            var p = new Paragraph();
+            p.Runs.Add(new Run(
+                $"Paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit, " +
+                "sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad " +
+                "minim veniam, quis nostrud exercitation ullamco laboris.",
+                bodyFmt));
+            doc.Blocks.Add(p);
+        }
+        return doc;
+    }
+
     private static T InvokePrivate<T>(object instance, string name, params object[] args)
     {
         var method = instance.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)

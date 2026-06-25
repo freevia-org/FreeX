@@ -56,9 +56,11 @@ return exitCode;
 static int Render(string outPath)
 {
     const int width  = 960;
-    const int height = 1100;
+    // Tall enough to show 2-3 discrete page rectangles with gaps between them.
+    // A US Letter page at 96dpi = 1056px; 3 pages + 2 gaps (~40px) + padding ≈ 3250px.
+    const int height = 3300;
 
-    var doc = BuildSampleDocument();
+    var doc = BuildMultiPageDocument();
     var view = new DocumentView();
     view.LoadDocument(doc);
     view.Measure(new Size(width, height));
@@ -147,10 +149,20 @@ static byte[] TryEncodeViaSkia(DocumentView view, int width, int height)
     }
 }
 
-static TextDocument BuildSampleDocument()
+/// <summary>
+/// Builds a document long enough to span 2–3 pages so the multi-page pagination
+/// (discrete white page rects with grey gaps) is visible in the captured PNG.
+/// A standard US-Letter page (11 in = 792pt) with 1-inch margins leaves ~9 in of
+/// text area. At 12pt body text and ~1.3 leading that's roughly 50 lines per page,
+/// so we add enough paragraphs to cross at least two page boundaries.
+/// </summary>
+static TextDocument BuildMultiPageDocument()
 {
     var doc = TextDocument.CreateEmpty();
     doc.Blocks.Clear();
+
+    // Standard US-Letter (default from PageSettings).
+    // doc.Page.WidthPt = 612; doc.Page.HeightPt = 792; margins = 72pt each side.
 
     doc.Styles["Heading1"] = new DocumentStyle
     {
@@ -167,52 +179,97 @@ static TextDocument BuildSampleDocument()
         Paragraph = ParagraphFormatting.Default with { SpaceBeforePt = 10, SpaceAfterPt = 4 },
     };
 
-    var h1 = new Paragraph { StyleId = "Heading1" };
-    h1.Runs.Add(new Run("FreeW — Avalonia Print Layout"));
-    doc.Blocks.Add(h1);
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
 
-    var intro = new Paragraph();
-    intro.Runs.Add(new Run(
-        "This document demonstrates the Word-style print-layout chrome in the FreeW Avalonia " +
-        "editing surface. The content is laid out on a white page surface set to the document's " +
-        "page width, centred on a neutral grey desk background. Real top and bottom margins from " +
-        "the PageSettings model are applied so text begins and ends at the correct inset.",
-        RunFormatting.Default with { FontSizePt = 12 }));
-    doc.Blocks.Add(intro);
+    void AddH1(string text)
+    {
+        var p = new Paragraph { StyleId = "Heading1" };
+        p.Runs.Add(new Run(text));
+        doc.Blocks.Add(p);
+    }
 
-    var para2 = new Paragraph();
-    para2.Runs.Add(new Run(
-        "A subtle drop-shadow sits behind the white page to lift it visually off the desk, " +
-        "matching the look of Microsoft Word's Print Layout view. Editing behaviour — caret " +
-        "movement, click hit-testing, selection, find/replace, undo/redo — is preserved because " +
-        "the coordinate shift is applied uniformly to every placed glyph and sentinel.",
-        RunFormatting.Default with { FontSizePt = 12 }));
-    doc.Blocks.Add(para2);
+    void AddH2(string text)
+    {
+        var p = new Paragraph { StyleId = "Heading2" };
+        p.Runs.Add(new Run(text));
+        doc.Blocks.Add(p);
+    }
 
-    var h2 = new Paragraph { StyleId = "Heading2" };
-    h2.Runs.Add(new Run("Coordinate model"));
-    doc.Blocks.Add(h2);
+    void AddPara(string text)
+    {
+        var p = new Paragraph();
+        p.Runs.Add(new Run(text, bodyFmt));
+        doc.Blocks.Add(p);
+    }
 
-    var para3 = new Paragraph();
-    para3.Runs.Add(new Run(
-        "All placed glyph Y-coordinates start at DeskPadding + MarginTopDip rather than zero. " +
-        "The page rectangle in Render() is drawn at DeskPadding from the top so the grey desk " +
-        "is always visible above the page. The PDF export subtracts the same origin before " +
-        "computing page index and baseline position, so export fidelity is maintained.",
-        RunFormatting.Default with { FontSizePt = 12 }));
-    doc.Blocks.Add(para3);
+    // ---- Page 1 ----
+    AddH1("FreeW — Discrete Multi-Page Pagination");
+    AddPara(
+        "This document spans multiple pages to verify the discrete pagination feature. " +
+        "Each white rectangle represents one page, separated by grey desk gaps — exactly " +
+        "like Microsoft Word's Print Layout view.");
+    AddH2("Background");
+    AddPara(
+        "Earlier builds rendered a single tall white page. The new layout engine computes " +
+        "a text-area height per page (page height minus top and bottom margins) and wraps " +
+        "content line-granularly: a complete line that would cross the bottom margin is " +
+        "pushed to the top margin of the next page.");
+    AddPara(
+        "The formula for page-space Y is: DeskPadding + pageIndex*(pageHeightPx+PageGap) " +
+        "+ marginTopDip + offsetWithinTextArea. All glyph coordinates, caret positions, " +
+        "hit-testing, selection rendering, find highlights, and GetBlockTop() use the same " +
+        "mapping, preserving editing behaviour across page boundaries.");
+    AddH2("Coordinate transform");
+    AddPara(
+        "Content Y (0 = start of first text area) increases monotonically through the " +
+        "document. Page index = floor(contentY / textAreaHeight). Offset within the page = " +
+        "contentY mod textAreaHeight. Page-space Y adds that offset to the Y of the top " +
+        "margin of the chosen page rectangle.");
+    AddPara(
+        "The ReserveContentY helper checks whether the next line fits in the remaining " +
+        "space on the current page (posInPage + lineHeight <= textAreaHeight). If not, it " +
+        "bumps contentY to the start of the next page before placing the line. This ensures " +
+        "no line is ever split across a page boundary.");
+    AddPara(
+        "Tables are treated row-by-row: each row is reserved as a unit on the current page " +
+        "or pushed to the next. Images are similarly reserved as a whole block. Paragraph " +
+        "space-before and space-after accumulate in content-Y space so they scale correctly " +
+        "across page boundaries.");
+    AddH2("Status bar");
+    AddPara(
+        "The status bar now shows 'Page X of Y' where X is the one-based index of the page " +
+        "containing the caret, and Y is the total page count. The page count is recomputed " +
+        "on every layout pass; the caret page updates whenever the caret moves.");
+    // Add filler paragraphs to push into page 2.
+    for (int i = 1; i <= 12; i++)
+        AddPara($"Paragraph {i} of filler text on page 1 — lorem ipsum dolor sit amet, " +
+                "consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore " +
+                "et dolore magna aliqua. Ut enim ad minim veniam.");
 
-    var mixed = new Paragraph();
-    mixed.Runs.Add(new Run("Key properties: ", RunFormatting.Default with { FontSizePt = 12 }));
-    mixed.Runs.Add(new Run("page width", RunFormatting.Default with { FontSizePt = 12, Bold = true }));
-    mixed.Runs.Add(new Run(" = 612pt, ", RunFormatting.Default with { FontSizePt = 12 }));
-    mixed.Runs.Add(new Run("margins", RunFormatting.Default with { FontSizePt = 12, Italic = true }));
-    mixed.Runs.Add(new Run(" = 72pt on each side (1 inch), desk padding = 24px.",
-        RunFormatting.Default with { FontSizePt = 12 }));
-    doc.Blocks.Add(mixed);
+    // ---- Page 2 ----
+    AddH1("Page 2 — Content continues here");
+    AddPara(
+        "This heading and the body below it are on page 2. The grey gap between pages 1 " +
+        "and 2 is clearly visible in the rendered PNG, confirming that the page-break " +
+        "logic placed content correctly.");
+    for (int i = 1; i <= 12; i++)
+        AddPara($"Body paragraph {i} on page 2 — the quick brown fox jumps over the lazy " +
+                "dog. Pack my box with five dozen liquor jugs. How vexingly quick daft " +
+                "zebras jump!");
+
+    // ---- Page 3 ----
+    AddH1("Page 3 — Third page verification");
+    AddPara(
+        "Reaching page 3 confirms the pagination loop handles more than one page boundary " +
+        "correctly. PDF export, undo/redo, find/replace, and navigation-pane scroll all " +
+        "continue to work because they all share the same page-space Y transform.");
+    for (int i = 1; i <= 6; i++)
+        AddPara($"Final filler paragraph {i} on page 3. Sphinx of black quartz, judge my " +
+                "vow. The five boxing wizards jump quickly.");
 
     return doc;
 }
+
 
 /// <summary>Minimal Avalonia app used by the page-layout shot tool (no UI shown).</summary>
 public sealed class PageShotApp : Application
