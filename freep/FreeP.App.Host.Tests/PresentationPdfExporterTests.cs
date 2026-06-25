@@ -1,7 +1,9 @@
 using System.Linq;
 using System.Text;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using FreeP.Core.IO;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
 
@@ -13,11 +15,17 @@ public class PresentationPdfExporterTests
         presentation.Slides.Clear();
 
         var s1 = new Slide { Title = "Welcome" };
-        s1.Shapes.Add(new SlideShape { Kind = "text", Text = "First bullet" });
-        s1.Shapes.Add(new SlideShape { Kind = "text", Text = "Second bullet" });
+        var bullet1 = new SlideShape { Kind = SlideShapeKind.AutoShape };
+        bullet1.Text = "First bullet";
+        s1.Shapes.Add(bullet1);
+        var bullet2 = new SlideShape { Kind = SlideShapeKind.AutoShape };
+        bullet2.Text = "Second bullet";
+        s1.Shapes.Add(bullet2);
 
         var s2 = new Slide { Title = "Agenda" };
-        s2.Shapes.Add(new SlideShape { Kind = "text", Text = "Line A\nLine B" });
+        var multiLine = new SlideShape { Kind = SlideShapeKind.AutoShape };
+        multiLine.Text = "Line A\nLine B";
+        s2.Shapes.Add(multiLine);
 
         presentation.Slides.Add(s1);
         presentation.Slides.Add(s2);

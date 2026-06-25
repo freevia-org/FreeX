@@ -5,11 +5,18 @@ using FreeP.Core.Model;
 namespace FreeP.Core.IO;
 
 /// <summary>
-/// Stub <c>.fxp</c> ("Free Presentation") reader/writer. FreeP's real on-disk format will be an OPC/.pptx
-/// package; this scaffold uses a small, deterministic JSON document so the host can prove a full
-/// Open → model → Save round-trip without pulling in the presentation domain. The serialization is
-/// canonical (stable property order via the DTO shape, indented, no BOM), so writing a model and re-writing
-/// the model parsed back from it produces byte-identical output — the round-trip invariant the host relies on.
+/// Legacy <c>.fxp</c> ("Free Presentation") reader/writer. The real on-disk format is .pptx; this
+/// frozen JSON format exists only so existing tests and host code can exercise Open/Save without
+/// the full OPC stack. The serialization is canonical (stable property order via the DTO shape,
+/// indented, no BOM), so writing a model and re-writing the model parsed back from it produces
+/// byte-identical output — the round-trip invariant the host relies on.
+///
+/// Wire format contract (Version 1 — frozen):
+///   { Version, Properties:{...}, Slides:[{ Id, Title, Shapes:[{Kind, Text}] }] }
+///
+/// The Title field holds the slide's title text. Shapes lists only non-placeholder content shapes.
+/// Placeholders (title, body) are NOT in the Shapes array — they are an internal model concept
+/// above what the FXP format knows about.
 /// </summary>
 public static class FxpFormat
 {
@@ -24,7 +31,7 @@ public static class FxpFormat
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>Reads a presentation from a <c>.fxp</c> file. Throws on malformed input (the host shows an error).</summary>
+    /// <summary>Reads a presentation from a <c>.fxp</c> file. Throws on malformed input.</summary>
     public static Presentation Read(string path)
     {
         using var stream = File.OpenRead(path);
@@ -46,8 +53,7 @@ public static class FxpFormat
         JsonSerializer.Serialize(PresentationDto.FromModel(presentation), SerializerOptions);
 
     // ── On-disk DTOs ─────────────────────────────────────────────────────────────
-    // Separate from the model so the wire format is an explicit, stable contract (property order, nullability)
-    // rather than whatever the mutable model happens to look like. Keeps the round-trip canonical.
+    // The wire format is a frozen contract. The model mapping adapts here.
 
     private sealed record PresentationDto(
         int Version,
@@ -93,8 +99,15 @@ public static class FxpFormat
 
     private sealed record SlideDto(string Id, string Title, IReadOnlyList<ShapeDto> Shapes)
     {
-        public static SlideDto FromModel(Slide s) =>
-            new(s.Id, s.Title, s.Shapes.Select(ShapeDto.FromModel).ToList());
+        public static SlideDto FromModel(Slide s) => new(
+            s.Id,
+            s.Title,
+            // Only serialize non-placeholder content shapes. The title/body placeholders are
+            // reconstructed from the Title field and the slide's layout on load.
+            s.Shapes
+                .Where(shape => shape.Placeholder is null)
+                .Select(ShapeDto.FromModel)
+                .ToList());
 
         public Slide ToModel()
         {
@@ -105,10 +118,61 @@ public static class FxpFormat
         }
     }
 
+    /// <summary>
+    /// Shape DTO — the wire format stores Kind as a free-form string (legacy contract).
+    /// On read, the string is preserved in <see cref="SlideShape.LegacyFxpKind"/> for
+    /// byte-stable re-write without having to re-derive the string from the enum.
+    /// </summary>
     private sealed record ShapeDto(string Kind, string Text)
     {
-        public static ShapeDto FromModel(SlideShape s) => new(s.Kind, s.Text);
+        public static ShapeDto FromModel(SlideShape s)
+        {
+            // Prefer the preserved legacy string for byte stability; derive otherwise.
+            var kindString = s.LegacyFxpKind ?? DeriveKindString(s);
+            return new(kindString, s.Text);
+        }
 
-        public SlideShape ToModel() => new() { Kind = Kind, Text = Text };
+        private static string DeriveKindString(SlideShape s) => s.Kind switch
+        {
+            Free.Shared.Drawing.SlideShapeKind.Picture => "picture",
+            Free.Shared.Drawing.SlideShapeKind.Group => "group",
+            Free.Shared.Drawing.SlideShapeKind.Table => "table",
+            Free.Shared.Drawing.SlideShapeKind.Connector => "connector",
+            _ => s.AutoShapeKind.ToString().ToLowerInvariant()
+        };
+
+        public SlideShape ToModel()
+        {
+            var shape = new SlideShape
+            {
+                Kind = ParseSlideShapeKind(Kind),
+                AutoShapeKind = ParseAutoShapeKind(Kind),
+                LegacyFxpKind = Kind, // Preserve for byte-stable round-trips
+            };
+            shape.Text = Text;
+            return shape;
+        }
+
+        private static Free.Shared.Drawing.SlideShapeKind ParseSlideShapeKind(string kind) =>
+            kind.ToLowerInvariant() switch
+            {
+                "picture" => Free.Shared.Drawing.SlideShapeKind.Picture,
+                "group" => Free.Shared.Drawing.SlideShapeKind.Group,
+                "table" => Free.Shared.Drawing.SlideShapeKind.Table,
+                "connector" => Free.Shared.Drawing.SlideShapeKind.Connector,
+                _ => Free.Shared.Drawing.SlideShapeKind.AutoShape
+            };
+
+        private static Free.Shared.Drawing.DrawingShapeKind ParseAutoShapeKind(string kind) =>
+            kind.ToLowerInvariant() switch
+            {
+                "rectangle" => Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                "ellipse" => Free.Shared.Drawing.DrawingShapeKind.Ellipse,
+                "line" => Free.Shared.Drawing.DrawingShapeKind.Line,
+                "roundedrectangle" => Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle,
+                "triangle" => Free.Shared.Drawing.DrawingShapeKind.Triangle,
+                "diamond" => Free.Shared.Drawing.DrawingShapeKind.Diamond,
+                _ => Free.Shared.Drawing.DrawingShapeKind.Rectangle
+            };
     }
 }

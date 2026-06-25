@@ -3,6 +3,7 @@
     <Project Path="shared/Free.Shared.AppServices/Free.Shared.AppServices.csproj" />
     <Project Path="shared/Free.Shared.AppServices.Windows/Free.Shared.AppServices.Windows.csproj" />
     <Project Path="shared/Free.Shared.Commands/Free.Shared.Commands.csproj" />
+    <Project Path="shared/Free.Shared.Drawing/Free.Shared.Drawing.csproj" />
     <Project Path="shared/Free.Shared.IO/Free.Shared.IO.csproj" />
     <Project Path="shared/Free.Shared.Localization/Free.Shared.Localization.csproj" />
     <Project Path="shared/Free.Shared.Opc/Free.Shared.Opc.csproj" />
@@ -50,6 +51,12 @@
     <Project Path="tests/FreeX.Fixtures/FreeX.Fixtures.csproj" />
     <Project Path="tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj" />
     <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
+  </Folder>
+  <Folder Name="/freep/">
+    <Project Path="freep/FreeP.Core.Model/FreeP.Core.Model.csproj" />
+    <Project Path="freep/FreeP.Core.IO/FreeP.Core.IO.csproj" />
+    <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
+    <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/FreeX.AppIoBench/FreeX.AppIoBench.csproj" />

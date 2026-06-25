@@ -1,11 +1,12 @@
 using System.IO;
+using Free.Shared.Drawing;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host.Tests;
 
 /// <summary>
-/// Coverage for the stub <c>.fxp</c> reader/writer: a presentation written, read back, and re-written must be
+/// Coverage for the <c>.fxp</c> reader/writer: a presentation written, read back, and re-written must be
 /// byte-identical (the round-trip invariant the host relies on), and the model content must survive the trip.
 /// </summary>
 public sealed class FxpRoundTripTests : IDisposable
@@ -28,10 +29,16 @@ public sealed class FxpRoundTripTests : IDisposable
         presentation.Properties.Keywords = "q3, revenue";
 
         var slide1 = new Slide { Id = "slide-1", Title = "Agenda" };
-        slide1.Shapes.Add(new SlideShape { Kind = "text", Text = "Welcome" });
-        slide1.Shapes.Add(new SlideShape { Kind = "rectangle", Text = "" });
-        presentation.Slides.Add(slide1);
+        // Non-placeholder content shapes (what FXP serializes in the Shapes array).
+        var textShape = new SlideShape { LegacyFxpKind = "text" };
+        textShape.Text = "Welcome";
+        slide1.Shapes.Add(textShape);
 
+        var rectShape = new SlideShape { LegacyFxpKind = "rectangle" };
+        rectShape.Text = "";
+        slide1.Shapes.Add(rectShape);
+
+        presentation.Slides.Add(slide1);
         presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Results" });
         return presentation;
     }
@@ -62,9 +69,17 @@ public sealed class FxpRoundTripTests : IDisposable
         reloaded.Slides.Should().HaveCount(2);
         reloaded.Slides[0].Id.Should().Be("slide-1");
         reloaded.Slides[0].Title.Should().Be("Agenda");
-        reloaded.Slides[0].Shapes.Should().HaveCount(2);
-        reloaded.Slides[0].Shapes[0].Text.Should().Be("Welcome");
-        reloaded.Slides[0].Shapes[1].Kind.Should().Be("rectangle");
+
+        // FXP serializes non-placeholder shapes; placeholders (title) are NOT in the shapes list.
+        // After reload the title placeholder is at index 0, then non-placeholder shapes follow.
+        var nonTitleShapes = reloaded.Slides[0].Shapes
+            .Where(s => s.Placeholder is null)
+            .ToList();
+        nonTitleShapes.Should().HaveCount(2);
+        nonTitleShapes[0].Text.Should().Be("Welcome");
+        // The legacy kind string is preserved for byte-stable round-trips.
+        nonTitleShapes[1].LegacyFxpKind.Should().Be("rectangle");
+
         reloaded.Slides[1].Title.Should().Be("Results");
     }
 

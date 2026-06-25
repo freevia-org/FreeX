@@ -64,7 +64,8 @@ public static class PresentationPdfExporter
             ops.Add(new PdfText(MarginPt, y, TitleSize, PdfFontFace.Bold, PdfColor.Black, OneLine(slide.Title)));
         y -= TitleSize * 1.4;
 
-        foreach (var shape in slide.Shapes)
+        // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
+        foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
         {
             var content = !string.IsNullOrEmpty(shape.Text) ? shape.Text : $"[{shape.Kind}]";
             foreach (var line in content.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))

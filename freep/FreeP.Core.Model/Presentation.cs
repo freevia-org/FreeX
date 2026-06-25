@@ -1,25 +1,67 @@
 namespace FreeP.Core.Model;
 
 /// <summary>
-/// FreeP's minimal presentation model: an ordered list of <see cref="Slide"/> plus document
-/// <see cref="Properties"/>. Deliberately tiny — this is scaffold, just enough to round-trip through the
-/// stub <c>.fxp</c> reader/writer and to prove the shared app tier hosts a second sister app. The real
-/// presentation domain (slide rendering, shape geometry, transitions, .pptx import/export) is intentionally
-/// out of scope and lands in a follow-up session.
+/// The root presentation model. Holds the slide list, masters, layouts, theme, and document
+/// properties. Designed to support a real .pptx reader/writer: one master, N layouts, M slides,
+/// one theme. Editing tools work with mutable lists; the IO layer reads/writes immutably.
 /// </summary>
 public sealed class Presentation
 {
-    /// <summary>The slides, in presentation order.</summary>
+    // ── Slide size ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Slide width in EMU. Default is 16:9 widescreen (12192000 EMU = 10 inches at 914400 EMU/inch).
+    /// </summary>
+    public long SlideSizeCxEmu { get; set; } = 12192000;
+
+    /// <summary>
+    /// Slide height in EMU. Default is 16:9 widescreen (6858000 EMU ≈ 7.5 inches).
+    /// </summary>
+    public long SlideSizeCyEmu { get; set; } = 6858000;
+
+    // ── Content ───────────────────────────────────────────────────────────────────
+
+    /// <summary>Slides, in presentation order.</summary>
     public List<Slide> Slides { get; } = new();
 
-    /// <summary>Core document properties (title/author/subject/...), mirroring FreeW's DocumentProperties.</summary>
+    /// <summary>Slide layouts referenced by the slides (keyed by SlideLayout.Id).</summary>
+    public List<SlideLayout> Layouts { get; } = new();
+
+    /// <summary>Slide masters (one per master in the package, keyed by SlideMaster.Id).</summary>
+    public List<SlideMaster> Masters { get; } = new();
+
+    /// <summary>The presentation theme (color + font schemes).</summary>
+    public PresentationTheme Theme { get; set; } = PresentationTheme.CreateDefault();
+
+    /// <summary>Core document properties (title, author, subject, …).</summary>
     public PresentationProperties Properties { get; } = new();
 
-    /// <summary>An empty presentation seeded with a single blank title slide (the only "template" FreeP ships).</summary>
+    // ── Factory ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates an empty presentation seeded with one blank title slide, one default master,
+    /// one blank layout, and the default Office theme.
+    /// </summary>
     public static Presentation CreateEmpty()
     {
         var presentation = new Presentation();
-        presentation.Slides.Add(new Slide { Title = "Slide 1" });
+
+        var master = new SlideMaster { Id = "rId1" };
+        presentation.Masters.Add(master);
+
+        var layout = new SlideLayout
+        {
+            Id = "rId1",
+            Name = "Title Slide",
+            LayoutType = SlideLayoutType.Title,
+            MasterId = master.Id
+        };
+        presentation.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = layout.Id };
+        slide.Title = "Slide 1";
+        presentation.Slides.Add(slide);
+
         return presentation;
     }
 }
