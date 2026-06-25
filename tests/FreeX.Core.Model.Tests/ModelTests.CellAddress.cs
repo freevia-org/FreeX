@@ -219,6 +219,62 @@ public partial class CellAddressTests
         allocated.Should().BeLessThan(1_000);
         stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
+
+    // K8 regression: CompareTo must be consistent with Equals (which includes the Sheet component).
+
+    [Fact]
+    public void CompareTo_SameRowAndCol_DifferentSheet_ReturnsNonZero()
+    {
+        var sheet1 = SheetId.New();
+        var sheet2 = SheetId.New();
+        var addr1 = new CellAddress(sheet1, 5, 3);
+        var addr2 = new CellAddress(sheet2, 5, 3);
+
+        addr1.CompareTo(addr2).Should().NotBe(0,
+            because: "addresses on different sheets must not compare as equal even when row and col match");
+    }
+
+    [Fact]
+    public void CompareTo_SameRowAndCol_SameSheet_ReturnsZero()
+    {
+        var sheet = SheetId.New();
+        var addr1 = new CellAddress(sheet, 5, 3);
+        var addr2 = new CellAddress(sheet, 5, 3);
+
+        addr1.CompareTo(addr2).Should().Be(0);
+        addr1.Should().Be(addr2);
+    }
+
+    [Fact]
+    public void SortedSet_RetainsBothAddressesAcrossDifferentSheets()
+    {
+        // K8 regression: a SortedSet<CellAddress> across sheets must retain both entries
+        // even when row and col are identical — CompareTo must not return 0 for different sheets.
+        var sheet1 = SheetId.New();
+        var sheet2 = SheetId.New();
+        var addr1 = new CellAddress(sheet1, 3, 2);
+        var addr2 = new CellAddress(sheet2, 3, 2);
+
+        var set = new SortedSet<CellAddress> { addr1, addr2 };
+
+        set.Count.Should().Be(2,
+            because: "both addresses must be retained in the SortedSet as they are on different sheets");
+        set.Should().Contain(addr1);
+        set.Should().Contain(addr2);
+    }
+
+    [Fact]
+    public void CompareTo_SameSheet_OrdersByRowThenCol()
+    {
+        var sheet = SheetId.New();
+        var a = new CellAddress(sheet, 1, 5);
+        var b = new CellAddress(sheet, 2, 1);
+        var c = new CellAddress(sheet, 2, 3);
+
+        a.CompareTo(b).Should().BeNegative("row 1 comes before row 2");
+        b.CompareTo(c).Should().BeNegative("same row, col 1 comes before col 3");
+        c.CompareTo(a).Should().BePositive();
+    }
 }
 
 [CollectionDefinition("CellAddress performance", DisableParallelization = true)]

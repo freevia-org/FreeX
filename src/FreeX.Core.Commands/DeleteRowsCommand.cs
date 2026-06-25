@@ -29,6 +29,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
 
@@ -122,6 +123,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _formulaSnapshot);
+        _namedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _namedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -136,6 +139,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row - _count, snapshot.Col);

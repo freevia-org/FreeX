@@ -233,6 +233,11 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
 
     public int CompareTo(CellAddress other)
     {
+        // Sheet is the primary key so that CompareTo is consistent with Equals (which includes Sheet).
+        // Without this, a SortedSet/SortedDictionary across sheets would treat addresses with the
+        // same row+col but different sheets as identical, silently dropping one of them.
+        var sheetCmp = Sheet.Value.CompareTo(other.Sheet.Value);
+        if (sheetCmp != 0) return sheetCmp;
         var rowCmp = Row.CompareTo(other.Row);
         return rowCmp != 0 ? rowCmp : Col.CompareTo(other.Col);
     }

@@ -26,6 +26,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<GridRange>? _chartSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
 
@@ -97,6 +98,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
+        _namedFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _namedFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -111,6 +114,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row + _count, snapshot.Col);

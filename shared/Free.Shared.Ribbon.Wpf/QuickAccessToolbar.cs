@@ -96,20 +96,46 @@ public sealed record QuickAccessToolbarRenderOptions
 /// </summary>
 public sealed class QuickAccessToolbarHandle
 {
-    private readonly Dictionary<string, Button> _byCommandId;
+    // Stores a list of buttons per command id so that duplicate CommandIds (multiple QAT descriptors
+    // sharing the same id) are both tracked and updated by SetEnabled, rather than the last one
+    // silently overwriting the earlier entry.
+    private readonly Dictionary<string, List<Button>> _byCommandId;
+    private readonly List<Button> _allButtons;
 
-    internal QuickAccessToolbarHandle(Dictionary<string, Button> byCommandId) => _byCommandId = byCommandId;
+    internal QuickAccessToolbarHandle(Dictionary<string, List<Button>> byCommandId, List<Button> allButtons)
+    {
+        _byCommandId = byCommandId;
+        _allButtons = allButtons;
+    }
 
     /// <summary>The rendered buttons, in render order.</summary>
-    public IReadOnlyCollection<Button> Buttons => _byCommandId.Values;
+    public IReadOnlyCollection<Button> Buttons => _allButtons;
 
-    public bool TryGetButton(string commandId, out Button button) => _byCommandId.TryGetValue(commandId, out button!);
+    /// <summary>
+    /// Returns the first button registered for <paramref name="commandId"/>, or false if none.
+    /// For the common (unique-id) case this is always the only button.
+    /// </summary>
+    public bool TryGetButton(string commandId, out Button button)
+    {
+        if (_byCommandId.TryGetValue(commandId, out var list) && list.Count > 0)
+        {
+            button = list[0];
+            return true;
+        }
+        button = null!;
+        return false;
+    }
 
-    /// <summary>Sets the enabled state of the button for <paramref name="commandId"/> (no-op if unknown).</summary>
+    /// <summary>Sets the enabled state of ALL buttons for <paramref name="commandId"/> (no-op if unknown).</summary>
     public void SetEnabled(string commandId, bool isEnabled)
     {
-        if (_byCommandId.TryGetValue(commandId, out var button) && button.IsEnabled != isEnabled)
-            button.IsEnabled = isEnabled;
+        if (!_byCommandId.TryGetValue(commandId, out var list))
+            return;
+        foreach (var button in list)
+        {
+            if (button.IsEnabled != isEnabled)
+                button.IsEnabled = isEnabled;
+        }
     }
 }
 
@@ -134,15 +160,22 @@ public static class QuickAccessToolbarRenderer
         ArgumentNullException.ThrowIfNull(items);
         options ??= new QuickAccessToolbarRenderOptions();
 
-        var byCommandId = new Dictionary<string, Button>(StringComparer.Ordinal);
+        var byCommandId = new Dictionary<string, List<Button>>(StringComparer.Ordinal);
+        var allButtons = new List<Button>();
         foreach (var item in items)
         {
             var button = BuildButton(resourceHost, item, onClick, options);
             host.Children.Add(button);
-            byCommandId[item.CommandId] = button;
+            allButtons.Add(button);
+            if (!byCommandId.TryGetValue(item.CommandId, out var list))
+            {
+                list = new List<Button>(1);
+                byCommandId[item.CommandId] = list;
+            }
+            list.Add(button);
         }
 
-        return new QuickAccessToolbarHandle(byCommandId);
+        return new QuickAccessToolbarHandle(byCommandId, allButtons);
     }
 
     /// <summary>

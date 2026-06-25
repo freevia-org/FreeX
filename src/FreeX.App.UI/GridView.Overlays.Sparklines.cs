@@ -85,10 +85,34 @@ public partial class GridView
 
     private static double? ResolveAxisMaxAbs(SparklineModel sp, Dictionary<int, double> groupMaxAbs)
     {
-        // For column sparklines, group scaling uses the shared maxAbs.
+        // For column/win-loss sparklines the bars are scaled symmetrically around zero using a
+        // single maxAbs bound.  Resolution priority (per axis):
+        //   Custom ManualMax / ManualMin  →  use the explicit bound (abs value for min)
+        //   Group                         →  fall back to the shared group maxAbs
+        //   Individual                    →  no override (return null)
+        //
+        // When one axis is Custom and the other is Group, the Custom value wins for its axis and
+        // the group value for the other; we take the larger abs so neither axis is clipped.
+        double? customAbs = null;
+
+        if (sp.MaxAxisType == SparklineAxisScaling.Custom && sp.ManualMax.HasValue)
+            customAbs = Math.Abs(sp.ManualMax.Value);
+
+        if (sp.MinAxisType == SparklineAxisScaling.Custom && sp.ManualMin.HasValue)
+        {
+            var absMin = Math.Abs(sp.ManualMin.Value);
+            customAbs = customAbs.HasValue ? Math.Max(customAbs.Value, absMin) : absMin;
+        }
+
+        // If either axis defers to the group, also fetch the group maxAbs.
+        double? groupAbs = null;
         if (sp.MaxAxisType == SparklineAxisScaling.Group || sp.MinAxisType == SparklineAxisScaling.Group)
-            return groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
-        return null;
+            groupAbs = groupMaxAbs.TryGetValue(sp.GroupId, out var v) ? v : null;
+
+        // Return the larger of any custom and group contributions; null if neither applies.
+        if (customAbs.HasValue && groupAbs.HasValue)
+            return Math.Max(customAbs.Value, groupAbs.Value);
+        return customAbs ?? groupAbs;
     }
 
     // ── Axis line ─────────────────────────────────────────────────────────────
