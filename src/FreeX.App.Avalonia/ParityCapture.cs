@@ -123,6 +123,11 @@ internal static class ParityCaptureCoordinator
     private const int ShellReadyWaitMilliseconds = 15000;
     private const int PollDelayMilliseconds = 100;
 
+    // Hard backstop: if the graceful desktop shutdown is blocked for any reason (a lingering
+    // window/dialog, a dirty-workbook prompt, etc.) force-exit so the headless capture process can
+    // never hang the Docker container after the manifest is already written.
+    private const int ShutdownBackstopMilliseconds = 8000;
+
     public static void Start(MainWindow mainWindow, ParityCaptureOptions options, AvaloniaAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
@@ -155,12 +160,16 @@ internal static class ParityCaptureCoordinator
                 ["captured"] = results.Count(r => r.Captured).ToString(),
                 ["total"] = results.Count.ToString(),
             });
+            // The capture seeds/edits the demo workbook, so it is dirty by now. Allow the close
+            // without the save prompt that would otherwise cancel shutdown and hang under Xvfb.
+            mainWindow.AllowCloseWithoutDirtyPromptForParityCapture();
             Shutdown(0);
         }
         catch (Exception ex)
         {
             diagnostics?.RecordCrash(ex, "parity_capture");
             TryWriteFailureManifest(options.OutputDirectory, ex);
+            mainWindow.AllowCloseWithoutDirtyPromptForParityCapture();
             Shutdown(1);
         }
     }
@@ -272,6 +281,15 @@ internal static class ParityCaptureCoordinator
             if (global::Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 desktop.TryShutdown(exitCode);
         }, DispatcherPriority.Background);
+
+        // Backstop on a background thread: if the graceful shutdown above is still blocked after a
+        // grace period, terminate the process outright. The PNGs + manifest are already flushed, so
+        // a hard exit is safe and guarantees the capture container can exit.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(ShutdownBackstopMilliseconds).ConfigureAwait(false);
+            Environment.Exit(exitCode);
+        });
     }
 }
 

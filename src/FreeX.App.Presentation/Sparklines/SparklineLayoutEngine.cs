@@ -76,6 +76,22 @@ public static class SparklineLayoutEngine
     }
 
     /// <summary>
+    /// Lays out a line sparkline with optional axis-bound overrides for group or custom scaling.
+    /// When <paramref name="overrideMin"/> or <paramref name="overrideMax"/> is non-null the supplied
+    /// value replaces the per-sparkline min/max so that all sparklines in a group share the same scale.
+    /// </summary>
+    public static SparklineLineLayout CalculateLineLayout(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        double? overrideMin,
+        double? overrideMax)
+    {
+        var consumer = new LineLayoutCollector(values.Count);
+        VisitLineLayout(values, rect, ref consumer, overrideMin, overrideMax);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
     /// Streams a line sparkline's geometry into <paramref name="consumer"/> without allocating a list.
     /// Same math as <see cref="CalculateLineLayout"/>; a renderer can consume points/segments directly.
     /// </summary>
@@ -184,6 +200,22 @@ public static class SparklineLayoutEngine
     {
         var consumer = new ColumnLayoutCollector(values.Count);
         VisitColumnLayout(values, rect, winLoss, ref consumer);
+        return consumer.ToLayout();
+    }
+
+    /// <summary>
+    /// Lays out a column or win/loss sparkline with an optional maximum-absolute-value override for
+    /// group or custom scaling. When <paramref name="overrideMaxAbs"/> is non-null it replaces the
+    /// per-sparkline max so all sparklines in a group share the same bar scale.
+    /// </summary>
+    public static SparklineColumnLayout CalculateColumnLayout(
+        IReadOnlyList<double> values,
+        LayoutRect rect,
+        bool winLoss,
+        double? overrideMaxAbs)
+    {
+        var consumer = new ColumnLayoutCollector(values.Count);
+        VisitColumnLayout(values, rect, winLoss, ref consumer, overrideMaxAbs);
         return consumer.ToLayout();
     }
 
