@@ -93,6 +93,24 @@ public partial class PhaseCFinancialTests
         result.Should().BeApproximately(0.096455, 0.0001);
     }
 
+    // ── RATE convergence check (J5) ──────────────────────────────────────
+
+    [Fact]
+    public void Rate_ValidInput_ConvergesAndReturnsCorrectRate()
+    {
+        // RATE(60, -200, 10000) → monthly rate ≈ 0.006183
+        double result = Calc("RATE(60,-200,10000)");
+        result.Should().BeApproximately(0.006183, 0.0001);
+    }
+
+    [Fact]
+    public void Rate_PathologicalNonConvergingInput_ReturnsNumError()
+    {
+        // RATE(10, 100, 100): positive payment + positive PV has no real solution.
+        // Newton's method diverges and the residual |f| >> 1e-7, so Excel returns #NUM!.
+        CalcError("RATE(10,100,100)").Should().Be("#NUM!");
+    }
+
     // ── MIRR ─────────────────────────────────────────────────────────────
 
     [Fact]

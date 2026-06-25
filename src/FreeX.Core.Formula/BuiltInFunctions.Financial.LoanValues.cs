@@ -192,6 +192,17 @@ public static partial class BuiltInFunctions
             r -= delta;
             if (Math.Abs(delta) < 1e-10) break;
         }
-        return double.IsNaN(r) || double.IsInfinity(r) ? ErrorValue.Num : new NumberValue(r);
+        if (double.IsNaN(r) || double.IsInfinity(r)) return ErrorValue.Num;
+        // Verify the solution actually satisfies the TVM equation; non-converged iterates
+        // can land far from any root and must return #NUM! (matches Excel behaviour).
+        double rFinal = r, fResidual;
+        if (Math.Abs(rFinal) < 1e-10)
+            fResidual = pv + pmt * nper + fv;
+        else
+        {
+            double rnF = Math.Pow(1 + rFinal, nper);
+            fResidual = pv * rnF + pmt * (1 + rFinal * type) * (rnF - 1) / rFinal + fv;
+        }
+        return Math.Abs(fResidual) > 1e-7 ? ErrorValue.Num : new NumberValue(r);
     }
 }

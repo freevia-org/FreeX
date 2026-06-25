@@ -97,10 +97,15 @@ internal sealed class BackstageView : Window
         {
             ColumnDefinitions = new ColumnDefinitions("200,*"),
         };
-        AvaloniaGrid.SetColumn(BuildLeftRail(), 0);
-        AvaloniaGrid.SetColumn(BuildContentArea(), 1);
-        grid.Children.Add(BuildLeftRail());
-        grid.Children.Add(BuildContentArea());
+        // Build each child ONCE and set its column on the instance that is actually added — building
+        // twice (and setting the column on the discarded copy) left both children in column 0, so the
+        // content area overlapped the nav rail.
+        var leftRail = BuildLeftRail();
+        AvaloniaGrid.SetColumn(leftRail, 0);
+        grid.Children.Add(leftRail);
+        var contentArea = BuildContentArea();
+        AvaloniaGrid.SetColumn(contentArea, 1);
+        grid.Children.Add(contentArea);
         return grid;
     }
 
