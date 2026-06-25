@@ -1267,7 +1267,7 @@ public sealed class FreeWRibbonParityTests
         tableDesign.Should().NotBeNull();
         tableDesign!.Groups.Select(group => group.Id)
             .Should()
-            .Equal("table-style-options", "table-style");
+            .Equal("table-style-options", "table-style", "draw-borders");
 
         CommandIds(tableDesign)
             .Should()
@@ -1279,7 +1279,9 @@ public sealed class FreeWRibbonParityTests
                 "freew.table-banded-rows",
                 "freew.table-banded-cols",
                 "freew.cell-shading",
-                "freew.cell-borders");
+                "freew.cell-borders",
+                "freew.draw-table",
+                "freew.eraser");
 
         foreach (var commandId in CommandIds(tableDesign))
             registry.TryGet(commandId, out _).Should().BeTrue($"{commandId} must execute from the Table Design tab");
@@ -2351,5 +2353,34 @@ public sealed class FreeWRibbonParityTests
             .Where(i => i.CommandId is { } cid && !string.IsNullOrWhiteSpace(cid.Value))
             .Select(i => i.CommandId!.Value.Value)  // RibbonCommandId?.Value is RibbonCommandId; .Value is the string
             .ToList();
+    }
+
+    [Fact]
+    public void TableDesignTab_DrawBordersGroup_ExposesDrawTableAndEraser()
+    {
+        var definition = FreeWRibbon.Build();
+        var tableDesign = definition.FindTab("table-design");
+        tableDesign.Should().NotBeNull();
+
+        tableDesign!.Groups.Select(g => g.Id)
+            .Should()
+            .Contain("draw-borders", "Table Design > Draw Borders is a Word-standard group");
+
+        var drawBorders = tableDesign.FindGroup("draw-borders");
+        drawBorders.Should().NotBeNull();
+
+        CommandIds(drawBorders!)
+            .Should()
+            .Contain(new[] { "freew.draw-table", "freew.eraser" });
+    }
+
+    [StaFact]
+    public void TableDesign_DrawTable_And_Eraser_AreBacked()
+    {
+        var editor = new DocumentView();
+        var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
+
+        registry.TryGet("freew.draw-table", out _).Should().BeTrue("freew.draw-table must be backed");
+        registry.TryGet("freew.eraser", out _).Should().BeTrue("freew.eraser must be backed");
     }
 }

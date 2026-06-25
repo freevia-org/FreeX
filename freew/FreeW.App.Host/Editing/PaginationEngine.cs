@@ -104,13 +104,35 @@ internal static class PaginationEngine
             return new DocumentPagination(pageCount, UniformBreaks(pageCount, contentHeight));
         }
 
+        // Build per-page cumulative content heights from the paginator's actual DocumentPage
+        // geometry. This gives overflow breaks an accurate Y rather than the uniform contentHeight
+        // multiple (objective 3a).
+        var cumulativePageY = new double[pageCount]; // cumulativePageY[pg] = Y where page pg ENDS
+        double cumY = 0;
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            double pageContentH;
+            try
+            {
+                var dpg = innerPaginator.GetPage(pg);
+                pageContentH = dpg.ContentBox.IsEmpty ? contentHeight : dpg.ContentBox.Height;
+            }
+            catch
+            {
+                pageContentH = contentHeight;
+            }
+            cumY += pageContentH;
+            cumulativePageY[pg] = cumY;
+        }
+
         // --- Step 3: build per-page break Ys ---------------------------------------------------
         // For each explicit-break paragraph (BreakPageBefore=true in the scratch clone), record
         // the page it opens and the Y of the corresponding block in the live editor. Overflow-
-        // driven page breaks are represented as uniform-step multiples of contentHeight.
+        // driven page breaks are represented by cumulative per-page content heights derived from
+        // the paginator's actual DocumentPage geometry.
         //
         // We assign explicit breaks to successive pages in order of appearance. Any page not
-        // covered by an explicit break is a uniform overflow break.
+        // covered by an explicit break is an overflow break using cumulativePageY.
         var explicitBreakAtPage = new Dictionary<int, double>(); // page index → break Y
 
         int currentPage = 0;
@@ -133,13 +155,14 @@ internal static class PaginationEngine
             }
         }
 
-        // Build the final break array: explicit breaks use live Ys; overflow breaks use uniform.
+        // Build the final break array: explicit breaks use live Ys; overflow breaks use per-page
+        // cumulative heights from the paginator's actual DocumentPage geometry.
         var breaks = new double[pageCount - 1];
         for (var pg = 1; pg < pageCount; pg++)
         {
             breaks[pg - 1] = explicitBreakAtPage.TryGetValue(pg, out var explicitY)
                 ? explicitY
-                : pg * contentHeight;
+                : cumulativePageY[pg - 1];
         }
 
         return new DocumentPagination(pageCount, breaks);

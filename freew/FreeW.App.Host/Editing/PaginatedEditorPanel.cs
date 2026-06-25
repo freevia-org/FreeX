@@ -1215,6 +1215,38 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         return result;
     }
 
+        // ── inter-page gap geometry ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the Y range (top, bottom) of the inter-page gap between
+    /// <paramref name="pageIndex"/> and <paramref name="pageIndex"/>+1 in the panel's
+    /// coordinate space. Used to draw selection highlight bands over the gap when a
+    /// cross-page selection spans it.
+    /// Returns null when <paramref name="pageIndex"/> is out of range or no gap exists.
+    /// </summary>
+    internal (double Top, double Bottom)? GetInterPageGapRect(int pageIndex)
+    {
+        if (pageIndex < 0 || pageIndex >= _pageBoxes.Count - 1)
+            return null;
+
+        var thisBox = _pageBoxes[pageIndex];
+        var nextBox = _pageBoxes[pageIndex + 1];
+
+        // Get the bottom of thisBox and top of nextBox in panel coordinates.
+        try
+        {
+            var thisPos = thisBox.TranslatePoint(new Point(0, thisBox.ActualHeight), _stack);
+            var nextPos = nextBox.TranslatePoint(new Point(0, 0), _stack);
+            if (thisPos.Y >= nextPos.Y)
+                return null; // no gap (or overlap)
+            return (thisPos.Y, nextPos.Y);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // ── Phase 3a even-distribution sharding (kept for reference; no longer called) ────────────────
 
     /// <summary>

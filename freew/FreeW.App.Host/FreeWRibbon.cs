@@ -1124,6 +1124,11 @@ internal static class FreeWRibbon
                     g.Medium("freew.cell-shading", "Shading", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill);
                     g.Medium("freew.cell-borders", "Borders", RibbonCommandIconKind.Grid);
                 });
+                tab.Group("draw-borders", "Draw Borders", "D", 60, g =>
+                {
+                    g.Medium("freew.draw-table", "Draw Table", RibbonCommandIconKind.Table, accent: RibbonCommandIconAccent.Border);
+                    g.Medium("freew.eraser", "Eraser", RibbonCommandIconKind.Clear);
+                });
             })
             .ContextualTab("table-layout", "Table Layout",
                 new RibbonTabContext("table", "Table Tools", RibbonContextColor.Teal), tab =>
