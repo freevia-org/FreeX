@@ -4201,8 +4201,6 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("private enum CellBorderEdge");
-        source.Should().Contain("style);");
         source.Should().Contain("AddStyledCellBorderOverlay(content, style);");
         source.Should().Contain("private static void AddStyledCellBorderOverlay(AvaloniaGrid content, CellStyle? style)");
         source.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
@@ -4210,12 +4208,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("style.BorderRight.Style != BorderStyle.None");
         source.Should().Contain("style.BorderBottom.Style != BorderStyle.None");
         source.Should().Contain("style.BorderLeft.Style != BorderStyle.None");
-        source.Should().Contain("private static void AddStyledCellBorderEdge(AvaloniaGrid content, CellBorder border, CellBorderEdge edge)");
-        source.Should().Contain("Background = Brush(border.Color)");
-        source.Should().Contain("GetDisplayedCellBorderThickness(border.Style)");
-        source.Should().Contain("BorderStyle.Medium => 1.5");
-        source.Should().Contain("BorderStyle.Thick => 2.5");
-        source.Should().Contain("IsHitTestVisible = false");
+        source.Should().Contain("style.BorderDiagonalDown.Style != BorderStyle.None");
+        source.Should().Contain("style.BorderDiagonalUp.Style != BorderStyle.None");
+        // Border drawing is delegated to CellBorderPanel (stroked Lines with dash + per-style
+        // thickness in CellBorderPanel.cs/CellBorderGeometry.cs), replacing the old inline
+        // solid-Border-strip approach that could not dash and had wrong Hair/SlantDashDot thickness.
+        source.Should().Contain("content.Children.Add(new CellBorderPanel(visibleStyle));");
     }
 
     [Fact]

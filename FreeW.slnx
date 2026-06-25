@@ -27,6 +27,13 @@
     <Project Path="freew/tools/FreeW.FidelityRender/FreeW.FidelityRender.csproj" />
     <Project Path="freew/tools/FreeW.RibbonShot/FreeW.RibbonShot.csproj" />
     <Project Path="freew/tools/FreeW.PageLayoutShot/FreeW.PageLayoutShot.csproj" />
+    <Project Path="freew/tools/FreeW.PdfRasterize/FreeW.PdfRasterize.csproj" />
+    <Project Path="freew/tools/_corpus_charts/_corpus_charts.csproj" />
+    <Project Path="freew/tools/_corpus_drawing/_corpus_drawing.csproj" />
+    <Project Path="freew/tools/_corpus_f2_objects/_corpus_f2_objects.csproj" />
+    <Project Path="freew/tools/_corpus_review/FreeW.CorpusReview.csproj" />
+    <Project Path="freew/tools/_corpus_tables/_corpus_tables.csproj" />
+    <Project Path="freew/tools/_corpus_text/_corpus_text.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
   </Folder>
 </Solution>

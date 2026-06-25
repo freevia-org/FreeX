@@ -166,6 +166,27 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
     FlowDocument flow = bodyView.Document;
     bodyView.Document = new FlowDocument();
 
+    // SG: Apply section-break BreakPageBefore flags to the flow so the WPF paginator produces the
+    // correct page count for multi-section documents.  The FreeW/OOXML convention stores a
+    // NextPage/EvenPage/OddPage section break on the LAST paragraph of the preceding section;
+    // the paragraph that FOLLOWS the marker must get BreakPageBefore = true so the paginator
+    // opens a new page there.  This mirrors PaginationEngine.ApplySectionBreakFlags.
+    {
+        var modelBlocks = doc.Blocks;
+        var flowBlocks  = flow.Blocks.ToList();
+        for (int bi = 0; bi < modelBlocks.Count - 1 && bi < flowBlocks.Count - 1; bi++)
+        {
+            if (modelBlocks[bi] is FreeW.Core.Model.Paragraph { SectionBreak: { } sec }
+                && sec.BreakKind is SectionBreakKind.NextPage
+                                 or SectionBreakKind.EvenPage
+                                 or SectionBreakKind.OddPage)
+            {
+                if (flowBlocks[bi + 1] is System.Windows.Documents.Paragraph nextWpf)
+                    nextWpf.BreakPageBefore = true;
+            }
+        }
+    }
+
     flow.PageWidth   = pageWDip;
     flow.PageHeight  = pageHDip;
     flow.PagePadding = new Thickness(marginLeft, marginTop, marginRight, marginBottom);
@@ -257,32 +278,46 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
     {
         DocumentPage docPage = paginator.GetPage(i);
 
-        // Start the composite bitmap (white background).
-        var bmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+        // SG: use this page's section geometry (portrait vs landscape) when it's available via the
+        // panel. Fall back to the document-level page if the panel didn't build or the box index is
+        // out of range (e.g. the body paginator produced more pages than panel boxes).
+        PageSettings thisPageSettings = page;
+        if (panel is not null && i < panel.PageBoxes.Count)
+            thisPageSettings = panel.PageBoxes[i].PageGeometry;
+
+        var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
+        var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
+            PageLayout.MarginsDip(thisPageSettings);
+
+        int thisPixW = (int)Math.Max(1, Math.Round(thisPageWDip));
+        int thisPixH = (int)Math.Max(1, Math.Round(thisPageHDip));
+
+        // Start the composite bitmap at this page's geometry (white background).
+        var bmp = new RenderTargetBitmap(thisPixW, thisPixH, 96, 96, PixelFormats.Pbgra32);
 
         // ─ Layers 1 + 1b + 2: background + watermark + body ──────────────────────────────────────
         // We composite these into a DrawingVisual because the body paginator visual is already a
         // WPF visual with correct layout. The watermark and background are drawn as fills behind it.
         {
-            var pageColor = string.IsNullOrEmpty(page.BackgroundColorHex)
+            var pageColor = string.IsNullOrEmpty(thisPageSettings.BackgroundColorHex)
                 ? Colors.White
-                : ParseHexColor(page.BackgroundColorHex, Colors.White);
+                : ParseHexColor(thisPageSettings.BackgroundColorHex, Colors.White);
 
             var composite = new DrawingVisual();
             using (var dc = composite.RenderOpen())
             {
                 // Layer 1: solid page background.
-                dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
+                dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, thisPixW, thisPixH));
 
                 // Layer 1b: watermark tiled over the page background.
                 // BuildWatermarkBrush returns a VisualBrush(Grid) where the Grid is not measured.
                 // We build the watermark content manually (TextBlock rendered to bitmap) so it
                 // works headlessly, then tile that bitmap as the watermark pattern.
-                var wm = page.EffectiveWatermark;
+                var wm = thisPageSettings.EffectiveWatermark;
                 if (wm is not null)
                 {
-                    var wmBmp = RenderWatermarkTile(wm, pageColor, pixW, pixH);
-                    dc.DrawImage(wmBmp, new Rect(0, 0, pixW, pixH));
+                    var wmBmp = RenderWatermarkTile(wm, pageColor, thisPixW, thisPixH);
+                    dc.DrawImage(wmBmp, new Rect(0, 0, thisPixW, thisPixH));
                 }
 
                 // Layer 2: body FlowDocument content (the paginator's Visual is already laid out).
@@ -295,7 +330,7 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
         }
 
         // ─ Layer 3: page border (draw into a separate DrawingVisual, composite onto bmp) ─────────
-        if (page.PageBorder is { } pb)
+        if (thisPageSettings.PageBorder is { } pb)
         {
             var borderVisual = new DrawingVisual();
             using (var dc = borderVisual.RenderOpen())
@@ -305,7 +340,7 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
                     Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
                 double ins = pen.Thickness / 2;
                 dc.DrawRectangle(null, pen,
-                    new Rect(ins, ins, pixW - pen.Thickness, pixH - pen.Thickness));
+                    new Rect(ins, ins, thisPixW - pen.Thickness, thisPixH - pen.Thickness));
             }
             bmp.Render(borderVisual);
         }
@@ -317,7 +352,7 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
         {
             var floatVisual = new DrawingVisual();
             using (var dc = floatVisual.RenderOpen())
-                dc.DrawImage(floatingBmp, new Rect(0, 0, pixW, pixH));
+                dc.DrawImage(floatingBmp, new Rect(0, 0, thisPixW, thisPixH));
             bmp.Render(floatVisual);
         }
 
@@ -339,13 +374,13 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, pageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
                         using (var dc = hfVis.RenderOpen())
                             dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
-                                null, new Rect(marginLeft, 2, pageWDip - marginLeft - marginRight, hfH));
+                                null, new Rect(thisMarginLeft, 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -356,13 +391,13 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, pageWDip, hfH, i + 1, pageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, pageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
                         using (var dc = hfVis.RenderOpen())
                             dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
-                                null, new Rect(marginLeft, pixH - hfH - 2, pageWDip - marginLeft - marginRight, hfH));
+                                null, new Rect(thisMarginLeft, thisPixH - hfH - 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -374,15 +409,15 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
             if (box.FootnoteIds.Count > 0)
             {
                 var footnoteBmp = RenderNoteRegion(doc, box.FootnoteIds, Array.Empty<int>(),
-                    pageWDip, marginLeft, marginRight, isEndnotePage: false);
+                    thisPageWDip, thisMarginLeft, thisMarginRight, isEndnotePage: false);
                 if (footnoteBmp is not null)
                 {
                     // Place the footnote region just above the footer strip.
                     double fnH = footnoteBmp.Height;
-                    double fnY = pixH - hfH - fnH - 4;
+                    double fnY = thisPixH - hfH - fnH - 4;
                     var fnVis = new DrawingVisual();
                     using (var dc = fnVis.RenderOpen())
-                        dc.DrawImage(footnoteBmp, new Rect(0, fnY, pixW, fnH));
+                        dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH));
                     bmp.Render(fnVis);
                 }
             }
@@ -393,7 +428,7 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
 
         string outPath = Path.Combine(outDir, $"{name}_p{i + 1}.png");
         SavePng(bmp, outPath);
-        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({pageCount} pages, composite)");
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, composite)");
     }
 
     // ═══ Synthetic endnotes page (rendered after all body pages) ══════════════════════════════════
@@ -405,25 +440,30 @@ static void RenderDocumentComposite(TextDocument doc, string name, string outDir
     if (endnotePageBox is not null && endnotePageBox.EndnoteIds.Count > 0)
     {
         var endnoteBox = endnotePageBox; // the synthetic page box
+        // Use the endnotes-page's own geometry (inherits final section's page settings).
+        var (endnotePageWDip, endnotePageHDip) = PageLayout.PageSizeDip(endnoteBox.PageGeometry);
+        var (endnoteMarginLeft, endnoteMarginTop, endnoteMarginRight, _) = PageLayout.MarginsDip(endnoteBox.PageGeometry);
+        int endnotePixW = (int)Math.Max(1, Math.Round(endnotePageWDip));
+        int endnotePixH = (int)Math.Max(1, Math.Round(endnotePageHDip));
         if (true)
         {
             var pageColor = Colors.White;
-            var bmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+            var bmp = new RenderTargetBitmap(endnotePixW, endnotePixH, 96, 96, PixelFormats.Pbgra32);
 
             // White background page.
             var bgVis = new DrawingVisual();
             using (var dc = bgVis.RenderOpen())
-                dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
+                dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, endnotePixW, endnotePixH));
             bmp.Render(bgVis);
 
             // Endnote region starting at top-margin.
             var endnoteBmp = RenderNoteRegion(doc, Array.Empty<int>(), endnoteBox.EndnoteIds,
-                pageWDip, marginLeft, marginRight, isEndnotePage: true);
+                endnotePageWDip, endnoteMarginLeft, endnoteMarginRight, isEndnotePage: true);
             if (endnoteBmp is not null)
             {
                 var enVis = new DrawingVisual();
                 using (var dc = enVis.RenderOpen())
-                    dc.DrawImage(endnoteBmp, new Rect(0, marginTop, pixW, endnoteBmp.Height));
+                    dc.DrawImage(endnoteBmp, new Rect(0, endnoteMarginTop, endnotePixW, endnoteBmp.Height));
                 bmp.Render(enVis);
             }
 
@@ -1016,33 +1056,43 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     // ─── 6. Section break with page-size change (portrait → landscape) ───────────────────────────
+    // SG: FreeW/OOXML section-break semantics: a SectionBreak on paragraph P describes the section
+    // that ENDS at P (the "preceding" section). The FINAL section is described by doc.Page.
+    // So for portrait(section1) → landscape(section2):
+    //   • sectionMarker.SectionBreak.Page = portrait settings  (section 1, which ends at the marker)
+    //   • doc.Page = landscape settings                        (section 2 = final section)
     {
         var doc = TextDocument.CreateEmpty();
-        // Section 1: portrait 8.5x11 (default)
-        doc.Page.WidthPt  = 612;  // 8.5in @ 72dpi
-        doc.Page.HeightPt = 792;  // 11in
         doc.Blocks.Clear();
         doc.Blocks.Add(MP("Section 1: Portrait (8.5 x 11 in)", "Heading1"));
         doc.Blocks.Add(MP("This section is portrait. The page is taller than wide. A next-page section break below this paragraph should switch to landscape."));
         for (int i = 1; i <= 4; i++)
             doc.Blocks.Add(MP($"Portrait section paragraph {i}: Standard letter-size portrait page."));
 
-        // Marker paragraph carries the section break; its SectionBreak property specifies the NEXT section
+        // Marker paragraph ends section 1.  Its SectionBreak.Page carries section 1's (portrait) geometry.
         var sectionMarker = MP("[ End of Portrait Section ]");
-        var landscapePage = new PageSettings
+        var portraitPage = new PageSettings
         {
-            WidthPt        = 792,  // 11in (wider)
-            HeightPt       = 612,  // 8.5in (shorter — swapped for landscape)
-            Landscape      = true,
+            WidthPt        = 612,  // 8.5in portrait
+            HeightPt       = 792,  // 11in portrait
+            Landscape      = false,
             MarginLeftPt   = 72,
             MarginRightPt  = 72,
             MarginTopPt    = 72,
             MarginBottomPt = 72,
         };
-        sectionMarker.SectionBreak = new FreeW.Core.Model.Section(landscapePage, SectionBreakKind.NextPage);
+        sectionMarker.SectionBreak = new FreeW.Core.Model.Section(portraitPage, SectionBreakKind.NextPage);
         doc.Blocks.Add(sectionMarker);
 
-        // Section 2: landscape
+        // Section 2 (final section): landscape — described by doc.Page.
+        doc.Page.WidthPt        = 792;  // 11in landscape (wider)
+        doc.Page.HeightPt       = 612;  // 8.5in landscape (shorter — swapped)
+        doc.Page.Landscape      = true;
+        doc.Page.MarginLeftPt   = 72;
+        doc.Page.MarginRightPt  = 72;
+        doc.Page.MarginTopPt    = 72;
+        doc.Page.MarginBottomPt = 72;
+
         doc.Blocks.Add(MP("Section 2: Landscape (11 x 8.5 in)", "Heading1"));
         doc.Blocks.Add(MP("This section should be landscape. If the section break rendered correctly the page is now wider than tall, and this text spans a wider line length. The page geometry changed from portrait (8.5x11) to landscape (11x8.5)."));
         for (int i = 1; i <= 4; i++)
