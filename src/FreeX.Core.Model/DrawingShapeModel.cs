@@ -43,7 +43,9 @@ public enum DrawingShapeKind
     RectangularCallout = 38,
     RoundedRectangularCallout = 39,
     OvalCallout = 40,
-    LineCallout = 41
+    LineCallout = 41,
+    Chevron = 42,
+    HomePlate = 43
 }
 
 public enum DrawingShapeEffectPreset
