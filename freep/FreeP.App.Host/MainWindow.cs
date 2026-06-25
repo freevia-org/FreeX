@@ -223,6 +223,8 @@ public sealed class MainWindow : Window
     {
         _presentation = presentation;
         RebuildEditor(); // also calls AttachCanvasEditing()
+        // 3B: re-bind slide pane to the new Editor on file open/new.
+        SlidePaneHost.Child = new SlidePane(Editor);
         RefreshCanvas();
         UpdateSlideCount();
     }
@@ -237,8 +239,9 @@ public sealed class MainWindow : Window
         {
             Width      = 180,
             Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            // Deliberately empty — 3B owns this region.
         };
+        // 3B SEAM: attach the slide-thumbnail pane.
+        SlidePaneHost.Child = new SlidePane(Editor);
 
         // CENTRE stage — the canvas proper.
         SlideCanvas = new SlideCanvas
