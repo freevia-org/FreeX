@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 
@@ -516,6 +517,60 @@ public partial class GridView
     {
         get => (WorksheetRepeatRange?)GetValue(PrintTitleColumnsProperty);
         set => SetValue(PrintTitleColumnsProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetRowHeightsProperty =
+        DependencyProperty.Register(nameof(SheetRowHeights), typeof(IReadOnlyDictionary<uint, double>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyDictionary<uint, double>? SheetRowHeights
+    {
+        get => (IReadOnlyDictionary<uint, double>?)GetValue(SheetRowHeightsProperty);
+        set => SetValue(SheetRowHeightsProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetDefaultRowHeightProperty =
+        DependencyProperty.Register(nameof(SheetDefaultRowHeight), typeof(double), typeof(GridView),
+            new FrameworkPropertyMetadata(PagePaginationPlanner.NominalRowHeight, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double SheetDefaultRowHeight
+    {
+        get => (double)GetValue(SheetDefaultRowHeightProperty);
+        set => SetValue(SheetDefaultRowHeightProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetColumnWidthsProperty =
+        DependencyProperty.Register(nameof(SheetColumnWidths), typeof(IReadOnlyDictionary<uint, double>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public IReadOnlyDictionary<uint, double>? SheetColumnWidths
+    {
+        get => (IReadOnlyDictionary<uint, double>?)GetValue(SheetColumnWidthsProperty);
+        set => SetValue(SheetColumnWidthsProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetDefaultColumnWidthProperty =
+        DependencyProperty.Register(nameof(SheetDefaultColumnWidth), typeof(double), typeof(GridView),
+            new FrameworkPropertyMetadata(8.43, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double SheetDefaultColumnWidth
+    {
+        get => (double)GetValue(SheetDefaultColumnWidthProperty);
+        set => SetValue(SheetDefaultColumnWidthProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetHeaderMarginProperty =
+        DependencyProperty.Register(nameof(SheetHeaderMargin), typeof(double), typeof(GridView),
+            new FrameworkPropertyMetadata(0.3, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double SheetHeaderMargin
+    {
+        get => (double)GetValue(SheetHeaderMarginProperty);
+        set => SetValue(SheetHeaderMarginProperty, value);
+    }
+
+    public static readonly DependencyProperty SheetFooterMarginProperty =
+        DependencyProperty.Register(nameof(SheetFooterMargin), typeof(double), typeof(GridView),
+            new FrameworkPropertyMetadata(0.3, FrameworkPropertyMetadataOptions.AffectsRender));
+    public double SheetFooterMargin
+    {
+        get => (double)GetValue(SheetFooterMarginProperty);
+        set => SetValue(SheetFooterMarginProperty, value);
     }
 
     // ClipboardRange: when set, draws marching ants around this range

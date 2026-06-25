@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Charts;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
@@ -56,7 +57,13 @@ public static class PageBreakPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight,
         double actualWidth,
-        double actualHeight)
+        double actualHeight,
+        IReadOnlyDictionary<uint, double>? rowHeights = null,
+        double defaultRowHeight = PagePaginationPlanner.NominalRowHeight,
+        IReadOnlyDictionary<uint, double>? columnWidths = null,
+        double defaultColumnWidth = 0.0,
+        double headerMarginInches = 0.0,
+        double footerMarginInches = 0.0)
     {
         if (printArea is not { } range ||
             viewport.RowMetrics.Count == 0 ||
@@ -86,6 +93,11 @@ public static class PageBreakPreviewLayoutPlanner
             return new PageBreakPreviewLayout([], [], []);
         }
 
+        var effectiveRowHeights = rowHeights ?? new Dictionary<uint, double>();
+        var effectiveColumnWidths = columnWidths ?? new Dictionary<uint, double>();
+        var effectiveDefaultColumnWidth = defaultColumnWidth > 0
+            ? defaultColumnWidth
+            : ColumnWidthPixelMapper.PixelsToColumnWidth(PagePaginationPlanner.MinimumPrintColumnWidth);
         var pagination = PagePaginationPlanner.Paginate(
             range,
             scaleToFit,
@@ -94,6 +106,12 @@ public static class PageBreakPreviewLayoutPlanner
             paperSize,
             orientation,
             margins,
+            effectiveRowHeights,
+            defaultRowHeight,
+            effectiveColumnWidths,
+            effectiveDefaultColumnWidth,
+            headerMarginInches,
+            footerMarginInches,
             rowPageBreaks,
             columnPageBreaks);
 

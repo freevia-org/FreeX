@@ -343,7 +343,13 @@ public partial class GridView
                 ActualRowHeaderWidth,
                 EffectiveColHeaderHeight,
                 logicalWidth,
-                logicalHeight))
+                logicalHeight,
+                SheetRowHeights,
+                SheetDefaultRowHeight,
+                SheetColumnWidths,
+                SheetDefaultColumnWidth,
+                SheetHeaderMargin,
+                SheetFooterMargin))
             : WpfPageBreakPreviewLayout.Empty;
 
         if (WorksheetViewMode == WorksheetViewMode.PageBreakPreview)

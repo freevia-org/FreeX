@@ -166,7 +166,13 @@ public sealed partial class MainWindow
             rowHeaderWidth,
             columnHeaderHeight,
             actualWidth,
-            actualHeight);
+            actualHeight,
+            sheet.RowHeights,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths,
+            sheet.DefaultColumnWidth,
+            sheet.HeaderMargin,
+            sheet.FooterMargin);
 
         var instructions = PageBreakPreviewInstructionBuilder.Build(layout);
         if (instructions.IsEmpty)

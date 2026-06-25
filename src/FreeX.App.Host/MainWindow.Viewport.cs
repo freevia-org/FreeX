@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -520,6 +521,12 @@ public partial class MainWindow
         SheetGrid.ScaleToFit = sheet?.ScaleToFit ?? WorksheetScaleToFit.Default;
         SheetGrid.PrintTitleRows = sheet?.PrintTitleRows;
         SheetGrid.PrintTitleColumns = sheet?.PrintTitleColumns;
+        SheetGrid.SheetRowHeights = sheet?.RowHeights;
+        SheetGrid.SheetDefaultRowHeight = sheet?.DefaultRowHeight ?? PagePaginationPlanner.NominalRowHeight;
+        SheetGrid.SheetColumnWidths = sheet?.ColumnWidths;
+        SheetGrid.SheetDefaultColumnWidth = sheet?.DefaultColumnWidth ?? 8.43;
+        SheetGrid.SheetHeaderMargin = sheet?.HeaderMargin ?? 0.3;
+        SheetGrid.SheetFooterMargin = sheet?.FooterMargin ?? 0.3;
 
         // Adjust scrollbar range to the used data range + buffer, thumb to visible area
         UpdateScrollbarMaximums(sheet);

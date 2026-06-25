@@ -57,6 +57,12 @@ public sealed class PrintPreviewPaginationContext
             sheet.PaperSize,
             sheet.PageOrientation,
             sheet.PageMargins,
+            sheet.RowHeights,
+            sheet.DefaultRowHeight,
+            sheet.ColumnWidths,
+            sheet.DefaultColumnWidth,
+            sheet.HeaderMargin,
+            sheet.FooterMargin,
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
 

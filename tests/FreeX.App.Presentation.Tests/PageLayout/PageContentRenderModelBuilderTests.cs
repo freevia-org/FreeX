@@ -371,6 +371,52 @@ public sealed class PageContentRenderModelBuilderTests
         act2.Should().Throw<ArgumentNullException>();
     }
 
+    /// <summary>
+    /// Production-path wiring test: a sheet with tall rows (60px each) fits fewer rows per page than
+    /// the same sheet with default rows (20px). PrintPreviewPaginationContext.TryCreate now calls the
+    /// real-size Paginate overload, so page count must reflect the actual row heights.
+    /// </summary>
+    [Fact]
+    public void TryCreate_TallRowsProduceMorePagesThanDefaultRows()
+    {
+        // Arrange: 60 rows of data — with default 20px rows all fit on 1 A4-narrow page (51 per page).
+        // With 60px tall rows only ~17 rows fit per page, so 60 rows → 4 pages.
+        const int rowCount = 60;
+        const uint tallRowHeightPx = 60;
+
+        var (workbook, sheetDefault) = CreateWorkbook();
+        sheetDefault.PaperSize = WorksheetPaperSize.A4;
+        sheetDefault.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheetDefault.PageMargins = WorksheetPageMargins.Narrow;
+        // DefaultRowHeight stays at 20px (the Sheet default).
+        for (uint r = 1; r <= rowCount; r++)
+            sheetDefault.SetCell(new CellAddress(sheetDefault.Id, r, 1), new NumberValue(r));
+
+        var (_, sheetTall) = CreateWorkbook();
+        sheetTall.PaperSize = WorksheetPaperSize.A4;
+        sheetTall.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheetTall.PageMargins = WorksheetPageMargins.Narrow;
+        // All rows are 60px tall (3× the default).
+        for (uint r = 1; r <= rowCount; r++)
+        {
+            sheetTall.RowHeights[r] = tallRowHeightPx;
+            sheetTall.SetCell(new CellAddress(sheetTall.Id, r, 1), new NumberValue(r));
+        }
+
+        // Act: use PrintPreviewPaginationContext (the production path for the print preview).
+        var defaultCreated = PrintPreviewPaginationContext.TryCreate(workbook, sheetDefault, Measurer, out var defaultCtx);
+        var tallCreated = PrintPreviewPaginationContext.TryCreate(workbook, sheetTall, Measurer, out var tallCtx);
+
+        // Assert: both contexts are valid, and tall rows produce more pages.
+        defaultCreated.Should().BeTrue();
+        tallCreated.Should().BeTrue();
+        tallCtx.PageCount.Should().BeGreaterThan(defaultCtx.PageCount,
+            "60px rows are 3× taller than default 20px rows so fewer rows fit per page and more pages are needed");
+        // With 60px rows: ~17 rows/page → 60 rows → 4 pages (ceil(60/17)=4). Default: 1 page (60 < 51 is false → 2 pages actually).
+        defaultCtx.PageCount.Should().Be(2, "60 rows at default 20px height: ~51 per page → 2 row pages");
+        tallCtx.PageCount.Should().BeGreaterThanOrEqualTo(3, "60 rows at 60px height: ~17 per page → at least 3 row pages");
+    }
+
     private static PageContentLayout? BuildFirstPage(Workbook workbook, Sheet sheet) =>
         PageContentRenderModelBuilder.Build(workbook, sheet, Paginate(sheet), 0, Measurer, new DateTime(2026, 1, 1));
 
