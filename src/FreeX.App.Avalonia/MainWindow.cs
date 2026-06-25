@@ -14,6 +14,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Globalization;
 using FreeX.App.Presentation;
@@ -8176,24 +8177,28 @@ public sealed partial class MainWindow : Window
         WorkbookHiddenSheet? result = null;
         var dialog = new Window
         {
-            Title = "Unhide Sheet",
-            Width = 380,
-            Height = 190,
+            Title = UiText.Get("UnhideSheet_UnhideSheet"),
+            Width = 360,
+            Height = 220,
             MinWidth = 340,
-            MinHeight = 180,
+            MinHeight = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
 
-        var sheetBox = new ComboBox
+        var sheetBox = new ListBox
         {
             ItemsSource = hiddenSheets,
             MinWidth = 280,
+            MinHeight = 64,
+            SelectionMode = SelectionMode.Single,
             SelectedIndex = hiddenSheets.Count > 0 ? 0 : -1,
+            Background = Brushes.White,
         };
-        AutomationProperties.SetName(sheetBox, "Hidden sheet");
+        AutomationProperties.SetName(sheetBox, UiText.Get("UnhideSheet_UnhideSheet"));
         AutomationProperties.SetAutomationId(sheetBox, "UnhideSheetList");
-        AutomationProperties.SetHelpText(sheetBox, "Select the hidden worksheet to make visible.");
+        AutomationProperties.SetHelpText(sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
+        sheetBox.DoubleTapped += (_, _) => Accept();
 
         var okButton = new Button
         {
@@ -8253,7 +8258,7 @@ public sealed partial class MainWindow : Window
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "Hidden sheet" },
+                new TextBlock { Text = UiText.Get("UnhideSheet_UnhideSheet2").Replace("_", string.Empty) },
                 sheetBox,
                 buttonRow,
             },
@@ -10867,18 +10872,18 @@ public sealed partial class MainWindow : Window
                                 Spacing = 10,
                                 Children =
                                 {
-                                    new Border
+                                    new StackPanel
                                     {
-                                        BorderBrush = Brushes.Gray,
-                                        BorderThickness = new Thickness(1),
-                                        Padding = new Thickness(6, 4),
-                                        Child = new StackPanel
+                                        Spacing = 4,
+                                        Children =
                                         {
-                                            Spacing = 2,
-                                            Children =
+                                            new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
+                                            new Border
                                             {
-                                                new TextBlock { Text = UiText.Get("FormatCells_Sample"), FontWeight = FontWeight.SemiBold },
-                                                numberPreview,
+                                                BorderBrush = FormulaBarControlBorder,
+                                                BorderThickness = new Thickness(1),
+                                                Padding = new Thickness(8, 6),
+                                                Child = numberPreview,
                                             },
                                         },
                                     },
@@ -11018,6 +11023,7 @@ public sealed partial class MainWindow : Window
         var tabStrip = new TabControl
         {
             SelectedIndex = 0,
+            Padding = new Thickness(0),
             ItemsSource = new[]
             {
                 numberTab,
@@ -11029,6 +11035,7 @@ public sealed partial class MainWindow : Window
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
+        ApplyClassicTabChrome(tabStrip);
 
         var buttonRow = new StackPanel
         {
@@ -11079,6 +11086,44 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    // Avalonia's default TabControl theme renders a borderless content pane and
+    // borderless inactive tabs, which diverges from the WPF/Windows "classic" Format
+    // Cells dialog (bordered tab pane + outlined inactive tabs). These template-targeting
+    // styles restore that look so the Linux dialog matches the Windows screenshot.
+    private static void ApplyClassicTabChrome(TabControl tabStrip)
+    {
+        var paneBorder = FormulaBarControlBorder; // light gray (192,192,192)
+        var inactiveTabBorder = Brush(160, 160, 160);
+        var inactiveTabBackground = Brush(243, 243, 243);
+
+        // Bordered content pane around the selected tab's content.
+        var contentPaneStyle = new Style(s => s
+            .OfType<TabControl>()
+            .Template()
+            .OfType<ContentPresenter>()
+            .Name("PART_SelectedContentHost"));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, paneBorder));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(12)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
+        tabStrip.Styles.Add(contentPaneStyle);
+
+        // Outlined inactive tabs (classic look). Default + non-selected.
+        var tabStyle = new Style(s => s.OfType<TabItem>());
+        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
+        tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
+        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, 0)));
+        tabStrip.Styles.Add(tabStyle);
+
+        // Selected tab: white background to merge with the content pane.
+        var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, paneBorder));
+        tabStrip.Styles.Add(selectedTabStyle);
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)

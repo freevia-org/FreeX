@@ -182,7 +182,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = UiText.Format("PivotOptions_Title", pivot.Name),
+            Title = UiText.Get("PivotTableOptions_PivotTableOptions"),
             Width = 520,
             MinHeight = 500,
             SizeToContent = SizeToContent.Height,
@@ -209,45 +209,119 @@ public sealed partial class MainWindow
             dialog.Close(true);
         };
 
-        // Grand Totals section (WPF-style groupbox framing)
-        var grandTotalsGroup = new StackPanel { Spacing = 4 };
-        grandTotalsGroup.Children.Add(rowGrandTotalsBox);
-        grandTotalsGroup.Children.Add(columnGrandTotalsBox);
+        // ── Tab: Layout & Format ───────────────────────────────────────────────
+        var layoutSection = new StackPanel { Spacing = 6 };
+        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportLayoutLabel")));
+        layoutSection.Children.Add(reportLayoutBox);
+        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_CompactIndentLabel")));
+        layoutSection.Children.Add(compactIndentBox);
+        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportFilterAreaLabel")));
+        // Page-field-layout labels mirror the WPF host's non-localized literals.
+        layoutSection.Children.Add(OptionComboBox(new[] { "Down, then over", "Over, then down" }));
+        layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel")));
+        layoutSection.Children.Add(OptionTextBox("0", 80));
+        layoutSection.Children.Add(repeatLabelsBox);
+        layoutSection.Children.Add(blankRowBox);
+        layoutSection.Children.Add(mergeLabelsBox);
 
-        // Layout section (WPF-style groupbox framing)
-        var layoutGroup = new StackPanel { Spacing = 6 };
-        layoutGroup.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_ReportLayoutLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        layoutGroup.Children.Add(reportLayoutBox);
-        layoutGroup.Children.Add(new TextBlock { Text = UiText.Get("PivotOptions_CompactIndentLabel"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        layoutGroup.Children.Add(compactIndentBox);
-        layoutGroup.Children.Add(repeatLabelsBox);
-        layoutGroup.Children.Add(blankRowBox);
-        layoutGroup.Children.Add(mergeLabelsBox);
+        var formatSection = new StackPanel { Spacing = 6 };
+        formatSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_EmptyCellsLabel")));
+        formatSection.Children.Add(OptionTextBox(string.Empty, 160));
+        formatSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ErrorValuesLabel")));
+        formatSection.Children.Add(OptionTextBox(string.Empty, 160));
+        formatSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_AutofitColumnWidthsOnUpdate"), true));
+        formatSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_PreserveCellFormattingOnUpdate"), true));
 
-        // Subtotals section (WPF-style groupbox framing)
-        var subtotalsGroup = new StackPanel { Spacing = 6 };
-        subtotalsGroup.Children.Add(subtotalsBox);
-        subtotalsGroup.Children.Add(subtotalPlacementBox);
+        var layoutTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        layoutTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_LayoutSectionGroup"), layoutSection));
+        layoutTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_FormatSectionGroup"), formatSection));
 
-        var content = new StackPanel { Spacing = 10, Margin = new Thickness(12) };
-        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_GrandTotalsHeader"), grandTotalsGroup));
-        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_LayoutHeader"), layoutGroup));
-        content.Children.Add(MakeSectionGroupBox(UiText.Get("PivotOptions_SubtotalsHeader"), subtotalsGroup));
-        content.Children.Add(new StackPanel
+        // ── Tab: Totals & Filters ──────────────────────────────────────────────
+        var grandTotalsSection = new StackPanel { Spacing = 4 };
+        grandTotalsSection.Children.Add(rowGrandTotalsBox);
+        grandTotalsSection.Children.Add(columnGrandTotalsBox);
+
+        var subtotalsSection = new StackPanel { Spacing = 6 };
+        subtotalsSection.Children.Add(subtotalsBox);
+        subtotalsSection.Children.Add(subtotalPlacementBox);
+
+        var totalsTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        totalsTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_GrandTotalsGroup"), grandTotalsSection));
+        totalsTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_FiltersAndSubtotalsGroup"), subtotalsSection));
+
+        // ── Tab: Display ───────────────────────────────────────────────────────
+        var displaySection = new StackPanel { Spacing = 6 };
+        displaySection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_PivotTableStyleLabel")));
+        displaySection.Children.Add(OptionComboBox(new[] { pivot.StyleName }));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_RowHeaders"), pivot.ShowRowHeaders));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ColumnHeaders"), pivot.ShowColumnHeaders));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns"), pivot.ShowFieldHeaders));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ShowContextualTooltips"), true));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ShowPropertiesInTooltips"), true));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ClassicPivotTableLayoutEnablesDraggingOfFieldsInTheGrid"), false));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ShowItemsWithNoDataOnRows"), false));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ShowItemsWithNoDataOnColumns"), false));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_BandedRows"), pivot.ShowRowStripes));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_BandedColumns"), pivot.ShowColumnStripes));
+        displaySection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_ShowExpandCollapseButtons"), true));
+        var displayTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        displayTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_PivotTableStyleOptionsGroup"), displaySection));
+
+        // ── Tab: Printing ──────────────────────────────────────────────────────
+        var printSection = new StackPanel { Spacing = 6 };
+        printSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_SetPrintTitles"), false));
+        printSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_PrintExpandCollapseButtonsWhenDisplayedOnPivotTable"), false));
+        var printTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        printTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_PrintOptionsGroup"), printSection));
+
+        // ── Tab: Data ──────────────────────────────────────────────────────────
+        var dataSection = new StackPanel { Spacing = 6 };
+        dataSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_RefreshDataWhenOpeningTheFile"), false));
+        dataSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_SaveSourceDataWithFile"), true));
+        dataSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_EnableRefresh"), true));
+        dataSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_EnableShowDetails"), true));
+        dataSection.Children.Add(OptionCheckBox(UiText.Get("PivotTableOptions_PreserveSourceSortAndFilterSettings"), true));
+        var dataTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        dataTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_DataOptionsGroup"), dataSection));
+
+        // ── Tab: Alt Text ──────────────────────────────────────────────────────
+        var altSection = new StackPanel { Spacing = 6 };
+        altSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_TitleLabel")));
+        altSection.Children.Add(OptionTextBox(string.Empty, 320));
+        altSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_DescriptionLabel")));
+        altSection.Children.Add(OptionTextBox(string.Empty, 320));
+        var altTab = new StackPanel { Spacing = 10, Margin = new Thickness(10) };
+        altTab.Children.Add(MakeSectionGroupBox(UiText.Get("PivotTableOptions_AltTextGroup"), altSection));
+
+        var tabs = new TabControl
+        {
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 12),
+            Items =
+            {
+                new TabItem { Header = UiText.Get("PivotTableOptions_LayoutAndFormat"), Content = layoutTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotTableOptions_TotalsAndFilters"), Content = totalsTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotTableOptions_Display"), Content = displayTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotTableOptions_Printing"), Content = printTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotTableOptions_Data"), Content = dataTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = UiText.Get("PivotTableOptions_AltText"), Content = altTab, FontSize = 12, FontFamily = FormulaBarFontFamily },
+            },
+        };
+        AutomationProperties.SetAutomationId(tabs, "PivotTableOptionsTabs");
+
+        var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Spacing = 8,
-            Margin = new Thickness(0, 4, 0, 0),
             Children = { ok, cancel },
-        });
-        dialog.Content = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            MaxHeight = 560,
-            Content = content,
         };
+
+        var content = new DockPanel { Margin = new Thickness(16) };
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        content.Children.Add(buttonRow);
+        content.Children.Add(tabs);
+        dialog.Content = content;
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
@@ -287,6 +361,49 @@ public sealed partial class MainWindow
             mergeAndCenterLabels: result.MergeAndCenterLabels);
 
         ExecutePivotTabCommand(command, "PivotTable options updated.");
+    }
+
+    // ── Display-only option control factories ─────────────────────────────────
+    // These render the WPF dialog's full tab surface for visual parity. Only the
+    // nine totals/layout/subtotal controls above are wired to the options command;
+    // the rest are presentation-only (the Avalonia options command does not carry
+    // them), matching the WPF reference structure.
+    private static TextBlock OptionLabel(string text) => new()
+    {
+        Text = text,
+        FontSize = 12,
+        FontFamily = FormulaBarFontFamily,
+        Foreground = HeaderForeground,
+    };
+
+    private static CheckBox OptionCheckBox(string text, bool isChecked) => new()
+    {
+        Content = text,
+        IsChecked = isChecked,
+        FontSize = 12,
+        FontFamily = FormulaBarFontFamily,
+    };
+
+    private static TextBox OptionTextBox(string text, double minWidth)
+    {
+        var box = new TextBox
+        {
+            Text = text,
+            MinWidth = minWidth,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        ApplyPivotTextBoxChrome(box);
+        return box;
+    }
+
+    private static ComboBox OptionComboBox(IReadOnlyList<string?> items)
+    {
+        var box = new ComboBox { MinWidth = 220 };
+        foreach (var item in items)
+            box.Items.Add(item ?? string.Empty);
+        box.SelectedIndex = items.Count > 0 ? 0 : -1;
+        ApplyPivotComboBoxChrome(box);
+        return box;
     }
 
     private static TextBlock SectionHeader(string text) => new()

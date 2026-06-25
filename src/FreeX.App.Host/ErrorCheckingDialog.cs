@@ -89,7 +89,6 @@ public sealed class ErrorCheckingDialog : Window
         _editFormulaButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.EditInFormulaBarButtonKey), Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(0, 0, 0, 6) };
         _editFormulaButton.Click += (_, _) => NavigateSelected();
         actionStack.Children.Add(_editFormulaButton);
-        root.Children.Add(actionPanel);
 
         var buttons = new StackPanel
         {
@@ -97,8 +96,12 @@ public sealed class ErrorCheckingDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0)
         };
+        // Dock the bottom button bar BEFORE the right-hand action panel so the bar spans the full
+        // dialog width (matching the Avalonia/Linux layout). Otherwise the Dock.Right panel claims its
+        // width first and the right-aligned button row is clipped on the left (the first button is cut off).
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
+        root.Children.Add(actionPanel);
 
         _goToButton = new Button { Content = UiText.Get(ErrorCheckingDialogPlanner.GoToButtonKey), Width = ErrorCheckingDialogPlanner.GoToButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0) };
         _goToButton.Click += (_, _) => NavigateSelected();

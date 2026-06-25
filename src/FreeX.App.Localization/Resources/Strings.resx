@@ -19352,4 +19352,148 @@ and {0} more.</value>
   <data name="ChartErrorBars_ValueAutomationName" xml:space="preserve">
     <value>Error bar value</value>
   </data>
+  <data name="AccessibilityChecker_AdditionalInformation" xml:space="preserve">
+    <value>Additional Information</value>
+  </data>
+  <data name="AccessibilityChecker_WhyFixHeader" xml:space="preserve">
+    <value>Why Fix:</value>
+  </data>
+  <data name="AccessibilityChecker_HowToFixHeader" xml:space="preserve">
+    <value>How To Fix:</value>
+  </data>
+  <data name="AccessibilityChecker_StatusReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="AccessibilityChecker_InspectionResults" xml:space="preserve">
+    <value>Inspection Results</value>
+  </data>
+  <data name="AccessibilityChecker_SectionErrors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="AccessibilityChecker_SectionWarnings" xml:space="preserve">
+    <value>Warnings</value>
+  </data>
+  <data name="AccessibilityChecker_SectionTips" xml:space="preserve">
+    <value>Tips</value>
+  </data>
+  <data name="AccessibilityChecker_GroupMissingAltText" xml:space="preserve">
+    <value>Missing alternative text</value>
+  </data>
+  <data name="AccessibilityChecker_WhyMissingAltText" xml:space="preserve">
+    <value>People who are blind or have low vision rely on alternative text to understand pictures, shapes, and other objects.</value>
+  </data>
+  <data name="AccessibilityChecker_HowMissingAltText" xml:space="preserve">
+    <value>Add alternative text that describes the object's content and purpose.</value>
+  </data>
+  <data name="AccessibilityChecker_HowMissingChartTitle" xml:space="preserve">
+    <value>Add a descriptive title to the chart.</value>
+  </data>
+  <data name="AccessibilityChecker_HowMissingAxisTitle" xml:space="preserve">
+    <value>Add a descriptive title to each chart axis.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupMissingTableHeader" xml:space="preserve">
+    <value>Missing table header</value>
+  </data>
+  <data name="AccessibilityChecker_WhyTableHeader" xml:space="preserve">
+    <value>Screen readers use table headers to help people navigate a table and understand its data.</value>
+  </data>
+  <data name="AccessibilityChecker_HowTableHeaderRow" xml:space="preserve">
+    <value>Turn on the header row for the table.</value>
+  </data>
+  <data name="AccessibilityChecker_HowTableHeaderText" xml:space="preserve">
+    <value>Enter descriptive text in every table header cell.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupGenericAltText" xml:space="preserve">
+    <value>Hard-to-understand alternative text</value>
+  </data>
+  <data name="AccessibilityChecker_WhyGenericAltText" xml:space="preserve">
+    <value>Generic alternative text such as a file name does not describe what an object shows.</value>
+  </data>
+  <data name="AccessibilityChecker_HowGenericAltText" xml:space="preserve">
+    <value>Replace the alternative text with a description of the object's content and purpose.</value>
+  </data>
+  <data name="AccessibilityChecker_HowGenericChartTitle" xml:space="preserve">
+    <value>Replace the chart title with a description of what the chart shows.</value>
+  </data>
+  <data name="AccessibilityChecker_HowGenericAxisTitle" xml:space="preserve">
+    <value>Replace the axis title with a description of what the axis measures.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupLowContrast" xml:space="preserve">
+    <value>Hard-to-read text contrast</value>
+  </data>
+  <data name="AccessibilityChecker_WhyLowContrast" xml:space="preserve">
+    <value>People with low vision or color blindness may not be able to read text that has low contrast with its background.</value>
+  </data>
+  <data name="AccessibilityChecker_HowLowContrast" xml:space="preserve">
+    <value>Increase the contrast between the text and its background color.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupMergedCells" xml:space="preserve">
+    <value>Merged cells</value>
+  </data>
+  <data name="AccessibilityChecker_WhyMergedCells" xml:space="preserve">
+    <value>Merged cells make it harder for people who use screen readers to navigate a worksheet.</value>
+  </data>
+  <data name="AccessibilityChecker_HowMergedCells" xml:space="preserve">
+    <value>Unmerge the cells so the data reads in a predictable order.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupHyperlinkText" xml:space="preserve">
+    <value>Unclear hyperlink text</value>
+  </data>
+  <data name="AccessibilityChecker_WhyHyperlinkText" xml:space="preserve">
+    <value>Screen readers read hyperlink display text aloud, so a raw URL does not tell people where the link goes.</value>
+  </data>
+  <data name="AccessibilityChecker_HowHyperlinkText" xml:space="preserve">
+    <value>Change the display text to describe the link destination.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupDefaultTableHeader" xml:space="preserve">
+    <value>Default table header text</value>
+  </data>
+  <data name="AccessibilityChecker_WhyDefaultTableHeader" xml:space="preserve">
+    <value>Default header text such as Column1 does not describe what a table column contains.</value>
+  </data>
+  <data name="AccessibilityChecker_HowDefaultTableHeader" xml:space="preserve">
+    <value>Replace the default header text with a description of each column.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupDuplicateTableHeader" xml:space="preserve">
+    <value>Duplicate table header text</value>
+  </data>
+  <data name="AccessibilityChecker_WhyDuplicateTableHeader" xml:space="preserve">
+    <value>Duplicate header text makes it hard for screen reader users to tell table columns apart.</value>
+  </data>
+  <data name="AccessibilityChecker_HowDuplicateTableHeader" xml:space="preserve">
+    <value>Give each table column a unique header.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupDefaultSheetNames" xml:space="preserve">
+    <value>Default sheet names</value>
+  </data>
+  <data name="AccessibilityChecker_WhyDefaultSheetNames" xml:space="preserve">
+    <value>Descriptive sheet names help everyone, including people who use screen readers, find their way around a workbook.</value>
+  </data>
+  <data name="AccessibilityChecker_HowDefaultSheetNames" xml:space="preserve">
+    <value>Rename the sheet tab to describe its contents.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupHiddenContent" xml:space="preserve">
+    <value>Hidden content</value>
+  </data>
+  <data name="AccessibilityChecker_WhyHiddenContent" xml:space="preserve">
+    <value>Hidden sheets, rows, and columns may contain information that people who use assistive technology miss.</value>
+  </data>
+  <data name="AccessibilityChecker_HowHiddenSheet" xml:space="preserve">
+    <value>Unhide the sheet if its content should be available to everyone.</value>
+  </data>
+  <data name="AccessibilityChecker_HowHiddenRow" xml:space="preserve">
+    <value>Unhide the rows if their content should be available to everyone.</value>
+  </data>
+  <data name="AccessibilityChecker_HowHiddenColumn" xml:space="preserve">
+    <value>Unhide the columns if their content should be available to everyone.</value>
+  </data>
+  <data name="AccessibilityChecker_GroupOther" xml:space="preserve">
+    <value>Other accessibility issues</value>
+  </data>
+  <data name="AccessibilityChecker_WhyOther" xml:space="preserve">
+    <value>Review this item to make the workbook easier for people with disabilities to use.</value>
+  </data>
+  <data name="AccessibilityChecker_HowOther" xml:space="preserve">
+    <value>Follow the guidance for this issue to improve accessibility.</value>
+  </data>
 </root>
