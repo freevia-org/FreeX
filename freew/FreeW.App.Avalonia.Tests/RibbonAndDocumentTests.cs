@@ -35,7 +35,7 @@ public class RibbonAndDocumentTests
     public void Every_ribbon_command_id_is_registered()
     {
         var definition = FreeWRibbon.BuildDefinition();
-        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { });
+        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
@@ -70,7 +70,8 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.OpenAsync(");
         mainWindow.Should().Contain("_fileWorkflow.SaveAsync(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
-        mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: true");
+        // suppressRecentFiles was true (stub) and is now false so files register in the store.
+        mainWindow.Should().Contain("_fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles:");
         mainWindow.Should().NotContain("new FileCommandSession");
         mainWindow.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         mainWindow.Should().NotContain("WorkbookDocumentState");

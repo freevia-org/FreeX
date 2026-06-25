@@ -531,7 +531,7 @@ public sealed class MacOsBundleMetadataTests
     private static IReadOnlyList<string> HostResourceLocalizations()
     {
         var neutralCulture = HostNeutralResourcesLanguage();
-        var neutralResourcePath = RepositoryFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx");
+        var neutralResourcePath = RepositoryFileLocator.Find("src", "FreeX.App.Localization", "Resources", "Strings.resx");
         var resourcesDirectory = Path.GetDirectoryName(neutralResourcePath)!;
         var satelliteCultures = Directory
             .EnumerateFiles(resourcesDirectory, "Strings.*.resx")

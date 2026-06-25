@@ -142,6 +142,18 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=CONCATENATE(\"Hello \",\"World\")", MakeSheet())
             .Should().Be(new TextValue("Hello World"));
 
+    // F3 regression: CONCATENATE / TEXTJOIN number→text coercion must use
+    // Excel's 15-significant-digit General format, not raw double.ToString.
+    [Fact]
+    public void Concatenate_NumberArg_Uses15SigDigits()
+    {
+        // CONCATENATE with numeric cell: 1/3 stored in A1, result must be 15 sig digits.
+        // Excel: =CONCATENATE(A1,"x") where A1=1/3 → "0.333333333333333x"
+        var sheet = MakeSheet((1, 1, new NumberValue(1.0 / 3.0)));
+        _eval.Evaluate("=CONCATENATE(A1,\"x\")", sheet)
+            .Should().Be(new TextValue("0.333333333333333x"));
+    }
+
     [Fact]
     public void Concatenate_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {

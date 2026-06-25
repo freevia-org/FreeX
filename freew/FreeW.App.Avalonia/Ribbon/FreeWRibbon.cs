@@ -25,6 +25,7 @@ internal static class FreeWRibbon
             .Tab("file", "File", "F", tab =>
                 tab.Group("document", "Document", null, 100, g =>
                 {
+                    g.Button("freew.backstage", "File...");
                     g.Button("freew.open", "Open");
                     g.Button("freew.save", "Save");
                 }))
@@ -70,6 +71,16 @@ internal static class FreeWRibbon
                 {
                     g.Button("freew.insert-table", "Table");
                 }))
+            .Tab("view", "View", "V", tab =>
+                tab.Group("show", "Show", null, 100, g =>
+                {
+                    g.Toggle("freew.navigationpane", "Navigation Pane");
+                }))
+            .Tab("review", "Review", "R", tab =>
+                tab.Group("tracking", "Tracking", null, 100, g =>
+                {
+                    g.Toggle("freew.reviewingpane", "Reviewing Pane");
+                }))
             .Build();
 
     public static RibbonCommandRegistry BuildRegistry(DocumentView editor, RibbonHostCallbacks callbacks)
@@ -103,11 +114,14 @@ internal static class FreeWRibbon
             if (!string.IsNullOrWhiteSpace(value))
                 editor.SetSelectionFontFamily(value);
         }));
+        registry.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
         registry.Register("freew.open", new RelayCommand(callbacks.Open));
         registry.Register("freew.save", new RelayCommand(callbacks.Save));
         registry.Register("freew.cut", new RelayCommand(callbacks.Cut));
         registry.Register("freew.copy", new RelayCommand(callbacks.Copy));
         registry.Register("freew.paste", new RelayCommand(callbacks.Paste));
+        registry.Register("freew.navigationpane", new RelayCommand(callbacks.ToggleNavigationPane));
+        registry.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
         return registry;
     }
 }
@@ -117,7 +131,10 @@ internal sealed record RibbonHostCallbacks(
     Action Save,
     Action Cut,
     Action Copy,
-    Action Paste);
+    Action Paste,
+    Action Backstage,
+    Action ToggleNavigationPane,
+    Action ToggleReviewingPane);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

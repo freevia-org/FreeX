@@ -23,6 +23,14 @@ public sealed class TimelineModel
     /// </summary>
     public int? Level { get; init; }
     /// <summary>
+    /// The OOXML <c>selectionLevel</c> attribute from the timeline definition part.
+    /// Controls which date hierarchy level drives the current selection (independent of
+    /// <see cref="Level"/>, which controls the display granularity). Null when absent —
+    /// in that case the writer falls back to emitting <see cref="Level"/> for this attribute,
+    /// preserving the pre-fix behaviour for files where the two values coincide.
+    /// </summary>
+    public int? SelectionLevel { get; init; }
+    /// <summary>
     /// The OOXML <c>scrollPosition</c> attribute from the timeline definition part — the date/time
     /// of the first visible period in the timeline's scroll window. Null when absent.
     /// </summary>

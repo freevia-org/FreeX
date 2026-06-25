@@ -413,6 +413,59 @@ public class FindReplaceTests
         FindReplaceService.CanSearchTextMatchNumber("SUM").Should().BeFalse();
     }
 
+    // ── F11: number-format-aware display text in Values search ───────────────
+
+    [Fact]
+    public void Find_Values_UsesAppliedNumberFormat_PercentCell()
+    {
+        // Regression: a cell with value 0.5 formatted as "0%" displays "50%" to the user.
+        // Searching Values for "50%" must find it; searching "0.5" must NOT (invariant rendering
+        // is not what the user sees).
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+
+        var percentStyle = wb.RegisterStyle(new CellStyle { NumberFormat = "0%" });
+        var cell = Cell.FromValue(new NumberValue(0.5));
+        cell.StyleId = percentStyle;
+        sheet.SetCell(a1, cell);
+
+        // Should find when searching the formatted display text.
+        var results = FindReplaceService.Find(wb, "50%");
+        results.Should().ContainSingle().Which.Address.Should().Be(a1);
+
+        // Should NOT find when searching the invariant raw value (user does not see "0.5").
+        var rawResults = FindReplaceService.Find(wb, "0.5");
+        rawResults.Should().BeEmpty("invariant raw value must not be returned in Values mode");
+    }
+
+    [Fact]
+    public void Find_Values_UsesAppliedNumberFormat_CurrencyCell()
+    {
+        // A cell with value 1000 formatted as "$#,##0.00" displays "$1,000.00".
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+
+        var currencyStyle = wb.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var cell = Cell.FromValue(new NumberValue(1000));
+        cell.StyleId = currencyStyle;
+        sheet.SetCell(a1, cell);
+
+        var results = FindReplaceService.Find(wb, "$1,000.00");
+        results.Should().ContainSingle().Which.Address.Should().Be(a1);
+    }
+
+    [Fact]
+    public void Find_Values_NumberFormat_TextCellUnchanged()
+    {
+        // Text cells must still be found by their text content regardless of number format.
+        var (wb, sheet, _) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("hello"));
+
+        var results = FindReplaceService.Find(wb, "hello");
+        results.Should().ContainSingle().Which.Address.Should().Be(a1);
+    }
+
     [Fact]
     public void TryReplaceAll_ReturnsCommandFailureInsteadOfCountingRejectedEdits()
     {

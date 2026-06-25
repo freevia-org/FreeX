@@ -55,15 +55,41 @@ internal static class XlsxDrawingAnchorApplier
         textBox.AnchorOffsetY = anchor.FromRowOffset;
     }
 
-    public static void ApplyToShape(DrawingShapeModel shape, XlsxDrawingAnchor? anchor, Sheet sheet)
+    public static void ApplyToShape(
+        DrawingShapeModel shape,
+        XlsxDrawingAnchor? anchor,
+        Sheet sheet,
+        double? xfrmWidthPixels = null,
+        double? xfrmHeightPixels = null)
     {
         if (anchor is null)
             return;
 
-        var (width, height) = GetAnchorSize(anchor, sheet);
+        // Prefer the pre-rotation size from <a:xfrm><a:ext cx cy> when available.
+        // For rotated shapes the outer anchor extent is the bounding box of the rotated shape,
+        // not the shape's own unrotated dimensions, so we must use the xfrm extent instead.
+        // For line-like shapes (Line, ElbowConnector, CurvedConnector), the xfrm cx/cy may be
+        // zero along one axis (e.g. a perfectly horizontal line has cy=0); in that case we still
+        // prefer the xfrm values so the shape renders as a flat line rather than a diagonal.
+        double width, height;
+        var isLineLike = DrawingShapeKindSupport.IsLineLike(shape.Kind);
+        if (xfrmWidthPixels.HasValue && xfrmHeightPixels.HasValue &&
+            (xfrmWidthPixels is > 0 || isLineLike) &&
+            (xfrmHeightPixels is > 0 || isLineLike))
+        {
+            width = xfrmWidthPixels.Value;
+            height = xfrmHeightPixels.Value;
+        }
+        else
+        {
+            (width, height) = GetAnchorSize(anchor, sheet);
+        }
+
         if (width > 0)
             shape.Width = width;
-        if (height > 0)
+        if (isLineLike)
+            shape.Height = Math.Max(0, height);   // allow flat (zero-height) lines
+        else if (height > 0)
             shape.Height = height;
         shape.AnchorOffsetX = anchor.FromColumnOffset;
         shape.AnchorOffsetY = anchor.FromRowOffset;

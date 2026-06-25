@@ -5127,18 +5127,75 @@ public sealed partial class MainWindow : Window
 
     private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
+        // Defensive: drop any stale subscriptions left over from a drag that lost capture without a
+        // PointerReleased (grid rebuild, alt-tab, context menu), so we never double-subscribe.
+        DetachCellSelectionDragHandlers();
+        // Also defensively clear stale drag-state flags so a stranded autofill/move drag cannot
+        // accidentally commit against a stale source range on the next drag.
+        _autofillDragging = false;
+        _autofillSourceRange = null;
+        _autofillTarget = null;
+        _selectionMoveDragging = false;
+        _selectionMoveSourceRange = null;
+        _selectionMovePreviewRange = null;
+        _selectionExtensionAnchor = null;
+        _selectionExtensionCursor = null;
+
         _cellDragSelectionAnchor = address;
+        // Keep _cellDragSelectionCapture for Focus() — the per-cell border is the right focus target.
         _cellDragSelectionCapture = capture;
         _cellDragSelectionPointer = args.Pointer;
         capture.Focus();
-        args.Pointer.Capture(capture);
+        // Capture on _sheetGridHost — the persistent host that SURVIVES RefreshShell/BuildSheetGrid,
+        // so the first ContinueCellSelectionDrag → SelectRangeFromAnchor → RefreshShell cannot
+        // destroy the captured control and cause Avalonia to silently drop pointer capture.
+        _sheetGridHost.PointerMoved += CellSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased += CellSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost += CellSelectionCapturePointerCaptureLost;
+        args.Pointer.Capture(_sheetGridHost);
+    }
+
+    private void CellSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
+        ContinueCellSelectionDrag(args, _cellDragSelectionAnchor ?? default);
+
+    private void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        EndCellSelectionDrag(args);
+
+    // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
+    // abort the drag and clear all drag state without committing any fill/move — mirrors the
+    // HeaderResizeCapturePointerCaptureLost cleanup pattern.
+    private void CellSelectionCapturePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        // Detach FIRST so the Capture(null) inside the cleanup below cannot re-raise
+        // PointerCaptureLost back into this handler (which would re-enter indefinitely).
+        DetachCellSelectionDragHandlers();
+        // Do NOT commit autofill or selection-move: capture lost means the drag was interrupted,
+        // so silently clear all drag state.
+        _cellDragSelectionPointer?.Capture(null);
+        _cellDragSelectionAnchor = null;
+        _cellDragSelectionCapture = null;
+        _cellDragSelectionPointer = null;
+        _selectionExtensionAnchor = null;
+        _selectionExtensionCursor = null;
+        _autofillDragging = false;
+        _autofillSourceRange = null;
+        _autofillTarget = null;
+        _selectionMoveDragging = false;
+        _selectionMoveSourceRange = null;
+        _selectionMovePreviewRange = null;
+    }
+
+    private void DetachCellSelectionDragHandlers()
+    {
+        _sheetGridHost.PointerMoved -= CellSelectionCapturePointerMoved;
+        _sheetGridHost.PointerReleased -= CellSelectionCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost -= CellSelectionCapturePointerCaptureLost;
     }
 
     private void ContinueCellSelectionDrag(PointerEventArgs args, CellAddress address)
     {
         if (_cellDragSelectionAnchor is not { } anchor ||
-            _cellDragSelectionCapture is null ||
-            !args.GetCurrentPoint(_cellDragSelectionCapture).Properties.IsLeftButtonPressed)
+            !args.GetCurrentPoint(_sheetGridHost).Properties.IsLeftButtonPressed)
         {
             return;
         }
@@ -5175,6 +5232,7 @@ public sealed partial class MainWindow : Window
         else if (_selectionMoveDragging)
             CommitSelectionMoveDrag();
 
+        DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
         _cellDragSelectionAnchor = null;
         _cellDragSelectionCapture = null;
@@ -5422,9 +5480,13 @@ public sealed partial class MainWindow : Window
         var pointer = kind == HeaderResizeKind.Column
             ? args.GetPosition(this).X
             : args.GetPosition(this).Y;
+        // Defensive: drop any stale subscription left over from a drag that lost capture without a
+        // PointerReleased, so we never double-subscribe (which would run Continue/Commit twice per event).
+        DetachHeaderResizeCaptureHandlers();
         _headerResizeDrag = new HeaderResizeDrag(kind, index, _sheetGridHost, args.Pointer, pointer, displayedSize, hadOriginalSize, originalSize);
         _sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;
         _sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost += HeaderResizeCapturePointerCaptureLost;
         args.Pointer.Capture(_sheetGridHost);
         args.Handled = true;
     }
@@ -5434,6 +5496,18 @@ public sealed partial class MainWindow : Window
 
     private void HeaderResizeCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
         CommitHeaderResize(args);
+
+    // If the OS revokes pointer capture mid-drag (alt-tab, focus loss, a context menu), abort the resize
+    // and restore the original size — mirrors the chart-drag PointerCaptureLost cleanup. Without this the
+    // capture handlers stay subscribed and _headerResizeDrag stays set.
+    private void HeaderResizeCapturePointerCaptureLost(object? sender, PointerCaptureLostEventArgs args)
+    {
+        // Detach FIRST so the Capture(null) inside CancelHeaderResizePreview cannot re-raise
+        // PointerCaptureLost back into this handler (which would re-enter the cancel path indefinitely).
+        DetachHeaderResizeCaptureHandlers();
+        if (_headerResizeDrag is not null)
+            CancelHeaderResizePreview();
+    }
 
     private void ContinueHeaderResize(PointerEventArgs args)
     {
@@ -5522,6 +5596,7 @@ public sealed partial class MainWindow : Window
     {
         _sheetGridHost.PointerMoved -= HeaderResizeCapturePointerMoved;
         _sheetGridHost.PointerReleased -= HeaderResizeCapturePointerReleased;
+        _sheetGridHost.PointerCaptureLost -= HeaderResizeCapturePointerCaptureLost;
     }
 
     private void RestoreHeaderResizeOriginal(HeaderResizeDrag drag)
@@ -5882,8 +5957,9 @@ public sealed partial class MainWindow : Window
             BeginCellSelectionDrag(args, border, address);
             args.Handled = true;
         };
-        border.PointerMoved += (_, args) => ContinueCellSelectionDrag(args, address);
-        border.PointerReleased += (_, args) => EndCellSelectionDrag(args);
+        // PointerMoved and PointerReleased for cell-selection drag are now subscribed on _sheetGridHost
+        // (the survivor that is NOT rebuilt by RefreshShell) inside BeginCellSelectionDrag, not here on
+        // the per-cell Border which gets destroyed the moment SelectRangeFromAnchor triggers RefreshShell.
         border.DoubleTapped += (_, args) =>
         {
             var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);

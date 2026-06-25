@@ -203,7 +203,7 @@ public sealed partial class SelectionPanePlannerTests
     [Fact]
     public void SelectionPaneDialog_ObjectListHelpTextDocumentsKeyboardShortcuts()
     {
-        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\Strings.resx");
+        var resources = DialogSourceTestSupport.ReadLocalizationSources("Resources\\Strings.resx");
 
         resources.Should().Contain("Ctrl+Up or Ctrl+Down");
         resources.Should().Contain("Press F2 to rename");

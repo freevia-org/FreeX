@@ -27,7 +27,15 @@ public sealed class PageSetupDialogModelTests
             .Equal(WorksheetPageOrientation.Portrait, WorksheetPageOrientation.Landscape);
         PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value)
             .Should()
-            .Equal(WorksheetPaperSize.Letter, WorksheetPaperSize.A4, WorksheetPaperSize.Legal);
+            .Equal(
+                WorksheetPaperSize.Letter,
+                WorksheetPaperSize.A4,
+                WorksheetPaperSize.Legal,
+                WorksheetPaperSize.Tabloid,
+                WorksheetPaperSize.Executive,
+                WorksheetPaperSize.A3,
+                WorksheetPaperSize.A5,
+                WorksheetPaperSize.B5);
         PageSetupDialogModel.PaperSizes.Should().Equal(
             PageSetupDialogModel.PaperSizeChoices.Select(choice => choice.Value));
         PageSetupDialogModel.PageOrderChoices.Select(choice => choice.Value)

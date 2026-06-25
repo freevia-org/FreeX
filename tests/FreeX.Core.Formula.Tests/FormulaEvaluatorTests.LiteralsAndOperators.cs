@@ -201,6 +201,37 @@ public partial class FormulaEvaluatorTests
             .Should().Be(new TextValue("Hello World"));
     }
 
+    // F3 regression: number→text coercion must use Excel's 15-sig-digit General format,
+    // not raw double.ToString which can produce 16-17 significant digits.
+
+    [Fact]
+    public void ConcatOp_OneThird_Produces15SigDigits()
+    {
+        // Excel: =1/3&"" → "0.333333333333333" (15 sig digits)
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=1/3&\"\"", sheet)
+            .Should().Be(new TextValue("0.333333333333333"));
+    }
+
+    [Fact]
+    public void ConcatOp_TwoThirds_Produces15SigDigits()
+    {
+        // Excel: ="x"&(2/3) → "x0.666666666666667" (15 sig digits, last digit rounded)
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=\"x\"&(2/3)", sheet)
+            .Should().Be(new TextValue("x0.666666666666667"));
+    }
+
+    [Fact]
+    public void ConcatOp_Integer_NoDecimalPoint()
+    {
+        // Integers must not gain trailing decimal zeros through G15.
+        // Excel: =42&"" → "42"
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate("=42&\"\"", sheet)
+            .Should().Be(new TextValue("42"));
+    }
+
     // ── Comparison operators ──
 
     [Fact]

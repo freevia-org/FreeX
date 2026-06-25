@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -26,6 +27,7 @@ internal static class FindReplaceSearchPlanner
     }
 
     public static IEnumerable<SearchText> EnumerateSearchTexts(Sheet sheet, FindLookIn lookIn,
+        Workbook? workbook = null,
         bool skipNumberValues = false)
     {
         if (lookIn == FindLookIn.Notes)
@@ -55,12 +57,24 @@ internal static class FindReplaceSearchPlanner
         {
             // Performance: skip number cells when the search pattern can never match any
             // invariant numeric rendering (no digits/sign/decimal/exponent or wildcards).
+            // This optimisation is only safe when NOT using number-format-aware rendering
+            // (formatted numbers can produce arbitrary strings like "50%" or "$1,000.00").
             if (skipNumberValues && cell.Value is NumberValue)
                 continue;
 
-            string? text = lookIn == FindLookIn.Formulas && cell.HasFormula
-                ? cell.FormulaText
-                : GetDisplayText(cell.Value);
+            string? text;
+            if (lookIn == FindLookIn.Formulas && cell.HasFormula)
+            {
+                text = cell.FormulaText;
+            }
+            else if (lookIn == FindLookIn.Values && workbook is not null)
+            {
+                text = GetDisplayTextFormatted(cell, workbook);
+            }
+            else
+            {
+                text = GetDisplayText(cell.Value);
+            }
 
             if (text is not null)
                 yield return new SearchText(addr, text);
@@ -149,6 +163,10 @@ internal static class FindReplaceSearchPlanner
     private static bool Matches(CellColor? expected, CellColor? actual) =>
         expected is null || expected.Equals(actual);
 
+    /// <summary>
+    /// Invariant display text used for formula-mode search and as a fallback when no workbook
+    /// is available. Numbers use the raw double representation; dates use yyyy-MM-dd.
+    /// </summary>
     private static string? GetDisplayText(ScalarValue value) => value switch
     {
         BlankValue => null,
@@ -159,5 +177,27 @@ internal static class FindReplaceSearchPlanner
         ErrorValue err => err.Code,
         _ => null
     };
+
+    /// <summary>
+    /// Number-format-aware display text for Values-mode search.  Numbers and dates are rendered
+    /// through <see cref="NumberFormatter"/> using the cell's applied number format so that
+    /// the searchable text matches what the user sees in the grid (e.g. "50%", "$1,000.00").
+    /// Text, boolean, and error values are returned as-is; blanks return null.
+    /// </summary>
+    private static string? GetDisplayTextFormatted(Cell cell, Workbook workbook)
+    {
+        var value = cell.Value;
+
+        // Fast-path for non-numeric types that are unaffected by number format.
+        if (value is BlankValue)  return null;
+        if (value is TextValue t) return t.Value;
+        if (value is BoolValue b) return b.Value ? "TRUE" : "FALSE";
+        if (value is ErrorValue e) return e.Code;
+
+        // For numbers and dates, apply the cell's number format so the displayed text
+        // matches the grid rendering (same as NumberFormatter.Format used in the grid).
+        var style = workbook.GetStyle(cell.StyleId);
+        return NumberFormatter.Format(value, style.NumberFormat);
+    }
 
 }

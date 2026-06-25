@@ -20,15 +20,39 @@ public static class ShapeGeometryBuilder
     public static ShapeGeometry Build(DrawingShapeKind kind, LayoutRect bounds)
     {
         var rect = Normalize(bounds);
-        if (rect.Width <= 0 || rect.Height <= 0)
+
+        // For line-like shapes allow one dimension to be zero (e.g. a perfectly horizontal or
+        // vertical line has zero height or zero width in its bounding box).
+        if (DrawingShapeKindSupport.IsLineLike(kind))
+        {
+            if (rect.Width <= 0 && rect.Height <= 0)
+                return ShapeGeometry.Empty;
+
+            // Flat horizontal line (cy=0): draw left→right across the full width.
+            if (rect.Height <= 0)
+                return Single(new ShapeContour(
+                    new LayoutPoint(rect.Left, rect.Top),
+                    [ShapeSegment.LineTo(new LayoutPoint(rect.Right, rect.Top))],
+                    Closed: false, Filled: false));
+
+            // Flat vertical line (cx=0): draw top→bottom across the full height.
+            if (rect.Width <= 0)
+                return Single(new ShapeContour(
+                    new LayoutPoint(rect.Left, rect.Top),
+                    [ShapeSegment.LineTo(new LayoutPoint(rect.Left, rect.Bottom))],
+                    Closed: false, Filled: false));
+        }
+        else if (rect.Width <= 0 || rect.Height <= 0)
+        {
             return ShapeGeometry.Empty;
+        }
 
         return kind switch
         {
             DrawingShapeKind.RoundedRectangle => RoundedRectangle(rect, CornerRadius(rect)),
             DrawingShapeKind.Ellipse => Ellipse(rect),
-            DrawingShapeKind.Line => OpenPath(rect, [(0.02, 0.02), (0.98, 0.98)]),
-            DrawingShapeKind.ElbowConnector => OpenPath(rect, [(0.05, 0.18), (0.55, 0.18), (0.55, 0.82), (0.95, 0.82)]),
+            DrawingShapeKind.Line => LinePath(rect),
+            DrawingShapeKind.ElbowConnector => ElbowPath(rect),
             DrawingShapeKind.CurvedConnector => CurvedConnector(rect),
             DrawingShapeKind.Triangle => Polygon(rect, [(0.5, 0), (1, 1), (0, 1)]),
             DrawingShapeKind.RightTriangle => Polygon(rect, [(0, 0), (1, 1), (0, 1)]),
@@ -43,8 +67,8 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.LeftArrow => Polygon(rect, [(1, 0.25), (0.38, 0.25), (0.38, 0), (0, 0.5), (0.38, 1), (0.38, 0.75), (1, 0.75)]),
             DrawingShapeKind.UpArrow => Polygon(rect, [(0.25, 1), (0.25, 0.38), (0, 0.38), (0.5, 0), (1, 0.38), (0.75, 0.38), (0.75, 1)]),
             DrawingShapeKind.DownArrow => Polygon(rect, [(0.25, 0), (0.75, 0), (0.75, 0.62), (1, 0.62), (0.5, 1), (0, 0.62), (0.25, 0.62)]),
-            DrawingShapeKind.LeftRightArrow => Polygon(rect, [(0, 0.5), (0.24, 0), (0.24, 0.28), (0.76, 0.28), (0.76, 0), (1, 0.5), (0.76, 1), (0.76, 0.72), (0.24, 0.72), (0.24, 1)]),
-            DrawingShapeKind.UpDownArrow => Polygon(rect, [(0.5, 0), (1, 0.24), (0.72, 0.24), (0.72, 0.76), (1, 0.76), (0.5, 1), (0, 0.76), (0.28, 0.76), (0.28, 0.24), (0, 0.24)]),
+            DrawingShapeKind.LeftRightArrow => Polygon(rect, [(0, 0.5), (0.25, 0), (0.25, 0.25), (0.75, 0.25), (0.75, 0), (1, 0.5), (0.75, 1), (0.75, 0.75), (0.25, 0.75), (0.25, 1)]),
+            DrawingShapeKind.UpDownArrow => Polygon(rect, [(0.5, 0), (1, 0.25), (0.75, 0.25), (0.75, 0.75), (1, 0.75), (0.5, 1), (0, 0.75), (0.25, 0.75), (0.25, 0.25), (0, 0.25)]),
             DrawingShapeKind.MinusSign => Minus(rect),
             DrawingShapeKind.MultiplySign => Multiply(rect),
             DrawingShapeKind.DivideSign => Divide(rect),
@@ -60,10 +84,12 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Explosion => Star(rect, 12, 0.62, startAngle: (-Math.PI / 2) + 0.08),
             DrawingShapeKind.Ribbon => Ribbon(rect),
             DrawingShapeKind.Wave => Wave(rect),
-            DrawingShapeKind.RectangularCallout => Polygon(rect, [(0, 0), (1, 0), (1, 0.72), (0.64, 0.72), (0.48, 1), (0.42, 0.72), (0, 0.72)]),
+            DrawingShapeKind.RectangularCallout => RectangularCallout(rect),
             DrawingShapeKind.RoundedRectangularCallout => RoundedCallout(rect),
             DrawingShapeKind.OvalCallout => OvalCallout(rect),
             DrawingShapeKind.LineCallout => LineCallout(rect),
+            DrawingShapeKind.Chevron => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1), (0.24, 0.5)]),
+            DrawingShapeKind.HomePlate => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1)]),
             _ => Rectangle(rect)
         };
     }
@@ -185,6 +211,49 @@ public static class ShapeGeometryBuilder
         ];
         return new ShapeContour(start, segments, Closed: true, Filled: true);
     }
+
+    /// <summary>
+    /// Renders a <see cref="DrawingShapeKind.Line"/> shape.  The path direction is inferred from
+    /// the bounding-box aspect ratio:
+    /// <list type="bullet">
+    ///   <item>Very wide (width/height &gt; 4): horizontal — draw left-to-right at vertical centre.</item>
+    ///   <item>Very tall (height/width &gt; 4): vertical — draw top-to-bottom at horizontal centre.</item>
+    ///   <item>Otherwise: diagonal — draw from top-left corner to bottom-right corner.</item>
+    /// </list>
+    /// Flip/rotation applied by the host renderer handle the remaining orientations (e.g. a
+    /// bottom-left to top-right diagonal is a <c>flipV</c> of the normal diagonal).
+    /// </summary>
+    private static ShapeGeometry LinePath(LayoutRect rect)
+    {
+        const double FlatRatioThreshold = 4.0;
+        var cx = rect.Width;
+        var cy = rect.Height;
+
+        // Horizontal line (cy ≈ 0 or very flat bounding box)
+        if (cy <= 0 || (cx > 0 && cx / cy >= FlatRatioThreshold))
+            return Single(new ShapeContour(
+                new LayoutPoint(rect.Left, rect.Top + cy / 2),
+                [ShapeSegment.LineTo(new LayoutPoint(rect.Right, rect.Top + cy / 2))],
+                Closed: false, Filled: false));
+
+        // Vertical line (cx ≈ 0 or very tall bounding box)
+        if (cx <= 0 || cy / cx >= FlatRatioThreshold)
+            return Single(new ShapeContour(
+                new LayoutPoint(rect.Left + cx / 2, rect.Top),
+                [ShapeSegment.LineTo(new LayoutPoint(rect.Left + cx / 2, rect.Bottom))],
+                Closed: false, Filled: false));
+
+        // Diagonal (aspect ratio near 1:1) — flip attributes on the host handle direction.
+        return OpenPath(rect, [(0, 0), (1, 1)]);
+    }
+
+    /// <summary>
+    /// Renders an <see cref="DrawingShapeKind.ElbowConnector"/> as a 3-segment orthogonal path
+    /// from the top-left corner of the bounding box to the bottom-right corner, bending at the
+    /// horizontal midpoint.  The host renderer applies flip/rotation for other orientations.
+    /// </summary>
+    private static ShapeGeometry ElbowPath(LayoutRect rect) =>
+        OpenPath(rect, [(0, 0), (0.5, 0), (0.5, 1), (1, 1)]);
 
     private static ShapeGeometry CurvedConnector(LayoutRect rect)
     {
@@ -326,23 +395,37 @@ public static class ShapeGeometryBuilder
         return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
     }
 
+    private static ShapeGeometry RectangularCallout(LayoutRect rect)
+    {
+        // Body is a full rectangle occupying ~80% of the height; tail is a triangle below.
+        const double bodyFraction = 0.80;
+        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * bodyFraction);
+        return new ShapeGeometry(
+        [
+            RectangleContour(body),
+            PolygonContour(rect, [(0.38, bodyFraction), (0.52, bodyFraction), (0.45, 1)])
+        ]);
+    }
+
     private static ShapeGeometry RoundedCallout(LayoutRect rect)
     {
-        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * 0.74);
+        const double bodyFraction = 0.80;
+        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * bodyFraction);
         return new ShapeGeometry(
         [
             RoundedRectangleContour(body, CornerRadius(body)),
-            PolygonContour(rect, [(0.42, 0.72), (0.64, 0.72), (0.48, 1)])
+            PolygonContour(rect, [(0.38, bodyFraction), (0.52, bodyFraction), (0.45, 1)])
         ]);
     }
 
     private static ShapeGeometry OvalCallout(LayoutRect rect)
     {
-        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * 0.78);
+        const double bodyFraction = 0.82;
+        var body = new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height * bodyFraction);
         return new ShapeGeometry(
         [
             EllipseContour(body),
-            PolygonContour(rect, [(0.42, 0.70), (0.64, 0.70), (0.48, 1)])
+            PolygonContour(rect, [(0.40, bodyFraction * 0.9), (0.54, bodyFraction * 0.9), (0.47, 1)])
         ]);
     }
 
