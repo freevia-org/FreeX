@@ -65,6 +65,9 @@ internal static class ConditionalIconGlyphRenderer
             case CfGlyphPrimitiveKind.Pie:
                 dc.DrawGeometry(brush, pen, PieGeometry(op));
                 break;
+            case CfGlyphPrimitiveKind.StarFillFraction:
+                DrawStarFillFraction(dc, op, iconBrush);
+                break;
         }
     }
 
@@ -84,6 +87,43 @@ internal static class ConditionalIconGlyphRenderer
     };
 
     private static Point ToPoint(LayoutPoint p) => new(p.X, p.Y);
+
+    /// <summary>
+    /// Draws a star polygon with a horizontal clip so the left <c>fillFraction</c> portion of the
+    /// star bounding box is filled with the icon brush, and the remainder is outline-only. This
+    /// matches Excel's partial-star appearance for the Stars icon sets.
+    /// </summary>
+    private static void DrawStarFillFraction(DrawingContext dc, CfGlyphOp op, Brush iconBrush)
+    {
+        var points = op.Points;
+        var fillFraction = Math.Clamp(op.RadiusX, 0d, 1d);
+        var pen = StrokePen(op.Stroke);
+        var starGeom = PolylineGeometry(points, closed: true);
+
+        if (fillFraction > 0d)
+        {
+            // Compute the bounding box to build the clip rect.
+            var minX = double.MaxValue;
+            var maxX = double.MinValue;
+            var minY = double.MaxValue;
+            var maxY = double.MinValue;
+            foreach (var p in points)
+            {
+                if (p.X < minX) minX = p.X;
+                if (p.X > maxX) maxX = p.X;
+                if (p.Y < minY) minY = p.Y;
+                if (p.Y > maxY) maxY = p.Y;
+            }
+
+            var clipRect = new Rect(minX, minY, (maxX - minX) * fillFraction, maxY - minY);
+            dc.PushClip(new RectangleGeometry(clipRect));
+            dc.DrawGeometry(iconBrush, null, starGeom);
+            dc.Pop();
+        }
+
+        // Always draw the full star outline.
+        dc.DrawGeometry(null, pen, starGeom);
+    }
 
     private static StreamGeometry PolylineGeometry(IReadOnlyList<LayoutPoint> points, bool closed)
     {

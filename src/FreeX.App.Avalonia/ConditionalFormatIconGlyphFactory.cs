@@ -59,6 +59,7 @@ internal static class ConditionalFormatIconGlyphFactory
             CfGlyphPrimitiveKind.Box => Box(op, iconFill),
             CfGlyphPrimitiveKind.Polyline => GeometryPath(PolylineGeometry(op.Points, closed: false), op, iconFill),
             CfGlyphPrimitiveKind.Polygon => GeometryPath(PolylineGeometry(op.Points, closed: true), op, iconFill),
+            CfGlyphPrimitiveKind.StarFillFraction => StarFillFraction(op, iconFill),
             _ => GeometryPath(PieGeometry(op), op, iconFill),
         };
     }
@@ -118,6 +119,63 @@ internal static class ConditionalFormatIconGlyphFactory
         };
         ApplyStroke((brush, thickness) => { path.Stroke = brush; path.StrokeThickness = thickness; }, op.Stroke);
         return path;
+    }
+
+    /// <summary>
+    /// Renders a star with a horizontal partial fill. The star polygon is drawn as an outline (gray),
+    /// and the left <c>fillFraction</c> portion of its bounding box is clipped to show the icon fill
+    /// color. This matches Excel's partial-star appearance for the Stars icon sets.
+    /// </summary>
+    private static Control StarFillFraction(CfGlyphOp op, IBrush iconFill)
+    {
+        // Compute the bounding box from the star points.
+        var points = op.Points;
+        var minX = double.MaxValue;
+        var maxX = double.MinValue;
+        var minY = double.MaxValue;
+        var maxY = double.MinValue;
+        foreach (var p in points)
+        {
+            if (p.X < minX) minX = p.X;
+            if (p.X > maxX) maxX = p.X;
+            if (p.Y < minY) minY = p.Y;
+            if (p.Y > maxY) maxY = p.Y;
+        }
+
+        var starWidth  = maxX - minX;
+        var fillFraction = Math.Clamp(op.RadiusX, 0d, 1d);  // RadiusX carries the fill fraction
+        var clipWidth  = starWidth * fillFraction;
+
+        // Build the star geometry (used for both the clip-filled path and the outline).
+        var starGeometry = PolylineGeometry(points, closed: true);
+
+        // The filled portion: a path with the star geometry, clipped to the left fillFraction strip.
+        var filledPath = new AvaloniaPath
+        {
+            Data = starGeometry,
+            Fill = iconFill,
+            // Clip to a rectangle covering only the left fillFraction of the star bounding box.
+            Clip = fillFraction >= 1d
+                ? null
+                : new RectangleGeometry(new Rect(minX, minY, Math.Max(0, clipWidth), maxY - minY)),
+        };
+
+        // The outline star drawn over the fill (always full outline regardless of fill fraction).
+        var outlinePath = new AvaloniaPath
+        {
+            Data = starGeometry,
+            Fill = null,
+        };
+        ApplyStroke((brush, thickness) => { outlinePath.Stroke = brush; outlinePath.StrokeThickness = thickness; }, op.Stroke);
+
+        // Composite: filled star (clipped) + outline star, inside a shared canvas.
+        var canvas = new Canvas
+        {
+            IsHitTestVisible = false,
+        };
+        canvas.Children.Add(filledPath);
+        canvas.Children.Add(outlinePath);
+        return canvas;
     }
 
     private static IBrush? Fill(CfGlyphFill fill, IBrush iconFill) => fill switch
