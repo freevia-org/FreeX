@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -120,7 +121,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dialog, "WatchWindowDialog");
 
         // Multi-column grid matching the WPF Watch Window (Book | Sheet | Name | Cell | Value | Formula).
-        var list = new ListBox { MinHeight = 200, FontSize = 12, FontFamily = FormulaBarFontFamily, Padding = new Thickness(0) };
+        // Extended (multi) selection mirrors the WPF ListView so Delete / Delete-Watch act on the picked rows.
+        var list = new ListBox
+        {
+            MinHeight = 200,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Padding = new Thickness(0),
+            SelectionMode = SelectionMode.Multiple,
+        };
         list.Styles.Add(new Style(s => s.Is<ListBoxItem>())
         {
             Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0, 1)) },
@@ -131,16 +140,67 @@ public sealed partial class MainWindow
 
         void RefreshList()
         {
-            list.ItemsSource = WatchWindowService.GetEntries(_session.Workbook)
+            // Preserve the selection across the rebind so a refresh (or a delete) keeps the user's place.
+            var selected = list.SelectedItems?
+                .OfType<WatchWindowGridRow>()
+                .Select(r => r.Address)
+                .ToHashSet() ?? [];
+
+            var rows = WatchWindowService.GetEntries(_session.Workbook)
                 .Select(e => new WatchWindowGridRow(
                     UiText.Get("WatchWindow_ThisWorkbook"),
                     e.SheetName,
                     string.Empty,
                     e.Address.ToA1(),
                     e.ValueText,
-                    e.FormulaText ?? string.Empty))
+                    e.FormulaText ?? string.Empty,
+                    e.Address))
                 .ToList();
+            list.ItemsSource = rows;
+
+            if (selected.Count > 0)
+                foreach (var row in rows.Where(r => selected.Contains(r.Address)))
+                    list.SelectedItems!.Add(row);
         }
+
+        // Delete the rows picked in the list (WPF DeleteSelectedWatch); fall back to the worksheet
+        // selection when nothing in the list is selected, preserving the Delete-Watch-by-range behavior.
+        void DeleteSelectedWatches()
+        {
+            var addresses = list.SelectedItems!
+                .OfType<WatchWindowGridRow>()
+                .Select(r => r.Address)
+                .ToList();
+            if (addresses.Count > 0)
+            {
+                foreach (var address in addresses)
+                    WatchWindowService.RemoveWatch(_session.Workbook, address);
+            }
+            else
+            {
+                WatchWindowService.RemoveWatches(_session.Workbook, _session.SelectedRange);
+            }
+
+            RefreshList();
+        }
+
+        // Double-click a watched cell to jump to it (WPF navigates without closing the dialog).
+        list.DoubleTapped += (_, _) =>
+        {
+            if (list.SelectedItem is WatchWindowGridRow row)
+            {
+                SelectCell(row.Address);
+                RefreshShell("Ready");
+            }
+        };
+        list.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Delete)
+            {
+                DeleteSelectedWatches();
+                e.Handled = true;
+            }
+        };
 
         RefreshList();
 
@@ -189,11 +249,7 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(deleteButton, "WatchWindowDeleteButton");
-        deleteButton.Click += (_, _) =>
-        {
-            WatchWindowService.RemoveWatches(_session.Workbook, _session.SelectedRange);
-            RefreshList();
-        };
+        deleteButton.Click += (_, _) => DeleteSelectedWatches();
 
         var refreshButton = new Button
         {
@@ -336,7 +392,8 @@ public sealed partial class MainWindow
         string Name,
         string Cell,
         string Value,
-        string Formula);
+        string Formula,
+        CellAddress Address);
 
     private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText)
     {
