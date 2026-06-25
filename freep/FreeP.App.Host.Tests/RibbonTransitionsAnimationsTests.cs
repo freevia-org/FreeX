@@ -1,3 +1,4 @@
+using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
