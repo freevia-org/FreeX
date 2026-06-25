@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -108,27 +110,41 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("RibbonWire_WatchWindowTitle"),
-            Width = 560,
+            Width = 700,
             Height = 360,
-            MinWidth = 420,
+            MinWidth = 560,
             MinHeight = 260,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "WatchWindowDialog");
 
-        var list = new ListBox { MinHeight = 200, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        // Multi-column grid matching the WPF Watch Window (Book | Sheet | Name | Cell | Value | Formula).
+        var list = new ListBox { MinHeight = 200, FontSize = 12, FontFamily = FormulaBarFontFamily, Padding = new Thickness(0) };
+        list.Styles.Add(new Style(s => s.Is<ListBoxItem>())
+        {
+            Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0, 1)) },
+        });
         AutomationProperties.SetAutomationId(list, "WatchWindowList");
+        list.ItemTemplate = new FuncDataTemplate<WatchWindowGridRow>(
+            (row, _) => BuildWatchWindowRowGrid(row), supportsRecycling: true);
 
         void RefreshList()
         {
-            var entries = WatchWindowService.GetEntries(_session.Workbook);
-            list.ItemsSource = entries
-                .Select(e => $"{e.SheetName}!{e.Address.ToA1()}    {e.ValueText}    {e.FormulaText}")
+            list.ItemsSource = WatchWindowService.GetEntries(_session.Workbook)
+                .Select(e => new WatchWindowGridRow(
+                    UiText.Get("WatchWindow_ThisWorkbook"),
+                    e.SheetName,
+                    string.Empty,
+                    e.Address.ToA1(),
+                    e.ValueText,
+                    e.FormulaText ?? string.Empty))
                 .ToList();
         }
 
         RefreshList();
+
+        var columnHeader = BuildWatchWindowColumnHeader();
 
         var addButton = new Button
         {
@@ -230,23 +246,97 @@ public sealed partial class MainWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(14),
-            Spacing = 8,
+            Spacing = 6,
             Children =
             {
                 new TextBlock
                 {
-                    Text = UiText.Get("RibbonWire_WatchWindowHint"),
-                    TextWrapping = TextWrapping.Wrap,
+                    Text = StripDisplayMnemonic(UiText.Get("WatchWindow_Watches")),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                 },
-                list,
+                new StackPanel { Spacing = 0, Children = { columnHeader, list } },
                 buttonRow,
             },
         };
 
         await dialog.ShowDialog(this);
     }
+
+    // Watch Window grid columns mirror the WPF dialog (Book | Sheet | Name | Cell | Value | Formula).
+    private static readonly (string Key, double Width)[] WatchWindowColumns =
+    [
+        ("WatchWindow_Book", 90),
+        ("WatchWindow_Sheet", 110),
+        ("WatchWindow_Name", 80),
+        ("WatchWindow_Cell", 70),
+        ("WatchWindow_Value", 120),
+        ("WatchWindow_Formula", 170),
+    ];
+
+    private static Grid CreateWatchWindowColumnGrid()
+    {
+        var grid = new Grid();
+        foreach (var column in WatchWindowColumns)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(column.Width) });
+        return grid;
+    }
+
+    private Border BuildWatchWindowColumnHeader()
+    {
+        var grid = CreateWatchWindowColumnGrid();
+        for (var i = 0; i < WatchWindowColumns.Length; i++)
+        {
+            var header = new TextBlock
+            {
+                Text = UiText.Get(WatchWindowColumns[i].Key),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(6, 2),
+            };
+            Grid.SetColumn(header, i);
+            grid.Children.Add(header);
+        }
+
+        return new Border
+        {
+            Background = Brush(240, 240, 240),
+            BorderBrush = Brush(200, 200, 200),
+            BorderThickness = new Thickness(1, 1, 1, 0),
+            Child = grid,
+        };
+    }
+
+    private Control BuildWatchWindowRowGrid(WatchWindowGridRow row)
+    {
+        var grid = CreateWatchWindowColumnGrid();
+        var values = new[] { row.Book, row.Sheet, row.Name, row.Cell, row.Value, row.Formula };
+        for (var i = 0; i < values.Length; i++)
+        {
+            var cell = new TextBlock
+            {
+                Text = values[i],
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Margin = new Thickness(6, 1),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            Grid.SetColumn(cell, i);
+            grid.Children.Add(cell);
+        }
+
+        return grid;
+    }
+
+    private sealed record WatchWindowGridRow(
+        string Book,
+        string Sheet,
+        string Name,
+        string Cell,
+        string Value,
+        string Formula);
 
     private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText)
     {
