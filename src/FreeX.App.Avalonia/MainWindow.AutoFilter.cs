@@ -11,12 +11,18 @@ using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
+using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
+    private static readonly IBrush AutoFilterBorderBrush = new SolidColorBrush(Color.FromRgb(142, 153, 166));
+    private static readonly IBrush AutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(45, 55, 65));
+    private static readonly IBrush ActiveAutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(15, 109, 140));
+
     /// <summary>
     /// Wraps a header cell's content with an AutoFilter dropdown button when the cell is a filter-button
     /// cell (the active AutoFilter range's header row). The button opens the column's filter flyout. Cells
@@ -30,15 +36,64 @@ public sealed partial class MainWindow
         var content = cellBorder.Child;
         cellBorder.Child = null;
 
-        var button = new Button
+        // Determine per-column active-filter state (mirrors WPF ActiveAutoFilterColumns logic).
+        var sheet = _session.ActiveSheet;
+        var isActive = false;
+        if (AutoFilterHeaderPlanner.TryGetAutoFilterRange(sheet) is { } range)
         {
-            Content = new TextBlock { Text = "▾", FontSize = 10, Foreground = HeaderForeground },
-            Padding = new Thickness(2, 0),
-            MinWidth = 16,
-            Width = 16,
+            var colOffset = (int)(address.Col - range.Start.Col);
+            isActive = sheet.AutoFilter?.FilterColumns.Any(fc => fc.ColumnId == colOffset) == true;
+        }
+
+        // Build a crisp drawn chevron button matching WPF's drawn geometry + gradient background.
+        // Triangle points mirror WPF DrawAutoFilterGlyph: (cx-3,cy-2)-(cx+3,cy-2)-(cx,cy+2).
+        var chevronPath = isActive
+            ? new AvaloniaPath
+            {
+                // Active: funnel/filter icon (wide-top narrowing to a bar, matching WPF).
+                Data = Geometry.Parse("M3,2 L12,2 L8.5,6 L8.5,12 L6.5,12 L6.5,6 Z"),
+                Fill = ActiveAutoFilterGlyphBrush,
+                Stretch = Stretch.None,
+            }
+            : new AvaloniaPath
+            {
+                // Inactive: simple filled downward triangle, centered in 15×15 at (7.5, 8.5).
+                Data = Geometry.Parse("M4.5,6.5 L10.5,6.5 L7.5,10.5 Z"),
+                Fill = AutoFilterGlyphBrush,
+                Stretch = Stretch.None,
+            };
+
+        var buttonBorder = new Border
+        {
+            Width = 15,
+            MinWidth = 15,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromRgb(252, 252, 252), 0),
+                    new GradientStop(Color.FromRgb(225, 232, 238), 1),
+                }
+            },
+            BorderBrush = AutoFilterBorderBrush,
+            BorderThickness = new Thickness(1),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 1, 0),
+            Margin = new Thickness(0, 0, 2, 0),
+            Child = chevronPath,
+            Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
+        };
+
+        // Wrap in a Button for click handling and accessibility.
+        var button = new Button
+        {
+            Content = buttonBorder,
+            Padding = new Thickness(0),
+            MinWidth = 0,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
