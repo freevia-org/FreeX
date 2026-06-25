@@ -9169,9 +9169,18 @@ public sealed class DocumentView : RichTextBox
     /// one-by-one through the undo/redo bus so the insert is reversible — mirroring <see cref="InsertIndex"/>.
     /// The paragraphs carry dedicated styles (registered via <see cref="TableOfAuthorities.EnsureStyles"/>)
     /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfAuthorities"/>.
+    /// Uses default <see cref="ToaOptions"/>; use the overload to supply Word's full dialog options.
     /// </summary>
-    public void InsertTableOfAuthorities()
+    public void InsertTableOfAuthorities() => InsertTableOfAuthorities(ToaOptions.Default);
+
+    /// <summary>
+    /// Insert a Table of Authorities generated from the document's marked citations using the given
+    /// <paramref name="options"/> (category filter, passim, keep original formatting, tab leader) at the
+    /// caret's block (else at the document end). Reversible through the undo/redo bus.
+    /// </summary>
+    public void InsertTableOfAuthorities(ToaOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
         TableOfAuthorities.EnsureStyles(_model);
@@ -9181,7 +9190,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        InsertTableOfAuthoritiesAt(index);
+        InsertTableOfAuthoritiesAt(index, options);
     }
 
     /// <summary>
@@ -9222,9 +9231,11 @@ public sealed class DocumentView : RichTextBox
 
     // Insert the freshly built Table of Authorities paragraphs starting at block index `at`, one reversible
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfAuthoritiesAt(int at)
+    private void InsertTableOfAuthoritiesAt(int at, ToaOptions? options = null)
     {
-        var entries = TableOfAuthorities.Build(_model);
+        var entries = options is not null && !ReferenceEquals(options, ToaOptions.Default)
+            ? TableOfAuthorities.Build(_model, options)
+            : TableOfAuthorities.Build(_model);
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));

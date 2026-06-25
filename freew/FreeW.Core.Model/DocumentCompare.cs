@@ -5,6 +5,64 @@ using System.Linq;
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// Which document the comparison result is shown in — Word's "Show changes in:" radio-button group.
+/// FreeW always produces a new result document (the compare engine never mutates its inputs), so
+/// <see cref="NewDocument"/> is the only substantively different option; the other two are kept for
+/// round-trip fidelity so the dialog setting can be persisted.
+/// </summary>
+public enum CompareShowChangesIn
+{
+    /// <summary>Show the blackline result in a new, separate document (FreeW's only real option).</summary>
+    NewDocument = 0,
+    /// <summary>Word also supports loading the result back into the original document.</summary>
+    Original = 1,
+    /// <summary>Word also supports loading the result back into the revised document.</summary>
+    Revised = 2
+}
+
+/// <summary>
+/// Configuration options for <see cref="DocumentCompare.Compare"/> that mirror Word's "Comparison Settings"
+/// expansion in the Compare Documents dialog. Every flag defaults to <c>true</c> (on), matching Word's
+/// default — all change types are tracked. When a flag is <c>false</c> the corresponding kind of
+/// difference is silently excluded from the output (no revision marks for it).
+/// <para>
+/// Only <see cref="Insertions"/> and <see cref="Deletions"/> affect FreeW's current word-level diff engine;
+/// the remaining flags (<see cref="Moves"/>, <see cref="Comments"/>, <see cref="Formatting"/>,
+/// <see cref="CaseChanges"/>, <see cref="Whitespace"/>) are stored so the dialog can persist them and are
+/// passed through to any future engine extension.
+/// </para>
+/// </summary>
+public sealed class CompareSettings
+{
+    /// <summary>Track inserted text. Default: <c>true</c>.</summary>
+    public bool Insertions { get; init; } = true;
+
+    /// <summary>Track deleted text. Default: <c>true</c>.</summary>
+    public bool Deletions { get; init; } = true;
+
+    /// <summary>Track moved/reordered paragraphs (not yet implemented in FreeW's engine). Default: <c>true</c>.</summary>
+    public bool Moves { get; init; } = true;
+
+    /// <summary>Track comment changes (not yet implemented). Default: <c>true</c>.</summary>
+    public bool Comments { get; init; } = true;
+
+    /// <summary>Track formatting changes (not yet implemented). Default: <c>true</c>.</summary>
+    public bool Formatting { get; init; } = true;
+
+    /// <summary>Track case changes as differences (not yet implemented). Default: <c>true</c>.</summary>
+    public bool CaseChanges { get; init; } = true;
+
+    /// <summary>Track whitespace changes as differences (not yet implemented). Default: <c>true</c>.</summary>
+    public bool Whitespace { get; init; } = true;
+
+    /// <summary>Which document to show the result in. Default: <see cref="CompareShowChangesIn.NewDocument"/>.</summary>
+    public CompareShowChangesIn ShowChangesIn { get; init; } = CompareShowChangesIn.NewDocument;
+
+    /// <summary>The default settings — all change types enabled, result in a new document.</summary>
+    public static readonly CompareSettings Default = new();
+}
+
+/// <summary>
 /// Pure, WPF-free document comparison ("Compare Documents"). Diffs an <c>original</c> against a
 /// <c>revised</c> document and produces a NEW document representing <c>revised</c> with the differences
 /// marked as tracked changes (see <see cref="Run.Revision"/>): text only in revised is marked
@@ -30,11 +88,26 @@ public static class DocumentCompare
         TextDocument original,
         TextDocument revised,
         string author,
-        string? dateXml = null)
+        string? dateXml = null) => Compare(original, revised, author, dateXml, CompareSettings.Default);
+
+    /// <summary>
+    /// Compare <paramref name="original"/> against <paramref name="revised"/> with the given
+    /// <paramref name="settings"/> (which change types to track). <paramref name="settings"/> with
+    /// <see cref="CompareSettings.Insertions"/> and/or <see cref="CompareSettings.Deletions"/> false will
+    /// suppress the corresponding revision marks in the output. Other settings are stored for round-trip but
+    /// do not yet affect the word-level diff engine.
+    /// </summary>
+    public static TextDocument Compare(
+        TextDocument original,
+        TextDocument revised,
+        string author,
+        string? dateXml,
+        CompareSettings settings)
     {
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(revised);
         ArgumentNullException.ThrowIfNull(author);
+        ArgumentNullException.ThrowIfNull(settings);
 
         var result = new TextDocument();
         // Carry over the revised document's defaults, styles and page setup so the result renders like it.
@@ -97,6 +170,8 @@ public static class DocumentCompare
         // (prevOriginalAnchor, originalLimit). Paired positionally: each pair is word-diffed; surplus
         // original paragraphs become whole-paragraph deletions, surplus revised ones whole insertions.
         // Deletions are emitted before insertions so removed text reads ahead of the replacement.
+        // When settings.Deletions is false, surplus original paragraphs are dropped (not carried as deletions).
+        // When settings.Insertions is false, surplus revised paragraphs are copied through unmarked.
         void ResolveGap(int originalLimit)
         {
             var gapOriginal = new List<Paragraph>();
@@ -105,13 +180,22 @@ public static class DocumentCompare
 
             var pairCount = Math.Min(gapOriginal.Count, gapRevised.Count);
             for (var i = 0; i < pairCount; i++)
-                result.Blocks.Add(DiffParagraph(gapOriginal[i], gapRevised[i], author, dateXml));
+                result.Blocks.Add(DiffParagraph(gapOriginal[i], gapRevised[i], author, dateXml, settings));
 
             for (var i = pairCount; i < gapOriginal.Count; i++)
-                result.Blocks.Add(MarkWholeParagraph(gapOriginal[i], RevisionKind.Deleted, author, dateXml));
+            {
+                if (settings.Deletions)
+                    result.Blocks.Add(MarkWholeParagraph(gapOriginal[i], RevisionKind.Deleted, author, dateXml));
+                // When deletions are suppressed, the original-only paragraph is simply dropped.
+            }
 
             for (var i = pairCount; i < gapRevised.Count; i++)
-                result.Blocks.Add(MarkWholeParagraph(gapRevised[i], RevisionKind.Inserted, author, dateXml));
+            {
+                if (settings.Insertions)
+                    result.Blocks.Add(MarkWholeParagraph(gapRevised[i], RevisionKind.Inserted, author, dateXml));
+                else
+                    result.Blocks.Add(ClonePlain(gapRevised[i])); // carry through unmarked
+            }
 
             prevOriginalAnchor = originalLimit - 1;
             gapRevised.Clear();
@@ -121,7 +205,8 @@ public static class DocumentCompare
     // Word-level diff of two paragraphs whose text differs. Runs an LCS over whitespace-delimited tokens:
     // common tokens become ordinary runs, revised-only tokens become inserted runs, original-only tokens
     // become deleted runs. Tokens keep their trailing spacing so the reconstructed text reads naturally.
-    private static Paragraph DiffParagraph(Paragraph original, Paragraph revised, string author, string? dateXml)
+    // settings.Insertions/Deletions gate whether those revision kinds appear in the output.
+    private static Paragraph DiffParagraph(Paragraph original, Paragraph revised, string author, string? dateXml, CompareSettings settings)
     {
         // Identical text: copy the revised paragraph verbatim (no revision marks at all).
         if (string.Equals(original.PlainText, revised.PlainText, StringComparison.Ordinal))
@@ -161,7 +246,9 @@ public static class DocumentCompare
             // Emit original-only tokens (deletions) until we reach the next common original token.
             if (oi < originalTokens.Count && !commonOriginal.Contains(oi))
             {
-                AppendRun(result, originalTokens[oi], RevisionKind.Deleted, author, dateXml);
+                // When deletions are suppressed, skip (do not emit the deleted token at all).
+                if (settings.Deletions)
+                    AppendRun(result, originalTokens[oi], RevisionKind.Deleted, author, dateXml);
                 oi++;
                 continue;
             }
@@ -169,7 +256,9 @@ public static class DocumentCompare
             // Then emit revised-only tokens (insertions) until we reach the next common revised token.
             if (ri < revisedTokens.Count && !commonRevised.Contains(ri))
             {
-                AppendRun(result, revisedTokens[ri], RevisionKind.Inserted, author, dateXml);
+                // When insertions are suppressed, emit the token as plain text (no revision mark).
+                var kind = settings.Insertions ? RevisionKind.Inserted : RevisionKind.None;
+                AppendRun(result, revisedTokens[ri], kind, author, dateXml);
                 ri++;
                 continue;
             }

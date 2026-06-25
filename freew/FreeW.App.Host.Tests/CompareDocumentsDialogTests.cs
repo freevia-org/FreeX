@@ -72,4 +72,34 @@ public sealed class CompareDocumentsDialogTests
         result.Should().NotBeNull();
         result!.OriginalFilePath.Should().Be(FakePath);
     }
+
+    // --- CompareSettings depth ---
+
+    [StaFact]
+    public void Dialog_DefaultSettings_AllChangesEnabled_NewDocument()
+    {
+        // When the user doesn't open "More", the result must carry all-enabled default settings.
+        var dlg = CompareDocumentsDialog.CreateForTest(FakePath, DefaultAuthor, RevisedTitle);
+        var result = dlg.AcceptForTest();
+
+        result.Should().NotBeNull();
+        result!.Settings.Insertions.Should().BeTrue();
+        result.Settings.Deletions.Should().BeTrue();
+        result.Settings.Moves.Should().BeTrue();
+        result.Settings.Comments.Should().BeTrue();
+        result.Settings.Formatting.Should().BeTrue();
+        result.Settings.CaseChanges.Should().BeTrue();
+        result.Settings.Whitespace.Should().BeTrue();
+        result.Settings.ShowChangesIn.Should().Be(FreeW.Core.Model.CompareShowChangesIn.NewDocument);
+    }
+
+    [StaFact]
+    public void Dialog_Result_CarriesSettingsInstance()
+    {
+        var dlg = CompareDocumentsDialog.CreateForTest(FakePath, DefaultAuthor, RevisedTitle);
+        var result = dlg.AcceptForTest();
+
+        result.Should().NotBeNull();
+        result!.Settings.Should().NotBeNull();
+    }
 }

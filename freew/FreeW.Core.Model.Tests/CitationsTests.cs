@@ -340,8 +340,11 @@ public class CitationsTests
     {
         Citations.ParseStyle(null).Should().Be(CitationStyle.Apa);
         Citations.ParseStyle("").Should().Be(CitationStyle.Apa);
-        Citations.ParseStyle("Harvard").Should().Be(CitationStyle.Apa);
-        Citations.ParseStyle("Harvard", CitationStyle.Chicago).Should().Be(CitationStyle.Chicago);
+        // "Oxford" is not a recognised style name — must fall back to the default.
+        Citations.ParseStyle("Oxford").Should().Be(CitationStyle.Apa);
+        Citations.ParseStyle("Oxford", CitationStyle.Chicago).Should().Be(CitationStyle.Chicago);
+        // Harvard is now a first-class style; ParseStyle must resolve it correctly.
+        Citations.ParseStyle("Harvard").Should().Be(CitationStyle.Harvard);
     }
 
     // --- Type-aware bibliography entries (Book / JournalArticle / WebSite) x each style ----------------
@@ -459,5 +462,244 @@ public class CitationsTests
                 },
                 CitationStyle.Apa)
             .Should().Be("Doe. (2010). Study. Nature, vol. 5.");
+    }
+
+    // --- Turabian -------------------------------------------------------------------------------
+
+    [Fact]
+    public void FormatInText_Turabian_AuthorYear_ProducesSameAsChicago()
+    {
+        // Turabian author–date in-text is identical to Chicago: (Author Year).
+        var source = new Source { Author = "Knuth", Year = "1997" };
+        Citations.FormatInText(source, CitationStyle.Turabian).Should().Be("(Knuth 1997)");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Turabian_MatchesChicagoOrdering()
+    {
+        // Turabian bibliography order is the same as Chicago: Author. Title. Publisher, Year.
+        var source = new Source { Author = "Knuth, D.", Year = "1997", Title = "TAOCP", Publisher = "AW" };
+        Citations.FormatBibliographyEntry(source, CitationStyle.Turabian).Should().Be("Knuth, D. TAOCP. AW, 1997.");
+    }
+
+    [Fact]
+    public void HeadingTextFor_Turabian_IsBibliography()
+    {
+        Citations.HeadingTextFor(CitationStyle.Turabian).Should().Be("Bibliography");
+    }
+
+    // --- Harvard --------------------------------------------------------------------------------
+
+    [Fact]
+    public void FormatInText_Harvard_AuthorYear_ProducesSameAsApa()
+    {
+        // Harvard author–date in-text: (Author, Year).
+        var source = new Source { Author = "Knuth", Year = "1997" };
+        Citations.FormatInText(source, CitationStyle.Harvard).Should().Be("(Knuth, 1997)");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Harvard_YearFollowsAuthorDirectly()
+    {
+        // Harvard: Author Year, Title. Publisher.
+        var source = new Source { Author = "Knuth, D.", Year = "1997", Title = "TAOCP", Publisher = "Addison-Wesley" };
+        var entry = Citations.FormatBibliographyEntry(source, CitationStyle.Harvard);
+        entry.Should().StartWith("Knuth, D. 1997,");
+        entry.Should().Contain("TAOCP.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Harvard_NoYear_OmitsYearGracefully()
+    {
+        var source = new Source { Author = "Brown", Title = "Work", Publisher = "Press" };
+        var entry = Citations.FormatBibliographyEntry(source, CitationStyle.Harvard);
+        entry.Should().StartWith("Brown.");
+        entry.Should().Contain("Work.");
+        entry.Should().Contain("Press.");
+    }
+
+    // --- Vancouver ------------------------------------------------------------------------------
+
+    [Fact]
+    public void FormatInText_Vancouver_BracketsAuthor()
+    {
+        // Vancouver numeric: [Author] as placeholder when no reference number is known.
+        var source = new Source { Author = "Doe", Year = "2000" };
+        Citations.FormatInText(source, CitationStyle.Vancouver).Should().Be("[Doe]");
+    }
+
+    [Fact]
+    public void FormatInText_Vancouver_Numbered_IsSquareBracketed()
+    {
+        Citations.FormatInText(5, CitationStyle.Vancouver).Should().Be("[5]");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Vancouver_JournalUsesCondensedForm()
+    {
+        var article = new Source
+        {
+            Type = SourceType.JournalArticle,
+            Author = "Doe J.",
+            Title = "A Study",
+            Year = "2000",
+            Journal = "N Engl J Med",
+            Volume = "342",
+            Issue = "1",
+            Pages = "1-10"
+        };
+        var entry = Citations.FormatBibliographyEntry(article, CitationStyle.Vancouver);
+        // Vancouver form: Author. Title. Journal. Year;Vol(Issue):Pages.
+        entry.Should().Contain("Doe J.");
+        entry.Should().Contain("A Study.");
+        entry.Should().Contain("N Engl J Med.");
+        entry.Should().Contain("2000;342(1):1-10");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Vancouver_BookUsesPublisherSemicolonYear()
+    {
+        var book = new Source { Author = "Smith", Title = "Book", Publisher = "Wiley", Year = "2020" };
+        var entry = Citations.FormatBibliographyEntry(book, CitationStyle.Vancouver);
+        entry.Should().Contain("Smith.");
+        entry.Should().Contain("Book.");
+        entry.Should().Contain("Wiley; 2020.");
+    }
+
+    // --- GOST -----------------------------------------------------------------------------------
+
+    [Fact]
+    public void FormatBibliographyEntry_Gost_AuthorTitlePublisherYear()
+    {
+        var book = new Source { Author = "Иванов И.И.", Title = "Книга", Publisher = "Наука", Year = "2010" };
+        var entry = Citations.FormatBibliographyEntry(book, CitationStyle.Gost);
+        // GOST: Author. Title. Publisher, Year.
+        entry.Should().Contain("Иванов И.И.");
+        entry.Should().Contain("Книга.");
+        entry.Should().Contain("Наука, 2010.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Gost_JournalArticleUsesVolumeAndNo()
+    {
+        var article = new Source
+        {
+            Type = SourceType.JournalArticle,
+            Author = "Petrov P.",
+            Title = "Analysis",
+            Year = "2005",
+            Journal = "Russian Journal",
+            Volume = "3",
+            Issue = "2",
+            Pages = "11-20"
+        };
+        var entry = Citations.FormatBibliographyEntry(article, CitationStyle.Gost);
+        entry.Should().Contain("Petrov P.");
+        entry.Should().Contain("Analysis.");
+        entry.Should().Contain("Russian Journal");
+        entry.Should().Contain("Vol. 3.");
+        entry.Should().Contain("No. 2.");
+        entry.Should().Contain("Pp. 11-20.");
+    }
+
+    // --- ISO-690 --------------------------------------------------------------------------------
+
+    [Fact]
+    public void FormatBibliographyEntry_Iso690_AuthorIsUpperCase()
+    {
+        var book = new Source { Author = "Knuth, D.", Year = "1997", Title = "TAOCP", Publisher = "AW" };
+        var entry = Citations.FormatBibliographyEntry(book, CitationStyle.Iso690);
+        // ISO 690: AUTHOR, Year. Title. Publisher.
+        entry.Should().StartWith("KNUTH, D., 1997.");
+        entry.Should().Contain("TAOCP.");
+        entry.Should().Contain("AW.");
+    }
+
+    [Fact]
+    public void FormatBibliographyEntry_Iso690_JournalIncludesVolAndIssue()
+    {
+        var article = new Source
+        {
+            Type = SourceType.JournalArticle,
+            Author = "Shannon, C.",
+            Title = "A Mathematical Theory of Communication",
+            Year = "1948",
+            Journal = "Bell System Technical Journal",
+            Volume = "27",
+            Issue = "3",
+            Pages = "379-423"
+        };
+        var entry = Citations.FormatBibliographyEntry(article, CitationStyle.Iso690);
+        entry.Should().StartWith("SHANNON, C., 1948.");
+        entry.Should().Contain("A Mathematical Theory of Communication.");
+        entry.Should().Contain("Bell System Technical Journal");
+        entry.Should().Contain("27(3)");
+        entry.Should().Contain("379-423");
+    }
+
+    // --- StyleName / ParseStyle round-trip for new styles ----------------------------------------
+
+    [Theory]
+    [InlineData(CitationStyle.Turabian, "Turabian")]
+    [InlineData(CitationStyle.Harvard,  "Harvard")]
+    [InlineData(CitationStyle.Vancouver, "Vancouver")]
+    [InlineData(CitationStyle.Gost, "GOST")]
+    [InlineData(CitationStyle.Iso690, "ISO690")]
+    public void StyleName_And_ParseStyle_RoundTrip_NewStyles(CitationStyle style, string name)
+    {
+        Citations.StyleName(style).Should().Be(name);
+        Citations.ParseStyle(name).Should().Be(style);
+        Citations.ParseStyle($"  {name.ToLowerInvariant()}  ").Should().Be(style);
+    }
+
+    [Fact]
+    public void ParseStyle_UnknownName_FallsBackToDefault_WithNewStyles()
+    {
+        // Vancouver / Harvard / GOST / ISO-690 are distinct from unknown values.
+        Citations.ParseStyle("Oxford").Should().Be(CitationStyle.Apa);
+        Citations.ParseStyle("Harvard", CitationStyle.Ieee).Should().Be(CitationStyle.Harvard);
+    }
+
+    // --- BuildBibliography headings for new styles -----------------------------------------------
+
+    [Fact]
+    public void BuildBibliography_NewStyles_UseCorrectHeading()
+    {
+        var doc = new TextDocument();
+        doc.Sources.Add(new Source { Author = "A", Year = "2000", Title = "T" });
+
+        Citations.BuildBibliography(doc, CitationStyle.Turabian)[0].PlainText.Should().Be("Bibliography");
+        Citations.BuildBibliography(doc, CitationStyle.Harvard)[0].PlainText.Should().Be("References");
+        Citations.BuildBibliography(doc, CitationStyle.Vancouver)[0].PlainText.Should().Be("References");
+        Citations.BuildBibliography(doc, CitationStyle.Gost)[0].PlainText.Should().Be("References");
+        Citations.BuildBibliography(doc, CitationStyle.Iso690)[0].PlainText.Should().Be("References");
+    }
+
+    [Fact]
+    public void BuildBibliography_NewStyles_ProduceDistinctEntries()
+    {
+        // Each new style must produce output distinct from APA so they are genuinely different formatters.
+        var source = new Source
+        {
+            Author = "Doe, J.",
+            Year = "2022",
+            Title = "Research Paper",
+            Publisher = "Springer",
+            Type = SourceType.Book
+        };
+        var doc = new TextDocument();
+        doc.Sources.Add(source);
+
+        var apa       = Citations.BuildBibliography(doc, CitationStyle.Apa).Last().PlainText;
+        var harvard   = Citations.BuildBibliography(doc, CitationStyle.Harvard).Last().PlainText;
+        var vancouver = Citations.BuildBibliography(doc, CitationStyle.Vancouver).Last().PlainText;
+        var gost      = Citations.BuildBibliography(doc, CitationStyle.Gost).Last().PlainText;
+        var iso690    = Citations.BuildBibliography(doc, CitationStyle.Iso690).Last().PlainText;
+
+        // Each entry must differ from APA to prove they're separate formatters.
+        harvard.Should().NotBe(apa, "Harvard year-after-author ordering differs from APA");
+        vancouver.Should().NotBe(apa, "Vancouver Publisher;Year ordering differs from APA");
+        gost.Should().NotBe(apa, "GOST Publisher, Year ordering differs from APA");
+        iso690.Should().NotBe(apa, "ISO-690 ALL-CAPS author differs from APA");
     }
 }

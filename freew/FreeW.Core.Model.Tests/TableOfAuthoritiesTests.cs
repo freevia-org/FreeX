@@ -173,4 +173,151 @@ public class TableOfAuthoritiesTests
         citation.LongCitation.Should().Be("Brown v. Board");
         citation.ShortCitation.Should().Be("Brown");
     }
+
+    // --- ToaOptions depth -----------------------------------------------------------------------
+
+    [Fact]
+    public void ToaOptions_Default_HasSaneValues()
+    {
+        var opts = ToaOptions.Default;
+        opts.UsePassim.Should().BeFalse();
+        opts.KeepOriginalFormatting.Should().BeFalse();
+        opts.CategoryFilter.Should().BeNull();
+        opts.TabLeader.Should().Be(ToaTabLeader.Dots);
+    }
+
+    [Fact]
+    public void Build_WithDefaultOptions_MatchesBuildWithNoCitations()
+    {
+        var citations = new[]
+        {
+            new Citation("Roe v. Wade", CitationCategory.Cases),
+            new Citation("42 U.S.C. § 1983", CitationCategory.Statutes)
+        };
+
+        var withDefault = TableOfAuthorities.Build(citations, ToaOptions.Default)
+            .Select(p => p.PlainText).ToList();
+        var withoutOptions = TableOfAuthorities.Build(citations)
+            .Select(p => p.PlainText).ToList();
+
+        withDefault.Should().Equal(withoutOptions);
+    }
+
+    [Fact]
+    public void Build_CategoryFilter_EmitsOnlyThatCategory()
+    {
+        var citations = new[]
+        {
+            new Citation("Brown v. Board", CitationCategory.Cases),
+            new Citation("17 U.S.C. § 107", CitationCategory.Statutes),
+            new Citation("Fed. R. Civ. P. 12", CitationCategory.Rules)
+        };
+
+        var opts = new ToaOptions { CategoryFilter = CitationCategory.Statutes };
+        var table = TableOfAuthorities.Build(citations, opts).Select(p => p.PlainText).ToList();
+
+        // Only the heading + Statutes category heading + Statutes entry: no Cases, no Rules.
+        table.Should().Equal(
+            TableOfAuthorities.HeadingText,
+            "Statutes",
+            "17 U.S.C. § 107");
+        table.Should().NotContain("Cases");
+        table.Should().NotContain("Rules");
+    }
+
+    [Fact]
+    public void Build_CategoryFilter_WhenFilteredCategoryHasNoCitations_YieldsOnlyHeading()
+    {
+        var citations = new[] { new Citation("Brown v. Board", CitationCategory.Cases) };
+
+        var opts = new ToaOptions { CategoryFilter = CitationCategory.Statutes };
+        var table = TableOfAuthorities.Build(citations, opts).Select(p => p.PlainText).ToList();
+
+        // No Statutes citations exist → only the heading paragraph.
+        table.Should().ContainSingle().Which.Should().Be(TableOfAuthorities.HeadingText);
+    }
+
+    [Fact]
+    public void Build_UsePassim_AppendsSuffixWhenFiveOrMoreOccurrences()
+    {
+        // A citation that appears 5 times must get " passim" appended.
+        var citation = new Citation("Brown v. Board", CitationCategory.Cases);
+        var citations = Enumerable.Repeat(citation, 5).ToList();
+
+        var opts = new ToaOptions { UsePassim = true };
+        // Use the document overload so occurrence counting works.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        foreach (var c in citations)
+            paragraph.Runs.Add(Run.CitationMark(c));
+        doc.Blocks.Add(paragraph);
+
+        var table = TableOfAuthorities.Build(doc, opts).Select(p => p.PlainText).ToList();
+
+        table.Should().ContainSingle(t => t.Contains(" passim"),
+            "an entry appearing 5 times must be annotated with passim");
+    }
+
+    [Fact]
+    public void Build_UsePassim_NoSuffixWhenFewerThanFiveOccurrences()
+    {
+        var citation = new Citation("Brown v. Board", CitationCategory.Cases);
+        var citations = Enumerable.Repeat(citation, 4).ToList();
+
+        var opts = new ToaOptions { UsePassim = true };
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        foreach (var c in citations)
+            paragraph.Runs.Add(Run.CitationMark(c));
+        doc.Blocks.Add(paragraph);
+
+        var table = TableOfAuthorities.Build(doc, opts).Select(p => p.PlainText).ToList();
+
+        table.Should().NotContain(t => t.Contains(" passim"),
+            "fewer than 5 occurrences must not be annotated with passim");
+    }
+
+    [Fact]
+    public void Build_UsePassim_False_NeverAnnotatesEvenWithManyOccurrences()
+    {
+        // When UsePassim is off, even 10 occurrences must produce no passim suffix.
+        var citations = Enumerable.Repeat(new Citation("Case X", CitationCategory.Cases), 10);
+        var opts = new ToaOptions { UsePassim = false };
+
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        foreach (var c in citations)
+            paragraph.Runs.Add(Run.CitationMark(c));
+        doc.Blocks.Add(paragraph);
+
+        var table = TableOfAuthorities.Build(doc, opts).Select(p => p.PlainText).ToList();
+        table.Should().NotContain(t => t.Contains(" passim"));
+    }
+
+    [Fact]
+    public void ToaOptions_TabLeader_CanBeSet()
+    {
+        var opts = new ToaOptions { TabLeader = ToaTabLeader.Dashes };
+        opts.TabLeader.Should().Be(ToaTabLeader.Dashes);
+    }
+
+    [Fact]
+    public void Build_WithCitationsAndOptions_CategoryFilter_FromEnumerableOverload()
+    {
+        // The IEnumerable<Citation> overload that takes ToaOptions also respects CategoryFilter.
+        var citations = new[]
+        {
+            new Citation("Case A", CitationCategory.Cases),
+            new Citation("Statute B", CitationCategory.Statutes)
+        };
+
+        var opts = new ToaOptions { CategoryFilter = CitationCategory.Cases };
+        var table = TableOfAuthorities.Build(citations, opts).Select(p => p.PlainText).ToList();
+
+        table.Should().Equal(TableOfAuthorities.HeadingText, "Cases", "Case A");
+        table.Should().NotContain("Statutes");
+    }
 }
