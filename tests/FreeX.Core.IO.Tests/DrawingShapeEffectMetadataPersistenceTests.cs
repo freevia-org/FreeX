@@ -195,21 +195,23 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
             </xdr:wsDr>
             """);
 
-        var textBox = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml)
-            .TextBoxes
+        // Shape-with-text (no txBox="1") → goes into Shapes list with text preserved.
+        var shape = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml)
+            .Shapes
             .Should()
             .ContainSingle()
             .Subject;
 
-        textBox.Anchor.Should().NotBeNull();
-        textBox.Anchor!.Kind.Should().Be(ChartDrawingAnchorKind.TwoCell);
-        textBox.Anchor.FromColumnZeroBased.Should().Be(3, "the box anchors to column D, not A");
-        textBox.Anchor.FromRowZeroBased.Should().Be(0);
+        shape.Anchor.Should().NotBeNull();
+        shape.Anchor!.Kind.Should().Be(ChartDrawingAnchorKind.TwoCell);
+        shape.Anchor.FromColumnZeroBased.Should().Be(3, "the box anchors to column D, not A");
+        shape.Anchor.FromRowZeroBased.Should().Be(0);
 
         // The from-cell sub-cell offsets are exposed in DIP pixels (EMU/9525) so the placement layer can
         // add them to the cell's left/top edge, keeping side-by-side objects within column D distinct.
-        textBox.Anchor.FromColumnOffset.Should().BeApproximately(438151 / 9525.0, 0.001);
-        textBox.Anchor.FromRowOffset.Should().BeApproximately(228600 / 9525.0, 0.001);
+        shape.Anchor.FromColumnOffset.Should().BeApproximately(438151 / 9525.0, 0.001);
+        shape.Anchor.FromRowOffset.Should().BeApproximately(228600 / 9525.0, 0.001);
+        shape.ShapeText.Should().Be("Visit Chandoo.org");
     }
 
     [Theory]
@@ -572,6 +574,183 @@ public sealed class DrawingShapeEffectMetadataPersistenceTests
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(240, 245, 250),
             GradientFillDirection = direction
+        });
+
+        return workbook;
+    }
+
+    // ── Shape text round-trip tests ───────────────────────────────────────
+
+    [Fact]
+    public void NativeJsonAdapter_RoundTripsShapeTextFontProperties()
+    {
+        var workbook = CreateWorkbookWithTextShape();
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
+        loaded.ShapeText.Should().Be("Hello Shape");
+        loaded.ShapeTextFontSizePoints.Should().Be(18);
+        loaded.ShapeTextBold.Should().BeTrue();
+        loaded.ShapeTextItalic.Should().BeFalse();
+        loaded.ShapeTextColor.Should().Be(new CellColor(0xFF, 0xFF, 0xFF));
+        loaded.ShapeTextHAlign.Should().Be(DrawingShapeTextHAlign.Center);
+        loaded.ShapeTextVAnchor.Should().Be(DrawingShapeTextVAnchor.Middle);
+        loaded.ShapeTextWrap.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTripsShapeTextFontProperties()
+    {
+        var workbook = CreateWorkbookWithTextShape();
+        using var stream = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        // Verify the XLSX contains a txBody with expected elements.
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = LoadDrawingXml(archive);
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            var txBody = drawingXml.Descendants(xdr + "txBody").Should().ContainSingle().Subject;
+            var bodyPr = txBody.Element(a + "bodyPr");
+            bodyPr.Should().NotBeNull();
+            bodyPr!.Attribute("anchor")!.Value.Should().Be("ctr");
+            bodyPr.Attribute("wrap")!.Value.Should().Be("square");
+
+            var pPr = txBody.Descendants(a + "pPr").Should().ContainSingle().Subject;
+            pPr.Attribute("algn")!.Value.Should().Be("ctr");
+
+            var rPr = txBody.Descendants(a + "rPr").Should().ContainSingle().Subject;
+            rPr.Attribute("sz")!.Value.Should().Be("1800");
+            rPr.Attribute("b")!.Value.Should().Be("1");
+
+            var tElement = txBody.Descendants(a + "t").Should().ContainSingle().Subject;
+            tElement.Value.Should().Be("Hello Shape");
+        }
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0).DrawingShapes.Should().ContainSingle().Subject;
+        loaded.ShapeText.Should().Be("Hello Shape");
+        loaded.ShapeTextFontSizePoints.Should().Be(18);
+        loaded.ShapeTextBold.Should().BeTrue();
+        loaded.ShapeTextColor.Should().Be(new CellColor(0xFF, 0xFF, 0xFF));
+        loaded.ShapeTextHAlign.Should().Be(DrawingShapeTextHAlign.Center);
+        loaded.ShapeTextVAnchor.Should().Be(DrawingShapeTextVAnchor.Middle);
+    }
+
+    [Fact]
+    public void XlsxDrawingPartReader_ParsesTxBodyTextAndFormatFromShapeXml()
+    {
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff>
+                          <xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:ext cx="914400" cy="457200"/>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="2" name="Ellipse 1"/>
+                    <xdr:cNvSpPr/>
+                  </xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>
+                    <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+                  </xdr:spPr>
+                  <xdr:txBody>
+                    <a:bodyPr anchor="ctr" wrap="square"/>
+                    <a:lstStyle/>
+                    <a:p>
+                      <a:pPr algn="ctr"/>
+                      <a:r>
+                        <a:rPr sz="1800" b="1" i="1">
+                          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+                        </a:rPr>
+                        <a:t>Ellipse</a:t>
+                      </a:r>
+                    </a:p>
+                  </xdr:txBody>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var shape = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml)
+            .Shapes
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.ShapeText.Should().Be("Ellipse");
+        shape.ShapeTextFontSizePoints.Should().Be(18);
+        shape.ShapeTextBold.Should().BeTrue();
+        shape.ShapeTextItalic.Should().BeTrue();
+        shape.ShapeTextColor.Should().Be(new CellColor(0xFF, 0xFF, 0xFF));
+        shape.ShapeTextHAlign.Should().Be(DrawingShapeTextHAlign.Center);
+        shape.ShapeTextVAnchor.Should().Be(DrawingShapeTextVAnchor.Middle);
+        shape.ShapeTextWrap.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxDrawingPartReader_TxBoxWithTxBox1GoesToTextBoxes()
+    {
+        // A shape with txBox="1" on cNvSpPr is a true text-box and must remain in TextBoxes.
+        var drawingXml = XDocument.Parse("""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+                      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <xdr:oneCellAnchor>
+                <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff>
+                          <xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+                <xdr:ext cx="914400" cy="457200"/>
+                <xdr:sp>
+                  <xdr:nvSpPr>
+                    <xdr:cNvPr id="2" name="TextBox 1"/>
+                    <xdr:cNvSpPr txBox="1"/>
+                  </xdr:nvSpPr>
+                  <xdr:spPr>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                  </xdr:spPr>
+                  <xdr:txBody><a:bodyPr/><a:p><a:r><a:t>Text</a:t></a:r></a:p></xdr:txBody>
+                </xdr:sp>
+                <xdr:clientData/>
+              </xdr:oneCellAnchor>
+            </xdr:wsDr>
+            """);
+
+        var result = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
+        result.TextBoxes.Should().ContainSingle().Which.Text.Should().Be("Text");
+        result.Shapes.Should().BeEmpty("txBox=1 shapes must go to TextBoxes, not Shapes");
+    }
+
+    private static Workbook CreateWorkbookWithTextShape()
+    {
+        var workbook = new Workbook("TextShape");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = DrawingShapeKind.Rectangle,
+            Width = 160,
+            Height = 80,
+            FillColor = new CellColor(0x44, 0x72, 0xC4),
+            OutlineColor = new CellColor(0x2F, 0x55, 0x97),
+            ShapeText = "Hello Shape",
+            ShapeTextFontSizePoints = 18,
+            ShapeTextBold = true,
+            ShapeTextColor = new CellColor(0xFF, 0xFF, 0xFF),
+            ShapeTextHAlign = DrawingShapeTextHAlign.Center,
+            ShapeTextVAnchor = DrawingShapeTextVAnchor.Middle,
+            ShapeTextWrap = true
         });
 
         return workbook;
