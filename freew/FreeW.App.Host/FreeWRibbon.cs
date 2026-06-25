@@ -647,6 +647,10 @@ internal static class FreeWRibbon
                     g.Large("freew.statistics", "Word Count", RibbonCommandIconKind.WordCount);
                     g.MediumToggle("freew.spellcheck-toggle", "Spelling & Grammar", RibbonCommandIconKind.Spelling);
                     g.Medium("freew.add-to-dictionary", "Add to Dictionary", RibbonCommandIconKind.Book);
+                    // Thesaurus (Shift+F7): looks up synonyms for the selected/caret word in the bundled
+                    // compact English synonym dictionary (Moby II derivative, ~3 000 headwords, public domain).
+                    // Shows senses + synonyms in a docked pane with Insert (replace word) and Copy actions.
+                    g.Medium("freew.thesaurus", "Thesaurus", RibbonCommandIconKind.Book, "T");
                     // Set Proofing Language lives in the Proofing group (matching Word's Review tab layout).
                     // It applies a BCP-47 language tag to the selected runs (rPr/w:lang) so the built-in
                     // spell checker uses the correct dictionary per run.
@@ -692,13 +696,17 @@ internal static class FreeWRibbon
                         m.Item("freew.display-for-review-no-markup", "No Markup", "N");
                         m.Item("freew.display-for-review-original", "Original", "O");
                     });
-                    // Show Markup: per-category visibility toggles. Balloons are DEFERRED — no balloon
-                    // affordance exists in the FlowDocument stack.
+                    // Show Markup: per-category visibility toggles. Balloons mode renders comments and
+                    // tracked-change revisions as right-margin callouts with leader lines, instead of
+                    // inline highlights. The BalloonOverlay adorner/panel hosts the balloon strip.
                     g.Medium("freew.show-markup", "Show Markup", RibbonCommandIconKind.History, "M", menu: m =>
                     {
                         m.Item("freew.show-markup-insertions-deletions", "Insertions and Deletions", "I");
                         m.Item("freew.show-markup-comments", "Comments", "C");
                         m.Item("freew.show-markup-formatting", "Formatting", "F");
+                        m.Separator();
+                        // Balloons: toggle right-margin balloon display mode for comments and revisions.
+                        m.Item("freew.show-markup-balloons", "Show Revisions in Balloons", "B");
                     });
                 });
                 // Changes group: Accept/Reject expose the current-change action plus the all-changes

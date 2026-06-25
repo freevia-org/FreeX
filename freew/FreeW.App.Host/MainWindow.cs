@@ -70,6 +70,16 @@ public sealed class MainWindow : Window
     // Active sort order for the Reviewing Pane. Default: reading order (sequence/date).
     private RevisionSortOrder _reviewSortOrder = RevisionSortOrder.Sequence;
 
+    // Thesaurus Pane (Review > Proofing > Thesaurus, Shift+F7): a docked right pane showing senses +
+    // synonyms for the word at the caret, backed by the bundled compact synonym dictionary. Insert replaces
+    // the word; Copy puts the synonym on the clipboard. Mirrors the ReviewingPane dock/toggle shape.
+    private ThesaurusPane _thesaurusPane = null!;
+
+    // Balloon Overlay (Review > Show Markup > Show Revisions in Balloons): a 200px strip to the right
+    // of the editor that renders comments and tracked-change revisions as rounded-rectangle callouts
+    // connected to their anchored text by dashed leader lines. Toggled via the Show Markup menu.
+    private BalloonOverlay _balloonOverlay = null!;
+
     // Notes Pane (References > Show Notes): a docked right-side pane that lists every footnote and
     // endnote as a stub (Kind + id + first line). Selecting a stub loads its paragraphs into a sub-editor
     // (a second DocumentView) for rich editing; Apply copies the edited blocks back into the note's
@@ -313,7 +323,9 @@ public sealed class MainWindow : Window
             onReadModeColumnWidth: ApplyReadModeColumnWidth,
             onReadModePageColor: ApplyReadModePageColor,
             onNewWindow: OpenNewWindow,
-            onArrangeAll: ArrangeAllWindows);
+            onArrangeAll: ArrangeAllWindows,
+            onToggleThesaurus: ToggleThesaurusPane,
+            onToggleBalloons: ToggleBalloons);
         _file = new FileCommands(this, editor, UpdateTitle, _options);
         editor.TextChanged += (_, _) =>
         {
@@ -323,6 +335,8 @@ public sealed class MainWindow : Window
             RefreshContextualTabs();
             RefreshReviewPane();
             RefreshNotesPane();
+            // Balloon overlay: rebuild whenever the document changes (no-op when disabled).
+            _balloonOverlay?.Rebuild();
             // Debounced refresh of the split-window snapshot pane (~300 ms), so rapid keystrokes
             // don't re-paginate on every character. No-op when the split pane is not open.
             ScheduleSplitPaneRefresh();
@@ -381,6 +395,13 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(reviewPane, Dock.Right);
         body.Children.Add(reviewPane);
 
+        // Thesaurus Pane docks on the RIGHT (Review > Proofing > Thesaurus, Shift+F7). Collapsed by
+        // default; ToggleThesaurusPane shows/hides it and triggers a lookup from the bundled dataset.
+        _thesaurusPane = new ThesaurusPane(editor);
+        var thesaurusPane = _thesaurusPane.Build();
+        DockPanel.SetDock(thesaurusPane, Dock.Right);
+        body.Children.Add(thesaurusPane);
+
         // Notes Pane docks on the BOTTOM (Word positions the notes pane below the body). Collapsed by
         // default; ToggleNotesPane shows/hides it and RefreshNotesPane rebuilds the stub list.
         var notesPane = BuildNotesPane();
@@ -404,9 +425,11 @@ public sealed class MainWindow : Window
         _vRuler = new Ruler(editor, Ruler.Orientation.Vertical);
         _rulerTabSelector = BuildRulerTabSelector();
 
+        // Workspace grid: col 0 = vertical ruler, col 1 = editor + floating canvas, col 2 = balloon strip.
         var workspaceGrid = new Grid();
-        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                         // col 0: v-ruler
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });    // col 1: editor
+        workspaceGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });                         // col 2: balloon strip
         workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         workspaceGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
@@ -441,6 +464,15 @@ public sealed class MainWindow : Window
         Grid.SetRow(editorOverlayHost, 1);
         Grid.SetColumn(editorOverlayHost, 1);
         workspaceGrid.Children.Add(editorOverlayHost);
+
+        // Balloon strip (col 2, rows 0+1): hosts the BalloonOverlay canvas. Width=0 when disabled;
+        // opens to 200px when Show Markup > Show Revisions in Balloons is toggled on.
+        _balloonOverlay = new BalloonOverlay(editor);
+        var balloonVisual = _balloonOverlay.Visual;
+        Grid.SetRow(balloonVisual, 0);
+        Grid.SetRowSpan(balloonVisual, 2);
+        Grid.SetColumn(balloonVisual, 2);
+        workspaceGrid.Children.Add(balloonVisual);
 
         _workspace = new Border
         {
@@ -502,6 +534,11 @@ public sealed class MainWindow : Window
         var revealFormatting = new RoutedUICommand("Reveal Formatting", "RevealFormatting", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(revealFormatting, (_, _) => ToggleRevealFormatting()));
         InputBindings.Add(new KeyBinding(revealFormatting, new KeyGesture(Key.F1, ModifierKeys.Shift)));
+
+        // Shift+F7: open/close the Thesaurus pane (Word's standard Thesaurus shortcut).
+        var thesaurus = new RoutedUICommand("Thesaurus", "Thesaurus", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(thesaurus, (_, _) => ToggleThesaurusPane()));
+        InputBindings.Add(new KeyBinding(thesaurus, new KeyGesture(Key.F7, ModifierKeys.Shift)));
 
         // Alt+F9: toggle field codes vs results across the document (Word's field-code toggle).
         var toggleFieldCodes = new RoutedUICommand("Toggle Field Codes", "ToggleFieldCodes", typeof(MainWindow));
@@ -1454,6 +1491,26 @@ public sealed class MainWindow : Window
             : (current + direction + _reviewEntries.Count) % _reviewEntries.Count;
         _reviewList.SelectedIndex = next;
         _reviewList.ScrollIntoView(_reviewList.SelectedItem);
+    }
+
+    // ── Thesaurus Pane ──────────────────────────────────────────────────────────────────────────────
+
+    // Toggle the Thesaurus pane (Review > Proofing > Thesaurus, Shift+F7) and trigger a word lookup.
+    // Opens the docked right pane (built by ThesaurusPane.Build()) if it was closed, then looks up the
+    // word at the caret in the bundled synonym dictionary. If already open, closes it.
+    private void ToggleThesaurusPane()
+    {
+        _thesaurusPane.Toggle();
+    }
+
+    // ── Balloon Overlay ──────────────────────────────────────────────────────────────────────────────
+
+    // Toggle Review > Show Markup > Show Revisions in Balloons. Enables or disables the right-margin
+    // balloon strip (BalloonOverlay) and rebuilds it immediately when enabling.
+    private void ToggleBalloons()
+    {
+        _balloonOverlay.Toggle();
+        _stateStore.SetChecked("freew.show-markup-balloons", _balloonOverlay.BalloonsEnabled);
     }
 
     // ── Notes Pane (Feature 1A-1C) ──────────────────────────────────────────────────────────────────

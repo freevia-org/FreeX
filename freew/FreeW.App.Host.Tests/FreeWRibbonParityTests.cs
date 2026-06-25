@@ -607,7 +607,8 @@ public sealed class FreeWRibbonParityTests
                 "freew.display-for-review-original",
                 "freew.show-markup-insertions-deletions",
                 "freew.show-markup-comments",
-                "freew.show-markup-formatting");
+                "freew.show-markup-formatting",
+                "freew.show-markup-balloons");
         CommandIds(review.FindGroup("changes")!)
             .Should()
             .Equal("freew.accept-this", "freew.reject-this", "freew.previous-change", "freew.next-change");

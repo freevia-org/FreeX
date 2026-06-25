@@ -134,7 +134,10 @@ internal static class FreeWRibbonCommands
         Action<string>? onReadModePageColor = null,
         // Feature 5 — New Window / Arrange All.
         Action? onNewWindow = null,
-        Action? onArrangeAll = null)
+        Action? onArrangeAll = null,
+        // W25 — Local Thesaurus pane + Balloons review mode.
+        Action? onToggleThesaurus = null,
+        Action? onToggleBalloons = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -1182,6 +1185,28 @@ internal static class FreeWRibbonCommands
         // Review tab — Proofing: open the read-only Word Count / Statistics dialog. Commits pending
         // edits first so the counts reflect the current text, then computes from the model.
         registry.Register("freew.statistics", new StatisticsCommand(editor));
+
+        // Review tab — Proofing > Thesaurus (Shift+F7): opens the Thesaurus docked pane and looks up
+        // synonyms for the selected/caret word in the bundled compact synonym dictionary (~3 000 headwords,
+        // Moby II derivative, public domain). The action callback supplied by the host toggles the pane
+        // and triggers a lookup; a no-op is registered when no host callback is wired (e.g. unit tests).
+        if (onToggleThesaurus is not null)
+            registry.Register("freew.thesaurus", new ActionCommand(onToggleThesaurus));
+        else
+            registry.Register("freew.thesaurus", new ActionCommand(() =>
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
+            }));
+
+        // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
+        // Comments and tracked-change revisions render as rounded rectangle callouts connected to their
+        // anchored text by dashed leader lines, in a 200px strip to the right of the editor. The callback
+        // is supplied by the host (BalloonOverlay.Toggle()); a no-op is registered in unit-test contexts.
+        if (onToggleBalloons is not null)
+            registry.Register("freew.show-markup-balloons", new ActionCommand(onToggleBalloons));
+        else
+            registry.Register("freew.show-markup-balloons", new ActionCommand(() => { }));
 
         // Review tab — Proofing: custom dictionary + spelling options. The custom dictionary is a
         // word-per-line .lex file persisted under FreeW's data folder; its Uri is registered with the

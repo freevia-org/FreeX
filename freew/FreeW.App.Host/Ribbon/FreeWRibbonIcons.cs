@@ -502,5 +502,9 @@ internal static class FreeWRibbonIcons
             ["freew.compare"] = RibbonCommandIconKind.Compare,
             ["freew.inspect-document"] = RibbonCommandIconKind.Search,
             ["freew.check-accessibility"] = RibbonCommandIconKind.Accessibility,
+
+            // W25 — Local Thesaurus + Balloons (dedicated SVGs in CommandIconsSvg/).
+            ["freew.thesaurus"]            = RibbonCommandIconKind.Book,
+            ["freew.show-markup-balloons"] = RibbonCommandIconKind.Comment,
         };
 }

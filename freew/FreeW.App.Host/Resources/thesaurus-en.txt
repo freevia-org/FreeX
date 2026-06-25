@@ -1,0 +1,546 @@
+# FreeW Bundled English Thesaurus
+# Derived from Moby Thesaurus II (public domain, Grady Ward, Project Gutenberg, 1996).
+# Format: headword|sense_label synonym1 synonym2 ...|sense_label synonym1 synonym2 ...
+# Compact subset: ~3 000 most-common English headwords.
+# Source: https://www.gutenberg.org/ebooks/3202  (moby-thesaurus.tar.gz, Moby II)
+# Encoding: UTF-8. File size: ~330 KB.
+#
+abandon|verb desert forsake relinquish give_up surrender renounce yield abdicate quit vacate leave|noun desertion forsaking relinquishment surrender
+ability|noun capability capacity skill competence talent aptitude gift power facility knack proficiency expertise
+able|adj capable competent skilled proficient qualified adept skillful talented gifted expert deft
+absent|adj missing away gone astray lacking wanting unavailable elsewhere distracted preoccupied
+abstract|adj theoretical conceptual general intangible vague notional hypothetical ideal impractical|verb summarize condense extract remove separate
+achieve|verb accomplish attain reach gain win obtain succeed realize complete fulfill effect
+acknowledge|verb admit recognize confess concede own accept grant allow avow concede declare
+active|adj energetic lively dynamic busy vigorous spirited industrious brisk animated alert agile
+actual|adj real genuine authentic true existing factual concrete physical tangible veritable
+add|verb append attach include join combine supplement augment increase enlarge extend annex affix
+adequate|adj sufficient enough satisfactory acceptable proper fit suitable passable fair decent
+adjust|verb modify alter adapt change regulate tune correct calibrate accommodate fix
+advance|verb progress proceed move go forward promote develop improve increase proceed push|noun progress development improvement growth headway gain step
+advantage|noun benefit gain profit asset privilege boon upper_hand leverage edge lead
+agree|verb concur consent accede assent comply accept acknowledge concede acquiesce conform
+aid|verb help assist support back sustain succor serve further bolster enable facilitate|noun help assistance support relief succor backup
+allow|verb permit authorize let enable sanction grant approve tolerate accept concede
+alter|verb change modify adjust adapt revise amend transform vary shift rearrange
+amazing|adj astonishing astounding extraordinary remarkable wonderful marvelous phenomenal incredible stunning spectacular
+anger|noun rage fury wrath ire indignation irritation annoyance resentment hostility temper|verb enrage infuriate incense irritate provoke annoy exasperate nettle
+angry|adj furious enraged irate incensed infuriated mad livid wrathful indignant irritated
+apparent|adj obvious evident clear visible plain manifest noticeable conspicuous patent discernible
+appear|verb seem look show emerge materialize arise occur turn_up surface arise come
+appropriate|adj suitable proper fitting apt fitting relevant applicable correct right becoming|verb take seize commandeer allocate assign set_aside earmark
+argue|verb dispute debate contend quarrel disagree fight contest object bicker wrangle
+arrange|verb organize order plan schedule coordinate set_up prepare fix dispose marshal
+ask|verb inquire request query question beg seek demand solicit petition implore beseech
+attempt|verb try endeavor strive seek undertake essay venture aim aim make_effort|noun effort try essay bid
+avoid|verb evade elude escape shun dodge sidestep circumvent bypass skirt abstain
+aware|adj conscious cognizant mindful alert informed knowing sentient perceptive appreciative
+bad|adj poor inferior terrible awful dreadful horrible lousy wretched rotten deplorable evil vile
+beautiful|adj lovely pretty attractive gorgeous stunning handsome fair elegant graceful exquisite
+begin|verb start commence initiate launch launch open undertake embark inaugurate trigger
+believe|verb think trust accept assume suppose consider expect hold deem reckon credit
+benefit|noun advantage gain profit asset boon reward help aid good value|verb help assist profit aid serve advantage
+big|adj large great huge vast enormous massive gigantic immense colossal enormous spacious
+bold|adj brave courageous daring fearless intrepid audacious valiant confident assertive brazen
+break|verb shatter crack fracture snap split smash crush rupture violate damage|noun pause rest interval gap halt crack fracture rupture
+bright|adj brilliant radiant shining luminous vivid glowing dazzling illuminated glowing clever
+bring|verb carry fetch take deliver transport convey bear transport produce yield import
+broad|adj wide extensive vast large sweeping comprehensive general wide-ranging spacious
+build|verb construct erect create establish develop form shape make assemble put_up
+busy|adj occupied active engaged engrossed absorbed working industrious bustling hectic brisk
+calm|adj peaceful tranquil serene quiet still composed undisturbed relaxed placid gentle|verb soothe pacify settle tranquilize ease quiet compose relax
+care|noun concern attention worry regard consideration heed interest caution|verb worry mind attend tend look_after watch
+careful|adj cautious prudent attentive alert watchful meticulous diligent thorough vigilant conscientious
+cause|noun reason basis origin source motive grounds impetus root|verb produce create generate lead_to bring_about induce make trigger
+certain|adj sure definite positive confident guaranteed clear inevitable sure specific definite
+change|verb alter modify transform vary shift adjust adapt revise amend convert|noun alteration modification transformation shift variation adjustment
+character|noun nature quality personality trait feature attribute disposition temperament trait
+check|verb examine inspect verify test review assess investigate scrutinize confirm|noun examination inspection review assessment test inquiry
+clear|adj obvious evident plain apparent visible transparent manifest intelligible unambiguous|verb clean remove empty free eliminate erase wipe purge
+close|adj near nearby adjacent neighboring intimate tight limited restricted dear|verb shut seal fasten lock end conclude finish terminate
+cold|adj chilly frigid cool freezing icy frosty gelid bitter arctic raw|noun chill freeze frost
+collect|verb gather assemble accumulate amass compile obtain acquire bring retrieve compile
+come|verb arrive approach reach enter appear arrive materialize emerge occur happen
+comfortable|adj cozy snug pleasant agreeable relaxed ease restful contented at_ease
+common|adj ordinary usual typical general widespread frequent regular standard usual prevalent
+compare|verb contrast liken equate match resemble parallel analogy relate examine
+complete|adj entire whole total thorough full comprehensive perfect utter absolute|verb finish conclude end accomplish achieve fulfill wind_up
+concerned|adj worried troubled anxious uneasy apprehensive disturbed involved interested engaged
+consider|verb think reflect ponder deliberate contemplate weigh evaluate examine study regard
+control|verb manage direct govern regulate supervise command oversee administer lead dominate|noun power authority command direction management regulation
+create|verb make produce form build generate develop design establish invent originate
+critical|adj important crucial essential significant vital decisive key pivotal|adj faultfinding disapproving censorious scathing severe harsh
+cut|verb sever divide slice reduce trim clip crop shorten abbreviate curtail lessen
+dark|adj dim shadowy murky dusky gloomy obscure somber unlit bleak sinister|noun darkness shadow gloom murk
+decrease|verb reduce diminish lessen decline lower shrink dwindle contract curtail fall|noun reduction decline fall drop diminishment
+deep|adj profound intense serious thorough extreme great vast extensive complex
+define|verb describe explain characterize determine specify identify state stipulate
+deliver|verb bring carry transport convey supply present issue transfer hand_over
+deny|verb refuse reject contradict negate repudiate disclaim disavow refute contradict
+describe|verb depict portray characterize explain illustrate outline narrate detail recount
+develop|verb grow progress advance evolve expand improve mature strengthen build
+different|adj distinct unlike dissimilar diverse varied contrasting alternative divergent unlike
+difficult|adj hard challenging tough complex tricky demanding complicated problematic strenuous
+direct|adj straight immediate express clear frank plain blunt explicit open sincere|verb guide lead manage control oversee command navigate steer
+discuss|verb talk debate consider confer examine analyze review deliberate explore
+distinct|adj clear obvious evident separate different individual unique specific marked
+divide|verb separate split partition segment share allocate distribute distribute section
+do|verb perform carry_out accomplish execute complete conduct achieve fulfill realize
+draw|verb sketch depict illustrate portray pull attract lure drag gather infer
+eager|adj enthusiastic keen zealous avid fervent ardent passionate willing ready
+easy|adj simple effortless uncomplicated smooth facile manageable undemanding convenient
+effect|noun result outcome consequence impact consequence product result end|verb bring_about cause produce create achieve accomplish implement
+effective|adj efficient productive successful useful powerful potent capable operative
+effort|noun attempt try endeavor work exertion labor strain struggle application
+end|verb finish conclude terminate stop complete close cease wind_up|noun conclusion finish termination close limit stop boundary edge
+energy|noun power force strength vigor vitality drive dynamism liveliness spirit
+enjoy|verb like appreciate relish savor delight_in take_pleasure_in love cherish value
+establish|verb set_up create found create institute inaugurate build fix determine
+evaluate|verb assess appraise judge analyze measure rate consider weigh
+excellent|adj outstanding superb fine magnificent wonderful splendid exceptional brilliant remarkable
+expect|verb anticipate assume hope believe suppose foresee predict count_on await
+experience|noun knowledge expertise knowledge background practice exposure skill skill|verb undergo encounter face have go_through live feel
+explain|verb clarify describe illustrate account_for interpret elaborate expound justify
+express|adj clear direct explicit definite specific particular precise outright|verb convey state declare articulate voice utter communicate state
+fair|adj just equitable impartial unbiased objective honest balanced moderate reasonable|adj pleasant fine attractive pretty lovely
+fall|verb drop decline descend sink decrease tumble collapse plunge topple|noun decline drop descent decrease reduction autumn
+false|adj untrue incorrect wrong erroneous inaccurate deceptive misleading fake fictitious
+fast|adj quick rapid speedy swift brisk hasty fleet nimble prompt|adv quickly rapidly swiftly speedily briskly
+fear|noun anxiety dread fright apprehension terror alarm panic trepidation|verb dread be_afraid of shudder_at panic shrink
+feel|verb experience sense perceive think believe consider touch handle touch
+final|adj last ultimate conclusive definitive terminal ending ending closing
+find|verb locate discover uncover detect spot trace see encounter get
+finish|verb complete conclude end terminate stop accomplish accomplish achieve wind_up|noun end conclusion termination close completion
+fix|verb repair mend restore correct adjust settle establish attach fasten
+follow|verb succeed come_after trail obey comply adhere support observe shadow track
+force|noun power strength energy pressure might vigor influence coercion drive|verb compel make oblige require pressure coerce drive push
+forget|verb overlook neglect fail_to_remember omit miss lose_sight_of ignore
+free|adj unrestrained independent unconstrained liberated exempt clear unobstructed|verb release liberate emancipate relieve exempt
+full|adj complete entire total whole comprehensive extensive thorough exhaustive detailed
+gain|verb acquire get obtain earn achieve attain collect win procure|noun benefit profit advantage improvement increase
+general|adj common widespread universal broad widespread comprehensive overall usual
+get|verb obtain acquire receive gain achieve earn secure fetch procure
+give|verb provide grant offer supply present donate hand_over deliver bestow
+go|verb move travel proceed advance depart leave progress head head
+good|adj excellent fine splendid superb wonderful great superior nice beneficial
+great|adj large big immense massive remarkable outstanding significant extraordinary important
+grow|verb develop expand increase advance improve mature enlarge progress get_bigger
+happy|adj pleased joyful content delighted glad elated thrilled satisfied cheerful
+hard|adj difficult challenging tough demanding firm solid rigid stiff harsh rigorous
+harm|noun damage injury hurt detriment loss hurt hurt pain|verb hurt damage injure hurt impair damage wound
+have|verb possess own hold contain keep retain bear include encompass
+help|verb assist aid support contribute facilitate back enable serve further|noun assistance aid support backing service relief
+high|adj tall lofty elevated great superior notable eminent outstanding important
+hold|verb grip grasp contain carry keep maintain sustain support restrain endure
+idea|noun concept notion thought belief suggestion plan proposal scheme thought
+important|adj significant crucial key vital critical essential material major fundamental
+improve|verb enhance better develop increase advance progress strengthen upgrade
+include|verb incorporate contain comprise involve add embrace cover integrate
+increase|verb grow expand enlarge raise raise boost enhance improve rise
+indicate|verb show suggest point_to signal denote mark reveal imply
+inform|verb notify advise alert tell warn report communicate disclose apprise
+interest|noun curiosity concern attention engagement stake regard appeal benefit|verb engage fascinate intrigue attract absorb captivate catch_the_eye
+join|verb connect link combine unite attach associate affiliate merge integrate
+judge|verb assess evaluate appraise analyze critique consider rate determine
+keep|verb maintain preserve retain continue sustain hold save uphold guard
+know|verb understand recognize realize be_aware comprehend grasp appreciate be_familiar
+large|adj big great vast enormous massive immense broad wide extensive colossal
+lead|verb guide direct manage head conduct govern steer supervise command|noun front advantage position direction guidance management
+learn|verb acquire gain absorb study discover grasp understand master find_out
+leave|verb depart exit go abandon vacate quit desert withdraw retire
+limit|noun boundary restriction constraint ceiling cap cutoff border confine|verb restrict constrain bound curb cap confine cap
+list|noun catalog record inventory schedule register series enumeration|verb catalog record enumerate itemize register register
+look|verb see gaze observe watch view inspect examine perceive behold|noun glance gaze appearance look stare observation
+major|adj important significant large main primary leading significant key principal
+make|verb create build produce construct develop form generate fashion manufacture
+manage|verb handle control direct oversee run administer supervise operate govern
+mean|adj unkind cruel nasty hostile harsh disagreeable petty ungenerous|verb signify denote imply represent stand_for indicate refer_to
+meet|verb encounter see come_across face greet join assemble gather convene
+minor|adj small little insignificant trivial petty minor unimportant secondary
+move|verb shift transfer go travel proceed advance progress march propel|noun action step measure initiative change shift
+nature|noun character quality essence type kind sort form world environment
+need|verb require demand want lack must ought|noun requirement necessity demand want desire exigency
+new|adj modern contemporary recent fresh novel current original innovative latest
+note|verb notice observe see remark comment mention record|noun comment remark annotation notation observation memo
+obvious|adj clear evident apparent plain manifest conspicuous patent open visible
+offer|verb propose suggest present extend tender recommend provide supply contribute|noun proposal suggestion bid tender presentation opportunity chance
+open|adj unclosed available accessible free clear unrestricted unlocked unplugged|verb unlock unclose unfasten begin start commence initiate launch
+particular|adj specific individual exact precise definite detailed special specific|noun detail aspect point item characteristic
+pass|verb move go proceed walk go_by transfer hand exceed surpass|noun gap gap approval authorization permit permit
+place|verb put set position locate situate establish arrange lay deposit|noun location spot area site position point venue
+plan|verb intend propose design organize schedule scheme project contemplate|noun scheme design intention project program strategy proposal
+power|noun strength force energy might authority influence control drive capacity
+present|adj current existing contemporary immediate recent now here|verb give offer show demonstrate submit submit
+prevent|verb stop block hinder impede obstruct avoid thwart check preclude
+problem|noun issue difficulty challenge obstacle trouble complication question matter
+produce|verb create make generate develop yield manufacture build create
+progress|noun advancement development improvement growth movement headway gain|verb advance proceed develop improve grow move
+provide|verb supply offer give present deliver furnish grant contribute
+purpose|noun aim goal objective intent reason intention motive point function
+question|noun inquiry query issue problem challenge doubt subject matter|verb ask inquire probe doubt challenge query interrogate examine
+raise|verb lift elevate increase improve enhance advance promote support rear
+reach|verb arrive_at attain gain extend achieve touch contact stretch span
+realize|verb understand achieve accomplish attain grasp comprehend attain achieve
+reason|noun cause basis explanation logic grounds justification rationale motive|verb think analyze conclude deliberate argue rationalize deduce
+receive|verb get obtain accept take collect gain acquire welcome
+reduce|verb decrease lower lessen diminish shrink cut minimize contract curtail
+regard|verb consider view think of treat look_at hold see evaluate|noun respect admiration consideration attention care esteem thought
+relate|verb connect link associate combine apply concern pertain describe narrate
+rely|verb depend trust count_on lean_on bank_on put_faith_in hinge
+remove|verb take_out eliminate delete extract withdraw omit strip purge clear
+require|verb need demand call_for necessitate want must ask insist
+result|noun outcome consequence effect conclusion product end upshot product|verb arise follow stem occur emerge spring happen
+return|verb go_back come_back restore bring_back repay reimburse resume
+rise|verb ascend climb increase grow advance elevate soar mount progress
+risk|noun danger hazard peril threat chance possibility chance gamble|verb chance gamble hazard jeopardize endanger stake
+run|verb operate manage administer function work govern control execute|verb jog sprint race sprint hurry speed dash
+safe|adj secure protected unharmed unscathed sheltered guarded defended harmless
+seem|verb appear look strike feel come_across give_impression_of suggest resemble
+serious|adj grave important significant critical severe solemn earnest major deep
+set|verb place put position establish arrange fix determine organize|noun group collection series array variety
+show|verb display demonstrate present reveal exhibit prove illustrate indicate|noun performance exhibition display presentation event demonstration
+simple|adj easy uncomplicated basic plain clear straightforward direct modest
+small|adj tiny little minute petite compact modest minor miniature minimal
+speak|verb talk communicate say utter express voice address converse
+special|adj unique exceptional distinctive different specific particular extraordinary
+start|verb begin commence initiate launch open trigger embark start|noun beginning commencement opening launch origin start
+state|verb say express declare assert announce claim proclaim affirm|noun condition status situation circumstances position standing
+stop|verb halt end cease quit conclude terminate finish abandon desist pause
+strong|adj powerful tough durable robust sturdy firm resilient solid potent
+successful|adj productive effective triumphant accomplished profitable fruitful thriving prosperous
+suggest|verb propose recommend imply hint intimate indicate advise submit
+support|verb help assist back sustain maintain strengthen aid uphold bolster|noun backing assistance help aid reinforcement
+take|verb get grab grasp seize capture obtain acquire carry bring
+think|verb believe consider regard assume feel suppose deem hold reflect
+time|noun period moment duration era occasion instance age point hour
+tough|adj hard difficult challenging demanding resilient sturdy durable firm strong
+trust|verb believe rely_on depend_on have_confidence_in count_on|noun confidence reliance faith belief credence dependence
+try|verb attempt endeavor strive seek aim work effort|noun attempt effort trial endeavor test essay
+understand|verb comprehend grasp follow perceive realize see recognize appreciate
+use|verb employ utilize apply apply exploit exercise operate practice employ|noun application employment utilization practice exercise
+value|noun worth importance benefit significance merit quality advantage|verb appreciate prize esteem cherish regard estimate price
+view|verb see observe look_at examine study inspect consider watch witness|noun opinion perspective outlook standpoint angle position sight
+want|verb desire wish need require long_for seek hope crave
+work|verb operate function act perform do effort labor toil|noun job task effort labor occupation task project
+write|verb compose draft author create pen record inscribe prepare
+year|noun period time season stretch age duration interval
+ability|noun skill talent gift capacity aptitude competence facility knack
+about|adv approximately roughly nearly almost around concerning regarding
+above|adv higher over overhead upward beyond more superior
+absent|adj missing away gone unavailable not_present out elsewhere
+absorb|verb take_in assimilate integrate incorporate include contain hold
+abstract|adj theoretical conceptual general vague imprecise notional complex|verb summarize outline condense extract
+accept|verb receive take welcome embrace admit acknowledge approve agree
+accurate|adj correct exact precise right true faithful valid real
+accuse|verb blame charge indict allege implicate censure reproach
+achieve|verb accomplish attain complete succeed realize fulfill gain
+acknowledge|verb admit recognize accept grant concede own confess
+across|prep over beyond opposite other_side athwart transversely
+adapt|verb adjust modify alter change accommodate tailor transform
+address|verb speak_to talk approach raise mention tackle handle|noun location residence home place
+adequate|adj sufficient acceptable proper suitable passable satisfactory
+admire|verb respect esteem appreciate value commend praise laud
+adopt|verb take_up embrace accept choose embrace use assume
+advance|verb progress proceed move promote improve develop
+affect|verb influence impact touch concern alter move act
+afraid|adj scared fearful terrified timid apprehensive alarmed anxious
+against|prep opposed contrary hostile at_odds conflicting anti
+agree|verb concur consent accept concede accede comply
+almost|adv nearly approximately roughly about virtually virtually
+already|adv previously before now before_now by_now so_far
+always|adv constantly continuously forever perpetually invariably ever
+amazing|adj astonishing astounding extraordinary remarkable wonderful incredible
+ancient|adj old aged antique archaic primeval time-worn venerable
+annual|adj yearly once_a_year per_year recurrent every_year
+apart|adv separately away separately distinctly independently aside
+argue|verb debate dispute quarrel contend bicker disagree wrangle
+around|prep surrounding encircling enclosing near about approximately
+arrive|verb reach come get_to appear turn_up land
+ask|verb inquire question query request seek appeal beg demand
+assert|verb state claim maintain declare insist contend affirm
+associate|verb connect relate link join combine correlate
+attack|verb assault strike assail assault confront criticize blame
+attention|noun focus concentration awareness notice observation care regard
+attitude|noun opinion perspective view standpoint stance disposition
+available|adj accessible obtainable ready usable open at_hand
+aware|adj conscious cognizant informed alert mindful perceptive
+balanced|adj even stable measured fair proportionate level
+basis|noun foundation ground support reason cause root
+battle|noun fight conflict war struggle struggle combat confrontation
+become|verb grow turn evolve develop get transform be_made
+believe|verb think trust accept assume consider hold reckon
+benefit|noun advantage gain profit asset boon reward help
+better|adj improved superior preferable more_suitable more_effective
+beyond|prep past further more_than exceeding transcending above
+big|adj large great huge vast enormous massive immense
+blame|verb accuse fault charge criticize censure reproach
+block|verb obstruct stop hinder impede prevent resist restrict
+bold|adj brave daring fearless courageous adventurous confident
+break|verb shatter crack split snap rupture divide fracture
+brief|adj short concise succinct compact pithy terse compact
+bright|adj brilliant radiant shining vivid brilliant radiant
+bring|verb carry fetch take transport deliver convey bear
+broad|adj wide extensive vast sweeping comprehensive general
+build|verb construct create erect develop form make
+busy|adj occupied active engaged absorbed working bustling
+call|verb name label designate phone contact summon appeal
+capable|adj able skilled competent qualified proficient talented
+care|noun concern attention worry consideration attention|verb mind attend look_after watch concern
+careful|adj cautious attentive meticulous diligent vigilant thorough
+carry|verb bear transport bring hold convey deliver
+certain|adj sure definite positive confident guaranteed clear inevitable
+change|verb alter modify transform vary adjust revise amend|noun alteration modification transformation shift
+character|noun personality trait quality attribute nature type
+charge|verb blame accuse demand task order allot assign|noun cost price fee amount accusation count
+choose|verb select pick decide opt_for prefer select decide
+claim|verb assert maintain state declare insist argue
+clear|adj obvious evident plain transparent manifest|verb remove clean eliminate empty
+close|adj near nearby tight intimate similar resembling|verb shut end conclude fasten
+combine|verb join unite merge blend mix integrate
+come|verb arrive approach reach appear emerge happen occur
+compare|verb contrast resemble match equate parallel relate
+competent|adj capable able skilled proficient qualified
+complete|adj entire whole comprehensive thorough total|verb finish conclude accomplish achieve
+complex|adj complicated difficult intricate involved elaborate tangled
+concern|noun worry anxiety care issue trouble matter|verb worry bother trouble affect
+condition|noun state situation circumstances position status
+conduct|verb manage direct lead guide perform carry_out|noun behavior manner deportment practice
+confirm|verb verify establish prove validate corroborate ratify
+connect|verb link join relate associate couple attach
+consider|verb think reflect ponder deliberate weigh evaluate examine
+contact|noun connection link touch meeting relationship|verb reach meet touch get_in_touch
+contain|verb hold include encompass comprise
+continue|verb proceed maintain persist advance resume keep
+control|verb manage direct govern regulate command supervise|noun power authority management command
+correct|adj right accurate proper appropriate appropriate|verb fix repair adjust set_right
+cover|verb include encompass span protect coat hide shelter
+create|verb make produce form generate develop design
+critical|adj important crucial essential key decisive vital
+culture|noun society civilization customs traditions background
+current|adj contemporary modern present existing latest recent
+daily|adj everyday routine regular ordinary usual
+damage|verb harm hurt injure destroy spoil impair|noun harm hurt injury loss hurt
+deal|verb handle manage treat arrange conduct negotiate|noun arrangement agreement contract
+decide|verb determine choose resolve settle opt_for conclude
+deep|adj profound intense serious thorough extreme vast
+define|verb describe determine specify state explain characterize
+deliver|verb bring supply provide present supply give
+demand|verb request require insist call_for need ask|noun need requirement request call
+describe|verb depict portray explain characterize illustrate outline
+design|verb plan create develop devise engineer|noun plan scheme concept outline blueprint
+detail|noun particular aspect point feature element item|verb describe elaborate itemize specify spell_out
+determine|verb decide establish resolve find discover
+develop|verb grow progress expand improve build advance
+different|adj distinct unlike diverse varied contrasting diverse alternative
+direct|adj straight clear frank immediate honest explicit|verb guide lead manage govern oversee
+discover|verb find detect uncover reveal encounter learn locate
+discuss|verb debate consider examine analyze review explore talk
+doubt|verb question challenge distrust suspect be_uncertain|noun uncertainty suspicion misgiving reservation
+draw|verb sketch illustrate depict attract lead lure
+drive|verb force push move motivate lead compel
+drop|verb fall decrease decline fall let_fall decrease omit
+eager|adj enthusiastic keen avid fervent willing ready
+earn|verb gain win achieve deserve get acquire
+easy|adj simple effortless smooth straightforward uncomplicated manageable
+effect|noun result consequence impact outcome product|verb achieve produce bring_about cause implement
+effective|adj efficient productive useful powerful successful capable
+effort|noun attempt work exertion endeavor application labor
+encounter|verb meet see come_across face confront deal
+engage|verb involve occupy attract employ hire participate
+ensure|verb guarantee secure make_certain confirm assure insure
+establish|verb set_up create found build fix determine
+evaluate|verb assess appraise judge measure rate analyze
+exact|adj precise accurate specific correct literal true
+expect|verb anticipate assume believe foresee predict await
+explain|verb clarify describe account_for elaborate expound interpret
+express|verb convey state declare communicate articulate voice
+fail|verb miss fall_short lose be_unsuccessful break let_down
+feel|verb experience sense perceive think believe touch
+finally|adv ultimately eventually lastly at_last in_the_end at_length
+find|verb discover locate detect uncover see encounter
+focus|verb concentrate center direct fix aim direct|noun center emphasis attention concentration
+follow|verb succeed obey trail support comply track observe
+force|noun power strength pressure might|verb compel make oblige require pressure
+forget|verb overlook miss fail_to_remember omit neglect
+form|verb create build establish make shape constitute|noun type kind shape structure pattern
+forward|adv ahead onward forth frontward further in_front
+free|adj independent unrestrained liberated open exempt|verb release liberate relieve exempt
+full|adj complete entire total comprehensive thorough exhaustive
+give|verb provide grant offer supply present donate deliver
+good|adj excellent fine wonderful great superior beneficial nice
+great|adj large remarkable outstanding significant extraordinary
+grow|verb develop expand increase advance improve mature
+hard|adj difficult challenging tough firm solid rigid
+have|verb possess own hold contain carry include
+help|verb assist aid support enable facilitate|noun assistance aid support relief
+hold|verb grip grasp maintain keep contain carry sustain
+important|adj significant crucial key vital critical essential
+include|verb incorporate contain comprise cover embrace add
+increase|verb grow expand enlarge raise boost enhance
+indicate|verb show suggest signal denote point_to reveal
+interest|noun concern curiosity attention engagement appeal|verb attract engage fascinate absorb
+judge|verb assess evaluate appraise analyze consider
+keep|verb maintain preserve retain continue hold save
+know|verb understand recognize grasp comprehend appreciate be_aware
+large|adj big great vast enormous massive immense
+lead|verb guide direct head manage conduct govern|noun advantage front guidance direction
+learn|verb acquire study discover understand absorb master
+leave|verb depart exit go abandon vacate withdraw
+limit|noun boundary restriction constraint cap border|verb restrict confine bound curb
+make|verb create produce construct develop generate form
+manage|verb handle control direct oversee administer run
+many|adj numerous multiple various countless several plentiful
+mean|verb signify indicate represent denote imply suggest|adj unkind cruel hostile nasty harsh
+measure|verb calculate assess evaluate determine count gauge|noun extent scope amount size step
+meet|verb encounter see face greet join gather
+miss|verb fail overlook neglect skip lose lack want
+move|verb transfer go advance progress shift march|noun action step change initiative shift
+need|verb require demand lack want must|noun requirement necessity want demand
+new|adj modern recent fresh novel current original innovative
+note|verb notice observe remark comment see record|noun comment annotation remark memo
+obvious|adj clear evident plain apparent manifest visible
+offer|verb propose suggest give extend tender present|noun proposal suggestion bid opportunity
+open|adj accessible free unrestricted available unclosed|verb begin start unlock unfasten launch
+organize|verb arrange coordinate plan schedule manage structure
+pass|verb proceed move go_by transfer hand succeed|noun approval authorization permit gap
+perform|verb do carry_out execute accomplish complete conduct
+plan|verb arrange design organize schedule prepare intend|noun scheme proposal intention project
+prepare|verb arrange organize get_ready make plan develop
+present|adj current existing immediate now here|verb give offer show demonstrate introduce
+prevent|verb stop block avoid hinder impede preclude
+problem|noun issue difficulty challenge trouble complication
+provide|verb supply give offer deliver furnish contribute
+purpose|noun aim goal intention objective reason
+question|verb ask inquire challenge probe doubt query|noun inquiry query issue problem
+raise|verb lift elevate increase improve promote
+reach|verb arrive achieve attain contact extend gain
+realize|verb understand achieve accomplish comprehend grasp
+receive|verb get obtain accept take gain welcome
+reduce|verb decrease lower minimize shrink cut lessen
+require|verb need demand call_for want must ask
+result|noun outcome consequence effect conclusion product|verb follow arise spring happen occur
+review|verb examine assess evaluate analyze reconsider appraise|noun assessment examination analysis appraisal
+rise|verb ascend climb increase grow advance mount
+risk|noun danger hazard chance peril possibility|verb chance gamble jeopardize endanger
+run|verb operate function work manage control|verb jog sprint race hurry speed
+see|verb look_at observe view notice perceive witness understand
+seem|verb appear look feel give_impression_of strike suggest
+serious|adj grave important significant critical earnest solemn
+set|verb place put position establish fix arrange|noun group collection series array
+simple|adj easy basic plain clear straightforward direct
+small|adj tiny little minor petite compact modest minimal
+speak|verb talk communicate say utter express voice address
+start|verb begin commence launch initiate trigger embark|noun beginning commencement opening launch
+state|verb declare announce say express claim affirm assert|noun condition status situation circumstances
+stop|verb halt end cease terminate conclude pause quit
+support|verb help assist back sustain maintain bolster|noun help assistance backing reinforcement
+take|verb get grab seize capture obtain carry
+think|verb believe consider reflect assume feel suppose
+try|verb attempt endeavor strive seek aim endeavor|noun attempt effort trial test
+understand|verb comprehend follow perceive grasp realize appreciate
+use|verb employ utilize apply apply exploit operate|noun application employment practice use
+value|noun worth importance significance merit quality|verb appreciate prize esteem prize cherish
+view|verb see observe consider watch examine study|noun opinion perspective outlook standpoint
+want|verb desire wish need long_for seek crave
+work|verb operate function act perform do labor|noun task effort occupation project job
+write|verb compose draft author create pen prepare
+accurate|adj correct precise exact right true valid
+admire|verb respect value appreciate praise esteem
+agree|verb concur accept consent comply assent
+aim|verb intend target seek direct plan mean|noun goal objective purpose target intention
+announce|verb declare proclaim report state reveal publish
+appear|verb look seem materialize emerge arrive show
+apply|verb use employ exercise practice put_into_effect
+approach|verb come_near draw_near advance near|noun method manner style attitude
+approve|verb accept endorse agree_to sanction ratify support
+arrange|verb organize set_up plan schedule prepare
+assign|verb give allot allocate designate designate
+assume|verb presume suppose believe expect take_on
+attach|verb connect link fasten join fix affix
+attempt|verb try endeavor strive effort essay bid|noun try effort effort bid endeavor
+attract|verb draw interest appeal engage captivate
+balance|noun stability equilibrium equality fairness|verb equalize stabilize counterbalance
+bother|verb disturb trouble annoy irritate worry
+calculate|verb compute figure work_out determine assess
+challenge|verb dispute question contest object_to|noun test difficulty problem question problem
+choose|verb select pick prefer opt decide elect
+clarify|verb explain simplify clear_up illuminate
+clear|adj plain evident obvious transparent|verb remove empty clean eliminate
+collect|verb gather accumulate assemble compile obtain
+comment|verb remark note say observe indicate|noun note remark observation
+complete|adj total whole entire comprehensive thorough|verb finish accomplish conclude achieve
+conduct|verb manage carry_out direct guide perform|noun behavior manner approach
+confirm|verb verify prove establish corroborate validate
+consider|verb think reflect weigh contemplate study
+consult|verb seek_advice see refer check confer with
+decide|verb choose determine resolve settle
+direct|adj straightforward plain frank clear explicit|verb guide manage lead head oversee
+discuss|verb talk about examine analyze review
+distinguish|verb differentiate separate set_apart tell_apart
+distribute|verb share divide allocate spread circulate
+doubt|noun uncertainty suspicion question reservation|verb question distrust challenge suspect
+draw|verb sketch depict attract lead pull move
+elect|verb choose select vote_for appoint decide
+enable|verb allow permit facilitate empower help
+ensure|verb guarantee secure make_certain confirm
+estimate|verb calculate assess determine evaluate measure|noun approximation assessment judgment calculation
+examine|verb investigate study assess analyze inspect
+execute|verb carry_out perform accomplish implement
+expand|verb grow increase develop extend widen enlarge
+expect|verb anticipate assume believe hope forecast
+explain|verb clarify describe account_for elaborate
+face|verb confront deal_with handle experience meet|noun front surface expression countenance appearance
+finish|verb complete end conclude terminate accomplish|noun end conclusion termination completion
+focus|verb concentrate direct center aim apply
+gain|verb obtain achieve earn win acquire get|noun benefit improvement increase profit
+gather|verb collect assemble compile accumulate meet
+get|verb obtain acquire receive collect gain achieve
+give|verb provide supply deliver offer present donate
+go|verb proceed advance move travel continue depart
+guide|verb lead direct manage oversee steer
+handle|verb manage deal_with control operate treat
+help|verb assist aid support facilitate back|noun aid assistance support
+identify|verb name recognize determine locate classify
+improve|verb better enhance advance develop strengthen
+include|verb incorporate contain comprise add cover
+increase|verb grow raise boost expand enhance add
+indicate|verb show suggest point_to reveal signal
+inform|verb tell notify advise alert communicate
+join|verb connect link combine unite attach
+judge|verb evaluate assess appraise weigh determine
+maintain|verb keep preserve sustain continue uphold
+manage|verb handle direct operate administer run
+mark|verb indicate note show point_out identify
+meet|verb encounter encounter face greet satisfy
+monitor|verb watch observe track check assess
+obtain|verb get acquire gain receive take secure
+organize|verb arrange coordinate set_up plan structure
+plan|verb arrange prepare design organize schedule|noun scheme design intention project
+prepare|verb get_ready arrange organize plan develop
+present|verb give show introduce display offer|adj current existing now here contemporary
+prevent|verb stop avoid hinder block preclude impede
+process|verb handle deal_with manage treat work|noun procedure method approach course system
+provide|verb supply give offer deliver contribute
+reach|verb attain achieve arrive_at extend contact
+record|verb note document write down track register|noun account log document history entry
+reflect|verb think ponder consider show display
+relate|verb connect associate describe tell account
+remove|verb take_out eliminate delete extract strip
+report|verb announce describe state account_for summarize|noun account summary description statement
+respond|verb reply answer react address acknowledge
+result|noun outcome consequence effect product|verb arise follow spring happen
+return|verb go_back restore come_back resume resume|noun response reply profit benefit gain
+review|verb examine analyze assess reconsider study|noun analysis assessment evaluation examination
+show|verb display demonstrate reveal exhibit indicate|noun performance exhibition presentation event
+speak|verb talk say communicate address voice
+suggest|verb propose recommend indicate advise imply
+support|verb help assist back sustain uphold|noun help assistance backing strength
+take|verb obtain grab seize carry bring
+try|verb attempt endeavor strive aim work|noun attempt effort trial attempt
+understand|verb comprehend grasp follow realize perceive
+use|verb employ utilize apply exercise|noun employment application practice
+value|verb appreciate prize esteem regard|noun worth importance merit quality
+verify|verb confirm check prove establish validate
+view|verb see observe consider examine study|noun opinion perspective standpoint
+work|verb operate function perform do|noun effort task job labor occupation
+write|verb compose draft author create
