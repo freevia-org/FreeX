@@ -583,14 +583,19 @@ public static class PptxPackageWriter
 
     private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme)
     {
-        var bodyPr = new XElement(A + "bodyPr",
-            new XAttribute("anchor", body.Anchor switch
+        // Write anchor only when explicitly set; omit when null (inherited from layout/master).
+        var bodyPr = new XElement(A + "bodyPr");
+        if (body.Anchor.HasValue)
+        {
+            bodyPr.Add(new XAttribute("anchor", body.Anchor.Value switch
             {
                 VerticalAnchor.Middle => "ctr",
                 VerticalAnchor.Bottom => "b",
+                VerticalAnchor.Top => "t",
                 VerticalAnchor.Distributed => "dist",
                 _ => "t"
             }));
+        }
 
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
         if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", (long)Math.Round(body.InsetLeftPt.Value * 12700)));

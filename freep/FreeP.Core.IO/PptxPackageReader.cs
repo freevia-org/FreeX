@@ -236,7 +236,7 @@ public static class PptxPackageReader
     private static SlideLayout ReadSlideLayout(
         ZipArchive archive, string layoutPath, string layoutId, string masterId, PresentationColorScheme scheme)
     {
-        var layout = new SlideLayout { Id = layoutId, MasterId = masterId };
+        var layout = new SlideLayout { Id = layoutId, MasterId = masterId, PartPath = layoutPath };
 
         var xml = LoadXml(archive, layoutPath);
         if (xml?.Root is null) return layout;
@@ -274,8 +274,8 @@ public static class PptxPackageReader
         if (layoutTarget is not null)
         {
             var layoutPath = ResolvePath(GetDirectory(slidePath), layoutTarget);
-            // Match with our loaded layouts by path-suffix heuristic
-            slide.LayoutId = MatchLayoutId(layoutPath, layouts);
+            // Match with our loaded layouts by exact normalized path (PartPath).
+            slide.LayoutId = MatchLayoutIdByPath(layoutPath, layouts);
         }
 
         var bg = xml.Root.Element(P + "bg");
@@ -291,17 +291,20 @@ public static class PptxPackageReader
         return slide;
     }
 
-    private static string? MatchLayoutId(string layoutPath, List<SlideLayout> layouts)
+    /// <summary>
+    /// Matches a slide to its layout by exact normalized OPC part path.
+    /// Falls back to the first layout if no exact match (should not happen in well-formed packages).
+    /// </summary>
+    private static string? MatchLayoutIdByPath(string layoutPath, List<SlideLayout> layouts)
     {
         if (layouts.Count == 0) return null;
-        // Match by last segment of path (e.g. "slideLayout1.xml")
+        // Primary: exact path match against the stored PartPath.
+        var match = layouts.Find(l => string.Equals(l.PartPath, layoutPath, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) return match.Id;
+        // Fallback: match by file name only (handles minor path normalization differences).
         var seg = layoutPath.Split('/').Last();
-        for (int i = 0; i < layouts.Count; i++)
-        {
-            // Layouts are loaded in order; try to infer index from path name
-            if (seg.Contains((i + 1).ToString()))
-                return layouts[i].Id;
-        }
+        match = layouts.Find(l => string.Equals(l.PartPath.Split('/').Last(), seg, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) return match.Id;
         return layouts[0].Id;
     }
 
@@ -370,6 +373,7 @@ public static class PptxPackageReader
 
         var spPr = pic.Element(P + "spPr");
         ReadSpPr(spPr, shape, scheme);
+        // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
 
         // blipFill → image
         var blip = pic.Element(P + "blipFill")?.Element(A + "blip");
@@ -476,12 +480,14 @@ public static class PptxPackageReader
         var bodyPr = txBody.Element(A + "bodyPr");
         if (bodyPr is not null)
         {
+            // Parse anchor only when explicitly present (null = inherit from layout/master).
             body.Anchor = bodyPr.Attribute("anchor")?.Value switch
             {
                 "ctr" => VerticalAnchor.Middle,
                 "b" => VerticalAnchor.Bottom,
+                "t" => VerticalAnchor.Top,
                 "dist" => VerticalAnchor.Distributed,
-                _ => VerticalAnchor.Top
+                _ => (VerticalAnchor?)null
             };
 
             if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = li / 12700.0;
@@ -490,6 +496,23 @@ public static class PptxPackageReader
             if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
+        }
+
+        // Parse a:lstStyle/a:lvl1pPr algn — carries per-level paragraph alignment defaults
+        // (e.g. "ctr" on layout ctrTitle placeholder).
+        var lstStyle = txBody.Element(A + "lstStyle");
+        if (lstStyle is not null)
+        {
+            var lvl1Algn = lstStyle.Element(A + "lvl1pPr")?.Attribute("algn")?.Value;
+            body.DefaultParaAlign = lvl1Algn switch
+            {
+                "ctr" => TextAlign.Center,
+                "r" => TextAlign.Right,
+                "just" => TextAlign.Justify,
+                "dist" => TextAlign.Distributed,
+                "l" => TextAlign.Left,
+                _ => (TextAlign?)null
+            };
         }
 
         foreach (var pEl in txBody.Elements(A + "p"))
