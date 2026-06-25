@@ -48,6 +48,9 @@ internal static class FreeWRibbon
                     g.Toggle("freew.italic",          "Italic");
                     g.Toggle("freew.underline",       "Underline");
                     g.Toggle("freew.strikethrough",   "Strikethrough");
+                    g.Toggle("freew.superscript",     "X²");
+                    g.Toggle("freew.subscript",       "X₂");
+                    g.Button("freew.highlight",       "Highlight");
                     g.Button("freew.grow-font",       "A↑");
                     g.Button("freew.shrink-font",     "A↓");
                     g.Button("freew.clear-formatting", "Clear");
@@ -63,6 +66,13 @@ internal static class FreeWRibbon
                     g.Button("freew.align-left",        "Left");
                     g.Button("freew.align-center",      "Center");
                     g.Button("freew.align-right",       "Right");
+                    g.Button("freew.align-justify",     "Justify");
+                    g.Button("freew.space-before",      "Space Before");
+                    g.Button("freew.space-after",       "Space After");
+                    g.Button("freew.line-spacing-1",    "1×");
+                    g.Button("freew.line-spacing-115",  "1.15×");
+                    g.Button("freew.line-spacing-15",   "1.5×");
+                    g.Button("freew.line-spacing-2",    "2×");
                     g.Toggle("freew.show-hide-para",    "¶");
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
