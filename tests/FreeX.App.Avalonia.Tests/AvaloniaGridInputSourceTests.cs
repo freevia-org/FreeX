@@ -44,8 +44,12 @@ public sealed class AvaloniaGridInputSourceTests
 
         source.Should().Contain("private CellAddress? _cellDragSelectionAnchor;");
         source.Should().Contain("BeginCellSelectionDrag(args, border, address);");
-        source.Should().Contain("border.PointerMoved += (_, args) => ContinueCellSelectionDrag(args, address);");
-        source.Should().Contain("border.PointerReleased += (_, args) => EndCellSelectionDrag(args);");
+        // Capture lives on the survivor host (not the per-cell Border, which RefreshShell rebuilds
+        // mid-drag), and a PointerCaptureLost handler aborts the drag if the OS revokes capture.
+        source.Should().Contain("_sheetGridHost.PointerMoved += CellSelectionCapturePointerMoved;");
+        source.Should().Contain("_sheetGridHost.PointerReleased += CellSelectionCapturePointerReleased;");
+        source.Should().Contain("_sheetGridHost.PointerCaptureLost += CellSelectionCapturePointerCaptureLost;");
+        source.Should().Contain("DetachCellSelectionDragHandlers();");
         source.Should().Contain("args.Pointer.Capture(capture);");
         source.Should().Contain("TryResolveCellPointerAddress(args, out var pointerAddress)");
         source.Should().Contain("SelectRangeFromAnchor(anchor, target);");

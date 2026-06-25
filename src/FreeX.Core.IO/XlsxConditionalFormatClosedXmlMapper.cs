@@ -88,45 +88,49 @@ internal static class XlsxConditionalFormatClosedXmlMapper
             if (cf.FormatIfTrue is null && cf.RuleType != CfRuleType.ColorScale && cf.RuleType != CfRuleType.DataBar)
                 continue;
 
-            var rangeStr = $"{CellAddress.NumberToColumnName(cf.AppliesTo.Start.Col)}{cf.AppliesTo.Start.Row}" +
-                           $":{CellAddress.NumberToColumnName(cf.AppliesTo.End.Col)}{cf.AppliesTo.End.Row}";
-
-            try
+            // Apply the rule to every range (primary + additional) so multi-range basic CF
+            // rules preserve all ranges instead of losing every range after the first.
+            foreach (var range in cf.AllRanges)
             {
-                var xlRange = xlSheet.Range(rangeStr);
-                var xlCf = xlRange.AddConditionalFormat();
+                var rangeStr = $"{CellAddress.NumberToColumnName(range.Start.Col)}{range.Start.Row}" +
+                               $":{CellAddress.NumberToColumnName(range.End.Col)}{range.End.Row}";
+                try
+                {
+                    var xlRange = xlSheet.Range(rangeStr);
+                    var xlCf = xlRange.AddConditionalFormat();
 
-                if (cf.RuleType == CfRuleType.Formula && !string.IsNullOrWhiteSpace(cf.FormulaText))
-                {
-                    var xlStyle = xlCf.WhenIsTrue("=" + cf.FormulaText);
-                    xlCf.SetStopIfTrue(cf.StopIfTrue);
-                    if (cf.FormatIfTrue is not null)
-                        ApplyStyle(xlStyle, cf.FormatIfTrue);
-                }
-                else if (cf.RuleType == CfRuleType.CellValue)
-                {
-                    var v1 = cf.Value1 ?? "";
-                    var v2 = cf.Value2 ?? "";
-                    IXLStyle xlStyle = cf.Operator switch
+                    if (cf.RuleType == CfRuleType.Formula && !string.IsNullOrWhiteSpace(cf.FormulaText))
                     {
-                        CfOperator.Equal => xlCf.WhenEquals(v1),
-                        CfOperator.NotEqual => xlCf.WhenNotEquals(v1),
-                        CfOperator.GreaterThan => xlCf.WhenGreaterThan(v1),
-                        CfOperator.GreaterThanOrEqual => xlCf.WhenEqualOrGreaterThan(v1),
-                        CfOperator.LessThan => xlCf.WhenLessThan(v1),
-                        CfOperator.LessThanOrEqual => xlCf.WhenEqualOrLessThan(v1),
-                        CfOperator.Between => xlCf.WhenBetween(v1, v2),
-                        CfOperator.NotBetween => xlCf.WhenNotBetween(v1, v2),
-                        _ => throw new InvalidOperationException("Unsupported conditional format operator.")
-                    };
-                    xlCf.SetStopIfTrue(cf.StopIfTrue);
-                    if (cf.FormatIfTrue is not null)
-                        ApplyStyle(xlStyle, cf.FormatIfTrue);
+                        var xlStyle = xlCf.WhenIsTrue("=" + cf.FormulaText);
+                        xlCf.SetStopIfTrue(cf.StopIfTrue);
+                        if (cf.FormatIfTrue is not null)
+                            ApplyStyle(xlStyle, cf.FormatIfTrue);
+                    }
+                    else if (cf.RuleType == CfRuleType.CellValue)
+                    {
+                        var v1 = cf.Value1 ?? "";
+                        var v2 = cf.Value2 ?? "";
+                        IXLStyle xlStyle = cf.Operator switch
+                        {
+                            CfOperator.Equal => xlCf.WhenEquals(v1),
+                            CfOperator.NotEqual => xlCf.WhenNotEquals(v1),
+                            CfOperator.GreaterThan => xlCf.WhenGreaterThan(v1),
+                            CfOperator.GreaterThanOrEqual => xlCf.WhenEqualOrGreaterThan(v1),
+                            CfOperator.LessThan => xlCf.WhenLessThan(v1),
+                            CfOperator.LessThanOrEqual => xlCf.WhenEqualOrLessThan(v1),
+                            CfOperator.Between => xlCf.WhenBetween(v1, v2),
+                            CfOperator.NotBetween => xlCf.WhenNotBetween(v1, v2),
+                            _ => throw new InvalidOperationException("Unsupported conditional format operator.")
+                        };
+                        xlCf.SetStopIfTrue(cf.StopIfTrue);
+                        if (cf.FormatIfTrue is not null)
+                            ApplyStyle(xlStyle, cf.FormatIfTrue);
+                    }
                 }
-            }
-            catch
-            {
-                // Skip rules that can't be serialized.
+                catch
+                {
+                    // Skip ranges that can't be serialized.
+                }
             }
         }
     }

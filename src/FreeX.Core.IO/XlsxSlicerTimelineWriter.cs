@@ -110,6 +110,36 @@ internal static class XlsxSlicerTimelineWriter
                 : null,
             element.Size is { } size ? new XAttribute("size", size.ToString(CultureInfo.InvariantCulture)) : null);
 
+    private static HashSet<int> GetUsedSlicerCacheIndices(ZipArchive archive, string directory, string stem)
+    {
+        var used = new HashSet<int>();
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName;
+            if (name.StartsWith(directory, StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                var file = name[directory.Length..^".xml".Length];
+                if (file.StartsWith(stem, StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(file[stem.Length..], out var index))
+                {
+                    used.Add(index);
+                }
+            }
+        }
+
+        return used;
+    }
+
+    private static int AllocateNextIndex(HashSet<int> usedIndices)
+    {
+        var index = 1;
+        while (usedIndices.Contains(index))
+            index++;
+        usedIndices.Add(index);
+        return index;
+    }
+
     private static void SaveSlicerTimelines(ZipArchive archive, Workbook workbook)
     {
         XNamespace freexNs = "https://freex.local/xlsx/slicerTimelineState";
@@ -124,14 +154,28 @@ internal static class XlsxSlicerTimelineWriter
             ? XlsxPackageXmlEditor.LoadXml(workbookRelsEntry)
             : new XDocument(new XElement(PackageRelNs + "Relationships"));
 
+        // Allocate cache indices against existing archive entries so we never overwrite an
+        // unrelated pre-existing slicerCache part. Track emitted cache names so a shared cache
+        // (multiple slicers pointing at the same CacheName) is written exactly once.
+        var usedSlicerCacheIndices = GetUsedSlicerCacheIndices(archive, "xl/slicerCaches/", "slicerCache");
+        var emittedSlicerCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         var slicerIndex = 1;
         foreach (var slicer in workbook.Slicers)
         {
             var slicerPath = string.IsNullOrWhiteSpace(slicer.PackagePart)
                 ? $"xl/slicers/slicer{slicerIndex}.xml"
                 : XlsxPackagePath.NormalizePackagePath(slicer.PackagePart);
-            var cachePath = $"xl/slicerCaches/slicerCache{slicerIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(slicer.CacheName) ? $"Slicer_{slicerIndex}" : slicer.CacheName;
+
+            // Reuse an already-written cache part for slicers that share the same CacheName.
+            var isNewCache = !emittedSlicerCachesByName.TryGetValue(cacheName, out var cachePath);
+            if (isNewCache)
+            {
+                var cacheIndex = AllocateNextIndex(usedSlicerCacheIndices);
+                cachePath = $"xl/slicerCaches/slicerCache{cacheIndex}.xml";
+                emittedSlicerCachesByName[cacheName] = cachePath;
+            }
 
             XlsxPackageXmlEditor.ReplaceXml(archive, slicerPath, new XDocument(
                 new XElement(SlicerNs + "slicers",
@@ -144,33 +188,37 @@ internal static class XlsxSlicerTimelineWriter
                         OptionalAttribute("style", slicer.StyleName),
                         new XAttribute("cache", cacheName),
                         new XAttribute("rowHeight", "228600")))));
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, new XDocument(
-                new XElement(SlicerNs + "slicerCacheDefinition",
-                    slicer.SelectedItems.Count == 0
-                        ? null
-                        : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
-                    new XAttribute("name", cacheName),
-                    OptionalAttribute("sourceName", slicer.SourceFieldName),
-                    new XElement(SlicerNs + "pivotTables",
-                        new XElement(
-                            SlicerNs + "pivotTable",
-                            OptionalAttribute("name", slicer.SourcePivotTableName),
-                            new XAttribute("tabId", "1"))),
-                    slicer.SelectedItems.Count == 0
-                        ? null
-                        : new XElement(SlicerNs + "extLst",
-                            new XElement(WorkbookNs + "ext",
-                                new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
-                                new XElement(freexNs + "selectedItems",
-                                    slicer.SelectedItems.Select(item =>
-                                        new XElement(freexNs + "selectedItem", new XAttribute("value", item)))))))));
+            if (isNewCache)
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
+                    new XElement(SlicerNs + "slicerCacheDefinition",
+                        slicer.SelectedItems.Count == 0
+                            ? null
+                            : new XAttribute(XNamespace.Xmlns + "x", WorkbookNs.NamespaceName),
+                        new XAttribute("name", cacheName),
+                        OptionalAttribute("sourceName", slicer.SourceFieldName),
+                        new XElement(SlicerNs + "pivotTables",
+                            new XElement(
+                                SlicerNs + "pivotTable",
+                                OptionalAttribute("name", slicer.SourcePivotTableName),
+                                new XAttribute("tabId", "1"))),
+                        slicer.SelectedItems.Count == 0
+                            ? null
+                            : new XElement(SlicerNs + "extLst",
+                                new XElement(WorkbookNs + "ext",
+                                    new XAttribute("uri", "{9F2C6F77-9A06-4E1E-AF41-4DB3CB03A6A6}"),
+                                    new XElement(freexNs + "selectedItems",
+                                        slicer.SelectedItems.Select(item =>
+                                            new XElement(freexNs + "selectedItem", new XAttribute("value", item)))))))));
+            }
+            var resolvedCachePath = cachePath!;
             var cacheRelationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
                 workbookRelsXml,
                 PackageRelNs,
                 "xl/workbook.xml",
-                cachePath,
+                resolvedCachePath,
                 SlicerCacheRelationshipType);
-            EnsurePartRelationship(archive, slicerPath, cachePath, SlicerCacheRelationshipType);
+            EnsurePartRelationship(archive, slicerPath, resolvedCachePath, SlicerCacheRelationshipType);
             EnsureWorkbookExtensionRef(
                 workbookXml,
                 SlicerNs,
@@ -196,9 +244,13 @@ internal static class XlsxSlicerTimelineWriter
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{slicerPath}", "application/vnd.ms-excel.slicer+xml");
-            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.slicerCache+xml");
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{resolvedCachePath}", "application/vnd.ms-excel.slicerCache+xml");
             slicerIndex++;
         }
+
+        // Allocate timeline cache indices against existing archive entries (same pattern as slicer caches).
+        var usedTimelineCacheIndices = GetUsedSlicerCacheIndices(archive, "xl/timelineCaches/", "timelineCache");
+        var emittedTimelineCachesByName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var timelineIndex = 1;
         foreach (var timeline in workbook.Timelines)
@@ -206,8 +258,16 @@ internal static class XlsxSlicerTimelineWriter
             var timelinePath = string.IsNullOrWhiteSpace(timeline.PackagePart)
                 ? $"xl/timelines/timeline{timelineIndex}.xml"
                 : XlsxPackagePath.NormalizePackagePath(timeline.PackagePart);
-            var cachePath = $"xl/timelineCaches/timelineCache{timelineIndex}.xml";
             var cacheName = string.IsNullOrWhiteSpace(timeline.CacheName) ? $"Timeline_{timelineIndex}" : timeline.CacheName;
+
+            // Reuse an already-written cache part for timelines that share the same CacheName.
+            var isNewTimelineCache = !emittedTimelineCachesByName.TryGetValue(cacheName, out var cachePath);
+            if (isNewTimelineCache)
+            {
+                var cacheIndex = AllocateNextIndex(usedTimelineCacheIndices);
+                cachePath = $"xl/timelineCaches/timelineCache{cacheIndex}.xml";
+                emittedTimelineCachesByName[cacheName] = cachePath;
+            }
 
             XlsxPackageXmlEditor.ReplaceXml(archive, timelinePath, new XDocument(
                 new XElement(TimelineNs + "timelines",
@@ -219,29 +279,37 @@ internal static class XlsxSlicerTimelineWriter
                         timeline.Level is { } lvl
                             ? new XAttribute("level", lvl.ToString(CultureInfo.InvariantCulture))
                             : null,
-                        timeline.Level is { } selLvl
+                        // G9: selectionLevel is independent from level; use SelectionLevel when set,
+                        // fall back to Level so files without a distinct selection level still emit
+                        // a valid selectionLevel attribute (Excel requires it when level is present).
+                        (timeline.SelectionLevel ?? timeline.Level) is { } selLvl
                             ? new XAttribute("selectionLevel", selLvl.ToString(CultureInfo.InvariantCulture))
                             : null,
                         timeline.ScrollPosition is { Length: > 0 } scrollPos
                             ? new XAttribute("scrollPosition", scrollPos + "T00:00:00")
                             : null))));
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, new XDocument(
-                new XElement(TimelineNs + "timelineCacheDefinition",
-                    new XAttribute("name", cacheName),
-                    OptionalAttribute("sourceName", timeline.SourceFieldName),
-                    OptionalAttribute("startDate", timeline.StartDate),
-                    OptionalAttribute("endDate", timeline.EndDate),
-                    OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
-                    OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
-                    new XElement(TimelineNs + "pivotTables",
-                        new XElement(TimelineNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
+            if (isNewTimelineCache)
+            {
+                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath!, new XDocument(
+                    new XElement(TimelineNs + "timelineCacheDefinition",
+                        new XAttribute("name", cacheName),
+                        OptionalAttribute("sourceName", timeline.SourceFieldName),
+                        OptionalAttribute("startDate", timeline.StartDate),
+                        OptionalAttribute("endDate", timeline.EndDate),
+                        OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
+                        OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
+                        new XElement(TimelineNs + "pivotTables",
+                            new XElement(TimelineNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
+            }
+
+            var resolvedTimelineCachePath = cachePath!;
             var cacheRelationshipId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
                 workbookRelsXml,
                 PackageRelNs,
                 "xl/workbook.xml",
-                cachePath,
+                resolvedTimelineCachePath,
                 TimelineCacheRelationshipType);
-            EnsurePartRelationship(archive, timelinePath, cachePath, TimelineCacheRelationshipType);
+            EnsurePartRelationship(archive, timelinePath, resolvedTimelineCachePath, TimelineCacheRelationshipType);
             EnsureWorkbookExtensionRef(
                 workbookXml,
                 TimelineNs,
@@ -267,7 +335,7 @@ internal static class XlsxSlicerTimelineWriter
             }
 
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{timelinePath}", "application/vnd.ms-excel.Timeline+xml");
-            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.ms-excel.TimelineCache+xml");
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{resolvedTimelineCachePath}", "application/vnd.ms-excel.TimelineCache+xml");
             timelineIndex++;
         }
 
