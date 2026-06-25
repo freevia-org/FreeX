@@ -958,6 +958,69 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_CellBorders_DistinctEdges_RoundTrip()
+    {
+        // A cell with per-edge borders (distinct style/colour/width on each edge) must survive the full
+        // write→read cycle so w:tcBorders is correctly emitted and parsed back into the model.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0] = new TableCell("bordered")
+        {
+            Borders = new CellBorders
+            {
+                Top    = new CellBorderEdge(BorderLineStyle.Double,  "#FF0000", 1.0),
+                Bottom = new CellBorderEdge(BorderLineStyle.Dashed,  "#0000FF", 0.75),
+                Left   = new CellBorderEdge(BorderLineStyle.Thick,   "#008000", 2.0),
+                Right  = new CellBorderEdge(BorderLineStyle.Dotted,  "#800000", 0.5),
+            }
+        };
+        table.Rows[0].Cells[1] = new TableCell("plain");
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        var borderedCell = readTable.Rows[0].Cells[0];
+        borderedCell.PlainText.Should().Be("bordered");
+        borderedCell.Borders.Should().NotBeNull();
+        borderedCell.Borders!.Top.Should().NotBeNull();
+        borderedCell.Borders.Top!.Style.Should().Be(BorderLineStyle.Double);
+        borderedCell.Borders.Top.ColorHex.Should().Be("#FF0000");
+        borderedCell.Borders.Bottom.Should().NotBeNull();
+        borderedCell.Borders.Bottom!.Style.Should().Be(BorderLineStyle.Dashed);
+        borderedCell.Borders.Bottom.ColorHex.Should().Be("#0000FF");
+        borderedCell.Borders.Left.Should().NotBeNull();
+        borderedCell.Borders.Left!.Style.Should().Be(BorderLineStyle.Thick);
+        borderedCell.Borders.Right.Should().NotBeNull();
+        borderedCell.Borders.Right!.Style.Should().Be(BorderLineStyle.Dotted);
+
+        // The plain cell must not pick up any borders.
+        var plainCell = readTable.Rows[0].Cells[1];
+        plainCell.PlainText.Should().Be("plain");
+        plainCell.Borders.Should().BeNull();
+    }
+
+    [Fact]
+    public void Table_CellTextDirection_AllValues_RoundTrip()
+    {
+        // Each CellTextDirection value (Horizontal / Rotate90 / Rotate270) must survive the full
+        // write→read cycle: w:textDirection is emitted only for non-horizontal directions and parsed back.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0] = new TableCell("h")   { TextDirection = CellTextDirection.Horizontal };
+        table.Rows[0].Cells[1] = new TableCell("r90")  { TextDirection = CellTextDirection.Rotate90 };
+        table.Rows[0].Cells[2] = new TableCell("r270") { TextDirection = CellTextDirection.Rotate270 };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Horizontal);
+        readTable.Rows[0].Cells[1].TextDirection.Should().Be(CellTextDirection.Rotate90);
+        readTable.Rows[0].Cells[2].TextDirection.Should().Be(CellTextDirection.Rotate270);
+    }
+
+    [Fact]
     public void Table_StyleToggles_RoundTrip()
     {
         var doc = new TextDocument();

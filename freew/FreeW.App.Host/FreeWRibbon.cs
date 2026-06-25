@@ -1089,6 +1089,7 @@ internal static class FreeWRibbon
                 tab.Group("table-style", "Table Style", "Y", 80, g =>
                 {
                     g.Medium("freew.cell-shading", "Shading", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill);
+                    g.Medium("freew.cell-borders", "Borders", RibbonCommandIconKind.Grid);
                 });
             })
             .ContextualTab("table-layout", "Table Layout",
@@ -1152,6 +1153,10 @@ internal static class FreeWRibbon
                     g.Medium("freew.cell-align-bottom-right", "Bottom Right", RibbonCommandIconKind.AlignRight);
                     g.RowBreak();
                     g.Medium("freew.table-cell-margins", "Cell Margins", RibbonCommandIconKind.Margins);
+                    g.RowBreak();
+                    g.Medium("freew.cell-text-direction-horizontal", "Horizontal", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.cell-text-direction-rotate90", "Rotate Text Up", RibbonCommandIconKind.AlignLeft);
+                    g.Medium("freew.cell-text-direction-rotate270", "Rotate Text Down", RibbonCommandIconKind.AlignLeft);
                 });
                 tab.Group("table-data", "Data", "D", 70, g =>
                 {
