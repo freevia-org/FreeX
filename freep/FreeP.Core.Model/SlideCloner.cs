@@ -221,14 +221,32 @@ public static class SlideCloner
         AdvanceAfterMs  = t.AdvanceAfterMs,
     };
 
-    private static ShapeAnimation CloneAnimation(ShapeAnimation a) => new()
+    private static ShapeAnimation CloneAnimation(ShapeAnimation a)
     {
-        ShapeId    = a.ShapeId,
-        Kind       = a.Kind,
-        Preset     = a.Preset,
-        Trigger    = a.Trigger,
-        DelayMs    = a.DelayMs,
-        DurationMs = a.DurationMs,
-        Direction  = a.Direction,
-    };
+        var copy = new ShapeAnimation
+        {
+            ShapeId       = a.ShapeId,
+            Kind          = a.Kind,
+            Preset        = a.Preset,
+            Trigger       = a.Trigger,
+            DelayMs       = a.DelayMs,
+            DurationMs    = a.DurationMs,
+            Direction     = a.Direction,
+            TriggerShapeId = a.TriggerShapeId,
+        };
+
+        if (a.Motion is not null)
+        {
+            var mp = new MotionPath
+            {
+                Origin   = a.Motion.Origin,
+                PtsTypes = a.Motion.PtsTypes,
+            };
+            foreach (var seg in a.Motion.Segments)
+                mp.Segments.Add(seg); // MotionPathSegment is immutable (init-only props)
+            copy.Motion = mp;
+        }
+
+        return copy;
+    }
 }

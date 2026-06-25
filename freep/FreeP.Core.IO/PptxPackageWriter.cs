@@ -577,13 +577,20 @@ public static class PptxPackageWriter
     {
         if (animations.Count == 0) return null;
 
-        // Build the main sequence build steps.
-        // Each animation that is OnClick starts a new click group; With/After attach to the previous group.
-        // Structure: p:timing > p:tnLst > p:par > p:cTn > p:childTnLst > p:seq > p:cTn > p:childTnLst > p:par*
-        // Each outer p:par = one click group; each inner p:par = one build item.
+        // Split animations into main-sequence and trigger groups.
+        var mainAnims    = animations.Where(a => a.TriggerShapeId is null).ToList();
+        var triggerAnims = animations
+            .Where(a => a.TriggerShapeId is not null)
+            .GroupBy(a => a.TriggerShapeId!.Value)
+            .ToList();
 
+        uint nodeId = 1;
+
+        // ── Main sequence ─────────────────────────────────────────────────────
+
+        // Build click-groups for the main sequence.
         var clickGroups = new List<List<ShapeAnimation>>();
-        foreach (var anim in animations)
+        foreach (var anim in mainAnims)
         {
             if (anim.Trigger == AnimationTrigger.OnClick || clickGroups.Count == 0)
                 clickGroups.Add(new List<ShapeAnimation> { anim });
@@ -591,20 +598,18 @@ public static class PptxPackageWriter
                 clickGroups[^1].Add(anim);
         }
 
-        uint nodeId = 1;
-
-        var seqChildTnLstItems = new List<XElement>();
+        var seqChildItems = new List<XElement>();
         foreach (var group in clickGroups)
-            seqChildTnLstItems.Add(BuildClickGroupEl(group, ref nodeId));
+            seqChildItems.Add(BuildClickGroupEl(group, ref nodeId));
 
-        var seqEl = new XElement(P + "seq",
+        var mainSeqEl = new XElement(P + "seq",
             new XAttribute("concurrent", "1"),
             new XAttribute("nextAc", "seek"),
             new XElement(P + "cTn",
                 new XAttribute("id", nodeId++),
                 new XAttribute("dur", "indefinite"),
                 new XAttribute("nodeType", "mainSeq"),
-                new XElement(P + "childTnLst", seqChildTnLstItems)));
+                new XElement(P + "childTnLst", seqChildItems)));
 
         var outerParCTn = new XElement(P + "cTn",
             new XAttribute("id", nodeId++),
@@ -617,23 +622,79 @@ public static class PptxPackageWriter
                     new XAttribute("evt", "onBegin"),
                     new XAttribute("delay", "indefinite"),
                     new XElement(P + "tn", new XAttribute("val", "0")))),
-            new XElement(P + "childTnLst", seqEl));
+            new XElement(P + "childTnLst", mainSeqEl));
 
-        // Wrap in the outer interactive par
         var outerPar = new XElement(P + "par",
             new XElement(P + "cTn",
                 new XAttribute("id", nodeId++),
                 new XAttribute("fill", "hold"),
                 new XElement(P + "stCondLst",
-                    new XElement(P + "cond",
-                        new XAttribute("delay", "0"))),
+                    new XElement(P + "cond", new XAttribute("delay", "0"))),
                 new XElement(P + "childTnLst",
-                    new XElement(P + "par",
-                        outerParCTn))));
+                    new XElement(P + "par", outerParCTn))));
+
+        // ── Trigger sequences ─────────────────────────────────────────────────
+
+        var triggerPars = new List<XElement>();
+        foreach (var group in triggerAnims)
+        {
+            var trigSpid = group.Key;
+            var trigSeqEl = BuildTriggerSequenceEl(group.ToList(), trigSpid, ref nodeId);
+            triggerPars.Add(trigSeqEl);
+        }
+
+        // Combine all top-level children into tnLst.
+        var tnLstChildren = new List<XElement> { outerPar };
+        tnLstChildren.AddRange(triggerPars);
 
         return new XElement(P + "timing",
-            new XElement(P + "tnLst",
-                outerPar));
+            new XElement(P + "tnLst", tnLstChildren));
+    }
+
+    /// <summary>
+    /// Builds a trigger (interactive) sequence for animations that fire when shapeId is clicked.
+    /// Emits a p:par > p:cTn > p:childTnLst > p:seq (with onClick stCond targeting triggerShapeId).
+    /// </summary>
+    private static XElement BuildTriggerSequenceEl(List<ShapeAnimation> anims, uint triggerShapeId, ref uint nodeId)
+    {
+        // Build click-groups within this trigger sequence.
+        var clickGroups = new List<List<ShapeAnimation>>();
+        foreach (var anim in anims)
+        {
+            if (anim.Trigger == AnimationTrigger.OnClick || clickGroups.Count == 0)
+                clickGroups.Add(new List<ShapeAnimation> { anim });
+            else
+                clickGroups[^1].Add(anim);
+        }
+
+        var seqChildItems = new List<XElement>();
+        foreach (var group in clickGroups)
+            seqChildItems.Add(BuildClickGroupEl(group, ref nodeId));
+
+        // The trigger p:seq has stCondLst/cond evt="onClick" tgtEl/spTgt spid=triggerShapeId.
+        var trigSeqEl = new XElement(P + "seq",
+            new XAttribute("concurrent", "1"),
+            new XAttribute("nextAc", "seek"),
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("dur", "indefinite"),
+                new XAttribute("nodeType", "interactiveSeq"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond",
+                        new XAttribute("evt", "onClick"),
+                        new XAttribute("delay", "0"),
+                        new XElement(P + "tgtEl",
+                            new XElement(P + "spTgt",
+                                new XAttribute("spid", triggerShapeId))))),
+                new XElement(P + "childTnLst", seqChildItems)));
+
+        return new XElement(P + "par",
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("fill", "hold"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond", new XAttribute("delay", "0"))),
+                new XElement(P + "childTnLst", trigSeqEl)));
     }
 
     private static XElement BuildClickGroupEl(List<ShapeAnimation> group, ref uint nodeId)
@@ -642,7 +703,6 @@ public static class PptxPackageWriter
         for (int i = 0; i < group.Count; i++)
         {
             var anim = group[i];
-            // First item in group: OnClick trigger (delay=indefinite); subsequent: WithPrevious or AfterPrevious
             var itemTrigger = i == 0 ? AnimationTrigger.OnClick : anim.Trigger;
             buildItems.Add(BuildBuildItemEl(anim, itemTrigger, ref nodeId));
         }
@@ -661,6 +721,10 @@ public static class PptxPackageWriter
 
     private static XElement BuildBuildItemEl(ShapeAnimation anim, AnimationTrigger triggerOverride, ref uint nodeId)
     {
+        // Motion-path animation: emit p:animMotion instead of p:set.
+        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+            return BuildMotionBuildItemEl(anim, triggerOverride, ref nodeId);
+
         var (presetClass, presetId) = PptxAnimationMap.AnimationPresetToOoxml(anim.Preset, anim.Kind);
         var subtypeAttr = PptxAnimationMap.AnimationDirectionToSubtype(anim.Direction);
 
@@ -679,14 +743,12 @@ public static class PptxPackageWriter
             new XAttribute("nodeType", "withEffect"),
         };
 
-        // Duration on the inner animation cTn
         var animCTn = new XElement(P + "cTn",
             new XAttribute("id", nodeId++),
             new XAttribute("dur", anim.DurationMs),
             new XElement(P + "stCondLst",
                 new XElement(P + "cond", new XAttribute("delay", "0"))));
 
-        // p:set element (most common — covers Appear and others)
         var setEl = new XElement(P + "set",
             new XElement(P + "cBhvr",
                 new XElement(P + "cTn",
@@ -709,6 +771,81 @@ public static class PptxPackageWriter
                             new XElement(P + "stCondLst",
                                 new XElement(P + "cond", new XAttribute("delay", "0"))),
                             new XElement(P + "childTnLst", animCTn, setEl))))));
+    }
+
+    /// <summary>
+    /// Emits a motion-path build item as a p:par containing p:animMotion.
+    /// </summary>
+    private static XElement BuildMotionBuildItemEl(ShapeAnimation anim, AnimationTrigger triggerOverride, ref uint nodeId)
+    {
+        string delayStr = triggerOverride == AnimationTrigger.OnClick
+            ? "indefinite"
+            : anim.DelayMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var pathStr = BuildMotionPathString(anim.Motion!);
+
+        var animMotionEl = new XElement(P + "animMotion",
+            new XAttribute("origin", anim.Motion!.Origin),
+            new XAttribute("path", pathStr),
+            anim.Motion.PtsTypes is not null
+                ? new XAttribute("ptsTypes", anim.Motion.PtsTypes)
+                : null,
+            new XElement(P + "cBhvr",
+                new XElement(P + "cTn",
+                    new XAttribute("id", nodeId++),
+                    new XAttribute("dur", anim.DurationMs),
+                    new XElement(P + "stCondLst",
+                        new XElement(P + "cond", new XAttribute("delay", "0")))),
+                new XElement(P + "tgtEl",
+                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
+
+        return new XElement(P + "par",
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("presetClass", "path"),
+                new XAttribute("presetID", "1"),
+                new XAttribute("presetSubtype", "0"),
+                new XAttribute("fill", "hold"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("nodeType", "withEffect"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond", new XAttribute("delay", delayStr))),
+                new XElement(P + "childTnLst",
+                    new XElement(P + "par",
+                        new XElement(P + "cTn",
+                            new XAttribute("id", nodeId++),
+                            new XAttribute("fill", "hold"),
+                            new XElement(P + "stCondLst",
+                                new XElement(P + "cond", new XAttribute("delay", "0"))),
+                            new XElement(P + "childTnLst", animMotionEl))))));
+    }
+
+    /// <summary>
+    /// Serializes a <see cref="MotionPath"/> back to the OOXML path mini-language string.
+    /// </summary>
+    private static string BuildMotionPathString(MotionPath mp)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var seg in mp.Segments)
+        {
+            switch (seg.Kind)
+            {
+                case MotionPathSegmentKind.Move:
+                    sb.Append(System.FormattableString.Invariant($"M {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Line:
+                    sb.Append(System.FormattableString.Invariant($"L {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Cubic:
+                    sb.Append(System.FormattableString.Invariant(
+                        $"C {seg.X1:F6} {seg.Y1:F6} {seg.X2:F6} {seg.Y2:F6} {seg.X:F6} {seg.Y:F6} "));
+                    break;
+                case MotionPathSegmentKind.Close:
+                    sb.Append("E ");
+                    break;
+            }
+        }
+        return sb.ToString().TrimEnd();
     }
 
     // ── slideLayout.xml ──────────────────────────────────────────────────────────
