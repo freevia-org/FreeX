@@ -1274,6 +1274,19 @@ public sealed class DocumentView : Control
 
     // ---- Model helpers --------------------------------------------------------------------------
 
+    /// <summary>
+    /// Called by the reviewing pane (and any future consumer) when it mutates the document model
+    /// directly outside the command bus — e.g. accept/reject tracked changes. Invalidates the layout
+    /// and visual and raises <see cref="DocumentChanged"/> exactly as an in-bus edit does. Note that
+    /// direct mutations bypass undo/redo, matching Word's accept/reject semantics.
+    /// </summary>
+    public void InvalidateAfterExternalMutation()
+    {
+        ClampCaret();
+        InvalidateLayoutAndVisual();
+        DocumentChanged?.Invoke();
+    }
+
     private void OnModelChanged()
     {
         InvalidateLayoutAndVisual();

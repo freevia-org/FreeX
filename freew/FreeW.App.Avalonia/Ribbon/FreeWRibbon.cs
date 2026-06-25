@@ -76,6 +76,11 @@ internal static class FreeWRibbon
                 {
                     g.Toggle("freew.navigationpane", "Navigation Pane");
                 }))
+            .Tab("review", "Review", "R", tab =>
+                tab.Group("tracking", "Tracking", null, 100, g =>
+                {
+                    g.Toggle("freew.reviewingpane", "Reviewing Pane");
+                }))
             .Build();
 
     public static RibbonCommandRegistry BuildRegistry(DocumentView editor, RibbonHostCallbacks callbacks)
@@ -116,6 +121,7 @@ internal static class FreeWRibbon
         registry.Register("freew.copy", new RelayCommand(callbacks.Copy));
         registry.Register("freew.paste", new RelayCommand(callbacks.Paste));
         registry.Register("freew.navigationpane", new RelayCommand(callbacks.ToggleNavigationPane));
+        registry.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
         return registry;
     }
 }
@@ -127,7 +133,8 @@ internal sealed record RibbonHostCallbacks(
     Action Copy,
     Action Paste,
     Action Backstage,
-    Action ToggleNavigationPane);
+    Action ToggleNavigationPane,
+    Action ToggleReviewingPane);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

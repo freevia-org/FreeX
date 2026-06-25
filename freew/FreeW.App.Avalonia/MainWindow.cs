@@ -45,6 +45,7 @@ public sealed class MainWindow : Window
     private readonly FileCommandWorkflow _fileWorkflow;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
+    private readonly ReviewingPane _reviewingPane;
     private Border? _findBar;
     private ScrollViewer? _scroller;
     private double _zoomScale = 1.0;
@@ -71,6 +72,7 @@ public sealed class MainWindow : Window
             save: () => SaveAsync().GetAwaiter().GetResult());
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow);
         _navPane = new NavigationPane(_editor);
+        _reviewingPane = new ReviewingPane(_editor);
 
         var root = new DockPanel();
 
@@ -102,15 +104,19 @@ public sealed class MainWindow : Window
         };
         _navPane.ScrollerRef = _scroller;
 
-        // Nav pane docked to the left; the workspace fills the remaining space.
+        // Nav pane docked left; reviewing pane docked right; workspace fills the remainder.
         DockPanel.SetDock(_navPane, Dock.Left);
         root.Children.Add(_navPane);
+
+        DockPanel.SetDock(_reviewingPane, Dock.Right);
+        root.Children.Add(_reviewingPane);
 
         var workspace = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)), Child = _scroller };
         root.Children.Add(workspace);
 
         _editor.DocumentChanged += OnEditorDocumentChanged;
         _editor.DocumentChanged += () => { if (_navPane.IsVisible) _navPane.Refresh(); };
+        _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
         _editor.CellEditRequested += async req =>
         {
@@ -145,6 +151,11 @@ public sealed class MainWindow : Window
     internal NavigationPane NavPane => _navPane;
 
     /// <summary>
+    /// Exposes the reviewing pane for tests that need to inspect its state headlessly.
+    /// </summary>
+    internal ReviewingPane ReviewingPane => _reviewingPane;
+
+    /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
     /// Wired to <c>freew.navigationpane</c> ribbon toggle.
     /// </summary>
@@ -153,6 +164,17 @@ public sealed class MainWindow : Window
         _navPane.IsVisible = !_navPane.IsVisible;
         if (_navPane.IsVisible)
             _navPane.Refresh();
+    }
+
+    /// <summary>
+    /// Show or hide the reviewing pane and refresh its tracked-changes list when making it visible.
+    /// Wired to <c>freew.reviewingpane</c> ribbon toggle.
+    /// </summary>
+    internal void ToggleReviewingPane()
+    {
+        _reviewingPane.IsVisible = !_reviewingPane.IsVisible;
+        if (_reviewingPane.IsVisible)
+            _reviewingPane.Refresh();
     }
 
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
@@ -179,7 +201,8 @@ public sealed class MainWindow : Window
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
             Backstage: () => _ = ShowBackstageAsync(),
-            ToggleNavigationPane: ToggleNavigationPane);
+            ToggleNavigationPane: ToggleNavigationPane,
+            ToggleReviewingPane: ToggleReviewingPane);
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
