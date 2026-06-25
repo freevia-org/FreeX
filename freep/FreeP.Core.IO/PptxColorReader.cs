@@ -1,0 +1,280 @@
+using System.Globalization;
+using System.Xml.Linq;
+using FreeP.Core.Model;
+
+namespace FreeP.Core.IO;
+
+/// <summary>
+/// Reads DrawingML color elements (a:solidFill, a:gradFill) from PresentationML XML,
+/// resolving scheme colors against a <see cref="PresentationColorScheme"/>.
+/// </summary>
+internal static class PptxColorReader
+{
+    internal static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+    /// <summary>
+    /// Tries to read a ThemeAwareColor from any color-bearing container element that contains
+    /// a:srgbClr or a:schemeClr. Returns null when no supported color child is found.
+    /// </summary>
+    public static ThemeAwareColor? TryReadColor(XElement? colorContainer, PresentationColorScheme scheme)
+    {
+        if (colorContainer is null) return null;
+
+        // a:srgbClr val="RRGGBB"
+        var srgb = colorContainer.Element(A + "srgbClr")?.Attribute("val")?.Value;
+        if (!string.IsNullOrWhiteSpace(srgb))
+        {
+            var rgb = ParseHexColor(srgb);
+            return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+        }
+
+        // a:schemeClr val="dk1|lt1|..."
+        var schemeClr = colorContainer.Element(A + "schemeClr");
+        if (schemeClr is not null)
+        {
+            var val = schemeClr.Attribute("val")?.Value;
+            if (TryMapSchemeColor(val, out var slot))
+            {
+                var lumMod = ReadPercentage(schemeClr.Element(A + "lumMod")?.Attribute("val")?.Value) ?? 1.0;
+                var lumOff = ReadPercentage(schemeClr.Element(A + "lumOff")?.Attribute("val")?.Value) ?? 0.0;
+
+                var baseColor = scheme[slot];
+                var resolved = ApplyLumModOff(baseColor, lumMod, lumOff);
+
+                return new ThemeAwareColor(resolved, new SchemeColorRef
+                {
+                    Slot = slot,
+                    LumMod = lumMod,
+                    LumOff = lumOff
+                });
+            }
+        }
+
+        // a:sysClr lastClr="RRGGBB" (window/windowText)
+        var sysClr = colorContainer.Element(A + "sysClr");
+        if (sysClr is not null)
+        {
+            var last = sysClr.Attribute("lastClr")?.Value;
+            if (!string.IsNullOrWhiteSpace(last))
+            {
+                var rgb = ParseHexColor(last);
+                return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads a ShapeFill from the parent element (spPr or similar). Returns null if no fill element found.</summary>
+    public static ShapeFill? TryReadFill(XElement spPr, PresentationColorScheme scheme)
+    {
+        // a:noFill
+        if (spPr.Element(A + "noFill") is not null)
+            return ShapeFill.None.Instance;
+
+        // a:solidFill
+        var solidFill = spPr.Element(A + "solidFill");
+        if (solidFill is not null)
+        {
+            var color = TryReadColor(solidFill, scheme);
+            return color is not null ? new ShapeFill.Solid(color) : null;
+        }
+
+        // a:gradFill — read first and last stops
+        var gradFill = spPr.Element(A + "gradFill");
+        if (gradFill is not null)
+        {
+            var gsLst = gradFill.Element(A + "gsLst");
+            var stops = gsLst?.Elements(A + "gs")
+                .OrderBy(g => ParseInt(g.Attribute("pos")?.Value))
+                .ToList();
+
+            if (stops is { Count: >= 2 })
+            {
+                // Each gs contains a color element directly or wrapped in a:solidFill.
+                var startColor = TryReadColor(stops[0].Element(A + "solidFill") ?? stops[0], scheme);
+                var endColor = TryReadColor(stops[^1].Element(A + "solidFill") ?? stops[^1], scheme);
+
+                if (startColor is not null && endColor is not null)
+                {
+                    // Read gradient angle from a:lin ang (in 1/60000 degree)
+                    var angAttr = gradFill.Element(A + "lin")?.Attribute("ang")?.Value;
+                    double angleDeg = 90; // default top→bottom
+                    if (long.TryParse(angAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var angRaw))
+                        angleDeg = angRaw / 60000.0;
+
+                    return new ShapeFill.Gradient(startColor, endColor, angleDeg);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads a ShapeOutline from an a:ln element. Returns null if element missing.</summary>
+    public static ShapeOutline? TryReadOutline(XElement? lnElement, PresentationColorScheme scheme)
+    {
+        if (lnElement is null) return null;
+
+        // a:noFill inside the line = no outline
+        if (lnElement.Element(A + "noFill") is not null)
+            return ShapeOutline.None.Instance;
+
+        var solidFill = lnElement.Element(A + "solidFill");
+        var color = solidFill is not null ? TryReadColor(solidFill, scheme) : null;
+        color ??= ThemeAwareColor.Black; // fallback
+
+        // w attribute in EMU; convert to points
+        var wAttr = lnElement.Attribute("w")?.Value;
+        double widthPt = 0.75;
+        if (long.TryParse(wAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wEmu) && wEmu > 0)
+            widthPt = wEmu / 12700.0;
+
+        // a:prstDash
+        var dashVal = lnElement.Element(A + "prstDash")?.Attribute("val")?.Value;
+        var dash = MapDash(dashVal);
+
+        return new ShapeOutline.Visible(color, widthPt, dash);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    internal static bool TryMapSchemeColor(string? value, out ThemeColorSlot slot)
+    {
+        slot = default;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        slot = value.Trim().ToLowerInvariant() switch
+        {
+            "dk1" or "tx1" => ThemeColorSlot.Dk1,
+            "lt1" or "bg1" => ThemeColorSlot.Lt1,
+            "dk2" or "tx2" => ThemeColorSlot.Dk2,
+            "lt2" or "bg2" => ThemeColorSlot.Lt2,
+            "accent1" => ThemeColorSlot.Accent1,
+            "accent2" => ThemeColorSlot.Accent2,
+            "accent3" => ThemeColorSlot.Accent3,
+            "accent4" => ThemeColorSlot.Accent4,
+            "accent5" => ThemeColorSlot.Accent5,
+            "accent6" => ThemeColorSlot.Accent6,
+            "hlink" => ThemeColorSlot.HLink,
+            "folhlink" => ThemeColorSlot.FolHLink,
+            _ => default
+        };
+
+        return value.Trim().ToLowerInvariant() is
+            "dk1" or "tx1" or
+            "lt1" or "bg1" or
+            "dk2" or "tx2" or
+            "lt2" or "bg2" or
+            "accent1" or "accent2" or "accent3" or "accent4" or "accent5" or "accent6" or
+            "hlink" or "folhlink";
+    }
+
+    internal static string ToSchemeColorString(ThemeColorSlot slot) =>
+        slot switch
+        {
+            ThemeColorSlot.Dk1 => "dk1",
+            ThemeColorSlot.Lt1 => "lt1",
+            ThemeColorSlot.Dk2 => "dk2",
+            ThemeColorSlot.Lt2 => "lt2",
+            ThemeColorSlot.Accent1 => "accent1",
+            ThemeColorSlot.Accent2 => "accent2",
+            ThemeColorSlot.Accent3 => "accent3",
+            ThemeColorSlot.Accent4 => "accent4",
+            ThemeColorSlot.Accent5 => "accent5",
+            ThemeColorSlot.Accent6 => "accent6",
+            ThemeColorSlot.HLink => "hlink",
+            ThemeColorSlot.FolHLink => "folHlink",
+            _ => "dk1"
+        };
+
+    internal static SrgbColor ApplyLumModOff(SrgbColor baseColor, double lumMod, double lumOff)
+    {
+        if (lumMod == 1.0 && lumOff == 0.0) return baseColor;
+
+        // Convert to HLS, apply, convert back
+        RgbToHls(baseColor, out var h, out var l, out var s);
+
+        l = Math.Clamp(l * lumMod + lumOff, 0.0, 1.0);
+
+        return HlsToRgb(h, l, s);
+    }
+
+    private static void RgbToHls(SrgbColor c, out double h, out double l, out double s)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b));
+        double min = Math.Min(r, Math.Min(g, b));
+        double delta = max - min;
+
+        l = (max + min) / 2.0;
+
+        if (delta < 1e-10) { h = 0; s = 0; return; }
+
+        s = l < 0.5 ? delta / (max + min) : delta / (2.0 - max - min);
+
+        if (max == r) h = ((g - b) / delta % 6.0) / 6.0;
+        else if (max == g) h = ((b - r) / delta + 2.0) / 6.0;
+        else h = ((r - g) / delta + 4.0) / 6.0;
+
+        if (h < 0) h += 1.0;
+    }
+
+    private static SrgbColor HlsToRgb(double h, double l, double s)
+    {
+        if (s < 1e-10)
+        {
+            var v = (byte)Math.Clamp(Math.Round(l * 255), 0, 255);
+            return new SrgbColor(v, v, v);
+        }
+
+        double q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+        double p = 2.0 * l - q;
+
+        return new SrgbColor(
+            HueToRgb(p, q, h + 1.0 / 3.0),
+            HueToRgb(p, q, h),
+            HueToRgb(p, q, h - 1.0 / 3.0));
+    }
+
+    private static byte HueToRgb(double p, double q, double t)
+    {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        double v = t < 1.0 / 6.0 ? p + (q - p) * 6.0 * t
+            : t < 1.0 / 2.0 ? q
+            : t < 2.0 / 3.0 ? p + (q - p) * (2.0 / 3.0 - t) * 6.0
+            : p;
+        return (byte)Math.Clamp(Math.Round(v * 255), 0, 255);
+    }
+
+    private static SrgbColor? ParseHexColor(string hex)
+    {
+        var normalized = hex.Trim().TrimStart('#');
+        if (normalized.Length != 6) return null;
+        if (!byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return null;
+        if (!byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return null;
+        if (!byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return null;
+        return new SrgbColor(r, g, b);
+    }
+
+    private static double? ReadPercentage(string? value) =>
+        long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+            ? Math.Clamp(v / 100000.0, 0, 2.0) // lumMod can exceed 1.0
+            : null;
+
+    private static int ParseInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+
+    private static OutlineDash MapDash(string? val) =>
+        val?.ToLowerInvariant() switch
+        {
+            "dash" => OutlineDash.Dash,
+            "dot" or "sysdot" => OutlineDash.Dot,
+            "dashdot" => OutlineDash.DashDot,
+            "lgdash" or "lgdashdot" or "lgdashdotdot" => OutlineDash.LongDash,
+            "sysdash" => OutlineDash.SystemDash,
+            "sysdashDot" => OutlineDash.SystemDashDot,
+            _ => OutlineDash.Solid
+        };
+}
