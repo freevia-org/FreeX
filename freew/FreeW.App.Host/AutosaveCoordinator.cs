@@ -66,11 +66,14 @@ internal sealed class AutosaveCoordinator
 
             if (recover)
             {
-                // Open the snapshot; only delete it when the load succeeds so a failed recovery
-                // does not also lose the snapshot file.
+                // Open the snapshot; delete it on success. On failure the snapshot is structurally
+                // unreadable (e.g. a truncated ZIP from a crashed write) — quarantine it so it is not
+                // re-offered on every launch, which otherwise loops the "Could not recover" error.
                 var loaded = _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
                 if (loaded)
                     AutosaveSnapshotStore.DeleteCandidate(candidate);
+                else
+                    AutosaveSnapshotStore.QuarantineCandidate(candidate);
             }
             // On decline ("No"): leave the candidate intact so it remains available for
             // "Recover Unsaved Documents" or the next startup prompt.
@@ -107,6 +110,10 @@ internal sealed class AutosaveCoordinator
             var recovered = _file.RecoverSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
             if (recovered)
                 AutosaveSnapshotStore.DeleteCandidate(candidate);
+            else
+                // Unreadable/corrupt snapshot — quarantine so "Recover Unsaved Documents" and the next
+                // startup prompt do not keep surfacing the same failure.
+                AutosaveSnapshotStore.QuarantineCandidate(candidate);
 
             return recovered;
         }
