@@ -18,7 +18,7 @@ public static partial class NumberFormatter
     private static readonly SimpleDateTimeFormatCacheEntry?[] SimpleDateTimeFormatCache =
         new SimpleDateTimeFormatCacheEntry[SimpleDateTimeFormatCacheSize];
 
-    private readonly record struct SimpleDateTimeFormatPlan(string NetFormat, int FractionalSecondPrecision);
+    private readonly record struct SimpleDateTimeFormatPlan(string NetFormat, int FractionalSecondPrecision, bool HasSecond);
 
     private sealed record SimpleDateTimeFormatCacheEntry(string ExcelFormat, SimpleDateTimeFormatPlan Plan);
 
@@ -80,6 +80,9 @@ public static partial class NumberFormatter
         {
             try
             {
+                // Use DateTime.FromOADate (not ExcelDateSystem.SerialToDate) so the
+                // roundtrip DateTime→ToOADate→FromOADate is lossless for modern dates.
+                // The 1900 phantom-leap-day correction only matters for regular date formats.
                 return NativeDigits(FormatSpecialDateTimeLocaleValue(DateTime.FromOADate(oaDate), specialDateTimeToken));
             }
             catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
@@ -98,7 +101,7 @@ public static partial class NumberFormatter
         cleanFmt = RemoveSpacingAndFillDirectives(directiveFormat.Format);
         try
         {
-            var dt = DateTime.FromOADate(oaDate);
+            var dt = ExcelDateSystem.SerialToDate(oaDate);
             if (IsDateTimeFormat(cleanFmt))
                 return NativeDigits(FormatDateTimeValue(dt, cleanFmt, dateTimeFormat));
             return NativeDigits(dt.ToString(cleanFmt, dateTimeFormat));
@@ -119,9 +122,11 @@ public static partial class NumberFormatter
 
         try
         {
-            var dt = DateTime.FromOADate(oaDate);
+            var dt = ExcelDateSystem.SerialToDate(oaDate);
             if (plan.FractionalSecondPrecision > 0)
                 dt = RoundToFractionalSecondPrecision(dt, plan.FractionalSecondPrecision);
+            else if (plan.HasSecond)
+                dt = RoundToNearestSecond(dt);
 
             text = dt.ToString(plan.NetFormat, CultureInfo.InvariantCulture.DateTimeFormat);
             return true;
@@ -156,7 +161,8 @@ public static partial class NumberFormatter
         TryGetFractionalSecondPrecision(cleanFormat, out var fractionalSecondPrecision);
         plan = new SimpleDateTimeFormatPlan(
             ExcelDateTimeFormatConverter.ToNetDateFormat(cleanFormat),
-            fractionalSecondPrecision);
+            fractionalSecondPrecision,
+            HasTimeToken(cleanFormat));
         Volatile.Write(ref SimpleDateTimeFormatCache[slot], new SimpleDateTimeFormatCacheEntry(excelFormat, plan));
         return true;
     }
@@ -249,10 +255,67 @@ public static partial class NumberFormatter
         DateTimeFormatInfo dateTimeFormat)
     {
         if (TryGetFractionalSecondPrecision(excelFormat, out int precision))
+        {
             dateTime = RoundToFractionalSecondPrecision(dateTime, precision);
+        }
+        else if (HasTimeToken(excelFormat))
+        {
+            // No fractional-second component in the format — Excel rounds to the nearest
+            // second at display time (e.g. 0:28.8 → "0:29" not "0:28", and near a minute
+            // boundary 44999.7s → "12:30" not "12:29"). Match that.
+            dateTime = RoundToNearestSecond(dateTime);
+        }
 
         var preparedFormat = ExcelDateTimeFormatConverter.PrepareFormat(excelFormat, dateTime, dateTimeFormat);
         return dateTime.ToString(ExcelDateTimeFormatConverter.ToNetDateFormat(preparedFormat), dateTimeFormat);
+    }
+
+    private static bool HasSecond(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (c == '\\') { i++; continue; }
+            if (!inQuote && (c == 's' || c == 'S'))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the format string contains any time token (h, m, s) outside of
+    /// quotes or escapes. Used to determine whether to round to the nearest second before
+    /// formatting, matching Excel's display-level rounding behaviour.
+    /// </summary>
+    private static bool HasTimeToken(string format)
+    {
+        bool inQuote = false;
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (c == '\\') { i++; continue; }
+            if (!inQuote && (c is 'h' or 'H' or 'm' or 'M' or 's' or 'S'))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static DateTime RoundToNearestSecond(DateTime dt)
+    {
+        // Round to nearest second (500ms threshold), matching Excel's display behaviour.
+        long ticks = dt.Ticks;
+        long halfSecondTicks = TimeSpan.TicksPerSecond / 2;
+        long secondTicks = TimeSpan.TicksPerSecond;
+        long remainder = ticks % secondTicks;
+        long rounded = remainder >= halfSecondTicks
+            ? ticks + (secondTicks - remainder)
+            : ticks - remainder;
+        return new DateTime(rounded, dt.Kind);
     }
 
     private static string FormatSpecialDateTimeLocaleValue(
@@ -345,6 +408,8 @@ public static partial class NumberFormatter
         double totalSecondsD = Math.Abs(value) * 86400.0;
         if (fractionalPrecision > 0)
             totalSecondsD = Math.Round(totalSecondsD, fractionalPrecision, MidpointRounding.AwayFromZero);
+        else
+            totalSecondsD = Math.Round(totalSecondsD, 0, MidpointRounding.AwayFromZero);
 
         long totalSeconds = (long)totalSecondsD;
         long totalMinutes = totalSeconds / 60;

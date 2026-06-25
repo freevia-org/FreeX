@@ -148,6 +148,10 @@ public static partial class NumberFormatter
                     ? plainNumericText
                     : ApplyNumericFormat(magnitude, sections[0]);
             singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
+            // Excel never displays negative zero: if sign is "-" but the formatted text
+            // is all zeros (after magnitude formatting), drop the sign.
+            if (sign == "-" && IsAllZeroText(singleSectionText))
+                sign = "";
             return new FormatResult(sign + singleSectionText);
         }
 
@@ -256,6 +260,10 @@ public static partial class NumberFormatter
         {
             try
             {
+                // Use DateTime.FromOADate for the special locale-token path so that the
+                // roundtrip DateTime→ToOADate→FromOADate is lossless for modern dates.
+                // ExcelDateSystem.SerialToDate is used for the regular date-format path
+                // (where the 1900 phantom-leap-day correction matters).
                 var dt = DateTime.FromOADate(value);
                 return NativeDigits(FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken));
             }
@@ -304,7 +312,7 @@ public static partial class NumberFormatter
         {
             try
             {
-                var dt = DateTime.FromOADate(value);
+                var dt = ExcelDateSystem.SerialToDate(value);
                 return NativeDigits(FormatDateTimeValue(dt, format, dateTimeFormat));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
@@ -344,7 +352,20 @@ public static partial class NumberFormatter
         try   { numStr = value.ToString(format, numberFormat); }
         catch { numStr = value.ToString(numberFormat); }
 
-        return NativeDigits(prefix + numStr + suffix);
+        // .NET may produce "-0" (or "-0.00" etc.) when a very small negative number
+        // rounds to zero under the format. Excel never displays negative zero — strip the sign.
+        if (numStr.Length > 1 && numStr[0] == '-' && IsNegativeZeroRepresentation(numStr, numberFormat))
+            numStr = numStr[1..];
+
+        var result = NativeDigits(prefix + numStr + suffix);
+
+        // Multi-section negative formats carry an explicit '-' in the prefix (e.g. the
+        // second section of "0;-0;0;…" is "-0"). If the entire formatted string is a
+        // negative-zero representation, drop the sign so Excel's behaviour is matched.
+        if (result.Length > 1 && result[0] == '-' && IsAllZeroText(result[1..]))
+            result = result[1..];
+
+        return result;
     }
 
     private static int CountActivePercentTokens(string format)
@@ -479,6 +500,46 @@ public static partial class NumberFormatter
         }
 
         return scaleCommas;
+    }
+
+    /// <summary>
+    /// Returns true when a formatted string like "-0" or "-0.00" is a negative-zero
+    /// representation — all digit characters after the minus sign are the numeric
+    /// separator characters or "0". Excel never displays negative zero; callers
+    /// should strip the leading "-" in that case.
+    /// </summary>
+    private static bool IsNegativeZeroRepresentation(string numStr, NumberFormatInfo fmt)
+    {
+        // numStr starts with "-"; scan the rest for any non-zero digit.
+        for (int i = 1; i < numStr.Length; i++)
+        {
+            char c = numStr[i];
+            // A non-zero digit means this is not "negative zero".
+            if (char.IsDigit(c) && c != '0')
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when every digit character in <paramref name="text"/> is '0'
+    /// (i.e. the text represents a zero value with possible non-digit decoration).
+    /// Used to detect "negative zero" situations such as "0", "0.00", "0,000".
+    /// </summary>
+    private static bool IsAllZeroText(string text)
+    {
+        bool hasDigit = false;
+        foreach (char c in text)
+        {
+            if (char.IsDigit(c))
+            {
+                hasDigit = true;
+                if (c != '0')
+                    return false;
+            }
+        }
+        return hasDigit;
     }
 
     private static bool IsEscaped(string text, int index)
