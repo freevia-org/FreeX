@@ -1076,6 +1076,29 @@ public sealed class DocumentView : Control
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
 
+    /// <summary>
+    /// Returns the effective run and paragraph formatting at the caret (or at the start of the
+    /// selection when there is one). This is the same formatting the ribbon state reflects.
+    /// The returned values are already resolved through the style chain so they are suitable for
+    /// passing directly to <see cref="RevealFormatting.Describe"/>. Read-only; never mutates the
+    /// document.
+    /// </summary>
+    public (RunFormatting Run, ParagraphFormatting Paragraph) GetCaretFormatting()
+    {
+        var paragraph = CurrentParagraph();
+        if (paragraph is null)
+            return (RunFormatting.Default, ParagraphFormatting.Default);
+
+        var cells = ParaCells(paragraph);
+        var rawRun = cells.Count == 0
+            ? (paragraph.Runs.Count > 0 ? paragraph.Runs[^1].Formatting : RunFormatting.Default)
+            : cells[Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1)].Fmt;
+
+        var resolvedRun = ResolveRunFmt(rawRun, paragraph);
+        var resolvedParagraph = ResolveParagraphFmt(paragraph);
+        return (resolvedRun, resolvedParagraph);
+    }
+
     /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
     public string SelectedText
     {
