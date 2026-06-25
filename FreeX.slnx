@@ -70,6 +70,7 @@
     <Project Path="tools/FreeX.FidelityCompare/FreeX.FidelityCompare.csproj" />
     <Project Path="tools/FreeX.FormatCrossCheck/FreeX.FormatCrossCheck.csproj" />
     <Project Path="tools/FreeX.FormatFidelity/FreeX.FormatFidelity.csproj" />
+    <Project Path="tools/FreeX.NumberFormatParity/FreeX.NumberFormatParity.csproj" />
     <Project Path="tools/FreeX.ParityCompare/FreeX.ParityCompare.csproj" />
     <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
