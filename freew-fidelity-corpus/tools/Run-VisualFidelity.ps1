@@ -46,8 +46,8 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 
 if (-not $FilesDir) { $FilesDir = Join-Path $scriptDir '..\files' }
-$FilesDir = (Resolve-Path $FilesDir).Path
-if (-not (Test-Path $FilesDir)) { throw "Files dir not found: $FilesDir (run tools/Fetch-FreeWFidelityCorpus.ps1)" }
+$FilesDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilesDir)
+if (-not (Test-Path $FilesDir)) { throw "Files dir not found: $FilesDir (run tools/Fetch-FreeWFidelityCorpus.ps1 or supply -FilesDir)" }
 
 if (-not $OutDir) {
     $stamp = (Get-Date -Format 'yyyyMMdd-HHmmss')
@@ -92,11 +92,23 @@ function Export-Pdf($docx, $pdf) {
     if ($useWord) {
         $word = New-Object -ComObject Word.Application
         $word.Visible = $false
+        # Automation hardening: without these, opening a doc that Word wants to write-lock
+        # (or any prompt-triggering content) pops a MODAL dialog that hangs headless COM.
+        try { $word.DisplayAlerts = 0 } catch {}              # wdAlertsNone
+        try { $word.AutomationSecurity = 3 } catch {}          # msoAutomationSecurityForceDisable (no macros)
         try {
-            $doc = $word.Documents.Open($docx, [ref]$false, [ref]$true)  # ConfirmConversions=false, ReadOnly=true
-            $doc.ExportAsFixedFormat($pdf, 17)  # 17 = wdExportFormatPDF
-            $doc.Close([ref]$false)
-        } finally { $word.Quit() }
+            # Open(FileName, ConfirmConversions=$false, ReadOnly=$true): ReadOnly avoids the
+            # write-lock / "~$" owner file and the "file in use" prompt that caused the hang.
+            $doc = $word.Documents.Open($docx, $false, $true)
+            # ExportAsFixedFormat: OutputFileName, ExportFormat=17 (wdExportFormatPDF)
+            $doc.ExportAsFixedFormat($pdf, 17)
+            $doc.Close($false)
+        } finally {
+            $word.Quit()
+            [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+        }
     }
     else {
         & soffice --headless --convert-to pdf --outdir (Split-Path $pdf) $docx | Out-Null
@@ -104,6 +116,17 @@ function Export-Pdf($docx, $pdf) {
 }
 
 # PDF -> PNG rasterizer (pick what's available)
+# FreeW.PdfRasterize is the preferred path on Windows when external tools are absent.
+$rasterizeProj = Join-Path $repoRoot 'freew\tools\FreeW.PdfRasterize\FreeW.PdfRasterize.csproj'
+$rasterizeDll  = Join-Path $repoRoot 'freew\tools\FreeW.PdfRasterize\bin\Release\net10.0-windows10.0.19041.0\FreeW.PdfRasterize.dll'
+
+function Ensure-PdfRasterizer {
+    if (-not (Test-Path $rasterizeDll)) {
+        Write-Host "  [build] FreeW.PdfRasterize ..." -ForegroundColor DarkGray
+        dotnet build $rasterizeProj -c Release --nologo | Out-Null
+    }
+}
+
 function Rasterize-Pdf($pdf, $outPrefix) {
     if (Have 'pdftoppm') { & pdftoppm -png -r 96 $pdf $outPrefix | Out-Null; return }
     if (Have 'magick') { & magick -density 96 $pdf "$outPrefix-%d.png" | Out-Null; return }
@@ -111,7 +134,28 @@ function Rasterize-Pdf($pdf, $outPrefix) {
         # soffice renders only the first page to png; acceptable fallback for page 1.
         & soffice --headless --convert-to png --outdir (Split-Path $outPrefix) $pdf | Out-Null; return
     }
-    throw "No PDF rasterizer (need pdftoppm, magick, or soffice). Baseline PDFs are in $pdfDir."
+    # Windows-native fallback: FreeW.PdfRasterize (Windows.Data.Pdf WinRT API).
+    # Outputs to a temp dir then renames files to match the <outPrefix>-N.png convention
+    # used by pdftoppm so the rest of the script sees consistent names.
+    if (Test-Path $rasterizeProj) {
+        Ensure-PdfRasterizer
+        $tmpOut = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
+        $null = New-Item -ItemType Directory -Force $tmpOut
+        $stem = [IO.Path]::GetFileNameWithoutExtension($pdf)
+        dotnet $rasterizeDll $pdf $tmpOut 816 1056 | Out-Null
+        # FreeW.PdfRasterize emits <stem>_pN.png (1-based).
+        # Copy them to <outPrefix>-N.png (pdftoppm-style, 1-based) so pairing logic
+        # finds them via the $baseDir wildcard filter "*.png".
+        # We also keep the _pN.png suffix because the diff loop sorts by Name and that
+        # already aligns with FidelityRender's <docname>_pN.png naming.
+        Get-ChildItem $tmpOut -Filter "${stem}_p*.png" | Sort-Object Name | ForEach-Object {
+            $dest = Join-Path (Split-Path $outPrefix) $_.Name
+            Copy-Item $_.FullName $dest -Force
+        }
+        Remove-Item $tmpOut -Recurse -Force
+        return
+    }
+    throw "No PDF rasterizer found. Install pdftoppm (Poppler), ImageMagick (magick), or LibreOffice (soffice) on PATH; or ensure freew/tools/FreeW.PdfRasterize exists in the repo. Baseline PDFs are in $pdfDir."
 }
 
 foreach ($f in $inputs) {
