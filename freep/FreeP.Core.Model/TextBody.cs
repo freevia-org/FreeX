@@ -103,6 +103,13 @@ public sealed class TextBody
 
     /// <summary>True if the shape auto-fits (resizes) to its text content.</summary>
     public bool AutoFit { get; set; }
+
+    /// <summary>
+    /// Full per-level list style from <c>a:lstStyle</c> on this text body.
+    /// Null when not present or not yet populated. Used by layout placeholders to carry
+    /// per-level defaults (alignment, font size, bullet) that the compositor inherits into slides.
+    /// </summary>
+    public TextStyleLevels? LstStyle { get; set; }
 }
 
 /// <summary>Vertical anchor (alignment) of a text body within its bounding box.</summary>
