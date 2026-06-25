@@ -251,7 +251,7 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = UiText.Get("WatchWindow_Watches"),
+                    Text = StripDisplayMnemonic(UiText.Get("WatchWindow_Watches")),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                 },
