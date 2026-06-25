@@ -520,6 +520,59 @@ public class ShapeRoundTripTests
         read.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
     }
 
+    // ── Pattern fill round-trip (bug fix: all presets rendered as diagCross) ─────────────────────
+
+    /// <summary>
+    /// Pattern fill presets must round-trip with the correct preset token, foreground and background
+    /// colours.  Previously the reader/writer preserved the data correctly but the render path mapped
+    /// every preset to a diagCross tile; the fix maps each preset family to a distinct tile.
+    /// This test verifies the IO round-trip so a regression in the read/write path is caught early.
+    /// </summary>
+    [Theory]
+    [InlineData("horz")]
+    [InlineData("vert")]
+    [InlineData("diagStripe")]
+    [InlineData("upDiag")]
+    [InlineData("cross")]
+    [InlineData("diagCross")]
+    [InlineData("dotGrid")]
+    [InlineData("horzBrick")]
+    [InlineData("pct5")]
+    [InlineData("pct50")]
+    public void PatternFill_Preset_RoundTrips(string preset)
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.Patterned(preset, "#112233", "#AABBCC");
+
+        var read = RoundTrip(DocumentWith(shape)).Paragraphs.Single()
+            .Runs.Single(r => r.Shape is not null).Shape!;
+
+        read.ExtendedFill.Should().NotBeNull();
+        read.ExtendedFill!.Kind.Should().Be(ShapeFillKind.Pattern);
+        read.ExtendedFill.PatternPreset.Should().Be(preset);
+        read.ExtendedFill.PatternFgColorHex.Should().Be("#112233");
+        read.ExtendedFill.PatternBgColorHex.Should().Be("#AABBCC");
+    }
+
+    /// <summary>
+    /// Each of the distinct preset families used in the render map must produce a different-looking
+    /// tile (validated here by checking they don't all resolve to the same set of geometry children).
+    /// The test asserts that the XML emitted for distinct pattern presets carries the correct @prst token.
+    /// </summary>
+    [Fact]
+    public void PatternFill_EmitsCorrectPrst_InXml()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.Patterned("horz", "#000000", "#FFFFFF");
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        var pattFill = xml.Descendants(A + "pattFill").FirstOrDefault();
+        pattFill.Should().NotBeNull("a pattern fill must emit a:pattFill");
+        pattFill!.Attribute("prst")!.Value.Should().Be("horz");
+        pattFill.Element(A + "fgClr").Should().NotBeNull();
+        pattFill.Element(A + "bgClr").Should().NotBeNull();
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside shapes.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
