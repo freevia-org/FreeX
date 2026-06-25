@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Chevron Up">
+  <rect width="32" height="32" fill="none"/>
+  <polygon points="16,8 28,24 4,24" fill="none" stroke="#4472C4" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="16" y="22" font-size="9" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">abc</text>
+</svg>

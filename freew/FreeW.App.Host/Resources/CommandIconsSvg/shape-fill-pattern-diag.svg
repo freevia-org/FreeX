@@ -1,0 +1,6 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Pattern Fill Diagonal">
+  <defs><pattern id="diag" patternUnits="userSpaceOnUse" width="6" height="6"><rect width="6" height="6" fill="white"/><line x1="0" y1="0" x2="6" y2="6" stroke="#4472C4" stroke-width="1"/><line x1="6" y1="0" x2="0" y2="6" stroke="#4472C4" stroke-width="1"/></pattern></defs>
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="14" fill="url(#diag)" stroke="#4472C4" stroke-width="1"/>
+  <rect x="4" y="24" width="24" height="4" fill="url(#diag)"/>
+</svg>

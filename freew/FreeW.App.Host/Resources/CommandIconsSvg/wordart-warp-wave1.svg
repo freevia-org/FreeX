@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Wave 1">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M4 18 Q10 10 16 18 Q22 26 28 18" fill="none" stroke="#4472C4" stroke-width="1.5"/>
+  <text x="16" y="20" font-size="11" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">abc</text>
+</svg>

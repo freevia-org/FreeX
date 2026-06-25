@@ -266,6 +266,166 @@ public class ShapeRoundTripTests
         xml.Descendants(A + "ln").Should().BeEmpty();
     }
 
+    // ── W24: ExtendedFill round-trip ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Shape_GradientFill_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.LinearGradient(5400000,
+            new GradientStop(0, "#4472C4"),
+            new GradientStop(100000, "#1F4E79"));
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.ExtendedFill.Should().NotBeNull();
+        s.ExtendedFill!.Kind.Should().Be(ShapeFillKind.Gradient);
+        s.ExtendedFill.GradientStops.Should().HaveCount(2);
+        s.ExtendedFill.GradientStops[0].ColorHex.Should().BeOneOf("#4472C4", "4472C4");
+        s.ExtendedFill.GradientStops[1].ColorHex.Should().BeOneOf("#1F4E79", "1F4E79");
+    }
+
+    [Fact]
+    public void Shape_GradientFill_EmitsAGradFillElement()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.LinearGradient(0,
+            new GradientStop(0, "#FF0000"),
+            new GradientStop(100000, "#0000FF"));
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        xml.Descendants(A + "gradFill").Should().NotBeEmpty("gradient fill should emit a:gradFill");
+        xml.Descendants(A + "solidFill").Where(e =>
+            e.Ancestors(Wps + "spPr").Any()).Should().BeEmpty("gradient fill must not also emit a solid fill");
+    }
+
+    [Fact]
+    public void Shape_PatternFill_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.Patterned("diagCross", "#4472C4", "#FFFFFF");
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.ExtendedFill.Should().NotBeNull();
+        s.ExtendedFill!.Kind.Should().Be(ShapeFillKind.Pattern);
+        s.ExtendedFill.PatternPreset.Should().Be("diagCross");
+    }
+
+    [Fact]
+    public void Shape_NoFill_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.ExtendedFill = ShapeFill.NoFill();
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.ExtendedFill.Should().NotBeNull();
+        s.ExtendedFill!.Kind.Should().Be(ShapeFillKind.NoFill);
+    }
+
+    // ── W24: ShapeEffectLst round-trip ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Shape_ShadowEffect_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowColorHex = "000000", ShadowBlurRad = 38100, ShadowDist = 38100 };
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.Effects.Should().NotBeNull();
+        s.Effects!.HasShadow.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_ShadowEffect_EmitsOuterShdwElement()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasShadow = true, ShadowColorHex = "FF0000", ShadowBlurRad = 50000 };
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        xml.Descendants(A + "outerShdw").Should().NotBeEmpty("shadow should emit a:outerShdw");
+    }
+
+    [Fact]
+    public void Shape_GlowEffect_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "4472C4", GlowRad = 50000 };
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.Effects.Should().NotBeNull();
+        s.Effects!.HasGlow.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_ReflectionEffect_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasReflection = true };
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.Effects.Should().NotBeNull();
+        s.Effects!.HasReflection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_SoftEdgeEffect_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasSoftEdge = true, SoftEdgeRad = 50000 };
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.Effects.Should().NotBeNull();
+        s.Effects!.HasSoftEdge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_BevelEffect_SurvivesRoundTrip()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasBevel = true, BevelW = 76200, BevelH = 76200 };
+
+        var read = RoundTrip(DocumentWith(shape));
+        var s = read.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        s.Effects.Should().NotBeNull();
+        s.Effects!.HasBevel.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Shape_BevelEffect_EmitsSp3dElement()
+    {
+        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
+        shape.Effects = new ShapeEffectLst { HasBevel = true, BevelW = 76200, BevelH = 76200 };
+
+        var xml = WriteDocumentXml(DocumentWith(shape));
+        xml.Descendants(A + "sp3d").Should().NotBeEmpty("bevel should emit a:sp3d");
+        xml.Descendants(A + "bevelT").Should().NotBeEmpty("bevel should emit a:bevelT inside sp3d");
+    }
+
+    [Fact]
+    public void Shape_ClearEffects_PreservesOtherProperties()
+    {
+        var shape = Shape.Preset(ShapeKind.Ellipse, widthPt: 80, heightPt: 40, fillColorHex: "#4472C4");
+        shape.Effects = new ShapeEffectLst { HasShadow = true };
+
+        var withEffects = RoundTrip(DocumentWith(shape));
+        var readShape = withEffects.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        readShape.Effects!.HasShadow.Should().BeTrue();
+
+        // Now clear effects
+        readShape.Effects = null;
+        var withoutEffects = RoundTrip(withEffects);
+        var finalShape = withoutEffects.Paragraphs.Single().Runs.Single(r => r.Shape is not null).Shape!;
+        finalShape.Effects.Should().BeNull("cleared effects should not be re-emitted");
+        finalShape.FillColorHex.Should().BeOneOf("#4472C4", "4472C4", "fill colour must survive effect clear");
+        finalShape.Kind.Should().Be(ShapeKind.Ellipse);
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside shapes.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

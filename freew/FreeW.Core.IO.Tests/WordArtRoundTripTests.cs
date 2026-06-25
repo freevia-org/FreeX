@@ -180,6 +180,82 @@ public class WordArtRoundTripTests
         read.Style.Should().Be(WordArtStyle.Shadow);
     }
 
+    // ── W24: Extended WordArt styles round-trip ───────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(WordArtStyle.FillGold)]
+    [InlineData(WordArtStyle.FillWhite)]
+    [InlineData(WordArtStyle.GradFillMulti)]
+    [InlineData(WordArtStyle.ChromeOne)]
+    [InlineData(WordArtStyle.ChromeTwo)]
+    [InlineData(WordArtStyle.ShadowOrange)]
+    [InlineData(WordArtStyle.GlowBlue)]
+    [InlineData(WordArtStyle.GlowGold)]
+    [InlineData(WordArtStyle.Reflection)]
+    [InlineData(WordArtStyle.Bevel)]
+    [InlineData(WordArtStyle.PatternFill)]
+    public void ExtendedWordArtStyle_SurvivesRoundTrip(WordArtStyle style)
+    {
+        var wordArt = new WordArt { Text = "Test", Style = style, FontSizePt = 36 };
+        var read = RoundTrip(DocumentWith(wordArt));
+
+        var wa = read.Paragraphs.Single().Runs.Single(r => r.WordArt is not null).WordArt!;
+        wa.Style.Should().Be(style, $"style {style} must survive round-trip");
+        wa.Text.Should().Be("Test");
+    }
+
+    // ── W24: WordArt Warp round-trip ─────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(WordArtWarp.ArchUp)]
+    [InlineData(WordArtWarp.ArchDown)]
+    [InlineData(WordArtWarp.Circle)]
+    [InlineData(WordArtWarp.Wave1)]
+    [InlineData(WordArtWarp.Wave2)]
+    [InlineData(WordArtWarp.Inflate)]
+    [InlineData(WordArtWarp.Deflate)]
+    [InlineData(WordArtWarp.ChevronUp)]
+    [InlineData(WordArtWarp.ChevronDown)]
+    [InlineData(WordArtWarp.FadeRight)]
+    [InlineData(WordArtWarp.FadeLeft)]
+    [InlineData(WordArtWarp.SlantUp)]
+    [InlineData(WordArtWarp.SlantDown)]
+    public void WordArtWarp_SurvivesRoundTrip(WordArtWarp warp)
+    {
+        var wordArt = new WordArt { Text = "Warp", Style = WordArtStyle.GradientFill, FontSizePt = 36, Warp = warp };
+        var read = RoundTrip(DocumentWith(wordArt));
+
+        var wa = read.Paragraphs.Single().Runs.Single(r => r.WordArt is not null).WordArt!;
+        wa.Warp.Should().Be(warp, $"warp {warp} must survive round-trip");
+    }
+
+    [Fact]
+    public void WordArtWarp_None_ProducesNoPrstTxWarp()
+    {
+        var wordArt = new WordArt { Text = "Plain", Style = WordArtStyle.FillBlue, FontSizePt = 36, Warp = WordArtWarp.None };
+        var xml = WriteDocumentXml(DocumentWith(wordArt));
+        xml.Descendants(A + "prstTxWarp").Should().BeEmpty("Warp=None must not emit a:prstTxWarp");
+    }
+
+    [Fact]
+    public void WordArtWarp_ArchUp_EmitsPrstTxWarpWithCorrectToken()
+    {
+        var wordArt = new WordArt { Text = "Arch", Style = WordArtStyle.FillBlue, FontSizePt = 36, Warp = WordArtWarp.ArchUp };
+        var xml = WriteDocumentXml(DocumentWith(wordArt));
+        var warpEl = xml.Descendants(A + "prstTxWarp").FirstOrDefault();
+        warpEl.Should().NotBeNull("Warp=ArchUp must emit a:prstTxWarp");
+        warpEl!.Attribute("prst")!.Value.Should().Be("textArchUp");
+    }
+
+    [Fact]
+    public void WordArtWarp_None_DefaultValuePreservesExistingStyle()
+    {
+        // A round-tripped WordArt with no warp set should remain Warp.None
+        var wordArt = new WordArt { Text = "NoWarp", Style = WordArtStyle.ShadowOrange, FontSizePt = 24 };
+        var read = RoundTrip(DocumentWith(wordArt));
+        read.Paragraphs.Single().Runs.Single(r => r.WordArt is not null).WordArt!.Warp.Should().Be(WordArtWarp.None);
+    }
+
     /// <summary>A minimal valid 1×1 PNG, used to exercise the image path alongside WordArt.</summary>
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");

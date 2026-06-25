@@ -1,5 +1,224 @@
 ﻿namespace FreeW.Core.Model;
 
+// ── Shape Fill union ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Discriminated kind of a <see cref="ShapeFill"/>.</summary>
+public enum ShapeFillKind { Solid, Gradient, Pattern, NoFill }
+
+/// <summary>A single gradient colour stop (0–100 000 position, RRGGBB hex colour).</summary>
+public sealed record GradientStop(int Position, string ColorHex);
+
+/// <summary>
+/// Fill descriptor for a <see cref="Shape"/>, replacing the previous <c>FillColorHex</c> string for
+/// gradient and pattern fills. Solid fills keep <c>FillColorHex</c> on the shape for backwards compat;
+/// this class is used when the fill is anything more complex than a solid colour.
+/// </summary>
+public sealed class ShapeFill
+{
+    public ShapeFillKind Kind { get; set; } = ShapeFillKind.Solid;
+
+    // Solid: reuses Shape.FillColorHex (not duplicated here)
+
+    // Gradient
+    /// <summary>Gradient stops (position 0–100 000, hex colour). Non-empty only for <see cref="ShapeFillKind.Gradient"/>.</summary>
+    public List<GradientStop> GradientStops { get; } = [];
+    /// <summary>Linear gradient angle in 60 000ths of a degree (5 400 000 = 90°). 0 = left→right.</summary>
+    public int GradientAngle { get; set; } = 0;
+
+    // Pattern
+    /// <summary>DrawingML preset pattern token (e.g. "pct5", "diagCross", "horzBrick"). Non-null only for <see cref="ShapeFillKind.Pattern"/>.</summary>
+    public string? PatternPreset { get; set; }
+    /// <summary>Pattern foreground (fgClr) RRGGBB hex. Null = theme default.</summary>
+    public string? PatternFgColorHex { get; set; }
+    /// <summary>Pattern background (bgClr) RRGGBB hex. Null = theme default.</summary>
+    public string? PatternBgColorHex { get; set; }
+
+    public static ShapeFill NoFill() => new ShapeFill { Kind = ShapeFillKind.NoFill };
+
+    public static ShapeFill LinearGradient(int angleDegree60k, params GradientStop[] stops)
+    {
+        var fill = new ShapeFill { Kind = ShapeFillKind.Gradient, GradientAngle = angleDegree60k };
+        foreach (var s in stops) fill.GradientStops.Add(s);
+        return fill;
+    }
+
+    public static ShapeFill Patterned(string preset, string? fg = null, string? bg = null) =>
+        new ShapeFill
+        {
+            Kind = ShapeFillKind.Pattern,
+            PatternPreset = preset,
+            PatternFgColorHex = fg,
+            PatternBgColorHex = bg,
+        };
+}
+
+// ── Shape Effects ─────────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Optional effects bundle applied to a <see cref="Shape"/> via <c>a:effectLst</c> in
+/// <c>wps:spPr</c>. Only fields that are non-default are emitted; all are optional.
+/// </summary>
+public sealed class ShapeEffectLst
+{
+    // Shadow (a:outerShdw)
+    public bool HasShadow { get; set; }
+    public int ShadowBlurRad { get; set; } = 50800;       // EMU (4 pt)
+    public int ShadowDist   { get; set; } = 38100;        // EMU (3 pt)
+    public int ShadowDir    { get; set; } = 2700000;      // 60k-degree (45°)
+    public string ShadowColorHex { get; set; } = "000000";
+    public int ShadowAlpha { get; set; } = 40000;         // out of 100 000
+
+    // Glow (a:glow)
+    public bool HasGlow { get; set; }
+    public int GlowRad { get; set; } = 50800;
+    public string GlowColorHex { get; set; } = "4472C4";
+    public int GlowAlpha { get; set; } = 60000;
+
+    // Soft Edges (a:softEdge)
+    public bool HasSoftEdge { get; set; }
+    public int SoftEdgeRad { get; set; } = 50800;
+
+    // Reflection (a:reflection)
+    public bool HasReflection { get; set; }
+    public int ReflectionBlurRad { get; set; } = 6350;
+    public int ReflectionAlpha { get; set; } = 50000;
+    public int ReflectionDir    { get; set; } = 5400000; // 90° = flip below
+    public int ReflectionDist   { get; set; } = 23000;
+
+    // Bevel / 3-D (a:sp3d — best-effort; carried through round-trip, rendered as border highlight)
+    public bool HasBevel { get; set; }
+    public int BevelW { get; set; } = 63500;              // EMU (5 pt)
+    public int BevelH { get; set; } = 63500;
+    public string BevelPresetType { get; set; } = "circle"; // circle / relaxedInset / angle / cross / divot
+}
+
+// ── Shape Style Preset ────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// A preset bundle of fill + outline + effect that together define a named shape style (like Word's
+/// Shape Styles gallery). Applying a preset sets all three fields on the target <see cref="Shape"/>.
+/// </summary>
+public sealed class ShapeStylePreset
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string? FillColorHex { get; init; }
+    public ShapeFill? Fill { get; init; }                    // non-null overrides FillColorHex
+    public string? OutlineColorHex { get; init; }
+    public double OutlineWidthPt { get; init; }
+    public string? OutlineDash { get; init; }
+    public ShapeEffectLst? Effect { get; init; }
+
+    // ── Catalog of 40 presets (theme-colour accent bands × effect tiers) ─────────────────────────
+    public static readonly IReadOnlyList<ShapeStylePreset> Catalog = BuildCatalog();
+
+    private static ShapeStylePreset[] BuildCatalog()
+    {
+        // Six accent colours × 6 tiers (no-fill/light/subtle/moderate/intense/dark) + 4 special = 40.
+        var accents = new[]
+        {
+            ("Accent1", "4472C4"), ("Accent2", "ED7D31"), ("Accent3", "A9D18E"),
+            ("Accent4", "FFC000"), ("Accent5", "5B9BD5"), ("Accent6", "70AD47"),
+        };
+        var list = new List<ShapeStylePreset>();
+        int n = 1;
+        foreach (var (label, hex) in accents)
+        {
+            // Tier 1: transparent fill, coloured outline
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Outlined – {label}",
+                Fill = ShapeFill.NoFill(), OutlineColorHex = "#" + hex, OutlineWidthPt = 1.0
+            });
+            // Tier 2: light tint fill, thin outline
+            var tint = LightenHex(hex, 0.7f);
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Light – {label}",
+                FillColorHex = "#" + tint, OutlineColorHex = "#" + hex, OutlineWidthPt = 0.75
+            });
+            // Tier 3: moderate fill, no outline
+            var mid = LightenHex(hex, 0.4f);
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Moderate – {label}",
+                FillColorHex = "#" + mid, OutlineColorHex = null, OutlineWidthPt = 0
+            });
+            // Tier 4: intense (full accent fill, white outline)
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Intense – {label}",
+                FillColorHex = "#" + hex, OutlineColorHex = "#FFFFFF", OutlineWidthPt = 0.75
+            });
+            // Tier 5: gradient fill
+            var dark = DarkenHex(hex, 0.3f);
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Gradient – {label}",
+                Fill = ShapeFill.LinearGradient(5400000,
+                    new GradientStop(0, "#" + hex),
+                    new GradientStop(100000, "#" + dark)),
+                OutlineColorHex = null
+            });
+            // Tier 6: accent fill + shadow
+            list.Add(new ShapeStylePreset
+            {
+                Id = $"shape-style-{n++}", Name = $"Shadow – {label}",
+                FillColorHex = "#" + hex, OutlineColorHex = null,
+                Effect = new ShapeEffectLst { HasShadow = true }
+            });
+        }
+        // 4 special presets to reach 40
+        list.Add(new ShapeStylePreset
+        {
+            Id = $"shape-style-{n++}", Name = "Dark 1 – No Fill",
+            Fill = ShapeFill.NoFill(), OutlineColorHex = "#242424", OutlineWidthPt = 1.5
+        });
+        list.Add(new ShapeStylePreset
+        {
+            Id = $"shape-style-{n++}", Name = "Subtle Effect – Dark",
+            FillColorHex = "#E7E6E6", OutlineColorHex = "#595959", OutlineWidthPt = 0.5
+        });
+        list.Add(new ShapeStylePreset
+        {
+            Id = $"shape-style-{n++}", Name = "Intense Effect – Dark",
+            FillColorHex = "#404040", OutlineColorHex = null,
+            Effect = new ShapeEffectLst { HasShadow = true }
+        });
+        list.Add(new ShapeStylePreset
+        {
+            Id = $"shape-style-{n}", Name = "Diagonal Hatch",
+            Fill = ShapeFill.Patterned("diagCross", "#4472C4", "#FFFFFF"),
+            OutlineColorHex = "#4472C4", OutlineWidthPt = 1.0
+        });
+        return [.. list];
+    }
+
+    private static string LightenHex(string hex, float amount)
+    {
+        var (r, g, b) = ParseHex(hex);
+        r = (byte)(r + (255 - r) * amount);
+        g = (byte)(g + (255 - g) * amount);
+        b = (byte)(b + (255 - b) * amount);
+        return $"{r:X2}{g:X2}{b:X2}";
+    }
+
+    private static string DarkenHex(string hex, float amount)
+    {
+        var (r, g, b) = ParseHex(hex);
+        r = (byte)(r * (1 - amount));
+        g = (byte)(g * (1 - amount));
+        b = (byte)(b * (1 - amount));
+        return $"{r:X2}{g:X2}{b:X2}";
+    }
+
+    private static (byte r, byte g, byte b) ParseHex(string hex)
+    {
+        hex = hex.TrimStart('#');
+        return (Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16));
+    }
+}
+
 // MODEL-DESIGN CHOICE (roadmap item W2, basic DrawingML shapes & text boxes):
 // A shape is modelled as an OPTIONAL INLINE RUN MARK (Run.Shape) exactly like Run.Equation / Run.Image.
 // This is the established FreeW pattern for every inline feature, so shapes flow through the existing run
@@ -106,6 +325,21 @@ public sealed class Shape
 
     /// <summary>True when this shape is floating (non-null Placement with Wrapping != Inline).</summary>
     public bool IsFloating => Placement?.IsFloating ?? false;
+
+    // ── New W24 fields ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Extended fill (gradient / pattern / no-fill). When non-null this overrides
+    /// <see cref="FillColorHex"/> for DOCX serialisation. Null means the simple solid-fill path.
+    /// </summary>
+    public ShapeFill? ExtendedFill { get; set; }
+
+    /// <summary>
+    /// Optional effects bundle (shadow / glow / soft-edge / reflection / bevel). Null means no effects.
+    /// Maps onto <c>a:effectLst</c> (and <c>a:sp3d</c> for bevel) inside <c>wps:spPr</c>.
+    /// </summary>
+    public ShapeEffectLst? Effects { get; set; }
+
     public Shape() { }
 
     public Shape(ShapeKind kind, double widthPt, double heightPt, string? fillColorHex = null)

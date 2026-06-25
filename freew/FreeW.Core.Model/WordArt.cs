@@ -17,20 +17,66 @@
 /// <summary>
 /// A WordArt decorative-text style preset. Each preset maps to a fixed bundle of DrawingML text effects
 /// applied to the WordArt run's <c>a:rPr</c> when written, and is inferred back from the presence of those
-/// effects when read:
-/// <list type="bullet">
-/// <item><see cref="FillBlue"/> â€” a solid blue text fill (<c>a:solidFill</c>), no outline/shadow.</item>
-/// <item><see cref="GradientFill"/> â€” a two-stop gradient text fill (<c>a:gradFill</c>).</item>
-/// <item><see cref="Outline"/> â€” a solid fill plus a coloured text outline (<c>a:ln</c>).</item>
-/// <item><see cref="Shadow"/> â€” a solid fill plus an outer shadow (<c>a:effectLst</c>/<c>a:outerShdw</c>).</item>
-/// </list>
+/// effects when read. The original four presets are preserved for backwards compatibility; the expanded
+/// set adds eleven further presets bringing the total to fifteen (covering Word's gallery columns A–F).
+/// Reader inference order: gradient → GradientFill / GradFillMulti, outline → Outline / ChromeOne / ChromeTwo,
+/// shadow → Shadow / ShadowOrange / GlowBlue / GlowGold, reflection → Reflection, bevel → Bevel, else → FillBlue/FillGold/FillWhite.
 /// </summary>
 public enum WordArtStyle
 {
+    // ── Original four ────────────────────────────────────────────────────────────────────────────
     FillBlue,
     GradientFill,
     Outline,
-    Shadow
+    Shadow,
+    // ── Extended set (11 additional) ─────────────────────────────────────────────────────────────
+    /// <summary>Solid gold / dark-yellow fill, no outline.</summary>
+    FillGold,
+    /// <summary>White/light fill for dark backgrounds, subtle outline.</summary>
+    FillWhite,
+    /// <summary>Multi-colour gradient (orange→red→purple), no outline.</summary>
+    GradFillMulti,
+    /// <summary>Dark outline only (no fill — text appears as letter outlines).</summary>
+    ChromeOne,
+    /// <summary>White fill + coloured outline (inverted outline style).</summary>
+    ChromeTwo,
+    /// <summary>Drop shadow with orange accent fill.</summary>
+    ShadowOrange,
+    /// <summary>Blue outer glow, dark fill.</summary>
+    GlowBlue,
+    /// <summary>Gold/amber outer glow, dark fill.</summary>
+    GlowGold,
+    /// <summary>Reflection below text, solid blue fill.</summary>
+    Reflection,
+    /// <summary>Bevel effect (3-D raised look), accent fill.</summary>
+    Bevel,
+    /// <summary>Pattern-fill text (diagonal cross hatch over blue).</summary>
+    PatternFill,
+}
+
+/// <summary>
+/// A text transform warp preset applied to the WordArt via <c>a:prstTxWarp/@prst</c>. Maps to the
+/// DrawingML preset text shapes that describe how the text path is warped. <see cref=”None”/> (the
+/// default) emits no <c>a:prstTxWarp</c> element. All others round-trip through DOCX unchanged.
+/// </summary>
+public enum WordArtWarp
+{
+    None,
+    ArchUp,           // textArchUp
+    ArchDown,         // textArchDown
+    Circle,           // textCircle
+    Button,           // textButton
+    Wave1,            // textWave1
+    Wave2,            // textWave2
+    Inflate,          // textInflate
+    Deflate,          // textDeflate
+    InflateBottom,    // textInflateBottom
+    ChevronUp,        // textChevron
+    ChevronDown,      // textChevronInverted
+    FadeRight,        // textFadeRight
+    FadeLeft,         // textFadeLeft
+    SlantUp,          // textSlantUp
+    SlantDown,        // textSlantDown
 }
 
 /// <summary>
@@ -64,6 +110,13 @@ public sealed class WordArt
 
     /// <summary>True when this WordArt is floating (non-null Placement with Wrapping != Inline).</summary>
     public bool IsFloating => Placement?.IsFloating ?? false;
+
+    // ── New W24 fields ─────────────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Text warp transform preset. <see cref="WordArtWarp.None"/> (default) emits no
+    /// <c>a:prstTxWarp</c>; any other value emits the matching preset token and is recovered on read.
+    /// </summary>
+    public WordArtWarp Warp { get; set; } = WordArtWarp.None;
 
     public WordArt() { }
 

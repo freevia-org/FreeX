@@ -2753,6 +2753,11 @@ public static class DocxReader
         if (!string.IsNullOrEmpty(waDocPrDescr))
             wordArt.AltText = waDocPrDescr;
 
+        // Warp: a:prstTxWarp/@prst inside wps:bodyPr (W24).
+        var bodyPrEl = wsp?.Element(Wps + "bodyPr");
+        var warpToken = bodyPrEl?.Element(A + "prstTxWarp")?.Attribute("prst")?.Value;
+        wordArt.Warp = WarpFromToken(warpToken);
+
         if (anchor is not null)
         {
             wordArt.Placement = new FloatingPlacement();
@@ -2763,21 +2768,113 @@ public static class DocxReader
 
     /// <summary>
     /// Infers a <see cref="WordArtStyle"/> from the DrawingML text effects under a WordArt run's w:rPr, or
-    /// null when none are present (so the element is a plain shape, not WordArt). Gradient fill → GradientFill,
-    /// solid fill + outline → Outline, solid fill + shadow → Shadow, plain solid fill → FillBlue.
+    /// null when none are present (so the element is a plain shape, not WordArt). The inference order matches
+    /// the writer's discriminators — see DocxWriter.WordArtEffects for the per-style signatures.
     /// </summary>
     private static WordArtStyle? InferWordArtStyle(XElement rPr)
     {
-        if (rPr.Element(A + "gradFill") is not null)
+        var hasGradFill    = rPr.Element(A + "gradFill") is not null;
+        var hasNoFill      = rPr.Element(A + "noFill")   is not null;
+        var hasLn          = rPr.Element(A + "ln")       is not null;
+        var hasEffectLst   = rPr.Element(A + "effectLst") is not null;
+        var hasSolidFill   = rPr.Element(A + "solidFill") is not null;
+        var hasPattFill    = rPr.Element(A + "pattFill")  is not null;
+        var hasSp3d        = rPr.Element(A + "sp3d")      is not null;
+
+        // Pattern fill is unambiguous
+        if (hasPattFill) return WordArtStyle.PatternFill;
+
+        // No fill + thick outline → ChromeOne
+        if (hasNoFill && hasLn) return WordArtStyle.ChromeOne;
+
+        // Gradient fills — differentiate by stop count
+        if (hasGradFill)
+        {
+            var stops = rPr.Element(A + "gradFill")!.Descendants(A + "gs").Count();
+            if (stops >= 3) return WordArtStyle.GradFillMulti;
+            // 2-stop: distinguish FillGold (gold start) from GradientFill (blue start)
+            var firstStopColor = rPr.Element(A + "gradFill")!.Descendants(A + "gs")
+                .FirstOrDefault()?.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value ?? "";
+            if (firstStopColor.StartsWith("C09", StringComparison.OrdinalIgnoreCase) ||
+                firstStopColor.StartsWith("c09", StringComparison.OrdinalIgnoreCase))
+                return WordArtStyle.FillGold;
             return WordArtStyle.GradientFill;
-        if (rPr.Element(A + "ln") is not null)
-            return WordArtStyle.Outline;
-        if (rPr.Element(A + "effectLst") is not null)
-            return WordArtStyle.Shadow;
-        if (rPr.Element(A + "solidFill") is not null)
+        }
+
+        // Solid fill variants
+        if (hasSolidFill)
+        {
+            var solidColor = rPr.Element(A + "solidFill")!.Descendants(A + "srgbClr")
+                .FirstOrDefault()?.Attribute("val")?.Value ?? "";
+
+            // White solidFill
+            if (solidColor.Equals("FFFFFF", StringComparison.OrdinalIgnoreCase))
+            {
+                // ChromeTwo has white + ln + effectLst with outerShdw children; FillWhite has an empty effectLst marker.
+                bool effectLstHasChildren = hasEffectLst &&
+                    rPr.Element(A + "effectLst")!.HasElements;
+                if (hasLn && effectLstHasChildren) return WordArtStyle.ChromeTwo;  // white+ln+shadow
+                if (hasLn)                         return WordArtStyle.FillWhite;   // white+thin ln (or empty effectLst)
+                return WordArtStyle.FillWhite;
+            }
+
+            // Dark fill
+            bool isDark = solidColor.Equals("242424", StringComparison.OrdinalIgnoreCase) ||
+                          solidColor.Equals("404040", StringComparison.OrdinalIgnoreCase);
+            if (isDark && hasEffectLst)
+            {
+                var glow = rPr.Element(A + "effectLst")?.Element(A + "glow");
+                if (glow is not null)
+                {
+                    var glowColor = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value ?? "";
+                    return glowColor.StartsWith("C09", StringComparison.OrdinalIgnoreCase)
+                        ? WordArtStyle.GlowGold : WordArtStyle.GlowBlue;
+                }
+            }
+
+            // Orange fill
+            bool isOrange = solidColor.Equals("ED7D31", StringComparison.OrdinalIgnoreCase);
+            if (isOrange)
+            {
+                if (hasSp3d) return WordArtStyle.Bevel;
+                if (hasEffectLst) return WordArtStyle.ShadowOrange;
+                return WordArtStyle.FillGold; // fallback
+            }
+
+            // Blue fill (WordArtFillColor = 1F4E79)
+            if (hasLn && hasEffectLst) return WordArtStyle.ChromeTwo;
+            if (hasLn)                 return WordArtStyle.Outline;
+            if (hasEffectLst)
+            {
+                var refl = rPr.Element(A + "effectLst")?.Element(A + "reflection");
+                if (refl is not null) return WordArtStyle.Reflection;
+                return WordArtStyle.Shadow;
+            }
             return WordArtStyle.FillBlue;
-        return null;
+        }
+
+        return null; // not WordArt
     }
+
+    private static WordArtWarp WarpFromToken(string? token) => token switch
+    {
+        "textArchUp"          => WordArtWarp.ArchUp,
+        "textArchDown"        => WordArtWarp.ArchDown,
+        "textCircle"          => WordArtWarp.Circle,
+        "textButton"          => WordArtWarp.Button,
+        "textWave1"           => WordArtWarp.Wave1,
+        "textWave2"           => WordArtWarp.Wave2,
+        "textInflate"         => WordArtWarp.Inflate,
+        "textDeflate"         => WordArtWarp.Deflate,
+        "textInflateBottom"   => WordArtWarp.InflateBottom,
+        "textChevron"         => WordArtWarp.ChevronUp,
+        "textChevronInverted" => WordArtWarp.ChevronDown,
+        "textFadeRight"       => WordArtWarp.FadeRight,
+        "textFadeLeft"        => WordArtWarp.FadeLeft,
+        "textSlantUp"         => WordArtWarp.SlantUp,
+        "textSlantDown"       => WordArtWarp.SlantDown,
+        _                     => WordArtWarp.None,
+    };
 
     /// <summary>
     /// Reads an inline DrawingML shape / text box (w:drawing → wp:inline → a:graphic/a:graphicData → wps:wsp)
@@ -2807,9 +2904,45 @@ public static class DocxReader
 
         var shape = new Shape(kind, widthPt, heightPt);
 
-        var fill = spPr?.Element(A + "solidFill")?.Element(A + "srgbClr")?.Attribute("val")?.Value;
-        if (!string.IsNullOrEmpty(fill) && !string.Equals(fill, "auto", StringComparison.Ordinal))
-            shape.FillColorHex = "#" + fill.TrimStart('#');
+        // Fill: extended fills (gradient / pattern / no-fill) take priority over solid.
+        var solidFillEl = spPr?.Element(A + "solidFill");
+        var gradFillEl  = spPr?.Element(A + "gradFill");
+        var pattFillEl  = spPr?.Element(A + "pattFill");
+        var noFillEl    = spPr?.Element(A + "noFill");
+
+        if (noFillEl is not null)
+        {
+            shape.ExtendedFill = ShapeFill.NoFill();
+        }
+        else if (gradFillEl is not null)
+        {
+            var gradFill = new ShapeFill { Kind = ShapeFillKind.Gradient };
+            var angAttr = gradFillEl.Element(A + "lin")?.Attribute("ang")?.Value;
+            if (int.TryParse(angAttr, out var ang)) gradFill.GradientAngle = ang;
+            foreach (var gs in gradFillEl.Descendants(A + "gs"))
+            {
+                var pos = int.TryParse(gs.Attribute("pos")?.Value, out var p) ? p : 0;
+                var c   = gs.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value ?? "000000";
+                gradFill.GradientStops.Add(new GradientStop(pos, "#" + c.TrimStart('#')));
+            }
+            shape.ExtendedFill = gradFill;
+        }
+        else if (pattFillEl is not null)
+        {
+            var pattFill = new ShapeFill { Kind = ShapeFillKind.Pattern };
+            pattFill.PatternPreset = pattFillEl.Attribute("prst")?.Value;
+            var fgHex = pattFillEl.Element(A + "fgClr")?.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(fgHex)) pattFill.PatternFgColorHex = "#" + fgHex.TrimStart('#');
+            var bgHex = pattFillEl.Element(A + "bgClr")?.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(bgHex)) pattFill.PatternBgColorHex = "#" + bgHex.TrimStart('#');
+            shape.ExtendedFill = pattFill;
+        }
+        else if (solidFillEl is not null)
+        {
+            var fill = solidFillEl.Element(A + "srgbClr")?.Attribute("val")?.Value;
+            if (!string.IsNullOrEmpty(fill) && !string.Equals(fill, "auto", StringComparison.Ordinal))
+                shape.FillColorHex = "#" + fill.TrimStart('#');
+        }
 
         // Outline: a:ln/@w (EMU) + a:solidFill/a:srgbClr/@val + optional a:prstDash/@val.
         var ln = spPr?.Element(A + "ln");
@@ -2823,6 +2956,56 @@ public static class DocxReader
                     shape.OutlineWidthPt = widthEmu / 12700.0;
                 shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
             }
+        }
+
+        // Effects: a:effectLst (shadow / glow / soft-edge / reflection) and a:sp3d (bevel).
+        var effectLstEl = spPr?.Element(A + "effectLst");
+        var sp3dEl      = spPr?.Element(A + "sp3d");
+        if (effectLstEl is not null || sp3dEl is not null)
+        {
+            var fx = new ShapeEffectLst();
+            if (effectLstEl?.Element(A + "outerShdw") is { } shdw)
+            {
+                fx.HasShadow = true;
+                if (int.TryParse(shdw.Attribute("blurRad")?.Value, out var br)) fx.ShadowBlurRad = br;
+                if (int.TryParse(shdw.Attribute("dist")?.Value, out var dist)) fx.ShadowDist = dist;
+                if (int.TryParse(shdw.Attribute("dir")?.Value, out var dir)) fx.ShadowDir = dir;
+                var sc = shdw.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+                if (!string.IsNullOrEmpty(sc)) fx.ShadowColorHex = sc;
+                var sa = shdw.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value;
+                if (int.TryParse(sa, out var salpha)) fx.ShadowAlpha = salpha;
+            }
+            if (effectLstEl?.Element(A + "glow") is { } glow)
+            {
+                fx.HasGlow = true;
+                if (int.TryParse(glow.Attribute("rad")?.Value, out var gr)) fx.GlowRad = gr;
+                var gc = glow.Descendants(A + "srgbClr").FirstOrDefault()?.Attribute("val")?.Value;
+                if (!string.IsNullOrEmpty(gc)) fx.GlowColorHex = gc;
+                var ga = glow.Descendants(A + "alpha").FirstOrDefault()?.Attribute("val")?.Value;
+                if (int.TryParse(ga, out var galpha)) fx.GlowAlpha = galpha;
+            }
+            if (effectLstEl?.Element(A + "softEdge") is { } softEdge)
+            {
+                fx.HasSoftEdge = true;
+                if (int.TryParse(softEdge.Attribute("rad")?.Value, out var ser)) fx.SoftEdgeRad = ser;
+            }
+            if (effectLstEl?.Element(A + "reflection") is { } refl)
+            {
+                fx.HasReflection = true;
+                if (int.TryParse(refl.Attribute("blurRad")?.Value, out var rbr)) fx.ReflectionBlurRad = rbr;
+                if (int.TryParse(refl.Attribute("alpha")?.Value, out var ra)) fx.ReflectionAlpha = ra;
+                if (int.TryParse(refl.Attribute("dir")?.Value, out var rd)) fx.ReflectionDir = rd;
+                if (int.TryParse(refl.Attribute("dist")?.Value, out var rdist)) fx.ReflectionDist = rdist;
+            }
+            if (sp3dEl?.Element(A + "bevelT") is { } bevel)
+            {
+                fx.HasBevel = true;
+                if (int.TryParse(bevel.Attribute("w")?.Value, out var bw)) fx.BevelW = bw;
+                if (int.TryParse(bevel.Attribute("h")?.Value, out var bh)) fx.BevelH = bh;
+                fx.BevelPresetType = bevel.Attribute("prst")?.Value ?? "circle";
+            }
+            if (fx.HasShadow || fx.HasGlow || fx.HasSoftEdge || fx.HasReflection || fx.HasBevel)
+                shape.Effects = fx;
         }
 
         // Alt text: wp:docPr/@descr on the inline or anchor drawing.

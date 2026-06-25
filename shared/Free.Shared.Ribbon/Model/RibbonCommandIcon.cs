@@ -235,7 +235,10 @@ public enum RibbonCommandIconKind
     Icons,
 
     // Review > Language glyph (added for character border/shading + proofing language W20).
-    Language
+    Language,
+
+    // Shape styles gallery glyph (added for FreeW shape styles gallery W24).
+    Styles
 }
 
 public enum RibbonCommandIconAccent

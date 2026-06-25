@@ -769,9 +769,16 @@ internal static class FreeWRibbon
                 });
                 tab.Group("drawing-styles", "Shape Styles", "H", 100, g =>
                 {
+                    // Shape Styles gallery — 40 theme-coloured presets (injected as live gallery at runtime)
+                    g.Medium("freew.shape-styles-gallery", "Shape Styles", RibbonCommandIconKind.Styles);
+
                     g.Medium("freew.shape-fill", "Shape Fill", RibbonCommandIconKind.Fill, accent: RibbonCommandIconAccent.Fill, menu: m =>
                     {
                         m.Item("freew.shape-fill-no-fill", "No Fill", "N");
+                        m.Separator();
+                        m.Item("freew.shape-fill-gradient-blue", "Gradient Blue", "G");
+                        m.Item("freew.shape-fill-gradient-orange", "Gradient Orange", "O");
+                        m.Item("freew.shape-fill-pattern-diag", "Pattern: Diagonal Cross", "D");
                     });
                     g.Medium("freew.shape-outline", "Shape Outline", RibbonCommandIconKind.Border, accent: RibbonCommandIconAccent.Border, menu: m =>
                     {
@@ -779,6 +786,17 @@ internal static class FreeWRibbon
                         m.Item("freew.shape-outline-solid", "Solid", "S");
                         m.Item("freew.shape-outline-dash", "Dash", "D");
                         m.Item("freew.shape-outline-dot", "Dot", "O");
+                    });
+                    // Shape Effects submenu (W24)
+                    g.Medium("freew.shape-effects", "Shape Effects", RibbonCommandIconKind.Effects, menu: m =>
+                    {
+                        m.Item("freew.shape-effects-none", "No Effects", "N");
+                        m.Separator();
+                        m.Item("freew.shape-effect-shadow", "Shadow", "S");
+                        m.Item("freew.shape-effect-glow", "Glow", "G");
+                        m.Item("freew.shape-effect-soft-edge", "Soft Edges", "E");
+                        m.Item("freew.shape-effect-reflection", "Reflection", "R");
+                        m.Item("freew.shape-effect-bevel", "Bevel", "B");
                     });
                 });
                 tab.Group("drawing-text", "Text", "X", 90, g =>
@@ -794,10 +812,43 @@ internal static class FreeWRibbon
                 {
                     g.Medium("freew.wordart-style", "WordArt Style", RibbonCommandIconKind.WordArt, menu: m =>
                     {
+                        // Original four
                         m.Item("freew.wordart-style-fill-blue", "Fill: Blue", "B");
                         m.Item("freew.wordart-style-gradient", "Gradient Fill", "G");
                         m.Item("freew.wordart-style-outline", "Outline", "O");
                         m.Item("freew.wordart-style-shadow", "Shadow", "S");
+                        m.Separator();
+                        // Extended eleven (W24)
+                        m.Item("freew.wordart-style-fill-gold", "Fill: Gold", "D");
+                        m.Item("freew.wordart-style-fill-white", "Fill: White", "W");
+                        m.Item("freew.wordart-style-grad-multi", "Gradient: Multicolour", "M");
+                        m.Item("freew.wordart-style-chrome-one", "Outline Only", "L");
+                        m.Item("freew.wordart-style-chrome-two", "White + Outline", "H");
+                        m.Item("freew.wordart-style-shadow-orange", "Shadow: Orange", "A");
+                        m.Item("freew.wordart-style-glow-blue", "Glow: Blue", "U");
+                        m.Item("freew.wordart-style-glow-gold", "Glow: Gold", "I");
+                        m.Item("freew.wordart-style-reflection", "Reflection", "F");
+                        m.Item("freew.wordart-style-bevel", "Bevel", "V");
+                        m.Item("freew.wordart-style-pattern", "Pattern Fill", "P");
+                    });
+                    // Text Effects > Transform (W24 — warp presets)
+                    g.Medium("freew.wordart-transform", "Text Effects: Transform", RibbonCommandIconKind.WordArt, menu: m =>
+                    {
+                        m.Item("freew.wordart-warp-none", "No Transform", "N");
+                        m.Separator();
+                        m.Item("freew.wordart-warp-arch-up", "Arch Up", "A");
+                        m.Item("freew.wordart-warp-arch-down", "Arch Down", "D");
+                        m.Item("freew.wordart-warp-circle", "Circle", "C");
+                        m.Item("freew.wordart-warp-wave1", "Wave 1", "W");
+                        m.Item("freew.wordart-warp-wave2", "Wave 2", "V");
+                        m.Item("freew.wordart-warp-inflate", "Inflate", "I");
+                        m.Item("freew.wordart-warp-deflate", "Deflate", "E");
+                        m.Item("freew.wordart-warp-chevron-up", "Chevron Up", "U");
+                        m.Item("freew.wordart-warp-chevron-down", "Chevron Down", "H");
+                        m.Item("freew.wordart-warp-fade-right", "Fade Right", "F");
+                        m.Item("freew.wordart-warp-fade-left", "Fade Left", "L");
+                        m.Item("freew.wordart-warp-slant-up", "Slant Up", "S");
+                        m.Item("freew.wordart-warp-slant-down", "Slant Down", "T");
                     });
                 });
                 tab.Group("drawing-arrange", "Arrange", "A", 80, g =>

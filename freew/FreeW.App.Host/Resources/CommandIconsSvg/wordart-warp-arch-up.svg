@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Arch Up">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M4 22 Q16 6 28 22" fill="none" stroke="#4472C4" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <text x="10" y="20" font-size="10" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="700">a</text>
+  <text x="15" y="16" font-size="10" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="700">b</text>
+  <text x="20" y="20" font-size="10" fill="#1F4E79" font-family="Segoe UI,Arial,sans-serif" font-weight="700">c</text>
+</svg>
