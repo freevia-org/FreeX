@@ -6332,8 +6332,47 @@ public sealed class DocumentView : RichTextBox
                 paraFmt.SuppressAutoHyphens,
                 paragraph.SectionBreak);
 
-        foreach (var run in paragraph.Runs)
-            wpf.Inlines.Add(BuildRun(run, paragraph, document));
+        // Drop-cap detection: the first text run whose FontSizePt is at or above the drop-cap
+        // threshold (42 pt by default) is treated as a drop cap. WPF's Floater (inline-level
+        // float) is used to sink the large letter into the left margin so subsequent inline
+        // content wraps to its right — the standard FlowDocument drop-cap pattern.
+        // Limitation: the Floater reserves a column-width proportional to its content; pixel-
+        // perfect N-line depth matching Word's exact line wrapping is not achievable without a
+        // custom panel, but the visual result is correct (letter is dropped and body wraps).
+        var runs = paragraph.Runs;
+        var firstTextIdx = runs.FindIndex(r => r.Text.Length > 0);
+        var hasDropCap = !inTableCell
+            && firstTextIdx >= 0
+            && (runs[firstTextIdx].Formatting.FontSizePt ?? 0) >= DropCap.DefaultSizePt
+            && runs.Count > firstTextIdx + 1;
+
+        if (hasDropCap)
+        {
+            // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
+            for (var i = 0; i < firstTextIdx; i++)
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+
+            // Build the cap run and host it in a Floater so body text wraps around it.
+            var capInline = BuildRun(runs[firstTextIdx], paragraph, document);
+            var capPara = new WpfParagraph(capInline) { Margin = new Thickness(0, 0, 4, 0) };
+            var floater = new System.Windows.Documents.Floater(capPara)
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+                // Width is sized to the cap's em: FontSizePt * PxPerPoint * 1.1 gives a little
+                // breathing room. NaN lets WPF size it to the content, which works correctly.
+                Width = double.NaN,
+            };
+            wpf.Inlines.Add(floater);
+
+            // Emit the remaining runs after the cap.
+            for (var i = firstTextIdx + 1; i < runs.Count; i++)
+                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document));
+        }
+        else
+        {
+            foreach (var run in runs)
+                wpf.Inlines.Add(BuildRun(run, paragraph, document));
+        }
 
         return wpf;
     }
@@ -7771,8 +7810,11 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Build a StackPanel containing the image element on top and a vertically-flipped semi-transparent
-    /// reflection copy below it (separated by <paramref name="distPx"/> pixels).
+    /// Build a StackPanel containing the image element on top and a vertically-flipped fading
+    /// reflection copy below it (separated by <paramref name="distPx"/> pixels). The reflection
+    /// fades from opaque near the object to fully transparent at the bottom, matching Word's look,
+    /// via a vertical <see cref="System.Windows.Media.LinearGradientBrush"/> applied as an
+    /// <see cref="System.Windows.UIElement.OpacityMask"/>.
     /// </summary>
     private static System.Windows.Controls.StackPanel BuildReflectionContainer(
         FrameworkElement imageRoot, double widthPx, double heightPx,
@@ -7789,14 +7831,25 @@ public sealed class DocumentView : RichTextBox
             AlignmentY = System.Windows.Media.AlignmentY.Top
         };
 
+        // Fade gradient: opaque at the top of the reflection (near the image) → transparent at
+        // the bottom. Applied as an OpacityMask so the reflection fades rather than sitting at
+        // a flat half-opacity — this matches Word's "reflection" visual appearance.
+        var fadeMask = new System.Windows.Media.LinearGradientBrush(
+            new System.Windows.Media.GradientStopCollection
+            {
+                new(Color.FromArgb((byte)(reflOpacity * 255), 0, 0, 0), 0.0),
+                new(Color.FromArgb(0, 0, 0, 0), 1.0),
+            },
+            new System.Windows.Point(0, 0), new System.Windows.Point(0, 1));
+
         var reflRect = new System.Windows.Shapes.Rectangle
         {
             Width  = totalW,
             Height = totalH,
             Fill   = vBrush,
-            Opacity = reflOpacity,
-            // Vertical flip via RenderTransform.
+            // Vertical flip via RenderTransform; Opacity removed — the OpacityMask handles fade.
             RenderTransform = new System.Windows.Media.ScaleTransform(1, -1, totalW / 2, totalH / 2),
+            OpacityMask = fadeMask,
             Margin = new Thickness(0, distPx, 0, 0)
         };
 
@@ -8210,27 +8263,131 @@ public sealed class DocumentView : RichTextBox
         return brush;
     }
 
-    /// <summary>Renders a pattern fill as a hatched DrawingBrush (best-effort; only "diagCross" patterned distinctly).</summary>
+    /// <summary>
+    /// Renders a DrawingML preset pattern fill as a tiled <see cref="System.Windows.Media.DrawingBrush"/>.
+    /// Each distinct preset group (horizontal, vertical, diagonal, cross, dot, etc.) maps to a visually
+    /// distinct tile so patterns are distinguishable from each other and from solid fills. The previous
+    /// implementation used a single diagCross tile for all presets.
+    /// </summary>
     private static System.Windows.Media.DrawingBrush BuildPatternBrush(ShapeFill fill)
     {
         TryParseColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
         TryParseColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
-        // Simple cross-hatch tile regardless of exact preset — renders distinctly from solid fills.
-        var drawing = new System.Windows.Media.DrawingGroup();
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(
-            new SolidColorBrush(bg), null,
-            new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, 8, 8))));
-        var linePen = new System.Windows.Media.Pen(new SolidColorBrush(fg), 1);
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
-            new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-        drawing.Children.Add(new System.Windows.Media.GeometryDrawing(null, linePen,
-            new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
-        return new System.Windows.Media.DrawingBrush(drawing)
+
+        var preset = fill.PatternPreset ?? string.Empty;
+        var fgBrush = new SolidColorBrush(fg);
+        var pen = new System.Windows.Media.Pen(fgBrush, 1);
+
+        // Build a tile drawing based on the preset family.
+        // Tile is 8×8 device-independent pixels; complex patterns use 12×12.
+        System.Windows.Media.Drawing tile;
+
+        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
         {
-            TileMode   = System.Windows.Media.TileMode.Tile,
-            Viewport   = new System.Windows.Rect(0, 0, 8, 8),
+            // Horizontal lines
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
+            tile = g;
+        }
+        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
+        {
+            // Vertical lines
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
+            tile = g;
+        }
+        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
+        {
+            // Diagonal top-left to bottom-right
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
+            tile = g;
+        }
+        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
+        {
+            // Diagonal bottom-left to top-right
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 8), new System.Windows.Point(8, 0))));
+            tile = g;
+        }
+        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
+        {
+            // Cross (horizontal + vertical grid)
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
+            tile = g;
+        }
+        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "pct90")
+        {
+            // Dotted / dot grid — single dot per cell
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(fgBrush, null,
+                new System.Windows.Media.EllipseGeometry(new System.Windows.Point(4, 4), 1, 1)));
+            tile = g;
+        }
+        else if (preset is "horzBrick" or "divot" or "weave")
+        {
+            // Brick — alternating horizontal dashes
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 12, 8));
+            var thinPen = new System.Windows.Media.Pen(fgBrush, 0.5);
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(12, 0))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 4), new System.Windows.Point(12, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(3, 4))));
+            // Vertical grout lines at offsets
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 0), new System.Windows.Point(6, 4))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(0, 8))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(12, 4), new System.Windows.Point(12, 8))));
+            tile = g;
+            // 12-wide tile — return early with custom viewport
+            return new System.Windows.Media.DrawingBrush(tile)
+            {
+                TileMode      = System.Windows.Media.TileMode.Tile,
+                Viewport      = new System.Windows.Rect(0, 0, 12, 8),
+                ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
+            };
+        }
+        else
+        {
+            // Default / diagCross — covers "diagCross", "ltDiagCross", "dkDiagCross", and unknowns.
+            var g = new System.Windows.Media.DrawingGroup();
+            g.Children.Add(BgRect(bg, 8, 8));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
+            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
+                new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
+            tile = g;
+        }
+
+        return new System.Windows.Media.DrawingBrush(tile)
+        {
+            TileMode      = System.Windows.Media.TileMode.Tile,
+            Viewport      = new System.Windows.Rect(0, 0, 8, 8),
             ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
         };
+
+        static System.Windows.Media.GeometryDrawing BgRect(Color c, double w, double h) =>
+            new(new SolidColorBrush(c), null,
+                new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, w, h)));
     }
 
     /// <summary>
@@ -8317,7 +8474,16 @@ public sealed class DocumentView : RichTextBox
                                                  new(Color.FromRgb(0xC0, 0x00, 0x00), 0.5),
                                                  new(Color.FromRgb(0x70, 0x30, 0xA0), 1),
                                              }, 90), null),
-            WordArtStyle.ChromeOne   => (System.Windows.Media.Brushes.Transparent, null),
+            // ChromeOne: Word renders a metallic silver-to-white gradient. Brushes.Transparent
+            // produced a zero-height invisible TextBlock; use a visible chrome gradient instead.
+            WordArtStyle.ChromeOne   => (new System.Windows.Media.LinearGradientBrush(
+                                            new System.Windows.Media.GradientStopCollection
+                                            {
+                                                new(Color.FromRgb(0xC0, 0xC0, 0xC0), 0),
+                                                new(Color.FromRgb(0xFF, 0xFF, 0xFF), 0.35),
+                                                new(Color.FromRgb(0xA0, 0xA8, 0xB0), 0.65),
+                                                new(Color.FromRgb(0xE8, 0xE8, 0xE8), 1),
+                                            }, 90), null),
             WordArtStyle.ChromeTwo   => (System.Windows.Media.Brushes.White,
                                             Shadow(Color.FromRgb(0x1F, 0x4E, 0x79))),
             WordArtStyle.ShadowOrange=> (new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),

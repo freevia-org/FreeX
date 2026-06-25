@@ -3776,4 +3776,78 @@ public class DocxRoundTripTests
         stream.Position = 0;
         return DocxReader.Read(stream);
     }
+
+    // ── Em-dash / non-ASCII punctuation round-trip (bug fix: encoding mis-decode) ─────────────────
+
+    /// <summary>
+    /// Em dashes, en dashes, curly quotes and ellipsis must survive a write→read round-trip
+    /// with their Unicode code points intact. The bug category: UTF-8 bytes interpreted as
+    /// Windows-1252 would turn U+2014 (—) into the three-character sequence â€" and similar.
+    /// Root cause established: the DocxWriter writes via XDocument.Save (UTF-8 + declaration)
+    /// and the DocxReader reads via XmlReader (respects the declaration) — both are correct.
+    /// This test acts as a regression guard so any future change to encoding paths stays honest.
+    /// </summary>
+    [Theory]
+    [InlineData("em dash", "—")]
+    [InlineData("en dash", "–")]
+    [InlineData("left double quote", "“")]
+    [InlineData("right double quote", "”")]
+    [InlineData("left single quote", "‘")]
+    [InlineData("right single quote", "’")]
+    [InlineData("ellipsis", "…")]
+    [InlineData("mixed non-ASCII", "Hello—World – “quoted” and …")]
+    public void NonAsciiPunctuation_RoundTrips_WithCorrectCodePoints(string _, string text)
+    {
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run(text));
+        doc.Blocks.Add(para);
+
+        var read = RoundTrip(doc);
+
+        var recovered = read.Blocks.OfType<Paragraph>().First().Runs.First().Text;
+        recovered.Should().Be(text, $"Unicode character(s) must survive write→read without encoding corruption");
+    }
+
+    /// <summary>
+    /// Confirms the em-dash is stored as the Unicode codepoint U+2014 in the emitted XML
+    /// (not as UTF-8 byte sequence interpreted as Windows-1252 mojibake â€").
+    /// </summary>
+    [Fact]
+    public void EmDash_StoredAsUnicodeCodePointInXml()
+    {
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("word—word"));
+        doc.Blocks.Add(para);
+
+        var xml = WriteDocumentXml(doc);
+        var tText = string.Concat(xml.Descendants(
+            System.Xml.Linq.XName.Get("t", "http://schemas.openxmlformats.org/wordprocessingml/2006/main"))
+            .Select(t => t.Value));
+
+        // The text must contain the actual em-dash character, not the Latin-1 mojibake sequence.
+        tText.Should().Contain("—");
+        tText.Should().NotContain("â", "that would indicate UTF-8 bytes mis-decoded as Latin-1 (â)");
+    }
+
+    /// <summary>
+    /// Non-ASCII punctuation typed via AutoCorrect (em-dash from `--`, smart quotes, ellipsis)
+    /// must also survive a save→open cycle. This verifies the full write→read path, not just
+    /// in-memory state.
+    /// </summary>
+    [Fact]
+    public void AutoCorrectPunctuation_SurvivesSaveOpen()
+    {
+        // Simulate text that would be produced by AutoCorrect: em-dash, en-dash, smart quotes,
+        // ellipsis all in one paragraph.
+        const string text = "“Hello” — world’s … en–dash";
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(new Run(text));
+        doc.Blocks.Add(para);
+
+        var read = RoundTrip(doc);
+        read.Blocks.OfType<Paragraph>().First().Runs.First().Text.Should().Be(text);
+    }
 }
