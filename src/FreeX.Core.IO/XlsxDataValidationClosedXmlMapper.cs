@@ -241,7 +241,13 @@ internal static class XlsxDataValidationClosedXmlMapper
                 (uint)rangeAddress.LastAddress.RowNumber,
                 (uint)rangeAddress.LastAddress.ColumnNumber));
 
-    private static string ToA1Range(GridRange range) =>
-        $"{CellAddress.NumberToColumnName(range.Start.Col)}{range.Start.Row}" +
-        $":{CellAddress.NumberToColumnName(range.End.Col)}{range.End.Row}";
+    private static string ToA1Range(GridRange range)
+    {
+        var startCol = CellAddress.NumberToColumnName(range.Start.Col);
+        var start    = $"{startCol}{range.Start.Row}";
+        if (range.Start.Row == range.End.Row && range.Start.Col == range.End.Col)
+            return start;   // single-cell: "A1" not "A1:A1"
+        var endCol = CellAddress.NumberToColumnName(range.End.Col);
+        return $"{start}:{endCol}{range.End.Row}";
+    }
 }

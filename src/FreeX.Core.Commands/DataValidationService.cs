@@ -430,17 +430,29 @@ public static partial class DataValidationService
         var original = sheet.GetCell(address)?.Clone();
         try
         {
+            // Write the candidate value into the cell so Formula1 can read it via its cell reference.
             sheet.SetCell(address, value);
+
             var formulaText = dv.Formula1.TrimStart();
             if (!formulaText.StartsWith('='))
                 formulaText = "=" + formulaText;
 
-            var result = new FormulaEvaluator().Evaluate(formulaText, sheet, workbook);
+            // Parse once so we can shift relative references from the rule's anchor cell
+            // (AppliesTo.Start) to the cell actually being validated, mirroring the way
+            // Excel evaluates conditional-format formula rules across a multi-cell range.
+            var ast = FormulaEvaluator.ParseFormula(formulaText);
+            var anchor = dv.AppliesTo.Start;
+            if (anchor != address)
+                ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
+
+            var result = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address);
+
+            // Excel treats FALSE, 0, and any error/blank as invalid.
             var passes = result switch
             {
-                BoolValue b => b.Value,
+                BoolValue b   => b.Value,
                 NumberValue n => Math.Abs(n.Value) > double.Epsilon,
-                _ => false
+                _             => false
             };
 
             return passes ? null : dv.ErrorMessage ?? "Value does not satisfy the custom validation rule.";

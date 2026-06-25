@@ -430,14 +430,22 @@ internal static class XlsxDataValidationNativeMetadataMapper
     private static string ToSqref(DataValidation validation)
     {
         if (validation.AdditionalRanges.Count == 0)
-            return validation.AppliesTo.ToString();
+            return RangeToSqrefPart(validation.AppliesTo);
 
-        var builder = new StringBuilder(validation.AppliesTo.ToString());
+        var builder = new StringBuilder(RangeToSqrefPart(validation.AppliesTo));
         foreach (var range in validation.AdditionalRanges)
-            builder.Append(' ').Append(range);
+            builder.Append(' ').Append(RangeToSqrefPart(range));
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// Converts a GridRange to a sqref token: single-cell ranges collapse to "A1" (not "A1:A1").
+    /// </summary>
+    private static string RangeToSqrefPart(GridRange range) =>
+        range.Start == range.End
+            ? range.Start.ToA1()
+            : range.ToString();
 
     private static void RemoveDuplicateMultiAreaValidations(
         Sheet sheet,

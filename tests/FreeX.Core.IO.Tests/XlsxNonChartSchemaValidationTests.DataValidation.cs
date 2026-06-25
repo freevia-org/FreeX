@@ -438,4 +438,156 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         validation.Element(worksheetNs + "formula1").Should().NotBeNull();
     }
 
+    // ── RT-4: single-cell sqref written as "A1", not "A1:A1" ────────────────
+
+    [Fact]
+    public void DataValidation_SingleCellRule_WritesSqrefAsSingleCell()
+    {
+        var workbook = new Workbook("SingleCellSqref");
+        var sheet    = workbook.AddSheet("Data");
+
+        // A single-cell range: A1 (start == end)
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 1, 1, 1, 1),   // A1:A1 as model
+            Type      = DvType.WholeNumber,
+            Operator  = DvOperator.GreaterThan,
+            Formula1  = "0"
+        });
+
+        var dataValidations = ReadDataValidationsElement(Save(workbook));
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sqref = dataValidations.Element(ns + "dataValidation")!.Attribute("sqref")!.Value;
+
+        sqref.Should().Be("A1", "single-cell range must be serialised as 'A1', not 'A1:A1'");
+    }
+
+    [Fact]
+    public void DataValidation_MultiCellRule_WritesSqrefWithColon()
+    {
+        var workbook = new Workbook("MultiCellSqref");
+        var sheet    = workbook.AddSheet("Data");
+
+        // A multi-cell range: A1:B5
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = Range(sheet, 1, 1, 5, 2),   // A1:B5
+            Type      = DvType.WholeNumber,
+            Operator  = DvOperator.GreaterThan,
+            Formula1  = "0"
+        });
+
+        var dataValidations = ReadDataValidationsElement(Save(workbook));
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sqref = dataValidations.Element(ns + "dataValidation")!.Attribute("sqref")!.Value;
+
+        sqref.Should().Be("A1:B5", "multi-cell range must retain the colon notation");
+    }
+
+    // ── RT-5: full XLSX round-trip — load, patch-save, reload, assert DV intact
+
+    [Fact]
+    public void DataValidation_RoundTrip_MultiRangeSqrefAndFormula1Preserved()
+    {
+        // Build a workbook that includes:
+        //   • a WholeNumber rule on A2:A5
+        //   • a List rule on B2:B5
+        //   • a Decimal rule on C2:C5 with AdditionalRanges H2:H5 (multi-range sqref)
+        var source = CreateRoundTripSourceWorkbook();
+
+        // Save to XLSX bytes and reload
+        using var firstSave = Save(source);
+        var adapter  = new XlsxFileAdapter();
+        var loaded   = adapter.Load(firstSave);
+        XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(loaded, out var blockReason)
+            .Should().BeTrue(blockReason);
+
+        // Make an unrelated edit so the patch-save path is exercised
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 10, 10), new NumberValue(99));
+
+        using var patchSave = new MemoryStream();
+        adapter.Save(loaded, patchSave);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.SourcePatch);
+
+        // Reload the patch-saved bytes and verify DV model is intact
+        patchSave.Position = 0;
+        var reloaded      = adapter.Load(patchSave);
+        var reloadedSheet = reloaded.GetSheetAt(0);
+
+        reloadedSheet.DataValidations.Should().HaveCount(3);
+
+        var wholeNumber = reloadedSheet.DataValidations.Single(v => v.Type == DvType.WholeNumber);
+        wholeNumber.AppliesTo.ToString().Should().Be("A2:A5");
+        wholeNumber.Operator.Should().Be(DvOperator.Between);
+        wholeNumber.Formula1.Should().Be("1");
+        wholeNumber.Formula2.Should().Be("100");
+
+        var list = reloadedSheet.DataValidations.Single(v => v.Type == DvType.List);
+        list.AppliesTo.ToString().Should().Be("B2:B5");
+        list.Formula1.Should().Be("Red,Green,Blue");
+
+        var decimal_ = reloadedSheet.DataValidations.Single(v => v.Type == DvType.Decimal);
+        decimal_.AppliesTo.ToString().Should().Be("C2:C5");
+        decimal_.AdditionalRanges.Should().ContainSingle()
+            .Which.ToString().Should().Be("H2:H5");
+        decimal_.Operator.Should().Be(DvOperator.Between);
+        decimal_.Formula1.Should().Be("0");
+        decimal_.Formula2.Should().Be("1");
+
+        // Also verify the sqref in the raw XML after patch-save
+        var dataValidations = ReadDataValidationsElement(patchSave);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var decimalSqref = dataValidations
+            .Elements(ns + "dataValidation")
+            .Single(e => e.Attribute("type")?.Value == "decimal")
+            .Attribute("sqref")!.Value;
+
+        decimalSqref.Should().Contain("C2:C5").And.Contain("H2:H5",
+            "multi-range sqref must be preserved through load → patch-save → reload");
+    }
+
+    private static Workbook CreateRoundTripSourceWorkbook()
+    {
+        var workbook = new Workbook("RoundTripDV");
+        var sheet    = workbook.AddSheet("Data");
+        SeedNumericGrid(sheet);
+
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo    = Range(sheet, 2, 1, 5, 1),
+            Type         = DvType.WholeNumber,
+            Operator     = DvOperator.Between,
+            Formula1     = "1",
+            Formula2     = "100",
+            AllowBlank   = true,
+            ShowInputMessage  = true,
+            PromptTitle       = "Enter a number",
+            PromptMessage     = "Between 1 and 100",
+            ShowErrorMessage  = true,
+            ErrorTitle        = "Invalid",
+            ErrorMessage      = "Out of range",
+            AlertStyle        = DvAlertStyle.Warning
+        });
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo    = Range(sheet, 2, 2, 5, 2),
+            Type         = DvType.List,
+            Formula1     = "\"Red,Green,Blue\"",
+            ShowDropdown = true
+        });
+        var decimalValidation = new DataValidation
+        {
+            AppliesTo = Range(sheet, 2, 3, 5, 3),
+            Type      = DvType.Decimal,
+            Operator  = DvOperator.Between,
+            Formula1  = "0",
+            Formula2  = "1"
+        };
+        decimalValidation.AdditionalRanges.Add(Range(sheet, 2, 8, 5, 8));
+        sheet.DataValidations.Add(decimalValidation);
+
+        return workbook;
+    }
+
 }
