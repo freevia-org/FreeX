@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PowerPoint interop-compare harness for FreeP parity validation (Wave 1E).
+    Drives PowerPoint COM to export each slide of a .pptx to PNG (ground truth),
+    optionally invokes the FreeP renderer to produce its own PNGs, then diffs the
+    two sets pixel-by-pixel.  Run on demand; not part of the automated test gate.
+
+    Modes (see Program.cs):
+      powerpoint-export, freep-render (stub), diff, generate-corpus
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <StartupObject>FreeP.RenderCompare.Program</StartupObject>
+    <Platforms>x64</Platforms>
+    <!-- Suppress COM interop late-binding warnings from dynamic usage -->
+    <NoWarn>$(NoWarn);CS8600;CS8602</NoWarn>
+  </PropertyGroup>
+
+</Project>
