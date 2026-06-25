@@ -5854,9 +5854,13 @@ public sealed partial class MainWindow : Window
                 cellHeight: cellHeight);
 
         var style = cell.Style;
-        var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor
-            ? Brush(fillColor)
-            : Brushes.White;
+        IBrush background;
+        if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
+            background = gradientBrush;
+        else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
+            background = Brush(fillColor);
+        else
+            background = Brushes.White;
         var foreground = style is null
             ? Brushes.Black
             : Brush(style.ResolveFontColor(_session.Workbook.Theme));
