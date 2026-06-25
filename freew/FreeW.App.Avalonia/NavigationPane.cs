@@ -19,13 +19,12 @@ namespace FreeW.App.Avalonia;
 /// <see cref="DocumentView.DocumentChanged"/> to call <see cref="Refresh"/>. Toggle
 /// <see cref="IsVisible"/> via the View ribbon; it defaults to hidden.
 /// </summary>
-public sealed class NavigationPane : UserControl
+public sealed class NavigationPane : SidePaneBase
 {
     private const double IndentPerLevel = 12.0;
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private readonly DocumentView _editor;
     private readonly ListBox _headingList;
     private readonly TextBox _searchBox;
     private readonly Button _prevButton;
@@ -49,9 +48,8 @@ public sealed class NavigationPane : UserControl
     // ── Construction ──────────────────────────────────────────────────────────
 
     public NavigationPane(DocumentView editor)
+        : base(editor, "Navigation", width: 240, chromeBorderThickness: new Thickness(0, 0, 1, 0), includeSeparator: false)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-
         // --- Heading list ---------------------------------------------------
         _headingList = new ListBox
         {
@@ -120,35 +118,13 @@ public sealed class NavigationPane : UserControl
         searchArea.Children.Add(_searchBox);
         searchArea.Children.Add(searchControls);
 
-        // --- Header ---------------------------------------------------------
-        var header = new TextBlock
-        {
-            Text = "Navigation",
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            Padding = new Thickness(8, 6),
-        };
-
-        // --- Root layout ----------------------------------------------------
-        //   [header]           Dock.Top
-        //   [searchArea]       Dock.Top
-        //   [headingList]      fill remainder
-        var layout = new DockPanel { Width = 240 };
-        DockPanel.SetDock(header, Dock.Top);
+        // Dock search area and heading list into the shared InnerLayout.
+        // InnerLayout already contains the header (Dock.Top). Add:
+        //   [searchArea]   Dock.Top
+        //   [headingList]  fill remainder
         DockPanel.SetDock(searchArea, Dock.Top);
-        layout.Children.Add(header);
-        layout.Children.Add(searchArea);
-        layout.Children.Add(_headingList);
-
-        Content = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Child = layout,
-        };
-
-        IsVisible = false; // hidden by default; toggled by View ribbon command
+        InnerLayout.Children.Add(searchArea);
+        InnerLayout.Children.Add(_headingList);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -157,7 +133,7 @@ public sealed class NavigationPane : UserControl
     /// Rebuild the heading list from the editor's current document. Call whenever the document
     /// changes (wire to <see cref="DocumentView.DocumentChanged"/>).
     /// </summary>
-    public void Refresh()
+    public override void Refresh()
     {
         var outline = DocumentOutline.Of(_editor.Document);
         var term = _searchBox.Text ?? string.Empty;

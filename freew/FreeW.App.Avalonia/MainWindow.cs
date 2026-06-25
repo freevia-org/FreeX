@@ -42,6 +42,10 @@ public sealed class MainWindow : Window
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
     private readonly ScaleTransform _zoom = new(1, 1);
+    // Status-bar view-mode buttons (Print / Web / Draft).
+    private readonly Button _btnPrintLayout  = MakeViewModeButton("Print");
+    private readonly Button _btnWebLayout    = MakeViewModeButton("Web");
+    private readonly Button _btnDraftView    = MakeViewModeButton("Draft");
     private readonly FileCommandWorkflow _fileWorkflow;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
@@ -125,6 +129,15 @@ public sealed class MainWindow : Window
         _editor.DocumentChanged += () => { if (_reviewingPane.IsVisible) _reviewingPane.Refresh(); };
         _editor.DocumentChanged += () => { if (_revealPane.IsVisible) _revealPane.Refresh(); };
         _editor.ScrollToCaretRequested += ScrollCaretIntoView;
+        _editor.CaretMoved += UpdateStatus;
+        _editor.ViewModeChanged += UpdateStatus;
+        _editor.ViewModeChanged += UpdateViewModeButtons;
+
+        // Wire view-mode buttons.
+        _btnPrintLayout.Click += (_, _) => SetViewMode(DocumentViewMode.PrintLayout);
+        _btnWebLayout.Click   += (_, _) => SetViewMode(DocumentViewMode.WebLayout);
+        _btnDraftView.Click   += (_, _) => SetViewMode(DocumentViewMode.Draft);
+        UpdateViewModeButtons();
         _editor.CellEditRequested += async req =>
         {
             var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
@@ -247,7 +260,10 @@ public sealed class MainWindow : Window
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
             ToggleRevealFormatting: ToggleRevealFormatting,
-            OpenFindReplaceDialog: OpenFindReplaceDialog);
+            OpenFindReplaceDialog: OpenFindReplaceDialog,
+            SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
+            SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
+            SetDraftView:   () => SetViewMode(DocumentViewMode.Draft));
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
@@ -319,10 +335,48 @@ public sealed class MainWindow : Window
     {
         _zoomLabel.Text = "100%";
         var panel = new DockPanel();
+
+        // Right side: zoom label, then view-mode buttons (right-to-left in DockPanel).
         DockPanel.SetDock(_zoomLabel, Dock.Right);
         panel.Children.Add(_zoomLabel);
+
+        var viewModeRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0),
+            Children = { _btnPrintLayout, _btnWebLayout, _btnDraftView },
+        };
+        DockPanel.SetDock(viewModeRow, Dock.Right);
+        panel.Children.Add(viewModeRow);
+
+        // Left side: status text.
         panel.Children.Add(_status);
         return panel;
+    }
+
+    private static Button MakeViewModeButton(string label) => new()
+    {
+        Content = label,
+        Padding = new Thickness(6, 1),
+        Margin = new Thickness(1, 1),
+        Height = 20,
+        FontSize = 11,
+    };
+
+    private void SetViewMode(DocumentViewMode mode)
+    {
+        _editor.ViewMode = mode;
+        _editor.Focus();
+    }
+
+    private void UpdateViewModeButtons()
+    {
+        var mode = _editor.ViewMode;
+        // Highlight the active button by toggling opacity; a full toggle style is overkill here.
+        _btnPrintLayout.Opacity = mode == DocumentViewMode.PrintLayout ? 1.0 : 0.5;
+        _btnWebLayout.Opacity   = mode == DocumentViewMode.WebLayout    ? 1.0 : 0.5;
+        _btnDraftView.Opacity   = mode == DocumentViewMode.Draft        ? 1.0 : 0.5;
     }
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
@@ -664,7 +718,10 @@ public sealed class MainWindow : Window
         var text = _editor.PlainText;
         var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
         var chars = text.Length;
-        _status.Text = $"{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
+        var pageInfo = _editor.ViewMode == DocumentViewMode.PrintLayout
+            ? $"Page {_editor.CaretPageIndex + 1} of {_editor.PageCount}   "
+            : string.Empty; // Web/Draft: no discrete pages — hide page indicator.
+        _status.Text = $"{pageInfo}{words} words   {chars} characters   {_editor.ParagraphCount} paragraphs"
             + (_editor.CanUndo ? "   • edited" : "");
     }
 

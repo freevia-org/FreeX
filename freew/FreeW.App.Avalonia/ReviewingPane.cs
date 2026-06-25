@@ -25,11 +25,10 @@ namespace FreeW.App.Avalonia;
 /// The Accept-All / Reject-All header buttons call <see cref="TrackChanges.AcceptAll"/> /
 /// <see cref="TrackChanges.RejectAll"/> then do the same.
 /// </summary>
-public sealed class ReviewingPane : UserControl
+public sealed class ReviewingPane : SidePaneBase
 {
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private readonly DocumentView _editor;
     private readonly ListBox _revisionList;
     private readonly TextBlock _countLabel;
     private readonly Button _acceptAllButton;
@@ -38,9 +37,8 @@ public sealed class ReviewingPane : UserControl
     // ── Construction ──────────────────────────────────────────────────────────
 
     public ReviewingPane(DocumentView editor)
+        : base(editor, "Tracked Changes", width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
-        _editor = editor ?? throw new ArgumentNullException(nameof(editor));
-
         // --- Accept-All / Reject-All buttons ------------------------------------
         _acceptAllButton = new Button
         {
@@ -84,49 +82,15 @@ public sealed class ReviewingPane : UserControl
             Background = Brushes.Transparent,
         };
 
-        // --- Header -------------------------------------------------------------
-        var header = new TextBlock
-        {
-            Text = "Tracked Changes",
-            FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            Padding = new Thickness(8, 6),
-        };
-
-        // --- Separator below header --------------------------------------------
-        var separator = new Border
-        {
-            Height = 1,
-            Background = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            Margin = new Thickness(0, 0, 0, 2),
-        };
-
-        // --- Root layout (DockPanel, right-docked, 280px wide) ----------------
-        //   [header]          Dock.Top
-        //   [separator]       Dock.Top
-        //   [bulkRow]         Dock.Top
-        //   [countLabel]      Dock.Top
-        //   [revisionList]    fill
-        var layout = new DockPanel { Width = 280 };
-        DockPanel.SetDock(header, Dock.Top);
-        DockPanel.SetDock(separator, Dock.Top);
+        // Dock bulk row and count label into InnerLayout (base added header + separator already).
+        //   [bulkRow]      Dock.Top
+        //   [countLabel]   Dock.Top
+        //   [revisionList] fill
         DockPanel.SetDock(bulkRow, Dock.Top);
         DockPanel.SetDock(_countLabel, Dock.Top);
-        layout.Children.Add(header);
-        layout.Children.Add(separator);
-        layout.Children.Add(bulkRow);
-        layout.Children.Add(_countLabel);
-        layout.Children.Add(_revisionList);
-
-        Content = new Border
-        {
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            BorderThickness = new Thickness(1, 0, 0, 0),    // left border (right-docked)
-            Child = layout,
-        };
-
-        IsVisible = false; // hidden by default; toggled by Review ribbon command
+        InnerLayout.Children.Add(bulkRow);
+        InnerLayout.Children.Add(_countLabel);
+        InnerLayout.Children.Add(_revisionList);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -135,7 +99,7 @@ public sealed class ReviewingPane : UserControl
     /// Rebuild the revision list from the editor's current document. Call whenever the document
     /// changes (wire to <see cref="DocumentView.DocumentChanged"/>).
     /// </summary>
-    public void Refresh()
+    public override void Refresh()
     {
         var revisions = RevisionList.Enumerate(_editor.Document);
         var hasRevisions = revisions.Count > 0;

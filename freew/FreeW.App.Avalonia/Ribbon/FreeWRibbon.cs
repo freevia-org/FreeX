@@ -73,11 +73,19 @@ internal static class FreeWRibbon
                     g.Button("freew.insert-table", "Table");
                 }))
             .Tab("view", "View", "V", tab =>
+            {
+                tab.Group("views", "Views", null, 110, g =>
+                {
+                    g.Button("freew.printlayout", "Print Layout");
+                    g.Button("freew.weblayout", "Web Layout");
+                    g.Button("freew.draftview", "Draft");
+                });
                 tab.Group("show", "Show", null, 100, g =>
                 {
                     g.Toggle("freew.navigationpane", "Navigation Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");
-                }))
+                });
+            })
             .Tab("review", "Review", "R", tab =>
                 tab.Group("tracking", "Tracking", null, 100, g =>
                 {
@@ -126,6 +134,9 @@ internal static class FreeWRibbon
         registry.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
         registry.Register("freew.reveal-formatting", new RelayCommand(callbacks.ToggleRevealFormatting));
         registry.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
+        registry.Register("freew.printlayout", new RelayCommand(callbacks.SetPrintLayout));
+        registry.Register("freew.weblayout",   new RelayCommand(callbacks.SetWebLayout));
+        registry.Register("freew.draftview",    new RelayCommand(callbacks.SetDraftView));
         return registry;
     }
 }
@@ -140,7 +151,10 @@ internal sealed record RibbonHostCallbacks(
     Action ToggleNavigationPane,
     Action ToggleReviewingPane,
     Action ToggleRevealFormatting,
-    Action OpenFindReplaceDialog);
+    Action OpenFindReplaceDialog,
+    Action SetPrintLayout,
+    Action SetWebLayout,
+    Action SetDraftView);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {
