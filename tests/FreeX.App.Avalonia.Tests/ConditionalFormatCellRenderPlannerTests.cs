@@ -130,7 +130,11 @@ public sealed class ConditionalFormatCellRenderPlannerTests
     [InlineData("3Signs", ConditionalIconGlyphKind.Sign)]
     [InlineData("3Symbols", ConditionalIconGlyphKind.Symbol)]
     [InlineData("3Flags", ConditionalIconGlyphKind.Flag)]
+    // "Rating" styles map to graduated bars (Rating kind); "Stars" styles map to partial-fill star (Star kind).
     [InlineData("5Rating", ConditionalIconGlyphKind.Rating)]
+    [InlineData("4Rating", ConditionalIconGlyphKind.Rating)]
+    [InlineData("3Stars", ConditionalIconGlyphKind.Star)]
+    [InlineData("5Stars", ConditionalIconGlyphKind.Star)]
     [InlineData("4QuartersOf5", ConditionalIconGlyphKind.Quarter)]
     [InlineData("5Boxes", ConditionalIconGlyphKind.Box)]
     [InlineData("3Arrows", ConditionalIconGlyphKind.Arrow)]
@@ -146,6 +150,19 @@ public sealed class ConditionalFormatCellRenderPlannerTests
     public void ResolveIconColor_GrayStyle_OverridesPalette()
     {
         ConditionalIconGlyphResolver.ResolveIconColor("3SymbolsGray", 0, 3).Should().Be("#666666");
+    }
+
+    [Theory]
+    [InlineData("3Stars", 0, 3)]
+    [InlineData("3Stars", 1, 3)]
+    [InlineData("3Stars", 2, 3)]
+    [InlineData("5Stars", 4, 5)]
+    public void ResolveIconColor_StarStyle_AlwaysGold(string style, int index, int count)
+    {
+        // Star icon sets use a fixed gold fill for all buckets; the fill fraction controls how much
+        // of the star is filled, not the hue.
+        ConditionalIconGlyphResolver.ResolveIconColor(style, index, count)
+            .Should().Be(ConditionalIconGlyphResolver.StarGoldHex);
     }
 
     [Theory]
