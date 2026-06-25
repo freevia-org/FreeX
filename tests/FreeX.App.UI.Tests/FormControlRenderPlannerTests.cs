@@ -140,6 +140,38 @@ public sealed class FormControlRenderPlannerTests
     }
 
     [Fact]
+    public void OffsetAwareRect_VmlStyleAnchor_PositionedAtCorrectRowWithPixelOffset()
+    {
+        // Mirrors the real Button VML anchor from formcontrols fixture:
+        //   "1, 53, 2, 2, 4, 13, 3, 18"  (0-based col/row; pixel offsets → EMU)
+        // from.Col=1 (colB), from.ColOff=53px*9525=504825 EMU
+        // from.Row=2 (row3 1-based), from.RowOff=2px*9525=19050 EMU
+        // to.Col=4, to.ColOff=13px, to.Row=3 (row4 1-based), to.RowOff=18px
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 53 * 9525, 2, 2 * 9525),
+            new DrawingAnchorPoint(4, 13 * 9525, 3, 18 * 9525));
+
+        // Build minimal viewport: rows 1-4 each 19px; colA(1)=64px, colB(2)..colE(5)
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 19, 0), new RowMetric(2, 19, 19), new RowMetric(3, 19, 38), new RowMetric(4, 19, 57)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(3, 64, 128),
+             new ColMetric(4, 64, 192), new ColMetric(5, 64, 256)]);
+
+        GridDrawingObjectPlanner.TryCreateDrawingAnchorRect(
+            viewport, anchor,
+            rowHeaderWidth: 0, columnHeaderHeight: 0,
+            out var rect).Should().BeTrue();
+
+        // topLeft.X = colB.LeftOffset(64) + 53 = 117
+        // topLeft.Y = row3.TopOffset(38) + 2 = 40
+        rect.Left.Should().BeApproximately(117, 0.5);
+        rect.Top.Should().BeApproximately(40, 0.5);
+        // bottomRight.Y = row4.TopOffset(57) + 18 = 75  → height = 35
+        rect.Height.Should().BeApproximately(35, 0.5);
+    }
+
+    [Fact]
     public void TryCreateAnchorRange_ReturnsFalseWhenAnchorMissing()
     {
         var control = new FormControlModel { Anchor = null };
