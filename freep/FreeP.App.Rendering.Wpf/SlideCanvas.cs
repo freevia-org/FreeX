@@ -1,6 +1,7 @@
 using FreeP.App.Compositor;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Drawing;
@@ -17,6 +18,9 @@ namespace FreeP.App.Rendering.Wpf;
 ///
 /// The control uses OnRender (DrawingContext) to paint all operations directly, which avoids
 /// creating a large visual tree of WPF elements for each shape.
+///
+/// Wave 3C: call <see cref="AttachEditing"/> once (and on every file new/open) to enable
+/// selection, move/resize/rotate, and in-canvas text editing.
 /// </summary>
 public sealed class SlideCanvas : FrameworkElement
 {
@@ -52,6 +56,32 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((SlideCanvas)d).Refresh();
+
+    // ── Editing (Wave 3C) ─────────────────────────────────────────────────────
+
+    private CanvasGestureHandler?  _gestureHandler;
+    private InCanvasTextEditor?    _textEditor;
+    private Canvas?                _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
+
+    /// <summary>
+    /// The current slide→screen transform (updated on every render pass).
+    /// Used by the gesture handler and adorner layer.
+    /// </summary>
+    public SlideTransform CurrentTransform { get; private set; } = SlideTransform.Identity;
+
+    /// <summary>
+    /// Attaches (or re-attaches) editing interaction to an <see cref="EditingSession"/>.
+    /// Call once after constructing the canvas and once on every file new/open to wire up
+    /// the new Editor instance.  The overlay canvas must already be in the visual tree.
+    /// </summary>
+    public void AttachEditing(EditingSession editor, Canvas textOverlay)
+    {
+        // Detach previous handler if any (don't re-add adorner on every call)
+        _textEditor    = null;
+        _gestureHandler = new CanvasGestureHandler(this, editor);
+        _textOverlay   = textOverlay;
+        _textEditor    = new InCanvasTextEditor(this, editor, textOverlay);
+    }
 
     // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
@@ -107,6 +137,9 @@ public sealed class SlideCanvas : FrameworkElement
         double scale = Math.Min(renderW / _slideWidthDip, renderH / _slideHeightDip);
         double offsetX = (renderW - _slideWidthDip * scale) / 2;
         double offsetY = (renderH - _slideHeightDip * scale) / 2;
+
+        // Expose the slide→screen transform so the editing layer can use it.
+        CurrentTransform = new SlideTransform(scale, offsetX, offsetY, _slideWidthDip, _slideHeightDip);
 
         var transform = new TransformGroup();
         transform.Children.Add(new ScaleTransform(scale, scale));

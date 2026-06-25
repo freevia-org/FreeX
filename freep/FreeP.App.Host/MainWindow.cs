@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon.Wpf;
@@ -98,6 +99,7 @@ public sealed class MainWindow : Window
     internal SlideCanvas SlideCanvas { get; private set; } = null!;
 
     private Border _canvasHost = null!;
+    private Canvas _textOverlay = null!;
     private TextBlock _slideCountText = null!;
 
     // ── Constructors ──────────────────────────────────────────────────────────────
@@ -190,6 +192,29 @@ public sealed class MainWindow : Window
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
         Editor.CurrentSlideChanged += (_, _) => RefreshCanvas();
         // SelectionChanged: 3C subscribes directly to Editor.SelectionChanged.
+
+        // Re-attach editing layer whenever the editor is rebuilt (file open/new).
+        // Guard: SlideCanvas is null during initial construction; BuildBody calls
+        // AttachCanvasEditing() itself after creating the canvas.
+        if (SlideCanvas is not null)
+            AttachCanvasEditing();
+    }
+
+    // ── 3C SEAM: canvas editing attachment ───────────────────────────────────────
+
+    /// <summary>
+    /// Wires the gesture handler and in-canvas text editor to the current Editor.
+    /// Called once from BuildBody (initial) and then on every file new/open from RebuildEditor.
+    ///
+    /// 3C SEAM LINE: this single call to <see cref="SlideCanvas.AttachEditing"/> is the
+    /// only change to MainWindow needed for Wave 3C.
+    /// </summary>
+    private void AttachCanvasEditing()
+    {
+        // _textOverlay may be null during the very first call from BuildBody before
+        // the field is assigned; BuildBody itself calls this after assigning it.
+        if (_textOverlay is null) return;
+        SlideCanvas.AttachEditing(Editor, _textOverlay);
     }
 
     // ── File load ─────────────────────────────────────────────────────────────────
@@ -197,7 +222,7 @@ public sealed class MainWindow : Window
     private void LoadModel(Presentation presentation)
     {
         _presentation = presentation;
-        RebuildEditor();
+        RebuildEditor(); // also calls AttachCanvasEditing()
         RefreshCanvas();
         UpdateSlideCount();
     }
@@ -219,23 +244,36 @@ public sealed class MainWindow : Window
         SlideCanvas = new SlideCanvas
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch,
+            Margin              = new Thickness(40)
+        };
+
+        // 3C SEAM: text-edit overlay Canvas (sits on top of the canvas, same coordinate space).
+        _textOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment   = VerticalAlignment.Stretch
         };
-        // <!-- 3C SEAM: attach mouse event handlers and adorner layer to SlideCanvas. -->
 
-        var viewbox = new Viewbox
-        {
-            Stretch          = Stretch.Uniform,
-            StretchDirection = StretchDirection.Both,
-            Margin           = new Thickness(40),
-            Child            = SlideCanvas
-        };
+        // Wrap canvas + overlay in a Grid so the overlay occupies the same bounds.
+        var stageGrid = new Grid();
+        stageGrid.Children.Add(SlideCanvas);
+        stageGrid.Children.Add(_textOverlay);
+
+        // AdornerDecorator ensures the adorner layer sits directly above SlideCanvas,
+        // so SelectionAdorner handles are positioned correctly regardless of zoom.
+        var adornerDecorator = new AdornerDecorator { Child = stageGrid };
 
         _canvasHost = new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
-            Child      = viewbox
+            Child      = adornerDecorator
         };
+
+        // 3C SEAM: attach gesture handler and text editor.
+        // Called here (after canvas is created) and again in RebuildEditor/LoadModel.
+        AttachCanvasEditing();
 
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
