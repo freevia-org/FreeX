@@ -176,7 +176,7 @@ public partial class GridView
         if (control.IsChecked)
             DrawFormCheckGlyph(dc, box);
 
-        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 4, pixelsPerDip);
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 6, pixelsPerDip);
     }
 
     private void DrawFormOptionButton(DrawingContext dc, FormControlModel control, Rect rect, double pixelsPerDip)
@@ -192,7 +192,7 @@ public partial class GridView
             dc.DrawEllipse(FormControlGlyphBrush, null, center, dotRadius, dotRadius);
         }
 
-        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 4, pixelsPerDip);
+        DrawFormControlCaption(dc, FormControlRenderPlanner.GetCaption(control), rect, box.Right + 6, pixelsPerDip);
     }
 
     private void DrawFormSpinner(DrawingContext dc, Rect rect)
