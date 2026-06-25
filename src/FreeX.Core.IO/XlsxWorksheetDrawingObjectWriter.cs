@@ -651,6 +651,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
             DrawingShapeKind.RoundedRectangularCallout => "wedgeRoundRectCallout",
             DrawingShapeKind.OvalCallout => "wedgeEllipseCallout",
             DrawingShapeKind.LineCallout => "lineCallout1",
+            DrawingShapeKind.Chevron => "chevron",
+            DrawingShapeKind.HomePlate => "homePlate",
             _ => "rect"
         };
 

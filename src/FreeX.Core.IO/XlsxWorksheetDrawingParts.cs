@@ -279,93 +279,178 @@ internal static partial class XlsxWorksheetDrawingPartReader
             if (shapeElement.Ancestors(markupCompatNs + "Fallback").Any())
                 continue;
 
-            var name = ReadNonVisualName(shapeElement);
-            var title = ReadNonVisualTitle(shapeElement);
-            var altText = ReadNonVisualDescription(shapeElement);
-            var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
-            var transform = spPr?.Element(drawingNs + "xfrm");
-            var rotation = ReadDrawingRotation(transform);
-            var flipHorizontal = ReadDrawingFlipHorizontal(transform);
-            var flipVertical = ReadDrawingFlipVertical(transform);
-            var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
-            var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
-            var solidFill = spPr?.Element(drawingNs + "solidFill");
-            var hasFill = spPr?.Element(drawingNs + "noFill") is null;
-            var lnElement = spPr?.Element(drawingNs + "ln");
-            var outlineFill = lnElement?.Element(drawingNs + "solidFill");
-            var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
-            var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
-            var fillThemeColor = solidFill is not null &&
-                                 XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readFillThemeColor)
-                ? readFillThemeColor
-                : (WorkbookThemeColorReference?)null;
-            var outlineThemeColor = outlineFill is not null &&
-                                    XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
-                ? readOutlineThemeColor
-                : (WorkbookThemeColorReference?)null;
-            var outlineWidthPoints = ReadDrawingOutlineWidthPoints(lnElement);
-            var outlineHasNoFill = lnElement is not null && lnElement.Element(drawingNs + "noFill") is not null;
-            var outlineDash = ReadDrawingOutlineDash(lnElement, drawingNs);
-            var effectPreset = ReadDrawingShapeEffectPreset(spPr, drawingNs);
-            var hasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow;
-            var text = string.Concat(shapeElement
-                .Element(spreadsheetDrawingNs + "txBody")?
-                .Descendants(drawingNs + "t")
-                .Select(t => t.Value) ?? []);
+            ReadSpElement(shapeElement, spreadsheetDrawingNs, drawingNs, textBoxes, shapes);
+        }
 
-            if (!string.IsNullOrEmpty(text))
-            {
-                textBoxes.Add(new XlsxTextBoxPackagePart(
-                    text,
-                    name,
-                    title,
-                    altText,
-                    ReadNearestAnchor(shapeElement),
-                    rotation,
-                    flipHorizontal,
-                    flipVertical,
-                    hasFill,
-                    fillThemeColor is null ? fillColor : null,
-                    outlineThemeColor is null ? outlineColor : null,
-                    fillThemeColor,
-                    outlineThemeColor,
-                    ReadNearestAnchorOrderIndex(shapeElement)));
+        // Also read connectors (<xdr:cxnSp>) — they use the same spPr/prstGeom structure as sp.
+        foreach (var cxnSpElement in drawingXml.Descendants(spreadsheetDrawingNs + "cxnSp"))
+        {
+            if (cxnSpElement.Ancestors(markupCompatNs + "Fallback").Any())
                 continue;
-            }
 
-            var preset = spPr?
-                .Element(drawingNs + "prstGeom")?
-                .Attribute("prst")?
-                .Value;
-            if (ToDrawingShapeKind(preset) is { } kind)
-                shapes.Add(new XlsxShapePackagePart(
-                    kind,
-                    name,
-                    title,
-                    altText,
-                    ReadNearestAnchor(shapeElement),
-                    rotation,
-                    flipHorizontal,
-                    flipVertical,
-                    hasFill,
-                    fillThemeColor is null ? fillColor : null,
-                    outlineThemeColor is null ? outlineColor : null,
-                    gradientFill.EndColor,
-                    gradientFill.Direction,
-                    fillThemeColor,
-                    outlineThemeColor,
-                    hasShadowEffect,
-                    effectPreset,
-                    ReadUsesThemeEffectStyle(shapeElement, drawingNs, spreadsheetDrawingNs),
-                    ReadNearestAnchorOrderIndex(shapeElement),
-                    xfrmWidthPixels,
-                    xfrmHeightPixels,
-                    outlineWidthPoints,
-                    outlineHasNoFill,
-                    outlineDash));
+            ReadCxnSpElement(cxnSpElement, spreadsheetDrawingNs, drawingNs, shapes);
         }
 
         return (textBoxes, shapes);
+    }
+
+    private static void ReadSpElement(
+        XElement shapeElement,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        List<XlsxTextBoxPackagePart> textBoxes,
+        List<XlsxShapePackagePart> shapes)
+    {
+        var name = ReadNonVisualName(shapeElement);
+        var title = ReadNonVisualTitle(shapeElement);
+        var altText = ReadNonVisualDescription(shapeElement);
+        var spPr = shapeElement.Element(spreadsheetDrawingNs + "spPr");
+        var transform = spPr?.Element(drawingNs + "xfrm");
+        var rotation = ReadDrawingRotation(transform);
+        var flipHorizontal = ReadDrawingFlipHorizontal(transform);
+        var flipVertical = ReadDrawingFlipVertical(transform);
+        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
+        var gradientFill = ReadDrawingGradientFillColors(spPr?.Element(drawingNs + "gradFill"), drawingNs);
+        var solidFill = spPr?.Element(drawingNs + "solidFill");
+        var hasFill = spPr?.Element(drawingNs + "noFill") is null;
+        var lnElement = spPr?.Element(drawingNs + "ln");
+        var outlineFill = lnElement?.Element(drawingNs + "solidFill");
+        var fillColor = gradientFill.StartColor ?? ReadDrawingSolidFillColor(solidFill, drawingNs);
+        var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
+        var fillThemeColor = solidFill is not null &&
+                             XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readFillThemeColor)
+            ? readFillThemeColor
+            : (WorkbookThemeColorReference?)null;
+        var outlineThemeColor = outlineFill is not null &&
+                                XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
+            ? readOutlineThemeColor
+            : (WorkbookThemeColorReference?)null;
+        var outlineWidthPoints = ReadDrawingOutlineWidthPoints(lnElement);
+        var outlineHasNoFill = lnElement is not null && lnElement.Element(drawingNs + "noFill") is not null;
+        var outlineDash = ReadDrawingOutlineDash(lnElement, drawingNs);
+        var effectPreset = ReadDrawingShapeEffectPreset(spPr, drawingNs);
+        var hasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow;
+        var text = string.Concat(shapeElement
+            .Element(spreadsheetDrawingNs + "txBody")?
+            .Descendants(drawingNs + "t")
+            .Select(t => t.Value) ?? []);
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            textBoxes.Add(new XlsxTextBoxPackagePart(
+                text,
+                name,
+                title,
+                altText,
+                ReadNearestAnchor(shapeElement),
+                rotation,
+                flipHorizontal,
+                flipVertical,
+                hasFill,
+                fillThemeColor is null ? fillColor : null,
+                outlineThemeColor is null ? outlineColor : null,
+                fillThemeColor,
+                outlineThemeColor,
+                ReadNearestAnchorOrderIndex(shapeElement)));
+            return;
+        }
+
+        var preset = spPr?
+            .Element(drawingNs + "prstGeom")?
+            .Attribute("prst")?
+            .Value;
+        if (ToDrawingShapeKind(preset) is { } kind)
+            shapes.Add(new XlsxShapePackagePart(
+                kind,
+                name,
+                title,
+                altText,
+                ReadNearestAnchor(shapeElement),
+                rotation,
+                flipHorizontal,
+                flipVertical,
+                hasFill,
+                fillThemeColor is null ? fillColor : null,
+                outlineThemeColor is null ? outlineColor : null,
+                gradientFill.EndColor,
+                gradientFill.Direction,
+                fillThemeColor,
+                outlineThemeColor,
+                hasShadowEffect,
+                effectPreset,
+                ReadUsesThemeEffectStyle(shapeElement, drawingNs, spreadsheetDrawingNs),
+                ReadNearestAnchorOrderIndex(shapeElement),
+                xfrmWidthPixels,
+                xfrmHeightPixels,
+                outlineWidthPoints,
+                outlineHasNoFill,
+                outlineDash));
+    }
+
+    /// <summary>
+    /// Reads a connector element (<c>&lt;xdr:cxnSp&gt;</c>) and adds the resulting shape to
+    /// <paramref name="shapes"/>.  Connectors use the same <c>spPr/prstGeom</c> structure as
+    /// regular shapes (<c>xdr:sp</c>) but have no fill and no txBody; the line element carries
+    /// the stroke properties.
+    /// </summary>
+    private static void ReadCxnSpElement(
+        XElement cxnSpElement,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        List<XlsxShapePackagePart> shapes)
+    {
+        var name = ReadNonVisualName(cxnSpElement);
+        var title = ReadNonVisualTitle(cxnSpElement);
+        var altText = ReadNonVisualDescription(cxnSpElement);
+        var spPr = cxnSpElement.Element(spreadsheetDrawingNs + "spPr");
+        var transform = spPr?.Element(drawingNs + "xfrm");
+        var rotation = ReadDrawingRotation(transform);
+        var flipHorizontal = ReadDrawingFlipHorizontal(transform);
+        var flipVertical = ReadDrawingFlipVertical(transform);
+        var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(transform, drawingNs);
+        var lnElement = spPr?.Element(drawingNs + "ln");
+        var outlineFill = lnElement?.Element(drawingNs + "solidFill");
+        var outlineColor = ReadDrawingSolidFillColor(outlineFill, drawingNs);
+        var outlineThemeColor = outlineFill is not null &&
+                                XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
+            ? readOutlineThemeColor
+            : (WorkbookThemeColorReference?)null;
+        var outlineWidthPoints = ReadDrawingOutlineWidthPoints(lnElement);
+        var outlineHasNoFill = lnElement is not null && lnElement.Element(drawingNs + "noFill") is not null;
+        var outlineDash = ReadDrawingOutlineDash(lnElement, drawingNs);
+
+        var preset = spPr?
+            .Element(drawingNs + "prstGeom")?
+            .Attribute("prst")?
+            .Value;
+
+        // Default to Line when no prstGeom is present (bare connector with no geometry override).
+        var kind = ToDrawingShapeKind(preset) ?? DrawingShapeKind.Line;
+        shapes.Add(new XlsxShapePackagePart(
+            kind,
+            name,
+            title,
+            altText,
+            ReadNearestAnchor(cxnSpElement),
+            rotation,
+            flipHorizontal,
+            flipVertical,
+            HasFill: false,           // connectors never have a body fill
+            FillColor: null,
+            outlineThemeColor is null ? outlineColor : null,
+            GradientFillEndColor: null,
+            DrawingShapeGradientDirection.DiagonalDown,
+            FillThemeColor: null,
+            outlineThemeColor,
+            HasShadowEffect: false,
+            DrawingShapeEffectPreset.None,
+            UsesThemeEffects: false,
+            ReadNearestAnchorOrderIndex(cxnSpElement),
+            xfrmWidthPixels,
+            xfrmHeightPixels,
+            outlineWidthPoints,
+            outlineHasNoFill,
+            outlineDash));
     }
 
     private static bool ReadUsesThemeEffectStyle(
@@ -490,11 +575,19 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (ext is null)
             return (null, null);
 
-        var cx = ext.Attribute("cx")?.Value;
-        var cy = ext.Attribute("cy")?.Value;
-        if (!double.TryParse(cx, NumberStyles.Float, CultureInfo.InvariantCulture, out var cxEmu) ||
-            !double.TryParse(cy, NumberStyles.Float, CultureInfo.InvariantCulture, out var cyEmu) ||
-            cxEmu <= 0 || cyEmu <= 0)
+        var cxStr = ext.Attribute("cx")?.Value;
+        var cyStr = ext.Attribute("cy")?.Value;
+        if (!double.TryParse(cxStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cxEmu) ||
+            !double.TryParse(cyStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var cyEmu))
+            return (null, null);
+
+        if (cxEmu < 0 || cyEmu < 0)
+            return (null, null);
+
+        // Return the values even when one axis is zero (e.g. a perfectly horizontal line has cy=0).
+        // A value of 0 is meaningful: it tells ApplyToShape that the shape is flat on that axis.
+        // Both zero → treat as absent (no usable xfrm extent).
+        if (cxEmu <= 0 && cyEmu <= 0)
             return (null, null);
 
         // 9525 EMU per DIP pixel (96 DPI)
@@ -661,9 +754,9 @@ internal static partial class XlsxWorksheetDrawingPartReader
             "rect" => DrawingShapeKind.Rectangle,
             "roundRect" => DrawingShapeKind.RoundedRectangle,
             "ellipse" => DrawingShapeKind.Ellipse,
-            "line" => DrawingShapeKind.Line,
-            "bentConnector2" or "bentConnector3" => DrawingShapeKind.ElbowConnector,
-            "curvedConnector2" or "curvedConnector3" => DrawingShapeKind.CurvedConnector,
+            "line" or "straightConnector1" => DrawingShapeKind.Line,
+            "bentConnector2" or "bentConnector3" or "bentConnector4" or "bentConnector5" => DrawingShapeKind.ElbowConnector,
+            "curvedConnector2" or "curvedConnector3" or "curvedConnector4" or "curvedConnector5" => DrawingShapeKind.CurvedConnector,
             "triangle" => DrawingShapeKind.Triangle,
             "rtTriangle" => DrawingShapeKind.RightTriangle,
             "diamond" => DrawingShapeKind.Diamond,
@@ -699,7 +792,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
             "wedgeRectCallout" => DrawingShapeKind.RectangularCallout,
             "wedgeRoundRectCallout" => DrawingShapeKind.RoundedRectangularCallout,
             "wedgeEllipseCallout" => DrawingShapeKind.OvalCallout,
-            "lineCallout1" => DrawingShapeKind.LineCallout,
+            "lineCallout1" or "lineCallout2" or "lineCallout3" or "lineCallout4" or
+            "borderCallout1" or "borderCallout2" or "borderCallout3" or "borderCallout4" => DrawingShapeKind.LineCallout,
+            "chevron" => DrawingShapeKind.Chevron,
+            "homePlate" => DrawingShapeKind.HomePlate,
             _ => null
         };
 
