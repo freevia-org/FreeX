@@ -20,4 +20,10 @@
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>FreeP.App.Host.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

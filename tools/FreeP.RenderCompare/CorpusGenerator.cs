@@ -331,7 +331,7 @@ internal static class CorpusGenerator
             try { app.WindowState = 2; } catch { } // ppWindowMinimized=2
 
             AddChartSlideViaCom(comPres, "Clustered Column Chart",
-                -4100,  // xlColumnClustered
+                51,  // xlColumnClustered (2D)
                 new[] { "Q1", "Q2", "Q3", "Q4" },
                 new[] { ("Sales", new double[] { 120, 200, 150, 180 }), ("Budget", new double[] { 130, 170, 160, 190 }) });
 
@@ -345,8 +345,8 @@ internal static class CorpusGenerator
                 new[] { "Alpha", "Beta", "Gamma", "Delta" },
                 new[] { ("Share", new double[] { 40, 30, 20, 10 }) });
 
-            AddChartSlideViaCom(comPres, "Stacked Bar Chart",
-                57,  // xlBarStacked
+            AddChartSlideViaCom(comPres, "Clustered Bar Chart",
+                57,  // xlBarClustered (horizontal clustered 2D bar)
                 new[] { "North", "South", "East", "West" },
                 new[] { ("2023", new double[] { 80, 100, 60, 90 }), ("2024", new double[] { 90, 110, 70, 100 }) });
 

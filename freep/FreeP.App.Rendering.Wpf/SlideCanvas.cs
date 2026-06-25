@@ -353,13 +353,16 @@ public sealed class SlideCanvas : FrameworkElement
         const double margin       = 8.0;
         const double titleH       = 18.0;
         const double legendH      = 14.0;
-        const double axisLabelW   = 36.0;  // value axis label area (left)
-        const double catLabelH    = 16.0;  // category label area (bottom)
+        const double axisLabelW   = 40.0;  // value axis label area (left for column; bottom for bar)
+        const double catLabelH    = 16.0;  // category label area height
         const double gridlinePad  = 2.0;
 
         double titleAreaH  = chart.Title is not null ? titleH + margin : 0;
         bool   hasLegend   = chart.Legend.HasValue;
         bool   isPie       = chart.ChartType == FreeP.Core.Model.ChartType.Pie;
+        bool   isBar       = chart.ChartType is FreeP.Core.Model.ChartType.BarClustered
+                                             or FreeP.Core.Model.ChartType.BarStacked
+                                             or FreeP.Core.Model.ChartType.BarStacked100;
 
         // Title
         if (chart.Title is not null)
@@ -370,7 +373,8 @@ public sealed class SlideCanvas : FrameworkElement
                 align: TextAlignment.Center);
         }
 
-        // Legend area (bottom when position is Bottom or unspecified, right otherwise)
+        // Legend area: PowerPoint default for column/bar/line = bottom; pie = right.
+        // Respect the explicit legendPos from XML; when null (no legend element) skip.
         double legendAreaW = 0, legendAreaH = 0;
         bool   legendRight = chart.Legend is FreeP.Core.Model.LegendPosition.Right or
                                              FreeP.Core.Model.LegendPosition.Left;
@@ -382,29 +386,51 @@ public sealed class SlideCanvas : FrameworkElement
                 legendAreaH = legendH + margin;
         }
 
-        // Plot area
-        double plotX = bounds.X + margin + (isPie ? 0 : axisLabelW);
-        double plotY = bounds.Y + margin + titleAreaH;
-        double plotW = bounds.Width  - 2 * margin - (isPie ? 0 : axisLabelW) - legendAreaW;
-        double plotH = bounds.Height - 2 * margin - titleAreaH - legendAreaH
-                                     - (isPie ? 0 : catLabelH);
+        // For horizontal bar charts: category labels are on the left (Y axis),
+        // value axis labels are on the bottom (X axis).
+        // For column/line/area: category labels on bottom, value labels on left.
+        double plotLeft   = bounds.X + margin + (isPie ? 0 : (isBar ? catLabelH : axisLabelW));
+        double plotTop    = bounds.Y + margin + titleAreaH;
+        double plotRight  = bounds.X + bounds.Width  - margin - legendAreaW;
+        double plotBottom = bounds.Y + bounds.Height - margin - legendAreaH
+                                     - (isPie ? 0 : (isBar ? axisLabelW : catLabelH));
+        double plotW = plotRight  - plotLeft;
+        double plotH = plotBottom - plotTop;
 
         if (plotW <= 0 || plotH <= 0) return;
 
-        // ── Gridlines ──────────────────────────────────────────────────────────
+        double plotX = plotLeft;
+        double plotY = plotTop;
+
+        // ── Gridlines (drawn before bars so they appear behind) ─────────────────
         if (!isPie && chart.ValueAxis.HasMajorGridlines)
         {
             var gridPen = new Pen(
                 FreezeBrush(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9))), 0.5);
             if (gridPen.CanFreeze) gridPen.Freeze();
 
-            const int gridLines = 5;
-            for (int gi = 0; gi <= gridLines; gi++)
+            var (minVal, maxVal, majorUnit) = ComputeNiceAxisRange(chart);
+            double range = maxVal - minVal;
+
+            if (isBar)
             {
-                double gy = plotY + plotH - (plotH / gridLines) * gi;
-                dc.DrawLine(gridPen,
-                    new Point(plotX, gy),
-                    new Point(plotX + plotW, gy));
+                // Vertical gridlines for horizontal bar charts
+                double steps = range / majorUnit;
+                for (int gi = 0; gi <= (int)Math.Round(steps); gi++)
+                {
+                    double gx = plotX + plotW * gi / steps;
+                    dc.DrawLine(gridPen, new Point(gx, plotY), new Point(gx, plotY + plotH));
+                }
+            }
+            else
+            {
+                // Horizontal gridlines for column/line/area
+                double steps = range / majorUnit;
+                for (int gi = 0; gi <= (int)Math.Round(steps); gi++)
+                {
+                    double gy = plotY + plotH - plotH * gi / steps;
+                    dc.DrawLine(gridPen, new Point(plotX, gy), new Point(plotX + plotW, gy));
+                }
             }
         }
 
@@ -450,28 +476,62 @@ public sealed class SlideCanvas : FrameworkElement
         // ── Axis labels ────────────────────────────────────────────────────────
         if (!isPie && chart.Categories.Count > 0)
         {
-            double catStep = plotW / Math.Max(1, chart.Categories.Count);
-            for (int ci = 0; ci < chart.Categories.Count; ci++)
+            if (isBar)
             {
-                double lx = plotX + ci * catStep;
-                var labelRect = new Rect(lx, plotY + plotH + 2, catStep, catLabelH);
-                DrawChartLabel(dc, chart.Categories[ci], labelRect, isBold: false, fontSize: 7.0,
-                    align: TextAlignment.Center);
+                // For bar charts: category labels on left (Y axis), one per category row
+                double catStep = plotH / Math.Max(1, chart.Categories.Count);
+                for (int ci = 0; ci < chart.Categories.Count; ci++)
+                {
+                    double ly = plotY + ci * catStep;
+                    var labelRect = new Rect(bounds.X + margin, ly, catLabelH - 2, catStep);
+                    DrawChartLabel(dc, chart.Categories[ci], labelRect, isBold: false, fontSize: 6.5,
+                        align: TextAlignment.Right);
+                }
+            }
+            else
+            {
+                // For column/line/area: category labels on bottom (X axis)
+                double catStep = plotW / Math.Max(1, chart.Categories.Count);
+                for (int ci = 0; ci < chart.Categories.Count; ci++)
+                {
+                    double lx = plotX + ci * catStep;
+                    var labelRect = new Rect(lx, plotY + plotH + 2, catStep, catLabelH);
+                    DrawChartLabel(dc, chart.Categories[ci], labelRect, isBold: false, fontSize: 7.0,
+                        align: TextAlignment.Center);
+                }
             }
         }
 
-        // Value axis labels (5 tick marks)
+        // Value axis labels using nice tick values
         if (!isPie)
         {
-            var (minVal, maxVal) = ComputeAxisRange(chart);
-            const int ticks = 5;
-            for (int ti = 0; ti <= ticks; ti++)
+            var (minVal, maxVal, majorUnit) = ComputeNiceAxisRange(chart);
+            double range = maxVal - minVal;
+            double steps = range / majorUnit;
+
+            if (isBar)
             {
-                double val = minVal + (maxVal - minVal) * ti / ticks;
-                double vy  = plotY + plotH - plotH * ti / ticks;
-                var labelRect = new Rect(bounds.X + margin, vy - 6, axisLabelW - gridlinePad, 12);
-                DrawChartLabel(dc, FormatAxisValue(val), labelRect,
-                    isBold: false, fontSize: 6.5, align: TextAlignment.Right);
+                // For bar charts: value axis labels on bottom (X axis)
+                for (int ti = 0; ti <= (int)Math.Round(steps); ti++)
+                {
+                    double val = minVal + majorUnit * ti;
+                    double vx  = plotX + plotW * ti / steps;
+                    var labelRect = new Rect(vx - axisLabelW / 2, plotY + plotH + 2, axisLabelW, catLabelH);
+                    DrawChartLabel(dc, FormatAxisValue(val), labelRect,
+                        isBold: false, fontSize: 6.5, align: TextAlignment.Center);
+                }
+            }
+            else
+            {
+                // For column/line/area: value axis labels on left (Y axis)
+                for (int ti = 0; ti <= (int)Math.Round(steps); ti++)
+                {
+                    double val = minVal + majorUnit * ti;
+                    double vy  = plotY + plotH - plotH * ti / steps;
+                    var labelRect = new Rect(bounds.X + margin, vy - 6, axisLabelW - gridlinePad, 12);
+                    DrawChartLabel(dc, FormatAxisValue(val), labelRect,
+                        isBold: false, fontSize: 6.5, align: TextAlignment.Right);
+                }
             }
         }
 
@@ -538,21 +598,28 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0) return;
 
-        var (minVal, maxVal) = ComputeAxisRange(chart);
+        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
 
         bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.ColumnStacked
                                        or FreeP.Core.Model.ChartType.ColumnStacked100;
 
-        double catW    = plotW / catCount;
-        double padding = catW * 0.15;
-        double serW    = stacked ? (catW - 2 * padding) : (catW - 2 * padding) / Math.Max(1, chart.Series.Count);
+        // PowerPoint default: gap width = 150% of bar cluster width.
+        // barCluster / (barCluster + gap) = 1 / (1 + 1.5) = 0.4
+        // So bars take up 40% of the category slot.
+        const double gapRatio   = 1.5;  // gap = 150% of bar cluster
+        double catW             = plotW / catCount;
+        double clusterW         = catW / (1.0 + gapRatio);  // 40% of catW
+        double gapW             = catW - clusterW;           // 60% of catW
+        double halfGap          = gapW / 2.0;
+        int    serCount         = Math.Max(1, chart.Series.Count);
+        double serW             = stacked ? clusterW : clusterW / serCount;
 
         for (int ci = 0; ci < catCount; ci++)
         {
-            double catX = plotX + ci * catW + padding;
-            double stackedY = plotY + plotH; // top of next stacked segment
+            double catLeft  = plotX + ci * catW + halfGap;
+            double stackedY = plotY + plotH;
 
             for (int si = 0; si < chart.Series.Count; si++)
             {
@@ -560,21 +627,31 @@ public sealed class SlideCanvas : FrameworkElement
                 double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) continue;
 
-                double val = rawVal.Value;
-                double barH = Math.Abs(val / range) * plotH;
+                double val  = rawVal.Value;
+                double barH = Math.Abs((val - minVal) / range * plotH);
                 if (barH < 0.5) barH = 0.5;
 
-                double barX = stacked ? catX : catX + si * serW;
+                double barX = stacked ? catLeft : catLeft + si * serW;
                 double barY = stacked
-                    ? (stackedY - barH)
-                    : (plotY + plotH - barH);
+                    ? (stackedY - Math.Abs(val / range) * plotH)
+                    : (plotY + plotH - (val - minVal) / range * plotH);
 
                 var color = GetSeriesColor(chart, si, ci, seriesColors);
                 var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
 
-                dc.DrawRectangle(brush, null, new Rect(barX, barY, serW - 1, barH));
-
-                if (stacked) stackedY -= barH;
+                // Leave 1px gap between adjacent series bars
+                double drawW = Math.Max(1, stacked ? serW : serW - 1);
+                if (stacked)
+                {
+                    double h = Math.Abs(val / range) * plotH;
+                    if (h < 0.5) h = 0.5;
+                    dc.DrawRectangle(brush, null, new Rect(barX, stackedY - h, drawW, h));
+                    stackedY -= h;
+                }
+                else
+                {
+                    dc.DrawRectangle(brush, null, new Rect(barX, barY, drawW, barH));
+                }
             }
         }
     }
@@ -589,21 +666,26 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0) return;
 
-        var (minVal, maxVal) = ComputeAxisRange(chart);
+        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
 
         bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.BarStacked
                                        or FreeP.Core.Model.ChartType.BarStacked100;
 
-        double catH    = plotH / catCount;
-        double padding = catH * 0.15;
-        double serH    = stacked ? (catH - 2 * padding) : (catH - 2 * padding) / Math.Max(1, chart.Series.Count);
+        // PowerPoint default: gap width = 150% of bar cluster height.
+        const double gapRatio  = 1.5;
+        double catH            = plotH / catCount;
+        double clusterH        = catH / (1.0 + gapRatio);
+        double gapH            = catH - clusterH;
+        double halfGap         = gapH / 2.0;
+        int    serCount        = Math.Max(1, chart.Series.Count);
+        double serH            = stacked ? clusterH : clusterH / serCount;
 
         for (int ci = 0; ci < catCount; ci++)
         {
-            double catY = plotY + ci * catH + padding;
-            double stackedX = plotX; // right edge of last stacked segment
+            double catTop   = plotY + ci * catH + halfGap;
+            double stackedX = plotX;
 
             for (int si = 0; si < chart.Series.Count; si++)
             {
@@ -611,17 +693,18 @@ public sealed class SlideCanvas : FrameworkElement
                 double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) continue;
 
-                double val   = rawVal.Value;
-                double barW  = Math.Abs(val / range) * plotW;
+                double val  = rawVal.Value;
+                double barW = Math.Abs((val - minVal) / range * plotW);
                 if (barW < 0.5) barW = 0.5;
 
-                double barY = stacked ? catY : catY + si * serH;
+                double barY = stacked ? catTop : catTop + si * serH;
                 double barX = stacked ? stackedX : plotX;
 
                 var color = GetSeriesColor(chart, si, ci, seriesColors);
                 var brush = FreezeBrush(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)));
 
-                dc.DrawRectangle(brush, null, new Rect(barX, barY, barW, serH - 1));
+                double drawH = Math.Max(1, stacked ? serH : serH - 1);
+                dc.DrawRectangle(brush, null, new Rect(barX, barY, barW, drawH));
 
                 if (stacked) stackedX += barW;
             }
@@ -639,7 +722,7 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0) return;
 
-        var (minVal, maxVal) = ComputeAxisRange(chart);
+        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
 
@@ -767,7 +850,7 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         if (chart.Series.Count == 0) return;
 
-        var (minVal, maxVal) = ComputeAxisRange(chart);
+        var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
 
@@ -824,31 +907,62 @@ public sealed class SlideCanvas : FrameworkElement
         return fallbacks[seriesIndex % fallbacks.Length];
     }
 
-    private static (double min, double max) ComputeAxisRange(FreeP.Core.Model.ChartShape chart)
+    /// <summary>
+    /// Computes nice axis min/max/majorUnit matching PowerPoint's auto-scale algorithm:
+    /// major unit is chosen from {1, 2, 2.5, 5} × 10^n so that there are ~4-6 intervals.
+    /// Returns (min, max, majorUnit).
+    /// </summary>
+    internal static (double min, double max, double majorUnit) ComputeNiceAxisRange(
+        FreeP.Core.Model.ChartShape chart)
     {
-        double min = 0, max = 0;
+        double dataMin = 0, dataMax = 0;
         foreach (var series in chart.Series)
         {
             foreach (var v in series.Values)
             {
                 if (v.HasValue)
                 {
-                    min = Math.Min(min, v.Value);
-                    max = Math.Max(max, v.Value);
+                    dataMin = Math.Min(dataMin, v.Value);
+                    dataMax = Math.Max(dataMax, v.Value);
                 }
             }
         }
 
         // Apply explicit axis overrides
-        if (chart.ValueAxis.Min.HasValue) min = chart.ValueAxis.Min.Value;
-        if (chart.ValueAxis.Max.HasValue) max = chart.ValueAxis.Max.Value;
+        double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
+        double max = chart.ValueAxis.Max ?? dataMax;
 
-        if (max <= min) max = min + 1; // avoid zero range
+        if (max <= min) max = min + 1;
 
-        // Nice round up
-        double range   = max - min;
-        double niceMax = Math.Ceiling(max / (range / 5)) * (range / 5);
-        return (min, niceMax > max ? niceMax : max);
+        // Pick a nice major unit so we get approximately 4-5 gridlines.
+        double range = max - min;
+        double rawUnit = range / 4.0;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
+        double norm = rawUnit / magnitude;
+
+        double niceMult = norm switch
+        {
+            < 1.5  => 1.0,
+            < 2.25 => 2.0,
+            < 3.75 => 2.5,
+            < 7.5  => 5.0,
+            _      => 10.0
+        };
+
+        double majorUnit = niceMult * magnitude;
+
+        // Round max up to next multiple of majorUnit
+        double niceMax = Math.Ceiling(max / majorUnit) * majorUnit;
+        double niceMin = min >= 0 ? 0 : Math.Floor(min / majorUnit) * majorUnit;
+
+        return (niceMin, niceMax, majorUnit);
+    }
+
+    // Keep old signature for compatibility with existing callers that only need min/max
+    private static (double min, double max) ComputeAxisRange(FreeP.Core.Model.ChartShape chart)
+    {
+        var (min, max, _) = ComputeNiceAxisRange(chart);
+        return (min, max);
     }
 
     private static string FormatAxisValue(double v) =>
