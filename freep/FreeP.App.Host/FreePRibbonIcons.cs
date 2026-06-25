@@ -7,6 +7,8 @@ namespace FreeP.App.Host;
 /// the shared WPF renderer (ribbon, BackstageFrame rail, QAT) draws a meaningful vector icon per control.
 /// Ids without a dedicated mapping fall back to the generic glyph. Mirrors FreeWRibbonIcons, kept minimal for
 /// the scaffold's small ribbon.
+///
+/// Wave 4C additions: Transitions, Animations, and Slide Show command ids.
 /// </summary>
 internal static class FreePRibbonIcons
 {
@@ -41,5 +43,56 @@ internal static class FreePRibbonIcons
             ["freep.picture"] = RibbonCommandIconKind.Picture,
             ["freep.shape-rectangle"] = RibbonCommandIconKind.Rectangle,
             ["freep.shape-ellipse"] = RibbonCommandIconKind.Ellipse,
+
+            // ── Wave 4C: Transition gallery ───────────────────────────────────────────
+            ["freep.transition.none"]     = RibbonCommandIconKind.Clear,
+            ["freep.transition.fade"]     = RibbonCommandIconKind.Effects,
+            ["freep.transition.push"]     = RibbonCommandIconKind.ArrowRight,
+            ["freep.transition.wipe"]     = RibbonCommandIconKind.ArrowLeft,
+            ["freep.transition.split"]    = RibbonCommandIconKind.ArrowLeftRight,
+            ["freep.transition.cut"]      = RibbonCommandIconKind.Flash,
+            ["freep.transition.cover"]    = RibbonCommandIconKind.Page,
+            ["freep.transition.uncover"]  = RibbonCommandIconKind.Expand,
+            ["freep.transition.blinds"]   = RibbonCommandIconKind.View,
+            ["freep.transition.dissolve"] = RibbonCommandIconKind.Color,
+            ["freep.transition.zoom"]     = RibbonCommandIconKind.Zoom,
+            ["freep.transition.wheel"]    = RibbonCommandIconKind.Rotate,
+
+            // Wave 4C: Transition timing
+            ["freep.transition.duration"]         = RibbonCommandIconKind.History,
+            ["freep.transition.advance-on-click"] = RibbonCommandIconKind.Next,
+            ["freep.transition.advance-after"]    = RibbonCommandIconKind.History,
+            ["freep.transition.apply-all"]        = RibbonCommandIconKind.Refresh,
+
+            // Wave 4C: Slide Show buttons
+            ["freep.slideshow.from-beginning"]     = RibbonCommandIconKind.Next,
+            ["freep.slideshow.from-current-slide"] = RibbonCommandIconKind.Previous,
+
+            // Wave 4C: Animation entrance effects
+            ["freep.anim.entrance.appear"] = RibbonCommandIconKind.Flash,
+            ["freep.anim.entrance.fade"]   = RibbonCommandIconKind.Effects,
+            ["freep.anim.entrance.fly-in"] = RibbonCommandIconKind.ArrowUp,
+            ["freep.anim.entrance.wipe"]   = RibbonCommandIconKind.ArrowRight,
+            ["freep.anim.entrance.zoom"]   = RibbonCommandIconKind.Zoom,
+            ["freep.anim.entrance.split"]  = RibbonCommandIconKind.ArrowLeftRight,
+
+            // Wave 4C: Animation emphasis effects
+            ["freep.anim.emphasis.pulse"]       = RibbonCommandIconKind.Flash,
+            ["freep.anim.emphasis.spin"]        = RibbonCommandIconKind.Rotate,
+            ["freep.anim.emphasis.grow-shrink"] = RibbonCommandIconKind.Scale,
+
+            // Wave 4C: Animation exit effects
+            ["freep.anim.exit.disappear"] = RibbonCommandIconKind.Delete,
+            ["freep.anim.exit.fade-out"]  = RibbonCommandIconKind.Effects,
+            ["freep.anim.exit.fly-out"]   = RibbonCommandIconKind.ArrowDown,
+
+            // Wave 4C: Animation none / timing / pane
+            ["freep.anim.none"]         = RibbonCommandIconKind.Clear,
+            ["freep.anim.trigger"]      = RibbonCommandIconKind.Next,
+            ["freep.anim.duration"]     = RibbonCommandIconKind.History,
+            ["freep.anim.delay"]        = RibbonCommandIconKind.History,
+            ["freep.anim.move-earlier"] = RibbonCommandIconKind.Previous,
+            ["freep.anim.move-later"]   = RibbonCommandIconKind.Next,
+            ["freep.anim.pane"]         = RibbonCommandIconKind.List,
         };
 }

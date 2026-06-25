@@ -1,6 +1,7 @@
 using System.Windows;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -9,12 +10,28 @@ namespace FreeP.App.Host;
 /// shared <see cref="IRibbonCommandRegistry"/>.
 ///
 /// Wave 3A: most ids are now real commands routed through <see cref="EditingSession"/>.
+/// Wave 4C: Transitions tab + Animations tab + Slide Show buttons wired here.
+///           Build() gains two extra parameters for the slideshow start Actions supplied by MainWindow.
 ///
-/// Still stubbed (noted below): freep.paste, freep.cut, freep.copy, freep.layout, freep.font-family.
+/// Still stubbed (noted below): freep.paste, freep.cut, freep.copy, freep.layout, freep.font-family,
+///   freep.anim.trigger / .duration / .delay combo-box live-change, freep.anim.pane toggle.
 /// </summary>
 internal static class FreePRibbonCommands
 {
-    public static RibbonCommandRegistry Build(RibbonStateStore stateStore, EditingSession editor)
+    /// <param name="stateStore">Ribbon state store (checked / enabled flags).</param>
+    /// <param name="editor">The active editing session.</param>
+    /// <param name="onStartFromStart">
+    ///   Callback that starts the slideshow from the first slide (wired to MainWindow.StartSlideShow(true)).
+    ///   Provided by Wave 4B; stub is acceptable here during parallel development.
+    /// </param>
+    /// <param name="onStartFromCurrent">
+    ///   Callback that starts the slideshow from the current slide (wired to MainWindow.StartSlideShow(false)).
+    /// </param>
+    public static RibbonCommandRegistry Build(
+        RibbonStateStore stateStore,
+        EditingSession   editor,
+        Action?          onStartFromStart   = null,
+        Action?          onStartFromCurrent = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -40,8 +57,7 @@ internal static class FreePRibbonCommands
         registry.Register("freep.shape-ellipse",
             new ActionCommand(() => editor.InsertDefaultEllipse()));
 
-        // Picture: open a file-open dialog and insert. Heavy WPF dialog plumbing
-        // is intentionally thin here — 3C can refine the UX.
+        // Picture: open a file-open dialog and insert.
         registry.Register("freep.picture", new ActionCommand(() =>
         {
             // TODO(3C): replace with a proper picture-insert dialog with preview.
@@ -83,9 +99,6 @@ internal static class FreePRibbonCommands
             () => editor.ToggleUnderlineOnSelection()));
 
         // ── Clipboard / layout / font-family: STUBBED ────────────────────────────
-        // freep.paste / freep.cut / freep.copy  — waiting for clipboard model (Wave 3C).
-        // freep.layout                           — layout picker UI (Wave 3B).
-        // freep.font-family                      — font-family combo (Wave 3C text editing).
         foreach (var id in new[]
         {
             "freep.paste", "freep.cut", "freep.copy",
@@ -96,7 +109,243 @@ internal static class FreePRibbonCommands
             registry.Register(id, new ActionCommand(() => { /* STUB: wave 3B/3C */ }));
         }
 
+        // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
+
+        // Transition gallery — set Kind on current slide, preserve other transition properties.
+        RegisterTransitionKind(registry, editor, "freep.transition.none",     TransitionKind.None);
+        RegisterTransitionKind(registry, editor, "freep.transition.fade",     TransitionKind.Fade);
+        RegisterTransitionKind(registry, editor, "freep.transition.push",     TransitionKind.Push);
+        RegisterTransitionKind(registry, editor, "freep.transition.wipe",     TransitionKind.Wipe);
+        RegisterTransitionKind(registry, editor, "freep.transition.split",    TransitionKind.Split);
+        RegisterTransitionKind(registry, editor, "freep.transition.cut",      TransitionKind.Cut);
+        RegisterTransitionKind(registry, editor, "freep.transition.cover",    TransitionKind.Cover);
+        RegisterTransitionKind(registry, editor, "freep.transition.uncover",  TransitionKind.Uncover);
+        RegisterTransitionKind(registry, editor, "freep.transition.blinds",   TransitionKind.Blinds);
+        RegisterTransitionKind(registry, editor, "freep.transition.dissolve", TransitionKind.Dissolve);
+        RegisterTransitionKind(registry, editor, "freep.transition.zoom",     TransitionKind.Zoom);
+        RegisterTransitionKind(registry, editor, "freep.transition.wheel",    TransitionKind.Wheel);
+
+        // Transition timing — Duration combo: 0=500ms, 1=750ms, 2=1000ms, 3=1500ms, 4=2000ms.
+        registry.Register("freep.transition.duration", new ActionCommand(() =>
+        {
+            // ComboBox selection is not yet fed back via context in Wave 4C; stub.
+            /* STUB: Wave 5 will feed the selected index through RibbonCommandContext */
+        }));
+
+        // Advance on click toggle.
+        registry.Register("freep.transition.advance-on-click",
+            new EditorToggleCommand(stateStore, "freep.transition.advance-on-click", () =>
+            {
+                var t = GetOrCreateTransition(editor);
+                t.AdvanceOnClick = !t.AdvanceOnClick;
+                editor.SetTransition(t);
+            }));
+
+        // Advance after time combo.
+        registry.Register("freep.transition.advance-after", new ActionCommand(() =>
+        {
+            /* STUB: Wave 5 will wire the selected time value */
+        }));
+
+        // Apply To All — copies the current slide's transition to every slide.
+        registry.Register("freep.transition.apply-all", new ActionCommand(() =>
+        {
+            var currentTransition = editor.CurrentSlideTransition;
+            var pres = editor.Presentation;
+            for (int i = 0; i < pres.Slides.Count; i++)
+            {
+                // Clone so each slide owns its own object; null clears any existing transition.
+                SlideTransition? copy = currentTransition is null ? null : new SlideTransition
+                {
+                    Kind           = currentTransition.Kind,
+                    Direction      = currentTransition.Direction,
+                    DurationMs     = currentTransition.DurationMs,
+                    AdvanceOnClick = currentTransition.AdvanceOnClick,
+                    AdvanceAfterMs = currentTransition.AdvanceAfterMs,
+                };
+                pres.Slides[i].Transition = copy;
+            }
+        }));
+
+        // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────
+
+        // From Beginning — delegates to MainWindow.StartSlideShow(true) via onStartFromStart.
+        registry.Register("freep.slideshow.from-beginning",
+            new ActionCommand(() => onStartFromStart?.Invoke()));
+
+        // From Current Slide — delegates to MainWindow.StartSlideShow(false) via onStartFromCurrent.
+        registry.Register("freep.slideshow.from-current-slide",
+            new ActionCommand(() => onStartFromCurrent?.Invoke()));
+
+        // ── Wave 4C: Animations tab ──────────────────────────────────────────────
+
+        // Entrance effects — AddAnimation with Kind=Entrance + appropriate Preset.
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.appear", AnimationPreset.Appear);
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fade",   AnimationPreset.Fade);
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.fly-in", AnimationPreset.FlyIn);
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.wipe",   AnimationPreset.Wipe);
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.zoom",   AnimationPreset.Zoom);
+        RegisterEntranceAnim(registry, editor, "freep.anim.entrance.split",  AnimationPreset.Split);
+
+        // Emphasis effects.
+        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.pulse",       AnimationPreset.Pulse);
+        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.spin",        AnimationPreset.Spin);
+        RegisterEmphasisAnim(registry, editor, "freep.anim.emphasis.grow-shrink", AnimationPreset.Grow);
+
+        // Exit effects.
+        RegisterExitAnim(registry, editor, "freep.anim.exit.disappear", AnimationPreset.Appear);
+        RegisterExitAnim(registry, editor, "freep.anim.exit.fade-out",  AnimationPreset.Fade);
+        RegisterExitAnim(registry, editor, "freep.anim.exit.fly-out",   AnimationPreset.FlyIn);
+
+        // No animation — removes the first animation that targets the selected shape.
+        registry.Register("freep.anim.none", new ActionCommand(() =>
+        {
+            var animations = editor.CurrentSlideAnimations;
+            var selectedIds = editor.SelectedShapeIds;
+            if (selectedIds.Count == 0) return;
+            var targetId = selectedIds[0];
+            // Walk backwards to keep indices valid after removal.
+            for (int i = animations.Count - 1; i >= 0; i--)
+            {
+                if (animations[i].ShapeId == targetId)
+                    editor.RemoveAnimation(i);
+            }
+        }));
+
+        // Timing: trigger combo (STUB — full implementation deferred to Wave 5).
+        registry.Register("freep.anim.trigger", new ActionCommand(() =>
+        {
+            /* STUB: Wave 5 will read the selected item and call editor.SetAnimation() */
+        }));
+
+        // Timing: duration + delay combos (STUBs).
+        registry.Register("freep.anim.duration", new ActionCommand(() => { /* STUB */ }));
+        registry.Register("freep.anim.delay",    new ActionCommand(() => { /* STUB */ }));
+
+        // Reorder animations — Move Earlier / Move Later.
+        registry.Register("freep.anim.move-earlier", new ActionCommand(() =>
+        {
+            var animations  = editor.CurrentSlideAnimations;
+            var selectedIds = editor.SelectedShapeIds;
+            if (selectedIds.Count == 0 || animations.Count == 0) return;
+            var targetId = selectedIds[0];
+            var idx = FindLastAnimationIndex(animations, targetId);
+            if (idx > 0)
+                editor.MoveAnimation(idx, idx - 1);
+        }));
+
+        registry.Register("freep.anim.move-later", new ActionCommand(() =>
+        {
+            var animations  = editor.CurrentSlideAnimations;
+            var selectedIds = editor.SelectedShapeIds;
+            if (selectedIds.Count == 0 || animations.Count == 0) return;
+            var targetId = selectedIds[0];
+            var idx = FindLastAnimationIndex(animations, targetId);
+            if (idx >= 0 && idx < animations.Count - 1)
+                editor.MoveAnimation(idx, idx + 1);
+        }));
+
+        // Animation Pane toggle stub.
+        registry.Register("freep.anim.pane",
+            new EditorToggleCommand(stateStore, "freep.anim.pane", () =>
+            {
+                /* STUB: Wave 5 will open the animation pane panel */
+            }));
+
         return registry;
+    }
+
+    // ── Transition helpers ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the current slide's transition if it exists, or a new default one.
+    /// Does NOT call SetTransition — the caller must do so after mutating.
+    /// </summary>
+    private static SlideTransition GetOrCreateTransition(EditingSession editor)
+        => editor.CurrentSlideTransition is not null
+            ? new SlideTransition
+              {
+                  Kind           = editor.CurrentSlideTransition.Kind,
+                  Direction      = editor.CurrentSlideTransition.Direction,
+                  DurationMs     = editor.CurrentSlideTransition.DurationMs,
+                  AdvanceOnClick = editor.CurrentSlideTransition.AdvanceOnClick,
+                  AdvanceAfterMs = editor.CurrentSlideTransition.AdvanceAfterMs,
+              }
+            : new SlideTransition();
+
+    private static void RegisterTransitionKind(
+        RibbonCommandRegistry registry,
+        EditingSession        editor,
+        string                id,
+        TransitionKind        kind)
+    {
+        registry.Register(id, new ActionCommand(() =>
+        {
+            if (kind == TransitionKind.None)
+            {
+                editor.SetTransition(null);
+            }
+            else
+            {
+                var t = GetOrCreateTransition(editor);
+                t.Kind = kind;
+                editor.SetTransition(t);
+            }
+        }));
+    }
+
+    // ── Animation helpers ─────────────────────────────────────────────────────────
+
+    private static void RegisterEntranceAnim(
+        RibbonCommandRegistry registry,
+        EditingSession        editor,
+        string                id,
+        AnimationPreset       preset)
+        => registry.Register(id, new ActionCommand(() =>
+            editor.AddAnimation(0, new ShapeAnimation
+            {
+                Kind       = AnimationKind.Entrance,
+                Preset     = preset,
+                Trigger    = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            })));
+
+    private static void RegisterEmphasisAnim(
+        RibbonCommandRegistry registry,
+        EditingSession        editor,
+        string                id,
+        AnimationPreset       preset)
+        => registry.Register(id, new ActionCommand(() =>
+            editor.AddAnimation(0, new ShapeAnimation
+            {
+                Kind       = AnimationKind.Emphasis,
+                Preset     = preset,
+                Trigger    = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            })));
+
+    private static void RegisterExitAnim(
+        RibbonCommandRegistry registry,
+        EditingSession        editor,
+        string                id,
+        AnimationPreset       preset)
+        => registry.Register(id, new ActionCommand(() =>
+            editor.AddAnimation(0, new ShapeAnimation
+            {
+                Kind       = AnimationKind.Exit,
+                Preset     = preset,
+                Trigger    = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            })));
+
+    /// <summary>Finds the last animation index targeting <paramref name="shapeId"/>; -1 if not found.</summary>
+    private static int FindLastAnimationIndex(
+        IReadOnlyList<ShapeAnimation> animations,
+        uint shapeId)
+    {
+        for (int i = animations.Count - 1; i >= 0; i--)
+            if (animations[i].ShapeId == shapeId) return i;
+        return -1;
     }
 
     // ── Inner helpers ─────────────────────────────────────────────────────────────

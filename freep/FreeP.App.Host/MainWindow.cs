@@ -135,8 +135,15 @@ public sealed class MainWindow : Window
         AddQuickAccessButtons(titleBar.QatHost);
 
         // Ribbon.
+        // Wave 4C: pass slideshow Actions into the command registry.
+        // StartSlideShow is defined by Wave 4B; if that branch has not yet merged,
+        // the local stub below (see "4B-MERGE PLACEHOLDER") keeps this branch green.
         var stateStore = new RibbonStateStore();
-        var commands = FreePRibbonCommands.Build(stateStore, Editor);
+        var commands = FreePRibbonCommands.Build(
+            stateStore,
+            Editor,
+            onStartFromStart:   () => StartSlideShow(true),
+            onStartFromCurrent: () => StartSlideShow(false));
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -389,4 +396,19 @@ public sealed class MainWindow : Window
 
     private static string ResolveDataFolderLabel()
         => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+
+    // ── Slide Show (4B SEAM) ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Launches the slideshow.
+    ///
+    /// 4B-MERGE PLACEHOLDER: Wave 4B owns the real implementation (SlideShowWindow etc.).
+    /// This stub exists ONLY so the Wave 4C branch compiles independently. The orchestrator
+    /// must remove this stub after merging 4B, which provides the real method.
+    /// </summary>
+    internal void StartSlideShow(bool fromStart)
+    {
+        // 4B-MERGE PLACEHOLDER — remove this stub after merging Wave 4B.
+        _ = fromStart; // suppress unused-parameter warning
+    }
 }
