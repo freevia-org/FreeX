@@ -258,10 +258,11 @@ internal static class CorpusGenerator
             // Slide is 960 x 540 pt. Centre a 700x260 table.
             dynamic table = slide.Shapes.AddTable(4, 3, 130f, 140f, 700f, 260f).Table;
 
-            // Apply "Medium Style 2 - Accent 1" table style
-            // Note: we set FirstRow = true so the header row gets a distinct style.
-            table.ShowHeaders = MsoTrue;
-            table.ApplyStyle("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", MsoTrue);
+            // Apply "Medium Style 2 - Accent 1" table style with firstRow/bandRow enabled.
+            // ApplyStyle(Style GUID, MakeDefault) — the second param is a bool on some versions;
+            // pass as MsoFalse to not make it the default.
+            try { table.ApplyStyle("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}", MsoFalse); }
+            catch { /* style may not exist in this PowerPoint installation; continue */ }
 
             // Column widths (sum ~700pt)
             table.Columns.Item(1).Width = 220f;
