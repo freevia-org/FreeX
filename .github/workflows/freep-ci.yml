@@ -1,29 +1,11 @@
 name: FreeP CI
 
 # Dedicated build + test gate for the FreeP presentations app (freep/, FreeP.slnx).
-# Runs on PRs to main and on direct pushes to main that touch FreeP, the shared tier, or this workflow,
-# mirroring the FreeW `freew-ci.yml` lane (windows-latest, .NET 10, build Release then test --no-build).
+# MANUAL-ONLY: triggered on demand via the Actions UI or `gh workflow run freep-ci.yml`
+# (windows-latest, .NET 10, build Release then test --no-build). The automatic PR/push
+# triggers were removed intentionally — run this lane manually when validating FreeP.
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "freep/**"
-      - "FreeP.slnx"
-      - "shared/**"
-      - "Directory.Build.props"
-      - "Directory.Packages.props"
-      - ".github/workflows/freep-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "freep/**"
-      - "FreeP.slnx"
-      - "shared/**"
-      - "Directory.Build.props"
-      - "Directory.Packages.props"
-      - ".github/workflows/freep-ci.yml"
+  workflow_dispatch:
 
 concurrency:
   group: freep-ci-${{ github.ref }}
