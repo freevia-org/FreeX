@@ -1219,6 +1219,12 @@ public sealed class DocumentView : Control
     /// </summary>
     internal void InsertParagraphBreakPublic() => InsertParagraphBreak();
 
+    /// <summary>Trigger a Backspace programmatically. Exposed for AV-TRACKEDIT unit tests.</summary>
+    internal void BackspacePublic() => Backspace();
+
+    /// <summary>Trigger a forward Delete programmatically. Exposed for AV-TRACKEDIT unit tests.</summary>
+    internal void DeleteForwardPublic() => DeleteForward();
+
     /// <summary>
     /// Invoke the list Tab/Shift-Tab handler and return whether it consumed the key.
     /// Exposed for AV-LIST unit tests.
@@ -3104,12 +3110,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -4302,6 +4308,11 @@ public sealed class DocumentView : Control
                 drawY   = pc.Y + pc.LineHeight * SubYLowerFraction;
             }
 
+            // AV-TRACKEDIT: tracked insertions/deletions draw in the revision colour; insertions are also
+            // underlined and deletions struck through (the marks layered on top of any run decorations below).
+            if (pc.Revision != RevisionKind.None)
+                drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+
             // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
             if (pc.Ch == '\t')
             {
@@ -4310,6 +4321,7 @@ public sealed class DocumentView : Control
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
                 if (pc.Fmt.Strikethrough)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+                DrawRevisionDecoration(context, pc);
                 continue;
             }
 
@@ -4320,6 +4332,7 @@ public sealed class DocumentView : Control
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
             if (pc.Fmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+            DrawRevisionDecoration(context, pc);
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
@@ -5060,6 +5073,27 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-TRACKEDIT: draw the tracked-change mark for a glyph — a revision-coloured underline under a tracked
+    /// insertion (Word's w:ins decoration) or a revision-coloured strikethrough across a tracked deletion
+    /// (w:del). A no-op for ordinary (un-tracked) glyphs.
+    /// </summary>
+    private static void DrawRevisionDecoration(DrawingContext context, PlacedChar pc)
+    {
+        if (pc.W <= 0)
+            return;
+        if (pc.IsInsertedRevision)
+        {
+            var y = pc.Y + pc.LineHeight * 0.86;
+            context.DrawLine(RevisionInsertUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        }
+        else if (pc.IsDeletedRevision)
+        {
+            var y = pc.Y + pc.LineHeight * 0.5;
+            context.DrawLine(RevisionDeleteStrikePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        }
+    }
+
+    /// <summary>
     /// AV-TAB: Draws a tab leader (dots / dashes / underline) filling the gap between
     /// <paramref name="x1"/> (tab character start) and <paramref name="x2"/> (next segment start)
     /// for the given <paramref name="leader"/> kind and run formatting.
@@ -5413,13 +5447,17 @@ public sealed class DocumentView : Control
                 return;
             var offset = cc.Offset;
             var fmt = ActiveFormatting(para, offset);
+            // AV-TRACKEDIT: record cell typing as a tracked insertion too when Track Changes is on.
+            var cellInsRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
+            var cellInsAuthor = TrackChangesEnabled ? RevisionAuthor : null;
+            var cellInsDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
                 var chars = ParaCells(p);
                 // BE4: insert at incrementing position so multi-char paste/IME inserts in order.
                 var at = Math.Clamp(offset, 0, chars.Count);
                 foreach (var ch in text)
-                    chars.Insert(at++, new Cell(ch, fmt));
+                    chars.Insert(at++, new Cell(ch, fmt, null, cellInsRevision, cellInsAuthor, cellInsDate));
                 SetRuns(p, chars);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
@@ -5442,11 +5480,17 @@ public sealed class DocumentView : Control
         var pendingFmt = _pendingRunFmt;
         _pendingRunFmt = null; // consume immediately so only the next typed char gets it
         var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
+        // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
+        // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
+        var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
+        var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
+        var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
+            var at = Math.Clamp(bodyOffset, 0, cells.Count);
             foreach (var ch in text)
-                cells.Insert(Math.Clamp(bodyOffset, 0, cells.Count), new Cell(ch, bodyFmt));
+                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate));
             SetRuns(p, cells);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -5466,6 +5510,12 @@ public sealed class DocumentView : Control
                 var offset = cc.Offset;
                 _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
                 {
+                    if (TrackChangesEnabled)
+                    {
+                        var (marked, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
+                        SetRuns(p, marked);
+                        return;
+                    }
                     var chars = ParaCells(p);
                     if (offset - 1 < chars.Count)
                         chars.RemoveAt(offset - 1);
@@ -5492,13 +5542,26 @@ public sealed class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                if (offset - 1 < cells.Count)
-                    cells.RemoveAt(offset - 1);
-                SetRuns(p, cells);
-            }));
+                // AV-TRACKEDIT: a tracked deletion keeps the character (struck) unless it is this author's own
+                // still-pending insertion, which is removed outright. MarkCellsDeleted applies that rule.
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
+                    SetRuns(p, cells);
+                }));
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    if (offset - 1 < cells.Count)
+                        cells.RemoveAt(offset - 1);
+                    SetRuns(p, cells);
+                }));
+            }
             _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
@@ -5523,14 +5586,37 @@ public sealed class DocumentView : Control
             if (cc.Offset < len)
             {
                 var offset = cc.Offset;
-                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                if (TrackChangesEnabled)
                 {
-                    var chars = ParaCells(p);
-                    if (offset < chars.Count)
-                        chars.RemoveAt(offset);
-                    SetRuns(p, chars);
-                }));
-                // Caret stays at same offset (now pointing at the next char).
+                    var before = ParaCells(para);
+                    var ownInsertion = offset < before.Count
+                        && before[offset].Revision == RevisionKind.Inserted
+                        && string.Equals(before[offset].RevisionAuthor, RevisionAuthor, StringComparison.Ordinal);
+                    _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                    {
+                        var (marked, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
+                        SetRuns(p, marked);
+                    }));
+                    // Advance past a kept-struck char so repeated Delete progresses; stay put if it collapsed.
+                    if (!ownInsertion)
+                    {
+                        _cellCaret = cc with { Offset = offset + 1 };
+                        _cellAnchor = _cellCaret;
+                        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, offset + 1));
+                        _selectionAnchor = _caret;
+                    }
+                }
+                else
+                {
+                    _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                    {
+                        var chars = ParaCells(p);
+                        if (offset < chars.Count)
+                            chars.RemoveAt(offset);
+                        SetRuns(p, chars);
+                    }));
+                    // Caret stays at same offset (now pointing at the next char).
+                }
             }
             // else at end of paragraph → delete paragraph break (join with next paragraph in cell)
             else
@@ -5559,13 +5645,37 @@ public sealed class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                if (offset < cells.Count)
-                    cells.RemoveAt(offset);
-                SetRuns(p, cells);
-            }));
+                // AV-TRACKEDIT: forward-delete records a tracked deletion (keeps the struck char) unless it is
+                // this author's own pending insertion (removed outright). When kept-struck, advance the caret
+                // past the struck character so a repeated Delete keeps progressing (Word behaviour); when the
+                // char collapsed away, leave the caret in place (the next char shifted into its position).
+                var before = ParaCells(paragraph);
+                var ownInsertion = offset < before.Count
+                    && before[offset].Revision == RevisionKind.Inserted
+                    && string.Equals(before[offset].RevisionAuthor, RevisionAuthor, StringComparison.Ordinal);
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
+                    SetRuns(p, cells);
+                }));
+                if (!ownInsertion)
+                {
+                    _caret = new DocPosition(block, offset + 1);
+                    _selectionAnchor = _caret;
+                }
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    if (offset < cells.Count)
+                        cells.RemoveAt(offset);
+                    SetRuns(p, cells);
+                }));
+            }
         }
     }
 
@@ -5692,6 +5802,14 @@ public sealed class DocumentView : Control
         var hi = Math.Max(anchor.Offset, cc.Offset);
         _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
         {
+            if (TrackChangesEnabled)
+            {
+                // AV-TRACKEDIT: mark the in-cell selection as a tracked deletion (keep struck) rather than
+                // removing it; own pending insertions collapse away (handled inside MarkCellsDeleted).
+                var (marked, _) = MarkCellsDeleted(ParaCells(p), lo, hi);
+                SetRuns(p, marked);
+                return;
+            }
             var chars = ParaCells(p);
             var clo = Math.Clamp(lo, 0, chars.Count);
             var chi = Math.Clamp(hi, 0, chars.Count);
@@ -5724,15 +5842,28 @@ public sealed class DocumentView : Control
                 _selectionAnchor = _caret;
                 return;
             }
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                var lo = Math.Clamp(a, 0, cells.Count);
-                var hi = Math.Clamp(b, 0, cells.Count);
-                cells.RemoveRange(lo, Math.Max(0, hi - lo));
-                SetRuns(p, cells);
-            }));
-            _caret = new DocPosition(block, a);
+                // AV-TRACKEDIT: a tracked deletion keeps the selected text (struck), except this author's own
+                // pending insertions which are removed outright. Caret collapses to the selection start.
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), Math.Min(a, b), Math.Max(a, b));
+                    SetRuns(p, cells);
+                }));
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    var lo = Math.Clamp(a, 0, cells.Count);
+                    var hi = Math.Clamp(b, 0, cells.Count);
+                    cells.RemoveRange(lo, Math.Max(0, hi - lo));
+                    SetRuns(p, cells);
+                }));
+            }
+            _caret = new DocPosition(block, Math.Min(a, b));
         }
         else if (_doc.Blocks[sel.Start.Block] is Paragraph startPara && _doc.Blocks[sel.End.Block] is Paragraph endPara)
         {
@@ -5942,21 +6073,67 @@ public sealed class DocumentView : Control
     // infra (AddComment/DeleteComment). Word count reads DocumentStatistics from the model.
 
     /// <summary>
-    /// When true, the editor is in Track Changes mode. <b>Deferred:</b> live keystroke-level recording of
-    /// edits as revisions is not wired (the Avalonia edit pipeline does not consult this flag yet). The flag
-    /// is model/UI state that the ribbon toggle reflects and that gates
-    /// <see cref="MarkSelectionAsRevision"/> (used to turn the current selection into a tracked insertion or
-    /// deletion). Accept/Reject of existing revisions work regardless of this flag.
+    /// When true, the editor is in Track Changes mode and the edit pipeline records edits as revisions
+    /// (AV-TRACKEDIT): typing inserts text marked as a tracked insertion (current <see cref="RevisionAuthor"/>
+    /// + date), and Backspace/Delete/selection-delete mark the affected text as a tracked deletion (the text
+    /// is kept and struck, per Word) rather than removing it — except deleting one's own still-pending tracked
+    /// insertion, which is removed outright. Accept/Reject of existing revisions work regardless of this flag.
     /// </summary>
     public bool TrackChangesEnabled { get; private set; }
 
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
 
+    /// <summary>The W3CDTF (UTC) timestamp stamped on revisions recorded right now.</summary>
+    private static string CurrentRevisionDateXml() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// AV-TRACKEDIT: mark the cell range [lo, hi) of <paramref name="cells"/> as a tracked deletion (per Word:
+    /// the characters are KEPT and struck, not removed) and return the resulting list together with the caret
+    /// offset that should follow the operation. Characters that are an unaccepted tracked insertion <em>by the
+    /// same author</em> are removed outright instead (Word behaviour: deleting your own pending insertion just
+    /// takes it back). Characters already marked deleted are left as-is. The returned caret offset is the start
+    /// of the range when anything was kept-struck, otherwise <paramref name="lo"/> (the run collapsed away).
+    /// </summary>
+    private (List<Cell> Cells, int Caret) MarkCellsDeleted(List<Cell> cells, int lo, int hi)
+    {
+        lo = Math.Clamp(lo, 0, cells.Count);
+        hi = Math.Clamp(hi, 0, cells.Count);
+        if (hi <= lo)
+            return (cells, lo);
+
+        var result = new List<Cell>(cells.Count);
+        result.AddRange(cells.Take(lo));
+        for (var k = lo; k < hi; k++)
+        {
+            var cell = cells[k];
+            // Deleting one's own still-pending insertion removes it outright (Word: it never "existed").
+            if (cell.Revision == RevisionKind.Inserted &&
+                string.Equals(cell.RevisionAuthor, RevisionAuthor, StringComparison.Ordinal))
+                continue;
+            // Already a tracked deletion → keep as-is (deleting struck text is a no-op).
+            if (cell.Revision == RevisionKind.Deleted)
+            {
+                result.Add(cell);
+                continue;
+            }
+            // Otherwise mark the (ordinary, or other-author-inserted) character as a tracked deletion: keep it.
+            result.Add(cell with
+            {
+                Revision = RevisionKind.Deleted,
+                RevisionAuthor = RevisionAuthor,
+                RevisionDateXml = CurrentRevisionDateXml(),
+            });
+        }
+        result.AddRange(cells.Skip(hi));
+        return (result, lo);
+    }
+
     /// <summary>
     /// Toggles <see cref="TrackChangesEnabled"/> and returns the new state. Re-renders so any change-bar /
-    /// markup adorners that depend on the mode update. (Recording edits-on-type as revisions is deferred —
-    /// see <see cref="TrackChangesEnabled"/>.)
+    /// markup adorners that depend on the mode update. While on, subsequent edits are recorded as tracked
+    /// revisions — see <see cref="TrackChangesEnabled"/>.
     /// </summary>
     public bool ToggleTrackChanges()
     {
@@ -7534,7 +7711,9 @@ public sealed class DocumentView : Control
             foreach (var ch in run.Text)
                 // AV-COMMENT: carry the run's CommentId so commented ranges survive the cell round-trip
                 // (layout + edit). Textless comment-reference runs contribute no cells, as before.
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId));
+                // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
+                // round-trip (and SetRuns can re-segment runs on a revision boundary).
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml));
         return cells;
     }
 
@@ -7565,11 +7744,28 @@ public sealed class DocumentView : Control
             // AV-COMMENT: also break runs on a comment-id boundary so the anchoring CommentId is preserved
             // across edits (a run is one contiguous run of equal Fmt AND equal CommentId).
             var commentId = cells[i].CommentId;
+            // AV-TRACKEDIT: a run is also broken on a tracked-change boundary so recorded insertions /
+            // deletions (and their author/date) survive the cell round-trip (a run is one contiguous run of
+            // equal Fmt AND CommentId AND Revision mark).
+            var revision = cells[i].Revision;
+            var revisionAuthor = cells[i].RevisionAuthor;
+            var revisionDateXml = cells[i].RevisionDateXml;
             var start = i;
-            while (i < cells.Count && cells[i].Fmt.Equals(fmt) && cells[i].CommentId == commentId)
+            while (i < cells.Count
+                   && cells[i].Fmt.Equals(fmt)
+                   && cells[i].CommentId == commentId
+                   && cells[i].Revision == revision
+                   && cells[i].RevisionAuthor == revisionAuthor
+                   && cells[i].RevisionDateXml == revisionDateXml)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
-            paragraph.Runs.Add(new Run(text, fmt) { CommentId = commentId });
+            paragraph.Runs.Add(new Run(text, fmt)
+            {
+                CommentId = commentId,
+                Revision = revision,
+                RevisionAuthor = revisionAuthor,
+                RevisionDateXml = revisionDateXml,
+            });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
         }
@@ -7744,9 +7940,27 @@ public sealed class DocumentView : Control
     // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
     private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
+    // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
+    // Word's default single-author revision colour is a deep red/maroon. Tracked insertions draw in this
+    // colour and underlined; tracked deletions draw in this colour and struck through.
+    private static Color RevisionColor { get; } = Color.FromRgb(0xC0, 0x00, 0x4B);
+    private const string RevisionColorHex = "#C0004B";
+    private static IBrush RevisionBrush { get; } = new SolidColorBrush(RevisionColor);
+    private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
+    private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
+
     // AV-COMMENT: CommentId carries the anchoring review-comment id (null = not commented) so the
     // glyph layout can mark commented ranges. Defaulted so existing Cell(ch, fmt) construction is unchanged.
-    private readonly record struct Cell(char Ch, RunFormatting Fmt, int? CommentId = null);
+    // AV-TRACKEDIT: Revision/RevisionAuthor/RevisionDateXml carry a per-character tracked-change mark so
+    // recorded insertions/deletions survive the cell round-trip (ParaCells → edit → SetRuns). Defaulted to
+    // an un-tracked character so all existing Cell(ch, fmt[, commentId]) construction is unchanged.
+    private readonly record struct Cell(
+        char Ch,
+        RunFormatting Fmt,
+        int? CommentId = null,
+        RevisionKind Revision = RevisionKind.None,
+        string? RevisionAuthor = null,
+        string? RevisionDateXml = null);
 
     private readonly record struct DocPosition(int Block, int Offset);
 
@@ -7766,13 +7980,22 @@ public sealed class DocumentView : Control
         int CellParaIdx = -1,
         int CellParaOffset = -1,
         // AV-COMMENT: anchoring review-comment id (null = this glyph is not inside a comment range).
-        int? CommentId = null)
+        int? CommentId = null,
+        // AV-TRACKEDIT: tracked-change mark on this glyph so the render can colour/underline insertions and
+        // strike deletions. None for ordinary text.
+        RevisionKind Revision = RevisionKind.None)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
 
         /// <summary>True when this glyph is covered by a review comment's anchored range.</summary>
         public bool IsCommented => CommentId is not null;
+
+        /// <summary>True when this glyph is part of a tracked insertion.</summary>
+        public bool IsInsertedRevision => Revision == RevisionKind.Inserted;
+
+        /// <summary>True when this glyph is part of a tracked deletion (kept and struck).</summary>
+        public bool IsDeletedRevision => Revision == RevisionKind.Deleted;
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
