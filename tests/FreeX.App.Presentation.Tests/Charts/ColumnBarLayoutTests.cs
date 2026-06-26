@@ -140,4 +140,95 @@ public sealed class ColumnBarLayoutTests
         bar.Left.Should().BeApproximately(catScale.Transform(-0.35), 1e-6);
         bar.Right.Should().BeApproximately(catScale.Transform(0.35), 1e-6);
     }
+
+    // ── 3-D column / 3-D bar flat-render tests ───────────────────────────────
+
+    [Fact]
+    public void ThreeDColumn_is_supported_and_lays_out_as_clustered_columns()
+    {
+        // 3-D column maps to the same flat-clustered-column layout as ChartType.Column.
+        ChartLayoutEngine.IsSupported(ChartType.ThreeDColumn).Should().BeTrue();
+
+        var request = Request(
+            Chart(ChartType.ThreeDColumn),
+            ["Q1", "Q2", "Q3", "Q4"],
+            [Series(0, "Revenue", 120, 150, 180, 200), Series(1, "Cost", 80, 100, 130, 160)]);
+
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series.Should().HaveCount(2);
+        layout.Series[0].Kind.Should().Be(SeriesGeometryKind.Columns, "3-D column renders as flat columns");
+        layout.Series[0].Bars.Should().HaveCount(4, "one bar per category");
+        layout.Series[1].Bars.Should().HaveCount(4);
+        // All bars must be non-degenerate rectangles with positive area.
+        foreach (var series in layout.Series)
+            foreach (var bar in series.Bars)
+                bar.Rect.Width.Should().BePositive("each bar must have positive width");
+    }
+
+    [Fact]
+    public void ThreeDColumn_lays_out_identically_to_2D_Column_for_same_data()
+    {
+        // Geometry should match the plain Column layout exactly (same axis, same bar widths).
+        var categories = new[] { "A", "B", "C" };
+        var plot = new PlotRect(0, 0, 300, 200);
+
+        var col3d = ChartLayoutEngine.Layout(Request(Chart(ChartType.ThreeDColumn), categories, [Series(0, "S", 10, 20, 30)], plot));
+        var col2d = ChartLayoutEngine.Layout(Request(Chart(ChartType.Column), categories, [Series(0, "S", 10, 20, 30)], plot));
+
+        // Same number of bars, same bar rects.
+        col3d.Series[0].Bars.Count.Should().Be(col2d.Series[0].Bars.Count);
+        for (var i = 0; i < col3d.Series[0].Bars.Count; i++)
+        {
+            col3d.Series[0].Bars[i].Rect.Left.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Left, 1e-6);
+            col3d.Series[0].Bars[i].Rect.Right.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Right, 1e-6);
+            col3d.Series[0].Bars[i].Rect.Top.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Top, 1e-6);
+            col3d.Series[0].Bars[i].Rect.Bottom.Should().BeApproximately(col2d.Series[0].Bars[i].Rect.Bottom, 1e-6);
+        }
+    }
+
+    [Fact]
+    public void ThreeDBar_is_supported_and_lays_out_as_clustered_bars()
+    {
+        // 3-D bar maps to the same flat-clustered-bar layout as ChartType.Bar.
+        ChartLayoutEngine.IsSupported(ChartType.ThreeDBar).Should().BeTrue();
+
+        var request = Request(
+            Chart(ChartType.ThreeDBar),
+            ["North", "South", "East", "West"],
+            [Series(0, "Sales", 340, 280, 410, 300), Series(1, "Target", 210, 190, 250, 180)]);
+
+        var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series.Should().HaveCount(2);
+        layout.Series[0].Kind.Should().Be(SeriesGeometryKind.Bars, "3-D bar renders as flat horizontal bars");
+        layout.Series[0].Bars.Should().HaveCount(4, "one bar per category");
+        layout.Series[1].Bars.Should().HaveCount(4);
+        // Category axis on the left, value axis on the bottom (horizontal bars).
+        layout.CategoryAxis!.Side.Should().Be(AxisSide.Left);
+        layout.ValueAxis!.Side.Should().Be(AxisSide.Bottom);
+        // All bars must be non-degenerate.
+        foreach (var series in layout.Series)
+            foreach (var bar in series.Bars)
+                bar.Rect.Width.Should().BePositive("each bar must have positive width");
+    }
+
+    [Fact]
+    public void ThreeDBar_lays_out_identically_to_2D_Bar_for_same_data()
+    {
+        var categories = new[] { "A", "B", "C" };
+        var plot = new PlotRect(0, 0, 300, 200);
+
+        var bar3d = ChartLayoutEngine.Layout(Request(Chart(ChartType.ThreeDBar), categories, [Series(0, "S", 10, 20, 30)], plot));
+        var bar2d = ChartLayoutEngine.Layout(Request(Chart(ChartType.Bar), categories, [Series(0, "S", 10, 20, 30)], plot));
+
+        bar3d.Series[0].Bars.Count.Should().Be(bar2d.Series[0].Bars.Count);
+        for (var i = 0; i < bar3d.Series[0].Bars.Count; i++)
+        {
+            bar3d.Series[0].Bars[i].Rect.Left.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Left, 1e-6);
+            bar3d.Series[0].Bars[i].Rect.Right.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Right, 1e-6);
+            bar3d.Series[0].Bars[i].Rect.Top.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Top, 1e-6);
+            bar3d.Series[0].Bars[i].Rect.Bottom.Should().BeApproximately(bar2d.Series[0].Bars[i].Rect.Bottom, 1e-6);
+        }
+    }
 }

@@ -29,9 +29,11 @@ public static class ChartLayoutEngine
         type is ChartType.Column
             or ChartType.StackedColumn
             or ChartType.PercentStackedColumn
+            or ChartType.ThreeDColumn
             or ChartType.Bar
             or ChartType.StackedBar
             or ChartType.PercentStackedBar
+            or ChartType.ThreeDBar
             or ChartType.Line
             or ChartType.ThreeDLine
             or ChartType.Area
@@ -60,7 +62,7 @@ public static class ChartLayoutEngine
         return chart.Type switch
         {
             ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut => LayoutPie(request),
-            ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar => LayoutBar(request),
+            ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar => LayoutBar(request),
             ChartType.Scatter => LayoutScatter(request),
             ChartType.Bubble => LayoutBubble(request),
             ChartType.Radar => LayoutRadar(request),
