@@ -271,9 +271,11 @@ public sealed class MainWindow : Window
             });
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        var tableContext = new TableRibbonContextSource(_editor);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             FreeWRibbon.BuildDefinition(),
             registry,
+            contextSource: tableContext,
             afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border

@@ -2580,3 +2580,40 @@ public sealed class MoveShapeEditPointCommand(
         context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
             ? p.Runs[runIndex].Shape : null;
 }
+
+/// <summary>
+/// Replace the <see cref="TableFormatting"/> on the table at <paramref name="blockIndex"/>.
+/// The previous formatting is snapshot-ed for undo. Out-of-range block index or a block that
+/// is not a <see cref="Table"/> are silently ignored (no-op).
+/// </summary>
+public sealed class SetTableFormattingCommand(int blockIndex, TableFormatting newFormatting) : IDocumentCommand
+{
+    private TableFormatting _previous = TableFormatting.Default;
+    private bool _applied;
+
+    public string Label => "Change Table Formatting";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetTable(context, out var table)) return;
+        _previous = table.Formatting;
+        table.Formatting = newFormatting;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetTable(context, out var table)) return;
+        table.Formatting = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetTable(IDocumentCommandContext context, out Table table)
+    {
+        table = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table t) return false;
+        table = t;
+        return true;
+    }
+}

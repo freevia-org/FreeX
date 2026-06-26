@@ -824,6 +824,54 @@ public sealed class DocumentView : Control
         return result;
     }
 
+    /// <summary>
+    /// Removes the entire table block at <paramref name="blockIndex"/> from the document.
+    /// No-op if the index is out of range or the block is not a <see cref="Table"/>.
+    /// Undoable.
+    /// </summary>
+    public void DeleteTableBlock(int blockIndex)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
+        if (_doc.Blocks[blockIndex] is not Table) return;
+        // Replace the single table block with an empty replacement list — effectively deleting it.
+        _bus.Execute(new ReplaceBlocksCommand(blockIndex, 1, Array.Empty<Block>()));
+        _cellCaret = null;
+        _cellAnchor = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        InvalidateLayoutAndVisual();
+    }
+
+    // ── AV-TBLTAB: table-level formatting toggles ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Toggles the <see cref="TableFormatting.HeaderRow"/> flag on the table containing the caret.
+    /// No-op outside a table. Undoable via the document command bus.
+    /// </summary>
+    public void ToggleTableHeaderRow()
+    {
+        if (_cellCaret is not { } cc) return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
+        var newFmt = tbl.Formatting with { HeaderRow = !tbl.Formatting.HeaderRow };
+        _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
+    /// Toggles the <see cref="TableFormatting.BandedRows"/> flag on the table containing the caret.
+    /// No-op outside a table. Undoable via the document command bus.
+    /// </summary>
+    public void ToggleBandedRows()
+    {
+        if (_cellCaret is not { } cc) return;
+        if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[cc.TableBlock] is not Table tbl) return;
+        var newFmt = tbl.Formatting with { BandedRows = !tbl.Formatting.BandedRows };
+        _bus.Execute(new SetTableFormattingCommand(cc.TableBlock, newFmt));
+        InvalidateLayoutAndVisual();
+    }
+
     // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
 
     /// <summary>
