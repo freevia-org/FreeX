@@ -1,4 +1,6 @@
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -164,9 +166,19 @@ public class TransitionAnimationTests
         Assert.Equal(2000, loaded.Slides[0].Animations[0].DurationMs);
     }
 
-    /// <summary>AB2 regression: transition DurationMs was quantized to slow/med/fast bucket (e.g. 800→750).</summary>
+    // ── AC1 regression: p14:dur in mc:AlternateContent (not bare dur on p:transition) ───────────
+
+    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
+
+    /// <summary>
+    /// AC1: transition DurationMs=800 must survive round-trip AND be written as p14:dur inside
+    /// mc:AlternateContent (not a bare "dur" attribute on p:transition, which is invalid per ECMA-376).
+    /// A bare dur on CT_SlideTransition is flagged by OpenXmlValidator; p14:dur is the correct form.
+    /// </summary>
     [Fact]
-    public void RoundTrip_Transition_DurationMs_IsExact()
+    public void RoundTrip_Transition_DurationMs_IsExact_And_Uses_P14Dur()
     {
         var pres = Presentation.CreateEmpty();
         pres.Slides[0].Transition = new SlideTransition
@@ -177,13 +189,66 @@ public class TransitionAnimationTests
 
         var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
+
+        // ── XML structure assertion: must use mc:AlternateContent + p14:dur (not bare dur) ──
+        ms.Position = 0;
+        using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.Entries.FirstOrDefault(e => e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(slideEntry);
+        XDocument slideXml;
+        using (var entryStream = slideEntry!.Open())
+            slideXml = XDocument.Load(entryStream);
+
+        // There must be an mc:AlternateContent element at the slide root (not a bare p:transition)
+        var altContent = slideXml.Root!.Elements(MC + "AlternateContent").FirstOrDefault();
+        Assert.NotNull(altContent); // AC1: mc:AlternateContent must be present
+
+        // The mc:Choice must have p:transition with p14:dur=800 (namespaced, not bare dur)
+        var choice = altContent!.Element(MC + "Choice");
+        Assert.NotNull(choice);
+        Assert.Equal("p14", choice!.Attribute("Requires")?.Value);
+        var choiceTrans = choice.Element(P + "transition");
+        Assert.NotNull(choiceTrans);
+        Assert.Equal("800", choiceTrans!.Attribute(P14 + "dur")?.Value); // p14:dur present and correct
+        Assert.Null(choiceTrans.Attribute("dur"));                        // no bare dur on p:transition
+
+        // The mc:Fallback must have a p:transition with only spd (legacy degradation)
+        var fallback = altContent.Element(MC + "Fallback");
+        Assert.NotNull(fallback);
+        var fallbackTrans = fallback!.Element(P + "transition");
+        Assert.NotNull(fallbackTrans);
+        Assert.NotNull(fallbackTrans!.Attribute("spd")); // legacy spd present
+        Assert.Null(fallbackTrans.Attribute("dur"));      // no bare dur in fallback either
+
+        // ── Round-trip assertion: DurationMs=800 must come back exactly ──
         ms.Position = 0;
         var loaded = PptxPackageReader.Read(ms);
-
         var t = loaded.Slides[0].Transition;
         Assert.NotNull(t);
-        Assert.Equal(TransitionKind.Fade, t.Kind);
-        Assert.Equal(800, t.DurationMs);
+        Assert.Equal(TransitionKind.Fade, t!.Kind);
+        Assert.Equal(800, t.DurationMs); // must NOT be quantized to 750 (spd="med")
+    }
+
+    /// <summary>AC1: a DurationMs that maps exactly to a legacy spd bucket still round-trips
+    /// precisely (via p14:dur in mc:Choice, not just spd quantization).</summary>
+    [Fact]
+    public void ReadTransition_LegacySpdMappable_RoundTripsExactly()
+    {
+        // 750ms maps exactly to spd="med". Verify it round-trips as 750 via p14:dur, not as
+        // a quantized spd value (both are 750 here, but p14:dur is the precision path).
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind       = TransitionKind.Fade,
+            DurationMs = 750, // exactly maps to spd="med"
+        };
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(750, t!.DurationMs); // exact round-trip via p14:dur
     }
 
     [Fact]
@@ -480,5 +545,83 @@ public class TransitionAnimationTests
     {
         var (session, _) = MakeLinkedSession();
         Assert.Empty(session.CurrentSlideAnimations);
+    }
+
+    // ── AC2: preset animation structural cTn dur — multi-behavior precision ──────
+
+    /// <summary>
+    /// AC2: ReadBuildItem must read the duration from the structural animCTn level (sibling of p:set),
+    /// NOT from an arbitrary FirstOrDefault(dur&gt;1) descendant which could pick a sub-behavior's dur.
+    /// This tests that multiple animations with different durations each survive round-trip exactly.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_PresetAnimation_MultipleDurations_EachExact()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, Name = "S2", Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Ellipse,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+        });
+
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = slide.Shapes[0].Id,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.FlyIn,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = 300,  // distinct from default 500
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 2,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Spin,
+            Trigger = AnimationTrigger.AfterPrevious,
+            DelayMs = 100,
+            DurationMs = 1200, // distinct and non-standard
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var anims = loaded.Slides[0].Animations;
+        Assert.Equal(2, anims.Count);
+        Assert.Equal(300,  anims[0].DurationMs); // AC2: must not bleed from anim[1]
+        Assert.Equal(1200, anims[1].DurationMs); // AC2: must not bleed from anim[0]
+    }
+
+    // ── AC3: DurationMs=1 must not be confused with the p:set sentinel dur="1" ───
+
+    /// <summary>
+    /// AC3: a legitimate preset animation with DurationMs=1 must round-trip as 1 (not default 500).
+    /// The p:set sentinel cTn also has dur="1", but it is excluded by structural scoping (it lives
+    /// inside a p:set element, not as a bare childTnLst child), so the 1ms animation is accepted.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_PresetAnimation_DurationMs_One_IsExact()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = slide.Shapes[0].Id,
+            Kind       = AnimationKind.Entrance,
+            Preset     = AnimationPreset.Appear,
+            Trigger    = AnimationTrigger.OnClick,
+            DurationMs = 1, // edge case: 1ms must not be filtered out by dur>1 sentinel guard
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        Assert.Single(loaded.Slides[0].Animations);
+        Assert.Equal(1, loaded.Slides[0].Animations[0].DurationMs); // AC3: not 500 (the old default)
     }
 }

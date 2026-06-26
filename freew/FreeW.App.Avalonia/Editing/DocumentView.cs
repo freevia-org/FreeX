@@ -1017,6 +1017,125 @@ public sealed class DocumentView : Control
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Builds a mapping from 0-based page index to (SectionHeadersFooters, section-relative
+    /// 1-based page number, PageSettings) for <paramref name="pageCount"/> pages.
+    ///
+    /// Mirrors WPF's PaginatedEditorPanel.ComputePageSectionMap: walks <see cref="_doc"/>.Blocks
+    /// to assign each block a section index (incrementing at each SectionBreak paragraph), then
+    /// uses <see cref="_placed"/> character positions to determine which page each block's content
+    /// first appears on, giving a true block→page→section mapping.
+    ///
+    /// Fallback: when a section's HeadersFooters is entirely empty, substitutes
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/> (AE3 fix).
+    /// </summary>
+    private (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[]
+        ComputePageSectionMap(IReadOnlyList<Section> sections, int pageCount)
+    {
+        var result = new (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[pageCount];
+
+        // Map each model-block index to a section index (0-based).
+        // A block belongs to section[k] if it comes before the k-th SectionBreak paragraph.
+        var blocks = _doc.Blocks;
+        int[] blockSection = new int[blocks.Count];
+        {
+            int secIdx = 0;
+            for (int b = 0; b < blocks.Count; b++)
+            {
+                blockSection[b] = secIdx;
+                // A paragraph carrying a SectionBreak ends secIdx and starts secIdx+1.
+                if (blocks[b] is Paragraph { SectionBreak: { } } && secIdx < sections.Count - 1)
+                    secIdx++;
+            }
+        }
+
+        // Determine the owning section index for each page.
+        // We use _placed: for each block, find the first PlacedChar on it and read its page.
+        // The first block placed on a page sets that page's section.
+        int[] pageSectionIdx = new int[pageCount];
+        // Track whether a page already has an assignment so first-placed-block wins.
+        bool[] pageAssigned = new bool[pageCount];
+
+        // Walk _placed in order (they are added in layout order, so earlier blocks come first).
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel) continue;
+            var b = pc.Block;
+            if (b < 0 || b >= blocks.Count) continue;
+            var pg = PageIndexFromPageSpaceY(pc.Y);
+            pg = Math.Clamp(pg, 0, pageCount - 1);
+            if (!pageAssigned[pg])
+            {
+                pageSectionIdx[pg] = blockSection[b];
+                pageAssigned[pg] = true;
+            }
+        }
+
+        // Fill any pages that got no placed content (e.g. blank trailing pages) by
+        // propagating the previous page's section forward.
+        for (int pg = 1; pg < pageCount; pg++)
+        {
+            if (!pageAssigned[pg])
+            {
+                pageSectionIdx[pg] = pageSectionIdx[pg - 1];
+                pageAssigned[pg] = true;
+            }
+        }
+
+        // Compute sectionFirstPage[k] = first 0-based page belonging to section k.
+        var sectionFirstPage = new int[Math.Max(1, sections.Count)];
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
+            if (pg == 0 || pageSectionIdx[pg - 1] != sec)
+                sectionFirstPage[sec] = pg;
+        }
+
+        // Build the result.
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
+            var sectionHf = sections[sec].HeadersFooters;
+
+            // AE3 fix: fall back to document-level headers when the section has no own slots.
+            if (sectionHf.IsEmpty)
+                sectionHf = _doc.FinalSectionHeadersFooters;
+
+            var sectionPage = sections[sec].Page;
+            int sectionRelPage = pg - sectionFirstPage[sec] + 1;
+            result[pg] = (sectionHf, sectionRelPage, sectionPage);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Selects the correct header/footer slot pair for the given page within a section.
+    /// Mirrors WPF's PaginatedEditorPanel.ResolveHfSlots: gates first-page variant on
+    /// <paramref name="sectionRelativePageNumber"/> == 1 (AE2 fix), not document-page 0.
+    /// </summary>
+    private static (HeaderFooter? Header, HeaderFooter? Footer) ResolveHfSlotsAvalonia(
+        SectionHeadersFooters sectionHf,
+        int sectionRelativePageNumber,
+        PageSettings pageSettings,
+        bool diffOddEvenDoc)
+    {
+        var diffFirst = pageSettings.DifferentFirstPage;
+
+        if (diffFirst && sectionRelativePageNumber == 1)
+        {
+            return (sectionHf.FirstHeader, sectionHf.FirstFooter);
+        }
+
+        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
+        {
+            return (sectionHf.EvenHeader ?? sectionHf.Header,
+                    sectionHf.EvenFooter ?? sectionHf.Footer);
+        }
+
+        return (sectionHf.Header, sectionHf.Footer);
+    }
+
+    /// <summary>
     /// Pre-computes the header/footer render items for each page in PrintLayout mode.
     /// Called once per Relayout pass after _pageCount is known. Each item carries a
     /// field-resolved text string, run formatting, page-space position, and alignment so
@@ -1033,47 +1152,26 @@ public sealed class DocumentView : Control
         // Document-level odd/even flag lives on _doc.Page.
         var diffOddEven = _doc.Page.DifferentOddEvenPages;
 
+        // AE1 fix: build a true page→section map via section-break markers on model blocks,
+        // mirroring WPF's PaginatedEditorPanel.ComputePageSectionMap.
+        var pageToSection = ComputePageSectionMap(sections, _pageCount);
+
         for (var pi = 0; pi < _pageCount; pi++)
         {
             // Page-space top of this page.
             var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
 
-            // Derive which section owns this page (rough heuristic: map page index to section
-            // by distributing pages evenly across sections — matches WPF's PaginatedEditorPanel
-            // approach when a precise section-break paginator is not available).
-            var sectionIndex = sections.Count > 1
-                ? Math.Min((int)((double)pi / _pageCount * sections.Count), sections.Count - 1)
-                : 0;
-            var section = sections.Count > 0 ? sections[sectionIndex] : null;
-            var sectionPage = section?.Page ?? _doc.Page;
-            var sectionHf = section?.HeadersFooters ?? _doc.FinalSectionHeadersFooters;
+            // AE1: use the true owning section for this page (not an even distribution).
+            var (sectionHf, sectionRelPage, sectionPage) = pageToSection[pi];
 
             // 1-based page number for this page (pi is 0-based).
             var pageNumber = pi + 1;
 
-            // Resolve which header/footer variant applies.
-            var diffFirst = sectionPage.DifferentFirstPage;
-            var isFirstPage = pi == 0; // first page of section (approximation: pi==0 for first section)
-
+            // AE2 fix: resolve HF slots using section-relative page number, mirroring
+            // WPF's PaginatedEditorPanel.ResolveHfSlots.
             HeaderFooter? header;
             HeaderFooter? footer;
-
-            if (diffFirst && isFirstPage)
-            {
-                header = sectionHf.FirstHeader;
-                footer = sectionHf.FirstFooter;
-            }
-            else if (diffOddEven && pageNumber % 2 == 0)
-            {
-                // Even page (page numbers are 1-based; even = page 2, 4, 6, …).
-                header = sectionHf.EvenHeader ?? sectionHf.Header;
-                footer = sectionHf.EvenFooter ?? sectionHf.Footer;
-            }
-            else
-            {
-                header = sectionHf.Header;
-                footer = sectionHf.Footer;
-            }
+            (header, footer) = ResolveHfSlotsAvalonia(sectionHf, sectionRelPage, sectionPage, diffOddEven);
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0

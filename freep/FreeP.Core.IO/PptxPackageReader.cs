@@ -42,8 +42,9 @@ public static class PptxPackageReader
     // Microsoft proprietary media rel type used by newer PowerPoint
     private const string MediaRelType         = "http://schemas.microsoft.com/office/2007/relationships/media";
 
-    // p14 section extension namespace
+    // p14 section extension + mc:AlternateContent namespace
     private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ───────────────────────────────────────────────────────────────
@@ -616,10 +617,10 @@ public static class PptxPackageReader
                 slide.Shapes.Add(shape);
         }
 
-        // Transition
-        var transEl = xml.Root.Element(P + "transition");
-        if (transEl is not null)
-            slide.Transition = ReadTransition(transEl);
+        // Transition — may be a plain p:transition (legacy) or wrapped in mc:AlternateContent (modern).
+        // AC1: resolve mc:AlternateContent → use mc:Choice p:transition (has p14:dur); fall back to
+        // mc:Fallback p:transition or a bare p:transition for files written without the extension.
+        slide.Transition = ResolveTransitionEl(xml.Root);
 
         // Animations (main sequence only)
         var timingEl = xml.Root.Element(P + "timing");
@@ -2079,16 +2080,58 @@ public static class PptxPackageReader
 
     // ── p:transition ─────────────────────────────────────────────────────────────
 
-    private static SlideTransition ReadTransition(XElement transEl)
+    /// <summary>
+    /// AC1: Resolve the transition element from a slide root, handling both:
+    /// (a) mc:AlternateContent wrapper (written by FreeP and real PowerPoint for p14:dur precision)
+    /// (b) bare p:transition (legacy files / files without p14 extension)
+    /// When an mc:AlternateContent is present, use the mc:Choice p:transition (which carries p14:dur);
+    /// if no Choice exists, fall back to mc:Fallback's p:transition.
+    /// </summary>
+    private static SlideTransition? ResolveTransitionEl(XElement? root)
+    {
+        if (root is null) return null;
+
+        // Modern format: mc:AlternateContent > mc:Choice > p:transition (with p14:dur)
+        var altContent = root.Element(MC + "AlternateContent");
+        if (altContent is not null)
+        {
+            var choice = altContent.Element(MC + "Choice");
+            var choiceTrans = choice?.Element(P + "transition");
+            if (choiceTrans is not null)
+                return ReadTransition(choiceTrans, preferP14Dur: true);
+
+            // Fallback inside mc:AlternateContent
+            var fallback = altContent.Element(MC + "Fallback");
+            var fallbackTrans = fallback?.Element(P + "transition");
+            if (fallbackTrans is not null)
+                return ReadTransition(fallbackTrans, preferP14Dur: false);
+        }
+
+        // Legacy: bare p:transition (no mc:AlternateContent wrapper)
+        var transEl = root.Element(P + "transition");
+        if (transEl is not null)
+            return ReadTransition(transEl, preferP14Dur: false);
+
+        return null;
+    }
+
+    private static SlideTransition ReadTransition(XElement transEl, bool preferP14Dur)
     {
         var t = new SlideTransition();
 
-        // spd or dur attribute for duration
+        // Duration: spd gives quantized fallback; p14:dur (namespaced) gives precise ms.
+        // AC1: when preferP14Dur=true (reading from mc:Choice) try p14:dur first.
         var spd = transEl.Attribute("spd")?.Value;
         if (!string.IsNullOrEmpty(spd))
             t.DurationMs = PptxAnimationMap.SpdToDuration(spd);
-        if (int.TryParse(transEl.Attribute("dur")?.Value, out var dur) && dur > 0)
-            t.DurationMs = dur;
+
+        if (preferP14Dur)
+        {
+            // p14:dur is the namespaced attribute on p:transition inside mc:Choice
+            if (int.TryParse(transEl.Attribute(P14 + "dur")?.Value, out var p14Dur) && p14Dur > 0)
+                t.DurationMs = p14Dur;
+        }
+        // (No bare "dur" fallback — bare dur on p:transition is invalid and was the bug we're fixing.)
 
         // advClick
         t.AdvanceOnClick = transEl.Attribute("advClick")?.Value != "0";
@@ -2097,8 +2140,8 @@ public static class PptxPackageReader
         if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
-        // Find the effect child element (first child that is not an attribute-only element)
-        var effectEl = transEl.Elements().FirstOrDefault();
+        // Find the effect child element: first P-namespace child (skip any mc: / extension elements).
+        var effectEl = transEl.Elements().FirstOrDefault(e => e.Name.Namespace == P);
         if (effectEl is not null)
         {
             t.Kind = PptxAnimationMap.ElementNameToTransitionKind(effectEl.Name.LocalName);
@@ -2238,24 +2281,34 @@ public static class PptxPackageReader
         var cTn = buildPar.Element(P + "cTn");
         if (cTn is null) return null;
 
-        // Duration: prefer outer p:cTn/@dur if present; otherwise fall through to the
-        // nested animCTn that carries the real duration for preset effects (PowerPoint
-        // puts the duration on the inner behavior cTn, not on the outer par/cTn).
+        // AC2/AC3: Read duration from the structural level the writer uses — the animCTn
+        // which is the p:cTn direct child of childTnLst of the inner p:par (sibling of p:set).
+        // This avoids picking a sub-behavior's dur (AC2) and naturally excludes the p:set
+        // sentinel cTn dur="1" (AC3) because it is inside p:set, not a bare childTnLst child.
+        // Writer structure (BuildBuildItemEl):
+        //   p:par > p:cTn[presetClass/ID] > p:childTnLst >
+        //     p:par > p:cTn[fill=hold] > p:childTnLst >
+        //       animCTn (p:cTn with dur=anim.DurationMs)  ← read from here
+        //       p:set > p:cBhvr > p:cTn (dur="1" sentinel) ← NOT touched
         int durationMs = 500;
         if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
+        {
             durationMs = d;
+        }
         else
         {
-            // Walk the nested p:cTn elements to find one that has a dur attribute.
-            // Exclude the setEl's inner cTn (dur="1") by requiring dur > 1.
-            var nestedDurCTn = buildPar
-                .Descendants(P + "cTn")
-                .Skip(1) // skip the outer cTn itself
-                .FirstOrDefault(el =>
-                    int.TryParse(el.Attribute("dur")?.Value, out var nd) && nd > 1);
-            if (nestedDurCTn is not null &&
-                int.TryParse(nestedDurCTn.Attribute("dur")?.Value, out var nd2) && nd2 > 1)
-                durationMs = nd2;
+            // Navigate structurally to the animCTn level (mirrors BuildBuildItemEl nesting).
+            var innerPar = cTn.Element(P + "childTnLst")?.Element(P + "par");
+            var innerParCTn = innerPar?.Element(P + "cTn");
+            var innerChildTnLst = innerParCTn?.Element(P + "childTnLst");
+            if (innerChildTnLst is not null)
+            {
+                // animCTn is a direct p:cTn child of innerChildTnLst (not inside p:set).
+                var animCTn = innerChildTnLst.Elements(P + "cTn").FirstOrDefault();
+                if (animCTn is not null &&
+                    int.TryParse(animCTn.Attribute("dur")?.Value, out var animDur) && animDur >= 1)
+                    durationMs = animDur;
+            }
         }
 
         // Delay and inner trigger
