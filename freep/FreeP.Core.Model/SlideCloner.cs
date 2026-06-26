@@ -82,6 +82,10 @@ public static class SlideCloner
         // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
+        // Connector attachments — small value-like objects, always deep-copied.
+        copy.ConnectionStart = shape.ConnectionStart is null ? null : CloneConnectorAttachment(shape.ConnectionStart);
+        copy.ConnectionEnd   = shape.ConnectionEnd   is null ? null : CloneConnectorAttachment(shape.ConnectionEnd);
+
         foreach (var child in shape.Children)
             copy.Children.Add(CloneShape(child));
 
@@ -333,6 +337,12 @@ public static class SlideCloner
         Brightness        = f.Brightness,
         Contrast          = f.Contrast,
         AlphaModPct       = f.AlphaModPct,
+    };
+
+    private static ConnectorAttachment CloneConnectorAttachment(ConnectorAttachment src) => new()
+    {
+        ShapeId   = src.ShapeId,
+        SiteIndex = src.SiteIndex,
     };
 
     // Theme 21: OLE cloner — byte arrays are treated as immutable; share the reference.

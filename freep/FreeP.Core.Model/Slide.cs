@@ -3,6 +3,28 @@ using Free.Shared.Drawing;
 namespace FreeP.Core.Model;
 
 /// <summary>
+/// Describes one end of a connector's attachment to a shape's connection site.
+/// </summary>
+public sealed class ConnectorAttachment
+{
+    /// <summary>
+    /// Id of the shape this end is attached to (matches <see cref="SlideShape.Id"/>).
+    /// Null when the end is free (dangling in space).
+    /// </summary>
+    public uint ShapeId { get; set; }
+
+    /// <summary>
+    /// Index of the connection-site on the target shape.
+    /// OOXML <c>a:stCxn</c>/<c>a:endCxn</c> <c>idx=</c> attribute.
+    ///
+    /// Standard PowerPoint 4-site mapping for rectangles and most presets:
+    ///   0 = left-mid, 1 = top-mid, 2 = right-mid, 3 = bottom-mid.
+    /// Additional per-shape sites follow the shape-specific numbering.
+    /// </summary>
+    public int SiteIndex { get; set; }
+}
+
+/// <summary>
 /// One segment in a custom geometry path. Uses normalized path-space coordinates (not yet
 /// scaled to shape bounds) so the path can be stored independently of the shape's size.
 /// </summary>
@@ -387,6 +409,22 @@ public sealed class SlideShape
     /// Not serialized by the model layer — FxpFormat uses it directly.
     /// </summary>
     public string? LegacyFxpKind { get; set; }
+
+    // ── Connector attachment (Kind == Connector only) ─────────────────────────────
+
+    /// <summary>
+    /// Start-point attachment for a connector shape. Corresponds to <c>a:stCxn</c> inside
+    /// <c>p:cNvCxnSpPr</c>. Null = free (not attached to any shape).
+    /// Only meaningful when <see cref="Kind"/> == <see cref="SlideShapeKind.Connector"/>.
+    /// </summary>
+    public ConnectorAttachment? ConnectionStart { get; set; }
+
+    /// <summary>
+    /// End-point attachment for a connector shape. Corresponds to <c>a:endCxn</c> inside
+    /// <c>p:cNvCxnSpPr</c>. Null = free.
+    /// Only meaningful when <see cref="Kind"/> == <see cref="SlideShapeKind.Connector"/>.
+    /// </summary>
+    public ConnectorAttachment? ConnectionEnd { get; set; }
 
     // ── Hyperlink ─────────────────────────────────────────────────────────────────
 
