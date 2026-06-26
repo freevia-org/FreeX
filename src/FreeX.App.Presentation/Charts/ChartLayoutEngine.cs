@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Text;
 
@@ -250,11 +251,11 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Bottom, valueScale.Transform(Clamp0(valueScale))),
-            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat),
+            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Bottom, valueScale.Transform(Clamp0(valueScale)), chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             SecondaryValueAxis = secondaryScale is null
                 ? null
-                : BuildValueAxisLayout(chart, secondaryScale, AxisSide.Right, plot.Right, chart.YAxisNumberFormat),
+                : BuildValueAxisLayout(chart, secondaryScale, AxisSide.Right, plot.Right, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -480,8 +481,8 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Left, baselineX),
-            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat),
+            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Left, baselineX, chart.YAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -533,8 +534,8 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat),
-            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat),
+            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -599,8 +600,8 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat),
-            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat),
+            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -761,8 +762,8 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Bottom, plot.Bottom),
-            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat),
+            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Bottom, plot.Bottom, chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
         };
@@ -805,12 +806,16 @@ public static class ChartLayoutEngine
         AxisScale scale,
         AxisSide side,
         double linePosition,
-        ChartDataLabelNumberFormat numberFormat)
+        ChartDataLabelNumberFormat numberFormat,
+        string? numberFormatCode = null,
+        double labelAngle = 0)
     {
         var ticks = new List<AxisTick>();
         foreach (var value in scale.GetMajorTickValues())
         {
-            var label = FormatAxisValue(numberFormat, value);
+            var label = !string.IsNullOrEmpty(numberFormatCode)
+                ? NumberFormatter.Format(new NumberValue(value), numberFormatCode)
+                : FormatAxisValue(numberFormat, value);
             ticks.Add(new AxisTick(value, scale.Transform(value), label));
         }
 
@@ -821,6 +826,7 @@ public static class ChartLayoutEngine
             LinePosition = linePosition,
             Ticks = ticks,
             Scale = scale,
+            LabelAngle = labelAngle,
         };
     }
 
@@ -828,7 +834,8 @@ public static class ChartLayoutEngine
         ChartLayoutRequest request,
         AxisScale scale,
         AxisSide side,
-        double linePosition)
+        double linePosition,
+        double labelAngle = 0)
     {
         var ticks = new List<AxisTick>();
         for (var i = 0; i < request.Categories.Count; i++)
@@ -843,6 +850,7 @@ public static class ChartLayoutEngine
             LinePosition = linePosition,
             Ticks = ticks,
             Scale = scale,
+            LabelAngle = labelAngle,
         };
     }
 
@@ -1375,7 +1383,7 @@ public static class ChartLayoutEngine
             catLabels.Add(i < request.Categories.Count ? request.Categories[i] : $"Point {i + 1}");
 
         var catAxis = BuildWaterfallCategoryAxis(request, categoryScale, catLabels);
-        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat);
+        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle);
 
         var seriesLayout = new SeriesLayout
         {
@@ -1499,7 +1507,7 @@ public static class ChartLayoutEngine
             Side = AxisSide.Left,
             Title = freqTitle,
             LinePosition = plot.Left,
-            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat).Ticks,
+            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle).Ticks,
             Scale = valueScale,
         };
 
@@ -1619,7 +1627,7 @@ public static class ChartLayoutEngine
             Side = AxisSide.Left,
             Title = leftTitle,
             LinePosition = plot.Left,
-            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat).Ticks,
+            Ticks = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle).Ticks,
             Scale = valueScale,
         };
 
@@ -1801,7 +1809,7 @@ public static class ChartLayoutEngine
             Ticks = catTicks,
             Scale = categoryScale,
         };
-        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat);
+        var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle);
 
         // Boxes as Columns series (filled Q1-Q3 rect), whiskers/median as Line, outliers as ScatterPoints.
         var boxSeries = new SeriesLayout

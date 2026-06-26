@@ -21,6 +21,13 @@ public sealed class AxisLayout
 
     /// <summary>The underlying scale, exposed so consumers can map extra values if needed.</summary>
     public required AxisScale Scale { get; init; }
+
+    /// <summary>
+    /// Clockwise rotation angle (degrees) for tick labels, as set on the chart axis.
+    /// 0 = horizontal (default). Negative values rotate counter-clockwise (e.g. -45 for diagonal labels).
+    /// The shell renderers apply this to each tick-label element.
+    /// </summary>
+    public double LabelAngle { get; init; }
 }
 
 /// <summary>The kind of geometry a series produced, so consumers can pick the right draw path.</summary>
