@@ -257,6 +257,13 @@ public sealed class MainWindow : Window
         PageSetupDialog.ShowAndApplyAsync(this, _editor);
 
     /// <summary>
+    /// AV-REVIEW: Opens the Word Count dialog (modal), showing words/characters/paragraphs/lines computed
+    /// from the document model. Wired to <c>freew.word-count</c> ribbon command (Review → Proofing group).
+    /// </summary>
+    private Task OpenWordCountDialogAsync() =>
+        new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
+
+    /// <summary>
     /// Toggle the document orientation between Portrait and Landscape (AV-PAGE).
     /// Wired to <c>freew.page-orientation</c>.
     /// </summary>
@@ -365,6 +372,7 @@ public sealed class MainWindow : Window
             ToggleOrientation:   ToggleOrientation,
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
+            OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;

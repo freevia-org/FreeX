@@ -43,6 +43,7 @@ public sealed class PictureDrawingContextualTabTests
             SetPrintLayout: () => { }, SetWebLayout: () => { }, SetDraftView: () => { },
             OpenFontDialog: () => { }, OpenParagraphDialog: () => { }, OpenPageSetupDialog: () => { },
             ToggleOrientation: () => { }, ApplyMarginPreset: _ => { }, ApplyPaperSize: _ => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     private static byte[] SmallPng()

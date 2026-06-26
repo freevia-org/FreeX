@@ -35,7 +35,7 @@ public class RibbonAndDocumentTests
     public void Every_ribbon_command_id_is_registered()
     {
         var definition = FreeWRibbon.BuildDefinition();
-        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, (_, _) => { });
+        var callbacks = new RibbonHostCallbacks(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, (_, _) => { });
         var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
