@@ -12064,6 +12064,18 @@ public sealed partial class MainWindow : Window
         selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, -1)));
         selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabStrip.Styles.Add(selectedTabStyle);
+
+        // Hide the Avalonia Fluent accent "pipe" (the selected-tab underline) so the dialog tabs use
+        // the classic Win32 look — a raised bordered tab that merges into the pane, with NO coloured
+        // underline (Windows dialog tabs have no accent bar). The pipe is a template Border named
+        // "PART_SelectedPipe" in the Fluent TabItem theme.
+        var hidePipeStyle = new Style(s => s
+            .OfType<TabItem>()
+            .Template()
+            .OfType<Border>()
+            .Name("PART_SelectedPipe"));
+        hidePipeStyle.Setters.Add(new Setter(Visual.IsVisibleProperty, false));
+        tabStrip.Styles.Add(hidePipeStyle);
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)

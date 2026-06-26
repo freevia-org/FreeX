@@ -1511,9 +1511,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static Control CreateDrawingShapeVisual(");
         source.Should().Contain("using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;");
         source.Should().Contain("using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;");
-        source.Should().Contain("DrawingShapeKind.Ellipse => new AvaloniaEllipse");
-        source.Should().Contain("DrawingShapeKind.Line => CreateDrawingLineVisual(stroke, width)");
-        source.Should().Contain("private static Border CreateDrawingLineVisual(IBrush stroke, double width)");
+        source.Should().Contain("DrawingShapeKind.Ellipse => CreateEllipseShapeVisual(fill, strokeBrush, strokeThickness, dashArray, w, h),");
+        source.Should().Contain("_ => CreateDrawingShapeGeometryVisual(drawingObject.ShapeKind, fill, strokeBrush, strokeThickness, dashArray, w, h),");
+        source.Should().Contain("private static Control CreateDrawingShapeGeometryVisual(");
         source.Should().Contain("new AvaloniaRectangle");
         source.Should().Contain("private static Control CreateDrawingImageVisual(");
         source.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
@@ -3575,7 +3575,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Underlined\" : \"Removed underline from\")} {rangeReference}\");");
         source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
         source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
-        source.Should().Contain("TextDecorations = textDecorations,");
+        source.Should().Contain("textBlock.TextDecorations = textDecorations;");
         source.Should().Contain("else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))");
         source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
@@ -3663,7 +3663,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Decrease Font Size failed.\");");
         source.Should().Contain("RefreshShell($\"Decreased font size for {rangeReference}\");");
         source.Should().Contain("var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;");
-        source.Should().Contain("FontSize = scaledFontSize,");
+        source.Should().Contain("var scaledFontSize = Math.Max(1, fontSize * zoomFactor);");
+        source.Should().Contain("FontSize = adjustedFontSize,");
     }
 
     [Fact]
@@ -3711,7 +3712,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);");
         source.Should().Contain("var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);");
         source.Should().Contain("private static int CountNativeColorPaletteSwatches(NativeMenu? menu)");
-        source.Should().Contain("var background = style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor");
+        source.Should().Contain("else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)");
         source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
     }
 
@@ -3995,8 +3996,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Wrapped\" : \"Unwrapped\")} {rangeReference}\");");
         source.Should().Contain("var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;");
         source.Should().Contain("var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;");
-        source.Should().Contain("TextWrapping = effectiveTextWrapping,");
-        source.Should().Contain("TextTrimming = effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255");
+        source.Should().Contain("TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,");
+        source.Should().Contain("TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)");
         source.Should().Contain("? TextTrimming.None");
         source.Should().Contain(": TextTrimming.CharacterEllipsis");
     }
@@ -4025,10 +4026,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.IncreaseSelectedRangeIndent();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Increase Indent failed.\");");
         source.Should().Contain("RefreshShell($\"Increased indent for {rangeReference}\");");
-        source.Should().Contain("var indentPadding = GetCellIndentPadding(style);");
+        source.Should().Contain("var indentPadding = GetCellIndentPadding(style) + GetPivotRowLabelTextPadding(address.Row, address.Col);");
         source.Should().Contain("private static double GetCellIndentPadding(CellStyle? style)");
         source.Should().Contain("Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;");
-        source.Should().Contain("Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, 0, scaledHorizontalPadding, 0),");
+        source.Should().Contain("Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),");
     }
 
     [Fact]
