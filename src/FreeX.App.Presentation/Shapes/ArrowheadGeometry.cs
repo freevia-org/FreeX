@@ -5,7 +5,7 @@ namespace FreeX.App.Presentation.Shapes;
 
 /// <summary>
 /// Portable, framework-free helper that computes the filled polygon (or ellipse) vertices for a
-/// line/connector arrowhead. The result is passed to both the WPF and Avalonia renderers so the
+/// line/connector arrowhead. The result is consumed by both desktop renderers so the
 /// geometry math is not duplicated.
 ///
 /// Coordinate system: tip of the arrowhead is at <paramref name="tip"/>; the line arrives from the
