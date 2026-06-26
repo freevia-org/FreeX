@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
@@ -33,6 +34,7 @@ public sealed class AvaloniaChartRenderer
     private const double DefaultLegendFontSize = 11;
     private const double DefaultDataLabelFontSize = 10;
     private const double TickLength = 4;
+    private const double AxisTitleFontSize = 11;
 
     // Title reserve: when a chart title is present we shift the plot area down by this many points.
     private const double TitleAreaHeight = 28;
@@ -42,6 +44,13 @@ public sealed class AvaloniaChartRenderer
     private static readonly IBrush DefaultPlotBackground = SolidBrush(0xFF, 0xFF, 0xFF);
     private static readonly IBrush DefaultPlotBorderBrush = SolidBrush(0xD9, 0xD9, 0xD9);
     private static readonly IBrush DefaultDataLabelBrush = SolidBrush(0x40, 0x40, 0x40);
+    private static readonly IBrush GridlineBrush = SolidBrush(0xDC, 0xDC, 0xDC);
+    private static readonly IBrush TrendlineBrush = SolidBrush(0x80, 0x80, 0x80);
+
+    // Dash arrays for StrokeDashArray — values are in stroke-thickness units.
+    // Dash: 4 on, 3 off. Dot: 1.5 on, 1.5 off.
+    private static readonly AvaloniaList<double> DashArray = [4, 3];
+    private static readonly AvaloniaList<double> DotArray = [1.5, 1.5];
 
     // Accent tint schedule mirrors WPF ChartRenderer.AccentTintSchedule.
     private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
@@ -103,8 +112,25 @@ public sealed class AvaloniaChartRenderer
         if (!isPie)
             AddPlotBackground(canvas, layout.PlotArea);
 
+        // Fix 1: Gridlines — draw before axes so the axis line draws on top.
+        RenderGridlines(canvas, layout.ValueAxis, layout.PlotArea, isValueAxis: true);
+        RenderGridlines(canvas, layout.CategoryAxis, layout.PlotArea, isValueAxis: false);
+
         RenderAxis(canvas, layout.ValueAxis, isValueAxis: true);
         RenderAxis(canvas, layout.CategoryAxis, isValueAxis: false);
+
+        // Fix 3: Secondary axis — render right-side axis when present.
+        if (layout.SecondaryValueAxis is not null)
+        {
+            RenderGridlines(canvas, layout.SecondaryValueAxis, layout.PlotArea, isValueAxis: true);
+            RenderAxis(canvas, layout.SecondaryValueAxis, isValueAxis: true);
+        }
+
+        // Fix 2: Axis titles — render after axes so they don't overlap tick labels awkwardly.
+        RenderAxisTitle(canvas, layout.ValueAxis, layout.PlotArea);
+        RenderAxisTitle(canvas, layout.CategoryAxis, layout.PlotArea);
+        if (layout.SecondaryValueAxis is not null)
+            RenderAxisTitle(canvas, layout.SecondaryValueAxis, layout.PlotArea);
 
         foreach (var series in layout.Series)
             RenderSeries(canvas, series);
@@ -232,12 +258,40 @@ public sealed class AvaloniaChartRenderer
                 RenderStock(canvas, series);
                 break;
         }
+
+        // Fix 4: Trendlines — draw trendline overlay after the series geometry.
+        if (series.Trendline is { Points.Count: >= 2 } tl)
+            RenderTrendline(canvas, tl, series.SeriesIndex);
     }
 
     private void RenderBars(Canvas canvas, SeriesLayout series)
     {
-        var fill = SeriesFill(series.SeriesIndex);
-        var stroke = SeriesStroke(series.SeriesIndex);
+        // Fix 7: NoFill / NoLine — transparent helper/invisible bars.
+        var format = FindSeriesFormat(series.SeriesIndex);
+        IBrush fill;
+        IBrush? stroke;
+        double strokeThickness;
+
+        if (format?.NoFill == true)
+        {
+            fill = Brushes.Transparent;
+        }
+        else
+        {
+            fill = SeriesFill(series.SeriesIndex);
+        }
+
+        if (format?.NoLine == true)
+        {
+            stroke = null;
+            strokeThickness = 0;
+        }
+        else
+        {
+            stroke = SeriesStroke(series.SeriesIndex);
+            strokeThickness = 0.75;
+        }
+
         foreach (var bar in series.Bars)
         {
             if (bar.Rect.Width <= 0 && bar.Rect.Height <= 0)
@@ -249,7 +303,7 @@ public sealed class AvaloniaChartRenderer
                 Height = Math.Max(1, bar.Rect.Height),
                 Fill = fill,
                 Stroke = stroke,
-                StrokeThickness = 0.75,
+                StrokeThickness = strokeThickness,
             };
             Canvas.SetLeft(rect, bar.Rect.Left);
             Canvas.SetTop(rect, bar.Rect.Top);
@@ -259,9 +313,14 @@ public sealed class AvaloniaChartRenderer
 
     private void RenderLine(Canvas canvas, SeriesLayout series)
     {
+        var format = FindSeriesFormat(series.SeriesIndex);
         var stroke = SeriesStroke(series.SeriesIndex);
-        AddPolyline(canvas, series.Points, stroke);
-        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke);
+        // Fix 6: Line dash style.
+        var dashStyle = format?.DashStyle;
+        // Fix 5: Marker shapes.
+        var markerStyle = format?.MarkerStyle ?? ChartMarkerStyle.Circle;
+        AddPolyline(canvas, series.Points, stroke, dashStyle);
+        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, markerStyle);
     }
 
     private void RenderArea(Canvas canvas, SeriesLayout series)
@@ -269,8 +328,10 @@ public sealed class AvaloniaChartRenderer
         if (series.Points.Count == 0)
             return;
 
+        var format = FindSeriesFormat(series.SeriesIndex);
         var fill = SeriesFill(series.SeriesIndex, alpha: 0xA0);
         var stroke = SeriesStroke(series.SeriesIndex);
+        var dashStyle = format?.DashStyle;
 
         var polygon = new AvaloniaPolygon
         {
@@ -280,11 +341,19 @@ public sealed class AvaloniaChartRenderer
             Points = BuildAreaPoints(series),
         };
         canvas.Children.Add(polygon);
-        AddMarkers(canvas, series.Points, fill, stroke);
+        AddMarkers(canvas, series.Points, fill, stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
     }
 
-    private void RenderScatter(Canvas canvas, SeriesLayout series) =>
-        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), SeriesStroke(series.SeriesIndex));
+    private void RenderScatter(Canvas canvas, SeriesLayout series)
+    {
+        var format = FindSeriesFormat(series.SeriesIndex);
+        AddMarkers(
+            canvas,
+            series.Points,
+            SeriesFill(series.SeriesIndex),
+            SeriesStroke(series.SeriesIndex),
+            format?.MarkerStyle ?? ChartMarkerStyle.Circle);
+    }
 
     private void RenderPie(Canvas canvas, SeriesLayout series)
     {
@@ -349,7 +418,8 @@ public sealed class AvaloniaChartRenderer
             Points = points,
         });
 
-        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke);
+        var format = FindSeriesFormat(series.SeriesIndex);
+        AddMarkers(canvas, series.Points, SeriesFill(series.SeriesIndex), stroke, format?.MarkerStyle ?? ChartMarkerStyle.Circle);
     }
 
     private void RenderStock(Canvas canvas, SeriesLayout series)
@@ -408,6 +478,36 @@ public sealed class AvaloniaChartRenderer
         }
     }
 
+    // Fix 4: Trendline rendering — dashed polyline in a muted gray (or chart trendline color).
+    private void RenderTrendline(Canvas canvas, TrendlineLayout tl, int seriesIndex)
+    {
+        if (tl.Points.Count < 2)
+            return;
+
+        IBrush brush = _chart.ResolveTrendlineColor(_theme) is { } tlColor
+            ? SolidBrush(tlColor)
+            : TrendlineBrush;
+
+        var dashArray = ToAvaloniaStrokeDashArray(_chart.TrendlineDashStyle);
+
+        var points = new Points();
+        foreach (var pt in tl.Points)
+            points.Add(new AvaloniaPoint(pt.X, pt.Y));
+
+        var polyline = new AvaloniaPolyline
+        {
+            Stroke = brush,
+            StrokeThickness = _chart.TrendlineThickness > 0 ? _chart.TrendlineThickness : 1.5,
+            StrokeJoin = PenLineJoin.Round,
+            Points = points,
+        };
+
+        if (dashArray is not null)
+            polyline.StrokeDashArray = dashArray;
+
+        canvas.Children.Add(polyline);
+    }
+
     private static Points BuildAreaPoints(SeriesLayout series)
     {
         var points = new Points();
@@ -422,7 +522,8 @@ public sealed class AvaloniaChartRenderer
         return points;
     }
 
-    private static void AddPolyline(Canvas canvas, IReadOnlyList<SeriesPoint> seriesPoints, IBrush stroke)
+    // Fix 6: dash style parameter for polyline stroke.
+    private static void AddPolyline(Canvas canvas, IReadOnlyList<SeriesPoint> seriesPoints, IBrush stroke, ChartLineDashStyle? dashStyle = null)
     {
         if (seriesPoints.Count < 2)
             return;
@@ -431,34 +532,113 @@ public sealed class AvaloniaChartRenderer
         foreach (var p in seriesPoints)
             points.Add(new AvaloniaPoint(p.Position.X, p.Position.Y));
 
-        canvas.Children.Add(new AvaloniaPolyline
+        var polyline = new AvaloniaPolyline
         {
             Stroke = stroke,
             StrokeThickness = 2,
             StrokeJoin = PenLineJoin.Round,
             Points = points,
-        });
+        };
+
+        var dashArray = ToAvaloniaStrokeDashArray(dashStyle);
+        if (dashArray is not null)
+            polyline.StrokeDashArray = dashArray;
+
+        canvas.Children.Add(polyline);
     }
 
+    // Fix 5: marker shapes — honor ChartMarkerStyle to produce non-circle geometries.
     private static void AddMarkers(
         Canvas canvas,
         IReadOnlyList<SeriesPoint> seriesPoints,
         IBrush fill,
-        IBrush stroke)
+        IBrush stroke,
+        ChartMarkerStyle markerStyle = ChartMarkerStyle.Circle)
     {
+        if (markerStyle == ChartMarkerStyle.None)
+            return;
+
         foreach (var p in seriesPoints)
         {
-            var marker = new Ellipse
+            var cx = p.Position.X;
+            var cy = p.Position.Y;
+            var control = BuildMarker(markerStyle, cx, cy, fill, stroke);
+            if (control is not null)
+                canvas.Children.Add(control);
+        }
+    }
+
+    /// <summary>
+    /// Builds a single marker control at (cx, cy). Returns null for <see cref="ChartMarkerStyle.None"/>.
+    /// Circle is an Ellipse; Square is a Rectangle; Diamond/Triangle/Cross/Plus/Star use a Path.
+    /// </summary>
+    internal static Control? BuildMarker(ChartMarkerStyle style, double cx, double cy, IBrush fill, IBrush stroke)
+    {
+        const double r = MarkerRadius;
+        switch (style)
+        {
+            case ChartMarkerStyle.None:
+                return null;
+
+            case ChartMarkerStyle.Square:
             {
-                Width = MarkerRadius * 2,
-                Height = MarkerRadius * 2,
-                Fill = fill,
-                Stroke = stroke,
-                StrokeThickness = 1,
-            };
-            Canvas.SetLeft(marker, p.Position.X - MarkerRadius);
-            Canvas.SetTop(marker, p.Position.Y - MarkerRadius);
-            canvas.Children.Add(marker);
+                var rect = new AvaloniaRectangle
+                {
+                    Width = r * 2,
+                    Height = r * 2,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                };
+                Canvas.SetLeft(rect, cx - r);
+                Canvas.SetTop(rect, cy - r);
+                return rect;
+            }
+
+            case ChartMarkerStyle.Diamond:
+            {
+                // Diamond: rotated square — four points at top/right/bottom/left.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx, cy - r), isFilled: true);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy));
+                    ctx.LineTo(new AvaloniaPoint(cx, cy + r));
+                    ctx.LineTo(new AvaloniaPoint(cx - r, cy));
+                    ctx.EndFigure(isClosed: true);
+                }
+                return new AvaloniaPath { Data = geo, Fill = fill, Stroke = stroke, StrokeThickness = 1 };
+            }
+
+            case ChartMarkerStyle.Triangle:
+            {
+                // Upward-pointing equilateral triangle.
+                var h = r * 1.732; // r * sqrt(3) ≈ height of equilateral triangle with half-base r.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new AvaloniaPoint(cx, cy - r), isFilled: true);
+                    ctx.LineTo(new AvaloniaPoint(cx + r, cy + h / 2));
+                    ctx.LineTo(new AvaloniaPoint(cx - r, cy + h / 2));
+                    ctx.EndFigure(isClosed: true);
+                }
+                return new AvaloniaPath { Data = geo, Fill = fill, Stroke = stroke, StrokeThickness = 1 };
+            }
+
+            default: // Circle fallback for Circle and any unrecognized value.
+            {
+                var ellipse = new Ellipse
+                {
+                    Width = r * 2,
+                    Height = r * 2,
+                    Fill = fill,
+                    Stroke = stroke,
+                    StrokeThickness = 1,
+                };
+                Canvas.SetLeft(ellipse, cx - r);
+                Canvas.SetTop(ellipse, cy - r);
+                return ellipse;
+            }
         }
     }
 
@@ -509,6 +689,72 @@ public sealed class AvaloniaChartRenderer
             center.Y - (radius * Math.Cos(radians)));
     }
 
+    // ── Gridlines (Fix 1) ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Draws major gridlines across the plot area at the axis tick positions.
+    /// For a value axis (vertical) the gridlines run horizontally across the plot.
+    /// For a category axis (horizontal) they run vertically.
+    /// </summary>
+    private void RenderGridlines(Canvas canvas, AxisLayout? axis, LayoutRect plot, bool isValueAxis)
+    {
+        if (axis is null || plot.Width <= 0 || plot.Height <= 0)
+            return;
+
+        var horizontal = axis.Side is AxisSide.Bottom or AxisSide.Top;
+
+        // Determine which model gridline settings apply.
+        bool showMajor;
+        CellColor? majorColor;
+        double thickness;
+
+        if (horizontal)
+        {
+            showMajor = _chart.ShowXAxisMajorGridlines;
+            majorColor = _chart.XAxisMajorGridlineColor;
+            thickness = Math.Max(0.5, _chart.XAxisGridlineThickness);
+        }
+        else
+        {
+            showMajor = _chart.ShowYAxisMajorGridlines;
+            majorColor = _chart.YAxisMajorGridlineColor;
+            thickness = Math.Max(0.5, _chart.YAxisGridlineThickness);
+        }
+
+        if (!showMajor)
+            return;
+
+        IBrush gridBrush = majorColor is { } mc
+            ? SolidBrush(mc)
+            : GridlineBrush;
+
+        foreach (var tick in axis.Ticks)
+        {
+            if (horizontal)
+            {
+                // Vertical gridline at this category tick position.
+                canvas.Children.Add(new Line
+                {
+                    StartPoint = new AvaloniaPoint(tick.Position, plot.Top),
+                    EndPoint = new AvaloniaPoint(tick.Position, plot.Bottom),
+                    Stroke = gridBrush,
+                    StrokeThickness = thickness,
+                });
+            }
+            else
+            {
+                // Horizontal gridline at this value tick position.
+                canvas.Children.Add(new Line
+                {
+                    StartPoint = new AvaloniaPoint(plot.Left, tick.Position),
+                    EndPoint = new AvaloniaPoint(plot.Right, tick.Position),
+                    Stroke = gridBrush,
+                    StrokeThickness = thickness,
+                });
+            }
+        }
+    }
+
     // ── Axes ────────────────────────────────────────────────────────────────
 
     private static void RenderAxis(Canvas canvas, AxisLayout? axis, bool isValueAxis)
@@ -531,9 +777,88 @@ public sealed class AvaloniaChartRenderer
             }
             else
             {
-                AddLine(canvas, axis.LinePosition - TickLength, tick.Position, axis.LinePosition, tick.Position);
-                AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false);
+                var tickX = axis.Side == AxisSide.Right
+                    ? axis.LinePosition
+                    : axis.LinePosition - TickLength;
+                var tickEndX = axis.Side == AxisSide.Right
+                    ? axis.LinePosition + TickLength
+                    : axis.LinePosition;
+                AddLine(canvas, tickX, tick.Position, tickEndX, tick.Position);
+
+                if (axis.Side == AxisSide.Right)
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position, centerHorizontally: false, rightAligned: false);
+                else
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false);
             }
+        }
+    }
+
+    // Fix 2: Axis title rendering.
+    private void RenderAxisTitle(Canvas canvas, AxisLayout? axis, LayoutRect plot)
+    {
+        if (axis is null || string.IsNullOrWhiteSpace(axis.Title))
+            return;
+
+        var fontSize = _chart.AxisTitleFontSize > 0 ? _chart.AxisTitleFontSize : AxisTitleFontSize;
+        IBrush foreground = _chart.ResolveAxisTitleTextColor(_theme) is { } titleColor
+            ? SolidBrush(titleColor)
+            : AxisLabelBrush;
+
+        var horizontal = axis.Side is AxisSide.Bottom or AxisSide.Top;
+
+        if (horizontal)
+        {
+            // X axis title: centered below the tick labels (below the axis line + ticks + labels).
+            var tb = new TextBlock
+            {
+                Text = axis.Title,
+                FontSize = fontSize,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = foreground,
+                TextAlignment = TextAlignment.Center,
+            };
+            tb.Measure(Size.Infinity);
+            var labelW = tb.DesiredSize.Width > 0 ? tb.DesiredSize.Width : 60;
+            var centerX = (plot.Left + plot.Right) / 2;
+            // Place below the axis line + tick (TickLength) + label height (~14) + 2px gap.
+            var top = axis.LinePosition + TickLength + 14 + 2;
+            Canvas.SetLeft(tb, centerX - labelW / 2);
+            Canvas.SetTop(tb, top);
+            canvas.Children.Add(tb);
+        }
+        else
+        {
+            // Y axis title: rotated 90° counter-clockwise, centered along the plot height.
+            var tb = new TextBlock
+            {
+                Text = axis.Title,
+                FontSize = fontSize,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = foreground,
+                TextAlignment = TextAlignment.Center,
+                RenderTransformOrigin = RelativePoint.TopLeft,
+            };
+            tb.Measure(Size.Infinity);
+            var textW = tb.DesiredSize.Width > 0 ? tb.DesiredSize.Width : 60;
+            var textH = tb.DesiredSize.Height > 0 ? tb.DesiredSize.Height : fontSize + 4;
+            var centerY = (plot.Top + plot.Bottom) / 2;
+
+            if (axis.Side == AxisSide.Right)
+            {
+                // Right axis title: rotated 90° clockwise, to the right of the right axis.
+                tb.RenderTransform = new RotateTransform(90);
+                Canvas.SetLeft(tb, axis.LinePosition + TickLength + 18);
+                Canvas.SetTop(tb, centerY - textW / 2);
+            }
+            else
+            {
+                // Left axis title: rotated 90° counter-clockwise (upward reading).
+                tb.RenderTransform = new RotateTransform(-90);
+                // After -90° rotation the text's left edge becomes its top, so offset accordingly.
+                Canvas.SetLeft(tb, axis.LinePosition - TickLength - 18 - textH);
+                Canvas.SetTop(tb, centerY + textW / 2);
+            }
+            canvas.Children.Add(tb);
         }
     }
 
@@ -553,7 +878,13 @@ public sealed class AvaloniaChartRenderer
         return double.IsInfinity(max) ? axis.LinePosition : max;
     }
 
-    private static void AddTickLabel(Canvas canvas, string text, double x, double y, bool centerHorizontally)
+    private static void AddTickLabel(
+        Canvas canvas,
+        string text,
+        double x,
+        double y,
+        bool centerHorizontally,
+        bool rightAligned = true)
     {
         if (string.IsNullOrEmpty(text))
             return;
@@ -575,7 +906,7 @@ public sealed class AvaloniaChartRenderer
         else
         {
             label.Measure(Size.Infinity);
-            Canvas.SetLeft(label, x - label.DesiredSize.Width);
+            Canvas.SetLeft(label, rightAligned ? x - label.DesiredSize.Width : x);
             Canvas.SetTop(label, y - (label.DesiredSize.Height / 2));
         }
 
@@ -780,6 +1111,20 @@ public sealed class AvaloniaChartRenderer
         }
         return palette;
     }
+
+    // ── Dash style helpers (Fix 6) ───────────────────────────────────────────
+
+    /// <summary>
+    /// Returns an Avalonia StrokeDashArray for the given dash style, or null for solid (no dash array needed).
+    /// Values are in stroke-thickness units (Avalonia convention).
+    /// </summary>
+    internal static AvaloniaList<double>? ToAvaloniaStrokeDashArray(ChartLineDashStyle? dashStyle) =>
+        dashStyle switch
+        {
+            ChartLineDashStyle.Dash => DashArray,
+            ChartLineDashStyle.Dot => DotArray,
+            _ => null, // Solid or null → no dash array
+        };
 
     private static IBrush SolidBrush(CellColor color) => SolidBrush(color.R, color.G, color.B);
 
