@@ -310,14 +310,27 @@ internal static class FreeWRibbon
                 });
                 tab.Group("show", "Show", null, 100, g =>
                 {
+                    // AV-VIEW: layout gridlines + ruler toggles (DocumentView render chrome).
+                    g.Toggle("freew.view-ruler",        "Ruler");
+                    g.Toggle("freew.view-gridlines",    "Gridlines");
                     g.Toggle("freew.navigationpane",    "Navigation Pane");
+                    // AV-VIEW: surface the Reviewing Pane toggle on View as well (also on Review tab).
+                    g.Toggle("freew.reviewingpane",     "Reviewing Pane");
                     g.Toggle("freew.reveal-formatting", "Reveal Formatting");
                 });
                 tab.Group("zoom", "Zoom", null, 90, g =>
                 {
+                    // AV-VIEW: full Zoom dialog (presets + custom %) alongside the quick controls.
+                    g.Button("freew.zoom-dialog", "Zoom");
                     g.Button("freew.zoom-in",  "Zoom In");
                     g.Button("freew.zoom-out", "Zoom Out");
                     g.Button("freew.zoom-100", "100%");
+                });
+                // AV-VIEW: Window group — new window (second view on the same doc) + split.
+                tab.Group("window", "Window", null, 80, g =>
+                {
+                    g.Button("freew.new-window", "New Window");
+                    g.Toggle("freew.split",      "Split");
                 });
             })
             .Tab("review", "Review", "R", tab =>
@@ -584,7 +597,13 @@ internal sealed record RibbonHostCallbacks(
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
-    Action<double?, double> ApplyZoom);
+    Action<double?, double> ApplyZoom,
+    /// <summary>AV-VIEW: Opens the Zoom dialog (modal); applies the chosen preset/custom zoom on OK.</summary>
+    Action? OpenZoomDialog = null,
+    /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
+    Action? NewWindow = null,
+    /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
+    Action? ToggleSplit = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

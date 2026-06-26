@@ -45,6 +45,10 @@ public sealed class DocumentView : Control
     private const double PxPerPoint = 96.0 / 72.0;
     // Print-layout chrome: grey "desk" gap above (and below) the white page surface.
     private const double DeskPadding = 24;
+    // AV-VIEW: spacing (DIP) between layout-gridlines (Word draws a ~quarter-inch grid; 18pt ≈ 0.25in).
+    private const double GridlineStepDip = 18.0;
+    // AV-VIEW: height/width of the ruler strip drawn at the page top / left edge in Print Layout.
+    private const double RulerThicknessDip = 14.0;
     // Gap between consecutive page rectangles (grey desk visible between them).
     private const double PageGap = 20;
     // Minimum horizontal gap between the control edge and the page left/right edge.
@@ -73,6 +77,11 @@ public sealed class DocumentView : Control
 
     private DocumentViewMode _viewMode = DocumentViewMode.PrintLayout;
     private bool _showParagraphMarks;
+    // AV-VIEW: layout-gridlines overlay (faint grid behind text) + ruler strip (top horizontal +
+    // left vertical with tick marks and margin markers). Both are view-only chrome — they never
+    // affect layout, only the Render pass — so toggling them just invalidates the visual.
+    private bool _showGridlines;
+    private bool _showRuler;
 
     // Standard Word font-size ladder (pt).
     private static readonly double[] FontSizeLadder = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
@@ -4922,6 +4931,38 @@ public sealed class DocumentView : Control
         context.DrawLine(pen, p1, p2);
     }
 
+    /// <summary>
+    /// AV-VIEW: Draw the ruler strips for the first page in Print Layout — a horizontal strip along the
+    /// page top and a vertical strip along the page left edge, each with the page margins tinted darker
+    /// (so the lighter span marks the editable body area) and inch tick marks. Pure render chrome.
+    /// </summary>
+    private void DrawRuler(DrawingContext context)
+    {
+        const double inchDip = 72.0;
+        var pageTop = DeskPadding; // first page only
+        // ── Horizontal ruler: sits just above the page's top edge. ──
+        var hRect = new Rect(_pageLeft, pageTop - RulerThicknessDip, _pageWidth, RulerThicknessDip);
+        context.FillRectangle(RulerFill, hRect);
+        // Margin tint: left margin + right margin spans (darker); body area stays light.
+        context.FillRectangle(RulerMarginFill, new Rect(_pageLeft, hRect.Y, _contentLeft - _pageLeft, RulerThicknessDip));
+        var bodyRight = _contentLeft + _contentWidth;
+        context.FillRectangle(RulerMarginFill, new Rect(bodyRight, hRect.Y, _pageLeft + _pageWidth - bodyRight, RulerThicknessDip));
+        context.DrawRectangle(null, RulerBorderPen, hRect);
+        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+            context.DrawLine(RulerTickPen, new Point(x, hRect.Y + RulerThicknessDip - 4), new Point(x, hRect.Y + RulerThicknessDip));
+
+        // ── Vertical ruler: sits just left of the page's left edge. ──
+        var vRect = new Rect(_pageLeft - RulerThicknessDip, pageTop, RulerThicknessDip, _pageHeightPx);
+        context.FillRectangle(RulerFill, vRect);
+        var bodyTop    = pageTop + _marginTopDip;
+        var bodyBottom = pageTop + _pageHeightPx - _marginBottomDip;
+        context.FillRectangle(RulerMarginFill, new Rect(vRect.X, pageTop, RulerThicknessDip, _marginTopDip));
+        context.FillRectangle(RulerMarginFill, new Rect(vRect.X, bodyBottom, RulerThicknessDip, pageTop + _pageHeightPx - bodyBottom));
+        context.DrawRectangle(null, RulerBorderPen, vRect);
+        for (var y = pageTop; y <= pageTop + _pageHeightPx + 0.01; y += inchDip)
+            context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
+    }
+
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
@@ -4932,6 +4973,14 @@ public sealed class DocumentView : Control
     private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
     // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
     private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
+    // AV-VIEW: faint layout-gridlines drawn behind body text when ShowGridlines is set.
+    private static Pen    GridlinePen      { get; } = new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0x60, 0x90, 0xC0)), 0.5);
+    // AV-VIEW: ruler strip fill, border, and tick marks drawn at the page top/left when ShowRuler is set.
+    private static IBrush RulerFill        { get; } = new SolidColorBrush(Color.FromRgb(0xF4, 0xF6, 0xFA));
+    private static Pen    RulerBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD4)), 0.75);
+    private static Pen    RulerTickPen     { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x70, 0x80, 0x98)), 0.75);
+    // AV-VIEW: darker tint marking the page margins on the ruler (the body text area is the lighter span).
+    private static IBrush RulerMarginFill  { get; } = new SolidColorBrush(Color.FromRgb(0xD8, 0xDE, 0xE8));
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -4961,6 +5010,18 @@ public sealed class DocumentView : Control
             // Web Layout / Draft: plain white background — no desk, no page chrome.
             context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
         }
+
+        // AV-VIEW: faint layout-gridlines behind the body text (Print Layout only). Drawn after the
+        // white page fill so the grid shows through, before table fills / text so it sits underneath.
+        if (_showGridlines && _viewMode == DocumentViewMode.PrintLayout)
+        {
+            foreach (var (x1, y1, x2, y2) in ComputeGridlines())
+                context.DrawLine(GridlinePen, new Point(x1, y1), new Point(x2, y2));
+        }
+
+        // AV-VIEW: horizontal + vertical ruler strips on the first page (Print Layout only).
+        if (_showRuler && _viewMode == DocumentViewMode.PrintLayout)
+            DrawRuler(context);
 
         // Table fills + borders sit beneath the text.
         foreach (var (rect, fill, border, cellBorder) in _rects)
@@ -7526,6 +7587,87 @@ public sealed class DocumentView : Control
             _showParagraphMarks = value;
             InvalidateVisual();
         }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Toggle a faint layout-gridlines overlay drawn behind the body text on each page
+    /// (View → Show → Gridlines in Word). The grid is purely visual chrome; it does not affect layout.
+    /// Only meaningful in <see cref="DocumentViewMode.PrintLayout"/> (where discrete pages exist).
+    /// </summary>
+    public bool ShowGridlines
+    {
+        get => _showGridlines;
+        set
+        {
+            if (_showGridlines == value)
+                return;
+            _showGridlines = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Toggle a horizontal (top) + vertical (left) ruler strip with tick marks and margin
+    /// markers, drawn on the first page in <see cref="DocumentViewMode.PrintLayout"/> (View → Show →
+    /// Ruler in Word). View-only chrome; does not affect layout.
+    /// </summary>
+    public bool ShowRuler
+    {
+        get => _showRuler;
+        set
+        {
+            if (_showRuler == value)
+                return;
+            _showRuler = value;
+            InvalidateVisual();
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Compute the layout-gridlines for the current layout — one horizontal line every
+    /// <see cref="GridlineStepDip"/> within each page's text area, plus one vertical line every
+    /// step across the text width. Returns page-space line segments (X1,Y1)-(X2,Y2). Exposed for the
+    /// Render pass and for tests; empty when gridlines are off or not in Print Layout.
+    /// </summary>
+    internal IReadOnlyList<(double X1, double Y1, double X2, double Y2)> ComputeGridlines()
+    {
+        var lines = new List<(double, double, double, double)>();
+        if (!_showGridlines || _viewMode != DocumentViewMode.PrintLayout)
+            return lines;
+
+        var areaLeft   = _contentLeft;
+        var areaRight  = _contentLeft + _contentWidth;
+        for (var pi = 0; pi < _pageCount; pi++)
+        {
+            var pageTop    = DeskPadding + pi * (_pageHeightPx + PageGap);
+            var areaTop    = pageTop + _marginTopDip;
+            var areaBottom = pageTop + _pageHeightPx - _marginBottomDip;
+
+            // Horizontal lines.
+            for (var y = areaTop; y <= areaBottom + 0.01; y += GridlineStepDip)
+                lines.Add((areaLeft, y, areaRight, y));
+            // Vertical lines.
+            for (var x = areaLeft; x <= areaRight + 0.01; x += GridlineStepDip)
+                lines.Add((x, areaTop, x, areaBottom));
+        }
+        return lines;
+    }
+
+    /// <summary>
+    /// AV-VIEW: Compute the ruler tick marks for the first page's horizontal ruler — one tick every
+    /// inch (72pt) across the page width, measured from the left page edge. Returns page-space tick X
+    /// positions. Exposed for the Render pass and for tests; empty when the ruler is off or not in
+    /// Print Layout.
+    /// </summary>
+    internal IReadOnlyList<double> ComputeRulerTicks()
+    {
+        var ticks = new List<double>();
+        if (!_showRuler || _viewMode != DocumentViewMode.PrintLayout)
+            return ticks;
+        const double inchDip = 72.0; // 1in = 72pt = 72 DIP at 96 DPI base
+        for (var x = _pageLeft; x <= _pageLeft + _pageWidth + 0.01; x += inchDip)
+            ticks.Add(x);
+        return ticks;
     }
 
     public void SetAlignment(TextAlignment alignment)
