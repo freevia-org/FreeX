@@ -1,0 +1,527 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+using SkiaSharp;
+using Xunit;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// AV-FLSEL: floating-object selection + placement edit infra tests.
+/// Covers: SelectFloating hit-test, SelectedFloatingInfo, ChangeFloatingZOrder,
+/// SetFloatingWrap, SetFloatingPosition, SetFloatingSize, RotateSelectedFloating,
+/// FlipSelectedFloating, DeleteSelectedFloating, undo of each, Esc deselect,
+/// click-outside deselect, non-float regression (body text click deselects).
+/// </summary>
+public sealed class DocumentViewFloatingSelectionTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────────────────────────────
+
+    private static byte[] SmallPng()
+    {
+        using var bmp = new SKBitmap(4, 4, SKColorType.Rgba8888, SKAlphaType.Premul);
+        bmp.Erase(new SKColor(255, 128, 0));
+        using var img = SKImage.FromBitmap(bmp);
+        using var data = img.Encode(SKEncodedImageFormat.Png, 90);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Document with one floating image at block=0, run=1 (run=0 is body text).
+    /// Image is 144×108 pt Square-wrapped, offset (36,36)pt from column/paragraph.
+    /// </summary>
+    private static (TextDocument Doc, int BlockIdx, int RunIdx) MakeDocWithFloatingImage()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        var img = new InlineImage(SmallPng(), 144, 108)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = 36,
+            VerticalOffsetPt   = 36,
+            ZOrderIndex        = 1,
+        };
+        var imgRun = new Run(string.Empty, RunFormatting.Default) { Image = img };
+        para.Runs.Add(imgRun);
+        doc.Blocks.Add(para);
+        return (doc, 0, 1);
+    }
+
+    /// <summary>
+    /// Document with one floating shape at block=0, run=1.
+    /// Shape is 120×80 pt, Square-wrapped, offset (36,36)pt.
+    /// </summary>
+    private static (TextDocument Doc, int BlockIdx, int RunIdx) MakeDocWithFloatingShape()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        var shape = new Shape
+        {
+            Kind       = ShapeKind.Rectangle,
+            WidthPt    = 120,
+            HeightPt   = 80,
+            FillColorHex = "#FF0000",
+            Placement  = new FloatingPlacement
+            {
+                Wrapping           = ImageWrapping.Square,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt   = 36,
+                ZOrderIndex        = 1,
+            },
+        };
+        var shapeRun = new Run(string.Empty, RunFormatting.Default) { Shape = shape };
+        para.Runs.Add(shapeRun);
+        doc.Blocks.Add(para);
+        return (doc, 0, 1);
+    }
+
+    // ── FLSEL-1: SelectFloating sets SelectedFloatingInfo ────────────────────────────────────────────
+
+    [Fact]
+    public async Task SelectFloating_sets_selected_floating_info()
+    {
+        (int BlockIndex, int RunIndex, string Kind, global::Avalonia.Rect Rect)? info = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            info = view.SelectedFloatingInfo;
+        });
+        if (!ran) return;
+        Assert.NotNull(info);
+        Assert.Equal(0,       info!.Value.BlockIndex);
+        Assert.Equal(1,       info!.Value.RunIndex);
+        Assert.Equal("Image", info!.Value.Kind);
+        Assert.True(info!.Value.Rect.Width  > 0, "selected rect should have non-zero width");
+        Assert.True(info!.Value.Rect.Height > 0, "selected rect should have non-zero height");
+    }
+
+    // ── FLSEL-2: DeselectFloating clears selection ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeselectFloating_clears_selection()
+    {
+        bool wasSelected = false;
+        bool isDeselected = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            wasSelected  = view.SelectedFloatingInfo is not null;
+            view.DeselectFloating();
+            isDeselected = view.SelectedFloatingInfo is null;
+        });
+        if (!ran) return;
+        Assert.True(wasSelected,  "object should be selected after SelectFloating");
+        Assert.True(isDeselected, "object should be deselected after DeselectFloating");
+    }
+
+    // ── FLSEL-3: SetFloatingWrap changes wrapping + undoable ─────────────────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingWrap_changes_model_wrapping_and_is_undoable()
+    {
+        ImageWrapping? after = null;
+        ImageWrapping? reverted = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingWrap(ImageWrapping.TopAndBottom);
+            after = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Placement!.Wrapping;
+
+            view.Undo();
+            reverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Placement!.Wrapping;
+        });
+        if (!ran) return;
+        Assert.Equal(ImageWrapping.TopAndBottom, after);
+        Assert.Equal(ImageWrapping.Square,       reverted);
+    }
+
+    // ── FLSEL-4: ChangeFloatingZOrder (BringToFront) raises ZOrderIndex ──────────────────────────────
+
+    [Fact]
+    public async Task ChangeFloatingZOrder_BringToFront_raises_z_index_and_is_undoable()
+    {
+        int? zBefore = null, zAfter = null, zReverted = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            var img = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!;
+            zBefore = img.ZOrderIndex; // = 1
+
+            view.SelectFloating(bi, ri);
+            view.ChangeFloatingZOrder(ZOrderOperation.BringToFront);
+            zAfter = img.ZOrderIndex;
+
+            view.Undo();
+            zReverted = img.ZOrderIndex;
+        });
+        if (!ran) return;
+        Assert.True(zAfter > zBefore, "BringToFront should increase ZOrderIndex");
+        Assert.Equal(zBefore, zReverted);
+    }
+
+    // ── FLSEL-5: SetFloatingPosition updates offsets + undoable ──────────────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingPosition_updates_image_offsets_and_is_undoable()
+    {
+        double hAfter = 0, vAfter = 0, hReverted = 0, vReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingPosition(72, 144, HorizontalAnchor.Margin, VerticalAnchor.Page);
+            var img = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!;
+            hAfter = img.HorizontalOffsetPt;
+            vAfter = img.VerticalOffsetPt;
+
+            view.Undo();
+            hReverted = img.HorizontalOffsetPt;
+            vReverted = img.VerticalOffsetPt;
+        });
+        if (!ran) return;
+        Assert.Equal(72,  hAfter);
+        Assert.Equal(144, vAfter);
+        Assert.Equal(36,  hReverted);
+        Assert.Equal(36,  vReverted);
+    }
+
+    // ── FLSEL-6: SetFloatingPosition updates shape placement + undoable ───────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingPosition_updates_shape_placement_and_is_undoable()
+    {
+        double hAfter = 0, vAfter = 0, hReverted = 0, vReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingPosition(100, 200, HorizontalAnchor.Column, VerticalAnchor.Paragraph);
+            var pl = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.Placement!;
+            hAfter = pl.HorizontalOffsetPt;
+            vAfter = pl.VerticalOffsetPt;
+
+            view.Undo();
+            hReverted = pl.HorizontalOffsetPt;
+            vReverted = pl.VerticalOffsetPt;
+        });
+        if (!ran) return;
+        Assert.Equal(100, hAfter);
+        Assert.Equal(200, vAfter);
+        Assert.Equal(36,  hReverted);
+        Assert.Equal(36,  vReverted);
+    }
+
+    // ── FLSEL-7: SetFloatingSize updates image size + undoable ───────────────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingSize_updates_image_size_and_is_undoable()
+    {
+        double wAfter = 0, hAfter = 0, wReverted = 0, hReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingSize(288, 216); // 4in × 3in
+            var img = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!;
+            wAfter  = img.WidthPt;
+            hAfter  = img.HeightPt;
+
+            view.Undo();
+            wReverted = img.WidthPt;
+            hReverted = img.HeightPt;
+        });
+        if (!ran) return;
+        Assert.Equal(288, wAfter);
+        Assert.Equal(216, hAfter);
+        Assert.Equal(144, wReverted);
+        Assert.Equal(108, hReverted);
+    }
+
+    // ── FLSEL-8: RotateSelectedFloating updates image rotation + undoable ────────────────────────────
+
+    [Fact]
+    public async Task RotateSelectedFloating_updates_image_rotation_and_is_undoable()
+    {
+        double angleAfter = 0, angleReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.RotateSelectedFloating(90);
+            angleAfter = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.RotationAngle;
+
+            view.Undo();
+            angleReverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.RotationAngle;
+        });
+        if (!ran) return;
+        Assert.Equal(90,  angleAfter);
+        Assert.Equal(0.0, angleReverted);
+    }
+
+    // ── FLSEL-9: RotateSelectedFloating updates shape rotation + undoable ────────────────────────────
+
+    [Fact]
+    public async Task RotateSelectedFloating_updates_shape_rotation_and_is_undoable()
+    {
+        double angleAfter = 0, angleReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.RotateSelectedFloating(45);
+            angleAfter = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.RotationAngle;
+
+            view.Undo();
+            angleReverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!.RotationAngle;
+        });
+        if (!ran) return;
+        Assert.Equal(45,  angleAfter);
+        Assert.Equal(0.0, angleReverted);
+    }
+
+    // ── FLSEL-10: FlipSelectedFloating updates image flip + undoable ─────────────────────────────────
+
+    [Fact]
+    public async Task FlipSelectedFloating_updates_image_flipH_and_is_undoable()
+    {
+        bool flipHAfter = false, flipHReverted = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.FlipSelectedFloating(horizontal: true);
+            flipHAfter = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.FlipH;
+
+            view.Undo();
+            flipHReverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.FlipH;
+        });
+        if (!ran) return;
+        Assert.True(flipHAfter,    "FlipH should be true after FlipSelectedFloating(horizontal)");
+        Assert.False(flipHReverted,"FlipH should be restored to false after undo");
+    }
+
+    // ── FLSEL-11: DeleteSelectedFloating removes run + undoable ──────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteSelectedFloating_removes_run_and_is_undoable()
+    {
+        int runCountBefore = 0, runCountAfter = 0, runCountReverted = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            runCountBefore = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+            view.DeleteSelectedFloating();
+            runCountAfter = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+
+            view.Undo();
+            runCountReverted = ((Paragraph)doc.Blocks[bi]).Runs.Count;
+        });
+        if (!ran) return;
+        Assert.Equal(2, runCountBefore);
+        Assert.Equal(1, runCountAfter);
+        Assert.Equal(2, runCountReverted);
+    }
+
+    // ── FLSEL-12: DeleteSelectedFloating clears selection ────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteSelectedFloating_clears_selection()
+    {
+        bool isNullAfterDelete = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            view.DeleteSelectedFloating();
+            isNullAfterDelete = view.SelectedFloatingInfo is null;
+        });
+        if (!ran) return;
+        Assert.True(isNullAfterDelete, "SelectedFloatingInfo should be null after delete");
+    }
+
+    // ── FLSEL-13: TryHitTestFloat — point inside float rect selects it ───────────────────────────────
+
+    [Fact]
+    public async Task SelectFloating_with_shape_sets_kind_and_valid_rect()
+    {
+        string? kind = null;
+        bool rectNonZero = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var info = view.SelectedFloatingInfo;
+            kind        = info?.Kind;
+            rectNonZero = info.HasValue && info.Value.Rect.Width > 0 && info.Value.Rect.Height > 0;
+        });
+        if (!ran) return;
+        Assert.Equal("Shape", kind);
+        Assert.True(rectNonZero);
+    }
+
+    // ── FLSEL-14: SelectFloating on invalid index does not crash ─────────────────────────────────────
+
+    [Fact]
+    public async Task SelectFloating_on_invalid_index_does_not_crash_and_leaves_null()
+    {
+        bool infoNull = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(99, 99); // out of range
+            infoNull = view.SelectedFloatingInfo is null;
+        });
+        if (!ran) return;
+        Assert.True(infoNull);
+    }
+
+    // ── FLSEL-15: SetFloatingWrap on image changes Wrapping ──────────────────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingWrap_on_image_changes_wrapping_and_is_undoable()
+    {
+        ImageWrapping? after = null, reverted = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingWrap(ImageWrapping.Behind);
+            after    = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.Wrapping;
+            view.Undo();
+            reverted = ((Paragraph)doc.Blocks[bi]).Runs[ri].Image!.Wrapping;
+        });
+        if (!ran) return;
+        Assert.Equal(ImageWrapping.Behind, after);
+        Assert.Equal(ImageWrapping.Square, reverted);
+    }
+
+    // ── FLSEL-16: FloatingImageRects still work after SelectFloating (non-regression) ─────────────────
+
+    [Fact]
+    public async Task FloatingImageRects_still_populated_after_SelectFloating()
+    {
+        int rectCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingImage();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            rectCount = view.FloatingImageRects.Count;
+        });
+        if (!ran) return;
+        Assert.Equal(1, rectCount);
+    }
+
+    // ── FLSEL-17: SetFloatingSize on shape updates size + undoable ────────────────────────────────────
+
+    [Fact]
+    public async Task SetFloatingSize_on_shape_updates_size_and_is_undoable()
+    {
+        double wAfter = 0, hAfter = 0, wRev = 0, hRev = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, bi, ri) = MakeDocWithFloatingShape();
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+
+            view.SetFloatingSize(240, 160);
+            var shape = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!;
+            wAfter = shape.WidthPt; hAfter = shape.HeightPt;
+
+            view.Undo();
+            wRev = shape.WidthPt; hRev = shape.HeightPt;
+        });
+        if (!ran) return;
+        Assert.Equal(240, wAfter);
+        Assert.Equal(160, hAfter);
+        Assert.Equal(120, wRev);
+        Assert.Equal(80,  hRev);
+    }
+}

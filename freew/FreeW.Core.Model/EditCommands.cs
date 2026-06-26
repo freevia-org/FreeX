@@ -2639,6 +2639,280 @@ public sealed class MoveShapeEditPointCommand(
             ? p.Runs[runIndex].Shape : null;
 }
 
+// ── AV-FLSEL: generic floating-object placement/size/rotation/wrapping commands ───────────────────
+
+/// <summary>
+/// Set the position (offsets + anchors) on ANY floating object (Image, Shape, Chart, SmartArt,
+/// WordArt, DrawingGroup) identified by (paragraphIndex, runIndex). Snaps the prior placement
+/// for undo. No-op when the run is not a floating object.
+/// </summary>
+public sealed class SetFloatingPositionCommand(
+    int paragraphIndex, int runIndex,
+    double horizontalOffsetPt, double verticalOffsetPt,
+    HorizontalAnchor horizontalAnchor, VerticalAnchor verticalAnchor) : IDocumentCommand
+{
+    private double _ph, _pv;
+    private HorizontalAnchor _pha;
+    private VerticalAnchor _pva;
+    private bool _applied;
+
+    public string Label => "Set Position";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetPlacement(context, out var pl)) return;
+        _ph = pl.HorizontalOffsetPt; _pv = pl.VerticalOffsetPt;
+        _pha = pl.HorizontalAnchor;  _pva = pl.VerticalAnchor;
+        pl.HorizontalOffsetPt = horizontalOffsetPt; pl.VerticalOffsetPt = verticalOffsetPt;
+        pl.HorizontalAnchor = horizontalAnchor;     pl.VerticalAnchor = verticalAnchor;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetPlacement(context, out var pl)) return;
+        pl.HorizontalOffsetPt = _ph; pl.VerticalOffsetPt = _pv;
+        pl.HorizontalAnchor = _pha; pl.VerticalAnchor = _pva;
+        _applied = false;
+    }
+
+    private bool TryGetPlacement(IDocumentCommandContext context, out FloatingPlacement pl)
+    {
+        pl = null!;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        pl = GetFloatingPlacement(p.Runs[runIndex])!;
+        return pl is not null;
+    }
+
+    public static FloatingPlacement? GetFloatingPlacement(Run run)
+    {
+        if (run.Image is { IsFloating: true } img)
+        {
+            // InlineImage stores offsets/anchors directly (no FloatingPlacement object).
+            // Wrap them in a proxy? No — for image we use a shim.
+            return null; // Images use SetImagePositionCommand instead.
+        }
+        if (run.Shape is { } shape)  { shape.Placement ??= new FloatingPlacement(); return shape.Placement; }
+        if (run.Chart is { } chart)  { chart.Placement ??= new FloatingPlacement { Wrapping = ImageWrapping.Square }; return chart.Placement; }
+        if (run.SmartArt is { } sa)  { sa.Placement ??= new FloatingPlacement { Wrapping = ImageWrapping.Square }; return sa.Placement; }
+        if (run.WordArt is { } wa)   { wa.Placement ??= new FloatingPlacement { Wrapping = ImageWrapping.Square }; return wa.Placement; }
+        if (run.DrawingGroup is { } g) return g.Placement;
+        return null;
+    }
+}
+
+/// <summary>
+/// Set the size (widthPt, heightPt) on ANY floating object (Image, Shape, Chart, SmartArt,
+/// WordArt, DrawingGroup) identified by (paragraphIndex, runIndex). Snaps the prior size for undo.
+/// </summary>
+public sealed class SetFloatingSizeCommand(
+    int paragraphIndex, int runIndex,
+    double widthPt, double heightPt) : IDocumentCommand
+{
+    private double _prevW, _prevH;
+    private bool _applied;
+
+    public string Label => "Resize";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryMutate(context, widthPt, heightPt, out _prevW, out _prevH)) return;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied) return;
+        TryMutate(context, _prevW, _prevH, out _, out _);
+        _applied = false;
+    }
+
+    private bool TryMutate(IDocumentCommandContext context, double w, double h,
+        out double prevW, out double prevH)
+    {
+        prevW = 0; prevH = 0;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        var run = p.Runs[runIndex];
+        if (run.Image is { IsFloating: true } img)
+            { prevW = img.WidthPt; prevH = img.HeightPt; img.WidthPt = w; img.HeightPt = h; return true; }
+        if (run.Shape is { } shape)
+            { prevW = shape.WidthPt; prevH = shape.HeightPt; shape.WidthPt = w; shape.HeightPt = h; return true; }
+        if (run.Chart is { } chart)
+            { prevW = chart.WidthPt; prevH = chart.HeightPt; chart.WidthPt = w; chart.HeightPt = h; return true; }
+        if (run.SmartArt is { } sa)
+            { prevW = sa.WidthPt; prevH = sa.HeightPt; sa.WidthPt = w; sa.HeightPt = h; return true; }
+        if (run.DrawingGroup is { } grp)
+            { prevW = grp.WidthPt; prevH = grp.HeightPt; grp.WidthPt = w; grp.HeightPt = h; return true; }
+        return false;
+    }
+}
+
+/// <summary>
+/// Set the wrapping mode on ANY floating object (Image, Shape, Chart, SmartArt, WordArt,
+/// DrawingGroup) identified by (paragraphIndex, runIndex). Snaps the prior wrapping for undo.
+/// For Image, this updates <see cref="InlineImage.Wrapping"/> directly.
+/// For all others, it updates <see cref="FloatingPlacement.Wrapping"/> (creating placement if absent).
+/// </summary>
+public sealed class SetFloatingWrapCommand(
+    int paragraphIndex, int runIndex,
+    ImageWrapping wrapping) : IDocumentCommand
+{
+    private ImageWrapping _previous;
+    private bool _applied;
+
+    public string Label => "Wrap Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryMutate(context, wrapping, out _previous)) return;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied) return;
+        TryMutate(context, _previous, out _);
+        _applied = false;
+    }
+
+    private bool TryMutate(IDocumentCommandContext context, ImageWrapping w, out ImageWrapping prev)
+    {
+        prev = ImageWrapping.Inline;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        var run = p.Runs[runIndex];
+        if (run.Image is { } img)
+            { prev = img.Wrapping; img.Wrapping = w; return true; }
+        var pl = SetFloatingPositionCommand.GetFloatingPlacement(run);
+        // For non-image types, GetFloatingPlacement returns the Placement (creating it if needed).
+        // But Image returns null from GetFloatingPlacement — handled above.
+        if (pl is null)
+        {
+            // Explicitly handle remaining types not covered by GetFloatingPlacement (only Image was
+            // excluded there, already handled above).
+            return false;
+        }
+        prev = pl.Wrapping; pl.Wrapping = w; return true;
+    }
+}
+
+/// <summary>
+/// Set the rotation + flip on ANY floating object that supports rotation (Image, Shape).
+/// For Image: updates <see cref="InlineImage.RotationAngle"/>, FlipH, FlipV.
+/// For Shape: updates <see cref="Shape.RotationAngle"/>, FlipH, FlipV.
+/// Chart/SmartArt/WordArt/Group do not carry rotation in the model; this command is a no-op for them.
+/// </summary>
+public sealed class SetFloatingRotationCommand(
+    int paragraphIndex, int runIndex,
+    double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+{
+    private double _prevAngle;
+    private bool _prevFlipH, _prevFlipV;
+    private bool _applied;
+
+    public string Label => "Rotate/Flip";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryMutate(context, angleDeg, flipH, flipV, out _prevAngle, out _prevFlipH, out _prevFlipV)) return;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied) return;
+        TryMutate(context, _prevAngle, _prevFlipH, _prevFlipV, out _, out _, out _);
+        _applied = false;
+    }
+
+    private bool TryMutate(IDocumentCommandContext context, double a, bool fh, bool fv,
+        out double pAngle, out bool pFH, out bool pFV)
+    {
+        pAngle = 0; pFH = false; pFV = false;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return false;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return false;
+        var run = p.Runs[runIndex];
+        if (run.Image is { } img)
+        {
+            pAngle = img.RotationAngle; pFH = img.FlipH; pFV = img.FlipV;
+            img.RotationAngle = a; img.FlipH = fh; img.FlipV = fv; return true;
+        }
+        if (run.Shape is { } shape)
+        {
+            pAngle = shape.RotationAngle; pFH = shape.FlipH; pFV = shape.FlipV;
+            shape.RotationAngle = a; shape.FlipH = fh; shape.FlipV = fv; return true;
+        }
+        return false;
+    }
+}
+
+/// <summary>
+/// Set only the position offsets (H/V in points) on a floating Image, updating
+/// <see cref="InlineImage.HorizontalOffsetPt"/> / <see cref="InlineImage.VerticalOffsetPt"/>
+/// while keeping anchors unchanged. Used by drag-move and arrow-key nudge in the Avalonia view.
+/// </summary>
+public sealed class NudgeImagePositionCommand(
+    int paragraphIndex, int runIndex,
+    double horizontalOffsetPt, double verticalOffsetPt) : IDocumentCommand
+{
+    private double _ph, _pv;
+    private bool _applied;
+
+    public string Label => "Move";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ImageAt(context) is not { IsFloating: true } img) return;
+        _ph = img.HorizontalOffsetPt; _pv = img.VerticalOffsetPt;
+        img.HorizontalOffsetPt = horizontalOffsetPt; img.VerticalOffsetPt = verticalOffsetPt;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ImageAt(context) is not { IsFloating: true } img) return;
+        img.HorizontalOffsetPt = _ph; img.VerticalOffsetPt = _pv;
+        _applied = false;
+    }
+
+    private InlineImage? ImageAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Image : null;
+}
+
+/// <summary>
+/// Remove the run at (paragraphIndex, runIndex) from its paragraph. Used by
+/// <c>DeleteSelectedFloating()</c> in the Avalonia DocumentView. Snaps the removed run for undo.
+/// No-op when the block is not a Paragraph or the run index is out of range.
+/// </summary>
+public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) : IDocumentCommand
+{
+    private Run? _removed;
+    private bool _applied;
+
+    public string Label => "Delete";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return;
+        _removed = p.Runs[runIndex];
+        p.Runs.RemoveAt(runIndex);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _removed is null) return;
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        var at = Math.Clamp(runIndex, 0, p.Runs.Count);
+        p.Runs.Insert(at, _removed);
+        _applied = false;
+    }
+}
+
 /// <summary>
 /// Replace the <see cref="TableFormatting"/> on the table at <paramref name="blockIndex"/>.
 /// The previous formatting is snapshot-ed for undo. Out-of-range block index or a block that

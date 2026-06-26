@@ -90,7 +90,8 @@ public sealed class DocumentView : Control
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
-    private readonly List<(Rect Rect, Bitmap? Image, bool BehindText, int ZOrder)> _floatingImages = new();
+    // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
+    private readonly List<(Rect Rect, Bitmap? Image, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
     // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
     // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
     private readonly List<FloatingShapeData> _floatingShapes = new();
@@ -126,6 +127,15 @@ public sealed class DocumentView : Control
     // under the pointer. Non-null only while a multi-cell selection is active.
     private (int TableBlock, int Row, int Col)? _cellBlockAnchor;
     private (int TableBlock, int Row, int Col)? _cellBlockFocus;
+
+    // ── AV-FLSEL: floating-object selection + placement edit ──────────────────────────────────────
+    // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
+    // Rect is the page-space bounding rect as laid out in the last layout pass.
+    private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
+    // Drag-move state: non-null while the user is dragging a selected float.
+    // PointerDown: stores the pointer's page-space position when the drag started and the float's
+    // Rect at that moment so we can compute delta offsets for the move.
+    private (Point PointerDown, Rect FloatRect)? _floatDragState;
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -2737,13 +2747,13 @@ public sealed class DocumentView : Control
         }
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
-        CollectFloatingImages(paragraph, anchorContentY);
-        CollectFloatingShapes(paragraph, anchorContentY);
+        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
+        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
         // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(paragraph, anchorContentY);
-        CollectFloatingWordArts(paragraph, anchorContentY);
-        CollectFloatingSmartArts(paragraph, anchorContentY);
-        CollectFloatingGroups(paragraph, anchorContentY);
+        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
 
         if (marker is not null)
         {
@@ -3375,13 +3385,13 @@ public sealed class DocumentView : Control
             break;
         }
         var anchorContentY = PeekFirstLineContentY(firstImgLineH);
-        CollectFloatingImages(paragraph, anchorContentY);
-        CollectFloatingShapes(paragraph, anchorContentY);
+        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
+        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
         // FO3: collect charts, WordArt, SmartArt, and drawing groups at the same accurate anchor Y.
-        CollectFloatingCharts(paragraph, anchorContentY);
-        CollectFloatingWordArts(paragraph, anchorContentY);
-        CollectFloatingSmartArts(paragraph, anchorContentY);
-        CollectFloatingGroups(paragraph, anchorContentY);
+        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
 
         foreach (var run in paragraph.Runs)
         {
@@ -3468,12 +3478,12 @@ public sealed class DocumentView : Control
         }
         // Collect floating objects anchored to this paragraph (mirrors LayoutImageParagraphPaged).
         var anchorContentY = PeekFirstLineContentY(firstObjHeight);
-        CollectFloatingImages(paragraph, anchorContentY);
-        CollectFloatingShapes(paragraph, anchorContentY);
-        CollectFloatingCharts(paragraph, anchorContentY);
-        CollectFloatingWordArts(paragraph, anchorContentY);
-        CollectFloatingSmartArts(paragraph, anchorContentY);
-        CollectFloatingGroups(paragraph, anchorContentY);
+        CollectFloatingImages(blockIndex, paragraph, anchorContentY);
+        CollectFloatingShapes(blockIndex, paragraph, anchorContentY);
+        CollectFloatingCharts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingWordArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingSmartArts(blockIndex, paragraph, anchorContentY);
+        CollectFloatingGroups(blockIndex, paragraph, anchorContentY);
 
         // Track a virtual glyph offset so the caret can step over inline objects.
         var glyphOffset = _placed.Count > 0
@@ -3644,7 +3654,7 @@ public sealed class DocumentView : Control
     /// <paramref name="anchorContentY"/> is the content-space Y at which the paragraph starts —
     /// used as the vertical reference when <see cref="VerticalAnchor.Paragraph"/> is set.
     /// </summary>
-    private void CollectFloatingImages(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingImages(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
         // Page index for the anchor paragraph.
         var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
@@ -3657,8 +3667,9 @@ public sealed class DocumentView : Control
                 ? DeskPadding + pi * (_pageHeightPx + PageGap)
                 : 0;
 
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.Image is not { IsFloating: true } img)
                 continue;
 
@@ -3693,7 +3704,8 @@ public sealed class DocumentView : Control
 
             var rect = new Rect(x, y, imgW, imgH);
             var behindText = img.Wrapping == ImageWrapping.Behind;
-            _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex));
+            // AV-FLSEL: BlockIndex/RunIndex stored for hit-test.
+            _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex, blockIndex, runIdx));
             // AV-WRAP: register exclusion zone for text-flow wrapping (Square/Tight/TopAndBottom only).
             AddWrapExclusion(rect, img.Wrapping);
         }
@@ -3704,7 +3716,7 @@ public sealed class DocumentView : Control
     /// with its page-space rect and pre-built brushes/pens. Mirrors <see cref="CollectFloatingImages"/>.
     /// <paramref name="anchorContentY"/> is the content-space Y of the paragraph start.
     /// </summary>
-    private void CollectFloatingShapes(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingShapes(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
         var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
             ? (int)(anchorContentY / _layoutTextAreaHeight)
@@ -3715,8 +3727,9 @@ public sealed class DocumentView : Control
                 ? DeskPadding + pi * (_pageHeightPx + PageGap)
                 : 0;
 
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.Shape is not { IsFloating: true } shape)
                 continue;
 
@@ -3795,6 +3808,8 @@ public sealed class DocumentView : Control
                 Rect          = rect,
                 BehindText    = behindText,
                 ZOrder        = pl.ZOrderIndex,
+                BlockIndex    = blockIndex,
+                RunIndex      = runIdx,
                 Kind          = shape.Kind,
                 CustomGeo     = shape.HasCustomGeometry ? shape.CustomGeometry : null,
                 FillBrush     = fillBrush,
@@ -4135,7 +4150,7 @@ public sealed class DocumentView : Control
             var behindDraws = new List<(int ZOrder, Action Draw)>();
             foreach (var fi in _floatingImages.Where(fi => fi.BehindText))
             {
-                var (rect, bitmap, _, _) = fi;
+                var (rect, bitmap, _, _, _, _) = fi;
                 behindDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
             }
             foreach (var sd in _floatingShapes.Where(sd => sd.BehindText))
@@ -4288,7 +4303,7 @@ public sealed class DocumentView : Control
             var frontDraws = new List<(int ZOrder, Action Draw)>();
             foreach (var fi in _floatingImages.Where(fi => !fi.BehindText))
             {
-                var (rect, bitmap, _, _) = fi;
+                var (rect, bitmap, _, _, _, _) = fi;
                 frontDraws.Add((fi.ZOrder, () => DrawFloatingImage(context, rect, bitmap)));
             }
             foreach (var sd in _floatingShapes.Where(sd => !sd.BehindText))
@@ -4334,6 +4349,10 @@ public sealed class DocumentView : Control
                 context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
             }
         }
+
+        // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
+        if (_selectedFloating is { } selFl)
+            DrawFloatingSelection(context, selFl.Rect);
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
@@ -4519,6 +4538,349 @@ public sealed class DocumentView : Control
         new Pen(new SolidColorBrush(Color.FromArgb(0xBB, 0x33, 0x99, 0xFF)), 1.0,
             new DashStyle([4, 3], 0));
 
+    // ── AV-FLSEL: floating selection rendering + hit-test + edit methods ───────────────────────────
+
+    // Selection outline pen: solid blue, 1.5px.
+    private static readonly Pen FloatSelectionPen =
+        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.5);
+    // Handle fill: white square with blue border.
+    private static readonly IBrush FloatHandleFill   = Brushes.White;
+    private static readonly Pen    FloatHandlePen    =
+        new Pen(new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4)), 1.0);
+    private const double FloatHandleSize = 7; // handle square side length in px
+
+    /// <summary>
+    /// Draws the selection outline (dashed blue rectangle) and 8 resize handles around
+    /// the selected floating object's page-space bounding rect.
+    /// </summary>
+    private void DrawFloatingSelection(DrawingContext context, Rect rect)
+    {
+        context.DrawRectangle(null, FloatSelectionPen, rect);
+
+        // 8 handle positions: corners + edge midpoints.
+        var hx = new[] { rect.X, rect.X + rect.Width / 2, rect.Right };
+        var hy = new[] { rect.Y, rect.Y + rect.Height / 2, rect.Bottom };
+        var half = FloatHandleSize / 2;
+        for (var row = 0; row < 3; row++)
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                if (row == 1 && col == 1) continue; // skip centre
+                var hRect = new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize);
+                context.FillRectangle(FloatHandleFill, hRect);
+                context.DrawRectangle(null, FloatHandlePen, hRect);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hit-tests <paramref name="point"/> against all floating objects (images, shapes, charts,
+    /// WordArts, SmartArts, groups). Returns the topmost (highest z-order; in-front preferred
+    /// over behind-text) object that contains the point, or false if none.
+    /// Requires at least one layout pass to have been completed.
+    /// </summary>
+    private bool TryHitTestFloat(Point point,
+        out (int BlockIndex, int RunIndex, string Kind, Rect Rect) hit)
+    {
+        hit = default;
+        if (_laidOutWidth < 0) Relayout(FallbackWidth);
+
+        // Gather all candidates into one list sorted by: BehindText ascending (in-front first),
+        // then ZOrder descending (highest z-order first). This mirrors the Word rule that in-front
+        // objects always beat behind-text objects; within each band the topmost z-order wins.
+        var candidates = new List<(bool BehindText, int ZOrder, int BlockIndex, int RunIndex, string Kind, Rect Rect)>();
+
+        foreach (var fi in _floatingImages)
+            if (fi.Rect.Contains(point))
+                candidates.Add((fi.BehindText, fi.ZOrder, fi.BlockIndex, fi.RunIndex, "Image", fi.Rect));
+
+        foreach (var sd in _floatingShapes)
+            if (sd.Rect.Contains(point))
+                candidates.Add((sd.BehindText, sd.ZOrder, sd.BlockIndex, sd.RunIndex, "Shape", sd.Rect));
+
+        foreach (var cd in _floatingCharts)
+            if (cd.Rect.Contains(point))
+                candidates.Add((cd.BehindText, cd.ZOrder, cd.BlockIndex, cd.RunIndex, "Chart", cd.Rect));
+
+        foreach (var wd in _floatingWordArts)
+            if (wd.Rect.Contains(point))
+                candidates.Add((wd.BehindText, wd.ZOrder, wd.BlockIndex, wd.RunIndex, "WordArt", wd.Rect));
+
+        foreach (var sa in _floatingSmartArts)
+            if (sa.Rect.Contains(point))
+                candidates.Add((sa.BehindText, sa.ZOrder, sa.BlockIndex, sa.RunIndex, "SmartArt", sa.Rect));
+
+        foreach (var gd in _floatingGroups)
+            if (gd.Rect.Contains(point))
+                candidates.Add((gd.BehindText, gd.ZOrder, gd.BlockIndex, gd.RunIndex, "Group", gd.Rect));
+
+        if (candidates.Count == 0) return false;
+
+        // In-front (BehindText=false) wins over behind-text; within each band highest ZOrder wins.
+        var winner = candidates
+            .OrderBy(c => c.BehindText ? 1 : 0)   // false (in-front) first
+            .ThenByDescending(c => c.ZOrder)
+            .First();
+
+        hit = (winner.BlockIndex, winner.RunIndex, winner.Kind, winner.Rect);
+        return true;
+    }
+
+    /// <summary>
+    /// Commits a drag-move by computing the new HOffset/VOffset in points (delta from the layout-time
+    /// position, converted back through PxPerPoint) and issuing the appropriate move command.
+    /// For Images: uses <see cref="NudgeImagePositionCommand"/> (direct offset fields).
+    /// For all others: uses <see cref="SetFloatingPositionCommand"/> (via FloatingPlacement).
+    /// </summary>
+    private void CommitFloatDragMove(int blockIndex, int runIndex, double dxPt, double dyPt, string kind)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
+        var run = para.Runs[runIndex];
+
+        if (kind == "Image" && run.Image is { IsFloating: true } img)
+        {
+            var newH = img.HorizontalOffsetPt + dxPt;
+            var newV = img.VerticalOffsetPt   + dyPt;
+            _bus.Execute(new NudgeImagePositionCommand(blockIndex, runIndex, newH, newV));
+        }
+        else
+        {
+            var pl = SetFloatingPositionCommand.GetFloatingPlacement(run);
+            if (pl is null) return;
+            var newH = pl.HorizontalOffsetPt + dxPt;
+            var newV = pl.VerticalOffsetPt   + dyPt;
+            _bus.Execute(new SetFloatingPositionCommand(blockIndex, runIndex,
+                newH, newV, pl.HorizontalAnchor, pl.VerticalAnchor));
+        }
+        InvalidateLayoutAndVisual();
+        // Refresh selected state after re-layout (the Rect changes).
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    /// <summary>
+    /// Arrow-key nudge: shifts the selected floating object by (dxPt, dyPt) points, routing through
+    /// the appropriate undoable command. No-op if nothing is selected or the block/run is stale.
+    /// </summary>
+    private void NudgeSelectedFloating(double dxPt, double dyPt)
+    {
+        if (_selectedFloating is not { } sel) return;
+        CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
+    }
+
+    /// <summary>
+    /// Rescans the floating lists after a layout pass to re-anchor <see cref="_selectedFloating"/>'s
+    /// Rect to the newly computed page-space position.
+    /// </summary>
+    private void RefreshSelectedFloatingRect(int blockIndex, int runIndex, string kind)
+    {
+        Rect? found = null;
+        switch (kind)
+        {
+            case "Image":
+                foreach (var fi in _floatingImages)
+                    if (fi.BlockIndex == blockIndex && fi.RunIndex == runIndex) { found = fi.Rect; break; }
+                break;
+            case "Shape":
+                foreach (var sd in _floatingShapes)
+                    if (sd.BlockIndex == blockIndex && sd.RunIndex == runIndex) { found = sd.Rect; break; }
+                break;
+            case "Chart":
+                foreach (var cd in _floatingCharts)
+                    if (cd.BlockIndex == blockIndex && cd.RunIndex == runIndex) { found = cd.Rect; break; }
+                break;
+            case "WordArt":
+                foreach (var wd in _floatingWordArts)
+                    if (wd.BlockIndex == blockIndex && wd.RunIndex == runIndex) { found = wd.Rect; break; }
+                break;
+            case "SmartArt":
+                foreach (var sa in _floatingSmartArts)
+                    if (sa.BlockIndex == blockIndex && sa.RunIndex == runIndex) { found = sa.Rect; break; }
+                break;
+            case "Group":
+                foreach (var gd in _floatingGroups)
+                    if (gd.BlockIndex == blockIndex && gd.RunIndex == runIndex) { found = gd.Rect; break; }
+                break;
+        }
+        if (found.HasValue)
+            _selectedFloating = (blockIndex, runIndex, kind, found.Value);
+        else
+            _selectedFloating = null; // object was deleted / moved out of view
+        InvalidateVisual();
+    }
+
+    // ── AV-FLSEL: public edit API ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Info about the currently selected floating object, or null if nothing is selected.
+    /// Kind = "Image" | "Shape" | "Chart" | "WordArt" | "SmartArt" | "Group".
+    /// Placement is the model's current FloatingPlacement (null for Image, which stores offsets inline).
+    /// </summary>
+    public (int BlockIndex, int RunIndex, string Kind, Rect Rect)? SelectedFloatingInfo
+        => _selectedFloating;
+
+    /// <summary>Deselect any selected floating object. No-op when nothing is selected.</summary>
+    public void DeselectFloating()
+    {
+        if (_selectedFloating is null) return;
+        _selectedFloating = null;
+        _floatDragState   = null;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Programmatically select the floating object at (blockIndex, runIndex). Triggers a layout pass
+    /// if needed and refreshes the selection rect. Used by tests and the host shell.
+    /// </summary>
+    public void SelectFloating(int blockIndex, int runIndex)
+    {
+        if (_laidOutWidth < 0) Relayout(FallbackWidth);
+        // Determine kind.
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
+        var run = para.Runs[runIndex];
+        string kind;
+        if (run.Image is { IsFloating: true })         kind = "Image";
+        else if (run.Shape is { IsFloating: true })    kind = "Shape";
+        else if (run.Chart is { IsFloating: true })    kind = "Chart";
+        else if (run.WordArt is { IsFloating: true })  kind = "WordArt";
+        else if (run.SmartArt is { IsFloating: true }) kind = "SmartArt";
+        else if (run.DrawingGroup is not null)         kind = "Group";
+        else return;
+
+        // Dummy rect; RefreshSelectedFloatingRect will update.
+        _selectedFloating = (blockIndex, runIndex, kind, default);
+        RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    /// <summary>
+    /// Set the wrap mode on the selected floating object. Undoable.
+    /// No-op when nothing is selected.
+    /// </summary>
+    public void SetFloatingWrap(ImageWrapping wrapping)
+    {
+        if (_selectedFloating is not { } sel) return;
+        _bus.Execute(new SetFloatingWrapCommand(sel.BlockIndex, sel.RunIndex, wrapping));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Change the z-order of the selected floating object. Undoable.
+    /// No-op when nothing is selected.
+    /// </summary>
+    public void ChangeFloatingZOrder(ZOrderOperation op)
+    {
+        if (_selectedFloating is not { } sel) return;
+        _bus.Execute(new ChangeZOrderCommand(sel.BlockIndex, sel.RunIndex, op));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set the floating position (offset + anchor) of the selected object. Undoable.
+    /// For Image: maps to <see cref="SetImagePositionCommand"/>.
+    /// For all others: maps to <see cref="SetFloatingPositionCommand"/>.
+    /// No-op when nothing is selected.
+    /// </summary>
+    public void SetFloatingPosition(double hOffsetPt, double vOffsetPt,
+        HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
+    {
+        if (_selectedFloating is not { } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        var run = para.Runs[sel.RunIndex];
+
+        if (run.Image is { IsFloating: true })
+            _bus.Execute(new SetImagePositionCommand(sel.BlockIndex, sel.RunIndex,
+                hOffsetPt, vOffsetPt, hAnchor, vAnchor));
+        else
+            _bus.Execute(new SetFloatingPositionCommand(sel.BlockIndex, sel.RunIndex,
+                hOffsetPt, vOffsetPt, hAnchor, vAnchor));
+
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Set the size (widthPt, heightPt) of the selected floating object. Undoable.
+    /// No-op when nothing is selected.
+    /// </summary>
+    public void SetFloatingSize(double widthPt, double heightPt)
+    {
+        if (_selectedFloating is not { } sel) return;
+        _bus.Execute(new SetFloatingSizeCommand(sel.BlockIndex, sel.RunIndex, widthPt, heightPt));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Rotate/flip the selected floating object (Images and Shapes only; other kinds are no-ops).
+    /// Undoable. No-op when nothing is selected.
+    /// </summary>
+    public void RotateSelectedFloating(double angleDeg)
+    {
+        if (_selectedFloating is not { } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        var run = para.Runs[sel.RunIndex];
+        if (run.Image is { IsFloating: true } img)
+            _bus.Execute(new SetImageRotationCommand(sel.BlockIndex, sel.RunIndex,
+                angleDeg, img.FlipH, img.FlipV));
+        else if (run.Shape is { } shape)
+            _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex,
+                angleDeg, shape.FlipH, shape.FlipV));
+        // Chart/SmartArt/WordArt/Group don't carry rotation — ignore.
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Flip the selected floating object horizontally or vertically (Images and Shapes only).
+    /// Undoable. No-op when nothing is selected or the type doesn't support flip.
+    /// </summary>
+    public void FlipSelectedFloating(bool horizontal)
+    {
+        if (_selectedFloating is not { } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+        var run = para.Runs[sel.RunIndex];
+        if (run.Image is { IsFloating: true } img)
+        {
+            var newFH = horizontal ? !img.FlipH : img.FlipH;
+            var newFV = horizontal ? img.FlipV : !img.FlipV;
+            _bus.Execute(new SetImageRotationCommand(sel.BlockIndex, sel.RunIndex, img.RotationAngle, newFH, newFV));
+        }
+        else if (run.Shape is { } shape)
+        {
+            var newFH = horizontal ? !shape.FlipH : shape.FlipH;
+            var newFV = horizontal ? shape.FlipV : !shape.FlipV;
+            _bus.Execute(new SetShapeRotationCommand(sel.BlockIndex, sel.RunIndex, shape.RotationAngle, newFH, newFV));
+        }
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// Delete the currently selected floating object. Removes the run from its paragraph.
+    /// Undoable via the command bus. No-op when nothing is selected.
+    /// </summary>
+    public void DeleteSelectedFloating()
+    {
+        if (_selectedFloating is not { } sel) return;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return;
+
+        // Remove the run in-place via a command (undoable).
+        _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
+        _selectedFloating = null;
+        _floatDragState   = null;
+        InvalidateLayoutAndVisual();
+    }
+
     private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine)
     {
         var pen = new Pen(BrushFor(pc.Fmt.ColorHex), Math.Max(1, FontSizePx(pc.Fmt) / 14));
@@ -4622,6 +4984,36 @@ public sealed class DocumentView : Control
         var point = e.GetPosition(this);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 
+        // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
+        // The topmost object (highest z-order, in-front preferred over behind) wins.
+        if (!shift && TryHitTestFloat(point, out var floatHit))
+        {
+            if (_selectedFloating.HasValue &&
+                _selectedFloating.Value.BlockIndex == floatHit.BlockIndex &&
+                _selectedFloating.Value.RunIndex   == floatHit.RunIndex)
+            {
+                // Second click on the same float: start drag-move.
+                _floatDragState = (point, floatHit.Rect);
+            }
+            else
+            {
+                // New selection.
+                _selectedFloating = floatHit;
+                _floatDragState   = (point, floatHit.Rect);
+            }
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        // Click outside any float → deselect.
+        if (_selectedFloating is not null)
+        {
+            _selectedFloating = null;
+            _floatDragState   = null;
+            InvalidateVisual();
+        }
+
         if (TryHitTest(point, out var pos))
         {
             // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
@@ -4657,6 +5049,24 @@ public sealed class DocumentView : Control
             return;
 
         var point = e.GetPosition(this);
+
+        // AV-FLSEL: drag-move the selected floating object.
+        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        {
+            var dx = (point.X - drag.PointerDown.X) / PxPerPoint;
+            var dy = (point.Y - drag.PointerDown.Y) / PxPerPoint;
+            if (Math.Abs(dx) >= 1 || Math.Abs(dy) >= 1)
+            {
+                // Apply the visual displacement without committing — update the stored Rect so handles track.
+                var newRect = new Rect(drag.FloatRect.X + dx * PxPerPoint,
+                                       drag.FloatRect.Y + dy * PxPerPoint,
+                                       drag.FloatRect.Width, drag.FloatRect.Height);
+                _selectedFloating = sel with { Rect = newRect };
+            }
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
         if (!TryHitTest(point, out var pos))
             return;
 
@@ -4699,6 +5109,25 @@ public sealed class DocumentView : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        // AV-FLSEL: commit drag-move when the left button is released.
+        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        {
+            var releasePoint = e.GetPosition(this);
+            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
+            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
+            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
+            {
+                // Commit the move: update the model offsets through the command bus.
+                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
+            }
+            _floatDragState = null;
+            // Note: _selectedFloating is refreshed via InvalidateLayoutAndVisual in the commit path.
+        }
+    }
+
     protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
@@ -4713,6 +5142,47 @@ public sealed class DocumentView : Control
         base.OnKeyDown(e);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        // AV-FLSEL: when a float is selected, intercept navigation/delete keys before body text.
+        if (_selectedFloating is { } selFloat)
+        {
+            const double NudgePt = 6; // 6pt ≈ 8px nudge per arrow key press
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    _selectedFloating = null;
+                    _floatDragState   = null;
+                    InvalidateVisual();
+                    e.Handled = true;
+                    return;
+                case Key.Delete:
+                case Key.Back:
+                    DeleteSelectedFloating();
+                    e.Handled = true;
+                    return;
+                case Key.Left:
+                    NudgeSelectedFloating(-NudgePt, 0);
+                    e.Handled = true;
+                    return;
+                case Key.Right:
+                    NudgeSelectedFloating(+NudgePt, 0);
+                    e.Handled = true;
+                    return;
+                case Key.Up:
+                    NudgeSelectedFloating(0, -NudgePt);
+                    e.Handled = true;
+                    return;
+                case Key.Down:
+                    NudgeSelectedFloating(0, +NudgePt);
+                    e.Handled = true;
+                    return;
+                case Key.Z when ctrl:
+                    Undo(); e.Handled = true; return;
+                case Key.Y when ctrl:
+                    Redo(); e.Handled = true; return;
+            }
+            // Any other key: pass through (don't consume).
+        }
 
         switch (e.Key)
         {
@@ -6668,6 +7138,9 @@ public sealed class DocumentView : Control
         public Rect Rect;           // page-space bounding rect
         public bool BehindText;     // true → draw before body text; false → draw after
         public int ZOrder;
+        // AV-FLSEL: model location so hit-test can issue commands.
+        public int BlockIndex;
+        public int RunIndex;
 
         // Geometry
         public ShapeKind Kind;
@@ -6695,6 +7168,9 @@ public sealed class DocumentView : Control
         public Rect         Rect;
         public bool         BehindText;
         public int          ZOrder;
+        // AV-FLSEL: model location so hit-test can issue commands.
+        public int BlockIndex;
+        public int RunIndex;
         public ChartKind    Kind;
         public string?      Title;
         public List<string> Categories = [];
@@ -6711,6 +7187,9 @@ public sealed class DocumentView : Control
         public Rect         Rect;
         public bool         BehindText;
         public int          ZOrder;
+        // AV-FLSEL: model location so hit-test can issue commands.
+        public int BlockIndex;
+        public int RunIndex;
         public string       Text        = string.Empty;
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
@@ -6722,6 +7201,9 @@ public sealed class DocumentView : Control
         public Rect             Rect;
         public bool             BehindText;
         public int              ZOrder;
+        // AV-FLSEL: model location so hit-test can issue commands.
+        public int BlockIndex;
+        public int RunIndex;
         public SmartArtKind     Kind;
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
@@ -6747,6 +7229,9 @@ public sealed class DocumentView : Control
         public Rect Rect;
         public bool BehindText;
         public int  ZOrder;
+        // AV-FLSEL: model location so hit-test can issue commands.
+        public int BlockIndex;
+        public int RunIndex;
         public List<FloatingGroupChildData> Children = [];
     }
 
@@ -6786,10 +7271,11 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Collects floating charts anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingCharts(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingCharts(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.Chart is not { IsFloating: true } chart)
                 continue;
 
@@ -6800,17 +7286,21 @@ public sealed class DocumentView : Control
 
             var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
             var chartRect = new Rect(x, y, w, h);
-            _floatingCharts.Add(BuildChartData(chart, chartRect, pl.Wrapping == ImageWrapping.Behind, pl.ZOrderIndex, series));
+            var cd = BuildChartData(chart, chartRect, pl.Wrapping == ImageWrapping.Behind, pl.ZOrderIndex, series);
+            cd.BlockIndex = blockIndex;
+            cd.RunIndex   = runIdx;
+            _floatingCharts.Add(cd);
             // AV-WRAP: register exclusion zone.
             AddWrapExclusion(chartRect, pl.Wrapping);
         }
     }
 
     /// <summary>Collects floating WordArt anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingWordArts(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingWordArts(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.WordArt is not { IsFloating: true } wa)
                 continue;
 
@@ -6826,6 +7316,8 @@ public sealed class DocumentView : Control
                 Rect       = waRect,
                 BehindText = pl.Wrapping == ImageWrapping.Behind,
                 ZOrder     = pl.ZOrderIndex,
+                BlockIndex = blockIndex,
+                RunIndex   = runIdx,
                 Text       = wa.Text,
                 Style      = wa.Style,
                 FontSizePt = wa.FontSizePt,
@@ -6837,10 +7329,11 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Collects floating SmartArt diagrams anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingSmartArts(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingSmartArts(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.SmartArt is not { IsFloating: true } sa)
                 continue;
 
@@ -6867,6 +7360,8 @@ public sealed class DocumentView : Control
                 Rect       = saRect,
                 BehindText = pl.Wrapping == ImageWrapping.Behind,
                 ZOrder     = pl.ZOrderIndex,
+                BlockIndex = blockIndex,
+                RunIndex   = runIdx,
                 Kind       = sa.Kind,
                 NodeTexts  = texts,
             });
@@ -6876,10 +7371,11 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Collects floating drawing groups anchored to <paramref name="paragraph"/>.</summary>
-    private void CollectFloatingGroups(Paragraph paragraph, double anchorContentY)
+    private void CollectFloatingGroups(int blockIndex, Paragraph paragraph, double anchorContentY)
     {
-        foreach (var run in paragraph.Runs)
+        for (var runIdx = 0; runIdx < paragraph.Runs.Count; runIdx++)
         {
+            var run = paragraph.Runs[runIdx];
             if (run.DrawingGroup is not { } grp)
                 continue;
 
@@ -7001,6 +7497,8 @@ public sealed class DocumentView : Control
                 Rect       = groupRect,
                 BehindText = behindText,
                 ZOrder     = pl.ZOrderIndex,
+                BlockIndex = blockIndex,
+                RunIndex   = runIdx,
                 Children   = children,
             });
             // AV-WRAP: register exclusion zone using the group's overall bounding rect.
