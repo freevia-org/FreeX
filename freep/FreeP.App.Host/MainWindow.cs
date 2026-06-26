@@ -116,6 +116,18 @@ public sealed class MainWindow : Window
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
 
+    // ── Wave 16B: Animation pane (right-side collapsible panel) ──────────────────
+    // 16B SEAM START — do not restructure this region (16A/16C may conflict nearby).
+    private AnimationPane? _animPane;
+    private Border         _animPaneHost = null!;  // collapsible right-side dock (~240px)
+
+    /// <summary>
+    /// Test-seam: exposes the animation pane host border so tests can inspect visibility
+    /// without launching the actual UI.  Internal; only visible to FreeP.App.Host.Tests.
+    /// </summary>
+    internal Border? AnimPaneHostForTest => _animPaneHost;
+    // 16B SEAM END
+
     // ── Constructors ──────────────────────────────────────────────────────────────
 
     public MainWindow() : this(new FreePOptions()) { }
@@ -170,7 +182,9 @@ public sealed class MainWindow : Window
             onInsertLink:       () => OpenHyperlinkDialog(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
-            onFindReplace:      () => OpenFindReplaceDialog());
+            onFindReplace:      () => OpenFindReplaceDialog(),
+            // Wave 16B: Animation pane toggle.
+            onAnimPane:         () => ToggleAnimationPane());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -265,6 +279,8 @@ public sealed class MainWindow : Window
         UpdateSlideCount();
         RefreshNotesPane();
         RefreshCommentPane();
+        // 16B: rebuild animation pane for new editor (only if the pane is currently shown).
+        RebuildAnimationPaneIfVisible();
     }
 
     // ── Body layout ───────────────────────────────────────────────────────────────
@@ -377,13 +393,29 @@ public sealed class MainWindow : Window
         rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
 
+        // ── Wave 16B: Animation pane host (right-side, hidden by default) ────────
+        // 16B SEAM: _animPaneHost is inserted as column 2. It starts Collapsed so the
+        // layout is unchanged until the ribbon toggle is pressed. Width=240 is a visual
+        // guideline — the Border has no explicit Width so it sizes to content when shown.
+        _animPaneHost = new Border
+        {
+            Width      = 240,
+            Visibility = Visibility.Collapsed,
+            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+        };
+        // AnimationPane itself is created lazily on first show (ToggleAnimationPane).
+        // END 16B SEAM
+
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(SlidePaneHost, 0);
-        Grid.SetColumn(rightPanel,    1);
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // 16B: anim pane
+        Grid.SetColumn(SlidePaneHost,  0);
+        Grid.SetColumn(rightPanel,     1);
+        Grid.SetColumn(_animPaneHost,  2); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
+        splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
     }
@@ -583,6 +615,52 @@ public sealed class MainWindow : Window
             _commentOverlay.Children.Add(dot);
         }
     }
+
+    // ── Wave 16B: Animation pane show/hide ───────────────────────────────────────
+    //
+    // ToggleAnimationPane is called by FreePRibbonCommands when the freep.anim.pane
+    // toggle button is pressed.  It lazily constructs the AnimationPane on first show
+    // and toggles _animPaneHost visibility.
+    //
+    // RebuildAnimationPaneIfVisible is called from LoadModel (file new/open) so the
+    // pane reflects the new editor if it is currently visible.
+    //
+    // 16B SEAM: keep these two methods contiguous; do not add code between them.
+
+    /// <summary>
+    /// Shows or hides the animation pane.  The first call creates the pane; subsequent
+    /// calls toggle visibility.  Called by the freep.anim.pane ribbon toggle.
+    /// </summary>
+    internal void ToggleAnimationPane()
+    {
+        if (_animPaneHost.Visibility == Visibility.Visible)
+        {
+            _animPaneHost.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            // Lazy construction: create the pane against the current Editor.
+            if (_animPane is null || _animPaneHost.Child is null)
+            {
+                _animPane = new AnimationPane(Editor, onPreview: () => StartSlideShow(fromStart: false));
+                _animPaneHost.Child = _animPane;
+            }
+            _animPaneHost.Visibility = Visibility.Visible;
+        }
+    }
+
+    /// <summary>
+    /// Replaces the AnimationPane with one bound to the current (rebuilt) Editor.
+    /// Called from LoadModel after the editor is rebuilt; no-op when pane is hidden.
+    /// </summary>
+    private void RebuildAnimationPaneIfVisible()
+    {
+        if (_animPaneHost is null || _animPaneHost.Visibility != Visibility.Visible) return;
+        _animPane = new AnimationPane(Editor, onPreview: () => StartSlideShow(fromStart: false));
+        _animPaneHost.Child = _animPane;
+    }
+
+    // END 16B SEAM
 
     // ── Status bar ────────────────────────────────────────────────────────────────
 
