@@ -662,4 +662,368 @@ public sealed class SmartArtTests : IDisposable
                 "when data part is missing no diagramData relationship should be written to slide rels");
         }
     }
+
+    // ── Theme 17: SmartArtData parse tests ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Helper that builds a minimal pptx with a SmartArt whose data1.xml has
+    /// a real node tree (ptLst + cxnLst parOf connections) and layout1.xml has
+    /// a recognisable uniqueId.
+    /// </summary>
+    private string MakeSmartArtPptxWithNodeTree(
+        string layoutUniqueId,
+        (string id, string text)[] nodes,
+        (string srcId, string destId)[] parOfConnections)
+    {
+        var path = Path.Combine(_tempDir, $"smartart_tree_{Guid.NewGuid():N}.pptx");
+
+        var pNs   = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var aNs   = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var rNs   = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var dgmNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var pkgNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+
+        const string diagramDataCT    = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml";
+        const string diagramLayoutCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml";
+        const string diagramQsCT      = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml";
+        const string diagramColorsCT  = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml";
+        const string diagramDrawingCT = "application/vnd.ms-office.drawingml.diagramDrawing+xml";
+
+        const string dmRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
+        const string loRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+        const string qsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramQuickStyle";
+        const string csRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
+        const string dgmDrawRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
+
+        // Build data1.xml with ptLst + cxnLst
+        var ptElems = nodes.Select(n =>
+            new XElement(dgmNs + "pt",
+                new XAttribute("modelId", n.id),
+                new XAttribute("type", "node"),
+                new XElement(dgmNs + "t",
+                    new XElement(aNs + "p",
+                        new XElement(aNs + "r",
+                            new XElement(aNs + "t", n.text))))));
+
+        var cxnElems = parOfConnections.Select(c =>
+            new XElement(dgmNs + "cxn",
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", c.srcId),
+                new XAttribute("destId", c.destId)));
+
+        var dataXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XElement(dgmNs + "ptLst", ptElems),
+                new XElement(dgmNs + "cxnLst", cxnElems)));
+
+        // Build layout1.xml with the given uniqueId
+        var layoutXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dgmNs + "layoutDef",
+                new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                new XAttribute("uniqueId", layoutUniqueId)));
+
+        var qsXml     = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+        var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
+
+        // Minimal dsp:drawing (empty spTree)
+        var dspXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(dspNs + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", dspNs.NamespaceName),
+                new XElement(dspNs + "spTree")));
+
+        static byte[] ToBytes(XDocument doc)
+        {
+            using var ms = new MemoryStream();
+            doc.Save(ms);
+            return ms.ToArray();
+        }
+
+        static byte[] MakeRels(XNamespace ns, params (string id, string type, string target)[] rels)
+        {
+            var doc = new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(ns + "Relationships",
+                    rels.Select(r => new XElement(ns + "Relationship",
+                        new XAttribute("Id", r.id),
+                        new XAttribute("Type", r.type),
+                        new XAttribute("Target", r.target)))));
+            using var ms = new MemoryStream();
+            doc.Save(ms);
+            return ms.ToArray();
+        }
+
+        // Reuse the same slide XML structure as in MakeSmartArtPptx
+        var slideXml = new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(pNs + "sld",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(pNs + "cSld",
+                    new XElement(pNs + "spTree",
+                        new XElement(pNs + "nvGrpSpPr",
+                            new XElement(pNs + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "")),
+                            new XElement(pNs + "cNvGrpSpPr"),
+                            new XElement(pNs + "nvPr")),
+                        new XElement(pNs + "grpSpPr",
+                            new XElement(aNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
+                                new XElement(aNs + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))),
+                        new XElement(pNs + "graphicFrame",
+                            new XElement(pNs + "nvGraphicFramePr",
+                                new XElement(pNs + "cNvPr", new XAttribute("id", "2"), new XAttribute("name", "SmartArt 1")),
+                                new XElement(pNs + "cNvGraphicFramePr"),
+                                new XElement(pNs + "nvPr")),
+                            new XElement(pNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "914400"), new XAttribute("y", "457200")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "7315200"), new XAttribute("cy", "3657600"))),
+                            new XElement(aNs + "graphic",
+                                new XElement(aNs + "graphicData",
+                                    new XAttribute("uri", "http://schemas.openxmlformats.org/drawingml/2006/diagram"),
+                                    new XElement(dgmNs + "relIds",
+                                        new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
+                                        new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                                        new XAttribute(rNs + "dm", "rIdDm1"),
+                                        new XAttribute(rNs + "lo", "rIdLo1"),
+                                        new XAttribute(rNs + "qs", "rIdQs1"),
+                                        new XAttribute(rNs + "cs", "rIdCs1")))))))));
+
+        using var zipStream = File.Create(path);
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false);
+
+        void WriteEntry(string entryPath, byte[] bytes)
+        {
+            var e = archive.CreateEntry(entryPath, CompressionLevel.Fastest);
+            using var s = e.Open();
+            s.Write(bytes);
+        }
+        void WriteXml(string entryPath, XDocument doc) => WriteEntry(entryPath, ToBytes(doc));
+
+        // [Content_Types].xml
+        var ctNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        WriteXml("[Content_Types].xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(ctNs + "Types",
+                new XElement(ctNs + "Default", new XAttribute("Extension", "rels"),  new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                new XElement(ctNs + "Default", new XAttribute("Extension", "xml"),   new XAttribute("ContentType", "application/xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/presentation.xml"),                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/slides/slide1.xml"),               new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/theme/theme1.xml"),                new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/slideLayouts/slideLayout1.xml"),   new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/slideMasters/slideMaster1.xml"),   new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml")),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/data1.xml"),      new XAttribute("ContentType", diagramDataCT)),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/layout1.xml"),    new XAttribute("ContentType", diagramLayoutCT)),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/quickStyle1.xml"), new XAttribute("ContentType", diagramQsCT)),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/colors1.xml"),    new XAttribute("ContentType", diagramColorsCT)),
+                new XElement(ctNs + "Override", new XAttribute("PartName", "/ppt/diagrams/drawing1.xml"),   new XAttribute("ContentType", diagramDrawingCT)))));
+
+        WriteEntry("_rels/.rels", MakeRels(pkgNs,
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "ppt/presentation.xml")));
+
+        var presNs = pNs;
+        WriteXml("ppt/presentation.xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(presNs + "presentation",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(presNs + "sldMasterIdLst",
+                    new XElement(presNs + "sldMasterId", new XAttribute("id", 2147483648u), new XAttribute(rNs + "id", "rId2"))),
+                new XElement(presNs + "sldIdLst",
+                    new XElement(presNs + "sldId", new XAttribute("id", 256), new XAttribute(rNs + "id", "rId1"))),
+                new XElement(presNs + "sldSz", new XAttribute("cx", 9144000), new XAttribute("cy", 6858000)),
+                new XElement(presNs + "notesSz", new XAttribute("cx", 6858000), new XAttribute("cy", 9144000)))));
+
+        WriteEntry("ppt/_rels/presentation.xml.rels", MakeRels(pkgNs,
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide", "slides/slide1.xml"),
+            ("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster", "slideMasters/slideMaster1.xml")));
+
+        var aNsTheme = aNs;
+        WriteXml("ppt/theme/theme1.xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(aNsTheme + "theme", new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName), new XAttribute("name", "Office Theme"),
+                new XElement(aNsTheme + "themeElements",
+                    new XElement(aNsTheme + "clrScheme", new XAttribute("name", "Office")),
+                    new XElement(aNsTheme + "fontScheme", new XAttribute("name", "Office"),
+                        new XElement(aNsTheme + "majorFont", new XElement(aNsTheme + "latin", new XAttribute("typeface", "Calibri Light"))),
+                        new XElement(aNsTheme + "minorFont", new XElement(aNsTheme + "latin", new XAttribute("typeface", "Calibri")))),
+                    new XElement(aNsTheme + "fmtScheme", new XAttribute("name", "Office"))))));
+
+        WriteXml("ppt/slideMasters/slideMaster1.xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(pNs + "sldMaster",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(pNs + "cSld",
+                    new XElement(pNs + "spTree",
+                        new XElement(pNs + "nvGrpSpPr",
+                            new XElement(pNs + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "")),
+                            new XElement(pNs + "cNvGrpSpPr"),
+                            new XElement(pNs + "nvPr")),
+                        new XElement(pNs + "grpSpPr",
+                            new XElement(aNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
+                                new XElement(aNs + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))))),
+                new XElement(pNs + "clrMap",
+                    new XAttribute("bg1", "lt1"), new XAttribute("tx1", "dk1"),
+                    new XAttribute("bg2", "lt2"), new XAttribute("tx2", "dk2"),
+                    new XAttribute("accent1", "accent1"), new XAttribute("accent2", "accent2"),
+                    new XAttribute("accent3", "accent3"), new XAttribute("accent4", "accent4"),
+                    new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
+                    new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink")))));
+
+        WriteEntry("ppt/slideMasters/_rels/slideMaster1.xml.rels", MakeRels(pkgNs,
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme", "../theme/theme1.xml"),
+            ("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", "../slideLayouts/slideLayout1.xml")));
+
+        WriteXml("ppt/slideLayouts/slideLayout1.xml", new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(pNs + "sldLayout",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XAttribute("type", "blank"),
+                new XElement(pNs + "cSld",
+                    new XElement(pNs + "spTree",
+                        new XElement(pNs + "nvGrpSpPr",
+                            new XElement(pNs + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "")),
+                            new XElement(pNs + "cNvGrpSpPr"),
+                            new XElement(pNs + "nvPr")),
+                        new XElement(pNs + "grpSpPr",
+                            new XElement(aNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
+                                new XElement(aNs + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))))))));
+
+        WriteEntry("ppt/slideLayouts/_rels/slideLayout1.xml.rels", MakeRels(pkgNs,
+            ("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster", "../slideMasters/slideMaster1.xml")));
+
+        WriteXml("ppt/slides/slide1.xml", slideXml);
+
+        WriteEntry("ppt/slides/_rels/slide1.xml.rels", MakeRels(pkgNs,
+            ("rId1",   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout", "../slideLayouts/slideLayout1.xml"),
+            ("rIdDm1", dmRelType, "../diagrams/data1.xml"),
+            ("rIdLo1", loRelType, "../diagrams/layout1.xml"),
+            ("rIdQs1", qsRelType, "../diagrams/quickStyle1.xml"),
+            ("rIdCs1", csRelType, "../diagrams/colors1.xml")));
+
+        WriteXml("ppt/diagrams/data1.xml",       dataXml);
+        WriteXml("ppt/diagrams/layout1.xml",     layoutXml);
+        WriteXml("ppt/diagrams/quickStyle1.xml", qsXml);
+        WriteXml("ppt/diagrams/colors1.xml",     colorsXml);
+        WriteXml("ppt/diagrams/drawing1.xml",    dspXml);
+
+        WriteEntry("ppt/diagrams/_rels/data1.xml.rels", MakeRels(pkgNs,
+            ("rIdDraw1", dgmDrawRelType, "drawing1.xml")));
+
+        return path;
+    }
+
+    // ── T17: data parse round-trip tests ───────────────────────────────────────────
+
+    [Fact]
+    public void Reader_ParsesSmartArtData_FlatProcessNodes()
+    {
+        // Three flat nodes with no connections → all roots
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/process1",
+            nodes: [("id1", "Step 1"), ("id2", "Step 2"), ("id3", "Step 3")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa   = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull("data1.xml + layout1.xml were present");
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process, "uniqueId contains 'process'");
+        sa.Data.Nodes.Should().HaveCount(3, "three root-level nodes with no parOf connections");
+
+        var nodeTexts = sa.Data.Nodes.Select(n => n.Text).ToList();
+        nodeTexts.Should().BeEquivalentTo(new[] { "Step 1", "Step 2", "Step 3" });
+    }
+
+    [Fact]
+    public void Reader_ParsesSmartArtData_HierarchyWithChildren()
+    {
+        // root "R" has two children "C1", "C2" via parOf connections
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("R", "Root"), ("C1", "Child1"), ("C2", "Child2")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa   = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy, "uniqueId contains 'hierarchy'");
+        sa.Data.Nodes.Should().HaveCount(1, "one root node");
+
+        var root = sa.Data.Nodes[0];
+        root.Text.Should().Be("Root");
+        root.Children.Should().HaveCount(2, "root has two parOf children");
+        root.Children.Select(c => c.Text).Should().BeEquivalentTo(new[] { "Child1", "Child2" });
+    }
+
+    [Fact]
+    public void Reader_ParsesSmartArtData_FamilyClassification_Cycle()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/cycle1",
+            nodes: [("A", "Phase A"), ("B", "Phase B"), ("C", "Phase C")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+    }
+
+    [Fact]
+    public void Reader_ParsesSmartArtData_FamilyClassification_List()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/list1",
+            nodes: [("A", "Bullet A"), ("B", "Bullet B")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+    }
+
+    [Fact]
+    public void Reader_ParsesSmartArtData_UnknownFamilyIsUnknown()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/matrix1",
+            nodes: [("A", "X")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data!.Family.Should().Be(SmartArtFamily.Unknown,
+            "layout uniqueId 'matrix1' doesn't match any supported family keyword so it should be Unknown");
+    }
+
+    [Fact]
+    public void Reader_SmartArtData_DoesNotBreakExistingFallbackShapeParse()
+    {
+        // Verify that adding Data parsing doesn't corrupt the fallback-shape round-trip
+        var nodeTexts = new[] { "Step A", "Step B" };
+        var pptxPath  = MakeSmartArtPptx(nodeTexts); // existing helper — has dsp:drawing shapes
+        var pres      = PptxPackageReader.Read(pptxPath);
+
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        // FallbackShapes are still populated (round-trip path unchanged)
+        sa.FallbackShapes.Should().HaveCount(nodeTexts.Length);
+
+        // Parts bytes are still there (round-trip writes them back verbatim)
+        sa.Parts.Should().ContainKey("ppt/diagrams/data1.xml");
+    }
 }
