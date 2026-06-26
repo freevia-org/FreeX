@@ -5,7 +5,7 @@ using System.Xml.Linq;
 namespace FreeW.Core.IO.Tests;
 
 /// <summary>
-/// Round-trip coverage for the W20 character border (w:rBdr), character shading (w:shd with pattern),
+/// Round-trip coverage for the W20 character border (w:bdr), character shading (w:shd with pattern),
 /// and proofing language (w:lang) run properties. Each feature is written via DocxWriter, re-read via
 /// DocxReader, and the recovered value is asserted. The defaults are also asserted so existing runs
 /// that lack these fields remain byte-unchanged through the round-trip.
@@ -81,14 +81,16 @@ public class CharacterBorderShadingLanguageRoundTripTests
     }
 
     [Fact]
-    public void CharacterBorder_WritesRBdrElement()
+    public void CharacterBorder_WritesBdrElement()
     {
         var border = new ParagraphBorder("#000000", 0.5);
         var rPr = WriteRunProperties(new RunFormatting { CharacterBorder = border });
 
-        rPr.Element(W + "rBdr").Should().NotBeNull("w:rBdr must appear in the run properties");
-        rPr.Element(W + "rBdr")!.Element(W + "top").Should().NotBeNull("top edge drawn");
-        rPr.Element(W + "rBdr")!.Element(W + "bottom").Should().NotBeNull("bottom edge drawn");
+        rPr.Element(W + "bdr").Should().NotBeNull("w:bdr must appear in the run properties (not the non-standard w:rBdr)");
+        rPr.Element(W + "bdr")!.Element(W + "top").Should().NotBeNull("top edge drawn");
+        rPr.Element(W + "bdr")!.Element(W + "bottom").Should().NotBeNull("bottom edge drawn");
+        // Regression: old code used the non-standard w:rBdr element name.
+        rPr.Element(W + "rBdr").Should().BeNull("w:rBdr is not a valid WordprocessingML run property — must be w:bdr");
     }
 
     [Fact]
@@ -104,10 +106,11 @@ public class CharacterBorderShadingLanguageRoundTripTests
     }
 
     [Fact]
-    public void CharacterBorder_Null_WritesNoRBdr()
+    public void CharacterBorder_Null_WritesNoBdr()
     {
         var rPr = WriteRunProperties(new RunFormatting { Bold = true });
-        rPr.Element(W + "rBdr").Should().BeNull("no character border → no w:rBdr element");
+        rPr.Element(W + "bdr").Should().BeNull("no character border → no w:bdr element");
+        rPr.Element(W + "rBdr").Should().BeNull("no character border → no w:rBdr element either");
     }
 
     [Fact]
@@ -116,6 +119,60 @@ public class CharacterBorderShadingLanguageRoundTripTests
         // A plain run without character border must round-trip without picking one up.
         var result = RoundTrip(new RunFormatting { Bold = true, Italic = true });
         result.CharacterBorder.Should().BeNull();
+    }
+
+    [Fact]
+    public void CharacterBorder_EmittedBeforeShd_SchemaOrder()
+    {
+        // Z4 regression: w:bdr must precede w:shd in CT_RPr/EG_RPrBase. A run with BOTH a character
+        // border AND character shading previously had the elements in the wrong order (bdr after shd),
+        // which causes Word to report "unreadable content / repair". Assert the element order directly.
+        var border = new ParagraphBorder("#FF0000", 1.0)
+        {
+            LineStyle = BorderLineStyle.Single,
+            Top = true, Left = true, Bottom = true, Right = true
+        };
+        var rPr = WriteRunProperties(new RunFormatting
+        {
+            CharacterBorder = border,
+            CharacterShadingHex = "#92D050",
+            CharacterShadingPattern = ShadingPattern.Pct25,
+        });
+
+        var bdr = rPr.Element(W + "bdr");
+        var shd = rPr.Element(W + "shd");
+        bdr.Should().NotBeNull("w:bdr must be present");
+        shd.Should().NotBeNull("w:shd must be present");
+
+        var children = rPr.Elements().ToList();
+        var bdrIdx = children.IndexOf(bdr!);
+        var shdIdx = children.IndexOf(shd!);
+        bdrIdx.Should().BeLessThan(shdIdx,
+            "w:bdr must precede w:shd in CT_RPr (EG_RPrBase schema order) — wrong order causes Word repair");
+    }
+
+    [Fact]
+    public void CharacterBorder_WithShading_BothSurviveRoundTrip()
+    {
+        // Z3+Z4 combined: a run with a character border AND character shading must round-trip both
+        // properties intact now that the element name is w:bdr (not w:rBdr) and the order is correct.
+        var border = new ParagraphBorder("#0070C0", 0.75)
+        {
+            LineStyle = BorderLineStyle.Single,
+            Top = true, Left = true, Bottom = true, Right = true
+        };
+        var result = RoundTrip(new RunFormatting
+        {
+            CharacterBorder = border,
+            CharacterShadingHex = "#FFC000",
+            CharacterShadingPattern = ShadingPattern.Pct10,
+        });
+
+        result.CharacterBorder.Should().NotBeNull();
+        result.CharacterBorder!.ColorHex.Should().Be("#0070C0");
+        result.CharacterBorder.LineStyle.Should().Be(BorderLineStyle.Single);
+        result.CharacterShadingHex.Should().Be("#FFC000");
+        result.CharacterShadingPattern.Should().Be(ShadingPattern.Pct10);
     }
 
     // ---- Character Shading (w:shd with pattern on run) ----

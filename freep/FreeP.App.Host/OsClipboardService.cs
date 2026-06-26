@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using FreeP.App.Compositor;
@@ -45,6 +46,20 @@ public interface IOsClipboard
     /// Implementations should be resilient to clipboard-locked errors.
     /// </summary>
     void SetDataObject(DataObject data);
+
+    /// <summary>
+    /// Returns the OS clipboard sequence number — an integer that Windows increments every
+    /// time ANY application writes to the clipboard.  Used to detect external clipboard
+    /// changes (i.e. another app overwrote our copy).
+    ///
+    /// The real implementation returns <see cref="System.Windows.Clipboard.GetSequenceNumber()"/>.
+    /// The fake/test implementation returns a settable counter so tests can simulate an
+    /// external clipboard change without touching the real OS clipboard.
+    ///
+    /// Returns 0 on error (clipboard locked); callers must treat any change from the recorded
+    /// value as an external write.
+    /// </summary>
+    long SequenceNumber { get; }
 }
 
 /// <summary>
@@ -88,6 +103,22 @@ public sealed class WpfOsClipboard : IOsClipboard
     {
         try { Clipboard.SetDataObject(data, copy: true); }
         catch { /* clipboard locked — degrade silently */ }
+    }
+
+    public long SequenceNumber
+    {
+        get
+        {
+            try { return NativeMethods.GetClipboardSequenceNumber(); }
+            catch { return 0; }
+        }
+    }
+
+    // Win32 interop for clipboard sequence number — not exposed by System.Windows.Clipboard.
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        internal static extern uint GetClipboardSequenceNumber();
     }
 
     private static byte[] BitmapSourceToPng(BitmapSource source)
@@ -152,20 +183,41 @@ public sealed class OsClipboardService
     private readonly IOsClipboard    _clipboard;
     private readonly IShapeRenderer  _renderer;
 
-    // ── Own-copy generation token (Y6) ────────────────────────────────────────────
-    // Incremented each time THIS service places content on the OS clipboard.
-    // Stored so Paste() can detect whether the current OS clipboard content was
-    // produced by this app instance and should therefore yield to the internal clipboard.
+    // ── Own-copy tracking (Y6 + Z1 fix) ──────────────────────────────────────────
+    // We track both a monotonic generation counter (in-app only) AND the OS clipboard
+    // sequence number at the moment of our last PlaceSelection call.
+    //
+    // The generation counter alone is NOT sufficient (Z1 regression): it is only bumped
+    // by OUR own copy operations but is never cleared when another app overwrites the
+    // clipboard.  The OS clipboard SEQUENCE NUMBER (incremented by Windows on every
+    // clipboard write, by any app) is the authoritative signal that the clipboard content
+    // has changed since we placed it.
+    //
+    // OwnCopyIsCurrentOnOs is true only when BOTH conditions hold:
+    //   1. We have previously placed content (generation > 0, lastPlaced == generation).
+    //   2. The OS sequence number has not changed since our last write, confirming no
+    //      external (or other in-app) clipboard write has occurred.
     private uint _ownCopyGeneration;        // monotonically increasing counter
     private uint _lastPlacedGeneration;     // value written during the last PlaceSelection call
+    private long _lastPlacedSequence = -1; // OS sequence number at the time of our last write
 
     /// <summary>
     /// True when the OS clipboard currently holds content placed by THIS service instance
-    /// (i.e. since the last in-app Ctrl+C / Ctrl+X).  Paste uses this to prefer the
-    /// internal editable clipboard over the rasterised OS image.
+    /// (i.e. since the last in-app Ctrl+C / Ctrl+X) AND no external application has
+    /// written to the clipboard since then.
+    ///
+    /// Paste uses this to prefer the internal editable clipboard over the rasterised OS image.
+    ///
+    /// The check combines the in-app generation token (unchanged by external apps) with the
+    /// OS clipboard sequence number (bumped by EVERY write, from any app).  If the sequence
+    /// number differs from what it was when we placed the data, another app overwrote the
+    /// clipboard and our copy is stale — own-copy is NOT current.
     /// </summary>
-    internal bool OwnCopyIsCurrentOnOs => _ownCopyGeneration > 0
-                                       && _ownCopyGeneration == _lastPlacedGeneration;
+    internal bool OwnCopyIsCurrentOnOs =>
+        _ownCopyGeneration > 0
+        && _ownCopyGeneration == _lastPlacedGeneration
+        && _lastPlacedSequence >= 0
+        && _clipboard.SequenceNumber == _lastPlacedSequence;
 
     /// <summary>
     /// Size (in pixels) used when rendering the selection to a PNG for the OS clipboard.
@@ -217,6 +269,11 @@ public sealed class OsClipboardService
         // content was placed by THIS instance and should yield to the internal clipboard.
         _ownCopyGeneration++;
         _lastPlacedGeneration = _ownCopyGeneration;
+
+        // Z1 fix: record the OS clipboard sequence number AFTER our write so that
+        // OwnCopyIsCurrentOnOs can detect when another app has overwritten the clipboard.
+        // If the sequence number later differs from this value, the clipboard is stale.
+        _lastPlacedSequence = _clipboard.SequenceNumber;
     }
 
     /// <summary>

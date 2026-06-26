@@ -170,19 +170,75 @@ internal static class TextBodyFlowDocumentConverter
             {
                 // Collect the original paragraph's runs (if available) so we can pass
                 // each original run to WpfInlineToModelRun for Y2 scheme-color preservation.
+                //
+                // Z2 fix: match reconstructed inlines to original runs by CHARACTER OFFSET,
+                // not by ordinal index.  When the user edits text the FlowDocument's leaf
+                // inline count/order diverges from the original run list:
+                //   - typing mid-run splits one run into multiple inlines,
+                //   - applying bold/color to a sub-range produces extra inlines,
+                //   - a soft break (LineBreak = "\n") is an extra leaf inline.
+                // Matching by index therefore carries the WRONG original run's scheme-color
+                // (or drops it when out of range).  Matching by offset is correct: a
+                // reconstructed inline whose start offset falls within original run [s,e)
+                // definitely came from that original run, so it inherits that run's color.
+                //
+                // Build a cumulative offset table for the original runs once, then walk the
+                // reconstructed inlines accumulating offset.  A LineBreak counts as 1
+                // character ("\n") consistent with how the model stores soft breaks (Y5).
                 IReadOnlyList<ModelRun>? origRuns = null;
                 if (originalBody is not null && modelParaIndex < originalBody.Paragraphs.Count)
                     origRuns = originalBody.Paragraphs[modelParaIndex].Runs;
 
-                int runIndex = 0;
+                // origRunRanges[i] = (startOffset, exclusiveEndOffset) of origRuns[i].
+                // Built once; empty when origRuns is null or empty.
+                (int start, int end)[] origRunRanges = Array.Empty<(int, int)>();
+                if (origRuns is { Count: > 0 })
+                {
+                    origRunRanges = new (int, int)[origRuns.Count];
+                    int offset = 0;
+                    for (int i = 0; i < origRuns.Count; i++)
+                    {
+                        // A run whose Text is "\n" has length 1 (the soft-break character).
+                        int len = origRuns[i].Text?.Length ?? 0;
+                        origRunRanges[i] = (offset, offset + len);
+                        offset += len;
+                    }
+                }
+
+                // Walk reconstructed leaf inlines, accumulating a character offset.
+                // For each inline, find the original run that contains its start offset.
+                int reconstructedOffset = 0;
                 foreach (var leaf in EnumerateLeafInlines(wp2.Inlines))
                 {
-                    ModelRun? origRun = (origRuns is not null && runIndex < origRuns.Count)
-                        ? origRuns[runIndex]
-                        : null;
+                    // Determine the length of this leaf for offset accounting.
+                    int leafLen = leaf switch
+                    {
+                        WpfRun wr   => wr.Text?.Length ?? 0,
+                        LineBreak _ => 1,   // "\n" is 1 char in the model (Y5)
+                        _           => 0
+                    };
+
+                    // Find the original run whose [start,end) span contains reconstructedOffset.
+                    // A new character typed beyond the original text won't fall in any range → null.
+                    ModelRun? origRun = null;
+                    if (origRunRanges.Length > 0)
+                    {
+                        for (int i = 0; i < origRunRanges.Length; i++)
+                        {
+                            var (s, e) = origRunRanges[i];
+                            // A zero-length original run (empty placeholder) matches only at its start.
+                            if (s == e ? reconstructedOffset == s
+                                       : reconstructedOffset >= s && reconstructedOffset < e)
+                            {
+                                origRun = origRuns![i];
+                                break;
+                            }
+                        }
+                    }
+
                     var mr = WpfInlineToModelRun(leaf, origRun);
                     mp.Runs.Add(mr);
-                    runIndex++;
+                    reconstructedOffset += leafLen;
                 }
             }
 

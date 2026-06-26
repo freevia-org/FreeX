@@ -4648,6 +4648,29 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        // w:bdr (character border) — a box around the run's glyphs (rPr/w:bdr). EG_RPrBase schema order
+        // places w:bdr BEFORE w:shd (and after w:u/w:effect), so we emit it here. Emitted only when set so
+        // existing runs round-trip byte-unchanged. Reuses the same edge encoding as w:pBdr (per-edge
+        // flags, w:sz in eighths of a point, w:space=0, w:color as RRGGBB).
+        if (f.CharacterBorder is { } charBdr)
+        {
+            var styleToken = BorderLineStyles.ToToken(charBdr.LineStyle);
+            XElement BdrEdge(string name) => new(W + name,
+                new XAttribute(W + "val", styleToken),
+                new XAttribute(W + "sz", PointsToEighthPoints(charBdr.WidthPt)),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", charBdr.ColorHex.TrimStart('#')));
+            var drawBottom = charBdr.BottomOnly || charBdr.Bottom;
+            var drawTop = !charBdr.BottomOnly && charBdr.Top;
+            var drawLeft = !charBdr.BottomOnly && charBdr.Left;
+            var drawRight = !charBdr.BottomOnly && charBdr.Right;
+            if (drawTop || drawLeft || drawBottom || drawRight)
+                rPr.Add(new XElement(W + "bdr",
+                    drawTop ? BdrEdge("top") : null,
+                    drawLeft ? BdrEdge("left") : null,
+                    drawBottom ? BdrEdge("bottom") : null,
+                    drawRight ? BdrEdge("right") : null));
+        }
         // w:shd on a run: CharacterShadingHex (pattern-aware, takes precedence) or HighlightColorHex
         // (legacy solid-fill highlight, w:val="clear"). Both share the single w:shd slot in CT_RPr; when
         // CharacterShadingHex is set it wins so its pattern is preserved in the round-trip.
@@ -4665,29 +4688,6 @@ public static class DocxWriter
                 new XAttribute(W + "val", "clear"),
                 new XAttribute(W + "color", "auto"),
                 new XAttribute(W + "fill", highlight.TrimStart('#'))));
-        }
-        // w:rBdr (character border) — a box around the run's glyphs (rPr/w:rBdr). Schema order places
-        // w:rBdr after w:shd and before w:vertAlign in CT_RPr (EG_RPrBase). Emitted only when set so
-        // existing runs round-trip byte-unchanged. Reuses the same edge encoding as w:pBdr (per-edge
-        // flags, w:sz in eighths of a point, w:space=0, w:color as RRGGBB).
-        if (f.CharacterBorder is { } charBdr)
-        {
-            var styleToken = BorderLineStyles.ToToken(charBdr.LineStyle);
-            XElement BdrEdge(string name) => new(W + name,
-                new XAttribute(W + "val", styleToken),
-                new XAttribute(W + "sz", PointsToEighthPoints(charBdr.WidthPt)),
-                new XAttribute(W + "space", 0),
-                new XAttribute(W + "color", charBdr.ColorHex.TrimStart('#')));
-            var drawBottom = charBdr.BottomOnly || charBdr.Bottom;
-            var drawTop = !charBdr.BottomOnly && charBdr.Top;
-            var drawLeft = !charBdr.BottomOnly && charBdr.Left;
-            var drawRight = !charBdr.BottomOnly && charBdr.Right;
-            if (drawTop || drawLeft || drawBottom || drawRight)
-                rPr.Add(new XElement(W + "rBdr",
-                    drawTop ? BdrEdge("top") : null,
-                    drawLeft ? BdrEdge("left") : null,
-                    drawBottom ? BdrEdge("bottom") : null,
-                    drawRight ? BdrEdge("right") : null));
         }
         if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             rPr.Add(new XElement(W + "vertAlign",

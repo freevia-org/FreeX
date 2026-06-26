@@ -328,6 +328,10 @@ internal static class TableColumnHelpers
 public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : IDocumentCommand
 {
     private int _appliedAt = -1;
+    // Snapshot of the exact cell instances inserted per row, so Revert can remove them by reference
+    // rather than recomputing GridColumnToCellIndex on the already-modified row (which resolves to the
+    // wrong cell when a preceding spanning cell covers the target grid column).
+    private List<(TableRow Row, TableCell Cell)>? _insertedCells;
 
     public string Label => "Insert Column";
 
@@ -335,13 +339,17 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
     {
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
         _appliedAt = Math.Max(columnIndex, 0);
+        var inserted = new List<(TableRow, TableCell)>(table.Rows.Count);
         foreach (var row in table.Rows)
         {
             // Map the target grid column to a cell-list position for this row (H6 grid awareness).
             var cellIdx = TableColumnHelpers.GridColumnToCellIndex(row, _appliedAt);
             var at = cellIdx >= 0 ? cellIdx : row.Cells.Count;
-            row.Cells.Insert(at, new TableCell(string.Empty));
+            var cell = new TableCell(string.Empty);
+            row.Cells.Insert(at, cell);
+            inserted.Add((row, cell));
         }
+        _insertedCells = inserted;
         // Keep ColumnWidthsPt consistent with the new column count (H4). Insert a default width at the
         // same position; use the average of neighbours when available, else zero (auto).
         if (table.ColumnWidthsPt.Count > 0)
@@ -356,15 +364,15 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_appliedAt < 0)
+        if (_appliedAt < 0 || _insertedCells is null)
             return;
+        // Remove each inserted cell by reference — do NOT recompute GridColumnToCellIndex because after
+        // Apply the row structure has changed and the grid lookup resolves to the wrong cell when a
+        // spanning cell precedes the inserted position.
+        foreach (var (row, cell) in _insertedCells)
+            row.Cells.Remove(cell);
+        _insertedCells = null;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
-        foreach (var row in table.Rows)
-        {
-            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(row, _appliedAt);
-            if (cellIdx >= 0 && cellIdx < row.Cells.Count)
-                row.Cells.RemoveAt(cellIdx);
-        }
         if (table.ColumnWidthsPt.Count > 0)
         {
             var removeAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count - 1);

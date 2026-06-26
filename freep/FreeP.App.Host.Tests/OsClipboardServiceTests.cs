@@ -19,6 +19,11 @@ public sealed class OsClipboardServiceTests
     /// <summary>
     /// In-memory clipboard stub.  Tests set HasImage / HasText / ImageBytes / Text before
     /// calling the service and inspect WasSetCalled / LastDataObject after.
+    ///
+    /// Z1: <see cref="SequenceNumber"/> starts at 1 and is auto-incremented by
+    /// <see cref="SetDataObject"/> (mirroring Windows, which bumps the sequence on every write).
+    /// Tests can also set <see cref="SequenceNumber"/> directly to simulate an external app
+    /// overwriting the clipboard.
     /// </summary>
     internal sealed class FakeOsClipboard : IOsClipboard
     {
@@ -30,6 +35,13 @@ public sealed class OsClipboardServiceTests
         public bool       WasSetCalled { get; private set; }
         public DataObject? LastDataObject { get; private set; }
 
+        /// <summary>
+        /// Simulates the Windows clipboard sequence number.
+        /// Auto-incremented by <see cref="SetDataObject"/>; may also be set directly
+        /// by tests to simulate an external clipboard write (another app overwrote it).
+        /// </summary>
+        public long SequenceNumber { get; set; } = 1;
+
         public bool     ContainsImage()   => HasImage;
         public bool     ContainsText()    => HasText;
         public byte[]?  GetImagePngBytes() => ImageBytes;
@@ -39,6 +51,8 @@ public sealed class OsClipboardServiceTests
         {
             WasSetCalled   = true;
             LastDataObject = data;
+            // Mimic Windows: every clipboard write bumps the sequence number.
+            SequenceNumber++;
         }
     }
 
@@ -568,5 +582,102 @@ public sealed class OsClipboardServiceTests
         // Empty text → guard in Paste() → no shape inserted.
         sess.CurrentSlide!.Shapes.Count.Should().Be(before,
             "Y9: empty OS text should not insert a textbox");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    //  Z1 — own-copy token invalidated by external clipboard write (sequence number)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Z1 (a): in-app copy followed immediately by in-app paste (sequence number unchanged)
+    /// still prefers the internal editable clipboard (existing Y6 behavior preserved).
+    /// </summary>
+    [StaFact]
+    public void Z1_InAppCopyThenPaste_SequenceUnchanged_PrefersInternal()
+    {
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out var original);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // Simulate in-app copy: internal clipboard + OS clipboard.
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        // OwnCopyIsCurrentOnOs should be true: sequence number matches.
+        svc.OwnCopyIsCurrentOnOs.Should().BeTrue(
+            "Z1: sequence number matches our last write → own copy is current");
+
+        sess.ClearSelection();
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        var pasted = sess.CurrentSlide!.Shapes.Last();
+        pasted.Kind.Should().NotBe(SlideShapeKind.Picture,
+            "Z1 (a): sequence unchanged → own-copy still current → editable shape, not picture");
+        pasted.Kind.Should().Be(original.Kind);
+    }
+
+    /// <summary>
+    /// Z1 (b): in-app copy, then an external app overwrites the OS clipboard (fake sequence
+    /// number bumped).  Paste must detect the external change and return OsImage, NOT the
+    /// stale internal shape.  This is the regression scenario.
+    /// </summary>
+    [StaFact]
+    public void Z1_ExternalClipboardChangeAfterInAppCopy_PastesExternalImage_NotStaleShape()
+    {
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        // In-app copy: internal clipboard + OS clipboard.
+        sess.CopySelectedShapes();
+        svc.PlaceSelectionOnOsClipboard(sess);
+
+        svc.OwnCopyIsCurrentOnOs.Should().BeTrue("own copy should be current right after copy");
+
+        // Simulate another app writing to the clipboard (bumps sequence number).
+        fake.SequenceNumber++;
+        // The OS clipboard now contains an external image (already set via HasImage=true).
+
+        // OwnCopyIsCurrentOnOs must now be false.
+        svc.OwnCopyIsCurrentOnOs.Should().BeFalse(
+            "Z1: sequence number changed by external app → own copy is stale");
+
+        sess.ClearSelection();
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1,
+            "an external image was on the OS clipboard → one shape inserted");
+        var pasted = sess.CurrentSlide!.Shapes.Last();
+        pasted.Kind.Should().Be(SlideShapeKind.Picture,
+            "Z1 (b): external clipboard change → paste must use external image (Picture), NOT stale internal shape");
+    }
+
+    /// <summary>
+    /// Z1 (c): external image with no prior in-app copy (own-copy token never set)
+    /// → paste returns OsImage.  Sanity check that the baseline path is unaffected.
+    /// </summary>
+    [StaFact]
+    public void Z1_ExternalImageWithNoPriorInAppCopy_PastesOsImage()
+    {
+        // OS clipboard has an image but we never called PlaceSelectionOnOsClipboard.
+        var fake = new FakeOsClipboard { HasImage = true, ImageBytes = _minPng };
+        var sess = MakeSessionWithShape(out _);
+        sess.ClearSelection();
+        var svc    = new OsClipboardService(fake, new StubShapeRenderer());
+        var before = sess.CurrentSlide!.Shapes.Count;
+
+        svc.OwnCopyIsCurrentOnOs.Should().BeFalse(
+            "Z1 (c): no in-app copy ever done → own copy is never current");
+
+        svc.Paste(sess, preferOsClipboard: true);
+
+        sess.CurrentSlide!.Shapes.Count.Should().Be(before + 1);
+        sess.CurrentSlide!.Shapes.Last().Kind.Should().Be(SlideShapeKind.Picture,
+            "Z1 (c): external image, no prior in-app copy → Picture");
     }
 }
