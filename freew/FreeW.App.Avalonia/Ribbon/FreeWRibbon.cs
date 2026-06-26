@@ -743,7 +743,6 @@ internal sealed record RibbonHostCallbacks(
     /// Optional: when null the messages are simply dropped (the merge still happens).
     /// </summary>
     Action<string>? ShowMailMergeInfo = null);
->>>>>>> codex/freew-avmail
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {
