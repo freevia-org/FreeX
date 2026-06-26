@@ -33,6 +33,8 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Shapes;
 
 using AvaloniaEllipse = Avalonia.Controls.Shapes.Ellipse;
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -4553,9 +4555,15 @@ public sealed partial class MainWindow : Window
 
         ApplyDrawingObjectEffect(shapeControl, drawingObject.Effect);
 
+        // Arrowheads for line-like shapes: overlay filled polygons on a Canvas.
+        var hasArrowheads = drawingObject.ShapeKind.HasValue &&
+            DrawingShapeKindSupport.IsLineLike(drawingObject.ShapeKind.Value) &&
+            ((drawingObject.HeadArrowhead?.IsPresent == true) ||
+             (drawingObject.TailArrowhead?.IsPresent == true));
+
         // Overlay shape text inside the same rotation envelope (text is added as a sibling in a
         // Grid so that ApplyDrawingObjectTransform, called by the caller, rotates both together).
-        if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+        if (hasArrowheads || !string.IsNullOrEmpty(drawingObject.ShapeText))
         {
             var grid = new AvaloniaGrid
             {
@@ -4564,11 +4572,94 @@ public sealed partial class MainWindow : Window
                 IsHitTestVisible = false,
             };
             grid.Children.Add(shapeControl);
-            grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
+            if (hasArrowheads)
+                AddArrowheadOverlays(grid, drawingObject, w, h, strokeBrush);
+            if (!string.IsNullOrEmpty(drawingObject.ShapeText))
+                grid.Children.Add(CreateShapeTextOverlay(drawingObject, w, h));
             return grid;
         }
 
         return shapeControl;
+    }
+
+    /// <summary>
+    /// Adds filled arrowhead Path elements on top of a line/connector visual inside <paramref name="container"/>.
+    /// Uses <see cref="ArrowheadGeometry"/> for the polygon math so the calculation is shared with WPF.
+    /// </summary>
+    private static void AddArrowheadOverlays(
+        AvaloniaGrid container,
+        DrawingObjectBounds d,
+        double w,
+        double h,
+        IBrush? arrowBrush)
+    {
+        if (arrowBrush is null || d.ShapeKind is not { } kind)
+            return;
+
+        const double PtToDip = 96.0 / 72.0;
+        var strokeDip = d.OutlineWidthPoints > 0 ? d.OutlineWidthPoints * PtToDip : 1.5;
+
+        var (startPt, endPt, dirStartToEnd) = ArrowheadGeometry.LineEndpoints(
+            0, 0, w, h,
+            d.FlipHorizontal, d.FlipVertical, kind);
+
+        // HeadEnd = start of line, points backward (opposite of travel direction)
+        if (d.HeadArrowhead?.IsPresent == true)
+            AddArrowheadPath(container, d.HeadArrowhead, startPt, dirStartToEnd + Math.PI, strokeDip, arrowBrush);
+
+        // TailEnd = end of line, points forward (same as travel direction)
+        if (d.TailArrowhead?.IsPresent == true)
+            AddArrowheadPath(container, d.TailArrowhead, endPt, dirStartToEnd, strokeDip, arrowBrush);
+    }
+
+    private static void AddArrowheadPath(
+        AvaloniaGrid container,
+        DrawingArrowhead arrowhead,
+        LayoutPoint tip,
+        double directionRadians,
+        double strokeWidth,
+        IBrush brush)
+    {
+        if (arrowhead.Type == DrawingArrowheadType.Oval)
+        {
+            var (center, radius) = ArrowheadGeometry.OvalCenter(arrowhead, tip, directionRadians, strokeWidth);
+            var ellipse = new AvaloniaEllipse
+            {
+                Width = radius * 2,
+                Height = radius * 2,
+                Fill = brush,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+                VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+                Margin = new Thickness(center.X - radius, center.Y - radius, 0, 0),
+                IsHitTestVisible = false,
+            };
+            container.Children.Add(ellipse);
+            return;
+        }
+
+        var pts = ArrowheadGeometry.PolygonPoints(arrowhead, tip, directionRadians, strokeWidth);
+        if (pts.Length < 3)
+            return;
+
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(new Point(pts[0].X, pts[0].Y), isFilled: true);
+            for (var i = 1; i < pts.Length; i++)
+                ctx.LineTo(new Point(pts[i].X, pts[i].Y));
+            ctx.EndFigure(isClosed: true);
+        }
+
+        var path = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = brush,
+            Stretch = Stretch.None,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+        container.Children.Add(path);
     }
 
     private static AvaloniaEllipse CreateEllipseShapeVisual(
