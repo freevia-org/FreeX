@@ -88,6 +88,11 @@ public sealed class DocumentView : Control
     // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
     // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
     private readonly List<FloatingShapeData> _floatingShapes = new();
+    // FO3: floating charts, WordArt, SmartArt, drawing groups — same z-ordered behind/in-front passes.
+    private readonly List<FloatingChartData>    _floatingCharts    = new();
+    private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
+    private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
+    private readonly List<FloatingGroupData>    _floatingGroups    = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
@@ -408,6 +413,72 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── FO3 introspection properties ────────────────────────────────────────────────────────────────
+
+    /// <summary>Number of floating charts collected during the last layout pass.</summary>
+    public int FloatingChartCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _floatingCharts.Count; }
+    }
+
+    /// <summary>Snapshot of floating chart rects for tests (rect, behind-text, z-order, kind, title).</summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, ChartKind Kind, string? Title)> FloatingChartRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title)).ToList();
+        }
+    }
+
+    /// <summary>Number of floating WordArt objects collected during the last layout pass.</summary>
+    public int FloatingWordArtCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _floatingWordArts.Count; }
+    }
+
+    /// <summary>Snapshot of floating WordArt rects for tests (rect, behind-text, z-order, text, style).</summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, string Text, WordArtStyle Style)> FloatingWordArtRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingWordArts.Select(w => (w.Rect, w.BehindText, w.ZOrder, w.Text, w.Style)).ToList();
+        }
+    }
+
+    /// <summary>Number of floating SmartArt diagrams collected during the last layout pass.</summary>
+    public int FloatingSmartArtCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _floatingSmartArts.Count; }
+    }
+
+    /// <summary>Snapshot of floating SmartArt rects for tests (rect, behind-text, z-order, kind, node count).</summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, SmartArtKind Kind, int NodeCount)> FloatingSmartArtRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingSmartArts.Select(s => (s.Rect, s.BehindText, s.ZOrder, s.Kind, s.NodeTexts.Count)).ToList();
+        }
+    }
+
+    /// <summary>Number of floating drawing groups collected during the last layout pass.</summary>
+    public int FloatingGroupCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _floatingGroups.Count; }
+    }
+
+    /// <summary>Snapshot of floating group rects for tests (rect, behind-text, z-order, child count).</summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, int ChildCount)> FloatingGroupRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingGroups.Select(g => (g.Rect, g.BehindText, g.ZOrder, g.Children.Count)).ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -563,6 +634,10 @@ public sealed class DocumentView : Control
         _images.Clear();
         _floatingImages.Clear();
         _floatingShapes.Clear();
+        _floatingCharts.Clear();
+        _floatingWordArts.Clear();
+        _floatingSmartArts.Clear();
+        _floatingGroups.Clear();
         _cellHits.Clear();
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -763,6 +838,11 @@ public sealed class DocumentView : Control
         // Must happen before SpaceBeforePt advances _layoutContentY so the anchor Y is accurate.
         CollectFloatingImages(paragraph, _layoutContentY);
         CollectFloatingShapes(paragraph, _layoutContentY);
+        // FO3: collect charts, WordArt, SmartArt, and drawing groups.
+        CollectFloatingCharts(paragraph, _layoutContentY);
+        CollectFloatingWordArts(paragraph, _layoutContentY);
+        CollectFloatingSmartArts(paragraph, _layoutContentY);
+        CollectFloatingGroups(paragraph, _layoutContentY);
 
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
@@ -1087,6 +1167,11 @@ public sealed class DocumentView : Control
         // Collect floating images and shapes anchored to this paragraph before advancing _layoutContentY.
         CollectFloatingImages(paragraph, _layoutContentY);
         CollectFloatingShapes(paragraph, _layoutContentY);
+        // FO3: collect charts, WordArt, SmartArt, and drawing groups.
+        CollectFloatingCharts(paragraph, _layoutContentY);
+        CollectFloatingWordArts(paragraph, _layoutContentY);
+        CollectFloatingSmartArts(paragraph, _layoutContentY);
+        CollectFloatingGroups(paragraph, _layoutContentY);
 
         foreach (var run in paragraph.Runs)
         {
@@ -1561,6 +1646,16 @@ public sealed class DocumentView : Control
             DrawFloatingShape(context, sd);
         }
 
+        // FO3: behind-text charts, WordArt, SmartArt, groups.
+        foreach (var cd in _floatingCharts.Where(c => c.BehindText).OrderBy(c => c.ZOrder))
+            DrawFloatingChart(context, cd);
+        foreach (var wd in _floatingWordArts.Where(w => w.BehindText).OrderBy(w => w.ZOrder))
+            DrawFloatingWordArt(context, wd);
+        foreach (var sd in _floatingSmartArts.Where(s => s.BehindText).OrderBy(s => s.ZOrder))
+            DrawFloatingSmartArt(context, sd);
+        foreach (var gd in _floatingGroups.Where(g => g.BehindText).OrderBy(g => g.ZOrder))
+            DrawFloatingGroup(context, gd);
+
         // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
         {
@@ -1647,6 +1742,16 @@ public sealed class DocumentView : Control
         {
             DrawFloatingShape(context, sd);
         }
+
+        // FO3: in-front charts, WordArt, SmartArt, groups.
+        foreach (var cd in _floatingCharts.Where(c => !c.BehindText).OrderBy(c => c.ZOrder))
+            DrawFloatingChart(context, cd);
+        foreach (var wd in _floatingWordArts.Where(w => !w.BehindText).OrderBy(w => w.ZOrder))
+            DrawFloatingWordArt(context, wd);
+        foreach (var sd in _floatingSmartArts.Where(s => !s.BehindText).OrderBy(s => s.ZOrder))
+            DrawFloatingSmartArt(context, sd);
+        foreach (var gd in _floatingGroups.Where(g => !g.BehindText).OrderBy(g => g.ZOrder))
+            DrawFloatingGroup(context, gd);
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
@@ -2925,5 +3030,839 @@ public sealed class DocumentView : Control
         public double RotationAngle;
         public bool FlipH;
         public bool FlipV;
+    }
+
+    // ── FO3: data classes for floating charts, WordArt, SmartArt, and drawing groups ───────────────
+
+    private sealed class FloatingChartData
+    {
+        public Rect         Rect;
+        public bool         BehindText;
+        public int          ZOrder;
+        public ChartKind    Kind;
+        public string?      Title;
+        public List<string> Categories = [];
+        public List<(string? Name, List<double> Values)> Series = [];
+    }
+
+    private sealed class FloatingWordArtData
+    {
+        public Rect         Rect;
+        public bool         BehindText;
+        public int          ZOrder;
+        public string       Text        = string.Empty;
+        public WordArtStyle Style;
+        public double       FontSizePt  = 36;
+        public WordArtWarp  Warp;
+    }
+
+    private sealed class FloatingSmartArtData
+    {
+        public Rect             Rect;
+        public bool             BehindText;
+        public int              ZOrder;
+        public SmartArtKind     Kind;
+        // Flattened node texts (first-level nodes + their children depth-first).
+        public List<string>     NodeTexts = [];
+    }
+
+    private sealed class FloatingGroupChildData
+    {
+        // Resolved page-space sub-rect for this child (group origin + child offset).
+        public Rect Rect;
+        // What kind of child: Image, Shape, Chart, WordArt, SmartArt.
+        public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt }
+        public ChildKind Kind;
+        // Reused data structs (only the relevant one is non-null):
+        public Bitmap?           Bitmap;    // Image
+        public FloatingShapeData? Shape;    // Shape
+        public FloatingChartData? Chart;    // Chart
+        public FloatingWordArtData? WordArt; // WordArt
+        public FloatingSmartArtData? SmartArt; // SmartArt
+    }
+
+    private sealed class FloatingGroupData
+    {
+        public Rect Rect;
+        public bool BehindText;
+        public int  ZOrder;
+        public List<FloatingGroupChildData> Children = [];
+    }
+
+    // ── FO3 collection helpers ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Resolves floating-placement page-space position. Mirrors CollectFloatingShapes anchor logic.</summary>
+    private (double X, double Y) ResolveFloatingPos(FloatingPlacement pl, double anchorContentY)
+    {
+        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
+            ? (int)(anchorContentY / _layoutTextAreaHeight)
+            : 0;
+
+        double PageTop(int pi) =>
+            _viewMode == DocumentViewMode.PrintLayout
+                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                : 0;
+
+        double x = pl.HorizontalAnchor switch
+        {
+            HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
+            HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
+            _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
+        };
+
+        double y = pl.VerticalAnchor switch
+        {
+            VerticalAnchor.Paragraph =>
+                ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
+            VerticalAnchor.Margin =>
+                PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
+            VerticalAnchor.Page =>
+                PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
+            _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
+        };
+
+        return (x, y);
+    }
+
+    /// <summary>Collects floating charts anchored to <paramref name="paragraph"/>.</summary>
+    private void CollectFloatingCharts(Paragraph paragraph, double anchorContentY)
+    {
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Chart is not { IsFloating: true } chart)
+                continue;
+
+            var pl = chart.Placement!;
+            var w  = chart.WidthPt  > 0 ? chart.WidthPt  * PxPerPoint : 360 * PxPerPoint;
+            var h  = chart.HeightPt > 0 ? chart.HeightPt * PxPerPoint : 216 * PxPerPoint;
+            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
+
+            var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
+            _floatingCharts.Add(new FloatingChartData
+            {
+                Rect       = new Rect(x, y, w, h),
+                BehindText = pl.Wrapping == ImageWrapping.Behind,
+                ZOrder     = pl.ZOrderIndex,
+                Kind       = chart.Kind,
+                Title      = chart.Title,
+                Categories = new List<string>(chart.Categories),
+                Series     = series,
+            });
+        }
+    }
+
+    /// <summary>Collects floating WordArt anchored to <paramref name="paragraph"/>.</summary>
+    private void CollectFloatingWordArts(Paragraph paragraph, double anchorContentY)
+    {
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.WordArt is not { IsFloating: true } wa)
+                continue;
+
+            var pl = wa.Placement!;
+            // WordArt width: estimate from text length × font size × scaling factor (no explicit WidthPt on model).
+            var w = Math.Max(72, wa.FontSizePt * Math.Max(1, wa.Text.Length) * 0.62) * PxPerPoint;
+            var h = Math.Max(40, wa.FontSizePt * 1.6) * PxPerPoint;
+            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
+
+            _floatingWordArts.Add(new FloatingWordArtData
+            {
+                Rect       = new Rect(x, y, w, h),
+                BehindText = pl.Wrapping == ImageWrapping.Behind,
+                ZOrder     = pl.ZOrderIndex,
+                Text       = wa.Text,
+                Style      = wa.Style,
+                FontSizePt = wa.FontSizePt,
+                Warp       = wa.Warp,
+            });
+        }
+    }
+
+    /// <summary>Collects floating SmartArt diagrams anchored to <paramref name="paragraph"/>.</summary>
+    private void CollectFloatingSmartArts(Paragraph paragraph, double anchorContentY)
+    {
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.SmartArt is not { IsFloating: true } sa)
+                continue;
+
+            var pl = sa.Placement!;
+            var w  = sa.WidthPt  > 0 ? sa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
+            var h  = sa.HeightPt > 0 ? sa.HeightPt * PxPerPoint : 216 * PxPerPoint;
+            var (x, y) = ResolveFloatingPos(pl, anchorContentY);
+
+            // Flatten node texts depth-first for render.
+            var texts = new List<string>();
+            static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
+            {
+                foreach (var n in nodes)
+                {
+                    into.Add(n.Text);
+                    FlattenNodes(n.Children, into);
+                }
+            }
+            FlattenNodes(sa.Nodes, texts);
+
+            _floatingSmartArts.Add(new FloatingSmartArtData
+            {
+                Rect       = new Rect(x, y, w, h),
+                BehindText = pl.Wrapping == ImageWrapping.Behind,
+                ZOrder     = pl.ZOrderIndex,
+                Kind       = sa.Kind,
+                NodeTexts  = texts,
+            });
+        }
+    }
+
+    /// <summary>Collects floating drawing groups anchored to <paramref name="paragraph"/>.</summary>
+    private void CollectFloatingGroups(Paragraph paragraph, double anchorContentY)
+    {
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.DrawingGroup is not { } grp)
+                continue;
+
+            var pl = grp.Placement;
+            var gw = grp.WidthPt  > 0 ? grp.WidthPt  * PxPerPoint : 144 * PxPerPoint;
+            var gh = grp.HeightPt > 0 ? grp.HeightPt * PxPerPoint :  72 * PxPerPoint;
+            var (gx, gy) = ResolveFloatingPos(pl, anchorContentY);
+            var groupRect = new Rect(gx, gy, gw, gh);
+
+            var behindText = pl.Wrapping == ImageWrapping.Behind;
+            var children   = new List<FloatingGroupChildData>();
+
+            for (var i = 0; i < grp.Children.Count; i++)
+            {
+                var child = grp.Children[i];
+                var offX  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].X * PxPerPoint : 0;
+                var offY  = i < grp.ChildOffsets.Count ? grp.ChildOffsets[i].Y * PxPerPoint : 0;
+                var cw    = grp.ChildWidthPt(i)  * PxPerPoint;
+                var ch    = grp.ChildHeightPt(i) * PxPerPoint;
+                var childRect = new Rect(gx + offX, gy + offY, cw, ch);
+
+                var cd = new FloatingGroupChildData { Rect = childRect };
+                switch (child)
+                {
+                    case InlineImage img:
+                        cd.Kind   = FloatingGroupChildData.ChildKind.Image;
+                        cd.Bitmap = DecodeBitmap(img);
+                        break;
+
+                    case Shape s:
+                    {
+                        cd.Kind = FloatingGroupChildData.ChildKind.Shape;
+                        IBrush? fb = null;
+                        if (s.ExtendedFill is { } ef)
+                        {
+                            fb = ef.Kind switch
+                            {
+                                ShapeFillKind.NoFill   => null,
+                                ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(ef, childRect),
+                                ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(ef),
+                                _                      => ParseSolidBrush(s.FillColorHex),
+                            };
+                        }
+                        else if (!string.IsNullOrEmpty(s.FillColorHex))
+                        {
+                            fb = ParseSolidBrush(s.FillColorHex);
+                        }
+
+                        Pen? op = null;
+                        if (!string.IsNullOrEmpty(s.OutlineColorHex))
+                        {
+                            var sw = s.OutlineWidthPt > 0 ? s.OutlineWidthPt * PxPerPoint : 1.0;
+                            op = new Pen(ParseSolidBrush(s.OutlineColorHex) ?? Brushes.Black, sw);
+                        }
+
+                        cd.Shape = new FloatingShapeData
+                        {
+                            Rect          = childRect,
+                            BehindText    = behindText,
+                            ZOrder        = pl.ZOrderIndex,
+                            Kind          = s.Kind,
+                            CustomGeo     = s.HasCustomGeometry ? s.CustomGeometry : null,
+                            FillBrush     = fb,
+                            OutlinePen    = op,
+                            Text          = s.HasText ? s.PlainText : null,
+                            RotationAngle = s.RotationAngle,
+                            FlipH         = s.FlipH,
+                            FlipV         = s.FlipV,
+                        };
+                        break;
+                    }
+
+                    case Chart c:
+                        cd.Kind = FloatingGroupChildData.ChildKind.Chart;
+                        cd.Chart = new FloatingChartData
+                        {
+                            Rect       = childRect,
+                            BehindText = behindText,
+                            ZOrder     = pl.ZOrderIndex,
+                            Kind       = c.Kind,
+                            Title      = c.Title,
+                            Categories = new List<string>(c.Categories),
+                            Series     = c.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList(),
+                        };
+                        break;
+
+                    case WordArt wa:
+                        cd.Kind = FloatingGroupChildData.ChildKind.WordArt;
+                        cd.WordArt = new FloatingWordArtData
+                        {
+                            Rect       = childRect,
+                            BehindText = behindText,
+                            ZOrder     = pl.ZOrderIndex,
+                            Text       = wa.Text,
+                            Style      = wa.Style,
+                            FontSizePt = wa.FontSizePt,
+                            Warp       = wa.Warp,
+                        };
+                        break;
+
+                    case SmartArt sa:
+                    {
+                        var texts = new List<string>();
+                        static void FlattenNodes(IEnumerable<SmartArtNode> nodes, List<string> into)
+                        {
+                            foreach (var n in nodes) { into.Add(n.Text); FlattenNodes(n.Children, into); }
+                        }
+                        FlattenNodes(sa.Nodes, texts);
+                        cd.Kind = FloatingGroupChildData.ChildKind.SmartArt;
+                        cd.SmartArt = new FloatingSmartArtData
+                        {
+                            Rect       = childRect,
+                            BehindText = behindText,
+                            ZOrder     = pl.ZOrderIndex,
+                            Kind       = sa.Kind,
+                            NodeTexts  = texts,
+                        };
+                        break;
+                    }
+                }
+
+                children.Add(cd);
+            }
+
+            _floatingGroups.Add(new FloatingGroupData
+            {
+                Rect       = groupRect,
+                BehindText = behindText,
+                ZOrder     = pl.ZOrderIndex,
+                Children   = children,
+            });
+        }
+    }
+
+    // ── FO3 draw helpers ──────────────────────────────────────────────────────────────────────────
+
+    // Colour palette for chart series — matches Word's default colorful1 scheme.
+    private static readonly Color[] ChartSeriesColors =
+    [
+        Color.FromRgb(0x43, 0x72, 0xC4), // blue
+        Color.FromRgb(0xED, 0x7D, 0x31), // orange
+        Color.FromRgb(0xA9, 0xD1, 0x8E), // green
+        Color.FromRgb(0xFF, 0xC0, 0x00), // gold
+        Color.FromRgb(0x5A, 0x96, 0xC5), // steel blue
+        Color.FromRgb(0x70, 0xAD, 0x47), // lime green
+    ];
+
+    private static readonly IBrush ChartFrameFill   = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
+    private static readonly Pen    ChartFramePen    = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
+    private static readonly IBrush ChartGridlineBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
+
+    /// <summary>
+    /// Renders a floating chart at its page-space rect.
+    /// Column/Bar/Line/Pie/Doughnut/Area/Scatter: basic geometry rendered from series data.
+    /// Approximation quality: correct placement, correct z-order, recognisable chart geometry (bars/
+    /// lines/pie slices). Data labels, axes tick text, and legend are omitted (placeholder tile for
+    /// those elements). Full chart geometry is deferred to a later wave if data-label fidelity is needed.
+    /// </summary>
+    private void DrawFloatingChart(DrawingContext context, FloatingChartData cd)
+    {
+        var rect = cd.Rect;
+        // Frame.
+        context.FillRectangle(ChartFrameFill, rect);
+        context.DrawRectangle(null, ChartFramePen, rect);
+
+        // Title bar (if present).
+        const double titleH = 20;
+        var titleY = rect.Y + 4;
+        if (!string.IsNullOrEmpty(cd.Title))
+        {
+            var titleFmt = new RunFormatting { FontSizePt = 9, Bold = true };
+            var ft = Build(cd.Title, titleFmt);
+            var tx = rect.X + (rect.Width - ft.WidthIncludingTrailingWhitespace) / 2;
+            context.DrawText(ft, new Point(Math.Max(rect.X + 2, tx), titleY));
+        }
+
+        var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 8 : titleH + 4);
+        var plotBottom = rect.Bottom - 18; // leave room for a fake x-axis label row
+        var plotLeft   = rect.X + 32;     // leave room for y-axis
+        var plotRight  = rect.Right - 8;
+        var plotW      = Math.Max(10, plotRight - plotLeft);
+        var plotH      = Math.Max(10, plotBottom - plotTop);
+
+        if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
+            return;
+
+        // Draw light horizontal gridlines.
+        const int gridLines = 4;
+        var gridPen = new Pen(ChartGridlineBrush, 0.5);
+        for (var g = 0; g <= gridLines; g++)
+        {
+            var gy = plotBottom - g * plotH / gridLines;
+            context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
+        }
+
+        switch (cd.Kind)
+        {
+            case ChartKind.Column:
+            case ChartKind.Bar:
+                DrawChartBars(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
+                    horizontal: cd.Kind == ChartKind.Bar);
+                break;
+
+            case ChartKind.Line:
+            case ChartKind.Scatter:
+            case ChartKind.Area:
+                DrawChartLines(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
+                    fillArea: cd.Kind == ChartKind.Area);
+                break;
+
+            case ChartKind.Pie:
+                DrawChartPie(context, cd, plotLeft, plotTop, plotW, plotH, doughnut: false);
+                break;
+
+            case ChartKind.Doughnut:
+                DrawChartPie(context, cd, plotLeft, plotTop, plotW, plotH, doughnut: true);
+                break;
+        }
+
+        // Kind label (bottom-right corner, tiny).
+        var kindFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#999999" };
+        var kindFt  = Build(cd.Kind.ToString(), kindFmt);
+        context.DrawText(kindFt, new Point(rect.Right - kindFt.WidthIncludingTrailingWhitespace - 2, rect.Bottom - kindFt.Height));
+    }
+
+    private void DrawChartBars(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool horizontal)
+    {
+        var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
+        var nSeries = cd.Series.Count;
+        var nBars   = cats;
+
+        // Find max value across all series.
+        var maxVal = 1.0;
+        foreach (var (_, vals) in cd.Series)
+            foreach (var v in vals)
+                if (v > maxVal) maxVal = v;
+
+        var groupW = plotW / Math.Max(1, nBars);
+        var barPad = Math.Max(1, groupW * 0.1);
+        var barGroupW = groupW - 2 * barPad;
+        var seriesW = barGroupW / Math.Max(1, nSeries);
+
+        for (var si = 0; si < nSeries; si++)
+        {
+            var (_, vals) = cd.Series[si];
+            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var brush = new SolidColorBrush(color);
+
+            for (var ci = 0; ci < nBars; ci++)
+            {
+                var val   = ci < vals.Count ? vals[ci] : 0;
+                var ratio = maxVal > 0 ? val / maxVal : 0;
+
+                if (horizontal)
+                {
+                    var bh     = Math.Max(1, seriesW - 1);
+                    var barH   = Math.Max(1, ratio * plotW);
+                    var by     = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
+                    var barRect = new Rect(plotLeft, by, barH, bh);
+                    context.FillRectangle(brush, barRect);
+                }
+                else
+                {
+                    var bw     = Math.Max(1, seriesW - 1);
+                    var barH   = Math.Max(1, ratio * plotH);
+                    var bx     = plotLeft + barPad + ci * groupW + si * seriesW;
+                    var barRect = new Rect(bx, plotBottom - barH, bw, barH);
+                    context.FillRectangle(brush, barRect);
+                }
+            }
+        }
+    }
+
+    private void DrawChartLines(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool fillArea)
+    {
+        var cats   = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
+        var maxVal = 1.0;
+        foreach (var (_, vals) in cd.Series)
+            foreach (var v in vals)
+                if (v > maxVal) maxVal = v;
+
+        for (var si = 0; si < cd.Series.Count; si++)
+        {
+            var (_, vals) = cd.Series[si];
+            if (vals.Count == 0) continue;
+
+            var color = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var pen   = new Pen(new SolidColorBrush(color), 1.5);
+
+            var pts = new List<Point>();
+            for (var ci = 0; ci < Math.Max(cats, vals.Count); ci++)
+            {
+                var val = ci < vals.Count ? vals[ci] : 0;
+                var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
+                var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+                pts.Add(new Point(px, py));
+            }
+
+            for (var pi = 0; pi < pts.Count - 1; pi++)
+                context.DrawLine(pen, pts[pi], pts[pi + 1]);
+
+            if (fillArea && pts.Count >= 2)
+            {
+                var geo = new StreamGeometry();
+                using var ctx = geo.Open();
+                ctx.BeginFigure(new Point(pts[0].X, plotBottom), isFilled: true);
+                foreach (var p in pts) ctx.LineTo(p);
+                ctx.LineTo(new Point(pts[^1].X, plotBottom));
+                ctx.EndFigure(true);
+                context.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)), null, geo);
+            }
+        }
+    }
+
+    private static void DrawChartPie(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, bool doughnut)
+    {
+        if (cd.Series.Count == 0) return;
+        var vals = cd.Series[0].Values;
+        if (vals.Count == 0) return;
+
+        var total = vals.Sum();
+        if (total <= 0) return;
+
+        var cx = plotLeft + plotW / 2;
+        var cy = plotTop  + plotH / 2;
+        var r  = Math.Min(plotW, plotH) / 2 - 4;
+        var innerR = doughnut ? r * 0.5 : 0;
+
+        var startAngle = -Math.PI / 2; // start at top
+        for (var si = 0; si < vals.Count; si++)
+        {
+            var sweep     = vals[si] / total * 2 * Math.PI;
+            var color     = ChartSeriesColors[si % ChartSeriesColors.Length];
+            var brush     = new SolidColorBrush(color);
+
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                if (doughnut)
+                {
+                    // Outer arc start.
+                    var ox1 = cx + r * Math.Cos(startAngle);
+                    var oy1 = cy + r * Math.Sin(startAngle);
+                    var ox2 = cx + r * Math.Cos(startAngle + sweep);
+                    var oy2 = cy + r * Math.Sin(startAngle + sweep);
+                    // Inner arc end (reversed).
+                    var ix1 = cx + innerR * Math.Cos(startAngle + sweep);
+                    var iy1 = cy + innerR * Math.Sin(startAngle + sweep);
+                    var ix2 = cx + innerR * Math.Cos(startAngle);
+                    var iy2 = cy + innerR * Math.Sin(startAngle);
+
+                    var isLarge = sweep > Math.PI;
+                    ctx.BeginFigure(new Point(ox1, oy1), isFilled: true);
+                    ctx.ArcTo(new Point(ox2, oy2), new Size(r, r), 0, isLarge, SweepDirection.Clockwise);
+                    ctx.LineTo(new Point(ix1, iy1));
+                    ctx.ArcTo(new Point(ix2, iy2), new Size(innerR, innerR), 0, isLarge, SweepDirection.CounterClockwise);
+                    ctx.EndFigure(true);
+                }
+                else
+                {
+                    var ex = cx + r * Math.Cos(startAngle + sweep);
+                    var ey = cy + r * Math.Sin(startAngle + sweep);
+                    var isLarge = sweep > Math.PI;
+                    ctx.BeginFigure(new Point(cx, cy), isFilled: true);
+                    ctx.LineTo(new Point(cx + r * Math.Cos(startAngle), cy + r * Math.Sin(startAngle)));
+                    ctx.ArcTo(new Point(ex, ey), new Size(r, r), 0, isLarge, SweepDirection.Clockwise);
+                    ctx.EndFigure(true);
+                }
+            }
+            context.DrawGeometry(brush, new Pen(Brushes.White, 0.5), geo);
+            startAngle += sweep;
+        }
+    }
+
+    // WordArt style → (fill colour, outline colour, glow/shadow hint) lookup.
+    private static (string FillHex, string? OutlineHex, bool Bold) WordArtStyleToColors(WordArtStyle style) =>
+        style switch
+        {
+            WordArtStyle.FillBlue      => ("#4472C4", null, true),
+            WordArtStyle.GradientFill  => ("#4472C4", null, true),
+            WordArtStyle.GradFillMulti => ("#ED7D31", null, true),
+            WordArtStyle.Outline       => ("#FFFFFF", "#4472C4", true),
+            WordArtStyle.ChromeOne     => ("#FFFFFF", "#000000", true),
+            WordArtStyle.ChromeTwo     => ("#4472C4", "#FFFFFF", true),
+            WordArtStyle.Shadow        => ("#4472C4", null, true),
+            WordArtStyle.ShadowOrange  => ("#ED7D31", null, true),
+            WordArtStyle.FillGold      => ("#FFC000", null, true),
+            WordArtStyle.FillWhite     => ("#FFFFFF", "#AAAAAA", true),
+            WordArtStyle.GlowBlue      => ("#4472C4", null, true),
+            WordArtStyle.GlowGold      => ("#FFC000", null, true),
+            WordArtStyle.Reflection    => ("#4472C4", null, true),
+            WordArtStyle.Bevel         => ("#4472C4", null, true),
+            WordArtStyle.PatternFill   => ("#4472C4", "#4472C4", true),
+            _                          => ("#4472C4", null, true),
+        };
+
+    /// <summary>
+    /// Renders a floating WordArt at its page-space rect.
+    /// Fully rendered: styled text with fill colour (and outline when preset uses one) at correct size,
+    /// position, and z-order. Text warp (WordArtWarp) approximated with a skew/arc label — no actual
+    /// path deformation (Avalonia immediate-mode has no text-on-path API); this is noted as a follow-up.
+    /// </summary>
+    private void DrawFloatingWordArt(DrawingContext context, FloatingWordArtData wd)
+    {
+        if (string.IsNullOrEmpty(wd.Text)) return;
+
+        var rect = wd.Rect;
+        var (fillHex, outlineHex, bold) = WordArtStyleToColors(wd.Style);
+
+        // Draw a light background frame so the WordArt region is visible even without warp geometry.
+        context.DrawRectangle(null,
+            new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x44, 0x72, 0xC4)), 1.0,
+                new DashStyle([3, 3], 0)),
+            rect);
+
+        // If the style has a fill background (e.g. gradient styles) draw a subtle bg gradient.
+        if (wd.Style is WordArtStyle.GradientFill or WordArtStyle.GradFillMulti)
+        {
+            var gb = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint   = new RelativePoint(1, 1, RelativeUnit.Relative),
+            };
+            if (TryParseAvaloniaColor(fillHex, out var c1))
+                gb.GradientStops.Add(new global::Avalonia.Media.GradientStop(c1, 0));
+            gb.GradientStops.Add(new global::Avalonia.Media.GradientStop(Colors.White, 1));
+            context.FillRectangle(gb, rect);
+        }
+
+        // Render the text centred in the rect at the WordArt font size.
+        var textFmt = new RunFormatting
+        {
+            FontSizePt = Math.Max(8, wd.FontSizePt),
+            Bold       = bold,
+            ColorHex   = fillHex,
+        };
+
+        // Warp hint: for non-None warps add a "(warp)" note since path-deform is not supported in
+        // Avalonia immediate-mode. The text is still at the right position and size.
+        var displayText = wd.Text;
+
+        var ft = Build(displayText, textFmt);
+        var tx = rect.X + Math.Max(0, (rect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
+        var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
+        using (context.PushClip(rect))
+            context.DrawText(ft, new Point(tx, ty));
+
+        // For styles with an outline, draw the text a second time with a contrasting colour offset by 1px
+        // to simulate an outline effect (poor-man's outline — Avalonia has no DrawTextOutline API).
+        if (!string.IsNullOrEmpty(outlineHex))
+        {
+            var outlineFmt = textFmt with { ColorHex = outlineHex };
+            var outlineFt  = Build(displayText, outlineFmt);
+            using (context.PushClip(rect))
+                context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
+        }
+
+        // Warp indicator (small label in corner if warp is set).
+        if (wd.Warp != WordArtWarp.None)
+        {
+            var warpFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#888888" };
+            var warpFt  = Build($"~{wd.Warp}", warpFmt);
+            context.DrawText(warpFt, new Point(rect.X + 2, rect.Bottom - warpFt.Height));
+        }
+    }
+
+    // SmartArt node colours per slot (reuses the chart palette for consistency).
+    private static readonly IBrush[] SmartArtNodeFills =
+    [
+        new SolidColorBrush(Color.FromRgb(0x43, 0x72, 0xC4)),
+        new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31)),
+        new SolidColorBrush(Color.FromRgb(0xA9, 0xD1, 0x8E)),
+        new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00)),
+        new SolidColorBrush(Color.FromRgb(0x5A, 0x96, 0xC5)),
+        new SolidColorBrush(Color.FromRgb(0x70, 0xAD, 0x47)),
+    ];
+
+    private static readonly Pen SmartArtNodePen    = new Pen(Brushes.White, 1.0);
+    private static readonly Pen SmartArtConnectPen = new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), 1.0);
+
+    /// <summary>
+    /// Renders a floating SmartArt diagram at its page-space rect.
+    /// Rendered: node topology — boxes with text labels + connecting lines — at the correct placement.
+    /// Layout algorithm: simple left-to-right (List/Process) or top-down tree (Hierarchy).
+    /// Full DrawingML layout engine is not implemented (that would require porting the diagram layout
+    /// parts); this is noted as a follow-up. Placement and z-order are correct.
+    /// </summary>
+    private void DrawFloatingSmartArt(DrawingContext context, FloatingSmartArtData sd)
+    {
+        var rect = sd.Rect;
+
+        // Frame.
+        context.FillRectangle(ChartFrameFill, rect);
+        context.DrawRectangle(null, ChartFramePen, rect);
+
+        // Kind label.
+        var headerFmt = new RunFormatting { FontSizePt = 8, Bold = true, ColorHex = "#555555" };
+        var headerFt  = Build($"SmartArt ({sd.Kind})", headerFmt);
+        context.DrawText(headerFt, new Point(rect.X + 4, rect.Y + 2));
+
+        if (sd.NodeTexts.Count == 0) return;
+
+        // Draw node boxes.
+        const double nodePad  = 6;
+        const double nodeH    = 26;
+        const double connGap  = 8;
+
+        var areaTop   = rect.Y + headerFt.Height + 6;
+        var areaH     = rect.Height - (areaTop - rect.Y) - nodePad;
+        var areaW     = rect.Width - 2 * nodePad;
+
+        if (sd.Kind == SmartArtKind.Hierarchy)
+        {
+            // Simple top-down: root on row 0, children on row 1, evenly spaced.
+            var roots    = sd.NodeTexts.Count > 0 ? new[] { sd.NodeTexts[0] } : [];
+            var children = sd.NodeTexts.Skip(1).ToArray();
+
+            // Root box.
+            var rootW = Math.Min(areaW, 120);
+            var rootX = rect.X + (rect.Width - rootW) / 2;
+            var rootY = areaTop + nodePad;
+            var rootRect = new Rect(rootX, rootY, rootW, nodeH);
+            context.FillRectangle(SmartArtNodeFills[0], rootRect);
+            DrawSmartArtNodeText(context, roots.Length > 0 ? roots[0] : string.Empty, rootRect);
+
+            if (children.Length > 0)
+            {
+                var childW  = Math.Min((areaW - (children.Length - 1) * connGap) / children.Length, 90);
+                var childY  = rootY + nodeH + connGap * 2;
+                var totalChildW = childW * children.Length + connGap * (children.Length - 1);
+                var childStartX = rect.X + (rect.Width - totalChildW) / 2;
+
+                // Vertical line from root to child row.
+                var midRootX = rootX + rootW / 2;
+                context.DrawLine(SmartArtConnectPen, new Point(midRootX, rootY + nodeH), new Point(midRootX, childY - connGap));
+                // Horizontal line across child tops.
+                if (children.Length > 1)
+                {
+                    context.DrawLine(SmartArtConnectPen,
+                        new Point(childStartX + childW / 2, childY - connGap),
+                        new Point(childStartX + (children.Length - 1) * (childW + connGap) + childW / 2, childY - connGap));
+                }
+
+                for (var ci = 0; ci < children.Length; ci++)
+                {
+                    var cx = childStartX + ci * (childW + connGap);
+                    var childRect = new Rect(cx, childY, childW, nodeH);
+                    var fill = SmartArtNodeFills[(ci + 1) % SmartArtNodeFills.Length];
+                    context.FillRectangle(fill, childRect);
+                    DrawSmartArtNodeText(context, children[ci], childRect);
+                    // Vertical drop line from horizontal bus to child.
+                    context.DrawLine(SmartArtConnectPen,
+                        new Point(cx + childW / 2, childY - connGap),
+                        new Point(cx + childW / 2, childY));
+                }
+            }
+        }
+        else
+        {
+            // List / Process: horizontal row of boxes with right-arrow connectors.
+            var count  = sd.NodeTexts.Count;
+            var arrows = sd.Kind == SmartArtKind.Process ? count - 1 : 0;
+            var arrowW = 12.0;
+            var totalArrowW = arrows * (arrowW + 2);
+            var boxW = Math.Max(24, (areaW - totalArrowW - 2 * nodePad) / count);
+            var boxY = areaTop + (areaH - nodeH) / 2;
+
+            var bx = rect.X + nodePad;
+            for (var ni = 0; ni < count; ni++)
+            {
+                var nodeRect = new Rect(bx, boxY, boxW, nodeH);
+                var fill = SmartArtNodeFills[ni % SmartArtNodeFills.Length];
+                context.FillRectangle(fill, nodeRect);
+                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect);
+                bx += boxW;
+
+                // Arrow connector between process nodes.
+                if (sd.Kind == SmartArtKind.Process && ni < count - 1)
+                {
+                    var arrowMidY = boxY + nodeH / 2;
+                    var arrowX1   = bx + 2;
+                    var arrowX2   = arrowX1 + arrowW;
+                    var arrowPen  = new Pen(SmartArtNodeFills[ni % SmartArtNodeFills.Length], 1.5);
+                    context.DrawLine(arrowPen, new Point(arrowX1, arrowMidY), new Point(arrowX2, arrowMidY));
+                    // Arrow head.
+                    context.DrawLine(arrowPen, new Point(arrowX2, arrowMidY), new Point(arrowX2 - 4, arrowMidY - 3));
+                    context.DrawLine(arrowPen, new Point(arrowX2, arrowMidY), new Point(arrowX2 - 4, arrowMidY + 3));
+                    bx += arrowW + 2;
+                }
+            }
+        }
+    }
+
+    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = "#FFFFFF", Bold = true };
+        var ft  = Build(text.Length > 12 ? text[..12] + "…" : text, fmt);
+        var tx  = nodeRect.X + Math.Max(2, (nodeRect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
+        var ty  = nodeRect.Y + Math.Max(0, (nodeRect.Height - ft.Height) / 2);
+        using (context.PushClip(nodeRect))
+            context.DrawText(ft, new Point(tx, ty));
+    }
+
+    /// <summary>
+    /// Renders a floating drawing group by composing the group placement with each child's offset
+    /// and dispatching to the child-type-specific draw method. Z-order within the group follows child
+    /// list order (no per-child z-order on the DrawingGroup model — children are always painted front-to-back).
+    /// </summary>
+    private void DrawFloatingGroup(DrawingContext context, FloatingGroupData gd)
+    {
+        // Optional: thin dashed group bounding frame for debuggability.
+        context.DrawRectangle(null,
+            new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x44, 0x44, 0x44)), 0.5,
+                new DashStyle([2, 2], 0)),
+            gd.Rect);
+
+        foreach (var child in gd.Children)
+        {
+            switch (child.Kind)
+            {
+                case FloatingGroupChildData.ChildKind.Image:
+                    DrawFloatingImage(context, child.Rect, child.Bitmap);
+                    break;
+
+                case FloatingGroupChildData.ChildKind.Shape when child.Shape is { } sd:
+                    DrawFloatingShape(context, sd);
+                    break;
+
+                case FloatingGroupChildData.ChildKind.Chart when child.Chart is { } cd:
+                    DrawFloatingChart(context, cd);
+                    break;
+
+                case FloatingGroupChildData.ChildKind.WordArt when child.WordArt is { } wd:
+                    DrawFloatingWordArt(context, wd);
+                    break;
+
+                case FloatingGroupChildData.ChildKind.SmartArt when child.SmartArt is { } sasd:
+                    DrawFloatingSmartArt(context, sasd);
+                    break;
+            }
+        }
     }
 }

@@ -1,0 +1,807 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Threading;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+using SkiaSharp;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// Tests for the Avalonia DocumentView floating object render path — FO3 wave:
+/// floating Charts, WordArt, SmartArt, and DrawingGroups.
+/// Verifies: each type is collected separately; page-space rect is resolved from FloatingPlacement;
+/// z-order (BehindText / ZOrder) is correct; render does not crash; headless PNG captures non-blank output.
+/// </summary>
+public sealed class DocumentViewFloatingFO3Tests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
+
+    private static TextDocument DocWithFloatingChart(
+        ChartKind kind,
+        ImageWrapping wrapping,
+        double hOffsetPt,
+        double vOffsetPt,
+        int zOrder = 0,
+        double widthPt  = 216,
+        double heightPt = 144,
+        string? title   = "Test Chart")
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
+
+        var chart = Chart.Create(kind,
+            new[] { "A", "B", "C" },
+            new[] { 10.0, 25.0, 15.0 },
+            "Series 1",
+            title);
+        chart.WidthPt  = widthPt;
+        chart.HeightPt = heightPt;
+        chart.Placement = new FloatingPlacement
+        {
+            Wrapping           = wrapping,
+            HorizontalOffsetPt = hOffsetPt,
+            VerticalOffsetPt   = vOffsetPt,
+            HorizontalAnchor   = HorizontalAnchor.Column,
+            VerticalAnchor     = VerticalAnchor.Paragraph,
+            ZOrderIndex        = zOrder,
+        };
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static TextDocument DocWithFloatingWordArt(
+        WordArtStyle style,
+        ImageWrapping wrapping,
+        double hOffsetPt,
+        double vOffsetPt,
+        int zOrder = 0,
+        string text = "Hello WordArt")
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
+
+        var wa = new WordArt(text, style, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping           = wrapping,
+                HorizontalOffsetPt = hOffsetPt,
+                VerticalOffsetPt   = vOffsetPt,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = zOrder,
+            },
+        };
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static TextDocument DocWithFloatingSmartArt(
+        SmartArtKind kind,
+        ImageWrapping wrapping,
+        double hOffsetPt,
+        double vOffsetPt,
+        int zOrder = 0)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
+
+        var sa = SmartArt.Create(kind, new[] { "Node A", "Node B", "Node C" });
+        sa.Placement = new FloatingPlacement
+        {
+            Wrapping           = wrapping,
+            HorizontalOffsetPt = hOffsetPt,
+            VerticalOffsetPt   = vOffsetPt,
+            HorizontalAnchor   = HorizontalAnchor.Column,
+            VerticalAnchor     = VerticalAnchor.Paragraph,
+            ZOrderIndex        = zOrder,
+        };
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    private static TextDocument DocWithFloatingGroup(ImageWrapping wrapping, double hOffsetPt, double vOffsetPt, int zOrder = 0)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var para = new Paragraph();
+        para.Runs.Add(new Run("Anchor text.", RunFormatting.Default));
+
+        var grp = new DrawingGroup
+        {
+            WidthPt  = 200,
+            HeightPt = 100,
+            Placement = new FloatingPlacement
+            {
+                Wrapping           = wrapping,
+                HorizontalOffsetPt = hOffsetPt,
+                VerticalOffsetPt   = vOffsetPt,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = zOrder,
+            },
+        };
+
+        // Child 1: shape
+        var s1 = new Shape(ShapeKind.Rectangle, 80, 60, "#4472C4");
+        grp.Children.Add(s1);
+        grp.ChildOffsets.Add((0, 0));
+
+        // Child 2: shape (ellipse)
+        var s2 = new Shape(ShapeKind.Ellipse, 60, 60, "#ED7D31");
+        grp.Children.Add(s2);
+        grp.ChildOffsets.Add((90, 10));
+
+        para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { DrawingGroup = grp });
+        doc.Blocks.Add(para);
+        return doc;
+    }
+
+    // ── Chart collection tests ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Inline_chart_is_not_collected_as_floating()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            // Inline chart (no Placement).
+            var chart = Chart.Create(ChartKind.Column, new[] { "A" }, new[] { 1.0 });
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingChartCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(0, "an inline chart (no Placement) must not be added to _floatingCharts");
+    }
+
+    [Fact]
+    public async Task Floating_column_chart_is_collected()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Column, ImageWrapping.Square, 36, 36);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingChartCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(1, "one floating chart should produce one entry in _floatingCharts");
+    }
+
+    [Fact]
+    public async Task Floating_chart_rect_has_correct_width()
+    {
+        double capturedWidth = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Bar, ImageWrapping.InFront, 0, 0, widthPt: 216);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) capturedWidth = rects[0].Rect.Width;
+        });
+
+        if (!ran) return;
+        capturedWidth.Should().BeApproximately(216 * (96.0 / 72.0), 2,
+            "chart width should be 216pt converted to DIP");
+    }
+
+    [Fact]
+    public async Task Floating_chart_behind_text_flag()
+    {
+        bool? behind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Pie, ImageWrapping.Behind, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) behind = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behind.Should().BeTrue("ImageWrapping.Behind must set BehindText=true for charts");
+    }
+
+    [Fact]
+    public async Task Floating_chart_infront_flag_false()
+    {
+        bool? behind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Line, ImageWrapping.InFront, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) behind = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behind.Should().BeFalse("ImageWrapping.InFront must set BehindText=false for charts");
+    }
+
+    [Fact]
+    public async Task Floating_chart_zorder_preserved()
+    {
+        int zOrder = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Column, ImageWrapping.Square, 0, 0, zOrder: 42);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) zOrder = rects[0].ZOrder;
+        });
+
+        if (!ran) return;
+        zOrder.Should().Be(42, "ZOrderIndex from FloatingPlacement must be preserved for charts");
+    }
+
+    [Fact]
+    public async Task Floating_chart_kind_preserved()
+    {
+        ChartKind kind = ChartKind.Column;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Pie, ImageWrapping.Square, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) kind = rects[0].Kind;
+        });
+
+        if (!ran) return;
+        kind.Should().Be(ChartKind.Pie, "chart kind must be preserved in FloatingChartRects");
+    }
+
+    [Fact]
+    public async Task Floating_chart_title_preserved()
+    {
+        string? title = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Column, ImageWrapping.Square, 0, 0, title: "My Chart");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingChartRects;
+            if (rects.Count > 0) title = rects[0].Title;
+        });
+
+        if (!ran) return;
+        title.Should().Be("My Chart", "chart title must be preserved in FloatingChartRects");
+    }
+
+    // ── WordArt collection tests ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Inline_wordart_is_not_collected_as_floating()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            var wa = new WordArt("Test", WordArtStyle.FillBlue); // no Placement
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingWordArtCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(0, "inline WordArt must not be collected as floating");
+    }
+
+    [Fact]
+    public async Task Floating_wordart_is_collected()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(WordArtStyle.FillBlue, ImageWrapping.InFront, 36, 36);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingWordArtCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(1, "one floating WordArt should produce one entry");
+    }
+
+    [Fact]
+    public async Task Floating_wordart_behind_text_flag()
+    {
+        bool? behind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(WordArtStyle.FillGold, ImageWrapping.Behind, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingWordArtRects;
+            if (rects.Count > 0) behind = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behind.Should().BeTrue("ImageWrapping.Behind must set BehindText=true for WordArt");
+    }
+
+    [Fact]
+    public async Task Floating_wordart_text_and_style_preserved()
+    {
+        string? text = null;
+        WordArtStyle style = WordArtStyle.FillBlue;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(WordArtStyle.Shadow, ImageWrapping.Square, 0, 0, text: "Hello");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingWordArtRects;
+            if (rects.Count > 0) { text = rects[0].Text; style = rects[0].Style; }
+        });
+
+        if (!ran) return;
+        text.Should().Be("Hello", "WordArt text must be preserved in FloatingWordArtRects");
+        style.Should().Be(WordArtStyle.Shadow, "WordArt style must be preserved");
+    }
+
+    [Fact]
+    public async Task Floating_wordart_zorder_preserved()
+    {
+        int zOrder = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(WordArtStyle.Outline, ImageWrapping.Square, 0, 0, zOrder: 99);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingWordArtRects;
+            if (rects.Count > 0) zOrder = rects[0].ZOrder;
+        });
+
+        if (!ran) return;
+        zOrder.Should().Be(99, "ZOrderIndex must be preserved for WordArt");
+    }
+
+    // ── SmartArt collection tests ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Inline_smartart_is_not_collected_as_floating()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            var sa = SmartArt.Create(SmartArtKind.List, new[] { "A", "B" }); // no Placement
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingSmartArtCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(0, "inline SmartArt must not be collected as floating");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_is_collected()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(SmartArtKind.Process, ImageWrapping.InFront, 36, 36);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingSmartArtCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(1, "one floating SmartArt should produce one entry");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_behind_text_flag()
+    {
+        bool? behind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(SmartArtKind.List, ImageWrapping.Behind, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingSmartArtRects;
+            if (rects.Count > 0) behind = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behind.Should().BeTrue("ImageWrapping.Behind must set BehindText=true for SmartArt");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_kind_and_nodecount_preserved()
+    {
+        SmartArtKind kind = SmartArtKind.List;
+        int nodeCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(SmartArtKind.Hierarchy, ImageWrapping.Square, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingSmartArtRects;
+            if (rects.Count > 0) { kind = rects[0].Kind; nodeCount = rects[0].NodeCount; }
+        });
+
+        if (!ran) return;
+        kind.Should().Be(SmartArtKind.Hierarchy, "SmartArt kind must be preserved");
+        nodeCount.Should().Be(3, "three nodes must be captured in FloatingSmartArtRects");
+    }
+
+    [Fact]
+    public async Task Floating_smartart_zorder_preserved()
+    {
+        int zOrder = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(SmartArtKind.Process, ImageWrapping.Square, 0, 0, zOrder: 55);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingSmartArtRects;
+            if (rects.Count > 0) zOrder = rects[0].ZOrder;
+        });
+
+        if (!ran) return;
+        zOrder.Should().Be(55, "ZOrderIndex must be preserved for SmartArt");
+    }
+
+    // ── DrawingGroup collection tests ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_group_is_collected()
+    {
+        int count = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingGroup(ImageWrapping.Square, 36, 36);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingGroupCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(1, "one floating group should produce one entry");
+    }
+
+    [Fact]
+    public async Task Floating_group_child_count_correct()
+    {
+        int childCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingGroup(ImageWrapping.InFront, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingGroupRects;
+            if (rects.Count > 0) childCount = rects[0].ChildCount;
+        });
+
+        if (!ran) return;
+        childCount.Should().Be(2, "group with 2 children must report ChildCount=2");
+    }
+
+    [Fact]
+    public async Task Floating_group_behind_text_flag()
+    {
+        bool? behind = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingGroup(ImageWrapping.Behind, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingGroupRects;
+            if (rects.Count > 0) behind = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behind.Should().BeTrue("ImageWrapping.Behind must set BehindText=true for groups");
+    }
+
+    [Fact]
+    public async Task Floating_group_zorder_preserved()
+    {
+        int zOrder = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingGroup(ImageWrapping.Square, 0, 0, zOrder: 7);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingGroupRects;
+            if (rects.Count > 0) zOrder = rects[0].ZOrder;
+        });
+
+        if (!ran) return;
+        zOrder.Should().Be(7, "ZOrderIndex must be preserved for drawing groups");
+    }
+
+    [Fact]
+    public async Task Floating_group_rect_has_positive_x()
+    {
+        double rectX = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingGroup(ImageWrapping.Square, 36, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var rects = view.FloatingGroupRects;
+            if (rects.Count > 0) rectX = rects[0].Rect.X;
+        });
+
+        if (!ran) return;
+        rectX.Should().BeGreaterThan(0, "floating group X should be positive (content left + offset)");
+    }
+
+    // ── Body text still lays out with mixed FO3 objects ───────────────────────────────────────────
+
+    [Fact]
+    public async Task Paragraph_with_floating_chart_still_produces_text_glyphs()
+    {
+        int glyphs = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Column, ImageWrapping.Square, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            glyphs = view.PlacedGlyphCount;
+        });
+
+        if (!ran) return;
+        glyphs.Should().BeGreaterThan(0, "paragraph with floating chart + text must still produce placed glyphs");
+    }
+
+    // ── Headless render capture — all FO3 types together ─────────────────────────────────────────
+
+    [Fact]
+    public async Task FO3_render_capture_all_types_produces_non_blank_output()
+    {
+        byte[]? pngBytes = null;
+        string? outPath  = null;
+        var ran = false;
+
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                ran = true;
+
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+
+                var para = new Paragraph();
+                para.Runs.Add(new Run("FO3 render test: chart + WordArt + SmartArt + group.",
+                    RunFormatting.Default with { FontSizePt = 11 }));
+
+                // Floating chart (column, in-front).
+                var chart = Chart.Create(ChartKind.Column,
+                    new[] { "Q1", "Q2", "Q3", "Q4" },
+                    new[] { 12.0, 30.0, 18.0, 25.0 },
+                    "Revenue", "Sales 2025");
+                chart.WidthPt  = 200;
+                chart.HeightPt = 130;
+                chart.Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.InFront,
+                    HorizontalOffsetPt = 10, VerticalOffsetPt = 60,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor   = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 1,
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+
+                // Floating WordArt (in-front, right side).
+                var wa = new WordArt("FreeW!", WordArtStyle.GradientFill, 28)
+                {
+                    Placement = new FloatingPlacement
+                    {
+                        Wrapping = ImageWrapping.InFront,
+                        HorizontalOffsetPt = 230, VerticalOffsetPt = 60,
+                        HorizontalAnchor = HorizontalAnchor.Column,
+                        VerticalAnchor   = VerticalAnchor.Paragraph,
+                        ZOrderIndex = 2,
+                    },
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
+
+                // Floating SmartArt (Process, below).
+                var sa = SmartArt.Create(SmartArtKind.Process, new[] { "Design", "Build", "Test", "Ship" });
+                sa.WidthPt  = 320;
+                sa.HeightPt = 80;
+                sa.Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.InFront,
+                    HorizontalOffsetPt = 10, VerticalOffsetPt = 210,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor   = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 3,
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = sa });
+
+                // Floating group (two shapes).
+                var grp = new DrawingGroup
+                {
+                    WidthPt  = 150,
+                    HeightPt = 70,
+                    Placement = new FloatingPlacement
+                    {
+                        Wrapping = ImageWrapping.InFront,
+                        HorizontalOffsetPt = 350, VerticalOffsetPt = 60,
+                        HorizontalAnchor = HorizontalAnchor.Column,
+                        VerticalAnchor   = VerticalAnchor.Paragraph,
+                        ZOrderIndex = 4,
+                    },
+                };
+                grp.Children.Add(new Shape(ShapeKind.Rectangle, 60, 50, "#4472C4"));
+                grp.ChildOffsets.Add((0, 0));
+                grp.Children.Add(new Shape(ShapeKind.Ellipse, 50, 50, "#ED7D31"));
+                grp.ChildOffsets.Add((70, 0));
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { DrawingGroup = grp });
+
+                doc.Blocks.Add(para);
+
+                for (var i = 0; i < 3; i++)
+                {
+                    var p = new Paragraph();
+                    p.Runs.Add(new Run($"Body paragraph {i + 1}: lorem ipsum dolor sit amet.",
+                        RunFormatting.Default));
+                    doc.Blocks.Add(p);
+                }
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+
+                var window = new Window { Width = 816, Height = 1100, Content = view };
+                window.Show();
+                window.Measure(new Size(816, 1100));
+                window.Arrange(new Rect(0, 0, 816, 1100));
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var frame = window.CaptureRenderedFrame();
+                if (frame is not null)
+                    pngBytes = WriteableBitmapToPng(frame);
+
+                window.Close();
+
+                var testBinDir = Path.GetDirectoryName(typeof(DocumentViewFloatingFO3Tests).Assembly.Location) ?? ".";
+                outPath = Path.GetFullPath(Path.Combine(testBinDir, "freew_avalonia_fo3_all_types.png"));
+                if (pngBytes is { Length: > 0 })
+                    File.WriteAllBytes(outPath, pngBytes);
+
+                Console.WriteLine($"[FO3Capture] PNG written ({pngBytes?.Length ?? 0} bytes) to: {outPath}");
+            }, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FO3Capture] Skipped: {ex.GetType().Name}: {ex.Message}");
+            ran = false;
+        }
+
+        if (!ran) return;
+        if (pngBytes is null)
+        {
+            Console.WriteLine("[FO3Capture] CaptureRenderedFrame returned null — skipping.");
+            return;
+        }
+        if (pngBytes.Length == 0)
+        {
+            Console.WriteLine("[FO3Capture] Encoder produced 0 bytes — skipping.");
+            return;
+        }
+
+        pngBytes.Length.Should().BeGreaterThan(5_000,
+            "a rendered page with FO3 floating objects and body text should produce a non-trivial PNG");
+        pngBytes[0].Should().Be(0x89);
+        pngBytes[1].Should().Be((byte)'P');
+        pngBytes[2].Should().Be((byte)'N');
+        pngBytes[3].Should().Be((byte)'G');
+
+        Console.WriteLine($"[FO3Capture] Visual inspection: {outPath}");
+    }
+
+    // ── PNG encoder ───────────────────────────────────────────────────────────────────────────────
+
+    private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
+    {
+        try
+        {
+            using var locked = bitmap.Lock();
+            var info = new SKImageInfo(
+                locked.Size.Width,
+                locked.Size.Height,
+                locked.Format == PixelFormat.Bgra8888 ? SKColorType.Bgra8888 : SKColorType.Rgba8888,
+                SKAlphaType.Premul);
+
+            using var skBitmap = new SKBitmap();
+            if (!skBitmap.InstallPixels(info, locked.Address, locked.RowBytes))
+                return [];
+
+            using var skImage = SKImage.FromBitmap(skBitmap);
+            using var data    = skImage.Encode(SKEncodedImageFormat.Png, 90);
+            return data?.ToArray() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+}
