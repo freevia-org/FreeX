@@ -2465,14 +2465,6 @@ public sealed class DocumentView : Control
 
         while (i < cells.Count)
         {
-            // AV-TAB: resolve tab advance lazily at the wrapping loop so measured[] reflects the
-            // actual pen position at the time each tab is encountered on its line.
-            if (cells[i].Ch == '\t')
-                measured[i] = ComputeTabMeasuredWidth(lineWidth, pf, defaultTabPx);
-
-            if (cells[i].Ch == ' ')
-                lastBreak = i;
-
             // OO2/OO3 fix: for each line compute how much of availableWidth is consumed by
             // the per-line left indent BEYOND paraLeftInset.  The wrapping budget (lineAvail)
             // is already reduced for the first-line positive indent; hanging-indent continuation
@@ -2481,8 +2473,21 @@ public sealed class DocumentView : Control
             //   • line 0 + positive first-line indent  → indentFirst  (normal first-line indent)
             //   • line > 0 + hanging indent (negative) → -indentFirst (continuation shifted right)
             //   • everything else                      → 0
+            // BP1 fix: moved BEFORE the tab check so the full margin-relative pen offset
+            // (lineWidth + paraLeftInset + lineExtraInset) is available for ComputeTabMeasuredWidth.
             var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+
+            // AV-TAB: resolve tab advance lazily at the wrapping loop so measured[] reflects the
+            // actual pen position at the time each tab is encountered on its line.
+            // BP1 fix: pass pen position from the MARGIN (lineWidth + full indent) so tab stops
+            // compare against OOXML positions (margin-relative), not the indented text origin.
+            if (cells[i].Ch == '\t')
+                measured[i] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + lineExtraInset, pf, defaultTabPx);
+
+            if (cells[i].Ch == ' ')
+                lastBreak = i;
+
             // Effective alignment / wrap width for this line so the right edge always lands at
             // the right margin regardless of indent variant.
             var lineAlignWidth = availableWidth - lineExtraInset;
@@ -2506,10 +2511,13 @@ public sealed class DocumentView : Control
                 lastBreak = -1;
                 // AV-TAB: recompute tab widths in the partial accumulation so they use the
                 // new line's pen position (tabs reset to a fresh pen at the new lineStart).
+                // BP1 fix: the new lineIndex may change lineExtraInset — recompute it now.
+                var newLineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                       (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
                 for (var k = lineStart; k < i; k++)
                 {
                     if (cells[k].Ch == '\t')
-                        measured[k] = ComputeTabMeasuredWidth(lineWidth, pf, defaultTabPx);
+                        measured[k] = ComputeTabMeasuredWidth(lineWidth + paraLeftInset + newLineExtraInset, pf, defaultTabPx);
                     lineWidth += measured[k];
                 }
             }
@@ -2628,6 +2636,14 @@ public sealed class DocumentView : Control
         // Content origin: absolute left edge where pen-position 0 begins (before alignment offset).
         // Tab stops are measured from this origin, not from the alignment-shifted x.
         var contentOriginX = colLeft + effectiveLeftInset;
+
+        // BP1 fix: OOXML w:tab/@w:pos is measured from the LEFT MARGIN (colLeft), not from the
+        // indented paragraph origin.  Ruler.cs confirms: tab markers are placed at
+        //   contentStart + PointsToDip(tab.PositionPt)
+        // where contentStart = pageX + MarginLeft (excludes IndentLeftPt).
+        // So the tab-stop coordinate origin is colLeft + wrapLeftDelta, NOT contentOriginX.
+        // effectiveLeftInset = leftInset + wrapLeftDelta  →  tabOriginX = contentOriginX - leftInset.
+        var tabOriginX = contentOriginX - leftInset;
         var alignOffset    = AlignmentOffset(alignment, effectiveWidth, lineWidth, isLast);
 
         // For lines without tabs, keep the existing simple path (no extra overhead).
@@ -2661,8 +2677,9 @@ public sealed class DocumentView : Control
         {
             if (cells[c].Ch == '\t')
             {
-                // AV-TAB: resolve the tab stop at the CURRENT pen position (relative to content origin).
-                var penPosInLine = x - contentOriginX;
+                // AV-TAB / BP1 fix: pen position and tab stops are relative to the margin origin
+                // (tabOriginX = colLeft + wrapLeftDelta), NOT the indented content origin.
+                var penPosInLine = x - tabOriginX;
                 var (stopDip, stopAlign, leader) = ResolveBodyTabStop(penPosInLine, pf, lineDefaultTabPx);
 
                 // Compute the advance: for left tabs this is straightforward.
@@ -2679,7 +2696,8 @@ public sealed class DocumentView : Control
                 }
 
                 // Target X in page space where the segment should land.
-                var stopPageX = contentOriginX + stopDip;
+                // BP1 fix: use tabOriginX (margin-relative) not contentOriginX (indent-relative).
+                var stopPageX = tabOriginX + stopDip;
                 double segmentStartX = stopAlign switch
                 {
                     TabStopAlignment.Center  => stopPageX - segmentWidth / 2,
@@ -2774,8 +2792,11 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Resolves the next tab stop for a body paragraph given the pen's current X position
-    /// <paramref name="penPosInLine"/> (measured from the <em>paragraph content origin</em>
-    /// — i.e. colLeft + effectiveLeftInset) in DIPs.
+    /// <paramref name="penPosInLine"/> measured from the <em>left margin / column left</em>
+    /// (i.e. tabOriginX = colLeft + wrapLeftDelta, NOT the indented paragraph origin).
+    /// This matches the OOXML <c>w:tab/@w:pos</c> coordinate system (positions measured from
+    /// the page margin) and the WPF Ruler which places tab markers at
+    /// <c>contentStart + PointsToDip(tab.PositionPt)</c> where contentStart excludes IndentLeftPt.
     /// <list type="bullet">
     ///   <item>Scans explicit <see cref="ParagraphFormatting.TabStops"/> (sorted by position) for
     ///     the first stop whose position (in DIP) is strictly greater than <paramref name="penPosInLine"/>.</item>
@@ -2783,7 +2804,7 @@ public sealed class DocumentView : Control
     ///     (<see cref="TextDocument.Page"/>/<see cref="PageSettings.DefaultTabStopPt"/>, default 36pt /
     ///     0.5").</item>
     /// </list>
-    /// Returns the resolved stop position <em>in DIPs from the paragraph content origin</em>,
+    /// Returns the resolved stop position <em>in DIPs from the margin/column left</em>,
     /// the stop alignment, and the leader fill kind.
     /// </summary>
     private static (double StopPosDip, TabStopAlignment Alignment, TabLeader Leader)
@@ -2805,8 +2826,10 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Computes the measured width to assign to a <c>\t</c> cell in <see cref="LayoutParagraphPaged"/>'s
-    /// wrapping loop.  The advance is from the current pen (<paramref name="penPosInLine"/>) to the
-    /// resolved stop, clamped to at least 1 px so the caret is always selectable.
+    /// wrapping loop.  <paramref name="penPosInLine"/> must be the pen distance from the
+    /// <em>left margin / column left</em> (i.e. lineWidth + paraLeftInset + lineExtraInset),
+    /// matching the coordinate system of <see cref="ResolveBodyTabStop"/>.
+    /// The advance is from the current pen to the resolved stop, clamped to at least 1 px.
     /// </summary>
     private static double ComputeTabMeasuredWidth(double penPosInLine, ParagraphFormatting pf, double defaultTabIntervalPx)
     {
