@@ -4250,6 +4250,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderInsideHorizontalToggle\"");
         source.Should().Contain("\"FormatCellsBorderInsideVerticalToggle\"");
         source.Should().Contain("\"FormatCellsBorderPreview\"");
+        // Per-edge "Individual border details": each outer edge has its OWN style box + color picker.
+        source.Should().Contain("\"FormatCellsBorderTopStyleBox\"");
+        source.Should().Contain("\"FormatCellsBorderTopColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderRightStyleBox\"");
+        source.Should().Contain("\"FormatCellsBorderRightColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderBottomStyleBox\"");
+        source.Should().Contain("\"FormatCellsBorderBottomColorBox\"");
+        source.Should().Contain("\"FormatCellsBorderLeftStyleBox\"");
+        source.Should().Contain("\"FormatCellsBorderLeftColorBox\"");
         source.Should().Contain("\"FormatCellsFontPreview\"");
         source.Should().Contain("\"FormatCellsFillPreview\"");
         source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
@@ -4272,6 +4281,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("BorderRight: borderRightSide");
         source.Should().Contain("BorderBottom: borderBottomSide");
         source.Should().Contain("BorderLeft: borderLeftSide");
+        // Each outer edge reads ITS OWN per-edge style box + color picker (not the shared Line).
+        source.Should().Contain("var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox);");
+        source.Should().Contain("var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox);");
+        source.Should().Contain("var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox);");
+        source.Should().Contain("var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox);");
+        // A real style => CellBorder with that edge's color; "None" => null (no border).
+        source.Should().Contain("CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox) =>");
+        source.Should().Contain("EdgeStyle(styleBox) is { } style ? new CellBorder(style, EdgeColor(colorBox)) : null;");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");

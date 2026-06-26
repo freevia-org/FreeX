@@ -11194,9 +11194,11 @@ public sealed partial class MainWindow : Window
             // Wider (matches Windows ~690px) so the Border tab's three side-by-side groups
             // (Presets / Line style list / Border diagram) fit without clipping.
             Width = 690,
-            Height = 560,
+            // Taller so the Border tab's per-edge "Individual border details" grid
+            // (Top/Right/Bottom/Left style + color rows) fits below the diagram without scrolling.
+            Height = 660,
             MinWidth = 620,
-            MinHeight = 500,
+            MinHeight = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -11643,6 +11645,45 @@ public sealed partial class MainWindow : Window
         var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
         var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
 
+        // Per-edge "Individual border details": each outer edge (Top/Right/Bottom/Left) gets its
+        // OWN style ComboBox (a "None" entry + the BorderStyle values) and its OWN color picker, so
+        // every edge can carry an independent Style + Color into FormatCellsCompactRequest (mirrors
+        // Excel's "Individual border details" grid). These are the source of truth read in Accept();
+        // the diagram toggles + Line group stay in two-way sync with them below.
+        var borderEdgeStyleChoices = CreateFormatCellsBorderStyleListChoices();
+        ComboBox CreateBorderEdgeStyleBox(string automationId)
+        {
+            var box = new ComboBox
+            {
+                ItemsSource = borderEdgeStyleChoices,
+                SelectedIndex = 0, // "None"
+                MinWidth = 150,
+                Width = 150,
+            };
+            AutomationProperties.SetAutomationId(box, automationId);
+            ApplyDialogComboBoxChrome(box);
+            return box;
+        }
+        var borderTopStyleBox = CreateBorderEdgeStyleBox("FormatCellsBorderTopStyleBox");
+        var borderRightStyleBox = CreateBorderEdgeStyleBox("FormatCellsBorderRightStyleBox");
+        var borderBottomStyleBox = CreateBorderEdgeStyleBox("FormatCellsBorderBottomStyleBox");
+        var borderLeftStyleBox = CreateBorderEdgeStyleBox("FormatCellsBorderLeftStyleBox");
+
+        FormatCellsColorPicker CreateBorderEdgeColorBox(string automationId)
+        {
+            var box = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
+            box.MinWidth = 120;
+            AutomationProperties.SetAutomationId(box, automationId);
+            return box;
+        }
+        var borderTopColorBox = CreateBorderEdgeColorBox("FormatCellsBorderTopColorBox");
+        var borderRightColorBox = CreateBorderEdgeColorBox("FormatCellsBorderRightColorBox");
+        var borderBottomColorBox = CreateBorderEdgeColorBox("FormatCellsBorderBottomColorBox");
+        var borderLeftColorBox = CreateBorderEdgeColorBox("FormatCellsBorderLeftColorBox");
+
+        // Re-entrancy guard so diagram-toggle <-> per-edge-style two-way sync doesn't loop.
+        var borderSyncing = false;
+
         var borderPreview = new Border
         {
             Width = 96,
@@ -11670,19 +11711,48 @@ public sealed partial class MainWindow : Window
                 : BorderStyle.Thin;
         CellBorder SelectedBorderLine() => new(SelectedBorderLineStyle(), SelectedBorderLineColor());
 
+        // The real BorderStyle selected in an edge's style box, or null when the box is on "None".
+        static BorderStyle? EdgeStyle(ComboBox box) =>
+            box.SelectedItem is FormatCellsNullableChoice<BorderStyle> choice ? choice.Value : null;
+        // The color chosen in an edge's color picker, falling back to the shared Line color when unset.
+        CellColor EdgeColor(FormatCellsColorPicker box) =>
+            box.SelectedColor ?? SelectedBorderLineColor();
+        // Compose this edge's per-edge value: a CellBorder when the style box is a real style, else null.
+        CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox) =>
+            EdgeStyle(styleBox) is { } style ? new CellBorder(style, EdgeColor(colorBox)) : null;
+
+        // Select the "None"/style entry in an edge's style box by BorderStyle (null => None).
+        void SetEdgeStyle(ComboBox box, BorderStyle? style)
+        {
+            foreach (var choice in borderEdgeStyleChoices)
+            {
+                if (choice.Value == style)
+                {
+                    box.SelectedItem = choice;
+                    return;
+                }
+            }
+            box.SelectedIndex = 0;
+        }
+
         void RenderBorderPreview()
         {
             borderPreviewGrid.Children.Clear();
-            var line = SelectedBorderLine();
-            var brush = Brush(line.Color);
-            var thickness = FormatCellsBorderPreviewThickness(line.Style);
+            var insideLine = SelectedBorderLine();
+            var insideBrush = Brush(insideLine.Color);
+            var insideThickness = FormatCellsBorderPreviewThickness(insideLine.Style);
 
-            void AddEdge(double left, double top, double right, double bottom)
+            // Each outer edge draws with ITS OWN style + color (from the per-edge boxes); falls back to
+            // the shared Line selection for color so the swatch still reads when no edge color was picked.
+            void AddEdge(BorderStyle? style, IBrush brush, double left, double top, double right, double bottom)
             {
+                if (style is not { } edgeStyle)
+                    return;
+                var t = FormatCellsBorderPreviewThickness(edgeStyle);
                 var edge = new Border
                 {
                     BorderBrush = brush,
-                    BorderThickness = new Thickness(left, top, right, bottom),
+                    BorderThickness = new Thickness(left > 0 ? t : 0, top > 0 ? t : 0, right > 0 ? t : 0, bottom > 0 ? t : 0),
                     IsHitTestVisible = false,
                     [AvaloniaGrid.RowProperty] = 0,
                     [AvaloniaGrid.ColumnProperty] = 0,
@@ -11692,20 +11762,16 @@ public sealed partial class MainWindow : Window
                 borderPreviewGrid.Children.Add(edge);
             }
 
-            if (borderTopToggle.IsChecked == true)
-                AddEdge(0, thickness, 0, 0);
-            if (borderBottomToggle.IsChecked == true)
-                AddEdge(0, 0, 0, thickness);
-            if (borderLeftToggle.IsChecked == true)
-                AddEdge(thickness, 0, 0, 0);
-            if (borderRightToggle.IsChecked == true)
-                AddEdge(0, 0, thickness, 0);
+            AddEdge(EdgeStyle(borderTopStyleBox), Brush(EdgeColor(borderTopColorBox)), 0, 1, 0, 0);
+            AddEdge(EdgeStyle(borderBottomStyleBox), Brush(EdgeColor(borderBottomColorBox)), 0, 0, 0, 1);
+            AddEdge(EdgeStyle(borderLeftStyleBox), Brush(EdgeColor(borderLeftColorBox)), 1, 0, 0, 0);
+            AddEdge(EdgeStyle(borderRightStyleBox), Brush(EdgeColor(borderRightColorBox)), 0, 0, 1, 0);
             if (borderInsideVerticalToggle.IsChecked == true)
             {
                 borderPreviewGrid.Children.Add(new Border
                 {
-                    BorderBrush = brush,
-                    BorderThickness = new Thickness(thickness, 0, 0, 0),
+                    BorderBrush = insideBrush,
+                    BorderThickness = new Thickness(insideThickness, 0, 0, 0),
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
                     IsHitTestVisible = false,
                     [AvaloniaGrid.RowProperty] = 0,
@@ -11717,8 +11783,8 @@ public sealed partial class MainWindow : Window
             {
                 borderPreviewGrid.Children.Add(new Border
                 {
-                    BorderBrush = brush,
-                    BorderThickness = new Thickness(0, thickness, 0, 0),
+                    BorderBrush = insideBrush,
+                    BorderThickness = new Thickness(0, insideThickness, 0, 0),
                     VerticalAlignment = AvaloniaVerticalAlignment.Center,
                     IsHitTestVisible = false,
                     [AvaloniaGrid.RowProperty] = 1,
@@ -11728,14 +11794,82 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        // Toggle ON an outer edge => set its style box to the shared Line style + its color to the
+        // shared Line color; toggle OFF => set its style box to "None". Guarded against re-entrancy.
+        void SyncEdgeFromToggle(ToggleButton toggle, ComboBox styleBox, FormatCellsColorPicker colorBox)
+        {
+            if (borderSyncing)
+                return;
+            borderSyncing = true;
+            try
+            {
+                if (toggle.IsChecked == true)
+                {
+                    SetEdgeStyle(styleBox, SelectedBorderLineStyle());
+                    colorBox.SelectColor(SelectedBorderLineColor());
+                }
+                else
+                {
+                    SetEdgeStyle(styleBox, null);
+                }
+            }
+            finally
+            {
+                borderSyncing = false;
+            }
+            RenderBorderPreview();
+        }
+
+        // A real style in an edge's style box checks its diagram toggle; "None" unchecks it.
+        void SyncToggleFromEdge(ComboBox styleBox, ToggleButton toggle)
+        {
+            if (borderSyncing)
+                return;
+            borderSyncing = true;
+            try
+            {
+                toggle.IsChecked = EdgeStyle(styleBox) is not null;
+            }
+            finally
+            {
+                borderSyncing = false;
+            }
+            RenderBorderPreview();
+        }
+
         void SetBorderSidesChecked(bool top, bool bottom, bool left, bool right, bool insideHorizontal, bool insideVertical)
         {
-            borderTopToggle.IsChecked = top;
-            borderBottomToggle.IsChecked = bottom;
-            borderLeftToggle.IsChecked = left;
-            borderRightToggle.IsChecked = right;
-            borderInsideHorizontalToggle.IsChecked = insideHorizontal;
-            borderInsideVerticalToggle.IsChecked = insideVertical;
+            // Drive BOTH the diagram toggles and the per-edge style boxes consistently. An edge that is
+            // turned on adopts the current shared Line style/color; an edge turned off becomes "None".
+            borderSyncing = true;
+            try
+            {
+                var sharedStyle = SelectedBorderLineStyle();
+                var sharedColor = SelectedBorderLineColor();
+                void Apply(bool on, ToggleButton toggle, ComboBox styleBox, FormatCellsColorPicker colorBox)
+                {
+                    toggle.IsChecked = on;
+                    if (on)
+                    {
+                        SetEdgeStyle(styleBox, sharedStyle);
+                        colorBox.SelectColor(sharedColor);
+                    }
+                    else
+                    {
+                        SetEdgeStyle(styleBox, null);
+                    }
+                }
+                Apply(top, borderTopToggle, borderTopStyleBox, borderTopColorBox);
+                Apply(bottom, borderBottomToggle, borderBottomStyleBox, borderBottomColorBox);
+                Apply(left, borderLeftToggle, borderLeftStyleBox, borderLeftColorBox);
+                Apply(right, borderRightToggle, borderRightStyleBox, borderRightColorBox);
+                borderInsideHorizontalToggle.IsChecked = insideHorizontal;
+                borderInsideVerticalToggle.IsChecked = insideVertical;
+            }
+            finally
+            {
+                borderSyncing = false;
+            }
             RenderBorderPreview();
         }
 
@@ -11752,22 +11886,24 @@ public sealed partial class MainWindow : Window
         ApplyDialogButtonChrome(borderInsideButton);
         borderInsideButton.Click += (_, _) => SetBorderSidesChecked(false, false, false, false, true, true);
 
-        foreach (var toggle in new[]
-        {
-            borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle,
-            borderInsideHorizontalToggle, borderInsideVerticalToggle,
-        })
-        {
-            toggle.IsCheckedChanged += (_, _) => RenderBorderPreview();
-        }
+        // Two-way diagram-toggle <-> per-edge-style sync.
+        borderTopToggle.IsCheckedChanged += (_, _) => SyncEdgeFromToggle(borderTopToggle, borderTopStyleBox, borderTopColorBox);
+        borderBottomToggle.IsCheckedChanged += (_, _) => SyncEdgeFromToggle(borderBottomToggle, borderBottomStyleBox, borderBottomColorBox);
+        borderLeftToggle.IsCheckedChanged += (_, _) => SyncEdgeFromToggle(borderLeftToggle, borderLeftStyleBox, borderLeftColorBox);
+        borderRightToggle.IsCheckedChanged += (_, _) => SyncEdgeFromToggle(borderRightToggle, borderRightStyleBox, borderRightColorBox);
+        borderInsideHorizontalToggle.IsCheckedChanged += (_, _) => RenderBorderPreview();
+        borderInsideVerticalToggle.IsCheckedChanged += (_, _) => RenderBorderPreview();
+        borderTopStyleBox.SelectionChanged += (_, _) => SyncToggleFromEdge(borderTopStyleBox, borderTopToggle);
+        borderBottomStyleBox.SelectionChanged += (_, _) => SyncToggleFromEdge(borderBottomStyleBox, borderBottomToggle);
+        borderLeftStyleBox.SelectionChanged += (_, _) => SyncToggleFromEdge(borderLeftStyleBox, borderLeftToggle);
+        borderRightStyleBox.SelectionChanged += (_, _) => SyncToggleFromEdge(borderRightStyleBox, borderRightToggle);
+        borderTopColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        borderBottomColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        borderLeftColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+        borderRightColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
         borderStyleBox.SelectionChanged += (_, _) => RenderBorderPreview();
         borderColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
         RenderBorderPreview();
-
-        CellBorder? ReadBorderSide(ToggleButton toggle) =>
-            toggle.IsChecked == true
-                ? SelectedBorderLine()
-                : null;
 
         var lockedBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Locked"), "FormatCellsLockedBox", currentLocked);
         var hiddenBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Hidden"), "FormatCellsHiddenBox", currentHidden);
@@ -11850,10 +11986,10 @@ public sealed partial class MainWindow : Window
                 ? selectedBorderStyle
                 : BorderStyle.Thin;
             var borderColor = (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
-            var borderTopSide = ReadBorderSide(borderTopToggle);
-            var borderBottomSide = ReadBorderSide(borderBottomToggle);
-            var borderLeftSide = ReadBorderSide(borderLeftToggle);
-            var borderRightSide = ReadBorderSide(borderRightToggle);
+            var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox);
+            var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox);
+            var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox);
+            var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox);
             // Inner horizontal/vertical edges aren't single-cell StyleDiff edges; carry them via
             // the shared Inside preset (applied per-cell by the session) when no explicit preset
             // was chosen in the preset combo.
@@ -12164,8 +12300,48 @@ public sealed partial class MainWindow : Window
             Children = { borderPresetsGroup, borderLineGroup, borderGroup },
         };
 
-        // "Individual border details" row keeps the preset combo + live preview swatch so
-        // the borderPresetBox wiring (read in Accept as borderChoice) is preserved.
+        // "Individual border details": four labeled rows (Top / Right / Bottom / Left), each with a
+        // per-edge Style dropdown and a per-edge Color (R,G,B) picker — matching Excel's grid. The
+        // legacy preset combo is preserved above the grid as "Preset" so the borderPresetBox wiring
+        // (read in Accept as borderChoice) is unchanged.
+        var borderDetailsGrid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
+            ColumnSpacing = 10,
+            RowSpacing = 6,
+        };
+        void AddDetailHeader(string text, int column)
+        {
+            var header = new TextBlock { Text = text, FontWeight = FontWeight.SemiBold };
+            AvaloniaGrid.SetRow(header, 0);
+            AvaloniaGrid.SetColumn(header, column);
+            borderDetailsGrid.Children.Add(header);
+        }
+        AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Style")), 1);
+        AddDetailHeader(StripDisplayMnemonic(UiText.Get("FormatCells_Color")), 2);
+        void AddDetailRow(int row, string labelKey, ComboBox styleBox, FormatCellsColorPicker colorBox)
+        {
+            var label = new TextBlock
+            {
+                Text = StripDisplayMnemonic(UiText.Get(labelKey)) + ":",
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            AvaloniaGrid.SetRow(label, row);
+            AvaloniaGrid.SetColumn(label, 0);
+            borderDetailsGrid.Children.Add(label);
+            AvaloniaGrid.SetRow(styleBox, row);
+            AvaloniaGrid.SetColumn(styleBox, 1);
+            borderDetailsGrid.Children.Add(styleBox);
+            AvaloniaGrid.SetRow(colorBox, row);
+            AvaloniaGrid.SetColumn(colorBox, 2);
+            borderDetailsGrid.Children.Add(colorBox);
+        }
+        AddDetailRow(1, "FormatCells_Top", borderTopStyleBox, borderTopColorBox);
+        AddDetailRow(2, "FormatCells_Right", borderRightStyleBox, borderRightColorBox);
+        AddDetailRow(3, "FormatCells_Bottom", borderBottomStyleBox, borderBottomColorBox);
+        AddDetailRow(4, "FormatCells_Left", borderLeftStyleBox, borderLeftColorBox);
+
         var borderDetailsRow = new StackPanel
         {
             Spacing = 8,
@@ -12178,6 +12354,7 @@ public sealed partial class MainWindow : Window
                     FontWeight = FontWeight.SemiBold,
                 },
                 CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
+                borderDetailsGrid,
             },
         };
 
