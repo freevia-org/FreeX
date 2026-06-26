@@ -59,6 +59,11 @@ public sealed class MainWindow : Window
     private readonly FreePOptions _options;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
 
+    // ── Wave 10B: OS-clipboard service ────────────────────────────────────────────
+    // Created once; the renderer is injected so tests can replace it without real Clipboard.
+    private readonly OsClipboardService _osClipboard =
+        new OsClipboardService(new WpfOsClipboard(), new WpfShapeRenderer());
+
     // ── Model ─────────────────────────────────────────────────────────────────────
 
     private Presentation _presentation = Presentation.CreateEmpty();
@@ -146,7 +151,11 @@ public sealed class MainWindow : Window
             Editor,
             onStartFromStart:   () => StartSlideShow(true),
             onStartFromCurrent: () => StartSlideShow(false),
-            onEditChartData:    () => OpenChartDataDialog());
+            onEditChartData:    () => OpenChartDataDialog(),
+            // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
+            onCustomSlideSize:  () => OpenSlideSizeDialog(),
+            // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
+            osClipboard:        _osClipboard);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -445,18 +454,29 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(slideShowFromCurrent, (_, _) => StartSlideShow(fromStart: false)));
         InputBindings.Add(new KeyBinding(slideShowFromCurrent, new KeyGesture(Key.F5, ModifierKeys.Shift)));
 
-        // Wave 5B: Clipboard keyboard shortcuts (Ctrl+C / Ctrl+X / Ctrl+V).
-        // Routed through editor so they participate in the same undo bus as the ribbon buttons.
+        // Wave 5B / 10B: Clipboard keyboard shortcuts (Ctrl+C / Ctrl+X / Ctrl+V).
+        // Copy and Cut update both the internal clipboard (EditingSession) AND the OS clipboard
+        // (OsClipboardService) so shapes can be pasted into other apps.
+        // Paste checks OS clipboard first (image → picture, text → textbox) then internal.
         var copyCommand = new RoutedCommand("CopyShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(copyCommand, (_, _) => Editor.CopySelectedShapes()));
+        CommandBindings.Add(new CommandBinding(copyCommand, (_, _) =>
+        {
+            Editor.CopySelectedShapes();
+            _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+        }));
         InputBindings.Add(new KeyBinding(copyCommand, new KeyGesture(Key.C, ModifierKeys.Control)));
 
         var cutCommand = new RoutedCommand("CutShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(cutCommand, (_, _) => Editor.CutSelectedShapes()));
+        CommandBindings.Add(new CommandBinding(cutCommand, (_, _) =>
+        {
+            Editor.CutSelectedShapes();
+            _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+        }));
         InputBindings.Add(new KeyBinding(cutCommand, new KeyGesture(Key.X, ModifierKeys.Control)));
 
         var pasteCommand = new RoutedCommand("PasteShapes", typeof(MainWindow));
-        CommandBindings.Add(new CommandBinding(pasteCommand, (_, _) => Editor.Paste()));
+        CommandBindings.Add(new CommandBinding(pasteCommand, (_, _) =>
+            _osClipboard.Paste(Editor, preferOsClipboard: true)));
         InputBindings.Add(new KeyBinding(pasteCommand, new KeyGesture(Key.V, ModifierKeys.Control)));
     }
 
@@ -494,6 +514,20 @@ public sealed class MainWindow : Window
             dialog.Owner = this;
         // dialog.ShowDialog() returns true when OK was clicked; the command is already
         // applied inside ChartDataDialog.OnOk() via EditingSession.ReplaceChartData().
+        dialog.ShowDialog();
+    }
+
+    // ── Slide size dialog (Wave 10B) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens the <see cref="SlideSizeDialog"/> for the current presentation.
+    /// On OK the session's <see cref="EditingSession.SetSlideSize"/> is called (undoable).
+    /// </summary>
+    internal void OpenSlideSizeDialog()
+    {
+        var dialog = new SlideSizeDialog(Editor);
+        if (IsVisible)
+            dialog.Owner = this;
         dialog.ShowDialog();
     }
 

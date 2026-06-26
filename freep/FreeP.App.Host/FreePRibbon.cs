@@ -86,10 +86,12 @@ internal static class FreePRibbon
                     g.Medium("freep.theme.slice",   "Slice",   RibbonCommandIconKind.Color, "S");
                 });
                 // Customize group — slide size options.
+                // Wave 10B: "Slide Size…" button opens the custom-size dialog.
                 tab.Group("customize", "Customize", "Z", 90, g =>
                 {
-                    g.Large("freep.slide-size-16x9", "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
-                    g.Large("freep.slide-size-4x3",  "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
+                    g.Large("freep.slide-size-16x9",  "Widescreen (16:9)", RibbonCommandIconKind.Page, "W");
+                    g.Large("freep.slide-size-4x3",   "Standard (4:3)",   RibbonCommandIconKind.Page, "S");
+                    g.Medium("freep.slide-size-custom", "Slide Size…",     RibbonCommandIconKind.Page, "C");
                 });
             })
             // ── Wave 4C: Transitions tab ───────────────────────────────────────────────
