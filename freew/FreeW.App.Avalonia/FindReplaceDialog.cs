@@ -122,6 +122,7 @@ public sealed class FindReplaceDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(14, 10, 14, 0),
         };
+        btnRow.Children.Add(MakeButton("Find Previous", (_, _) => FindPrevious()));
         btnRow.Children.Add(MakeButton("Find Next", (_, _) => FindNext()));
         btnRow.Children.Add(MakeButton("Replace", (_, _) => Replace()));
         btnRow.Children.Add(MakeButton("Replace All", (_, _) => ReplaceAll()));
@@ -156,6 +157,13 @@ public sealed class FindReplaceDialog : Window
         {
             if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        // Remove the find-all highlight when the dialog goes away so stale washes don't linger.
+        _editor.ClearFindHighlights();
+        base.OnClosed(e);
     }
 
     // ── Go To section ─────────────────────────────────────────────────────────
@@ -261,6 +269,33 @@ public sealed class FindReplaceDialog : Window
     private bool WholeWord => _wholeWord.IsChecked == true;
     private bool UseWildcards => _useWildcards.IsChecked == true;
 
+    private DocumentView.FindOptions Options => new(MatchCase, WholeWord);
+
+    /// <summary>
+    /// Re-runs FindAll for the current term/options so the editor highlights every match, and
+    /// reports the total count plus the 1-based ordinal of the active match ("3 of 7"). Called after
+    /// every Find Next / Find Previous and whenever options change.
+    /// </summary>
+    private void RefreshHighlights(string term)
+    {
+        if (term.Length == 0 || UseWildcards)
+        {
+            // Wildcard highlighting goes through the dialog's own counter (the editor highlight uses
+            // plain match-case/whole-word options only); clear the editor highlight in that case.
+            _editor.ClearFindHighlights();
+            return;
+        }
+
+        var total = _editor.FindAll(term, Options);
+        var ordinal = _editor.CurrentFindOrdinal(term, Options);
+        if (total == 0)
+            _status.Text = $"\"{term}\" not found.";
+        else if (ordinal > 0)
+            _status.Text = $"{ordinal} of {total}";
+        else
+            _status.Text = $"{total} match{(total == 1 ? "" : "es")}";
+    }
+
     private void FindNext()
     {
         var term = _findBox.Text ?? string.Empty;
@@ -270,54 +305,52 @@ public sealed class FindReplaceDialog : Window
             return;
         }
 
-        // Build the effective search query honoring the active options.
-        // DocumentView.FindNext uses DocumentSearch (case-insensitive, plain); for option-aware
-        // search we go direct to TextSearch across the document's plain text and use GetBlockTop
-        // to scroll, so Match Case / Whole Word / Wildcards are all respected.
-        if (FindNextWithOptions(term))
-        {
-            _status.Text = string.Empty;
-        }
+        var found = UseWildcards
+            ? FindWildcardNext(term)
+            : _editor.FindNext(term, Options);
+
+        if (found)
+            RefreshHighlights(term);
         else
-        {
             _status.Text = $"\"{term}\" not found.";
+    }
+
+    private void FindPrevious()
+    {
+        var term = _findBox.Text ?? string.Empty;
+        if (term.Length == 0)
+        {
+            _status.Text = "Enter a search term.";
+            return;
         }
+
+        // Wildcard previous reuses the forward path (rare); plain path supports true backwards search.
+        var found = UseWildcards ? FindWildcardNext(term) : _editor.FindPrevious(term, Options);
+        if (found)
+            RefreshHighlights(term);
+        else
+            _status.Text = $"\"{term}\" not found.";
     }
 
     /// <summary>
-    /// Finds the next match of <paramref name="term"/> after the editor's current caret using
-    /// <see cref="TextSearch.FindAll"/> with the active options, scanning paragraphs in document
-    /// order. When a match is found in a block the editor's <see cref="DocumentView.FindNext"/>
-    /// is called (which re-uses DocumentSearch for actual selection + scroll). If FindNext is
-    /// not case/wildcard-aware we fall back to a best-effort: we locate the right block via
-    /// TextSearch, then let the editor's plain FindNext select within it.
+    /// Wildcard Find Next: scans the document via <see cref="TextSearch.FindAll"/> (which understands
+    /// the Word wildcard grammar) and selects the first match in document order. The editor's own
+    /// FindNext only does literal matching, so wildcard navigation is driven from the dialog.
     /// </summary>
-    private bool FindNextWithOptions(string term)
+    private bool FindWildcardNext(string term)
     {
-        if (!UseWildcards && !MatchCase && !WholeWord)
-        {
-            // Fast path: delegate entirely to the editor (case-insensitive plain search).
-            return _editor.FindNext(term);
-        }
-
-        // Option-aware path: scan blocks via TextSearch, then use the editor to select.
         var blocks = _editor.Document.Blocks;
         for (var bi = 0; bi < blocks.Count; bi++)
         {
             if (blocks[bi] is not Paragraph p)
                 continue;
-            var text = p.PlainText;
-            var hits = TextSearch.FindAll(text, term, MatchCase, WholeWord, UseWildcards);
-            if (hits.Any())
+            var hit = TextSearch.FindAll(p.PlainText, term, MatchCase, WholeWord, useWildcards: true).FirstOrDefault();
+            if (hit.Length > 0)
             {
-                // Navigate the editor to this block via GetBlockTop + ScrollToCaretRequested
-                // equivalent: use FindNext for the actual text selection so the editor moves
-                // the caret (FindNext uses DocumentSearch which is case-insensitive; we already
-                // confirmed the match exists above, so this reliably selects it).
-                return _editor.FindNext(term);
+                _editor.SelectRange(bi, hit.Start, hit.Length);
+                return true;
             }
         }
-
         return false;
     }
 
@@ -328,10 +361,10 @@ public sealed class FindReplaceDialog : Window
         if (term.Length == 0)
             return;
 
-        if (!_editor.ReplaceNext(term, replacement))
+        if (!_editor.ReplaceNext(term, replacement, Options))
             _status.Text = $"\"{term}\" not found.";
         else
-            _status.Text = string.Empty;
+            RefreshHighlights(term);
     }
 
     private void ReplaceAll()
@@ -341,7 +374,7 @@ public sealed class FindReplaceDialog : Window
         if (term.Length == 0)
             return;
 
-        var count = _editor.ReplaceAll(term, replacement);
+        var count = _editor.ReplaceAll(term, replacement, Options);
         _status.Text = count == 0
             ? $"\"{term}\" not found."
             : $"Replaced {count} occurrence{(count == 1 ? "" : "s")}.";

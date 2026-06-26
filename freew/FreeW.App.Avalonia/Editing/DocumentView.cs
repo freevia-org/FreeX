@@ -373,20 +373,221 @@ public sealed class DocumentView : Control
             ClampCaret();
     }
 
+    // ── AV-FIND: option-aware Find & Replace engine ────────────────────────────────────────────────
+    //
+    // The engine searches the editable body paragraphs (in document order) using the pure
+    // FreeW.Core.Model.TextSearch matcher, so Match Case / Whole Word are honoured uniformly across
+    // FindNext / FindPrevious / FindAll / ReplaceNext / ReplaceAll. Each method has a back-compat
+    // 1-arg overload (case-insensitive, whole-document) that older callers and tests use.
+    //
+    // A "find highlight" (distinct from the blue selection) is painted behind every match reported by
+    // the last FindAll, so the user sees every occurrence at once. It is cleared on any document edit
+    // and by ClearFindHighlights.
+
+    /// <summary>Options that tune a Find/Replace operation. Defaults: case-insensitive, not whole-word.</summary>
+    public readonly record struct FindOptions(bool MatchCase = false, bool WholeWord = false)
+    {
+        public static FindOptions Default => new();
+    }
+
+    // Match ranges from the most recent FindAll, painted as a distinct "find highlight".
+    private readonly List<(int Block, int Start, int End)> _findHighlights = new();
+
     /// <summary>Select the next occurrence of <paramref name="query"/> after the caret (wraps around).</summary>
-    public bool FindNext(string query)
+    public bool FindNext(string query) => FindNext(query, FindOptions.Default);
+
+    /// <summary>
+    /// Select the next occurrence of <paramref name="query"/> at or after the caret, honouring
+    /// <paramref name="options"/> (match-case / whole-word). Searches editable body paragraphs in
+    /// document order and wraps around to the start. Returns false when there is no match.
+    /// </summary>
+    public bool FindNext(string query, FindOptions options)
     {
         if (string.IsNullOrEmpty(query))
             return false;
-        if (DocumentSearch.FindNext(_doc, query, _caret.Block, _caret.Offset) is not { } hit)
+        if (FindFrom(query, options, _caret.Block, _caret.Offset, forward: true) is not { } hit)
             return false;
+        SelectMatch(hit.Block, hit.Start, hit.Length);
+        return true;
+    }
 
-        _selectionAnchor = new DocPosition(hit.Block, hit.Start);
-        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+    /// <summary>
+    /// Select the previous occurrence of <paramref name="query"/> before the current selection,
+    /// honouring <paramref name="options"/>. Wraps around to the end of the document.
+    /// </summary>
+    public bool FindPrevious(string query, FindOptions options)
+    {
+        if (string.IsNullOrEmpty(query))
+            return false;
+        // Search strictly before the selection's start so repeated calls walk backwards.
+        var anchor = NormalizedSelection() is { } sel ? sel.Start : _caret;
+        if (FindFrom(query, options, anchor.Block, anchor.Offset, forward: false) is not { } hit)
+            return false;
+        SelectMatch(hit.Block, hit.Start, hit.Length);
+        return true;
+    }
+
+    /// <summary>Back-compat overload — case-insensitive, not whole-word.</summary>
+    public bool FindPrevious(string query) => FindPrevious(query, FindOptions.Default);
+
+    private void SelectMatch(int block, int start, int length)
+    {
+        _selectionAnchor = new DocPosition(block, start);
+        _caret = new DocPosition(block, start + length);
         Focus();
         InvalidateVisual();
         ScrollToCaretRequested?.Invoke();
-        return true;
+    }
+
+    /// <summary>
+    /// Scans editable body paragraphs for the next/previous match relative to (fromBlock, fromOffset),
+    /// wrapping once. When <paramref name="forward"/> is true the first candidate is the earliest match
+    /// at or after the position; when false it is the latest match strictly before it.
+    /// </summary>
+    private (int Block, int Start, int Length)? FindFrom(
+        string query, FindOptions options, int fromBlock, int fromOffset, bool forward)
+    {
+        var blocks = _doc.Blocks;
+        var count = blocks.Count;
+        if (count == 0)
+            return null;
+
+        // Visit every block once from the current one, wrapping. The +1 step revisits the start block
+        // so a match on the "other side" of the caret (before it going forward / after it going back)
+        // is still found.
+        for (var step = 0; step <= count; step++)
+        {
+            var index = forward
+                ? (fromBlock + step) % count
+                : ((fromBlock - step) % count + count) % count;
+            if (blocks[index] is not Paragraph paragraph || !IsEditable(paragraph))
+                continue;
+
+            var text = paragraph.PlainText;
+            var hits = TextSearch.FindAll(text, query, options.MatchCase, options.WholeWord).ToList();
+            if (hits.Count == 0)
+                continue;
+
+            if (forward)
+            {
+                // On step 0 only matches at/after the cursor count; on the wrap step only matches
+                // before it (so we don't re-report the same hit). Otherwise any match in the block.
+                if (step == 0)
+                {
+                    foreach (var (s, len) in hits)
+                        if (s >= fromOffset)
+                            return (index, s, len);
+                }
+                else if (step == count)
+                {
+                    foreach (var (s, len) in hits)
+                        if (s < fromOffset)
+                            return (index, s, len);
+                }
+                else
+                {
+                    var (s, len) = hits[0];
+                    return (index, s, len);
+                }
+            }
+            else
+            {
+                if (step == 0)
+                {
+                    for (var i = hits.Count - 1; i >= 0; i--)
+                        if (hits[i].Start < fromOffset)
+                            return (index, hits[i].Start, hits[i].Length);
+                }
+                else if (step == count)
+                {
+                    for (var i = hits.Count - 1; i >= 0; i--)
+                        if (hits[i].Start >= fromOffset)
+                            return (index, hits[i].Start, hits[i].Length);
+                }
+                else
+                {
+                    var last = hits[^1];
+                    return (index, last.Start, last.Length);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds every occurrence of <paramref name="query"/> in the editable body paragraphs, paints a
+    /// distinct find-highlight behind each, and returns the total count. Pass an empty query to clear
+    /// the highlight. Does not move the caret.
+    /// </summary>
+    public int FindAll(string query, FindOptions options)
+    {
+        _findHighlights.Clear();
+        if (!string.IsNullOrEmpty(query))
+        {
+            var blocks = _doc.Blocks;
+            for (var bi = 0; bi < blocks.Count; bi++)
+            {
+                if (blocks[bi] is not Paragraph p || !IsEditable(p))
+                    continue;
+                foreach (var (start, len) in TextSearch.FindAll(p.PlainText, query, options.MatchCase, options.WholeWord))
+                    _findHighlights.Add((bi, start, start + len));
+            }
+        }
+
+        InvalidateVisual();
+        return _findHighlights.Count;
+    }
+
+    /// <summary>Back-compat overload — case-insensitive, not whole-word.</summary>
+    public int FindAll(string query) => FindAll(query, FindOptions.Default);
+
+    /// <summary>Clears the find-all highlight without affecting the selection.</summary>
+    public void ClearFindHighlights()
+    {
+        if (_findHighlights.Count == 0)
+            return;
+        _findHighlights.Clear();
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Selects the body range [start, start+length) in <paramref name="block"/> and scrolls it into
+    /// view. Used by the Find dialog for wildcard navigation (and exposed for tests).
+    /// </summary>
+    public void SelectRange(int block, int start, int length)
+    {
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph)
+            return;
+        SelectMatch(block, start, length);
+    }
+
+    /// <summary>
+    /// The 1-based ordinal of the current selection among all <paramref name="query"/> matches under
+    /// <paramref name="options"/> (for a "3 of 7" indicator), or 0 when the selection is not exactly a
+    /// match. Counts matches in document order across editable body paragraphs.
+    /// </summary>
+    public int CurrentFindOrdinal(string query, FindOptions options)
+    {
+        if (string.IsNullOrEmpty(query) || NormalizedSelection() is not { } sel)
+            return 0;
+        if (sel.Start.Block != sel.End.Block)
+            return 0;
+
+        var ordinal = 0;
+        var blocks = _doc.Blocks;
+        for (var bi = 0; bi < blocks.Count; bi++)
+        {
+            if (blocks[bi] is not Paragraph p || !IsEditable(p))
+                continue;
+            foreach (var (start, len) in TextSearch.FindAll(p.PlainText, query, options.MatchCase, options.WholeWord))
+            {
+                ordinal++;
+                if (bi == sel.Start.Block && start == sel.Start.Offset && len == sel.End.Offset - sel.Start.Offset)
+                    return ordinal;
+            }
+        }
+        return 0;
     }
 
     /// <summary>
@@ -447,30 +648,85 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
-    public bool ReplaceNext(string query, string replacement)
+    public bool ReplaceNext(string query, string replacement) =>
+        ReplaceNext(query, replacement, FindOptions.Default);
+
+    /// <summary>
+    /// If the current selection equals <paramref name="query"/> (under <paramref name="options"/>),
+    /// replace it; then select the next match. Returns true when a subsequent match was selected.
+    /// </summary>
+    public bool ReplaceNext(string query, string replacement, FindOptions options)
     {
         if (string.IsNullOrEmpty(query))
             return false;
-        if (string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+        var comparison = options.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        if (string.Equals(SelectedText, query, comparison))
+        {
+            ClearFindHighlights();
             ReplaceSelectionWith(replacement);
-        return FindNext(query);
+        }
+        return FindNext(query, options);
     }
 
     /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
-    public int ReplaceAll(string query, string replacement)
+    public int ReplaceAll(string query, string replacement) =>
+        ReplaceAll(query, replacement, FindOptions.Default);
+
+    /// <summary>
+    /// Replace every occurrence of <paramref name="query"/> (honouring <paramref name="options"/>) from
+    /// the document start, as a SINGLE undoable step. Returns the replacement count.
+    /// </summary>
+    public int ReplaceAll(string query, string replacement, FindOptions options)
     {
         if (string.IsNullOrEmpty(query))
             return 0;
 
-        _caret = new DocPosition(FirstEditableBlock(), 0);
-        _selectionAnchor = _caret;
-        var count = 0;
-        while (count < 10000 && FindNext(query))
+        ClearFindHighlights();
+
+        // Collect every match up-front so replacing never re-scans inserted text (which would loop
+        // forever when the replacement contains the query). Replace within each block from the last
+        // match to the first so earlier offsets stay valid as text length changes.
+        var perBlock = new List<(int Block, List<(int Start, int Length)> Hits)>();
+        var blocks = _doc.Blocks;
+        for (var bi = 0; bi < blocks.Count; bi++)
         {
-            ReplaceSelectionWith(replacement);
-            count++;
+            if (blocks[bi] is not Paragraph p || !IsEditable(p))
+                continue;
+            var hits = TextSearch.FindAll(p.PlainText, query, options.MatchCase, options.WholeWord).ToList();
+            if (hits.Count > 0)
+                perBlock.Add((bi, hits));
         }
 
+        if (perBlock.Count == 0)
+            return 0;
+
+        // Group all replacements into one undo group so a single Undo reverts the whole ReplaceAll.
+        _bus.BeginUndoGroup();
+        var count = 0;
+        try
+        {
+            foreach (var (block, hits) in perBlock)
+            {
+                for (var i = hits.Count - 1; i >= 0; i--)
+                {
+                    var (start, len) = hits[i];
+                    _selectionAnchor = new DocPosition(block, start);
+                    _caret = new DocPosition(block, start + len);
+                    ReplaceSelectionWith(replacement);
+                    count++;
+                }
+            }
+        }
+        catch
+        {
+            _bus.AbortUndoGroup();
+            throw;
+        }
+
+        _bus.CommitUndoGroup(count == 1 ? "Replace" : "Replace All");
+        // Place the caret at the document start after a Replace All (mirrors Word).
+        _caret = new DocPosition(FirstEditableBlock(), 0);
+        _selectionAnchor = _caret;
         InvalidateVisual();
         return count;
     }
@@ -5576,6 +5832,11 @@ public sealed class DocumentView : Control
             if (pc.Sentinel)
                 continue;
 
+            // AV-FIND: paint the find-all highlight (a distinct amber wash) behind every match
+            // reported by the last FindAll, beneath the blue selection so the active match still reads.
+            if (_findHighlights.Count > 0 && IsInFindHighlight(pc.Block, pc.Offset))
+                context.FillRectangle(FindHighlightBrush, new Rect(pc.X, pc.Y, Math.Max(2, pc.W), pc.LineHeight));
+
             if (selection is { } sel && IsWithin(sel, pc.Block, pc.Offset))
                 context.FillRectangle(SelectionBrush, new Rect(pc.X, pc.Y, Math.Max(2, pc.W), pc.LineHeight));
 
@@ -10400,6 +10661,15 @@ public sealed class DocumentView : Control
         return Compare(sel.Start, p) <= 0 && Compare(p, sel.End) < 0;
     }
 
+    /// <summary>AV-FIND: true when (block, offset) falls inside any FindAll match range.</summary>
+    private bool IsInFindHighlight(int block, int offset)
+    {
+        foreach (var (b, start, end) in _findHighlights)
+            if (b == block && offset >= start && offset < end)
+                return true;
+        return false;
+    }
+
     private static int Compare(DocPosition a, DocPosition b) =>
         a.Block != b.Block ? a.Block.CompareTo(b.Block) : a.Offset.CompareTo(b.Offset);
 
@@ -10420,6 +10690,8 @@ public sealed class DocumentView : Control
 
     private void OnModelChanged()
     {
+        // AV-FIND: any model edit invalidates the find-all highlight ranges (offsets may have shifted).
+        _findHighlights.Clear();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }
@@ -10736,6 +11008,8 @@ public sealed class DocumentView : Control
     }
 
     private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
+    // AV-FIND: find-all highlight — a translucent amber wash distinct from the blue selection.
+    private static IBrush FindHighlightBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xD5, 0x4F));
 
     // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
     // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
