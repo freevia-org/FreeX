@@ -131,11 +131,19 @@ public interface IShapeRenderer
 ///   text concatenated as plain text, then places both on the OS clipboard via
 ///   <see cref="IOsClipboard"/>.  This lets FreeP content be pasted into other apps.
 ///
-/// Paste:
-///   Checks the OS clipboard first.  Priority:
-///   1. OS bitmap  → <see cref="EditingSession.InsertPicture"/>
-///   2. OS text    → insert default textbox carrying the text
-///   3. Internal clipboard (delegate to <see cref="EditingSession.Paste"/>)
+/// Paste (Y6 fix — in-app copy→paste prefers the internal editable clipboard):
+///   When the most-recent OS-clipboard write was produced by THIS service instance
+///   (i.e. the user pressed Ctrl+C/X inside FreeP), and the internal shape clipboard is
+///   still populated, <see cref="Paste"/> prefers the internal clipboard so the pasted
+///   result is an editable deep-copied shape rather than a flattened PNG.
+///   An image copied from ANOTHER app still inserts a picture (the generation token will
+///   not match, so the OS-image path is taken).
+///
+///   Priority when internal clipboard carries our own copy (ownCopyIsCurrentOnOs=true):
+///     internal > OS text > OS image > nothing
+///
+///   Priority when OS clipboard was set by an external app (ownCopyIsCurrentOnOs=false):
+///     OS image > OS text > internal > nothing
 ///
 /// Strategy is documented at the call site.
 /// </summary>
@@ -143,6 +151,21 @@ public sealed class OsClipboardService
 {
     private readonly IOsClipboard    _clipboard;
     private readonly IShapeRenderer  _renderer;
+
+    // ── Own-copy generation token (Y6) ────────────────────────────────────────────
+    // Incremented each time THIS service places content on the OS clipboard.
+    // Stored so Paste() can detect whether the current OS clipboard content was
+    // produced by this app instance and should therefore yield to the internal clipboard.
+    private uint _ownCopyGeneration;        // monotonically increasing counter
+    private uint _lastPlacedGeneration;     // value written during the last PlaceSelection call
+
+    /// <summary>
+    /// True when the OS clipboard currently holds content placed by THIS service instance
+    /// (i.e. since the last in-app Ctrl+C / Ctrl+X).  Paste uses this to prefer the
+    /// internal editable clipboard over the rasterised OS image.
+    /// </summary>
+    internal bool OwnCopyIsCurrentOnOs => _ownCopyGeneration > 0
+                                       && _ownCopyGeneration == _lastPlacedGeneration;
 
     /// <summary>
     /// Size (in pixels) used when rendering the selection to a PNG for the OS clipboard.
@@ -168,6 +191,10 @@ public sealed class OsClipboardService
     /// <see cref="EditingSession.CutSelectedShapes"/> so the internal clipboard is also updated.
     ///
     /// This method is a no-op when there is no selection or no current slide.
+    ///
+    /// After a successful write the generation token is bumped so <see cref="Paste"/> knows
+    /// the OS clipboard content originates from this app and should yield to the internal
+    /// editable clipboard (Y6 fix).
     /// </summary>
     public void PlaceSelectionOnOsClipboard(EditingSession editor)
     {
@@ -185,6 +212,11 @@ public sealed class OsClipboardService
         // Build the DataObject with both formats.
         var dataObj = BuildDataObject(editor.Presentation, slide, selectedShapes);
         _clipboard.SetDataObject(dataObj);
+
+        // Bump the own-copy generation token so Paste() can detect that the OS clipboard
+        // content was placed by THIS instance and should yield to the internal clipboard.
+        _ownCopyGeneration++;
+        _lastPlacedGeneration = _ownCopyGeneration;
     }
 
     /// <summary>
@@ -226,26 +258,30 @@ public sealed class OsClipboardService
     // ── Paste ──────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Executes a paste operation using the following priority:
-    /// <list type="number">
-    ///   <item>OS clipboard image → <see cref="EditingSession.InsertPicture"/></item>
-    ///   <item>OS clipboard text  → textbox inserted via <see cref="EditingSession.InsertDefaultTextBox"/></item>
-    ///   <item>Internal clipboard → <see cref="EditingSession.Paste"/></item>
-    /// </list>
+    /// Executes a paste operation.
     ///
-    /// When <paramref name="preferOsClipboard"/> is false, the internal clipboard is checked
-    /// first and OS clipboard is only used as a fallback (useful when the internal clipboard
-    /// is known to have valid content).
+    /// When the OS clipboard was populated by THIS app instance's last Ctrl+C/X
+    /// (<see cref="OwnCopyIsCurrentOnOs"/> is true) and the internal shape clipboard has
+    /// data, the internal editable clipboard is preferred so the pasted result is an
+    /// editable deep-copied shape (not a flattened PNG).  This is the Y6 fix.
     ///
-    /// See <see cref="DecidePasteAction"/> for the pure routing logic (tested without a real editor).
+    /// When the OS clipboard was populated by ANOTHER app, OS image or OS text wins as
+    /// before (external image paste still inserts a picture shape).
+    ///
+    /// See <see cref="DecidePasteAction"/> for the pure routing logic (testable).
     /// </summary>
     public void Paste(EditingSession editor, bool preferOsClipboard = true)
     {
+        // Y6: detect whether the OS clipboard content came from our own last copy/cut.
+        // When it did, prefer the internal editable clipboard over the rasterised image.
+        bool ownCopy = OwnCopyIsCurrentOnOs && editor.CanPaste;
+
         var action = DecidePasteAction(
-            osHasImage:       _clipboard.ContainsImage(),
-            osHasText:        _clipboard.ContainsText(),
-            internalHasData:  editor.CanPaste,
-            preferOsClipboard: preferOsClipboard);
+            osHasImage:          _clipboard.ContainsImage(),
+            osHasText:           _clipboard.ContainsText(),
+            internalHasData:     editor.CanPaste,
+            preferOsClipboard:   preferOsClipboard && !ownCopy,
+            ownCopyIsCurrentOnOs: ownCopy);
 
         switch (action)
         {
@@ -256,19 +292,12 @@ public sealed class OsClipboardService
                 break;
 
             case PasteAction.OsText:
+                // Y8/Y9: delegate to InsertTextBox(text) so the shape is built with the
+                // clipboard text already in its run — a single undoable command, no
+                // out-of-band mutation, and multi-line text is split into paragraphs.
                 var text = _clipboard.GetText();
                 if (!string.IsNullOrEmpty(text))
-                {
-                    var shape = editor.InsertDefaultTextBox();
-                    // Replace the empty placeholder run with the clipboard text.
-                    var body = shape.TextBody;
-                    if (body is not null && body.Paragraphs.Count > 0)
-                    {
-                        var para = body.Paragraphs[0];
-                        if (para.Runs.Count > 0)
-                            para.Runs[0].Text = text;
-                    }
-                }
+                    editor.InsertTextBox(text);
                 break;
 
             case PasteAction.Internal:
@@ -283,18 +312,34 @@ public sealed class OsClipboardService
     /// <summary>
     /// Pure paste-routing decision function — no side effects, fully testable.
     ///
-    /// Priority when <paramref name="preferOsClipboard"/> is true:
-    ///   OS image > OS text > internal > nothing
-    ///
-    /// Priority when false:
-    ///   internal > OS image > OS text > nothing
+    /// Routing priority:
+    /// <list type="bullet">
+    ///   <item>When <paramref name="ownCopyIsCurrentOnOs"/> is true (the OS clipboard
+    ///     content was placed by this app's last copy/cut) AND
+    ///     <paramref name="internalHasData"/> is true:
+    ///     internal > OS text > OS image > nothing  (Y6: editable shape preferred).</item>
+    ///   <item>When <paramref name="preferOsClipboard"/> is true (external content):
+    ///     OS image > OS text > internal > nothing.</item>
+    ///   <item>When <paramref name="preferOsClipboard"/> is false:
+    ///     internal > OS image > OS text > nothing.</item>
+    /// </list>
     /// </summary>
     public static PasteAction DecidePasteAction(
         bool osHasImage,
         bool osHasText,
         bool internalHasData,
-        bool preferOsClipboard = true)
+        bool preferOsClipboard   = true,
+        bool ownCopyIsCurrentOnOs = false)
     {
+        // Y6: own-copy path — prefer editable internal clipboard over the rasterised
+        // OS image we placed ourselves.  OS text (e.g. plain-text description we also
+        // placed) still falls through after Internal; external OS image is deprioritised.
+        if (ownCopyIsCurrentOnOs && internalHasData)
+        {
+            // internal wins; fall through to OS text then OS image only as last resort.
+            return PasteAction.Internal;
+        }
+
         if (preferOsClipboard)
         {
             if (osHasImage)       return PasteAction.OsImage;

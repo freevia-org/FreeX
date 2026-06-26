@@ -474,8 +474,14 @@ public sealed class MainWindow : Window
         var cutCommand = new RoutedCommand("CutShapes", typeof(MainWindow));
         CommandBindings.Add(new CommandBinding(cutCommand, (_, _) =>
         {
-            Editor.CutSelectedShapes();
+            // Y7: capture the selection on the OS clipboard BEFORE CutSelectedShapes()
+            // calls DeleteSelected() → ClearSelection(), which would leave an empty
+            // selection and cause PlaceSelectionOnOsClipboard to silently no-op.
+            // Order: (1) deep-clone to internal clipboard, (2) render+push to OS clipboard,
+            // (3) delete the originals.  Both clipboards end up populated.
+            Editor.CopySelectedShapes();
             _osClipboard.PlaceSelectionOnOsClipboard(Editor);
+            Editor.DeleteSelected();
         }));
         InputBindings.Add(new KeyBinding(cutCommand, new KeyGesture(Key.X, ModifierKeys.Control)));
 

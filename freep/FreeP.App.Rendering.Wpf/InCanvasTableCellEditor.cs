@@ -434,10 +434,28 @@ public sealed class InCanvasTableCellEditor
                 var rb = pb.Runs[ri];
                 if (ra.Text != rb.Text || ra.Bold != rb.Bold || ra.Italic != rb.Italic
                     || ra.Underline != rb.Underline || ra.Strikethrough != rb.Strikethrough
-                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt)
+                    || ra.FontFamily != rb.FontFamily || ra.FontSizePt != rb.FontSizePt
+                    || !ColorsEqual(ra.Color, rb.Color))   // Y3: include Color in change detection
                     return false;
             }
         }
         return true;
+    }
+
+    /// <summary>
+    /// Compares two <see cref="ThemeAwareColor"/> values, including resolved sRGB and SchemeColor ref.
+    /// </summary>
+    private static bool ColorsEqual(ThemeAwareColor? a, ThemeAwareColor? b)
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        if (a.Resolved != b.Resolved) return false;
+        if (a.SchemeColor is null && b.SchemeColor is null) return true;
+        if (a.SchemeColor is null || b.SchemeColor is null) return false;
+        return a.SchemeColor.Slot    == b.SchemeColor.Slot
+            && a.SchemeColor.LumMod  == b.SchemeColor.LumMod
+            && a.SchemeColor.LumOff  == b.SchemeColor.LumOff
+            && a.SchemeColor.Tint    == b.SchemeColor.Tint
+            && a.SchemeColor.Shade   == b.SchemeColor.Shade;
     }
 }

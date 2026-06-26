@@ -504,6 +504,57 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>
+    /// Creates and inserts a text-box shape already carrying <paramref name="text"/> as its
+    /// content, as a single undoable <see cref="AddShapeCommand"/>.
+    ///
+    /// Y8 fix: the text is baked into the shape BEFORE the command is executed so it is
+    /// captured atomically by the undo bus — no out-of-band mutation after the fact.
+    ///
+    /// Y9 fix: <paramref name="text"/> is split on line-breaks into separate
+    /// <see cref="Paragraph"/>s so multi-line clipboard content preserves its structure.
+    /// Each paragraph is guaranteed to have at least one <see cref="Run"/> (the empty
+    /// paragraph fallback ensures the shape always has a valid text body).
+    /// </summary>
+    public SlideShape InsertTextBox(string text)
+    {
+        var (x, y, cx, cy) = DefaultShapeBounds();
+        var body = new TextBody { Wrap = true };
+
+        // Split on common line-break sequences; keep empty lines so spacing is preserved.
+        var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+        foreach (var line in lines)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = line });
+            body.Paragraphs.Add(para);
+        }
+
+        // Guard: ensure at least one paragraph exists (handles empty string gracefully).
+        if (body.Paragraphs.Count == 0)
+        {
+            var para = new Paragraph();
+            para.Runs.Add(new Run { Text = string.Empty });
+            body.Paragraphs.Add(para);
+        }
+
+        var shape = new SlideShape
+        {
+            Id            = NextShapeId(),
+            Name          = "TextBox",
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = x,
+            OffsetYEmu    = y,
+            ExtentCxEmu   = cx,
+            ExtentCyEmu   = cy,
+            Fill          = ShapeFill.None.Instance,
+            TextBody      = body
+        };
+        AddShape(shape);
+        return shape;
+    }
+
     /// <summary>Creates and inserts a default rectangle autoshape onto the current slide.</summary>
     public SlideShape InsertDefaultRectangle()
     {

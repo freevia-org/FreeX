@@ -168,10 +168,21 @@ internal static class TextBodyFlowDocumentConverter
 
             if (block is WpfParagraph wp2)
             {
+                // Collect the original paragraph's runs (if available) so we can pass
+                // each original run to WpfInlineToModelRun for Y2 scheme-color preservation.
+                IReadOnlyList<ModelRun>? origRuns = null;
+                if (originalBody is not null && modelParaIndex < originalBody.Paragraphs.Count)
+                    origRuns = originalBody.Paragraphs[modelParaIndex].Runs;
+
+                int runIndex = 0;
                 foreach (var leaf in EnumerateLeafInlines(wp2.Inlines))
                 {
-                    var mr = WpfInlineToModelRun(leaf);
+                    ModelRun? origRun = (origRuns is not null && runIndex < origRuns.Count)
+                        ? origRuns[runIndex]
+                        : null;
+                    var mr = WpfInlineToModelRun(leaf, origRun);
                     mp.Runs.Add(mr);
+                    runIndex++;
                 }
             }
 
@@ -196,19 +207,30 @@ internal static class TextBodyFlowDocumentConverter
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    private static WpfRun ModelRunToWpfRun(ModelRun mr)
+    private static Inline ModelRunToWpfRun(ModelRun mr)
     {
+        // Y5: a run with Text=="\n" maps to a WPF LineBreak so soft breaks survive
+        // repeated round-trips symmetrically (FromFlowDocument maps LineBreak → "\n").
+        if (mr.Text == "\n")
+            return new LineBreak();
+
         var wr = new WpfRun(mr.Text ?? string.Empty);
 
-        // Font family.
+        // Y1: only set a LOCAL font-family / font-size on the inline when the model
+        // run carries an explicit value.  Runs with null values must not set any local
+        // value so that WpfInlineToModelRun sees UnsetValue and leaves them null (inherit).
         if (!string.IsNullOrEmpty(mr.FontFamily))
             wr.FontFamily = new FontFamily(mr.FontFamily);
 
-        // Font size (pt → DIP).
         if (mr.FontSizePt.HasValue)
             wr.FontSize = mr.FontSizePt.Value * PtToDip;
 
-        // Bold / Italic.
+        // Y4: only set Bold from an explicit model value — do NOT set Normal as a local
+        // value so that inherited-bold runs read back as UnsetValue from the document default.
+        // Bold / Italic are still set unconditionally here because they are non-nullable booleans
+        // in the model; the model's default (false) is the WPF default too, so this is safe.
+        // The key correction is the Y4 fix: map only FontWeights.Bold → mr.Bold; SemiBold/DemiBold
+        // must NOT become Bold on the round-trip.
         wr.FontWeight = mr.Bold   ? FontWeights.Bold   : FontWeights.Normal;
         wr.FontStyle  = mr.Italic ? FontStyles.Italic  : FontStyles.Normal;
 
@@ -228,7 +250,9 @@ internal static class TextBodyFlowDocumentConverter
             wr.TextDecorations = new TextDecorationCollection();
         }
 
-        // Color.
+        // Y2: only set a LOCAL foreground when the run has an explicit color.
+        // When mr.Color is null (inherit), leave Foreground unset so the read-back
+        // via ReadLocalValue sees UnsetValue and leaves mr.Color null (preserving inherit).
         var color = ResolveModelColor(mr.Color);
         if (color.HasValue)
             wr.Foreground = new SolidColorBrush(color.Value);
@@ -259,43 +283,57 @@ internal static class TextBodyFlowDocumentConverter
 
     /// <summary>
     /// Reads formatting properties from a WPF <see cref="Inline"/> into a model <see cref="ModelRun"/>.
-    /// Properties are read via dependency-property inheritance so that values set on a parent
-    /// <see cref="Span"/> are correctly resolved.
+    ///
+    /// Y1/Y2/Y4: Properties are read via <see cref="DependencyObject.ReadLocalValue"/> so that
+    /// ONLY values explicitly set on this inline are captured.  An inherited / unset value returns
+    /// <see cref="DependencyProperty.UnsetValue"/> and is left null in the model (inherit).
+    /// This prevents baking theme/placeholder defaults into every run on a no-op edit commit.
+    ///
+    /// Y2: the original run (looked up by position) is passed through for its Color when the
+    /// inline's Foreground is locally unset — preserving the SchemeColor ref.
     /// </summary>
-    internal static ModelRun WpfInlineToModelRun(Inline inline)
+    internal static ModelRun WpfInlineToModelRun(Inline inline, ModelRun? originalRun = null)
     {
         var mr = new ModelRun();
 
         // Text — only WpfRun has text; LineBreaks become "\n".
         mr.Text = inline switch
         {
-            WpfRun wr  => wr.Text ?? string.Empty,
-            LineBreak _ => "\n",
-            _           => string.Empty
+            WpfRun wr   => wr.Text ?? string.Empty,
+            LineBreak _  => "\n",
+            _            => string.Empty
         };
 
-        // Font family — read the effective (inherited) value.
-        var family = (FontFamily)inline.GetValue(Inline.FontFamilyProperty);
-        mr.FontFamily = family?.Source;
+        // Y1: read FontFamily LOCAL value only (not resolved/inherited).
+        var localFamily = inline.ReadLocalValue(TextElement.FontFamilyProperty);
+        if (localFamily != DependencyProperty.UnsetValue && localFamily is FontFamily ff)
+            mr.FontFamily = ff.Source;
+        // else leave mr.FontFamily = null (inherit)
 
-        // Font size (DIP → pt).
-        var sizeDip = (double)inline.GetValue(Inline.FontSizeProperty);
-        if (!double.IsNaN(sizeDip) && sizeDip > 0)
+        // Y1: read FontSize LOCAL value only.
+        var localSize = inline.ReadLocalValue(TextElement.FontSizeProperty);
+        if (localSize != DependencyProperty.UnsetValue && localSize is double sizeDip
+            && !double.IsNaN(sizeDip) && sizeDip > 0)
             mr.FontSizePt = Math.Round(sizeDip * DipToPt, 4);
+        // else leave mr.FontSizePt = null (inherit)
 
-        // Bold.
-        var weight = (FontWeight)inline.GetValue(Inline.FontWeightProperty);
-        mr.Bold = weight == FontWeights.Bold
-               || weight == FontWeights.SemiBold
-               || weight == FontWeights.DemiBold;
+        // Y4: read FontWeight LOCAL value only, and map ONLY FontWeights.Bold to mr.Bold=true.
+        // SemiBold/DemiBold must NOT be coerced to Bold.
+        var localWeight = inline.ReadLocalValue(TextElement.FontWeightProperty);
+        if (localWeight != DependencyProperty.UnsetValue && localWeight is FontWeight fw)
+            mr.Bold = fw == FontWeights.Bold;
+        // else leave mr.Bold = false (the model default; if this run was inheriting bold from
+        // placeholder the placeholder itself carries Bold=true — we don't bake it here)
 
-        // Italic.
-        var style = (FontStyle)inline.GetValue(Inline.FontStyleProperty);
-        mr.Italic = style == FontStyles.Italic || style == FontStyles.Oblique;
+        // Italic — read LOCAL value only.
+        var localStyle = inline.ReadLocalValue(TextElement.FontStyleProperty);
+        if (localStyle != DependencyProperty.UnsetValue && localStyle is FontStyle fs)
+            mr.Italic = fs == FontStyles.Italic || fs == FontStyles.Oblique;
 
-        // Underline / Strikethrough from TextDecorations.
-        var decorations = (TextDecorationCollection?)inline.GetValue(Inline.TextDecorationsProperty);
-        if (decorations is not null)
+        // Underline / Strikethrough from TextDecorations — read LOCAL value.
+        var localDecorations = inline.ReadLocalValue(Inline.TextDecorationsProperty);
+        if (localDecorations != DependencyProperty.UnsetValue &&
+            localDecorations is TextDecorationCollection decorations)
         {
             foreach (var d in decorations)
             {
@@ -306,12 +344,38 @@ internal static class TextBodyFlowDocumentConverter
             }
         }
 
-        // Color — convert SolidColorBrush foreground to sRGB ThemeAwareColor.
-        var brush = inline.GetValue(Inline.ForegroundProperty) as SolidColorBrush;
-        if (brush is not null)
+        // Y2: read Foreground LOCAL value only.
+        // When unset (inherited), carry the ORIGINAL run's Color (incl. SchemeColor ref) through
+        // unchanged so theme-slot references survive a no-op edit session.
+        // When set locally, compare the resolved sRGB against the original run's resolved color:
+        //   • If they match, carry the original Color object (preserving any SchemeColor ref)
+        //     because the user did NOT actually change this run's color.
+        //   • If they differ, synthesize a new plain sRGB — the user explicitly picked a new color.
+        var localForeground = inline.ReadLocalValue(TextElement.ForegroundProperty);
+        if (localForeground != DependencyProperty.UnsetValue &&
+            localForeground is SolidColorBrush brush)
         {
-            var c = brush.Color;
-            mr.Color = new ThemeAwareColor(new SrgbColor(c.R, c.G, c.B));
+            var c           = brush.Color;
+            var resolvedSrg = new SrgbColor(c.R, c.G, c.B);
+
+            // If the original run had a Color whose Resolved sRGB equals what the inline has,
+            // the user did not change this color — carry the original (which may have a SchemeColor).
+            if (originalRun?.Color is not null &&
+                originalRun.Color.Resolved == resolvedSrg)
+            {
+                mr.Color = originalRun.Color;
+            }
+            else
+            {
+                // Color actually changed (or there was no original) — synthesize new sRGB.
+                mr.Color = new ThemeAwareColor(resolvedSrg);
+            }
+        }
+        else
+        {
+            // Foreground is inherited — preserve the original run's Color (may be null or a
+            // SchemeColor ref such as accent1) rather than synthesizing a new sRGB.
+            mr.Color = originalRun?.Color;
         }
 
         return mr;

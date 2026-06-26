@@ -270,6 +270,209 @@ public sealed class RichTextEditorTests
             "no command should be issued when the text body is unchanged");
     }
 
+    // ─── Y1: inherited FontFamily/FontSizePt null must NOT be baked ─────────────
+
+    [StaFact]
+    public void Converter_InheritedFontFamilyAndSize_RoundTrip_StillNull()
+    {
+        // Arrange: run with FontFamily=null and FontSizePt=null (inherit from placeholder).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Inherited",
+            FontFamily = null,    // must stay null after round-trip
+            FontSizePt = null,    // must stay null after round-trip
+        });
+        body.Paragraphs.Add(para);
+
+        // Act: round-trip via ToFlowDocument → FromFlowDocument.
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        // Assert: inherited values must NOT have been baked in.
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Text.Should().Be("Inherited");
+        r.FontFamily.Should().BeNull("FontFamily=null must survive round-trip (not baked to 'Calibri')");
+        r.FontSizePt.Should().BeNull("FontSizePt=null must survive round-trip (not baked to 14pt)");
+    }
+
+    // ─── Y2: inherited/scheme Color null must NOT be baked; SchemeColor ref must survive ──
+
+    [StaFact]
+    public void Converter_InheritedColor_RoundTrip_StillNull()
+    {
+        // Arrange: run with Color=null (inherit).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "NoColor", Color = null });
+        body.Paragraphs.Add(para);
+
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Color.Should().BeNull("Color=null (inherit) must survive round-trip, not be baked to sRGB");
+    }
+
+    [StaFact]
+    public void Converter_SchemeColor_RoundTrip_PreservesRef()
+    {
+        // Arrange: run with a SchemeColor (accent1) — the "theme slot" case.
+        var schemeRef = new SchemeColorRef { Slot = ThemeColorSlot.Accent1, LumMod = 0.8, LumOff = 0.0 };
+        var themeColor = new ThemeAwareColor(new SrgbColor(0x44, 0x72, 0xC4), schemeRef);
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "Themed", Color = themeColor });
+        body.Paragraphs.Add(para);
+
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 14);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Color.Should().NotBeNull();
+        r.Color!.SchemeColor.Should().NotBeNull(
+            "SchemeColor ref must survive the round-trip (not be replaced by a plain sRGB)");
+        r.Color.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent1);
+        r.Color.SchemeColor.LumMod.Should().BeApproximately(0.8, 1e-9);
+    }
+
+    // ─── Y1+Y2: no-op edit (convert and convert back) leaves TextBodiesEqual true ──
+
+    [StaFact]
+    public void Converter_NoOpEdit_InheritedRun_BodyUnchanged()
+    {
+        // Arrange: a body with a run that has all-null formatting (fully inherited).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Placeholder text",
+            FontFamily = null,
+            FontSizePt = null,
+            Color      = null,
+        });
+        body.Paragraphs.Add(para);
+
+        // Act: simulate a no-op edit (convert to doc, convert back with original body as reference).
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 18);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        // Assert: both runs have the same (null) inherited fields — bodies are "equal".
+        // We verify the fields directly (TextBodiesEqual is private).
+        var orig = body.Paragraphs[0].Runs[0];
+        var rest = restored.Paragraphs[0].Runs[0];
+        rest.Text.Should().Be(orig.Text);
+        rest.FontFamily.Should().BeNull("FontFamily must stay null after no-op edit");
+        rest.FontSizePt.Should().BeNull("FontSizePt must stay null after no-op edit");
+        rest.Color.Should().BeNull("Color must stay null after no-op edit");
+        rest.Bold.Should().Be(orig.Bold);
+        rest.Italic.Should().Be(orig.Italic);
+    }
+
+    // ─── Y3: color-only change IS detected by TextBodiesEqual (via Commit path) ─
+
+    [StaFact]
+    public void InCanvasTextEditor_Commit_ColorOnlyChange_IssuesCommand()
+    {
+        // Arrange: shape with one red run.
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var redColor  = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+        var blueColor = new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF));
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun
+        {
+            Text       = "Red",
+            FontFamily = "Calibri",
+            FontSizePt = 14,
+            Color      = redColor,
+        });
+        body.Paragraphs.Add(para);
+
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 0,
+            ExtentCxEmu = 2743200L,
+            ExtentCyEmu = 1371600L,
+            TextBody    = body,
+        };
+        slide.Shapes.Add(shape);
+
+        var bus     = new PresentationCommandBus(p);
+        var editor  = new EditingSession(p, bus);
+        var canvas  = new SlideCanvas();
+        var overlay = new System.Windows.Controls.Canvas();
+        canvas.AttachEditing(editor, overlay);
+        canvas.Presentation = p;
+        canvas.Slide        = slide;
+
+        // Activate the editor so we can call ApplyColor on the selection.
+        canvas.TextEditor!.Activate(shape.Id);
+        canvas.TextEditor.IsActive.Should().BeTrue();
+
+        // Apply a blue color to the selection (changes the run's color).
+        canvas.TextEditor.ApplyColor(blueColor);
+
+        // Commit — this should issue a command because color changed.
+        canvas.TextEditor.Commit();
+
+        editor.CanUndo.Should().BeTrue(
+            "a color-only change must be detected and issue an undo-able command");
+    }
+
+    // ─── Y4: SemiBold weight NOT coerced to Bold ───────────────────────────────
+
+    [StaFact]
+    public void Converter_SemiBoldRun_NotCoercedToBold()
+    {
+        // Build a FlowDocument with a SemiBold run manually (simulating WPF producing it).
+        var doc = new FlowDocument();
+        var wp  = new System.Windows.Documents.Paragraph();
+        var wr  = new System.Windows.Documents.Run("SemiBold text")
+        {
+            FontWeight = FontWeights.SemiBold
+        };
+        wp.Inlines.Add(wr);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc);
+
+        var r = restored.Paragraphs[0].Runs[0];
+        r.Bold.Should().BeFalse("SemiBold must NOT be coerced to Bold=true");
+    }
+
+    // ─── Y5: soft-break "\n" runs survive round-trip as LineBreak ─────────────
+
+    [StaFact]
+    public void Converter_SoftBreakRun_RoundTrips_AsLineBreak()
+    {
+        // Arrange: a body with a soft line-break run (Text=="\n").
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph();
+        para.Runs.Add(new ModelRun { Text = "Line 1" });
+        para.Runs.Add(new ModelRun { Text = "\n" });    // soft break
+        para.Runs.Add(new ModelRun { Text = "Line 2" });
+        body.Paragraphs.Add(para);
+
+        // Act: to FlowDocument and back.
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3, "three model runs (text + soft-break + text)");
+        runs[0].Text.Should().Be("Line 1");
+        runs[1].Text.Should().Be("\n", "soft break must survive as '\\n' text in the model");
+        runs[2].Text.Should().Be("Line 2");
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>
