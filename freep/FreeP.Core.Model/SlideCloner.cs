@@ -69,6 +69,7 @@ public static class SlideCloner
             Outline        = shape.Outline,   // immutable — share
             Placeholder    = shape.Placeholder is null ? null : ClonePlaceholder(shape.Placeholder),
             Picture        = shape.Picture,   // byte[] treated as immutable
+            PictureFormat  = shape.PictureFormat is null ? null : ClonePictureFormat(shape.PictureFormat),
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
             TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
@@ -308,4 +309,17 @@ public static class SlideCloner
 
         return copy;
     }
+
+    private static PictureFormat ClonePictureFormat(PictureFormat f) => new()
+    {
+        CropLeft          = f.CropLeft,
+        CropTop           = f.CropTop,
+        CropRight         = f.CropRight,
+        CropBottom        = f.CropBottom,
+        Grayscale         = f.Grayscale,
+        BiLevelThreshold  = f.BiLevelThreshold,
+        Brightness        = f.Brightness,
+        Contrast          = f.Contrast,
+        AlphaModPct       = f.AlphaModPct,
+    };
 }

@@ -187,6 +187,70 @@ public sealed class ImagePart
 }
 
 /// <summary>
+/// Crop and color-effect metadata for a picture shape (<see cref="SlideShapeKind.Picture"/>).
+/// Stored on <see cref="SlideShape.PictureFormat"/>; null means no crop and no effects.
+/// All crop fractions are in the range 0..1 and represent the fraction of the source image
+/// to remove from each edge (matching the PresentationML a:srcRect l/t/r/b * 0.001% convention).
+/// </summary>
+public sealed class PictureFormat
+{
+    // ── Crop (a:srcRect) ──────────────────────────────────────────────────────────
+
+    /// <summary>Fraction of image width to crop from the left edge (0..1). Default 0.</summary>
+    public double CropLeft   { get; set; }
+    /// <summary>Fraction of image height to crop from the top edge (0..1). Default 0.</summary>
+    public double CropTop    { get; set; }
+    /// <summary>Fraction of image width to crop from the right edge (0..1). Default 0.</summary>
+    public double CropRight  { get; set; }
+    /// <summary>Fraction of image height to crop from the bottom edge (0..1). Default 0.</summary>
+    public double CropBottom { get; set; }
+
+    /// <summary>True when any crop fraction is non-zero.</summary>
+    public bool HasCrop =>
+        CropLeft != 0 || CropTop != 0 || CropRight != 0 || CropBottom != 0;
+
+    // ── Color effects (a:blip child elements) ─────────────────────────────────────
+
+    /// <summary>a:grayscl — convert image to grayscale.</summary>
+    public bool Grayscale { get; set; }
+
+    /// <summary>
+    /// a:biLevel thresh= — threshold to black/white.
+    /// Expressed as a fraction 0..1 (OOXML stores it in 1/1000 of a %, i.e. 50000 = 50%).
+    /// Null means the effect is not present.
+    /// </summary>
+    public double? BiLevelThreshold { get; set; }
+
+    /// <summary>
+    /// a:lum bright= — brightness adjustment in the range -1..1.
+    /// (OOXML stores -100000..100000, we normalise to -1..1.)
+    /// Null means the effect is not present.
+    /// </summary>
+    public double? Brightness { get; set; }
+
+    /// <summary>
+    /// a:lum contrast= — contrast adjustment in the range -1..1.
+    /// Null means the effect is not present (same element as Brightness; both present together).
+    /// </summary>
+    public double? Contrast { get; set; }
+
+    /// <summary>
+    /// a:alphaModFix amt= — opacity multiplier in the range 0..1.
+    /// (OOXML stores 0..100000; 100000 = fully opaque = 1.0.)
+    /// Null means the effect is not present (treated as fully opaque).
+    /// </summary>
+    public double? AlphaModPct { get; set; }
+
+    /// <summary>True when any colour effect is active.</summary>
+    public bool HasColorEffect =>
+        Grayscale ||
+        BiLevelThreshold.HasValue ||
+        Brightness.HasValue ||
+        Contrast.HasValue ||
+        AlphaModPct.HasValue;
+}
+
+/// <summary>
 /// A shape on a slide. Covers autoshapes, textboxes, pictures, connectors, and group shapes.
 /// The <see cref="Kind"/> discriminator determines which optional properties are populated.
 /// </summary>
@@ -271,6 +335,13 @@ public sealed class SlideShape
 
     /// <summary>Image data when Kind == Picture.</summary>
     public ImagePart? Picture { get; set; }
+
+    /// <summary>
+    /// Crop rectangle and colour-effect overrides for the picture. Null means no crop and no
+    /// colour effects (render the full image at natural colours).
+    /// Only populated when Kind == Picture (or Media, for the poster image).
+    /// </summary>
+    public PictureFormat? PictureFormat { get; set; }
 
     // ── Media (audio/video) ───────────────────────────────────────────────────────────
 
