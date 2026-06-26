@@ -577,6 +577,9 @@ public sealed class SlideShowWindow : Window
     {
         int ms = Math.Max(50, t.DurationMs);
 
+        // Play transition sound first (fire-and-forget; swallowed on error).
+        PlayTransitionSound(t);
+
         switch (t.Kind)
         {
             case TransitionKind.Cut:
@@ -585,6 +588,7 @@ public sealed class SlideShowWindow : Window
 
             case TransitionKind.Fade:
             case TransitionKind.Dissolve:
+            case TransitionKind.Flash:       // flash → fast fade approximation
                 PlayFadeTransition(slide, ms);
                 return;
 
@@ -595,10 +599,79 @@ public sealed class SlideShowWindow : Window
                 PlayPushTransition(slide, t, ms);
                 return;
 
+            // Directional / slide-like transitions: Push approximation
+            case TransitionKind.Gallery:
+            case TransitionKind.Conveyor:
+            case TransitionKind.Pan:
+            case TransitionKind.Reveal:
+            case TransitionKind.Comb:
+            case TransitionKind.Doors:
+            case TransitionKind.Window:
+                PlayPushTransition(slide, t, ms);
+                return;
+
+            // Exotic / 3-D transitions: Fade fallback
+            // Full morph/3D transition engines are out of scope; Fade is the safe approximation.
+            // Kinds: Morph, Cube, Box, Rotate, Flip, Ferris, Flythrough, Switch, Orbit, Honeycomb,
+            //        Glitter, Vortex, Shred, Wind, Ripple, Warp, Fracture, Crush, PeelOff,
+            //        PageCurlDouble, PageCurlSingle, Airplane, Origami, Prism, Curtains, Drape,
+            //        Prestige, WheelReverse, Zoom, Wheel, RandomBar, Strips, Blinds, Split, Random,
+            //        Fly, Other (unknown/exotic)
             default:
-                // All other kinds fall back to Fade.
+                // All other kinds (including morph and all 3-D effects) fall back to Fade.
                 PlayFadeTransition(slide, ms);
                 return;
+        }
+    }
+
+    // ── Transition sound playback ─────────────────────────────────────────────────
+
+    private System.Windows.Media.MediaPlayer? _transitionSoundPlayer;
+
+    /// <summary>
+    /// Plays the transition sound (if any) using WPF MediaPlayer on a temp file.
+    /// Fire-and-forget; errors are silently swallowed.
+    /// </summary>
+    private void PlayTransitionSound(SlideTransition t)
+    {
+        if (t.Sound?.AudioBytes is not { Length: > 0 }) return;
+
+        try
+        {
+            // Stop any previous transition sound.
+            _transitionSoundPlayer?.Stop();
+            _transitionSoundPlayer?.Close();
+            _transitionSoundPlayer = null;
+
+            // Write audio to a temp file (MediaPlayer requires a URI/file path).
+            var sound = t.Sound;
+            var ext   = sound.ContentType switch
+            {
+                "audio/mpeg" or "audio/mp3" => ".mp3",
+                "audio/wav"                 => ".wav",
+                "audio/ogg"                 => ".ogg",
+                "audio/aac"                 => ".aac",
+                "audio/x-ms-wma"            => ".wma",
+                _                           => ".mp3"
+            };
+            var tmpPath = System.IO.Path.GetTempFileName() + ext;
+            System.IO.File.WriteAllBytes(tmpPath, sound.AudioBytes);
+
+            var player = new System.Windows.Media.MediaPlayer();
+            player.Open(new Uri(tmpPath, UriKind.Absolute));
+            player.Play();
+            _transitionSoundPlayer = player;
+
+            // Clean up temp file after playback (best-effort).
+            player.MediaEnded += (_, _) =>
+            {
+                player.Close();
+                try { System.IO.File.Delete(tmpPath); } catch { /* ignore */ }
+            };
+        }
+        catch
+        {
+            // Never crash the slideshow over audio.
         }
     }
 
@@ -1174,6 +1247,10 @@ public sealed class SlideShowWindow : Window
             try { sb.Stop(); } catch { /* ignore */ }
         }
         _pendingStoryboards.Clear();
+
+        // Stop transition sound player.
+        try { _transitionSoundPlayer?.Stop(); _transitionSoundPlayer?.Close(); } catch { /* ignore */ }
+        _transitionSoundPlayer = null;
 
         // Stop all media players and delete temp files.
         _mediaController.Teardown();
