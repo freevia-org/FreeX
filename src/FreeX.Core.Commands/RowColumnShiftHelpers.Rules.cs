@@ -7,17 +7,39 @@ internal static partial class RowColumnShiftHelpers
 {
     // ── CF/DV formula-text rewrites for structural insert/delete ─────────────
 
+    // Slot constants for cfThresholdSnapshot keys (Guid = rule.Id, int = slot below).
+    // 0 = FormulaText (not a threshold — kept in cfSnapshot, listed here for reference only)
+    // 1 = MinThresholdValue   (colorScale)
+    // 2 = MidThresholdValue   (colorScale)
+    // 3 = MaxThresholdValue   (colorScale)
+    // 4 = DataBarMinThresholdValue
+    // 5 = DataBarMaxThresholdValue
+    // 10 + i = IconSetThresholds[i].Value  (i = 0..n-1)
+    private const int SlotColorScaleMin = 1;
+    private const int SlotColorScaleMax = 3;
+    private const int SlotColorScaleMid = 2;
+    private const int SlotDataBarMin    = 4;
+    private const int SlotDataBarMax    = 5;
+    private const int SlotIconSetBase   = 10;
+
     /// <summary>
     /// After geometry has already been shifted, rewrites FormulaText on any
     /// ConditionalFormat rule and Formula1/Formula2 on any DataValidation rule
     /// through <see cref="FormulaRewriter"/> with the supplied structural op.
     /// Changed values are recorded in <paramref name="cfSnapshot"/> /
-    /// <paramref name="dvSnapshot"/> for undo by <see cref="RestoreRuleFormulas"/>.
+    /// <paramref name="cfThresholdSnapshot"/> / <paramref name="dvSnapshot"/>
+    /// for undo by <see cref="RestoreRuleFormulas"/>.
+    /// <para>
+    /// <paramref name="cfThresholdSnapshot"/> captures colorScale/dataBar/iconSet cfvo
+    /// threshold values whose <c>ThresholdType</c> is <see cref="CfThresholdType.Formula"/>.
+    /// The key is <c>(rule.Id, slot)</c> where slot is one of the <c>Slot*</c> constants above.
+    /// </para>
     /// </summary>
     internal static void RewriteRuleFormulas(
         Sheet sheet,
         RewriteOperation op,
         Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
         Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
     {
         foreach (var rule in sheet.ConditionalFormats)
@@ -29,6 +51,40 @@ internal static partial class RowColumnShiftHelpers
                 {
                     cfSnapshot[rule.Id] = ft;
                     rule.FormulaText = rewritten;
+                }
+            }
+
+            // colorScale thresholds
+            RewriteThreshold(rule, SlotColorScaleMin, rule.MinThresholdType, rule.MinThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MinThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotColorScaleMid, rule.MidThresholdType, rule.MidThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MidThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotColorScaleMax, rule.MaxThresholdType, rule.MaxThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MaxThresholdValue = rewritten);
+
+            // dataBar thresholds
+            RewriteThreshold(rule, SlotDataBarMin, rule.DataBarMinThresholdType, rule.DataBarMinThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.DataBarMinThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotDataBarMax, rule.DataBarMaxThresholdType, rule.DataBarMaxThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.DataBarMaxThresholdValue = rewritten);
+
+            // iconSet thresholds
+            for (var i = 0; i < rule.IconSetThresholds.Count; i++)
+            {
+                var threshold = rule.IconSetThresholds[i];
+                if (threshold.Type == CfThresholdType.Formula && threshold.Value is { } tv)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(tv, op, sheet.Name);
+                    if (rewritten is not null && rewritten != tv)
+                    {
+                        cfThresholdSnapshot[(rule.Id, SlotIconSetBase + i)] = tv;
+                        rule.IconSetThresholds[i] = threshold with { Value = rewritten };
+                    }
                 }
             }
         }
@@ -56,21 +112,62 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    private static void RewriteThreshold(
+        ConditionalFormat rule,
+        int slot,
+        CfThresholdType type,
+        string? value,
+        RewriteOperation op,
+        string sheetName,
+        Dictionary<(Guid Id, int Slot), string?> snapshot,
+        Action<string> apply)
+    {
+        if (type != CfThresholdType.Formula || value is null)
+            return;
+        var rewritten = FormulaRewriter.Rewrite(value, op, sheetName);
+        if (rewritten is not null && rewritten != value)
+        {
+            snapshot[(rule.Id, slot)] = value;
+            apply(rewritten);
+        }
+    }
+
     /// <summary>
-    /// Restores CF/DV formula text from snapshots captured by <see cref="RewriteRuleFormulas"/>.
+    /// Restores CF/DV formula text (and CF Formula-type threshold values) from snapshots
+    /// captured by <see cref="RewriteRuleFormulas"/>.
     /// Looks up each rule by its <see cref="ConditionalFormat.Id"/> / <see cref="DataValidation.Id"/>.
     /// </summary>
     internal static void RestoreRuleFormulas(
         Sheet sheet,
         Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
         Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
     {
-        if (cfSnapshot.Count > 0)
+        if (cfSnapshot.Count > 0 || cfThresholdSnapshot.Count > 0)
         {
             foreach (var rule in sheet.ConditionalFormats)
             {
                 if (cfSnapshot.TryGetValue(rule.Id, out var original))
                     rule.FormulaText = original;
+
+                if (cfThresholdSnapshot.Count > 0)
+                {
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMin), out var minVal))
+                        rule.MinThresholdValue = minVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMid), out var midVal))
+                        rule.MidThresholdValue = midVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMax), out var maxVal))
+                        rule.MaxThresholdValue = maxVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotDataBarMin), out var dbMin))
+                        rule.DataBarMinThresholdValue = dbMin;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotDataBarMax), out var dbMax))
+                        rule.DataBarMaxThresholdValue = dbMax;
+                    for (var i = 0; i < rule.IconSetThresholds.Count; i++)
+                    {
+                        if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotIconSetBase + i), out var iconVal))
+                            rule.IconSetThresholds[i] = rule.IconSetThresholds[i] with { Value = iconVal };
+                    }
+                }
             }
         }
 
@@ -89,7 +186,7 @@ internal static partial class RowColumnShiftHelpers
 
     internal static (
         List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? DataValidations,
-        List<(ConditionalFormat Rule, GridRange AppliesTo)>? ConditionalFormats)
+        List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? ConditionalFormats)
         CaptureRuleRanges(Sheet sheet)
     {
         return (
@@ -98,13 +195,13 @@ internal static partial class RowColumnShiftHelpers
                 : sheet.DataValidations.Select(rule => (rule, rule.AppliesTo, rule.AdditionalRanges.ToList())).ToList(),
             sheet.ConditionalFormats.Count == 0
                 ? null
-                : sheet.ConditionalFormats.Select(rule => (rule, rule.AppliesTo)).ToList());
+                : sheet.ConditionalFormats.Select(rule => (rule, rule.AppliesTo, (rule.AdditionalRanges ?? []).ToList())).ToList());
     }
 
     internal static void RestoreRuleRangesInPlace(
         Sheet sheet,
         List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? dataValidations,
-        List<(ConditionalFormat Rule, GridRange AppliesTo)>? conditionalFormats)
+        List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? conditionalFormats)
     {
         if (dataValidations is not null)
         {
@@ -120,8 +217,11 @@ internal static partial class RowColumnShiftHelpers
 
         if (conditionalFormats is not null)
         {
-            foreach (var (rule, appliesTo) in conditionalFormats)
+            foreach (var (rule, appliesTo, additionalRanges) in conditionalFormats)
+            {
                 rule.AppliesTo = appliesTo;
+                rule.AdditionalRanges = additionalRanges.Count == 0 ? null : additionalRanges;
+            }
 
             sheet.ConditionalFormats.NotifyRulesChanged();
         }
@@ -131,7 +231,7 @@ internal static partial class RowColumnShiftHelpers
     internal static void RestoreRuleRanges(
         Sheet sheet,
         List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? dataValidations,
-        List<(ConditionalFormat Rule, GridRange AppliesTo)>? conditionalFormats)
+        List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? conditionalFormats)
     {
         if (dataValidations is not null)
         {
@@ -147,9 +247,10 @@ internal static partial class RowColumnShiftHelpers
         if (conditionalFormats is not null)
         {
             sheet.ConditionalFormats.Clear();
-            foreach (var (rule, appliesTo) in conditionalFormats)
+            foreach (var (rule, appliesTo, additionalRanges) in conditionalFormats)
             {
                 rule.AppliesTo = appliesTo;
+                rule.AdditionalRanges = additionalRanges.Count == 0 ? null : additionalRanges;
                 sheet.ConditionalFormats.Add(rule);
             }
         }
@@ -167,7 +268,10 @@ internal static partial class RowColumnShiftHelpers
             sheet.DataValidations.NotifyRulesChanged();
         }
         foreach (var rule in sheet.ConditionalFormats)
+        {
             rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
+            ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
+        }
     }
 
     internal static void ShiftRuleRowsDown(Sheet sheet, uint start, uint count)
@@ -190,7 +294,11 @@ internal static partial class RowColumnShiftHelpers
         {
             var shifted = ShiftRangeRowsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
             if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
-            else sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+            else
+            {
+                sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+                ShiftCfAdditionalRanges(sheet.ConditionalFormats[i], range => ShiftRangeRowsDown(range, start, count));
+            }
         }
     }
 
@@ -206,7 +314,10 @@ internal static partial class RowColumnShiftHelpers
             sheet.DataValidations.NotifyRulesChanged();
         }
         foreach (var rule in sheet.ConditionalFormats)
+        {
             rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
+            ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
+        }
     }
 
     internal static void ShiftRuleColumnsDown(Sheet sheet, uint start, uint count)
@@ -229,7 +340,11 @@ internal static partial class RowColumnShiftHelpers
         {
             var shifted = ShiftRangeColumnsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
             if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
-            else sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+            else
+            {
+                sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
+                ShiftCfAdditionalRanges(sheet.ConditionalFormats[i], range => ShiftRangeColumnsDown(range, start, count));
+            }
         }
     }
 
@@ -243,6 +358,26 @@ internal static partial class RowColumnShiftHelpers
             else
                 rule.AdditionalRanges[i] = shifted.Value;
         }
+    }
+
+    /// <summary>
+    /// Applies a shift function to all entries in <see cref="ConditionalFormat.AdditionalRanges"/>.
+    /// Ranges for which <paramref name="shift"/> returns <see langword="null"/> are removed (deleted out of existence).
+    /// Rebuilds and reassigns the list (CF's AdditionalRanges is IReadOnlyList, not mutable in-place).
+    /// </summary>
+    private static void ShiftCfAdditionalRanges(ConditionalFormat rule, Func<GridRange, GridRange?> shift)
+    {
+        if (rule.AdditionalRanges is null || rule.AdditionalRanges.Count == 0)
+            return;
+
+        var result = new List<GridRange>(rule.AdditionalRanges.Count);
+        foreach (var range in rule.AdditionalRanges)
+        {
+            var shifted = shift(range);
+            if (shifted.HasValue)
+                result.Add(shifted.Value);
+        }
+        rule.AdditionalRanges = result.Count == 0 ? null : result;
     }
 
     // ── Band-scoped rule adjustments for Insert/Delete Cells ─────────────────
@@ -292,6 +427,8 @@ internal static partial class RowColumnShiftHelpers
                 rule.AppliesTo = translated.Value;
                 cfChanged = true;
             }
+            if (TranslateCfAdditionalRangesInsert(rule, r => TranslateRangeInsertDown(r, bandStartCol, bandEndCol, insertBeforeRow, count)))
+                cfChanged = true;
         }
 
         if (cfChanged)
@@ -340,6 +477,8 @@ internal static partial class RowColumnShiftHelpers
                 rule.AppliesTo = translated.Value;
                 cfChanged = true;
             }
+            if (TranslateCfAdditionalRangesInsert(rule, r => TranslateRangeInsertRight(r, bandStartRow, bandEndRow, insertBeforeCol, count)))
+                cfChanged = true;
         }
 
         if (cfChanged)
@@ -395,10 +534,15 @@ internal static partial class RowColumnShiftHelpers
                 sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }
-            else if (result.Translated.HasValue)
+            else
             {
-                rule.AppliesTo = result.Translated.Value;
-                cfChanged = true;
+                if (result.Translated.HasValue)
+                {
+                    rule.AppliesTo = result.Translated.Value;
+                    cfChanged = true;
+                }
+                if (AdjustCfAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count))
+                    cfChanged = true;
             }
         }
 
@@ -453,10 +597,15 @@ internal static partial class RowColumnShiftHelpers
                 sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }
-            else if (result.Translated.HasValue)
+            else
             {
-                rule.AppliesTo = result.Translated.Value;
-                cfChanged = true;
+                if (result.Translated.HasValue)
+                {
+                    rule.AppliesTo = result.Translated.Value;
+                    cfChanged = true;
+                }
+                if (AdjustCfAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count))
+                    cfChanged = true;
             }
         }
 
@@ -636,6 +785,103 @@ internal static partial class RowColumnShiftHelpers
             }
         }
 
+        return changed;
+    }
+
+    // ── CF additional-range band-scoped helpers ───────────────────────────────
+    // CF uses IReadOnlyList<GridRange>? (not a mutable List), so we must rebuild
+    // and reassign rather than editing in-place like DV does.
+
+    /// <summary>
+    /// Applies <paramref name="translate"/> to each entry in <see cref="ConditionalFormat.AdditionalRanges"/>.
+    /// Entries for which the delegate returns a new value are replaced; entries returning null are unchanged
+    /// (for insert operations, null means "not in the shift band, leave alone").
+    /// Returns true when any change was made.
+    /// </summary>
+    private static bool TranslateCfAdditionalRangesInsert(ConditionalFormat rule, Func<GridRange, GridRange?> translate)
+    {
+        if (rule.AdditionalRanges is null || rule.AdditionalRanges.Count == 0)
+            return false;
+
+        var changed = false;
+        var result = new List<GridRange>(rule.AdditionalRanges.Count);
+        foreach (var range in rule.AdditionalRanges)
+        {
+            var translated = translate(range);
+            result.Add(translated ?? range);
+            if (translated.HasValue)
+                changed = true;
+        }
+        if (changed)
+            rule.AdditionalRanges = result;
+        return changed;
+    }
+
+    /// <summary>
+    /// Adjusts each entry in CF's <see cref="ConditionalFormat.AdditionalRanges"/> for a Delete-Shift-Up
+    /// band operation. Ranges fully in the deleted zone are removed; ranges below are translated up.
+    /// Returns true when any change was made.
+    /// </summary>
+    private static bool AdjustCfAdditionalRangesDeleteUp(
+        ConditionalFormat rule,
+        uint bandStartCol, uint bandEndCol,
+        uint deletedStartRow, uint deletedEndRow, uint count)
+    {
+        if (rule.AdditionalRanges is null || rule.AdditionalRanges.Count == 0)
+            return false;
+
+        var changed = false;
+        var result = new List<GridRange>(rule.AdditionalRanges.Count);
+        foreach (var range in rule.AdditionalRanges)
+        {
+            var res = TranslateRangeDeleteUp(range, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
+            if (res == RangeDeleteResult.Remove)
+            {
+                changed = true;
+            }
+            else
+            {
+                result.Add(res.Translated ?? range);
+                if (res.Translated.HasValue)
+                    changed = true;
+            }
+        }
+        if (changed)
+            rule.AdditionalRanges = result.Count == 0 ? null : result;
+        return changed;
+    }
+
+    /// <summary>
+    /// Adjusts each entry in CF's <see cref="ConditionalFormat.AdditionalRanges"/> for a Delete-Shift-Left
+    /// band operation. Ranges fully in the deleted zone are removed; ranges to the right are translated left.
+    /// Returns true when any change was made.
+    /// </summary>
+    private static bool AdjustCfAdditionalRangesDeleteLeft(
+        ConditionalFormat rule,
+        uint bandStartRow, uint bandEndRow,
+        uint deletedStartCol, uint deletedEndCol, uint count)
+    {
+        if (rule.AdditionalRanges is null || rule.AdditionalRanges.Count == 0)
+            return false;
+
+        var changed = false;
+        var result = new List<GridRange>(rule.AdditionalRanges.Count);
+        foreach (var range in rule.AdditionalRanges)
+        {
+            var res = TranslateRangeDeleteLeft(range, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
+            if (res == RangeDeleteResult.Remove)
+            {
+                changed = true;
+            }
+            else
+            {
+                result.Add(res.Translated ?? range);
+                if (res.Translated.HasValue)
+                    changed = true;
+            }
+        }
+        if (changed)
+            rule.AdditionalRanges = result.Count == 0 ? null : result;
         return changed;
     }
 }

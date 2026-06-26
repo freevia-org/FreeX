@@ -2145,7 +2145,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void AddDataValidationDropdownOverlay(");
         source.Should().Contain("DataValidationDropdownPlanner.TryPlan(");
         source.Should().Contain("new DataValidationDropdownCellBounds(left, top, width, height)");
-        source.Should().Contain("private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)");
+        source.Should().Contain("private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan, double width, double height)");
         source.Should().Contain("ItemsSource = plan.Items");
         source.Should().Contain("SelectedItem = plan.SelectedItem");
         source.Should().Contain("MinWidth = DataValidationDropdownPlanner.MinimumWidth");

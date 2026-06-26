@@ -701,6 +701,7 @@ public partial class MainWindow
             RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
             RefreshValidationDropdown();
+            RefreshDvInputMessage();
             UpdateCommentPreview(merge.Value.Start);
             return;
         }
@@ -724,6 +725,7 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         UpdateCommentPreview(addr);
     }
 
@@ -806,6 +808,7 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         UpdateCommentPreview(snapshot.Anchor);
     }
 

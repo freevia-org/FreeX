@@ -67,8 +67,9 @@ public static class SmartArtLayoutEngine
         var nodes = FlattenNodes(data);
         if (nodes.Count == 0)
         {
-            // No nodes — return an empty list (compositor will emit nothing from live path)
-            return Array.Empty<SlideShape>();
+            // BI2: Return null (not an empty list) so the compositor proceeds to the
+            // cached-drawing fallback instead of emitting nothing and rendering blank.
+            return null;
         }
 
         // Build accent color palette from the theme
@@ -217,8 +218,24 @@ public static class SmartArtLayoutEngine
         var shapes = new List<SlideShape>();
 
         long outerPad = (long)(fcx * OuterPaddingFrac);
-        long connectorW = (long)(fcx * 0.03);   // arrow connector width
-        long gap = (long)(fcx * GapFrac);
+
+        // BI3: Scale gap and connectorW down proportionally when many nodes would overflow.
+        // Raw (unscaled) values:
+        long rawConnectorW = (long)(fcx * 0.03);
+        long rawGap        = (long)(fcx * GapFrac);
+
+        // Total overhead consumed by gaps+connectors between the n boxes:
+        long rawOverhead = (n - 1) * (rawGap + rawConnectorW);
+        long innerW      = fcx - 2 * outerPad;
+
+        // If the overhead alone would consume more than 50% of innerW, shrink it to 50%
+        // (leaves at least half the inner width for the boxes themselves).
+        double scale = (rawOverhead > 0 && rawOverhead > innerW / 2)
+            ? (double)(innerW / 2) / rawOverhead
+            : 1.0;
+
+        long connectorW = (long)(rawConnectorW * scale);
+        long gap        = (long)(rawGap        * scale);
 
         long availW = fcx - 2 * outerPad - (n - 1) * (gap + connectorW);
         long boxW   = n > 0 ? Math.Max(availW / n, 1L) : 1L;
@@ -374,18 +391,15 @@ public static class SmartArtLayoutEngine
         var shapes = new List<SlideShape>();
         if (data.Nodes.Count == 0) return shapes;
 
-        // Use the first root (most org-charts have a single root)
-        var root = data.Nodes[0];
-
         long padX = (long)(fcx * OuterPaddingFrac);
         long padY = (long)(fcy * OuterPaddingFrac);
 
         long availW = fcx - 2 * padX;
         long availH = fcy - 2 * padY;
 
-        // Measure the tree depth and max-width to determine box sizes
-        int treeDepth    = GetTreeDepth(root);
-        int treeMaxWidth = GetTreeWidth(root);
+        // BI4: Measure across ALL roots so sizing accounts for the whole forest.
+        int treeDepth    = data.Nodes.Max(GetTreeDepth);
+        int treeMaxWidth = data.Nodes.Sum(GetTreeWidth);  // total leaf columns across all roots
 
         treeDepth    = Math.Max(treeDepth, 1);
         treeMaxWidth = Math.Max(treeMaxWidth, 1);
@@ -397,7 +411,7 @@ public static class SmartArtLayoutEngine
         long boxH = (availH - (treeDepth - 1) * gapY) / treeDepth;
         boxH = Math.Max(boxH, (long)(fcy * 0.10));
 
-        // Box width is determined per-level from available width
+        // Box width is determined from the total leaf-column count across all roots
         long boxW = (long)(availW / Math.Max(treeMaxWidth, 1) - gapX);
         boxW = Math.Max(boxW, (long)(fcx * 0.08));
 
@@ -405,13 +419,31 @@ public static class SmartArtLayoutEngine
         long startX    = fx + padX;
         long startY    = fy + padY;
 
-        RenderNode(root, 0, 0, treeMaxWidth, startX, startY, availW, boxW, boxH, gapX, gapY,
-            shapes, palette, ref idCounter, parentCenterX: -1, parentBottomY: -1);
+        // BI4: Lay out each root side-by-side, each allocated horizontal space
+        // proportional to its subtree leaf-width.
+        long curX = startX;
+        foreach (var root in data.Nodes)
+        {
+            int rootWidth = GetTreeWidth(root);
+            long rootSlotW = (long)((double)rootWidth / treeMaxWidth * availW);
+
+            RenderNode(root, 0, 0, rootWidth, curX, startY, rootSlotW, boxW, boxH, gapX, gapY,
+                shapes, palette, ref idCounter, parentCenterX: -1, parentBottomY: -1);
+
+            curX += rootSlotW;
+        }
 
         return shapes;
     }
 
     /// <summary>Recursively renders a hierarchy node and its children.</summary>
+    /// <param name="node">Node to render.</param>
+    /// <param name="levelIndex">Depth level (unused, kept for diagnostics).</param>
+    /// <param name="siblingIndex">Not used here — slot is passed via startX/availW.</param>
+    /// <param name="levelWidth">Total leaf-column width of this node's subtree (for proportional sizing).</param>
+    /// <param name="startX">Left edge of the slot allocated to this subtree.</param>
+    /// <param name="levelY">Top Y of this level's boxes.</param>
+    /// <param name="availW">Horizontal space allocated to this subtree (the slot width).</param>
     private static void RenderNode(
         SmartArtNode node,
         int levelIndex, int siblingIndex, int levelWidth,
@@ -422,23 +454,20 @@ public static class SmartArtLayoutEngine
         ref uint idCounter,
         long parentCenterX, long parentBottomY)
     {
-        // Compute subtree width so we can center this node within its column slot
-        int subWidth = GetTreeWidth(node);
-        subWidth = Math.Max(subWidth, 1);
+        // BI1: The slot for this node is exactly availW (already pre-allocated by the caller).
+        // Center the box within its slot, clamping boxW so it never exceeds the slot.
+        long slotW = availW;
+        long nodeBoxW = Math.Min(boxW, Math.Max(slotW - gapX, 1L));
 
-        // Column slot assigned to this subtree
-        long slotW    = availW / Math.Max(levelWidth, 1);
-        long slotX    = startX + siblingIndex * slotW;
-
-        long boxX = slotX + (slotW - boxW) / 2;
+        long boxX = startX + (slotW - nodeBoxW) / 2;
         long boxY = levelY;
 
         var fill    = NodeFill(node.Level, palette);
         var textClr = NodeTextColor(fill);
-        shapes.Add(MakeBox(idCounter++, node.Text, fill, textClr, boxX, boxY, boxW, boxH,
+        shapes.Add(MakeBox(idCounter++, node.Text, fill, textClr, boxX, boxY, nodeBoxW, boxH,
             node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
 
-        long boxCenterX = boxX + boxW / 2;
+        long boxCenterX = boxX + nodeBoxW / 2;
         long boxTopY    = boxY;
         long boxBottomY = boxY + boxH;
 
@@ -452,20 +481,29 @@ public static class SmartArtLayoutEngine
         if (node.Children.Count > 0)
         {
             long childLevelY = boxBottomY + gapY;
-            int nChildren    = node.Children.Count;
 
-            // Distribute children evenly in the subtree's column slot
-            for (int ci = 0; ci < nChildren; ci++)
+            // BI1: Distribute children's horizontal slots PROPORTIONALLY by each child's
+            // GetTreeWidth (subtree leaf count), not evenly by sibling count.
+            // This prevents unbalanced trees from assigning slots narrower than boxW.
+            int totalChildWidth = node.Children.Sum(GetTreeWidth);
+            totalChildWidth = Math.Max(totalChildWidth, 1);
+
+            long childCurX = startX;
+            foreach (var child in node.Children)
             {
-                var child = node.Children[ci];
+                int childWidth  = GetTreeWidth(child);
+                long childSlotW = (long)((double)childWidth / totalChildWidth * availW);
+
                 RenderNode(child,
                     node.Level + 1,
-                    ci, nChildren,
-                    slotX, childLevelY, slotW,
+                    0, childWidth,
+                    childCurX, childLevelY, childSlotW,
                     boxW, boxH, gapX, gapY,
                     shapes, palette, ref idCounter,
                     parentCenterX: boxCenterX,
                     parentBottomY: boxBottomY);
+
+                childCurX += childSlotW;
             }
         }
     }

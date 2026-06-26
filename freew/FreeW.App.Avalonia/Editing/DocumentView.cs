@@ -80,7 +80,10 @@ public sealed class DocumentView : Control
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
-    private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
+    // AV-TBL4: extended to carry per-cell shading brush and per-edge CellBorders.
+    // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
+    // Border: bool = table-level outer border; CellBorder: per-edge override from CellBorders model.
+    private readonly List<(Rect Rect, IBrush? Fill, bool Border, CellBorders? CellBorder)> _rects = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
@@ -480,6 +483,251 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
+    // ── AV-TBL3: cell merge / split ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merge the rectangular block of cells in <see cref="SelectedCellRange"/> into a single cell.
+    /// When the selection spans only a single row the model-level horizontal merge command is used
+    /// (collapses GridSpan). When the selection spans only a single column a vertical merge is used
+    /// (sets VerticalMerge Restart/Continue flags). When the selection spans both rows and columns a
+    /// horizontal merge is applied to the first row as a best-effort approximation (same behaviour as
+    /// the WPF host). Requires an active cross-cell selection; no-op when only a point caret is active.
+    /// Undoable.
+    /// </summary>
+    public void MergeSelectedCells()
+    {
+        if (SelectedCellRange is not { } sel)
+            return;
+        var blockIdx = sel.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+
+        var table = (Table)_doc.Blocks[blockIdx];
+        if (sel.MinRow == sel.MaxRow)
+        {
+            // Same row — horizontal merge.
+            // BH1: SelectedCellRange returns GRID columns; MergeCellsHorizontalCommand expects
+            // CELL-LIST indices. Convert via GridColumnToCellIndex for the relevant row.
+            var row = table.Rows[sel.MinRow];
+            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
+            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
+            if (firstCellIdx < 0 || lastCellIdx < 0)
+                return;
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
+        }
+        else if (sel.MinCol == sel.MaxCol)
+        {
+            // Same column — vertical merge.
+            // MergeCellsVerticalCommand takes a GRID column and converts internally — pass as-is.
+            _bus.Execute(new MergeCellsVerticalCommand(blockIdx, sel.MinCol, sel.MinRow, sel.MaxRow));
+        }
+        else
+        {
+            // Mixed — best-effort: horizontal merge on the first row only.
+            // BH1: same grid→cell-list conversion for the best-effort path.
+            var row = table.Rows[sel.MinRow];
+            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
+            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
+            if (firstCellIdx < 0 || lastCellIdx < 0)
+                return;
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
+        }
+
+        // Clear block selection and place caret in the surviving top-left cell.
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
+        PlaceCaretInCell(blockIdx, sel.MinRow, sel.MinCol, 0, 0);
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
+    /// Split the merged cell at the current caret position back into individual cells via
+    /// <see cref="SplitCellCommand"/>. Handles both horizontal merges (GridSpan &gt; 1) and vertical
+    /// merges (VerticalMerge = Restart). No-op when the caret is not in a table or the cell is not
+    /// merged. Undoable.
+    /// </summary>
+    /// <param name="rows">Reserved for future subdivision; currently ignored (model splits to 1×N or N×1).</param>
+    /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
+    public void SplitCurrentCell(int rows = 1, int cols = 1)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+
+        // BH2: _cellCaret.Col is a GRID column; SplitCellCommand expects a CELL-LIST index.
+        // Convert via GridColumnToCellIndex before issuing the command.
+        var splitTable = (Table)_doc.Blocks[blockIdx];
+        var splitCellIdx = GridColumnToCellIndex(splitTable.Rows[cc.Row], cc.Col);
+        if (splitCellIdx < 0)
+            return;
+        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, splitCellIdx));
+        // Re-place caret in the same cell (which is now split back to span=1).
+        PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
+        InvalidateLayoutAndVisual();
+    }
+
+    // ── AV-TBL4: cell shading + per-edge border edit surface ─────────────────────────────────────
+
+    /// <summary>
+    /// Set the background shading of the caret cell, or of ALL cells in <see cref="SelectedCellRange"/>
+    /// when a block selection is active.
+    /// <para><paramref name="hexColor"/> is an RRGGBB hex string (e.g. <c>"#FFFF00"</c>) or null/empty
+    /// to clear the fill.</para>
+    /// Routed through <see cref="DocumentCommandBus"/> so it is undoable. No-op when the caret is not
+    /// inside a table cell.
+    /// </summary>
+    public void SetCellShading(string? hexColor)
+    {
+        if (SelectedCellRange is { } sel)
+        {
+            // Block selection: apply to every cell in the rectangle.
+            if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
+                || _doc.Blocks[sel.TableBlock] is not Table selTbl)
+                return;
+            for (var r = sel.MinRow; r <= sel.MaxRow; r++)
+            {
+                if (r >= selTbl.Rows.Count) break;
+                var cells = selTbl.Rows[r].Cells;
+                for (var c = sel.MinCol; c <= sel.MaxCol; c++)
+                {
+                    if (c >= cells.Count) break;
+                    _bus.Execute(new SetCellShadingCommand(sel.TableBlock, r, c, hexColor));
+                }
+            }
+        }
+        else if (_cellCaret is { } cc)
+        {
+            // Single caret cell.
+            if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+                || _doc.Blocks[cc.TableBlock] is not Table)
+                return;
+            _bus.Execute(new SetCellShadingCommand(cc.TableBlock, cc.Row, cc.Col, hexColor));
+        }
+        else
+        {
+            return; // Not in a table — no-op.
+        }
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
+    /// Set or clear border edge(s) on the caret cell or all cells in <see cref="SelectedCellRange"/>.
+    /// <para>
+    /// <paramref name="edges"/> selects which edges to apply:
+    /// <list type="bullet">
+    ///   <item><see cref="CellBorderEdges.All"/> — all four edges of every selected cell.</item>
+    ///   <item><see cref="CellBorderEdges.Outside"/> — the outer boundary of the selected block
+    ///     (top edge of top row, bottom edge of bottom row, left of left col, right of right col).</item>
+    ///   <item><see cref="CellBorderEdges.Inside"/> — the shared inner edges of the selected block
+    ///     (bottom edges of all but last row, right edges of all but last column).</item>
+    ///   <item>Individual flags (<see cref="CellBorderEdges.Top"/> etc.) — applied to every selected cell.</item>
+    /// </list>
+    /// </para>
+    /// Pass <paramref name="clearEdges"/> = true to remove the specified edges rather than set them.
+    /// Routed through <see cref="DocumentCommandBus"/> — undoable. No-op outside a table.
+    /// </summary>
+    public void SetCellBorders(
+        CellBorderEdges edges,
+        string colorHex = "#000000",
+        double widthPt = 0.5,
+        BorderLineStyle style = BorderLineStyle.Single,
+        bool clearEdges = false)
+    {
+        int blockIdx;
+        int minRow, maxRow, minCol, maxCol;
+
+        if (SelectedCellRange is { } sel)
+        {
+            blockIdx = sel.TableBlock;
+            minRow = sel.MinRow; maxRow = sel.MaxRow;
+            minCol = sel.MinCol; maxCol = sel.MaxCol;
+        }
+        else if (_cellCaret is { } cc)
+        {
+            blockIdx = cc.TableBlock;
+            minRow = maxRow = cc.Row;
+            minCol = maxCol = cc.Col;
+        }
+        else
+        {
+            return; // Not in a table.
+        }
+
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count
+            || _doc.Blocks[blockIdx] is not Table tbl)
+            return;
+
+        for (var r = minRow; r <= maxRow; r++)
+        {
+            if (r >= tbl.Rows.Count) break;
+            var cells = tbl.Rows[r].Cells;
+            for (var c = minCol; c <= maxCol; c++)
+            {
+                if (c >= cells.Count) break;
+
+                // Determine which primitive edges apply to this cell given the edge selector.
+                var effectiveEdges = ResolveEdgesForCell(edges, r, c, minRow, maxRow, minCol, maxCol);
+                if (effectiveEdges == CellBorderEdges.None)
+                    continue;
+
+                _bus.Execute(new SetCellBordersCommand(blockIdx, r, c, effectiveEdges, style, colorHex, widthPt, clearEdges));
+            }
+        }
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
+    /// Translates an abstract edge selector (All/Outside/Inside/primitive flags) into the
+    /// concrete set of primitive edge bits that apply to a specific cell at (row, col) within
+    /// the selected block [minRow..maxRow] × [minCol..maxCol].
+    /// </summary>
+    private static CellBorderEdges ResolveEdgesForCell(
+        CellBorderEdges edges,
+        int row, int col,
+        int minRow, int maxRow, int minCol, int maxCol)
+    {
+        // Expand composite selectors: All = all four primitive edges; treat Outside / Inside below.
+        bool hasAll     = (edges & CellBorderEdges.All)     == CellBorderEdges.All;
+        bool hasOutside = (edges & CellBorderEdges.Outside) == CellBorderEdges.Outside;
+        bool hasInside  = (edges & CellBorderEdges.Inside)  != 0;
+        bool hasTop     = (edges & CellBorderEdges.Top)     != 0;
+        bool hasBottom  = (edges & CellBorderEdges.Bottom)  != 0;
+        bool hasLeft    = (edges & CellBorderEdges.Left)    != 0;
+        bool hasRight   = (edges & CellBorderEdges.Right)   != 0;
+
+        // If All requested, set all four edge bits now.
+        if (hasAll)
+            return CellBorderEdges.Top | CellBorderEdges.Bottom | CellBorderEdges.Left | CellBorderEdges.Right;
+
+        var result = CellBorderEdges.None;
+
+        // Outside: the outer boundary of the selection block.
+        if (hasOutside)
+        {
+            if (row == minRow) result |= CellBorderEdges.Top;
+            if (row == maxRow) result |= CellBorderEdges.Bottom;
+            if (col == minCol) result |= CellBorderEdges.Left;
+            if (col == maxCol) result |= CellBorderEdges.Right;
+        }
+
+        // Inside: shared inner edges (bottom of each non-last row; right of each non-last col).
+        if (hasInside)
+        {
+            if (row < maxRow) result |= CellBorderEdges.Bottom;
+            if (col < maxCol) result |= CellBorderEdges.Right;
+        }
+
+        // Primitive edge bits applied to every cell in the selection.
+        if (hasTop)    result |= CellBorderEdges.Top;
+        if (hasBottom) result |= CellBorderEdges.Bottom;
+        if (hasLeft)   result |= CellBorderEdges.Left;
+        if (hasRight)  result |= CellBorderEdges.Right;
+
+        return result;
+    }
+
     // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
 
     /// <summary>
@@ -497,9 +745,11 @@ public sealed class DocumentView : Control
                 return null;
             if (a.TableBlock != f.TableBlock)
                 return null;
-            return (a.TableBlock,
+            var raw = (a.TableBlock,
                 Math.Min(a.Row, f.Row), Math.Min(a.Col, f.Col),
                 Math.Max(a.Row, f.Row), Math.Max(a.Col, f.Col));
+            // BF5: expand the rectangle to fully cover any merged cells that straddle the boundary.
+            return ExpandForMergedCells(raw);
         }
     }
 
@@ -2397,8 +2647,9 @@ public sealed class DocumentView : Control
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
                 var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
-                IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
-                _rects.Add((rect, fill, borders));
+                // AV-TBL4: per-cell ShadingColorHex overrides table-style fills; header/band still apply as fallback.
+                IBrush? fill = ResolveCellFill(cellModel, isHeader, isBand);
+                _rects.Add((rect, fill, borders, cellModel.Borders));
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
                 var ty = rowPageSpaceY + pad;
@@ -3115,6 +3366,40 @@ public sealed class DocumentView : Control
         return result;
     }
 
+    // AV-TBL4: resolve the fill brush for a cell — per-cell ShadingColorHex wins; header/band are fallbacks.
+    private IBrush? ResolveCellFill(TableCell cell, bool isHeader, bool isBand)
+    {
+        if (!string.IsNullOrEmpty(cell.ShadingColorHex))
+            return BrushFor(cell.ShadingColorHex);
+        if (isHeader) return HeaderFill;
+        if (isBand)   return BandFill;
+        return null;
+    }
+
+    // AV-TBL4: draw per-edge cell borders using CellBorderEdge style/color/width data.
+    private void DrawCellBorderEdges(DrawingContext context, Rect rect, CellBorders borders)
+    {
+        DrawCellEdgeLine(context, borders.Top,    new Point(rect.Left, rect.Top),    new Point(rect.Right, rect.Top));
+        DrawCellEdgeLine(context, borders.Bottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        DrawCellEdgeLine(context, borders.Left,   new Point(rect.Left, rect.Top),    new Point(rect.Left, rect.Bottom));
+        DrawCellEdgeLine(context, borders.Right,  new Point(rect.Right, rect.Top),   new Point(rect.Right, rect.Bottom));
+    }
+
+    private void DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge, Point p1, Point p2)
+    {
+        if (edge is null) return;
+        DashStyle? dashStyle = edge.Style switch
+        {
+            BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
+            BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+            _ => null,
+        };
+        var pen = dashStyle is not null
+            ? new Pen(BrushFor(edge.ColorHex), edge.WidthPt * PxPerPoint, dashStyle)
+            : new Pen(BrushFor(edge.ColorHex), edge.WidthPt * PxPerPoint);
+        context.DrawLine(pen, p1, p2);
+    }
+
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
@@ -3154,12 +3439,15 @@ public sealed class DocumentView : Control
         }
 
         // Table fills + borders sit beneath the text.
-        foreach (var (rect, fill, border) in _rects)
+        foreach (var (rect, fill, border, cellBorder) in _rects)
         {
             if (fill is not null)
                 context.FillRectangle(fill, rect);
             if (border)
                 context.DrawRectangle(null, TableBorderPen, rect);
+            // AV-TBL4: per-edge cell borders drawn on top of the table-level border.
+            if (cellBorder is not null)
+                DrawCellBorderEdges(context, rect, cellBorder);
         }
 
         // AV-COL: draw column rules (vertical divider lines in each inter-column gap) when enabled.
@@ -3245,13 +3533,19 @@ public sealed class DocumentView : Control
 
         // AV-TBL2: cross-cell block-selection highlight. Draw a semi-transparent overlay over each
         // cell-hit rect that falls inside the selected row×col rectangle.
+        // BF5: use span-overlap test so merged cells straddling the boundary are highlighted.
         if (SelectedCellRange is { } cellSel)
         {
             foreach (var (cellRect, cellBlock, cellRow, cellCol) in _cellHits)
             {
                 if (cellBlock != cellSel.TableBlock) continue;
                 if (cellRow < cellSel.MinRow || cellRow > cellSel.MaxRow) continue;
-                if (cellCol < cellSel.MinCol || cellCol > cellSel.MaxCol) continue;
+                // Overlap test: include cell if its column range [startCol, startCol+span-1] overlaps
+                // the selection [MinCol, MaxCol]. For cells with no merged span, GridSpan is 1.
+                var cellSpan = GetCellModel(cellBlock, cellRow, cellCol)?.GridSpan ?? 1;
+                cellSpan = Math.Max(1, cellSpan);
+                if (cellCol + cellSpan - 1 < cellSel.MinCol) continue; // cell ends before selection
+                if (cellCol > cellSel.MaxCol) continue;                 // cell starts after selection
                 context.FillRectangle(CellBlockSelectionBrush, cellRect);
             }
         }
@@ -3651,13 +3945,27 @@ public sealed class DocumentView : Control
 
         // AV-TBL2: when a drag starts inside a cell and moves to a DIFFERENT cell, switch to
         // rectangular cross-cell block selection instead of single-cell text selection.
-        if (_cellAnchor is { } anchor && _cellCaret is { } focus
+        if (_cellBlockAnchor is { } blockAnchor && _cellCaret is { } movingFocus
+            && blockAnchor.TableBlock == movingFocus.TableBlock)
+        {
+            // BF4: block selection is already active — just update focus to the current cell.
+            // _cellCaret/_cellAnchor are already null (cleared when block selection was first activated).
+            _cellBlockFocus = (movingFocus.TableBlock, movingFocus.Row, movingFocus.Col);
+            _cellCaret  = null;
+            _cellAnchor = null;
+            _selectionAnchor = _caret;
+        }
+        else if (_cellAnchor is { } anchor && _cellCaret is { } focus
             && anchor.TableBlock == focus.TableBlock
             && (anchor.Row != focus.Row || anchor.Col != focus.Col))
         {
             // Different cell than where the drag started → activate block selection.
             _cellBlockAnchor = (anchor.TableBlock, anchor.Row, anchor.Col);
             _cellBlockFocus  = (focus.TableBlock,  focus.Row,  focus.Col);
+            // BF4: clear single-cell caret/anchor so SelectedCellRange and CellCaretInfo are
+            // never both non-null (mirrors SetCellBlockSelection invariant).
+            _cellCaret  = null;
+            _cellAnchor = null;
             // Suppress the single-cell text selection anchor so IsWithin() doesn't highlight glyphs.
             _selectionAnchor = _caret;
         }
@@ -3705,6 +4013,20 @@ public sealed class DocumentView : Control
             case Key.End: MoveToLineEdge(toStart: false, shift); e.Handled = true; break;
             case Key.Up: MoveCaretVertical(-1, shift); e.Handled = true; break;
             case Key.Down: MoveCaretVertical(+1, shift); e.Handled = true; break;
+            // AV-TBL3: Tab navigates between cells when the caret is in a table; outside a table
+            // it inserts a literal tab character (body-paragraph behaviour, same as before).
+            case Key.Tab:
+                if (_cellCaret is not null)
+                {
+                    TabNavigateCell(forward: !shift);
+                    e.Handled = true;
+                }
+                else if (!shift)
+                {
+                    InsertText("\t");
+                    e.Handled = true;
+                }
+                break;
         }
     }
 
@@ -4641,6 +4963,67 @@ public sealed class DocumentView : Control
         CaretMoved?.Invoke();
     }
 
+    // AV-TBL3: Tab / Shift-Tab cell navigation.
+    // Tab  → next cell (left→right, wrap to first cell of next row).
+    //         Tab in the last cell of the table appends a new row and moves into its first cell
+    //         (Word behaviour).
+    // Shift+Tab → previous cell.
+    // Never inserts a literal tab character when the caret is in a table.
+    private void TabNavigateCell(bool forward)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        // Build a flat reading-order list of (row, gridCol) entries, honouring GridSpan.
+        // BH3: Skip VerticalMerge.Continue cells — they are visually part of the merge anchor
+        // above them. Tab should only land on Restart/None cells (Word semantics).
+        var cellOrder = new List<(int Row, int Col)>();
+        for (var ri = 0; ri < table.Rows.Count; ri++)
+        {
+            var col = 0;
+            foreach (var cell in table.Rows[ri].Cells)
+            {
+                if (cell.VerticalMerge != VerticalMergeState.Continue)
+                    cellOrder.Add((ri, col));
+                col += Math.Max(1, cell.GridSpan);
+            }
+        }
+
+        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
+        if (currentIdx < 0)
+            return;
+
+        var targetIdx = currentIdx + (forward ? 1 : -1);
+
+        if (forward && targetIdx >= cellOrder.Count)
+        {
+            // Tab in the last cell → append a new row (Word behaviour) and place caret in it.
+            _bus.Execute(new InsertTableRowCommand(cc.TableBlock, table.Rows.Count));
+            // After insert the table has grown; re-read to find the new last row.
+            if (_doc.Blocks[cc.TableBlock] is not Table updatedTable)
+                return;
+            var newRow = updatedTable.Rows.Count - 1;
+            _cellBlockAnchor = null;
+            _cellBlockFocus  = null;
+            InvalidateLayoutAndVisual();
+            PlaceCaretInCell(cc.TableBlock, newRow, 0, 0, 0);
+            return;
+        }
+
+        if (targetIdx < 0)
+        {
+            // Shift+Tab at the very first cell — stay put (no wrap before the table start).
+            return;
+        }
+
+        var (targetRow, targetCol) = cellOrder[targetIdx];
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
+        PlaceCaretInCell(cc.TableBlock, targetRow, targetCol, 0, 0);
+    }
+
     private void MoveToLineEdge(bool toStart, bool extend)
     {
         // AV-TBL: Home/End within a cell moves to start/end of the current cell paragraph.
@@ -4782,6 +5165,112 @@ public sealed class DocumentView : Control
             if (colIdx == col)
                 return (paraIdx >= 0 && paraIdx < cell.Paragraphs.Count) ? cell.Paragraphs[paraIdx] : null;
             colIdx += Math.Max(1, cell.GridSpan);
+        }
+        return null;
+    }
+
+    // BF5: Expand the raw (TableBlock, MinRow, MinCol, MaxRow, MaxCol) rectangle so that any
+    // horizontally-merged cell (GridSpan > 1) whose column span straddles the boundary is fully
+    // included. Mirrors Word semantics: a straddling merged cell is included and the effective
+    // selection grows to cover the whole merged cell. Iterates until stable (a single pass is
+    // usually sufficient; a second pass handles cascaded merges).
+    private (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)
+        ExpandForMergedCells((int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol) raw)
+    {
+        if (raw.TableBlock < 0 || raw.TableBlock >= _doc.Blocks.Count)
+            return raw;
+        if (_doc.Blocks[raw.TableBlock] is not Table table)
+            return raw;
+
+        var (block, minRow, minCol, maxRow, maxCol) = raw;
+        bool changed;
+        do
+        {
+            changed = false;
+
+            // ── Horizontal expansion ─────────────────────────────────────────────────────────────
+            // For every row in the current range, extend minCol/maxCol to fully cover any
+            // horizontally merged cell (GridSpan > 1) that straddles the boundary.
+            for (var r = minRow; r <= maxRow; r++)
+            {
+                if (r < 0 || r >= table.Rows.Count) continue;
+                var col = 0;
+                foreach (var cell in table.Rows[r].Cells)
+                {
+                    var span = Math.Max(1, cell.GridSpan <= 0 ? 1 : cell.GridSpan);
+                    var cellEnd = col + span - 1; // inclusive last column of this cell
+
+                    // Overlap: cell's [col, cellEnd] overlaps selection [minCol, maxCol]?
+                    if (col <= maxCol && cellEnd >= minCol)
+                    {
+                        // Expand the selection to fully include this merged cell.
+                        if (col < minCol) { minCol = col; changed = true; }
+                        if (cellEnd > maxCol) { maxCol = cellEnd; changed = true; }
+                    }
+                    col += span;
+                }
+            }
+
+            // ── Vertical expansion (BG1) ─────────────────────────────────────────────────────────
+            // For every grid column in [minCol, maxCol], walk UP from minRow while the cell is a
+            // VerticalMerge.Continue (include its Restart head), and walk DOWN from maxRow while
+            // the next row's cell is Continue, expanding minRow/maxRow until stable.
+            for (var gridCol = minCol; gridCol <= maxCol; gridCol++)
+            {
+                // Walk UP: if minRow contains a Continue cell, include the Restart head.
+                while (minRow > 0)
+                {
+                    var cell = GetCellModelGridCol(table, minRow, gridCol);
+                    if (cell?.VerticalMerge != VerticalMergeState.Continue)
+                        break;
+                    minRow--;
+                    changed = true;
+                }
+
+                // Walk DOWN: if the row just below maxRow is Continue, include it.
+                while (maxRow + 1 < table.Rows.Count)
+                {
+                    var cell = GetCellModelGridCol(table, maxRow + 1, gridCol);
+                    if (cell?.VerticalMerge != VerticalMergeState.Continue)
+                        break;
+                    maxRow++;
+                    changed = true;
+                }
+            }
+        } while (changed);
+
+        return (block, minRow, minCol, maxRow, maxCol);
+    }
+
+    // BH1/BH2: map a GRID column to the Cells list index for a row.
+    // TableColumnHelpers.GridColumnToCellIndex is internal to FreeW.Core.Model, so we replicate the
+    // same logic here. Returns the index of the first cell whose cumulative span covers gridCol,
+    // or -1 if gridCol is beyond the row's total grid width.
+    private static int GridColumnToCellIndex(TableRow row, int targetGridCol)
+    {
+        var gridPos = 0;
+        for (var i = 0; i < row.Cells.Count; i++)
+        {
+            var span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridCol < gridPos + span)
+                return i;
+            gridPos += span;
+        }
+        return -1;
+    }
+
+    // BG1: retrieve a cell by GRID column from a Table instance directly (no block lookup).
+    // Returns the first cell whose cumulative grid span covers gridCol, or null if out of range.
+    private static TableCell? GetCellModelGridCol(Table table, int row, int gridCol)
+    {
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var colIdx = 0;
+        foreach (var cell in table.Rows[row].Cells)
+        {
+            var span = Math.Max(1, cell.GridSpan);
+            if (gridCol >= colIdx && gridCol < colIdx + span)
+                return cell;
+            colIdx += span;
         }
         return null;
     }

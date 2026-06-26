@@ -55,7 +55,7 @@ public sealed partial class XlsxFileAdapter
                 else if (string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
                          rule.Element(worksheetNs + "dataBar") is { } dataBar)
                 {
-                    var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs);
+                    var format = ReadDataBarConditionalFormat(dataBar, appliesTo, priority, worksheetNs, workbookTheme, indexedColors);
                     format.AdditionalRanges = additionalRanges;
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
@@ -376,12 +376,21 @@ public sealed partial class XlsxFileAdapter
             });
         }
 
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), workbookTheme, indexedColors, out var minColor))
+        if (XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(0), workbookTheme, indexedColors, out var minColor, out var minSource))
+        {
             format.MinColor = minColor;
-        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), workbookTheme, indexedColors, out var midColor))
+            format.MinColorSource = minSource;
+        }
+        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(1), workbookTheme, indexedColors, out var midColor, out var midSource))
+        {
             format.MidColor = midColor;
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), workbookTheme, indexedColors, out var maxColor))
+            format.MidColorSource = midSource;
+        }
+        if (XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), workbookTheme, indexedColors, out var maxColor, out var maxSource))
+        {
             format.MaxColor = maxColor;
+            format.MaxColorSource = maxSource;
+        }
 
         ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
         return format;
@@ -391,7 +400,9 @@ public sealed partial class XlsxFileAdapter
         XElement dataBar,
         GridRange appliesTo,
         int priority,
-        XNamespace worksheetNs)
+        XNamespace worksheetNs,
+        WorkbookTheme workbookTheme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var thresholds = dataBar.Elements(worksheetNs + "cfvo").ToList();
         var format = new ConditionalFormat
@@ -413,8 +424,11 @@ public sealed partial class XlsxFileAdapter
             format.DataBarMaxThresholdType = value.Type;
             format.DataBarMaxThresholdValue = value.Value;
         });
-        if (XlsxColorReader.TryReadRgbColor(dataBar.Element(worksheetNs + "color"), out var color))
+        if (XlsxColorReader.TryReadRgbColorWithSource(dataBar.Element(worksheetNs + "color"), workbookTheme, indexedColors, out var color, out var colorSource))
+        {
             format.DataBarColor = color;
+            format.DataBarColorSource = colorSource;
+        }
         var borderVal = dataBar.Attribute("border")?.Value;
         if (borderVal is not null)
             format.DataBarBorder = IsTruthy(borderVal);
@@ -518,6 +532,9 @@ public sealed partial class XlsxFileAdapter
             MinColor = source.MinColor,
             MidColor = source.MidColor,
             MaxColor = source.MaxColor,
+            MinColorSource = source.MinColorSource,
+            MidColorSource = source.MidColorSource,
+            MaxColorSource = source.MaxColorSource,
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
             MinThresholdValue = source.MinThresholdValue,
@@ -529,6 +546,7 @@ public sealed partial class XlsxFileAdapter
             MaxThresholdValue = source.MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
             DataBarColor = source.DataBarColor,
+            DataBarColorSource = source.DataBarColorSource,
             DataBarMinThresholdType = source.DataBarMinThresholdType,
             DataBarMinThresholdValue = source.DataBarMinThresholdValue,
             DataBarMaxThresholdType = source.DataBarMaxThresholdType,

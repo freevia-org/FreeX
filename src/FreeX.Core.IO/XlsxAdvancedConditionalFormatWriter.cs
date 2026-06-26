@@ -154,9 +154,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     ToCfvoXml(worksheetNs, cf.MinThresholdType, cf.MinThresholdValue, cf.MinThresholdGreaterThanOrEqual),
                     cf.UseThreeColorScale ? ToCfvoXml(worksheetNs, cf.MidThresholdType, cf.MidThresholdValue, cf.MidThresholdGreaterThanOrEqual) : null,
                     ToCfvoXml(worksheetNs, cf.MaxThresholdType, cf.MaxThresholdValue, cf.MaxThresholdGreaterThanOrEqual),
-                    ToColorXml(worksheetNs, cf.MinColor),
-                    cf.UseThreeColorScale ? ToColorXml(worksheetNs, cf.MidColor) : null,
-                    ToColorXml(worksheetNs, cf.MaxColor)), cf, worksheetNs));
+                    ToColorXml(worksheetNs, cf.MinColor, cf.MinColorSource),
+                    cf.UseThreeColorScale ? ToColorXml(worksheetNs, cf.MidColor, cf.MidColorSource) : null,
+                    ToColorXml(worksheetNs, cf.MaxColor, cf.MaxColorSource)), cf, worksheetNs));
                 break;
             case CfRuleType.DataBar:
                 var dataBar = new XElement(
@@ -164,7 +164,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     new XAttribute("showValue", cf.DataBarShowValue ? "1" : "0"),
                     ToCfvoXml(worksheetNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue),
                     ToCfvoXml(worksheetNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue),
-                    ToColorXml(worksheetNs, cf.DataBarColor));
+                    ToColorXml(worksheetNs, cf.DataBarColor, cf.DataBarColorSource));
                 if (cf.DataBarMinLength.HasValue)
                     dataBar.SetAttributeValue("minLength", cf.DataBarMinLength.Value.ToString(CultureInfo.InvariantCulture));
                 if (cf.DataBarMaxLength.HasValue)
@@ -368,6 +368,25 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
     private static XElement ToColorXml(XNamespace worksheetNs, RgbColor color) =>
         new(worksheetNs + "color", new XAttribute("rgb", $"FF{color.R:X2}{color.G:X2}{color.B:X2}"));
+
+    /// <summary>
+    /// When <paramref name="source"/> is non-null (color originated from a workbook theme reference),
+    /// emits the raw <c>theme</c> (and optional <c>tint</c>) attributes to preserve round-trip fidelity
+    /// instead of flattening to sRGB.
+    /// </summary>
+    private static XElement ToColorXml(XNamespace worksheetNs, RgbColor color, CfColorStopSource? source)
+    {
+        if (source is { } s)
+        {
+            var el = new XElement(worksheetNs + "color",
+                new XAttribute("theme", s.ThemeIndex.ToString(CultureInfo.InvariantCulture)));
+            if (Math.Abs(s.Tint) >= 0.000001)
+                el.SetAttributeValue("tint", s.Tint.ToString("G17", CultureInfo.InvariantCulture));
+            return el;
+        }
+
+        return ToColorXml(worksheetNs, color);
+    }
 
     private static string ToArgb(CellColor color) =>
         $"FF{color.R:X2}{color.G:X2}{color.B:X2}";

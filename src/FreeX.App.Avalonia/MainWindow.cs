@@ -4377,21 +4377,95 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var dropdown = CreateDataValidationDropdown(plan);
-        Canvas.SetLeft(dropdown, plan.Bounds.Left);
+        // Size the ComboBox to exactly ArrowButtonWidth so it looks like Excel's in-cell
+        // dropdown-arrow button (a narrow button with a chevron, flush with the cell's right edge).
+        var btnWidth = Math.Max(DataValidationDropdownPlanner.MinimumWidth,
+            DataValidationAffordancePlanner.ArrowButtonWidth * zoomFactor);
+        var btnHeight = Math.Max(DataValidationDropdownPlanner.MinimumHeight, plan.Bounds.Height);
+        var btnLeft = left + width - btnWidth;
+
+        var dropdown = CreateDataValidationDropdown(plan, btnWidth, btnHeight);
+        Canvas.SetLeft(dropdown, btnLeft);
         Canvas.SetTop(dropdown, plan.Bounds.Top);
         overlay.Children.Add(dropdown);
         _activeDataValidationDropdown = dropdown;
+
+        // Input-message tooltip anchored below-left of the active cell.
+        AddDvInputMessageOverlay(overlay, left, top + height, overlay.Width, overlay.Height);
     }
 
-    private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan)
+    private void AddDvInputMessageOverlay(
+        Canvas overlay,
+        double cellLeft,
+        double cellBottom,
+        double overlayWidth,
+        double overlayHeight)
+    {
+        var prompt = DataValidationAffordancePlanner.GetInputMessagePrompt(
+            _session.ActiveSheet, _session.ActiveCell);
+        if (prompt is null)
+            return;
+
+        const double boxWidth = 160;
+        const double maxBoxHeight = 120;
+
+        var left = Math.Max(0, Math.Min(cellLeft, Math.Max(0, overlayWidth - boxWidth)));
+        var top = cellBottom + 2;
+        if (top + maxBoxHeight > overlayHeight && top > maxBoxHeight + 2)
+            top = Math.Max(0, cellBottom - maxBoxHeight - 2);
+
+        var panel = new StackPanel { MaxWidth = boxWidth - 16 };
+
+        if (prompt.Value.Title.Length > 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = prompt.Value.Title,
+                FontWeight = FontWeight.Bold,
+                FontSize = 11,
+                Foreground = Brushes.Black,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, prompt.Value.Message.Length > 0 ? 3 : 0)
+            });
+        }
+
+        if (prompt.Value.Message.Length > 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = prompt.Value.Message,
+                FontSize = 11,
+                Foreground = Brushes.Black,
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        var border = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 6, 8, 6),
+            Width = boxWidth,
+            MaxHeight = maxBoxHeight,
+            Child = panel,
+        };
+        AutomationProperties.SetAutomationId(border, "WorksheetDvInputMessagePopup");
+        AutomationProperties.SetName(border, "Data validation input message");
+
+        Canvas.SetLeft(border, left);
+        Canvas.SetTop(border, top);
+        overlay.Children.Add(border);
+    }
+
+    private ComboBox CreateDataValidationDropdown(DataValidationDropdownPlan plan, double width, double height)
     {
         var dropdown = new ComboBox
         {
             ItemsSource = plan.Items,
             SelectedItem = plan.SelectedItem,
-            Width = plan.Bounds.Width,
-            Height = plan.Bounds.Height,
+            Width = width,
+            Height = height,
             MinWidth = DataValidationDropdownPlanner.MinimumWidth,
             MinHeight = DataValidationDropdownPlanner.MinimumHeight,
             MaxDropDownHeight = 220,
@@ -18785,18 +18859,22 @@ public sealed partial class MainWindow : Window
             hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 500, minWidth: 680, minHeight: 420);
         });
 
-        var dropdown = CreateDataValidationDropdown(new DataValidationDropdownPlan(
+        var dvPlan = new DataValidationDropdownPlan(
             ["Yes", "No"],
             "Yes",
-            new DataValidationDropdownBounds(12, 16, 48, 18)));
+            new DataValidationDropdownBounds(12, 16, 48, 18));
+        var dropdown = CreateDataValidationDropdown(
+            dvPlan,
+            DataValidationAffordancePlanner.ArrowButtonWidth,
+            Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height));
         var hasDataValidationDropdownControl =
             HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
             string.Equals(
                 AutomationProperties.GetHelpText(dropdown),
                 "Pick a permitted value for the active cell.",
                 StringComparison.Ordinal) &&
-            dropdown.Width == 48 &&
-            dropdown.Height == 18 &&
+            dropdown.Width == DataValidationAffordancePlanner.ArrowButtonWidth &&
+            dropdown.Height == Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height) &&
             dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
             dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
         var hasDataValidationDropdownItems =

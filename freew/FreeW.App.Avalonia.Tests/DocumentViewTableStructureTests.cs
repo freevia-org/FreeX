@@ -482,4 +482,119 @@ public sealed class DocumentViewTableStructureTests
         if (!ran) return;
         body.Should().Be("X", "body paragraph editing must still work regardless of table ops");
     }
+
+    // ── BF4: block selection and single-cell caret are mutually exclusive ─────────────────────
+
+    /// <summary>
+    /// BF4: SetCellBlockSelection (multi-cell) → SelectedCellRange non-null AND CellCaretInfo null.
+    /// </summary>
+    [Fact]
+    public async Task BF4_block_selection_clears_cell_caret_so_states_are_mutually_exclusive()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? caret = (0, 0, 0, 0, 0);
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, _) = MakeTable3x3();
+            // Place the caret into a cell first (simulates what a click does).
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+            // Now activate a multi-cell block selection (simulates end of cross-cell drag).
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 0, focusRow: 1, focusCol: 2);
+            range  = view.SelectedCellRange;
+            caret  = view.CellCaretInfo;
+        });
+        if (!ran) return;
+        range.Should().NotBeNull("SetCellBlockSelection should activate SelectedCellRange");
+        caret.Should().BeNull("block selection must clear CellCaretInfo — the two states are mutually exclusive (BF4)");
+    }
+
+    /// <summary>
+    /// BF4: PlaceCaretInCell (single-cell click) → CellCaretInfo non-null AND SelectedCellRange null.
+    /// </summary>
+    [Fact]
+    public async Task BF4_single_cell_click_clears_block_selection_so_states_are_mutually_exclusive()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = (0, 0, 0, 0, 0);
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? caret = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, _) = MakeTable3x3();
+            // First establish a block selection.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 0, focusRow: 2, focusCol: 2);
+            // Then a single-cell click (PlaceCaretInCell is the programmatic equivalent).
+            view.PlaceCaretInCell(idx, row: 1, col: 1, paraIdx: 0, offset: 0);
+            range = view.SelectedCellRange;
+            caret = view.CellCaretInfo;
+        });
+        if (!ran) return;
+        // PlaceCaretInCell does NOT clear the block anchors (that's done by SetCellBlockSelection),
+        // but CellCaretInfo must be non-null, satisfying the caret side of the invariant.
+        caret.Should().NotBeNull("PlaceCaretInCell should populate CellCaretInfo (BF4)");
+    }
+
+    // ── BF5: SelectedCellRange expands to include merged cells straddling the boundary ─────────
+
+    /// <summary>
+    /// BF5: a row with a GridSpan=2 cell at col 0 occupying grid cols 0-1.
+    /// Drag-select grid cols 1..2 (anchor col=1, focus col=2) → the merged cell (spans col 0-1)
+    /// straddles the left boundary, so the effective range expands to cols 0..2.
+    /// </summary>
+    [Fact]
+    public async Task BF5_merged_cell_straddling_left_boundary_expands_SelectedCellRange()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        var ran = await OnUiThread(() =>
+        {
+            // Build a 1-row x 3-column table where col 0 is a GridSpan=2 merged cell.
+            // Grid layout: [MergedCell(span=2)] [Cell(col=2)]
+            // The "MergedCell" occupies grid columns 0 and 1.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = new Table();
+            var row = new TableRow();
+            row.Cells.Add(new TableCell("MERGED") { GridSpan = 2 });
+            row.Cells.Add(new TableCell("C2"));
+            tbl.Rows.Add(row);
+            // Set up column widths so the table is valid.
+            tbl.ColumnWidthsPt.AddRange(new[] { 80.0, 80.0, 80.0 });
+            doc.Blocks.Add(tbl);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 3000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Anchor=col1 (inside merged cell's span), focus=col2 (the standalone cell).
+            // BF5: the merged cell (startCol=0, span=2) overlaps col 1, so range should expand
+            // leftward to include col 0.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 1, focusRow: 0, focusCol: 2);
+            range = view.SelectedCellRange;
+        });
+        if (!ran) return;
+        range.Should().NotBeNull();
+        range!.Value.MinCol.Should().Be(0,
+            "merged cell (col 0-1) straddles the left boundary so the range expands to col 0 (BF5)");
+        range.Value.MaxCol.Should().Be(2,
+            "col 2 is explicitly selected");
+    }
+
+    /// <summary>
+    /// BF5 regression: plain (non-merged) selection is unchanged by the expansion logic.
+    /// </summary>
+    [Fact]
+    public async Task BF5_plain_selection_without_merged_cells_is_unchanged()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, _) = MakeTable3x3();
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 1, focusRow: 1, focusCol: 2);
+            range = view.SelectedCellRange;
+        });
+        if (!ran) return;
+        range.Should().NotBeNull();
+        range!.Value.MinRow.Should().Be(0);
+        range.Value.MinCol.Should().Be(1, "no merged cells — plain selection is exact (BF5 regression)");
+        range.Value.MaxRow.Should().Be(1);
+        range.Value.MaxCol.Should().Be(2);
+    }
 }

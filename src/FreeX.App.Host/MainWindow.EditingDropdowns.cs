@@ -1,7 +1,9 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -54,10 +56,18 @@ public partial class MainWindow
         _validationDropdown.SelectedItem = plan.SelectedItem;
         _suppressValidationDropdownCommit = false;
 
-        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, plan.Bounds.Left);
-        System.Windows.Controls.Canvas.SetTop(_validationDropdown, plan.Bounds.Top);
-        _validationDropdown.Width = plan.Bounds.Width;
-        _validationDropdown.Height = plan.Bounds.Height;
+        // Anchor to the RIGHT edge of the cell at exactly ArrowButtonWidth px wide —
+        // this makes the ComboBox appear as Excel's in-cell dropdown-arrow button.
+        var zoom = _zoomLevel;
+        var btnWidth = DataValidationAffordancePlanner.ArrowButtonWidth * zoom;
+        var btnLeft = (rect.Left + rect.Width) * zoom - btnWidth;
+        var btnTop = rect.Top * zoom;
+        var btnHeight = rect.Height * zoom;
+
+        System.Windows.Controls.Canvas.SetLeft(_validationDropdown, btnLeft);
+        System.Windows.Controls.Canvas.SetTop(_validationDropdown, btnTop);
+        _validationDropdown.Width = btnWidth;
+        _validationDropdown.Height = Math.Max(DataValidationDropdownPlanner.MinimumHeight, btnHeight);
         _validationDropdown.Visibility = Visibility.Visible;
         EditOverlay.IsHitTestVisible = true;
     }
@@ -73,11 +83,14 @@ public partial class MainWindow
             Padding = new System.Windows.Thickness(0),
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(15, 109, 140)),
+                System.Windows.Media.Color.FromRgb(120, 120, 120)),
             BorderThickness = new System.Windows.Thickness(1),
             MaxDropDownHeight = 220,
             ToolTip = "Pick from list"
         };
+        AutomationProperties.SetAutomationId(_validationDropdown, "WorksheetDataValidationDropdown");
+        AutomationProperties.SetName(_validationDropdown, "Data validation list");
+        AutomationProperties.SetHelpText(_validationDropdown, "Pick a permitted value for the active cell.");
         _validationDropdown.SelectionChanged += ValidationDropdown_SelectionChanged;
         EditOverlay.Children.Add(_validationDropdown);
     }
@@ -91,6 +104,126 @@ public partial class MainWindow
             _textBoxInlineEditor?.IsVisible != true &&
             EditOverlay.IsHitTestVisible)
             EditOverlay.IsHitTestVisible = false;
+    }
+
+    // ── DV input-message floating tooltip ────────────────────────────────────
+
+    /// <summary>
+    /// Shows or refreshes the floating input-message tooltip for the active cell if it has a
+    /// DV input message. The box appears below-right of the active cell, similar to the comment
+    /// preview. Dismissed on selection change or when there is no prompt.
+    /// </summary>
+    private void RefreshDvInputMessage()
+    {
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet ||
+            SheetGrid.SelectedRange is not { } range)
+        {
+            HideDvInputMessage();
+            return;
+        }
+
+        var prompt = DataValidationAffordancePlanner.GetInputMessagePrompt(sheet, range.Start);
+        if (prompt is null)
+        {
+            HideDvInputMessage();
+            return;
+        }
+
+        if (TryGetCellOverlayRect(range.Start) is not { } cellRect)
+        {
+            HideDvInputMessage();
+            return;
+        }
+
+        EnsureDvInputMessageBorder();
+        BuildDvInputMessageContent(prompt.Value);
+        PositionDvInputMessage(cellRect);
+        _dvInputMessageBorder!.Visibility = Visibility.Visible;
+    }
+
+    private void HideDvInputMessage()
+    {
+        if (_dvInputMessageBorder is { Visibility: not Visibility.Collapsed })
+            _dvInputMessageBorder.Visibility = Visibility.Collapsed;
+    }
+
+    private void EnsureDvInputMessageBorder()
+    {
+        if (_dvInputMessageBorder is not null)
+            return;
+
+        _dvInputMessageBorder = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 6, 8, 6),
+            Visibility = Visibility.Collapsed,
+            Effect = new DropShadowEffect
+            {
+                BlurRadius = 6,
+                Direction = 315,
+                Opacity = 0.20,
+                ShadowDepth = 2
+            }
+        };
+        AutomationProperties.SetAutomationId(_dvInputMessageBorder, "WorksheetDvInputMessagePopup");
+        AutomationProperties.SetName(_dvInputMessageBorder, "Data validation input message");
+        CommentOverlay.Children.Add(_dvInputMessageBorder);
+    }
+
+    private void BuildDvInputMessageContent(DataValidationService.InputPrompt prompt)
+    {
+        var panel = new StackPanel { MaxWidth = 200 };
+
+        if (prompt.Title.Length > 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = prompt.Title,
+                FontWeight = System.Windows.FontWeights.Bold,
+                FontSize = 11,
+                Foreground = System.Windows.Media.Brushes.Black,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, prompt.Message.Length > 0 ? 3 : 0)
+            });
+        }
+
+        if (prompt.Message.Length > 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = prompt.Message,
+                FontSize = 11,
+                Foreground = System.Windows.Media.Brushes.Black,
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        _dvInputMessageBorder!.Child = panel;
+    }
+
+    private void PositionDvInputMessage(Rect cellRect)
+    {
+        if (_dvInputMessageBorder is null)
+            return;
+
+        var zoom = _zoomLevel;
+        var scaledBottom = (cellRect.Top + cellRect.Height) * zoom;
+        var scaledLeft = cellRect.Left * zoom;
+        const double boxWidth = 160;
+        const double maxBoxHeight = 120;
+
+        // Prefer below-left of cell; shift up if it would go off-screen bottom.
+        var left = Math.Max(0, Math.Min(scaledLeft, Math.Max(0, CommentOverlay.ActualWidth - boxWidth)));
+        var top = scaledBottom + 2;
+        if (top + maxBoxHeight > CommentOverlay.ActualHeight)
+            top = Math.Max(0, (cellRect.Top * zoom) - maxBoxHeight - 2);
+
+        _dvInputMessageBorder.Width = boxWidth;
+        _dvInputMessageBorder.MaxHeight = maxBoxHeight;
+        System.Windows.Controls.Canvas.SetLeft(_dvInputMessageBorder, left);
+        System.Windows.Controls.Canvas.SetTop(_dvInputMessageBorder, top);
     }
 
     private void OpenActiveDropdown()

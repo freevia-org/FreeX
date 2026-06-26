@@ -14,6 +14,16 @@ public readonly record struct RgbColor(byte R, byte G, byte B)
     public static RgbColor FromCellColor(CellColor c) => new(c.R, c.G, c.B);
 }
 
+/// <summary>
+/// Carries the original OOXML <c>theme</c> index and optional <c>tint</c> for a colorScale stop color
+/// that was expressed as a theme reference in the source file. Stored alongside the resolved
+/// <see cref="RgbColor"/> so the writer can round-trip the raw theme attributes without flattening
+/// to sRGB.
+/// </summary>
+/// <param name="ThemeIndex">OOXML theme index (0–11), matching the numeric @theme attribute.</param>
+/// <param name="Tint">Tint value in [−1, 1]. 0 means no tint.</param>
+public readonly record struct CfColorStopSource(int ThemeIndex, double Tint = 0);
+
 /// <summary>Rule type for a conditional format.</summary>
 public enum CfRuleType
 {
@@ -117,6 +127,19 @@ public sealed class ConditionalFormat
     public RgbColor MidColor { get; set; } = new(255, 235, 132);  // yellow
     public RgbColor MaxColor { get; set; } = new(248, 105, 107);  // red
 
+    /// <summary>
+    /// When the min stop color originated from a workbook theme reference in the source file,
+    /// this carries the raw theme index and tint so the writer can round-trip the original
+    /// attributes instead of flattening to sRGB.
+    /// </summary>
+    public CfColorStopSource? MinColorSource { get; set; }
+
+    /// <summary>Theme source for the mid stop color. <see langword="null"/> when the color was sRGB or indexed.</summary>
+    public CfColorStopSource? MidColorSource { get; set; }
+
+    /// <summary>Theme source for the max stop color. <see langword="null"/> when the color was sRGB or indexed.</summary>
+    public CfColorStopSource? MaxColorSource { get; set; }
+
     /// <summary>When true, interpolate through MidColor at the 50 % point.</summary>
     public bool UseThreeColorScale { get; set; } = false;
     public CfThresholdType MinThresholdType { get; set; } = CfThresholdType.Min;
@@ -132,6 +155,13 @@ public sealed class ConditionalFormat
     // ── DataBar rule ────────────────────────────────────────────────────────
 
     public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
+
+    /// <summary>
+    /// When the dataBar fill color originated from a workbook theme reference in the source file,
+    /// this carries the raw theme index and tint so the writer can round-trip the original
+    /// attributes instead of flattening to sRGB.
+    /// </summary>
+    public CfColorStopSource? DataBarColorSource { get; set; }
     public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
     public string? DataBarMinThresholdValue { get; set; }
     public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
@@ -225,6 +255,9 @@ public sealed class ConditionalFormat
             MinColor = MinColor,
             MidColor = MidColor,
             MaxColor = MaxColor,
+            MinColorSource = MinColorSource,
+            MidColorSource = MidColorSource,
+            MaxColorSource = MaxColorSource,
             UseThreeColorScale = UseThreeColorScale,
             MinThresholdType = MinThresholdType,
             MinThresholdValue = MinThresholdValue,
@@ -236,6 +269,7 @@ public sealed class ConditionalFormat
             MaxThresholdValue = MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = MaxThresholdGreaterThanOrEqual,
             DataBarColor = DataBarColor,
+            DataBarColorSource = DataBarColorSource,
             DataBarMinThresholdType = DataBarMinThresholdType,
             DataBarMinThresholdValue = DataBarMinThresholdValue,
             DataBarMaxThresholdType = DataBarMaxThresholdType,

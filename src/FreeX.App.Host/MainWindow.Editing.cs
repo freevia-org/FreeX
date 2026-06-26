@@ -748,6 +748,7 @@ public partial class MainWindow
         EnsureCellVisible(selectedRange.Start);
         UpdateViewport();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         FocusSheetGridIfNeeded();
     }
 
@@ -789,6 +790,7 @@ public partial class MainWindow
         EnsureCellVisible(selectedRange.Start);
         UpdateViewport();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         FocusSheetGridIfNeeded();
         e.Handled = true;
     }
@@ -997,6 +999,7 @@ public partial class MainWindow
         UpdateViewport();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         return true;
     }
 

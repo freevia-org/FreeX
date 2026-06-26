@@ -74,6 +74,40 @@ public static class XlsxColorReader
         return false;
     }
 
+    /// <summary>
+    /// Like <see cref="TryReadRgbColor(XElement?,WorkbookTheme,WorkbookIndexedColorPalette,out RgbColor)"/>
+    /// but also returns the raw OOXML theme index and tint via <paramref name="source"/> when the color
+    /// was expressed as a theme reference (so callers can round-trip the original attributes).
+    /// <paramref name="source"/> is <see langword="null"/> when the color was sRGB or indexed.
+    /// </summary>
+    public static bool TryReadRgbColorWithSource(
+        XElement? element,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
+        out RgbColor color,
+        out CfColorStopSource? source)
+    {
+        source = null;
+
+        if (TryReadRgbColor(element, out color))
+            return true;
+
+        if (TryReadThemeColorWithSource(element, theme, out var cellColor, out source))
+        {
+            color = RgbColor.FromCellColor(cellColor);
+            return true;
+        }
+
+        if (TryReadIndexedColor(element, indexedColors, out cellColor))
+        {
+            color = RgbColor.FromCellColor(cellColor);
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
     public static bool TryReadCellColor(XElement? element, out CellColor color)
     {
         color = default;
@@ -126,6 +160,31 @@ public static class XlsxColorReader
         }
 
         color = theme.ResolveColor(slot, ReadTint(element));
+        return true;
+    }
+
+    private static bool TryReadThemeColorWithSource(
+        XElement? element,
+        WorkbookTheme theme,
+        out CellColor color,
+        out CfColorStopSource? source)
+    {
+        color = default;
+        source = null;
+        if (element is null)
+            return false;
+
+        var themeText = element.Attribute("theme")?.Value;
+        if (string.IsNullOrWhiteSpace(themeText) ||
+            !int.TryParse(themeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var themeIndex) ||
+            !TryMapThemeColorSlot(themeIndex, out var slot))
+        {
+            return false;
+        }
+
+        var tint = ReadTint(element);
+        color = theme.ResolveColor(slot, tint);
+        source = new CfColorStopSource(themeIndex, tint);
         return true;
     }
 

@@ -224,7 +224,11 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
 
 /// <summary>
 /// Insert a blank row into the table at <paramref name="blockIndex"/>, at <paramref name="rowIndex"/>
-/// (clamped to the row count). The new row gets one empty cell per existing column. Reversible.
+/// (clamped to the row count). The new row gets one empty cell per grid column. When the insert
+/// position falls strictly INSIDE a vertical-merged run for a given grid column (the cell above is
+/// Restart or Continue AND the cell below is Continue), the new cell inherits
+/// <see cref="VerticalMergeState.Continue"/> so the merge is extended rather than severed (BF2).
+/// Reversible.
 /// </summary>
 public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocumentCommand
 {
@@ -235,11 +239,37 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
     public void Apply(IDocumentCommandContext context)
     {
         var table = TableAt(context, blockIndex);
-        var columns = Math.Max(table.ColumnCount, 1);
         var at = Math.Clamp(rowIndex, 0, table.Rows.Count);
+
+        // Compute the total grid width from the first row (or ColumnCount fallback).
+        var gridWidth = table.Rows.Count > 0
+            ? TableColumnHelpers.RowGridWidth(table.Rows[0])
+            : Math.Max(table.ColumnCount, 1);
+
         var row = new TableRow();
-        for (var c = 0; c < columns; c++)
-            row.Cells.Add(new TableCell(string.Empty));
+        for (var gc = 0; gc < gridWidth; gc++)
+        {
+            // BF2: Determine whether this grid column is strictly inside a vertical-merged run
+            // at the insert position.  A position is "strictly inside" when the row above
+            // (index at-1) carries Restart or Continue for this column AND the row below
+            // (index at, before insertion) carries Continue.
+            var mergeState = VerticalMergeState.None;
+            if (at > 0 && at < table.Rows.Count)
+            {
+                var cellAboveIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at - 1], gc);
+                var cellBelowIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at], gc);
+                if (cellAboveIdx >= 0 && cellBelowIdx >= 0)
+                {
+                    var aboveState = table.Rows[at - 1].Cells[cellAboveIdx].VerticalMerge;
+                    var belowState = table.Rows[at].Cells[cellBelowIdx].VerticalMerge;
+                    if ((aboveState == VerticalMergeState.Restart || aboveState == VerticalMergeState.Continue)
+                        && belowState == VerticalMergeState.Continue)
+                        mergeState = VerticalMergeState.Continue;
+                }
+            }
+            row.Cells.Add(new TableCell(string.Empty) { VerticalMerge = mergeState });
+        }
+
         table.Rows.Insert(at, row);
         _appliedAt = at;
     }
@@ -259,11 +289,18 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 /// <summary>
 /// Delete the row at <paramref name="rowIndex"/> from the table at <paramref name="blockIndex"/>,
 /// snapshotting it (and its position) so undo restores the exact row. Never removes the last row.
+/// <para>BF1: When the deleted row contains a <see cref="VerticalMergeState.Restart"/> cell, the
+/// cell directly below it in the same grid column is promoted from
+/// <see cref="VerticalMergeState.Continue"/> to <see cref="VerticalMergeState.Restart"/> so the
+/// vertical merge continues from the next row (matching Word's behaviour). The prior states of any
+/// promoted cells are snapshotted for exact undo restoration.</para>
 /// </summary>
 public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocumentCommand
 {
     private TableRow? _removed;
     private int _removedAt = -1;
+    // Snapshot of cells that were promoted (BF1): (rowIndexAfterDeletion, cellListIndex, priorState).
+    private (int Row, int CellIdx, VerticalMergeState PriorState)[]? _promoted;
 
     public string Label => "Delete Row";
 
@@ -274,6 +311,39 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
             return;
         _removedAt = rowIndex;
         _removed = table.Rows[rowIndex];
+
+        // BF1: Before removing the row, promote any orphaned vertical-merge continuations.
+        // For each cell in the deleted row that is a Restart head, the cell directly below it
+        // (same grid column, next row) must become Restart so the merge survives.
+        var nextRowIndex = rowIndex + 1;
+        if (nextRowIndex < table.Rows.Count)
+        {
+            var promotions = new List<(int, int, VerticalMergeState)>();
+            var deletedRow = table.Rows[rowIndex];
+            var nextRow = table.Rows[nextRowIndex];
+            // Walk each grid column of the deleted row.
+            var gridPos = 0;
+            foreach (var cell in deletedRow.Cells)
+            {
+                var span = Math.Max(1, cell.GridSpan);
+                // Only the grid column at the START of this cell matters for vertical merge lookup.
+                var gc = gridPos;
+                if (cell.VerticalMerge == VerticalMergeState.Restart)
+                {
+                    var nextCellIdx = TableColumnHelpers.GridColumnToCellIndex(nextRow, gc);
+                    if (nextCellIdx >= 0 && nextRow.Cells[nextCellIdx].VerticalMerge == VerticalMergeState.Continue)
+                    {
+                        // The row below deletion index is currently at nextRowIndex, but after the
+                        // actual RemoveAt it will be at rowIndex. Record the post-deletion row index.
+                        promotions.Add((rowIndex, nextCellIdx, VerticalMergeState.Continue));
+                        nextRow.Cells[nextCellIdx].VerticalMerge = VerticalMergeState.Restart;
+                    }
+                }
+                gridPos += span;
+            }
+            _promoted = promotions.Count > 0 ? [.. promotions] : null;
+        }
+
         table.Rows.RemoveAt(rowIndex);
     }
 
@@ -281,7 +351,24 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
     {
         if (_removed is null || _removedAt < 0)
             return;
-        InsertTableRowCommand.TableAt(context, blockIndex).Rows.Insert(_removedAt, _removed);
+        var table = InsertTableRowCommand.TableAt(context, blockIndex);
+
+        // Re-insert the removed row first so that the row indices in _promoted are valid.
+        table.Rows.Insert(_removedAt, _removed);
+
+        // BF1 undo: restore promoted cells to their prior state.
+        if (_promoted is not null)
+        {
+            // After re-insertion, the next row is at _removedAt + 1.
+            var nextRowAfterUndo = _removedAt + 1;
+            foreach (var (_, cellIdx, priorState) in _promoted)
+            {
+                if (nextRowAfterUndo < table.Rows.Count && cellIdx < table.Rows[nextRowAfterUndo].Cells.Count)
+                    table.Rows[nextRowAfterUndo].Cells[cellIdx].VerticalMerge = priorState;
+            }
+            _promoted = null;
+        }
+
         _removed = null;
         _removedAt = -1;
     }
@@ -318,20 +405,38 @@ internal static class TableColumnHelpers
     /// </summary>
     internal static int RowGridWidth(TableRow row) =>
         row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+
+    /// <summary>
+    /// Maps a <see cref="TableRow.Cells"/> list index to the GRID-column index it occupies (i.e. the
+    /// sum of GridSpans of all preceding cells).  Returns -1 if <paramref name="cellIndex"/> is out of
+    /// range.
+    /// </summary>
+    internal static int CellIndexToGridColumn(TableRow row, int cellIndex)
+    {
+        if (cellIndex < 0 || cellIndex >= row.Cells.Count)
+            return -1;
+        var gridPos = 0;
+        for (var i = 0; i < cellIndex; i++)
+            gridPos += Math.Max(1, row.Cells[i].GridSpan);
+        return gridPos;
+    }
 }
 
 /// <summary>
 /// Insert a blank column at <paramref name="columnIndex"/> (clamped) into the table at
-/// <paramref name="blockIndex"/>: one new empty cell in every row. Keeps
+/// <paramref name="blockIndex"/>: one new empty cell per row (or a GridSpan increment when the
+/// target grid column falls strictly inside an existing horizontal merge). Keeps
 /// <see cref="Table.ColumnWidthsPt"/> in sync. Reversible.
+/// <para>BF3: When <paramref name="columnIndex"/> falls strictly INSIDE a cell's GridSpan (i.e. the
+/// cell starts before the target column), the cell's GridSpan is incremented instead of inserting a
+/// stand-alone cell, keeping the rectangular grid intact (matching Word's behaviour).</para>
 /// </summary>
 public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : IDocumentCommand
 {
     private int _appliedAt = -1;
-    // Snapshot of the exact cell instances inserted per row, so Revert can remove them by reference
-    // rather than recomputing GridColumnToCellIndex on the already-modified row (which resolves to the
-    // wrong cell when a preceding spanning cell covers the target grid column).
-    private List<(TableRow Row, TableCell Cell)>? _insertedCells;
+    // Per-row action: either an inserted cell (for removal on undo) or a widened spanning cell (for
+    // GridSpan decrement on undo).  Null means the row was untouched (can't happen in practice).
+    private List<(TableRow Row, TableCell Cell, bool WasSpanIncrement)>? _actions;
 
     public string Label => "Insert Column";
 
@@ -339,39 +444,66 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
     {
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
         _appliedAt = Math.Max(columnIndex, 0);
-        var inserted = new List<(TableRow, TableCell)>(table.Rows.Count);
+        var actions = new List<(TableRow, TableCell, bool)>(table.Rows.Count);
         foreach (var row in table.Rows)
         {
-            // Map the target grid column to a cell-list position for this row (H6 grid awareness).
-            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(row, _appliedAt);
-            var at = cellIdx >= 0 ? cellIdx : row.Cells.Count;
-            var cell = new TableCell(string.Empty);
-            row.Cells.Insert(at, cell);
-            inserted.Add((row, cell));
+            // Walk the row to find the cell covering _appliedAt and whether we're at its boundary.
+            var gridPos = 0;
+            var handled = false;
+            for (var i = 0; i < row.Cells.Count; i++)
+            {
+                var span = Math.Max(1, row.Cells[i].GridSpan);
+                if (_appliedAt >= gridPos && _appliedAt < gridPos + span)
+                {
+                    if (_appliedAt > gridPos)
+                    {
+                        // BF3: Target falls STRICTLY inside this cell's span — widen it.
+                        row.Cells[i].GridSpan = span + 1;
+                        actions.Add((row, row.Cells[i], true));
+                    }
+                    else
+                    {
+                        // Target is at the START of this cell (a cell boundary) — insert a new cell.
+                        var cell = new TableCell(string.Empty);
+                        row.Cells.Insert(i, cell);
+                        actions.Add((row, cell, false));
+                    }
+                    handled = true;
+                    break;
+                }
+                gridPos += span;
+            }
+            if (!handled)
+            {
+                // _appliedAt is beyond the row's current grid extent — append a new cell.
+                var cell = new TableCell(string.Empty);
+                row.Cells.Add(cell);
+                actions.Add((row, cell, false));
+            }
         }
-        _insertedCells = inserted;
+        _actions = actions;
         // Keep ColumnWidthsPt consistent with the new column count (H4). Insert a default width at the
         // same position; use the average of neighbours when available, else zero (auto).
         if (table.ColumnWidthsPt.Count > 0)
         {
             var insertAt = Math.Clamp(_appliedAt, 0, table.ColumnWidthsPt.Count);
-            var defaultWidth = table.ColumnWidthsPt.Count > 0
-                ? table.ColumnWidthsPt.Average()
-                : 0.0;
+            var defaultWidth = table.ColumnWidthsPt.Average();
             table.ColumnWidthsPt.Insert(insertAt, defaultWidth);
         }
     }
 
     public void Revert(IDocumentCommandContext context)
     {
-        if (_appliedAt < 0 || _insertedCells is null)
+        if (_appliedAt < 0 || _actions is null)
             return;
-        // Remove each inserted cell by reference — do NOT recompute GridColumnToCellIndex because after
-        // Apply the row structure has changed and the grid lookup resolves to the wrong cell when a
-        // spanning cell precedes the inserted position.
-        foreach (var (row, cell) in _insertedCells)
-            row.Cells.Remove(cell);
-        _insertedCells = null;
+        foreach (var (row, cell, wasSpanIncrement) in _actions)
+        {
+            if (wasSpanIncrement)
+                cell.GridSpan = Math.Max(1, cell.GridSpan - 1);  // restore widened span
+            else
+                row.Cells.Remove(cell);  // remove the inserted cell by reference
+        }
+        _actions = null;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
         if (table.ColumnWidthsPt.Count > 0)
         {
@@ -643,15 +775,23 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
         // Vertical split: clear the restart head and the continue cells beneath it in the same column.
         if (cell.VerticalMerge == VerticalMergeState.Restart)
         {
+            // BH4 fix: derive the GRID column from the head row's cell-list index so that lower rows
+            // with a different cell-list layout (e.g. a preceding horizontal merge) are resolved
+            // correctly.  Mirrors the GridColumnToCellIndex mapping used by MergeCellsVerticalCommand.
+            var gridColumn = TableColumnHelpers.CellIndexToGridColumn(table.Rows[rowIndex], columnIndex);
             var snapshot = new List<(int, int, VerticalMergeState)> { (rowIndex, columnIndex, VerticalMergeState.Restart) };
             cell.VerticalMerge = VerticalMergeState.None;
             for (var r = rowIndex + 1; r < table.Rows.Count; r++)
             {
-                var below = table.Rows[r].Cells;
-                if (columnIndex >= below.Count || below[columnIndex].VerticalMerge != VerticalMergeState.Continue)
+                var belowRow = table.Rows[r];
+                var belowIdx = gridColumn >= 0
+                    ? TableColumnHelpers.GridColumnToCellIndex(belowRow, gridColumn)
+                    : columnIndex; // fallback: grid col unavailable, use raw index (head row has no preceding cells)
+                if (belowIdx < 0 || belowIdx >= belowRow.Cells.Count
+                    || belowRow.Cells[belowIdx].VerticalMerge != VerticalMergeState.Continue)
                     break;
-                snapshot.Add((r, columnIndex, VerticalMergeState.Continue));
-                below[columnIndex].VerticalMerge = VerticalMergeState.None;
+                snapshot.Add((r, belowIdx, VerticalMergeState.Continue));
+                belowRow.Cells[belowIdx].VerticalMerge = VerticalMergeState.None;
             }
             _verticalPrevious = [.. snapshot];
         }
@@ -748,6 +888,151 @@ public sealed class SetTableCellContentCommand(
             cell.Paragraphs.Add(p);
         _previous = null;
     }
+}
+
+// ── AV-TBL4: per-cell shading + border commands ───────────────────────────────────────────────
+
+/// <summary>
+/// Set (or clear) the background shading of a single table cell.
+/// <para><paramref name="colorHex"/> is an RRGGBB hex string (e.g. <c>"#FFFF00"</c>) or null/empty
+/// to clear the fill.  The previous value is snapshot-ed so <see cref="Revert"/> restores it.</para>
+/// Coordinates are: <paramref name="blockIndex"/> = the table's block index in the document,
+/// <paramref name="rowIndex"/> / <paramref name="colIndex"/> = the cell-list indices within that row.
+/// Out-of-range addresses are silently ignored (no-op).
+/// </summary>
+public sealed class SetCellShadingCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    string? colorHex) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Set Cell Shading";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.ShadingColorHex;
+        cell.ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.ShadingColorHex = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table table) return false;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count) return false;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count) return false;
+        cell = cells[colIndex];
+        return true;
+    }
+}
+
+/// <summary>
+/// Set the per-edge borders of a single table cell, merging with any existing per-edge settings.
+/// <para>Only the edges specified in <paramref name="edges"/> are touched; the others are preserved
+/// from the cell's current <see cref="CellBorders"/> (or left null when no borders existed).</para>
+/// An edge is set to a new <see cref="CellBorderEdge"/> built from <paramref name="style"/>,
+/// <paramref name="colorHex"/> and <paramref name="widthPt"/>; passing
+/// <paramref name="clearEdges"/> = true removes the specified edges instead of setting them.
+/// The previous <see cref="CellBorders"/> is snapshot-ed so <see cref="Revert"/> restores it exactly.
+/// Coordinates: same as <see cref="SetCellShadingCommand"/>.
+/// </summary>
+public sealed class SetCellBordersCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    CellBorderEdges edges,
+    BorderLineStyle style,
+    string colorHex,
+    double widthPt,
+    bool clearEdges = false) : IDocumentCommand
+{
+    private CellBorders? _previous;
+    private bool _applied;
+
+    public string Label => clearEdges ? "Clear Cell Border" : "Set Cell Border";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.Borders;
+        cell.Borders = ApplyEdges(cell.Borders, edges, style, colorHex, widthPt, clearEdges);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.Borders = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table table) return false;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count) return false;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count) return false;
+        cell = cells[colIndex];
+        return true;
+    }
+
+    internal static CellBorders? ApplyEdges(
+        CellBorders? existing,
+        CellBorderEdges edges,
+        BorderLineStyle style,
+        string colorHex,
+        double widthPt,
+        bool clear)
+    {
+        var edge = clear ? null : new CellBorderEdge(style, colorHex, widthPt);
+        var top    = (edges & CellBorderEdges.Top)    != 0 ? edge : existing?.Top;
+        var bottom = (edges & CellBorderEdges.Bottom) != 0 ? edge : existing?.Bottom;
+        var left   = (edges & CellBorderEdges.Left)   != 0 ? edge : existing?.Left;
+        var right  = (edges & CellBorderEdges.Right)  != 0 ? edge : existing?.Right;
+        if (top is null && bottom is null && left is null && right is null)
+            return null;
+        return new CellBorders { Top = top, Bottom = bottom, Left = left, Right = right };
+    }
+}
+
+/// <summary>
+/// Edge selector for <see cref="SetCellBordersCommand"/>. Can be combined as flags.
+/// Composite values (<see cref="All"/>, <see cref="Outside"/>, <see cref="Inside"/>) are
+/// expanded by the DocumentView before issuing per-cell commands, so each command only sees
+/// the four primitive edge bits.
+/// </summary>
+[Flags]
+public enum CellBorderEdges
+{
+    None   = 0,
+    Top    = 1,
+    Bottom = 2,
+    Left   = 4,
+    Right  = 8,
+    All      = Top | Bottom | Left | Right,
+    /// <summary>All four primitive edges — alias for <see cref="All"/>.</summary>
+    Outside  = All,
+    /// <summary>Inside edges of a selection (handled at the DocumentView layer).</summary>
+    Inside   = 16,
 }
 
 /// <summary>

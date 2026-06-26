@@ -471,6 +471,166 @@ public sealed class DataBarAdvancedOptionsTests
         return package;
     }
 
+    // ── DataBar fill theme-color round-trip tests ────────────────────────────
+
+    [Fact]
+    public void Load_DataBarThemeColor_ResolvesWorkbookThemeColorAndPreservesSource()
+    {
+        // A <color theme="4" tint="0.4"/> on a dataBar should resolve to the tinted Accent1
+        // AND record the DataBarColorSource so the writer can round-trip theme/tint attributes.
+        using var source = CreateXlsxWithThemeColorDataBar();
+
+        var workbook = new XlsxFileAdapter().Load(source);
+
+        var rule = workbook.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.RuleType.Should().Be(CfRuleType.DataBar);
+        // The resolved color should be the tinted Accent1.
+        var expectedTinted = RgbColor.FromCellColor(WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.4));
+        rule.DataBarColor.Should().Be(expectedTinted, because: "theme=4 tint=0.4 resolves to tinted Accent1");
+        // Source must carry both theme index and tint.
+        rule.DataBarColorSource.Should().Be(new CfColorStopSource(4, 0.4), because: "tint must be recorded for round-trip");
+    }
+
+    [Fact]
+    public void RoundTrip_DataBarThemeColor_WritesThemeIndexAndTintAttributes()
+    {
+        // When a dataBar fill color was expressed as a theme reference in the source file,
+        // the writer must round-trip the original theme/tint attributes — not flatten to sRGB.
+        using var source = CreateXlsxWithThemeColorDataBar();
+        var workbook = new XlsxFileAdapter().Load(source);
+        using var saved = new MemoryStream();
+
+        new XlsxFileAdapter().Save(workbook, saved);
+
+        var dataBar = XlsxPackageTestHelper.ReadWorksheetXml(saved)
+            .Descendants(MainNs + "dataBar")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        var color = dataBar.Element(MainNs + "color");
+        color.Should().NotBeNull(because: "dataBar must emit a <color> element");
+        color!.Attribute("theme")?.Value.Should().Be("4", because: "Accent1 is OOXML theme index 4");
+        color.Attribute("tint").Should().NotBeNull(because: "tint must be written");
+        double.Parse(color.Attribute("tint")!.Value, System.Globalization.CultureInfo.InvariantCulture)
+            .Should().BeApproximately(0.4, 0.0001, because: "tint round-trips");
+        color.Attribute("rgb").Should().BeNull(because: "theme color must not be duplicated as rgb");
+    }
+
+    [Fact]
+    public void Load_DataBarThemeColorNoTint_ResolvesCorrectlyAndPreservesSource()
+    {
+        // A plain <color theme="4"/> (no tint) dataBar should resolve Accent1 with no tint
+        // and record source with Tint=0 for round-trip.
+        using var source = CreateXlsxWithThemeColorDataBarNoTint();
+
+        var workbook = new XlsxFileAdapter().Load(source);
+
+        var rule = workbook.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.DataBarColor.Should().Be(RgbColor.FromCellColor(WorkbookTheme.Office.GetColor(WorkbookThemeColorSlot.Accent1)));
+        rule.DataBarColorSource.Should().Be(new CfColorStopSource(4, 0), because: "Accent1 theme index=4, no tint");
+    }
+
+    [Fact]
+    public void RoundTrip_DataBarThemeColorNoTint_WritesThemeIndexWithoutTintAttribute()
+    {
+        using var source = CreateXlsxWithThemeColorDataBarNoTint();
+        var workbook = new XlsxFileAdapter().Load(source);
+        using var saved = new MemoryStream();
+
+        new XlsxFileAdapter().Save(workbook, saved);
+
+        var color = XlsxPackageTestHelper.ReadWorksheetXml(saved)
+            .Descendants(MainNs + "dataBar")
+            .Should().ContainSingle().Subject
+            .Element(MainNs + "color");
+        color.Should().NotBeNull();
+        color!.Attribute("theme")?.Value.Should().Be("4");
+        color.Attribute("tint").Should().BeNull(because: "no tint was specified");
+        color.Attribute("rgb").Should().BeNull(because: "theme color must not emit rgb");
+    }
+
+    [Fact]
+    public void RoundTrip_DataBarSRgbColor_StaysRgb()
+    {
+        // A plain sRGB dataBar color must not be affected by the theme fix — it stays rgb=.
+        using var source = CreateXlsxWithMainAdvancedDataBarXml();
+        var workbook = new XlsxFileAdapter().Load(source);
+        var rule = workbook.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.DataBarColorSource.Should().BeNull(because: "rgb source has no theme reference");
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+
+        var color = XlsxPackageTestHelper.ReadWorksheetXml(saved)
+            .Descendants(MainNs + "dataBar")
+            .Should().ContainSingle().Subject
+            .Element(MainNs + "color");
+        color.Should().NotBeNull();
+        color!.Attribute("rgb").Should().NotBeNull(because: "sRGB color must still emit rgb=");
+        color.Attribute("theme").Should().BeNull(because: "sRGB color must not emit theme=");
+    }
+
+    [Fact]
+    public void Clone_DataBarThemeColorSource_IsCopied()
+    {
+        // ConditionalFormat.Clone() must preserve DataBarColorSource so paste / copy operations
+        // keep the theme reference alive.
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            DataBarColor = RgbColor.FromCellColor(WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.4)),
+            DataBarColorSource = new CfColorStopSource(4, 0.4)
+        };
+
+        var clone = source.Clone(Guid.NewGuid());
+
+        clone.DataBarColorSource.Should().Be(new CfColorStopSource(4, 0.4));
+        clone.DataBarColor.Should().Be(source.DataBarColor);
+    }
+
+    private static MemoryStream CreateXlsxWithThemeColorDataBar()
+    {
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
+        {
+            xml.Root!.Add(
+                new XElement(MainNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(MainNs + "cfRule",
+                        new XAttribute("type", "dataBar"),
+                        new XAttribute("priority", "1"),
+                        new XElement(MainNs + "dataBar",
+                            new XElement(MainNs + "cfvo", new XAttribute("type", "min")),
+                            new XElement(MainNs + "cfvo", new XAttribute("type", "max")),
+                            new XElement(MainNs + "color",
+                                new XAttribute("theme", "4"),
+                                new XAttribute("tint", "0.4"))))));
+        });
+        return package;
+    }
+
+    private static MemoryStream CreateXlsxWithThemeColorDataBarNoTint()
+    {
+        var package = XlsxPackageTestHelper.CreateSingleCellWorkbookPackage();
+        XlsxPackageTestHelper.PatchWorksheetXml(package, xml =>
+        {
+            xml.Root!.Add(
+                new XElement(MainNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(MainNs + "cfRule",
+                        new XAttribute("type", "dataBar"),
+                        new XAttribute("priority", "1"),
+                        new XElement(MainNs + "dataBar",
+                            new XElement(MainNs + "cfvo", new XAttribute("type", "min")),
+                            new XElement(MainNs + "cfvo", new XAttribute("type", "max")),
+                            new XElement(MainNs + "color", new XAttribute("theme", "4"))))));
+        });
+        return package;
+    }
+
     private static readonly XNamespace MainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace XmNs = "http://schemas.microsoft.com/office/excel/2006/main";
