@@ -62,7 +62,10 @@ internal static class FreePRibbonCommands
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
-        Action?             onInsertLink       = null)
+        Action?             onInsertLink       = null,
+        // Wave 12B: Find & Replace dialog launchers.
+        Action?             onFind             = null,
+        Action?             onFindReplace      = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -464,6 +467,14 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.arrange.distribute-v",
             new ActionCommand(() => editor.DistributeVertically()));
+
+        // ── Wave 12B: Find & Replace ──────────────────────────────────────────────
+
+        registry.Register("freep.find",
+            new ActionCommand(() => onFind?.Invoke()));
+
+        registry.Register("freep.replace",
+            new ActionCommand(() => onFindReplace?.Invoke()));
 
         return registry;
     }

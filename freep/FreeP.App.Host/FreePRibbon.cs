@@ -67,6 +67,12 @@ internal static class FreePRibbon
                     g.Medium("freep.arrange.distribute-h",    "Distribute Horiz.", RibbonCommandIconKind.AlignCenter, "D");
                     g.Medium("freep.arrange.distribute-v",    "Distribute Vert.",  RibbonCommandIconKind.Align,       "V");
                 });
+                // Wave 12B: Editing group — Find & Replace.
+                tab.Group("editing", "Editing", "E", 70, g =>
+                {
+                    g.Large("freep.find",    "Find",    RibbonCommandIconKind.Search,  "F");
+                    g.Medium("freep.replace", "Replace", RibbonCommandIconKind.Refresh, "H");
+                });
             })
             .Tab("insert", "Insert", "N", tab =>
             {

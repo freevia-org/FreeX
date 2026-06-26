@@ -3,6 +3,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using System.Collections.Generic;
 
 namespace FreeP.App.Rendering.Wpf;
 
@@ -57,6 +58,15 @@ public sealed class CanvasGestureHandler
     // ── Small nudge step ──────────────────────────────────────────────────────────────────────
     private const long SmallNudgeEmu = 91440L;    // ~0.1 inch
     private const long LargeNudgeEmu = 914400L;   // 1 inch
+
+    // ── Wave 12B: Snap settings ───────────────────────────────────────────────────────────────
+    // Both default on; holding Alt during drag disables snapping (PowerPoint convention).
+
+    /// <summary>When true (default), shapes snap to the background grid during move/resize.</summary>
+    public bool SnapToGrid   { get; set; } = true;
+
+    /// <summary>When true (default), shapes snap to other shapes' edges and centers during move/resize.</summary>
+    public bool SnapToShapes { get; set; } = true;
 
     // ── Construction / attach ─────────────────────────────────────────────────────────────────
 
@@ -236,6 +246,7 @@ public sealed class CanvasGestureHandler
         _gesture = GestureKind.None;
         _adorner.UpdatePreview(null);
         _adorner.UpdateMarquee(null);
+        _adorner.UpdateSnapGuides(null, SlideTransform.Identity); // Wave 12B: clear guides
         _canvas.ReleaseMouseCapture();
     }
 
@@ -258,10 +269,55 @@ public sealed class CanvasGestureHandler
 
     private void PreviewMove(Point screenPt, SlideTransform xf, Slide slide)
     {
-        double ddx = screenPt.X - _dragStartScreen.X;
-        double ddy = screenPt.Y - _dragStartScreen.Y;
+        double ddxPx = screenPt.X - _dragStartScreen.X;
+        double ddyPx = screenPt.Y - _dragStartScreen.Y;
 
-        // Build preview rects based on start positions + delta
+        // Convert drag delta from screen pixels to DIP (slide coordinate space).
+        double ddxDip = xf.ScaleScreenToDip(ddxPx);
+        double ddyDip = xf.ScaleScreenToDip(ddyPx);
+
+        // Wave 12B: compute snapping.
+        // Alt key disables snapping (PowerPoint convention).
+        bool altHeld = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+
+        SnapResult snap = SnapResult.None;
+        if (snapEnabled && _moveStartPositions is not null && _editor.SelectedShapeIds.Count > 0)
+        {
+            // Take the first selected shape as the "anchor" for snap probe.
+            var firstId = _editor.SelectedShapeIds[0];
+            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
+            {
+                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
+                if (firstShape is not null)
+                {
+                    double newLeftDip  = SlideTransform.EmuToDip(firstOrig.ox) + ddxDip;
+                    double newTopDip   = SlideTransform.EmuToDip(firstOrig.oy) + ddyDip;
+                    double newRightDip = newLeftDip + SlideTransform.EmuToDip(firstShape.ExtentCxEmu);
+                    double newBotDip   = newTopDip  + SlideTransform.EmuToDip(firstShape.ExtentCyEmu);
+
+                    var candidates = SnapToShapes
+                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
+                        : null;
+
+                    double slideW = xf.SlideWidthDip;
+                    double slideH = xf.SlideHeightDip;
+
+                    snap = SnapEngine.Snap(
+                        (newLeftDip, newTopDip, newRightDip, newBotDip),
+                        candidates,
+                        slideW, slideH,
+                        snapEnabled: true,
+                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
+                }
+            }
+        }
+
+        // Apply snap delta (DIP) to the screen drag delta.
+        double snapDxPx = snap.SnapDx * xf.Scale;
+        double snapDyPx = snap.SnapDy * xf.Scale;
+
+        // Build preview rects based on start positions + delta + snap correction.
         var rects = new List<(uint, Rect)>();
         foreach (var id in _editor.SelectedShapeIds)
         {
@@ -273,34 +329,75 @@ public sealed class CanvasGestureHandler
             double origYDip = SlideTransform.EmuToDip(orig.oy);
             double cxDip    = SlideTransform.EmuToDip(s.ExtentCxEmu);
             double cyDip    = SlideTransform.EmuToDip(s.ExtentCyEmu);
-            double newXScr  = origXDip * xf.Scale + xf.OffsetX + ddx;
-            double newYScr  = origYDip * xf.Scale + xf.OffsetY + ddy;
+            double newXScr  = origXDip * xf.Scale + xf.OffsetX + ddxPx + snapDxPx;
+            double newYScr  = origYDip * xf.Scale + xf.OffsetY + ddyPx + snapDyPx;
             rects.Add((id, new Rect(newXScr, newYScr, cxDip * xf.Scale, cyDip * xf.Scale)));
         }
 
-        // Show preview as adorner overlay (single first rect)
+        // Show preview as adorner overlay (single first rect or union for multi-select).
         if (rects.Count == 1)
             _adorner.UpdatePreview(rects[0].Item2);
         else if (rects.Count > 1)
         {
-            // For multi-select, union rect
-            double l = rects.Min(r => r.Item2.Left);
-            double t = rects.Min(r => r.Item2.Top);
+            double l  = rects.Min(r => r.Item2.Left);
+            double t  = rects.Min(r => r.Item2.Top);
             double rt = rects.Max(r => r.Item2.Right);
             double bt = rects.Max(r => r.Item2.Bottom);
             _adorner.UpdatePreview(new Rect(l, t, rt - l, bt - t));
         }
+
+        // Update guide lines.
+        _adorner.UpdateSnapGuides(snap.Guides.Count > 0 ? snap.Guides : null, xf);
     }
 
     private void CommitMove(Point screenPt, SlideTransform xf)
     {
         if (_moveStartPositions is null) return;
-        double ddx = screenPt.X - _dragStartScreen.X;
-        double ddy = screenPt.Y - _dragStartScreen.Y;
-        if (Math.Abs(ddx) < 1 && Math.Abs(ddy) < 1) return; // no meaningful move
+        double ddxPx = screenPt.X - _dragStartScreen.X;
+        double ddyPx = screenPt.Y - _dragStartScreen.Y;
+        if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return; // no meaningful move
 
-        long dxEmu = xf.ScreenDeltaToEmu(ddx);
-        long dyEmu = xf.ScreenDeltaToEmu(ddy);
+        // Wave 12B: recompute snap for the final commit position so the committed
+        // position is snapped even if the user stopped moving.
+        bool altHeld    = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+        double snapDxPx = 0, snapDyPx = 0;
+
+        var slide = _editor.CurrentSlide;
+        if (snapEnabled && slide is not null && _editor.SelectedShapeIds.Count > 0)
+        {
+            double ddxDip = xf.ScaleScreenToDip(ddxPx);
+            double ddyDip = xf.ScaleScreenToDip(ddyPx);
+            var firstId   = _editor.SelectedShapeIds[0];
+            if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
+            {
+                var firstShape = slide.Shapes.FirstOrDefault(s => s.Id == firstId);
+                if (firstShape is not null)
+                {
+                    double newL = SlideTransform.EmuToDip(firstOrig.ox) + ddxDip;
+                    double newT = SlideTransform.EmuToDip(firstOrig.oy) + ddyDip;
+                    double newR = newL + SlideTransform.EmuToDip(firstShape.ExtentCxEmu);
+                    double newB = newT + SlideTransform.EmuToDip(firstShape.ExtentCyEmu);
+
+                    var candidates = SnapToShapes
+                        ? SnapEngine.BuildShapeCandidates(slide, _editor.SelectedShapeIds)
+                        : null;
+
+                    var snap = SnapEngine.Snap(
+                        (newL, newT, newR, newB),
+                        candidates,
+                        xf.SlideWidthDip, xf.SlideHeightDip,
+                        snapEnabled: true,
+                        gridPitchDip: SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
+
+                    snapDxPx = snap.SnapDx * xf.Scale;
+                    snapDyPx = snap.SnapDy * xf.Scale;
+                }
+            }
+        }
+
+        long dxEmu = xf.ScreenDeltaToEmu(ddxPx + snapDxPx);
+        long dyEmu = xf.ScreenDeltaToEmu(ddyPx + snapDyPx);
         _editor.MoveSelected(dxEmu, dyEmu);
     }
 
