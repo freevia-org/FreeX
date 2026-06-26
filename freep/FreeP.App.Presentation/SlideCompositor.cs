@@ -955,16 +955,44 @@ public static class SlideCompositor
                     ? run.Italic
                     : (run.Italic || (run.Field?.Italic ?? false) || (inheritedStyle?.Italic ?? false));
 
+                // Wave 16A: resolve text fill, outline, shadow
+                ResolvedFill?   resolvedTextFill    = null;
+                ResolvedOutline? resolvedTextOutline = null;
+                ResolvedRunShadow? resolvedTextShadow = null;
+
+                if (run.TextFill is not null)
+                    resolvedTextFill = ResolveFill(run.TextFill, theme, effectiveClrMap);
+
+                if (run.TextOutline is not null)
+                    resolvedTextOutline = ResolveOutline(run.TextOutline, theme, effectiveClrMap);
+
+                if (run.TextShadow is not null)
+                {
+                    var ts = run.TextShadow;
+                    var shadowColor = ThemeColorResolver.Resolve(ts.Color, theme, effectiveClrMap);
+                    resolvedTextShadow = new ResolvedRunShadow
+                    {
+                        Color   = shadowColor,
+                        Alpha   = ts.Alpha,
+                        BlurDip = PointsToDip(ts.BlurPt),
+                        DistDip = PointsToDip(ts.DistPt),
+                        DirDeg  = ts.DirDeg,
+                    };
+                }
+
                 resolvedRuns.Add(new ResolvedRun
                 {
-                    Text = resolvedText,
-                    FontFamily = fontFamily,
-                    FontSizePt = fontSizePt,
-                    Bold = bold,
-                    Italic = italic,
-                    Underline = run.Underline,
+                    Text          = resolvedText,
+                    FontFamily    = fontFamily,
+                    FontSizePt    = fontSizePt,
+                    Bold          = bold,
+                    Italic        = italic,
+                    Underline     = run.Underline,
                     Strikethrough = run.Strikethrough,
-                    Color = color
+                    Color         = color,
+                    TextFill      = resolvedTextFill,
+                    TextOutline   = resolvedTextOutline,
+                    TextShadow    = resolvedTextShadow,
                 });
             }
 
@@ -990,7 +1018,8 @@ public static class SlideCompositor
             InsetRightDip = body.InsetRightPt.HasValue ? PointsToDip(body.InsetRightPt.Value) : DefaultInsetHorzDip,
             InsetTopDip = body.InsetTopPt.HasValue ? PointsToDip(body.InsetTopPt.Value) : DefaultInsetVertDip,
             InsetBottomDip = body.InsetBottomPt.HasValue ? PointsToDip(body.InsetBottomPt.Value) : DefaultInsetVertDip,
-            Wrap = body.Wrap
+            Wrap = body.Wrap,
+            WarpPreset = body.WarpPreset,   // Wave 16A
         };
     }
 

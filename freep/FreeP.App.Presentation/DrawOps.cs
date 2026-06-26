@@ -6,6 +6,21 @@ namespace FreeP.App.Compositor;
 // ─── Resolved text types ──────────────────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
+/// Resolved text-run shadow for the renderer (concrete DIP values).
+/// </summary>
+public sealed class ResolvedRunShadow
+{
+    public SrgbColor Color { get; init; }
+    public byte Alpha { get; init; }
+    /// <summary>Blur radius in DIP.</summary>
+    public double BlurDip { get; init; }
+    /// <summary>Offset distance in DIP.</summary>
+    public double DistDip { get; init; }
+    /// <summary>Direction in degrees clockwise from right.</summary>
+    public double DirDeg { get; init; }
+}
+
+/// <summary>
 /// A fully-resolved text run ready for the renderer: all inherited properties have been applied
 /// so the renderer sees concrete values without any nulls.
 /// </summary>
@@ -19,6 +34,19 @@ public sealed class ResolvedRun
     public bool Underline { get; init; }
     public bool Strikethrough { get; init; }
     public SrgbColor Color { get; init; } = SrgbColor.Black;
+
+    // ── Wave 16A: text effects ────────────────────────────────────────────────
+    /// <summary>
+    /// Resolved glyph fill — null means use <see cref="Color"/> as solid fill (legacy path).
+    /// Non-null carries a gradient or other complex fill for the glyphs.
+    /// </summary>
+    public ResolvedFill? TextFill { get; init; }
+
+    /// <summary>Resolved glyph outline — null means no outline.</summary>
+    public ResolvedOutline? TextOutline { get; init; }
+
+    /// <summary>Resolved glyph shadow — null means no shadow.</summary>
+    public ResolvedRunShadow? TextShadow { get; init; }
 }
 
 /// <summary>
@@ -56,6 +84,12 @@ public sealed class ResolvedTextLayout
     public double InsetBottomDip { get; init; } = 4.57;
 
     public bool Wrap { get; init; } = true;
+
+    /// <summary>
+    /// WordArt warp preset name, e.g. "textArchUp", "textWave1", "textTriangle".
+    /// Null = no warp (flat text).  Used by renderers to apply glyph-path warping.
+    /// </summary>
+    public string? WarpPreset { get; init; }
 }
 
 // ─── Resolved fill/outline ────────────────────────────────────────────────────────────────────────────────────────

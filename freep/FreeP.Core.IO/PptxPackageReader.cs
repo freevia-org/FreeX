@@ -1921,6 +1921,10 @@ public static class PptxPackageReader
             if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
+            // Wave 16A: warp preset
+            var prstTxWarp = bodyPr.Element(A + "prstTxWarp");
+            if (prstTxWarp is not null)
+                body.WarpPreset = prstTxWarp.Attribute("prst")?.Value;
         }
 
         // Parse a:lstStyle — full per-level paragraph/run defaults.
@@ -2065,9 +2069,55 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 run.FontSizePt = sz / 100.0;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+
+            // Simple solid run color
             var solidFill = rPr.Element(A + "solidFill");
             if (solidFill is not null)
                 run.Color = PptxColorReader.TryReadColor(solidFill, scheme);
+
+            // Wave 16A: gradient text fill — stored as TextFill when present
+            var gradFill = rPr.Element(A + "gradFill");
+            if (gradFill is not null)
+            {
+                var grad = PptxColorReader.TryReadGradFill(gradFill, scheme);
+                if (grad is not null) run.TextFill = grad;
+            }
+
+            // Wave 16A: text outline (a:ln inside a:rPr)
+            var lnEl = rPr.Element(A + "ln");
+            if (lnEl is not null)
+                run.TextOutline = PptxColorReader.TryReadOutline(lnEl, scheme);
+
+            // Wave 16A: text shadow (a:effectLst/a:outerShdw inside a:rPr)
+            var outerShdw = rPr.Element(A + "effectLst")?.Element(A + "outerShdw");
+            if (outerShdw is not null)
+            {
+                var shdwColor = PptxColorReader.TryReadColor(outerShdw, scheme);
+                byte alpha = 128;
+                // a:outerShdw may have alpha on its color element
+                var schemeClrEl = outerShdw.Element(A + "schemeClr") ?? outerShdw.Element(A + "srgbClr");
+                if (schemeClrEl is not null)
+                {
+                    var alphaEl = schemeClrEl.Element(A + "alpha");
+                    if (alphaEl is not null &&
+                        long.TryParse(alphaEl.Attribute("val")?.Value,
+                            System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out var av))
+                        alpha = (byte)Math.Clamp((int)(av / 100000.0 * 255), 0, 255);
+                }
+                double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = blurEmu / 12700.0;
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = distEmu / 12700.0;
+                if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
+                run.TextShadow = new RunTextShadow
+                {
+                    Color  = shdwColor ?? new ThemeAwareColor(new SrgbColor(0, 0, 0)),
+                    Alpha  = alpha,
+                    BlurPt = blurPt,
+                    DistPt = distPt,
+                    DirDeg = dirDeg,
+                };
+            }
 
             // Run-level hyperlink: a:hlinkClick inside a:rPr.
             var runHlink = rPr.Element(A + "hlinkClick");

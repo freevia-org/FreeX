@@ -100,6 +100,7 @@ public static class SlideCloner
             InsetBottomPt     = tb.InsetBottomPt,
             Wrap              = tb.Wrap,
             AutoFit           = tb.AutoFit,
+            WarpPreset        = tb.WarpPreset,       // Wave 16A
         };
 
         foreach (var para in tb.Paragraphs)
@@ -126,6 +127,16 @@ public static class SlideCloner
         return copy;
     }
 
+    private static RunTextShadow? CloneRunShadow(RunTextShadow? s) =>
+        s is null ? null : new RunTextShadow
+        {
+            Color  = s.Color,
+            Alpha  = s.Alpha,
+            BlurPt = s.BlurPt,
+            DistPt = s.DistPt,
+            DirDeg = s.DirDeg,
+        };
+
     private static Run CloneRun(Run run) => new()
     {
         Text          = run.Text,
@@ -149,6 +160,10 @@ public static class SlideCloner
             Italic     = run.Field.Italic,
             Color      = run.Field.Color,
         },
+        // Wave 16A: text effects — ShapeFill/ShapeOutline are immutable discriminated unions, share reference
+        TextFill    = run.TextFill,
+        TextOutline = run.TextOutline,
+        TextShadow  = CloneRunShadow(run.TextShadow),
     };
 
     private static Hyperlink? CloneHyperlink(Hyperlink? h) =>

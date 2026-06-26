@@ -65,6 +65,28 @@ public sealed class FieldRun
 }
 
 /// <summary>
+/// Per-run text shadow descriptor (from <c>a:rPr/a:effectLst/a:outerShdw</c>).
+/// Parallel to <see cref="ShapeEffects"/> outer shadow but scoped to a single glyph run.
+/// </summary>
+public sealed class RunTextShadow
+{
+    /// <summary>Shadow color (resolved or raw).</summary>
+    public ThemeAwareColor Color { get; set; } = new ThemeAwareColor(new SrgbColor(0, 0, 0));
+
+    /// <summary>Alpha (0–255).</summary>
+    public byte Alpha { get; set; } = 128;
+
+    /// <summary>Blur radius in points (from a:outerShdw @blurRad in EMU / 12700).</summary>
+    public double BlurPt { get; set; } = 2.0;
+
+    /// <summary>Distance in points (from a:outerShdw @dist in EMU / 12700).</summary>
+    public double DistPt { get; set; } = 2.0;
+
+    /// <summary>Direction in degrees clockwise from right (from a:outerShdw @dir / 60000).</summary>
+    public double DirDeg { get; set; } = 45.0;
+}
+
+/// <summary>
 /// A single text run: a span of text with uniform character properties.
 /// </summary>
 public sealed class Run
@@ -108,6 +130,29 @@ public sealed class Run
     /// field holds the cached text for rendering; the field type is here.
     /// </summary>
     public FieldRun? Field { get; set; }
+
+    // ── WordArt / Text-effects (Wave 16A) ─────────────────────────────────────
+
+    /// <summary>
+    /// Glyph fill override — used for gradient and other complex text fills.
+    /// When set, overrides <see cref="Color"/> for fill rendering.
+    /// Null means use <see cref="Color"/> as a simple solid fill.
+    /// Corresponds to <c>a:rPr/a:gradFill</c> (or <c>a:solidFill</c> mapped here
+    /// for uniformity when richer rendering is needed).
+    /// </summary>
+    public ShapeFill? TextFill { get; set; }
+
+    /// <summary>
+    /// Outline drawn around each glyph.  Corresponds to <c>a:rPr/a:ln</c>.
+    /// Null = no outline.
+    /// </summary>
+    public ShapeOutline? TextOutline { get; set; }
+
+    /// <summary>
+    /// Drop shadow behind glyphs.  Corresponds to <c>a:rPr/a:effectLst/a:outerShdw</c>.
+    /// Null = no shadow.
+    /// </summary>
+    public RunTextShadow? TextShadow { get; set; }
 }
 
 /// <summary>
@@ -179,6 +224,13 @@ public sealed class TextBody
     /// per-level defaults (alignment, font size, bullet) that the compositor inherits into slides.
     /// </summary>
     public TextStyleLevels? LstStyle { get; set; }
+
+    /// <summary>
+    /// WordArt warp preset name from <c>a:bodyPr/a:prstTxWarp @prst</c>, e.g.
+    /// "textArchUp", "textArchDown", "textWave1", "textTriangle", "textCircle".
+    /// Null means no warp (flat text).
+    /// </summary>
+    public string? WarpPreset { get; set; }
 }
 
 /// <summary>Vertical anchor (alignment) of a text body within its bounding box.</summary>

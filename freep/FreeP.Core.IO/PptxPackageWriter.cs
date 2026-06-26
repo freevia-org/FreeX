@@ -2211,6 +2211,12 @@ public static class PptxPackageWriter
         if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", (long)Math.Round(body.InsetBottomPt.Value * 12700)));
         if (body.AutoFit) bodyPr.Add(new XElement(A + "normAutofit"));
 
+        // Wave 16A: warp preset
+        if (!string.IsNullOrWhiteSpace(body.WarpPreset))
+            bodyPr.Add(new XElement(A + "prstTxWarp",
+                new XAttribute("prst", body.WarpPreset),
+                new XElement(A + "avLst")));
+
         // In PresentationML, the text body inside p:sp is p:txBody (not a:txBody).
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
         return new XElement(P + "txBody",
@@ -2299,10 +2305,41 @@ public static class PptxPackageWriter
         if (run.Strikethrough) rPr.Add(new XAttribute("strike", "sngStrike"));
         if (run.FontSizePt.HasValue)
             rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
-        if (run.Color is not null)
+
+        // Wave 16A: text fill — gradient takes precedence; solid color is the fallback
+        if (run.TextFill is not null)
+        {
+            var fillEl = BuildFillEl(run.TextFill, PresentationColorScheme.CreateDefault());
+            if (fillEl is not null) rPr.Add(fillEl);
+        }
+        else if (run.Color is not null)
+        {
             rPr.Add(new XElement(A + "solidFill", BuildColorEl(run.Color)));
+        }
+
         if (run.FontFamily is not null)
             rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
+
+        // Wave 16A: text outline (a:ln inside a:rPr)
+        if (run.TextOutline is not null)
+            rPr.Add(BuildOutlineEl(run.TextOutline));
+
+        // Wave 16A: text shadow (a:effectLst/a:outerShdw inside a:rPr)
+        if (run.TextShadow is not null)
+        {
+            var ts = run.TextShadow;
+            var shdwColorEl = BuildColorEl(ts.Color);
+            // Embed alpha on the color element
+            if (ts.Alpha < 255)
+                shdwColorEl.Add(new XElement(A + "alpha",
+                    new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
+            rPr.Add(new XElement(A + "effectLst",
+                new XElement(A + "outerShdw",
+                    new XAttribute("blurRad", (long)Math.Round(ts.BlurPt * 12700)),
+                    new XAttribute("dist",    (long)Math.Round(ts.DistPt * 12700)),
+                    new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
+                    shdwColorEl)));
+        }
 
         // Run-level hyperlink
         if (run.Hyperlink is not null)
