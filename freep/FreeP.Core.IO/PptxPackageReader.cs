@@ -2331,15 +2331,21 @@ public static class PptxPackageReader
         var cTn = buildPar.Element(P + "cTn");
         if (cTn is null) return null;
 
-        // AC2/AC3: Read duration from the structural level the writer uses — the animCTn
+        // AC2/AC3/AF1: Read duration from the structural level the writer uses — the animCTn
         // which is the p:cTn direct child of childTnLst of the inner p:par (sibling of p:set).
         // This avoids picking a sub-behavior's dur (AC2) and naturally excludes the p:set
         // sentinel cTn dur="1" (AC3) because it is inside p:set, not a bare childTnLst child.
         // Writer structure (BuildBuildItemEl):
         //   p:par > p:cTn[presetClass/ID] > p:childTnLst >
         //     p:par > p:cTn[fill=hold] > p:childTnLst >
-        //       animCTn (p:cTn with dur=anim.DurationMs)  ← read from here
+        //       animCTn (p:cTn with dur=anim.DurationMs)  ← read from here (FreeP round-trip)
         //       p:set > p:cBhvr > p:cTn (dur="1" sentinel) ← NOT touched
+        //
+        // AF1: Real PowerPoint emits p:animEffect/p:anim/p:set as children of innerChildTnLst,
+        // NOT a bare p:cTn. The actual duration lives on the p:cTn inside p:cBhvr under those
+        // elements. When the primary structural nav finds no direct p:cTn child, fall back to a
+        // bounded descendant search within innerChildTnLst, excluding any p:cTn that has a p:set
+        // ancestor (which would be the sentinel dur="1" on the p:set behavior element).
         int durationMs = 500;
         if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
         {
@@ -2353,11 +2359,27 @@ public static class PptxPackageReader
             var innerChildTnLst = innerParCTn?.Element(P + "childTnLst");
             if (innerChildTnLst is not null)
             {
-                // animCTn is a direct p:cTn child of innerChildTnLst (not inside p:set).
+                // Primary: animCTn is a direct p:cTn child of innerChildTnLst (FreeP's own form).
                 var animCTn = innerChildTnLst.Elements(P + "cTn").FirstOrDefault();
                 if (animCTn is not null &&
                     int.TryParse(animCTn.Attribute("dur")?.Value, out var animDur) && animDur >= 1)
+                {
                     durationMs = animDur;
+                }
+                else
+                {
+                    // AF1 fallback: real PowerPoint nesting — dur is on a p:cTn inside p:cBhvr under
+                    // p:animEffect/p:anim/p:set. Search descendants of innerChildTnLst for a p:cTn
+                    // that has a dur attribute and is NOT inside a p:set element (sentinel exclusion).
+                    var fallbackCTn = innerChildTnLst
+                        .Descendants(P + "cTn")
+                        .FirstOrDefault(c =>
+                            c.Attribute("dur") != null &&
+                            !c.Ancestors(P + "set").Any());
+                    if (fallbackCTn is not null &&
+                        int.TryParse(fallbackCTn.Attribute("dur")?.Value, out var fbDur) && fbDur >= 1)
+                        durationMs = fbDur;
+                }
             }
         }
 

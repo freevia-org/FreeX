@@ -624,4 +624,236 @@ public class TransitionAnimationTests
         Assert.Single(loaded.Slides[0].Animations);
         Assert.Equal(1, loaded.Slides[0].Animations[0].DurationMs); // AC3: not 500 (the old default)
     }
+
+    // ── AF1: import from real PowerPoint — dur lives inside p:cBhvr, not bare p:cTn ──────────
+
+    /// <summary>
+    /// AF1: ReadBuildItem must read DurationMs from a real-PowerPoint-shaped preset animation where
+    /// the inner childTnLst contains p:animEffect (not a bare p:cTn), and the actual duration is on
+    /// the p:cTn inside p:animEffect &gt; p:cBhvr. The AC2 structural-primary path finds no direct
+    /// p:cTn child; the AF1 bounded-descendant fallback must find the dur=2000 p:cTn (not the
+    /// dur="1" sentinel inside p:set), and return DurationMs=2000 (not the 500ms default).
+    /// </summary>
+    [Fact]
+    public void Import_RealPowerPoint_PresetAnimation_DurationMs_ReadFromCBhvr()
+    {
+        // Construct a minimal p:timing XML tree shaped like real PowerPoint emits for a
+        // preset entrance animation with dur=2000 on the p:cTn inside p:animEffect/p:cBhvr.
+        //
+        // Structure (real PowerPoint nesting):
+        //   p:par (buildPar)
+        //     p:cTn [presetClass="entr" presetID="1" fill="hold" nodeType="withEffect"]
+        //       p:stCondLst > p:cond delay="indefinite"
+        //       p:childTnLst
+        //         p:par
+        //           p:cTn [fill="hold"]
+        //             p:stCondLst > p:cond delay="0"
+        //             p:childTnLst          ← innerChildTnLst
+        //               p:animEffect        ← real PowerPoint behavior element (not bare p:cTn)
+        //                 p:cBhvr
+        //                   p:cTn [dur="2000"]   ← AF1 fallback target
+        //                   p:tgtEl > p:spTgt spid="1"
+        //               p:set               ← sentinel: p:cBhvr > p:cTn dur="1"
+        //                 p:cBhvr
+        //                   p:cTn [dur="1"]  ← must NOT be picked
+        //                   p:tgtEl > p:spTgt spid="1"
+
+        const string presNs  = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace  pNs      = presNs;
+
+        var buildPar = new XElement(pNs + "par",
+            new XElement(pNs + "cTn",
+                new XAttribute("presetClass", "entr"),
+                new XAttribute("presetID", "1"),
+                new XAttribute("presetSubtype", "0"),
+                new XAttribute("fill", "hold"),
+                new XAttribute("grpId", "0"),
+                new XAttribute("nodeType", "withEffect"),
+                new XElement(pNs + "stCondLst",
+                    new XElement(pNs + "cond", new XAttribute("delay", "indefinite"))),
+                new XElement(pNs + "childTnLst",
+                    new XElement(pNs + "par",
+                        new XElement(pNs + "cTn",
+                            new XAttribute("fill", "hold"),
+                            new XElement(pNs + "stCondLst",
+                                new XElement(pNs + "cond", new XAttribute("delay", "0"))),
+                            new XElement(pNs + "childTnLst",
+                                // Real PowerPoint: p:animEffect with dur on p:cBhvr/p:cTn
+                                new XElement(pNs + "animEffect",
+                                    new XElement(pNs + "cBhvr",
+                                        new XElement(pNs + "cTn",
+                                            new XAttribute("dur", "2000")),
+                                        new XElement(pNs + "tgtEl",
+                                            new XElement(pNs + "spTgt",
+                                                new XAttribute("spid", "1"))))),
+                                // p:set sentinel: dur="1" must NOT be picked by fallback
+                                new XElement(pNs + "set",
+                                    new XElement(pNs + "cBhvr",
+                                        new XElement(pNs + "cTn",
+                                            new XAttribute("dur", "1"),
+                                            new XAttribute("fill", "hold")),
+                                        new XElement(pNs + "tgtEl",
+                                            new XElement(pNs + "spTgt",
+                                                new XAttribute("spid", "1")))))))))));
+
+        // Wrap in minimal p:timing > p:tnLst > ... > p:seq (mainSeq) > ... > click group
+        var timingEl = BuildMinimalTimingWithBuildPar(pNs, buildPar);
+
+        // ReadAnimations is internal; invoke via the full Read pipeline using a minimal in-memory PPTX.
+        var pptxBytes = BuildMinimalPptxWithTiming(timingEl);
+        using var ms = new System.IO.MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+
+        Assert.Single(loaded.Slides[0].Animations);
+        var anim = loaded.Slides[0].Animations[0];
+        // AF1: must read 2000 from the p:cBhvr/p:cTn under p:animEffect, NOT the 500ms default.
+        Assert.Equal(2000, anim.DurationMs);
+        // Sanity: sentinel p:set dur="1" was not mistakenly picked.
+        Assert.NotEqual(1, anim.DurationMs);
+    }
+
+    // ── AF1 test helpers ─────────────────────────────────────────────────────────────
+
+    /// <summary>Wraps a build-par in the minimal p:timing tree ReadAnimations expects.</summary>
+    private static XElement BuildMinimalTimingWithBuildPar(XNamespace pNs, XElement buildPar)
+    {
+        // p:timing > p:tnLst > p:par (interactive root) > p:cTn > p:childTnLst >
+        //   p:seq (mainSeq) > p:cTn[nodeType=mainSeq] > p:childTnLst >
+        //     p:par (click group) > p:cTn > p:stCondLst/p:cond + p:childTnLst >
+        //       buildPar
+        return new XElement(pNs + "timing",
+            new XElement(pNs + "tnLst",
+                new XElement(pNs + "par",
+                    new XElement(pNs + "cTn",
+                        new XElement(pNs + "childTnLst",
+                            new XElement(pNs + "seq",
+                                new XElement(pNs + "cTn",
+                                    new XAttribute("nodeType", "mainSeq"),
+                                    new XElement(pNs + "childTnLst",
+                                        new XElement(pNs + "par",
+                                            new XElement(pNs + "cTn",
+                                                new XElement(pNs + "stCondLst",
+                                                    new XElement(pNs + "cond",
+                                                        new XAttribute("delay", "indefinite"))),
+                                                new XElement(pNs + "childTnLst",
+                                                    buildPar)))))))))));
+    }
+
+    /// <summary>
+    /// Builds the smallest valid PPTX zip that contains one slide with the given p:timing element.
+    /// PptxPackageReader.Read requires a real OPC/ZIP stream with slide1.xml, presentation.xml,
+    /// [Content_Types].xml, and the required relationship files.
+    /// </summary>
+    private static byte[] BuildMinimalPptxWithTiming(XElement timingEl)
+    {
+        XNamespace pNs    = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace aNs    = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace rNs    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace pkgRel = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        // slide1.xml — minimal sld with one shape (spid=1) and the timing tree
+        var slideXml = new XDocument(
+            new XElement(pNs + "sld",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", aNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(pNs + "cSld",
+                    new XElement(pNs + "spTree",
+                        new XElement(pNs + "nvGrpSpPr",
+                            new XElement(pNs + "cNvPr",
+                                new XAttribute("id", "1"), new XAttribute("name", "Group 1")),
+                            new XElement(pNs + "cNvGrpSpPr"),
+                            new XElement(pNs + "nvPr")),
+                        new XElement(pNs + "grpSpPr",
+                            new XElement(aNs + "xfrm",
+                                new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
+                                new XElement(aNs + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                new XElement(aNs + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))),
+                        new XElement(pNs + "sp",
+                            new XElement(pNs + "nvSpPr",
+                                new XElement(pNs + "cNvPr",
+                                    new XAttribute("id", "1"), new XAttribute("name", "Shape1")),
+                                new XElement(pNs + "cNvSpPr"),
+                                new XElement(pNs + "nvPr")),
+                            new XElement(pNs + "spPr",
+                                new XElement(aNs + "xfrm",
+                                    new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                                    new XElement(aNs + "ext", new XAttribute("cx", "914400"), new XAttribute("cy", "914400"))),
+                                new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"))),
+                            new XElement(pNs + "txBody",
+                                new XElement(aNs + "bodyPr"),
+                                new XElement(aNs + "p"))))),
+                timingEl));
+
+        // presentation.xml — minimal, references slide1
+        var presXml = new XDocument(
+            new XElement(pNs + "presentation",
+                new XAttribute(XNamespace.Xmlns + "p", pNs.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "r", rNs.NamespaceName),
+                new XElement(pNs + "sldSz",
+                    new XAttribute("cx", "9144000"), new XAttribute("cy", "6858000")),
+                new XElement(pNs + "notesSz",
+                    new XAttribute("cx", "6858000"), new XAttribute("cy", "9144000")),
+                new XElement(pNs + "sldIdLst",
+                    new XElement(pNs + "sldId",
+                        new XAttribute("id", "256"),
+                        new XAttribute(rNs + "id", "rId1")))));
+
+        // [Content_Types].xml
+        XNamespace ctNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var contentTypes = new XDocument(
+            new XElement(ctNs + "Types",
+                new XElement(ctNs + "Default",
+                    new XAttribute("Extension", "rels"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
+                new XElement(ctNs + "Default",
+                    new XAttribute("Extension", "xml"),
+                    new XAttribute("ContentType", "application/xml")),
+                new XElement(ctNs + "Override",
+                    new XAttribute("PartName", "/ppt/presentation.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
+                new XElement(ctNs + "Override",
+                    new XAttribute("PartName", "/ppt/slides/slide1.xml"),
+                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"))));
+
+        // _rels/.rels
+        var rootRels = new XDocument(
+            new XElement(pkgRel + "Relationships",
+                new XElement(pkgRel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"),
+                    new XAttribute("Target", "ppt/presentation.xml"))));
+
+        // ppt/_rels/presentation.xml.rels
+        var presRels = new XDocument(
+            new XElement(pkgRel + "Relationships",
+                new XElement(pkgRel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"),
+                    new XAttribute("Target", "slides/slide1.xml"))));
+
+        // ppt/slides/_rels/slide1.xml.rels — empty (no slideLayout for this minimal test)
+        var slideRels = new XDocument(
+            new XElement(pkgRel + "Relationships"));
+
+        using var outMs = new System.IO.MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(outMs, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteEntry(zip, "[Content_Types].xml", contentTypes);
+            WriteEntry(zip, "_rels/.rels", rootRels);
+            WriteEntry(zip, "ppt/presentation.xml", presXml);
+            WriteEntry(zip, "ppt/_rels/presentation.xml.rels", presRels);
+            WriteEntry(zip, "ppt/slides/slide1.xml", slideXml);
+            WriteEntry(zip, "ppt/slides/_rels/slide1.xml.rels", slideRels);
+        }
+        return outMs.ToArray();
+    }
+
+    private static void WriteEntry(System.IO.Compression.ZipArchive zip, string path, XDocument doc)
+    {
+        var entry = zip.CreateEntry(path);
+        using var stream = entry.Open();
+        doc.Save(stream);
+    }
 }

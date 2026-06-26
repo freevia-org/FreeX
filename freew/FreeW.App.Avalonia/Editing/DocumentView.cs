@@ -631,6 +631,28 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── AV-COL-NONTXT: inline-image and table-cell rect introspection for column-layout tests ──────────
+
+    /// <summary>Snapshot of inline (non-floating) image rects — multi-column X-band tests.</summary>
+    internal IReadOnlyList<Rect> InlineImageRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _images.Select(i => i.Rect).ToList();
+        }
+    }
+
+    /// <summary>Snapshot of table cell rects (Rect, Block, Row, Col) — multi-column X-band tests.</summary>
+    internal IReadOnlyList<(Rect Rect, int Block, int Row, int Col)> TableCellRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _cellHits.ToList();
+        }
+    }
+
     // ── XX1 draw-order introspection (tests only) ────────────────────────────────────────────────────
 
     /// <summary>Merged BehindText floating-object draw order (ZOrder, type) — verifies XX1 interleave.</summary>
@@ -2017,6 +2039,26 @@ public sealed class DocumentView : Control
         _ => 0,
     };
 
+    /// <summary>
+    /// AV-COL-NONTXT: Returns the left edge of the document column that contains a piece of content
+    /// at the given <paramref name="contentY"/> (the flowing content-space Y, not page-space Y).
+    /// <para>
+    /// The snaking column model works by dividing the continuous content-Y axis into slots of height
+    /// <see cref="_layoutTextAreaHeight"/>. Slot <c>k</c> maps to column-index <c>k % _colCount</c>
+    /// within a page. The left edge of that column is
+    /// <c>_contentLeft + colIndex * (_colWidth + _colGap)</c>.
+    /// </para>
+    /// When <c>_colCount == 1</c> this returns <see cref="_contentLeft"/> unchanged (no regression).
+    /// </summary>
+    private double ColumnLeftFor(double contentY)
+    {
+        if (_colCount <= 1 || _layoutTextAreaHeight <= 0)
+            return _contentLeft;
+        var slot     = (int)(contentY / _layoutTextAreaHeight);
+        var colIndex = slot % _colCount;
+        return _contentLeft + colIndex * (_colWidth + _colGap);
+    }
+
     private void LayoutReadOnlyBlockPaged(int blockIndex, Block block, double textWidth)
     {
         var text = block is Table table ? TablePlainText(table) : block.ToString() ?? "";
@@ -2042,14 +2084,16 @@ public sealed class DocumentView : Control
     {
         var cols = Math.Max(1, table.ColumnCount);
         var colWidths = ComputeColumnWidths(table, cols, textWidth);
-        var columnLeft = new double[cols + 1];
-        var running = _contentLeft;
+        // AV-COL-NONTXT AG1: build columnLeft[] as offsets from _contentLeft (column-0 base).
+        // Each row re-applies the per-row column shift after reserving its Y slot.
+        var colOffsets = new double[cols + 1]; // relative to _contentLeft
+        var running = 0.0;
         for (var c = 0; c < cols; c++)
         {
-            columnLeft[c] = running;
+            colOffsets[c] = running;
             running += colWidths[c];
         }
-        columnLeft[cols] = running;
+        colOffsets[cols] = running;
 
         const double pad = 5;
         var borders = table.Formatting.Borders;
@@ -2093,12 +2137,16 @@ public sealed class DocumentView : Control
             var rowContentY = ReserveContentY(rowHeight);
             var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
 
+            // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
+            var rowColLeft = ColumnLeftFor(rowContentY);
+
             foreach (var (startCol, span, lines, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
-                var rect = new Rect(columnLeft[startCol], rowPageSpaceY, cellWidth, rowHeight);
+                var cellX = rowColLeft + colOffsets[startCol];
+                var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
                 IBrush? fill = isHeader ? HeaderFill : isBand ? BandFill : null;
                 _rects.Add((rect, fill, borders));
                 _cellHits.Add((rect, blockIndex, r, startCol));
@@ -2106,7 +2154,7 @@ public sealed class DocumentView : Control
                 var ty = rowPageSpaceY + pad;
                 foreach (var (lineHeight, chars) in lines)
                 {
-                    var tx = columnLeft[startCol] + pad;
+                    var tx = cellX + pad;
                     foreach (var (ch, w) in chars)
                     {
                         _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, ty, w, lineHeight, fmt, ch, Sentinel: false));
@@ -2167,7 +2215,8 @@ public sealed class DocumentView : Control
 
             var imgContentY = ReserveContentY(height);
             var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
-            var x = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+            // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
+            var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
             _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeBitmap(image)));
             _layoutContentY = imgContentY + height + gap;
         }
@@ -2258,7 +2307,8 @@ public sealed class DocumentView : Control
 
                 var contentY   = ReserveContentY(height);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
-                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                // AV-COL-NONTXT AG3: shift X to the column band for this inline chart's content-Y.
+                var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 // Build inline chart data (reuses the same struct as floating charts).
@@ -2287,7 +2337,8 @@ public sealed class DocumentView : Control
 
                 var contentY   = ReserveContentY(height);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
-                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                // AV-COL-NONTXT AG3: shift X to the column band for this inline WordArt's content-Y.
+                var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 _inlineWordArts.Add(new FloatingWordArtData
@@ -2318,7 +2369,8 @@ public sealed class DocumentView : Control
 
                 var contentY   = ReserveContentY(height);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
-                var x          = _contentLeft + AlignmentOffset(alignment, textWidth, width);
+                // AV-COL-NONTXT AG3: shift X to the column band for this inline SmartArt's content-Y.
+                var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 // Flatten nodes depth-first (mirrors CollectFloatingSmartArts).
@@ -2355,7 +2407,8 @@ public sealed class DocumentView : Control
                 var lineH = Build("Ag", fmt).Height;
                 var contentY   = ReserveContentY(lineH);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
-                var tx = _contentLeft;
+                // AV-COL-NONTXT AG3: shift X to the column band for this inline text's content-Y.
+                var tx = ColumnLeftFor(contentY);
                 foreach (var ch in run.Text)
                 {
                     var ft = Build(ch.ToString(), fmt);
@@ -2368,10 +2421,11 @@ public sealed class DocumentView : Control
         }
 
         // End-of-paragraph sentinel so the caret can rest after the last inline object.
+        // AV-COL-NONTXT AG3: use the column-shifted X for the sentinel as well.
         var sentinelY = _placed.Count > 0
             ? _placed.Last(p => p.Block == blockIndex).Y
             : ContentYToPageSpaceY(_layoutContentY);
-        _placed.Add(new PlacedChar(blockIndex, glyphOffset, _contentLeft, sentinelY,
+        _placed.Add(new PlacedChar(blockIndex, glyphOffset, ColumnLeftFor(_layoutContentY), sentinelY,
             0, DefaultFontSizePt * PxPerPoint * 1.3, RunFormatting.Default, '\0', Sentinel: true));
 
         _layoutContentY += gap;
@@ -2738,6 +2792,11 @@ public sealed class DocumentView : Control
                 widths[c] = missing > 0 ? even : textWidth / cols;
 
         var total = widths.Sum();
+        // AV-COL-NONTXT AG4: Scale declared widths to fit the available column width.
+        // In multi-column layout, textWidth = _colWidth (the per-column width, not the full page
+        // content width).  A table whose declared ColumnWidthsPt sums to the full page width would
+        // overflow the column and bleed across the column rule.  The scale-down here ensures that
+        // any table — declared or not — is clamped to the available column (or page) width.
         if (total > textWidth && total > 0)
         {
             var scale = textWidth / total;
