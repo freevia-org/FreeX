@@ -75,6 +75,7 @@ internal static class CorpusGenerator
                 ("13-wordart",      GenerateWordArt),
                 ("14-smartart-live", GenerateSmartArtLive),
                 ("16-bg-tabs-vtext", GenerateBgTabsVtext),
+                ("18-chart-types",   GenerateChartTypes),
             };
 
             var errors = 0;
@@ -678,6 +679,258 @@ internal static class CorpusGenerator
     }
 
 
+
+    // -----------------------------------------------------------------------
+    // Deck 18: Doughnut, Scatter, Radar, Bubble chart types
+    // -----------------------------------------------------------------------
+    // XlChartType constants:
+    //   xlDoughnut    = -4120
+    //   xlXYScatter   = -4169  (scatter with markers only)
+    //   xlRadar       = -4151
+    //   xlBubble      = 15
+    private static void GenerateChartTypes(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? comPres = null;
+        try
+        {
+            comPres = app.Presentations.Add(MsoTrue);
+            try { app.WindowState = 2; } catch { } // ppWindowMinimized=2
+
+            // Slide 1: Doughnut
+            AddChartSlideViaCom(comPres, "Doughnut Chart",
+                -4120, // xlDoughnut
+                new[] { "Alpha", "Beta", "Gamma", "Delta" },
+                new[] { ("Share", new double[] { 40, 30, 20, 10 }) });
+
+            // Slide 2: XY Scatter
+            AddChartSlideViaCom(comPres, "XY Scatter",
+                -4169, // xlXYScatter
+                new[] { "1", "2", "3", "4", "5" },
+                new[] { ("Series1", new double[] { 10, 30, 15, 40, 25 }) });
+
+            // Slide 3: Radar
+            AddChartSlideViaCom(comPres, "Radar Chart",
+                -4151, // xlRadar
+                new[] { "Speed", "Power", "Agility", "Stamina", "Tech" },
+                new[] {
+                    ("Alpha", new double[] { 80, 60, 90, 70, 50 }),
+                    ("Beta",  new double[] { 50, 80, 60, 90, 75 })
+                });
+
+            // Slide 4: Bubble
+            AddChartSlideViaCom(comPres, "Bubble Chart",
+                15, // xlBubble
+                new[] { "1", "2", "3" },
+                new[] { ("Bubbles", new double[] { 2, 4, 1 }) });
+
+            if (File.Exists(pptxPath)) File.Delete(pptxPath);
+            comPres.SaveAs(pptxPath, 24, MsoFalse);
+            comPres.Close();
+            comPres = null;
+
+            // Patch chart XML with correct cached data
+            PatchChartTypes18InZip(pptxPath);
+
+            // Export reference PNGs
+            dynamic? exportPres = null;
+            try
+            {
+                exportPres = app.Presentations.Open(pptxPath, MsoTrue, MsoFalse, MsoFalse);
+                int slideCount = (int)exportPres.Slides.Count;
+                for (int i = 1; i <= slideCount; i++)
+                {
+                    var pngPath = Path.Combine(refDir, $"slide-{i:D2}.png");
+                    dynamic slide = exportPres.Slides.Item(i);
+                    slide.Export(pngPath, "PNG", ExportWidth, ExportHeight);
+                }
+                exportPres.Close();
+                exportPres = null;
+            }
+            finally
+            {
+                if (exportPres is not null)
+                    try { exportPres.Close(); } catch { }
+            }
+        }
+        finally
+        {
+            if (comPres is not null)
+            {
+                try { comPres.Close(); } catch { }
+                if (Marshal.IsComObject(comPres))
+                    try { Marshal.FinalReleaseComObject(comPres); } catch { }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Patches chart XML for the 18-chart-types deck:
+    ///   chart1 — doughnut  (c:cat / c:val)
+    ///   chart2 — scatter   (c:xVal / c:yVal)
+    ///   chart3 — radar     (c:cat / c:val)
+    ///   chart4 — bubble    (c:xVal / c:yVal / c:bubbleSize)
+    /// </summary>
+    private static void PatchChartTypes18InZip(string pptxPath)
+    {
+        var patchedPath = pptxPath + ".patched";
+        using var srcZip  = ZipFile.OpenRead(pptxPath);
+        using var destZip = ZipFile.Open(patchedPath, ZipArchiveMode.Create);
+
+        var chartEntries = srcZip.Entries
+            .Where(e => System.Text.RegularExpressions.Regex.IsMatch(e.FullName, @"ppt/charts/chart\d+\.xml$"))
+            .OrderBy(e => int.Parse(System.Text.RegularExpressions.Regex.Match(e.FullName, @"\d+").Value))
+            .ToList();
+
+        int chartIdx = 0;
+        foreach (var entry in srcZip.Entries)
+        {
+            if (chartIdx < chartEntries.Count && chartEntries.Contains(entry))
+            {
+                string xmlText;
+                using (var s = entry.Open())
+                using (var reader = new StreamReader(s, Encoding.UTF8))
+                    xmlText = reader.ReadToEnd();
+
+                System.Xml.XmlDocument patched;
+                switch (chartIdx)
+                {
+                    case 0: // doughnut
+                        patched = PatchChartXmlViaXmlDocument(xmlText, new ChartPatchData(
+                            Cats: new[] { "Alpha", "Beta", "Gamma", "Delta" },
+                            Series: new[] { ("Share", new double[] { 40, 30, 20, 10 }) }));
+                        break;
+                    case 1: // scatter
+                        patched = PatchScatterChartXml(xmlText,
+                            xVals:  new double[] { 1, 2, 3, 4, 5 },
+                            yVals:  new double[] { 10, 30, 15, 40, 25 },
+                            serName: "Series1");
+                        break;
+                    case 2: // radar
+                        patched = PatchChartXmlViaXmlDocument(xmlText, new ChartPatchData(
+                            Cats: new[] { "Speed", "Power", "Agility", "Stamina", "Tech" },
+                            Series: new[]
+                            {
+                                ("Alpha", new double[] { 80, 60, 90, 70, 50 }),
+                                ("Beta",  new double[] { 50, 80, 60, 90, 75 })
+                            }));
+                        break;
+                    case 3: // bubble
+                        patched = PatchBubbleChartXml(xmlText,
+                            xVals:       new double[] { 1, 3, 5 },
+                            yVals:       new double[] { 2, 4, 1 },
+                            bubbleSizes: new double[] { 5, 15, 10 },
+                            serName: "Bubbles");
+                        break;
+                    default:
+                        patched = null!;
+                        break;
+                }
+
+                var destEntry = destZip.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                var utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+                using (var s = destEntry.Open())
+                {
+                    var settings = new System.Xml.XmlWriterSettings
+                        { Encoding = utf8NoBom, Indent = false, CloseOutput = false };
+                    using (var xw = System.Xml.XmlWriter.Create(s, settings))
+                        patched.Save(xw);
+                }
+                chartIdx++;
+            }
+            else
+            {
+                var destEntry = destZip.CreateEntry(entry.FullName, CompressionLevel.Optimal);
+                using var src  = entry.Open();
+                using var dest = destEntry.Open();
+                src.CopyTo(dest);
+            }
+        }
+
+        srcZip.Dispose();
+        destZip.Dispose();
+
+        File.Delete(pptxPath);
+        File.Move(patchedPath, pptxPath);
+    }
+
+    /// <summary>Patches a scatter chart's series to use c:xVal / c:yVal caches.</summary>
+    private static System.Xml.XmlDocument PatchScatterChartXml(
+        string xmlText, double[] xVals, double[] yVals, string serName)
+    {
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xmlText);
+        var nsMgr = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        nsMgr.AddNamespace("c", ChartNsUri);
+
+        var serNode = doc.SelectSingleNode("//c:plotArea/*/c:ser", nsMgr);
+        if (serNode is null) return doc;
+
+        // Series name
+        var txV = serNode.SelectSingleNode("c:tx//c:v", nsMgr);
+        if (txV is not null) txV.InnerText = serName;
+
+        // Ensure c:xVal with numCache
+        EnsureXValYVal(doc, nsMgr, serNode, xVals, yVals);
+        return doc;
+    }
+
+    /// <summary>Patches a bubble chart's series to use c:xVal / c:yVal / c:bubbleSize caches.</summary>
+    private static System.Xml.XmlDocument PatchBubbleChartXml(
+        string xmlText, double[] xVals, double[] yVals, double[] bubbleSizes, string serName)
+    {
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xmlText);
+        var nsMgr = new System.Xml.XmlNamespaceManager(doc.NameTable);
+        nsMgr.AddNamespace("c", ChartNsUri);
+
+        var serNode = doc.SelectSingleNode("//c:plotArea/*/c:ser", nsMgr);
+        if (serNode is null) return doc;
+
+        var txV = serNode.SelectSingleNode("c:tx//c:v", nsMgr);
+        if (txV is not null) txV.InnerText = serName;
+
+        EnsureXValYVal(doc, nsMgr, serNode, xVals, yVals);
+
+        // c:bubbleSize
+        var bsNode = serNode.SelectSingleNode("c:bubbleSize", nsMgr)
+                     ?? AppendElement(doc, serNode, "c", "bubbleSize", ChartNsUri);
+        bsNode.RemoveAll();
+        var bsNumRef = doc.CreateElement("c", "numRef", ChartNsUri);
+        bsNumRef.AppendChild(CreateNumCache(doc, nsMgr, bubbleSizes));
+        bsNode.AppendChild(bsNumRef);
+
+        return doc;
+    }
+
+    private static void EnsureXValYVal(
+        System.Xml.XmlDocument doc, System.Xml.XmlNamespaceManager nsMgr,
+        System.Xml.XmlNode serNode, double[] xVals, double[] yVals)
+    {
+        // c:xVal
+        var xNode = serNode.SelectSingleNode("c:xVal", nsMgr)
+                    ?? AppendElement(doc, serNode, "c", "xVal", ChartNsUri);
+        xNode.RemoveAll();
+        var xNumRef = doc.CreateElement("c", "numRef", ChartNsUri);
+        xNumRef.AppendChild(CreateNumCache(doc, nsMgr, xVals));
+        xNode.AppendChild(xNumRef);
+
+        // c:yVal
+        var yNode = serNode.SelectSingleNode("c:yVal", nsMgr)
+                    ?? AppendElement(doc, serNode, "c", "yVal", ChartNsUri);
+        yNode.RemoveAll();
+        var yNumRef = doc.CreateElement("c", "numRef", ChartNsUri);
+        yNumRef.AppendChild(CreateNumCache(doc, nsMgr, yVals));
+        yNode.AppendChild(yNumRef);
+    }
+
+    private static System.Xml.XmlElement AppendElement(
+        System.Xml.XmlDocument doc, System.Xml.XmlNode parent,
+        string prefix, string localName, string ns)
+    {
+        var el = doc.CreateElement(prefix, localName, ns);
+        parent.AppendChild(el);
+        return el;
+    }
 
     // -----------------------------------------------------------------------
     // Deck 04: Slide with a picture (we embed a small generated PNG)
