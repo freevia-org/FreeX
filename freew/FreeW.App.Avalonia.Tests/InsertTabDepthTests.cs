@@ -31,7 +31,7 @@ public sealed class InsertTabDepthTests
             ToggleReviewingPane: () => { }, ToggleRevealFormatting: () => { }, OpenFindReplaceDialog: () => { },
             SetPrintLayout: () => { }, SetWebLayout: () => { }, SetDraftView: () => { },
             OpenFontDialog: () => { }, OpenParagraphDialog: () => { }, OpenPageSetupDialog: () => { },
-            ToggleOrientation: () => { }, ApplyMarginPreset: _ => { }, ApplyPaperSize: _ => { },
+            ToggleOrientation: () => { }, ApplyMarginPreset: _ => { }, ApplyPaperSize: _ => { }, OpenWordCountDialog: () => { },
             InsertPicture: () => { }, ApplyZoom: (_, _) => { });
 
     private static DocumentView ViewWith(string text = "Body paragraph")

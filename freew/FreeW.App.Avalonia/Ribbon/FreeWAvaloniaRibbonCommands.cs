@@ -264,6 +264,19 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Review ───────────────────────────────────────────────────────────
         r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
+        // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
+        // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
+        r.Register("freew.track-changes", new RelayCommand(() => editor.ToggleTrackChanges()));
+        // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
+        r.Register("freew.accept-change", new RelayCommand(() => editor.AcceptCurrentRevision()));
+        r.Register("freew.reject-change", new RelayCommand(() => editor.RejectCurrentRevision()));
+        r.Register("freew.accept-all",    new RelayCommand(() => editor.AcceptAllRevisions()));
+        r.Register("freew.reject-all",    new RelayCommand(() => editor.RejectAllRevisions()));
+        // Comments — new comment over the selection / delete the comment at the caret.
+        r.Register("freew.new-comment",    new RelayCommand(() => editor.NewComment()));
+        r.Register("freew.delete-comment", new RelayCommand(() => editor.DeleteCommentAtCaret()));
+        // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
+        r.Register("freew.word-count", new RelayCommand(callbacks.OpenWordCountDialog));
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);

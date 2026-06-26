@@ -49,6 +49,7 @@ public sealed class PageSetupDialogTests
             ApplyMarginPreset: _ => { },
             ApplyPaperSize: _ => { },
             InsertPicture: () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Command registry ──────────────────────────────────────────────────────

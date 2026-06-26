@@ -49,6 +49,7 @@ public sealed class CommandRegistryTests
             ApplyMarginPreset:   _ => { },
             ApplyPaperSize:      _ => { },
             InsertPicture:       () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     /// <summary>Creates a minimal editable document with one paragraph of text.</summary>

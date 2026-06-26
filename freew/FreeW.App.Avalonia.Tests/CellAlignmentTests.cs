@@ -64,6 +64,7 @@ public sealed class CellAlignmentTests
             ApplyMarginPreset:   _ => { },
             ApplyPaperSize:      _ => { },
             InsertPicture:       () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────────

@@ -44,6 +44,7 @@ public sealed class PictureDrawingContextualTabTests
             OpenFontDialog: () => { }, OpenParagraphDialog: () => { }, OpenPageSetupDialog: () => { },
             ToggleOrientation: () => { }, ApplyMarginPreset: _ => { }, ApplyPaperSize: _ => { },
             InsertPicture: () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     private static byte[] SmallPng()

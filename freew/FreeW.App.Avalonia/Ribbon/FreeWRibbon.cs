@@ -245,10 +245,33 @@ internal static class FreeWRibbon
                 });
             })
             .Tab("review", "Review", "R", tab =>
-                tab.Group("tracking", "Tracking", null, 100, g =>
+            {
+                // AV-REVIEW: Proofing group — word count dialog.
+                tab.Group("proofing", "Proofing", null, 110, g =>
                 {
+                    g.Button("freew.word-count", "Word Count");
+                });
+                // AV-REVIEW: Comments group — new / delete review comment.
+                tab.Group("comments", "Comments", null, 100, g =>
+                {
+                    g.Button("freew.new-comment",    "New Comment");
+                    g.Button("freew.delete-comment", "Delete");
+                });
+                // AV-REVIEW: Tracking group — Track Changes toggle + reviewing pane.
+                tab.Group("tracking", "Tracking", null, 90, g =>
+                {
+                    g.Toggle("freew.track-changes", "Track Changes");
                     g.Toggle("freew.reviewingpane", "Reviewing Pane");
-                }))
+                });
+                // AV-REVIEW: Changes group — accept / reject (current + all).
+                tab.Group("changes", "Changes", null, 80, g =>
+                {
+                    g.Button("freew.accept-change", "Accept");
+                    g.Button("freew.accept-all",    "Accept All");
+                    g.Button("freew.reject-change", "Reject");
+                    g.Button("freew.reject-all",    "Reject All");
+                });
+            })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext(TableRibbonContextSource.TableContextKey, "Table Tools", RibbonContextColor.Teal),
@@ -396,6 +419,8 @@ internal sealed record RibbonHostCallbacks(
     Action<string> ApplyPaperSize,
     /// <summary>Insert &gt; Picture: open a file picker, load the image, insert it at the caret (AV-INSERT).</summary>
     Action InsertPicture,
+    /// <summary>Opens the Word Count dialog (modal) showing words/characters/paragraphs from the model.</summary>
+    Action OpenWordCountDialog,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.

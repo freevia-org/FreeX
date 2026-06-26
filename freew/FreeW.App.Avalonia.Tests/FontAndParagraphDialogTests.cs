@@ -50,6 +50,7 @@ public sealed class FontAndParagraphDialogTests
             ApplyMarginPreset:   _ => { },
             ApplyPaperSize:      _ => { },
             InsertPicture:       () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Launcher command ids resolve in the registry ──────────────────────────

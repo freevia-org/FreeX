@@ -5936,6 +5936,170 @@ public sealed class DocumentView : Control
             .ToList();
     }
 
+    // ── AV-REVIEW: Review-tab tracked-changes + comments + word count wiring ──────────────────────────
+    // Accept/reject ride the shared DocumentCommandBus (undoable), mirroring the WPF host's accept/reject
+    // but reusing the portable TrackChanges/RevisionList model directly. Comments reuse the AV-COMMENT
+    // infra (AddComment/DeleteComment). Word count reads DocumentStatistics from the model.
+
+    /// <summary>
+    /// When true, the editor is in Track Changes mode. <b>Deferred:</b> live keystroke-level recording of
+    /// edits as revisions is not wired (the Avalonia edit pipeline does not consult this flag yet). The flag
+    /// is model/UI state that the ribbon toggle reflects and that gates
+    /// <see cref="MarkSelectionAsRevision"/> (used to turn the current selection into a tracked insertion or
+    /// deletion). Accept/Reject of existing revisions work regardless of this flag.
+    /// </summary>
+    public bool TrackChangesEnabled { get; private set; }
+
+    /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
+    public string RevisionAuthor { get; set; } = "FreeW User";
+
+    /// <summary>
+    /// Toggles <see cref="TrackChangesEnabled"/> and returns the new state. Re-renders so any change-bar /
+    /// markup adorners that depend on the mode update. (Recording edits-on-type as revisions is deferred —
+    /// see <see cref="TrackChangesEnabled"/>.)
+    /// </summary>
+    public bool ToggleTrackChanges()
+    {
+        TrackChangesEnabled = !TrackChangesEnabled;
+        InvalidateVisual();
+        DocumentChanged?.Invoke();
+        return TrackChangesEnabled;
+    }
+
+    /// <summary>
+    /// Marks the current selection (or, when empty, the whole caret paragraph) as a tracked change of
+    /// <paramref name="kind"/> (insertion or deletion) by <see cref="RevisionAuthor"/>. Undoable; re-renders
+    /// so the revision colour/decoration appears and the marks round-trip on save. Returns true when a run
+    /// was marked. A no-op for <see cref="RevisionKind.None"/> or when there is nothing textual to mark.
+    /// </summary>
+    public bool MarkSelectionAsRevision(RevisionKind kind)
+    {
+        if (kind == RevisionKind.None)
+            return false;
+
+        var sel = NormalizedSelection();
+        int block, startOffset, endOffset;
+        if (sel is { } s && s.Start.Block == s.End.Block && s.Start.Offset != s.End.Offset)
+        {
+            block = s.Start.Block;
+            startOffset = s.Start.Offset;
+            endOffset = s.End.Offset;
+        }
+        else
+        {
+            block = _caret.Block;
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsEditable(paragraph))
+            return false;
+        if (ParaCells(paragraph).Count == 0)
+            return false;
+
+        var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        _bus.Execute(new MarkRevisionRangeCommand(block, startOffset, endOffset, kind, RevisionAuthor, dateXml));
+        return TrackChanges.HasRevisions(_doc);
+    }
+
+    /// <summary>Every tracked change in the committed document, in reading order — drives Previous/Next.</summary>
+    public IReadOnlyList<RevisionEntry> Revisions => RevisionList.Enumerate(_doc);
+
+    /// <summary>True when the document carries any tracked change (insertion/deletion/formatting).</summary>
+    public bool HasRevisions => TrackChanges.HasRevisions(_doc);
+
+    /// <summary>
+    /// Accept exactly one tracked change — the one at or after the caret, falling back to the first revision
+    /// in reading order. Undoable; re-renders. Returns true when a revision was resolved.
+    /// </summary>
+    public bool AcceptCurrentRevision() => ResolveCurrentRevision(accept: true);
+
+    /// <summary>
+    /// Reject exactly one tracked change — the one at or after the caret, falling back to the first revision
+    /// in reading order. Undoable; re-renders. Returns true when a revision was resolved.
+    /// </summary>
+    public bool RejectCurrentRevision() => ResolveCurrentRevision(accept: false);
+
+    private bool ResolveCurrentRevision(bool accept)
+    {
+        var entries = RevisionList.Enumerate(_doc);
+        if (entries.Count == 0)
+            return false;
+
+        // Prefer the first revision whose owning block index is at/after the caret block; else the first.
+        var caretBlock = _caret.Block;
+        var index = -1;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].BlockIndex >= caretBlock)
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0)
+            index = 0;
+
+        _bus.Execute(accept ? new AcceptOneRevisionCommand(index) : new RejectOneRevisionCommand(index));
+        return true;
+    }
+
+    /// <summary>
+    /// Accept every tracked change: insertions become ordinary text, deletions are removed. Undoable as a
+    /// single step; re-renders. Returns true when there was anything to resolve.
+    /// </summary>
+    public bool AcceptAllRevisions()
+    {
+        if (!TrackChanges.HasRevisions(_doc))
+            return false;
+        _bus.Execute(new AcceptAllRevisionsCommand());
+        return true;
+    }
+
+    /// <summary>
+    /// Reject every tracked change: insertions are removed, deletions become ordinary text. Undoable as a
+    /// single step; re-renders. Returns true when there was anything to resolve.
+    /// </summary>
+    public bool RejectAllRevisions()
+    {
+        if (!TrackChanges.HasRevisions(_doc))
+            return false;
+        _bus.Execute(new RejectAllRevisionsCommand());
+        return true;
+    }
+
+    /// <summary>
+    /// Adds a review comment over the current selection using <see cref="RevisionAuthor"/> as the author
+    /// (initials derived from it). Reuses the AV-COMMENT <see cref="AddComment(string,string,string)"/>
+    /// infra. Returns the new comment id, or null when there was nothing textual to anchor to.
+    /// Wired to <c>freew.new-comment</c>.
+    /// </summary>
+    public int? NewComment(string text = "New comment")
+    {
+        var initials = DeriveInitials(RevisionAuthor);
+        return AddComment(text, RevisionAuthor, initials);
+    }
+
+    /// <summary>Derives up-to-two-letter initials from an author name (e.g. "Ann Reviewer" → "AR").</summary>
+    private static string DeriveInitials(string? author)
+    {
+        if (string.IsNullOrWhiteSpace(author))
+            return "";
+        var parts = author.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant(),
+        };
+    }
+
+    /// <summary>
+    /// Full word/character/paragraph statistics for the document, computed from the model via
+    /// <see cref="DocumentStatistics.Compute(TextDocument)"/>. Drives the Word Count dialog.
+    /// </summary>
+    public DocumentStatistics ComputeStatistics() => DocumentStatistics.Compute(_doc);
+
     /// <summary>
     /// Set the paragraph space-before (in points) for the current paragraph.
     /// </summary>
