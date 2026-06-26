@@ -748,6 +748,73 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
+    // ── AV-TBL5: cell alignment (vertical + horizontal) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Set the vertical alignment of the table cell(s) and the horizontal (paragraph) alignment
+    /// of all paragraphs within those cells. Applies to:
+    /// <list type="bullet">
+    ///   <item>All cells in <see cref="SelectedCellRange"/> when a block selection is active.</item>
+    ///   <item>The single caret cell otherwise.</item>
+    /// </list>
+    /// Routed through <see cref="DocumentCommandBus"/> as a grouped undo action. No-op when the
+    /// caret is not inside a table cell.
+    /// <para>
+    /// NOTE — vertical render: the Avalonia table renderer currently top-anchors all cell content
+    /// (ty = rowPageSpaceY + pad in <c>LayoutTablePaged</c>).  Horizontal alignment applies
+    /// immediately through the existing paragraph-alignment render path.  Vertical centering/bottom
+    /// positioning is a follow-up render task (AV-TBL5-VRENDER).
+    /// </para>
+    /// </summary>
+    public void SetCaretCellAlignment(TableCellVerticalAlignment verticalAlignment, TextAlignment horizontalAlignment)
+    {
+        if (SelectedCellRange is { } sel)
+        {
+            if (sel.TableBlock < 0 || sel.TableBlock >= _doc.Blocks.Count
+                || _doc.Blocks[sel.TableBlock] is not Table selTbl)
+                return;
+            _bus.BeginUndoGroup();
+            try
+            {
+                for (var r = sel.MinRow; r <= sel.MaxRow; r++)
+                {
+                    if (r >= selTbl.Rows.Count) break;
+                    var row = selTbl.Rows[r];
+                    // BL1/BL3: SelectedCellRange uses GRID columns; SetCellAlignmentCommand expects
+                    // CELL-LIST indices. Convert and dedupe merged cells (same pattern as SetCellShading).
+                    var lastCellIdx = -1;
+                    for (var gridCol = sel.MinCol; gridCol <= sel.MaxCol; gridCol++)
+                    {
+                        var cellIdx = GridColumnToCellIndex(row, gridCol);
+                        if (cellIdx < 0) break;
+                        if (cellIdx == lastCellIdx) continue; // merged cell already processed
+                        lastCellIdx = cellIdx;
+                        _bus.Execute(new SetCellAlignmentCommand(sel.TableBlock, r, cellIdx, verticalAlignment, horizontalAlignment));
+                    }
+                }
+            }
+            finally
+            {
+                _bus.CommitUndoGroup("Set Cell Alignment");
+            }
+        }
+        else if (_cellCaret is { } cc)
+        {
+            if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count
+                || _doc.Blocks[cc.TableBlock] is not Table ccTbl)
+                return;
+            // BL1: cc.Col is a GRID column; convert to cell-list index.
+            var caretCellIdx = GridColumnToCellIndex(ccTbl.Rows[cc.Row], cc.Col);
+            if (caretCellIdx < 0) return;
+            _bus.Execute(new SetCellAlignmentCommand(cc.TableBlock, cc.Row, caretCellIdx, verticalAlignment, horizontalAlignment));
+        }
+        else
+        {
+            return; // Not in a table — no-op.
+        }
+        InvalidateLayoutAndVisual();
+    }
+
     /// <summary>
     /// Translates an abstract edge selector (All/Outside/Inside/primitive flags) into the
     /// concrete set of primitive edge bits that apply to a specific cell at (row, col) within
@@ -3205,7 +3272,29 @@ public sealed class DocumentView : Control
                 _rects.Add((rect, fill, borders, cellModel.Borders));
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
-                var ty = rowPageSpaceY + pad;
+                // AV-TBL5-VRENDER: per-cell vertical alignment offset within the row.
+                // cellAvailableHeight = row interior height (row height minus top+bottom padding).
+                // contentHeight = sum of this cell's laid-out line heights.
+                // For single-row cells (no rowspan), the available height is the full row interior.
+                // For rowspan cells, a per-row vAlign would require knowing the total merged height
+                // up-front — defer to standard top-anchor to avoid regressing existing rowspan layout.
+                // Paginated cells (content split across pages): ReserveContentY treats the row as a
+                // unit so the whole row lands on one page; no per-page split of a single row occurs,
+                // so the vAlign offset is safe to apply without extra pagination logic.
+                var cellLines = cellParas.SelectMany(pl => pl).ToList();
+                var contentHeight = cellLines.Sum(l => l.Height);
+                var cellAvailableHeight = rowHeight - 2 * pad;
+                var vAlignOffset = cellModel.VerticalAlignment switch
+                {
+                    TableCellVerticalAlignment.Center =>
+                        Math.Max(0.0, (cellAvailableHeight - contentHeight) / 2.0),
+                    TableCellVerticalAlignment.Bottom =>
+                        Math.Max(0.0, cellAvailableHeight - contentHeight),
+                    _ => 0.0  // Top (default)
+                };
+                var contentTopY = rowPageSpaceY + pad + vAlignOffset;
+
+                var ty = contentTopY;
                 // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
                 // on their own visual Y band, so multi-paragraph cells never collapse to one line.
                 // BE1: emit one sentinel PlacedChar per paragraph so the caret is findable at the
@@ -3235,7 +3324,7 @@ public sealed class DocumentView : Control
                     var sentinelX = cellX + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - lastParaLine.Value.Height
-                        : rowPageSpaceY + pad;
+                        : contentTopY;
                     var sentinelH = lastParaLine.HasValue ? lastParaLine.Value.Height : Build("A", fmt).Height;
                     var sentinelParaOffset = cellModel.Paragraphs.Count > pIdx
                         ? cellModel.Paragraphs[pIdx].PlainText.Length
