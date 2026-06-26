@@ -135,6 +135,14 @@ public sealed class DocumentView : Control
     private (int TableBlock, int Row, int Col)? _cellBlockAnchor;
     private (int TableBlock, int Row, int Col)? _cellBlockFocus;
 
+    // ── AV-HFEDIT: in-region header/footer caret ──────────────────────────────────────────────────
+    // Non-null when the caret is inside a rendered header or footer region. Stores which section
+    // header/footer SLOT the caret is in (default/first/even header or footer), the paragraph index
+    // within that slot, and the character offset within that paragraph's literal model text.
+    // Mirrors the _cellCaret pattern but addresses the per-section HeaderFooter store instead of a
+    // table cell. When set, the body caret/selection state is suppressed (drawn separately).
+    private (HfTarget Target, int Offset)? _hfCaret;
+
     // ── AV-FLSEL: floating-object selection + placement edit ──────────────────────────────────────
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
@@ -302,6 +310,7 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
+        _hfCaret = null; // AV-HFEDIT: clear header/footer caret on document load
         _selectedFloating = null; // AV-PICTAB: clear float selection on document load
         _floatDragState   = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -488,6 +497,468 @@ public sealed class DocumentView : Control
         _cellAnchor = _cellCaret;
         _caret = new DocPosition(tableBlockIndex, FindCellGlyphOffset(tableBlockIndex, row, col, paraIdx, offset));
         _selectionAnchor = _caret;
+        _hfCaret = null; // AV-HFEDIT: entering a cell exits any header/footer caret
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    // ── AV-HFEDIT: header/footer editing public surface ──────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the current header/footer caret address, or null when the caret is in body text / a cell.
+    /// Reports which section the caret is in, whether it is a footer (vs header), the slot, the paragraph
+    /// index within that slot, and the character offset within the paragraph's literal model text.
+    /// Used by tests and the ribbon to detect in-region header/footer editing and to drive an
+    /// "Edit Header"/"Edit Footer" command.
+    /// </summary>
+    public (int SectionIndex, bool IsFooter, string Slot, int ParaIdx, int Offset)? HeaderFooterCaretInfo =>
+        _hfCaret is { } hc
+            ? (hc.Target.SectionIndex, IsFooterSlot(hc.Target.Slot), hc.Target.Slot.ToString(), hc.Target.ParaIdx, hc.Offset)
+            : null;
+
+    /// <summary>True when the caret is currently inside an editable header or footer region.</summary>
+    public bool IsHeaderFooterCaretActive => _hfCaret is not null;
+
+    /// <summary>
+    /// Test entry point: hit-test a page-space point against the rendered header/footer regions and, when it
+    /// lands in one, place the H/F caret there. Returns true on a hit. Mirrors the pointer-press routing
+    /// without requiring a focused control or a real pointer event.
+    /// </summary>
+    internal bool HitTestHeaderFooterForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        return TryHitTestHeaderFooter(point);
+    }
+
+    /// <summary>Test entry point: the current header/footer caret rectangle (page-space), or null when none/not laid out.</summary>
+    internal Rect? HfCaretRectForTest => TryGetHfCaretRect(out var r) ? r : null;
+
+    /// <summary>Test shim: invoke Backspace (routes into the H/F region when the H/F caret is active).</summary>
+    internal void BackspaceForTest() => Backspace();
+
+    /// <summary>Test shim: invoke forward-delete (routes into the H/F region when the H/F caret is active).</summary>
+    internal void DeleteForwardForTest() => DeleteForward();
+
+    /// <summary>Test shim: invoke a paragraph break / Enter (routes into the H/F region when the H/F caret is active).</summary>
+    internal void InsertParagraphBreakForTest() => InsertParagraphBreak();
+
+    /// <summary>Test shim: place the body caret at (block, offset), exiting any H/F caret (mirrors MoveCaretToBlock + H/F exit).</summary>
+    internal void MoveCaretToBlockForTest(int blockIdx, int offset)
+    {
+        _hfCaret = null;
+        MoveCaretToBlock(blockIdx, offset);
+    }
+
+    /// <summary>
+    /// Test shim: simulate a body click at the given page-space point — exits any H/F caret and routes the
+    /// caret to the body via the same hit-test the pointer handler uses.
+    /// </summary>
+    internal void HandleBodyClickForTest(Point point)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        // Mirror the pointer-press order: an H/F hit wins; otherwise a body hit exits the H/F caret.
+        if (_viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+            return;
+        _hfCaret = null;
+        if (TryHitTest(point, out var pos))
+        {
+            _caret = pos;
+            _selectionAnchor = pos;
+        }
+        InvalidateVisual();
+    }
+
+    private static bool IsFooterSlot(HfSlot slot) =>
+        slot is HfSlot.Footer or HfSlot.FirstFooter or HfSlot.EvenFooter;
+
+    /// <summary>The literal-model text length (sum of run text lengths) of a header/footer paragraph.</summary>
+    private int HfParaLength(HfTarget target) => GetHfParagraph(target) is { } p ? HfModelPlainText(p).Length : 0;
+
+    /// <summary>Concatenates a header/footer paragraph's run text (literal model text, including field runs' cached text).</summary>
+    private static string HfModelPlainText(Paragraph para)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var run in para.Runs)
+            sb.Append(run.Text);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Programmatically place the caret inside the DEFAULT header or footer of the active (final) section
+    /// at <paramref name="paraIdx"/> + <paramref name="offset"/>. Triggers a layout pass if needed so the
+    /// header/footer region exists, ensures the targeted slot/paragraph exists (creating an empty paragraph
+    /// when the slot is currently null/empty), then sets <c>_hfCaret</c>. Exposed for tests and a future
+    /// "Edit Header"/"Edit Footer" ribbon command. First-page/odd-even variants are addressed via the
+    /// hit-test entry point (clicking the rendered region) rather than this default-slot helper.
+    /// </summary>
+    public void PlaceCaretInHeaderFooter(bool footer, int paraIdx = 0, int offset = 0)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+
+        // Default slot on the document-level (final-section) store; create the slot + a paragraph if absent
+        // so the caret has a region to land in (mirrors Word's "click into empty header to start typing").
+        var store = _doc.FinalSectionHeadersFooters;
+        var slot = footer ? HfSlot.Footer : HfSlot.Header;
+        var hf = GetHfSlot(store, slot);
+        if (hf is null)
+        {
+            hf = new HeaderFooter();
+            if (footer) store.Footer = hf; else store.Header = hf;
+        }
+        if (hf.Paragraphs.Count == 0)
+            hf.Paragraphs.Add(new Paragraph());
+
+        var target = new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot,
+            Math.Clamp(paraIdx, 0, hf.Paragraphs.Count - 1));
+        // Set the caret first so HfCaretTargets returns true, THEN re-layout at the current width so the
+        // (possibly freshly-created/empty) band is built immediately and becomes hit-testable / drawable.
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        PlaceCaretInHeaderFooter(target, offset);
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Core header/footer caret placement: clamps the offset to the paragraph's literal length, sets
+    /// <c>_hfCaret</c>, and clears body/cell caret state. Used by the public helper and the hit-test path.
+    /// </summary>
+    private void PlaceCaretInHeaderFooter(HfTarget target, int offset)
+    {
+        var len = HfParaLength(target);
+        offset = Math.Clamp(offset, 0, len);
+        _hfCaret = (target, offset);
+        // Suppress body + cell caret so only the H/F caret renders + receives edits.
+        _cellCaret = null;
+        _cellAnchor = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        _selectionAnchor = null;
+        _selectedFloating = null;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Exit any header/footer caret and return the caret to the body. No-op when not in a header/footer.
+    /// Triggered by Esc or by clicking back into the document body.
+    /// </summary>
+    public void ExitHeaderFooterCaret()
+    {
+        if (_hfCaret is null)
+            return;
+        _hfCaret = null;
+        ClampCaret();
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>
+    /// Hit-test a page-space point against the rendered header/footer regions. When the point lands in an
+    /// editable header/footer line, places the H/F caret at the nearest character offset and returns true.
+    /// Mirrors the table-cell entry point: a click inside the region routes the caret into that region.
+    /// </summary>
+    private bool TryHitTestHeaderFooter(Point point)
+    {
+        // Find the closest editable region line whose vertical band contains the click, preferring an exact
+        // Y-band hit. Each item's band is [Y, Y + LineHeight); X must be within the content area.
+        HfRenderItem? best = null;
+        var bestDist = double.MaxValue;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is null)
+                continue;
+            var top = item.Y;
+            var bottom = item.Y + (item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3);
+            // Vertical band test with a small slop so clicks just above/below the text still land.
+            var withinY = point.Y >= top - 2 && point.Y <= bottom + 2;
+            if (!withinY)
+                continue;
+            // Horizontal acceptance: anywhere across the content width of the page that owns this line.
+            var left = _contentLeft - 4;
+            var right = _contentLeft + _contentWidth + 4;
+            if (point.X < left || point.X > right)
+                continue;
+            // Prefer the item whose drawn text X-range is closest to the click (handles tab-split segments
+            // sharing a line). Distance is 0 when inside the segment's own [X, X+width] range.
+            var dist = HfItemHorizontalDistance(item, point.X);
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                best = item;
+            }
+        }
+
+        if (best?.Target is not { } target)
+            return false;
+
+        var modelOffset = HfOffsetFromPoint(best, point.X);
+        PlaceCaretInHeaderFooter(target, modelOffset);
+        return true;
+    }
+
+    /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
+    private double HfItemHorizontalDistance(HfRenderItem item, double x)
+    {
+        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var x0 = item.X + alignOffset;
+        var x1 = x0 + ft.WidthIncludingTrailingWhitespace;
+        if (x < x0) return x0 - x;
+        if (x > x1) return x - x1;
+        return 0;
+    }
+
+    /// <summary>
+    /// Maps a click X to a model-text offset inside a rendered H/F item, via per-prefix width measurement.
+    /// Returns ModelStartOffset + (chars before X). Field-resolved text is treated by displayed-char count,
+    /// which is exact for literal segments and a good approximation when a field's resolved length differs.
+    /// </summary>
+    private int HfOffsetFromPoint(HfRenderItem item, double x)
+    {
+        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var x0 = item.X + alignOffset;
+        var local = x - x0;
+        if (local <= 0 || item.Text.Length == 0)
+            return item.ModelStartOffset;
+        // Walk character prefixes; pick the boundary nearest the click (left-edge of the char it falls before).
+        var best = item.Text.Length;
+        for (var i = 1; i <= item.Text.Length; i++)
+        {
+            var prefixW = Build(item.Text[..i], item.Fmt).WidthIncludingTrailingWhitespace;
+            var prevW = Build(item.Text[..(i - 1)], item.Fmt).WidthIncludingTrailingWhitespace;
+            var mid = (prefixW + prevW) / 2;
+            if (local < mid)
+            {
+                best = i - 1;
+                break;
+            }
+        }
+        return item.ModelStartOffset + best;
+    }
+
+    // ── AV-HFEDIT: header/footer in-region edit operations ────────────────────────────────────────
+
+    /// <summary>
+    /// One editable atom of a header/footer paragraph: a single literal character carrying its run
+    /// formatting, OR a whole atomic field run (kept intact across edits so view-only fields like the
+    /// page number are never split or corrupted). Literal atoms occupy one model offset each; a field
+    /// atom occupies <see cref="FieldRun"/>.Text.Length model offsets (its cached resolved text length).
+    /// </summary>
+    private readonly record struct HfAtom(char Ch, RunFormatting Fmt, Run? FieldRun)
+    {
+        public bool IsField => FieldRun is not null;
+        public int ModelLength => FieldRun?.Text.Length ?? 1;
+    }
+
+    /// <summary>Decomposes a header/footer paragraph into editable atoms (literal chars + atomic field runs).</summary>
+    private static List<HfAtom> HfAtoms(Paragraph para)
+    {
+        var atoms = new List<HfAtom>();
+        foreach (var run in para.Runs)
+        {
+            if (run.FieldKind != RunFieldKind.None || run.ComplexField is not null)
+            {
+                // Atomic field run — keep whole.
+                atoms.Add(new HfAtom('\0', run.Formatting, run));
+            }
+            else
+            {
+                foreach (var ch in run.Text)
+                    atoms.Add(new HfAtom(ch, run.Formatting, null));
+            }
+        }
+        return atoms;
+    }
+
+    /// <summary>
+    /// Rebuilds a paragraph's runs from an edited atom list, coalescing consecutive literal atoms that
+    /// share formatting into a single run and re-emitting field atoms as their preserved runs.
+    /// </summary>
+    private static void HfSetAtoms(Paragraph para, List<HfAtom> atoms)
+    {
+        para.Runs.Clear();
+        var i = 0;
+        while (i < atoms.Count)
+        {
+            if (atoms[i].IsField)
+            {
+                para.Runs.Add(atoms[i].FieldRun!);
+                i++;
+                continue;
+            }
+            var fmt = atoms[i].Fmt;
+            var start = i;
+            while (i < atoms.Count && !atoms[i].IsField && atoms[i].Fmt.Equals(fmt))
+                i++;
+            var text = new string(atoms.Skip(start).Take(i - start).Select(a => a.Ch).ToArray());
+            para.Runs.Add(new Run(text, fmt));
+        }
+    }
+
+    /// <summary>
+    /// Maps a model-text offset to an atom-list index and reports whether that index lands inside a field
+    /// atom. Literal atoms advance the model offset by 1; field atoms by their cached text length. When the
+    /// offset falls strictly inside a field atom it is snapped to the field's leading edge (atomBefore) so
+    /// edits never split a field run.
+    /// </summary>
+    private static (int AtomIndex, bool InsideField) HfAtomIndexForOffset(List<HfAtom> atoms, int modelOffset)
+    {
+        var pos = 0;
+        for (var i = 0; i < atoms.Count; i++)
+        {
+            if (modelOffset <= pos)
+                return (i, false);
+            var next = pos + atoms[i].ModelLength;
+            if (modelOffset < next)
+                return (i, atoms[i].IsField); // inside this atom; for a field this is "inside the field"
+            pos = next;
+        }
+        return (atoms.Count, false);
+    }
+
+    /// <summary>The model-offset length of an atom list (sum of each atom's model length).</summary>
+    private static int HfAtomsModelLength(List<HfAtom> atoms) => atoms.Sum(a => a.ModelLength);
+
+    /// <summary>The active run formatting for a typed character at <paramref name="modelOffset"/> (inherits the char before, else after, else default).</summary>
+    private static RunFormatting HfActiveFormatting(List<HfAtom> atoms, int modelOffset)
+    {
+        var (idx, _) = HfAtomIndexForOffset(atoms, modelOffset);
+        if (idx > 0 && idx - 1 < atoms.Count && !atoms[idx - 1].IsField)
+            return atoms[idx - 1].Fmt;
+        if (idx < atoms.Count && !atoms[idx].IsField)
+            return atoms[idx].Fmt;
+        // Fall back to the first literal atom's formatting, else default.
+        var firstLiteral = atoms.FirstOrDefault(a => !a.IsField);
+        return atoms.Any(a => !a.IsField) ? firstLiteral.Fmt : RunFormatting.Default;
+    }
+
+    /// <summary>Runs an undoable edit on the H/F caret's paragraph, then refreshes layout + caret.</summary>
+    private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
+    {
+        var slot = (int)target.Slot;
+        _bus.Execute(new EditHeaderFooterParagraphCommand(
+            target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
+            {
+                var atoms = HfAtoms(p);
+                mutate(atoms);
+                HfSetAtoms(p, atoms);
+            }));
+        var len = HfParaLength(target);
+        _hfCaret = (target, Math.Clamp(newOffset, 0, len));
+        // Re-layout at the current width so the H/F band + caret reflect the edit immediately.
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Insert literal text at the H/F caret (field runs are never split).</summary>
+    private void HfInsertText(string text)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        HfEditParagraph(target, atoms =>
+        {
+            var (idx, _) = HfAtomIndexForOffset(atoms, offset);
+            var fmt = HfActiveFormatting(atoms, offset);
+            var at = idx;
+            foreach (var ch in text)
+                atoms.Insert(at++, new HfAtom(ch, fmt, null));
+        }, offset + text.Length);
+    }
+
+    /// <summary>Backspace at the H/F caret: delete the literal atom before the caret (skips/removes a whole field atom).</summary>
+    private void HfBackspace()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        if (offset <= 0)
+            return; // at start of paragraph — H/F single-paragraph editing does not merge across slots
+        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
+        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
+        var removeIdx = idx - 1;
+        if (removeIdx < 0 || removeIdx >= atoms0.Count)
+            return;
+        var removedModelLen = atoms0[removeIdx].ModelLength;
+        HfEditParagraph(target, atoms =>
+        {
+            if (removeIdx >= 0 && removeIdx < atoms.Count)
+                atoms.RemoveAt(removeIdx);
+        }, offset - removedModelLen);
+    }
+
+    /// <summary>Forward-delete at the H/F caret: delete the atom at the caret (a whole field atom when on one).</summary>
+    private void HfDeleteForward()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
+        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
+        if (idx < 0 || idx >= atoms0.Count)
+            return;
+        HfEditParagraph(target, atoms =>
+        {
+            if (idx >= 0 && idx < atoms.Count)
+                atoms.RemoveAt(idx);
+        }, offset);
+    }
+
+    /// <summary>
+    /// Enter in a header/footer splits the current paragraph into two at the caret (a new H/F line),
+    /// targeting the H/F slot's paragraph list. Mirrors the cell paragraph-split behaviour.
+    /// </summary>
+    private void HfInsertParagraphBreak()
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var target = hc.Target;
+        var offset = hc.Offset;
+        var store = ResolveHfStore(target);
+        var hf = store is null ? null : GetHfSlot(store, target.Slot);
+        if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
+            return;
+        var para = hf.Paragraphs[target.ParaIdx];
+        var atoms = HfAtoms(para);
+        var (idx, _) = HfAtomIndexForOffset(atoms, offset);
+
+        _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+            target.SectionIndex, target.UseFinalSectionStore, (int)target.Slot, target.ParaIdx,
+            () =>
+            {
+                var src = hf.Paragraphs[target.ParaIdx];
+                var srcAtoms = HfAtoms(src);
+                var first = new Paragraph { Formatting = src.Formatting, StyleId = src.StyleId };
+                HfSetAtoms(first, srcAtoms.Take(idx).ToList());
+                var second = new Paragraph { Formatting = src.Formatting };
+                HfSetAtoms(second, srcAtoms.Skip(idx).ToList());
+                return [first, second];
+            }));
+
+        _hfCaret = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
+        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        Relayout(width);
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    /// <summary>Move the H/F caret left/right by one model offset within the current paragraph (clamped to its bounds).</summary>
+    private void HfMoveCaret(int delta)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        var len = HfParaLength(hc.Target);
+        _hfCaret = (hc.Target, Math.Clamp(hc.Offset + delta, 0, len));
         InvalidateVisual();
         CaretMoved?.Invoke();
     }
@@ -1642,6 +2113,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
+                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.Y, i.Alignment))
                 .ToList();
         }
@@ -1659,6 +2131,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _headerFooterItems
+                .Where(i => !string.IsNullOrEmpty(i.Text)) // AV-HFEDIT: skip empty editable-region placeholders
                 .Select(i => (i.Text, i.X, i.Y, i.Alignment, i.AvailableWidth))
                 .ToList();
         }
@@ -2245,6 +2718,60 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-HFEDIT: companion to <see cref="ResolveHfSlotsAvalonia"/> that reports WHICH slot enums were
+    /// chosen for the page (so the editable render items can address the right model paragraph). Uses the
+    /// identical selection rules (first-page → odd/even → default).
+    /// </summary>
+    private static (HfSlot HeaderSlot, HfSlot FooterSlot) ResolveHfSlotEnums(
+        SectionHeadersFooters sectionHf,
+        int sectionRelativePageNumber,
+        PageSettings pageSettings,
+        bool diffOddEvenDoc)
+    {
+        var diffFirst = pageSettings.DifferentFirstPage;
+        if (diffFirst && sectionRelativePageNumber == 1)
+            return (HfSlot.FirstHeader, HfSlot.FirstFooter);
+        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
+        {
+            // EvenHeader/EvenFooter fall back to the default slot when unset (matches ResolveHfSlotsAvalonia).
+            var hSlot = sectionHf.EvenHeader is not null ? HfSlot.EvenHeader : HfSlot.Header;
+            var fSlot = sectionHf.EvenFooter is not null ? HfSlot.EvenFooter : HfSlot.Footer;
+            return (hSlot, fSlot);
+        }
+        return (HfSlot.Header, HfSlot.Footer);
+    }
+
+    /// <summary>
+    /// AV-HFEDIT: builds a stable <see cref="HfTarget"/> for a resolved HF store + slot. Identifies the
+    /// store either as the document-level final-section store (which the document-level Header/Footer views
+    /// alias) or by reference-equality with a section's own store.
+    /// </summary>
+    private HfTarget MakeHfTarget(SectionHeadersFooters sectionHf, HfSlot slot, int paraIdx)
+    {
+        if (ReferenceEquals(sectionHf, _doc.FinalSectionHeadersFooters))
+            return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+        for (var i = 0; i < _doc.Sections.Count; i++)
+        {
+            if (ReferenceEquals(_doc.Sections[i].HeadersFooters, sectionHf))
+                return new HfTarget(i, UseFinalSectionStore: false, slot, paraIdx);
+        }
+        // Defensive fallback: treat as the final-section store.
+        return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+    }
+
+    /// <summary>
+    /// AV-HFEDIT: true when the active header/footer caret targets the given resolved store + slot. Used so
+    /// the layout still emits an (empty) editable band for a freshly-clicked or just-emptied slot.
+    /// </summary>
+    private bool HfCaretTargets(SectionHeadersFooters sectionHf, HfSlot slot)
+    {
+        if (_hfCaret is not { } hc || hc.Target.Slot != slot)
+            return false;
+        var caretStore = ResolveHfStore(hc.Target);
+        return ReferenceEquals(caretStore, sectionHf);
+    }
+
+    /// <summary>
     /// Pre-computes the header/footer render items for each page in PrintLayout mode.
     /// Called once per Relayout pass after _pageCount is known. Each item carries a
     /// field-resolved text string, run formatting, page-space position, and alignment so
@@ -2281,6 +2808,8 @@ public sealed class DocumentView : Control
             HeaderFooter? header;
             HeaderFooter? footer;
             (header, footer) = ResolveHfSlotsAvalonia(sectionHf, sectionRelPage, sectionPage, diffOddEven);
+            // AV-HFEDIT: which slot enums these resolved to, so emitted items can address the model.
+            var (headerSlot, footerSlot) = ResolveHfSlotEnums(sectionHf, sectionRelPage, sectionPage, diffOddEven);
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0
@@ -2297,21 +2826,28 @@ public sealed class DocumentView : Control
             // Render-width = page content width (use same as body text area).
             var hfWidth = _contentWidth;
 
+            // AV-HFEDIT: emit an empty (but editable) band when the H/F caret is active in this slot even if
+            // the slot has no visible content yet — so a freshly-clicked/empty header still renders + edits.
+            var headerActive = header is not null && (!header.IsEmpty || HfCaretTargets(sectionHf, headerSlot));
+            var footerActive = footer is not null && (!footer.IsEmpty || HfCaretTargets(sectionHf, footerSlot));
+
             // Emit header.
-            if (header is not null && !header.IsEmpty)
+            if (headerActive)
             {
                 var hfY = pageTop + headerDistDip;
-                EmitHfParagraphs(header, hfY, hfWidth, pageNumber, _pageCount);
+                EmitHfParagraphs(header!, hfY, hfWidth, pageNumber, _pageCount,
+                    pi => MakeHfTarget(sectionHf, headerSlot, pi));
             }
 
             // Emit footer.
-            if (footer is not null && !footer.IsEmpty)
+            if (footerActive)
             {
                 // Footer distance is from the BOTTOM of the page upward; the footer text
                 // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
                 var pageBottom = pageTop + _pageHeightPx;
                 var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer, hfY, hfWidth, pageNumber, _pageCount);
+                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumber, _pageCount,
+                    pi => MakeHfTarget(sectionHf, footerSlot, pi));
             }
         }
     }
@@ -2324,48 +2860,71 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount)
+    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount,
+        Func<int, HfTarget>? targetFactory = null)
     {
         var y = startY;
-        foreach (var para in hf.Paragraphs)
+        for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
         {
+            var para = hf.Paragraphs[paraIdx];
             var pf = ResolveParagraphFmt(para);
+            // AV-HFEDIT: the editing target for this paragraph (which section/slot/para), or null in
+            // legacy callers that do not pass a factory (kept for backward compatibility / tests).
+            HfTarget? paraTarget = targetFactory?.Invoke(paraIdx);
 
             // Build segments split on TAB characters.
-            // Each entry carries (tabStopIndex, Text, Fmt):
+            // Each entry carries (tabStopIndex, Text, Fmt, ModelStart):
             //   tabStopIndex 0 → segment before the first tab (left-aligned at X=_contentLeft)
             //   tabStopIndex 1 → segment after the first tab (centre stop)
             //   tabStopIndex 2 → segment after the second tab (right stop)
             // Multiple consecutive tabs advance the index so the ordinal is always correct even
             // if some slots carry empty text (e.g. "Left\t\tRight" puts "Right" at stop 2).
-            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt)>();
+            // AV-HFEDIT: ModelStart is the literal-model-text offset where the segment's first char
+            // begins, so a click X maps to a model offset for the editing caret. Model offset advances
+            // by run.Text.Length for each run (field runs are atomic — their resolved text may differ in
+            // length, but the model span is run.Text.Length, including a single tab char per model tab).
+            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt, int ModelStart)>();
             var sb = new System.Text.StringBuilder();
             RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
             var stopIndex = 0;
+            var modelOffset = 0;       // running literal-model offset across all runs
+            var segModelStart = 0;     // model offset at the start of the current (buffered) segment
 
             foreach (var run in para.Runs)
             {
                 var fieldText = ResolveHfField(run, pageNumber, pageCount);
+                var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
                     segFmt = run.Formatting;
 
-                // Split the resolved text on tab characters.
+                if (isField)
+                {
+                    // Atomic field run: append its resolved text whole (no tab-splitting inside a field).
+                    sb.Append(text);
+                    modelOffset += run.Text.Length;
+                    continue;
+                }
+
+                // Split the literal run text on tab characters; model offset advances per literal char.
                 var parts = text.Split('\t');
                 for (var pi = 0; pi < parts.Length; pi++)
                 {
                     sb.Append(parts[pi]);
+                    modelOffset += parts[pi].Length;
                     if (pi < parts.Length - 1)
                     {
                         // A TAB was consumed — flush the current buffer as a segment and advance the stop index.
-                        segments.Add((stopIndex, sb.ToString(), segFmt));
+                        segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
                         sb.Clear();
                         stopIndex++;
+                        modelOffset += 1;            // the consumed tab is one model char
+                        segModelStart = modelOffset; // next segment starts after the tab
                     }
                 }
             }
             // Flush the final (or only) segment.
-            segments.Add((stopIndex, sb.ToString(), segFmt));
+            segments.Add((stopIndex, sb.ToString(), segFmt, segModelStart));
 
             // Whether the paragraph contains any tab characters at all.
             var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
@@ -2390,20 +2949,21 @@ public sealed class DocumentView : Control
 
             if (!hasAnyTab)
             {
-                // No tabs — use paragraph alignment as before.
+                // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
+                // header/footer line is still clickable for editing (the caret needs a region to land in).
                 var seg = segments[0];
-                if (!string.IsNullOrEmpty(seg.Text))
+                _headerFooterItems.Add(new HfRenderItem
                 {
-                    _headerFooterItems.Add(new HfRenderItem
-                    {
-                        Text           = seg.Text,
-                        Fmt            = seg.Fmt,
-                        X              = _contentLeft,
-                        Y              = y,
-                        AvailableWidth = availWidth,
-                        Alignment      = pf.Alignment,
-                    });
-                }
+                    Text             = seg.Text,
+                    Fmt              = seg.Fmt,
+                    X                = _contentLeft,
+                    Y                = y,
+                    AvailableWidth   = availWidth,
+                    Alignment        = pf.Alignment,
+                    Target           = paraTarget,
+                    LineHeight       = lineH,
+                    ModelStartOffset = seg.ModelStart,
+                });
             }
             else
             {
@@ -2411,7 +2971,7 @@ public sealed class DocumentView : Control
                 // StopIndex 0 → left (at _contentLeft, no stop lookup needed).
                 // StopIndex 1 → first tab stop  (default: centre).
                 // StopIndex 2 → second tab stop (default: right).
-                foreach (var (si, text, fmt) in segments)
+                foreach (var (si, text, fmt, modelStart) in segments)
                 {
                     if (string.IsNullOrEmpty(text)) continue;
 
@@ -2455,12 +3015,15 @@ public sealed class DocumentView : Control
 
                     _headerFooterItems.Add(new HfRenderItem
                     {
-                        Text           = text,
-                        Fmt            = fmt,
-                        X              = itemX,
-                        Y              = y,
-                        AvailableWidth = 0,                  // absolute X — skip alignment offset at draw time
-                        Alignment      = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
+                        Text             = text,
+                        Fmt              = fmt,
+                        X                = itemX,
+                        Y                = y,
+                        AvailableWidth   = 0,                  // absolute X — skip alignment offset at draw time
+                        Alignment        = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
+                        Target           = paraTarget,
+                        LineHeight       = lineH,
+                        ModelStartOffset = modelStart,
                     });
                 }
             }
@@ -4679,14 +5242,111 @@ public sealed class DocumentView : Control
                 }
                 context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
+
+            // AV-HFEDIT: when the caret is inside a header/footer region, draw a subtle region
+            // outline + a small "Header"/"Footer" label so the active edit zone is obvious.
+            DrawHeaderFooterEditRegion(context);
         }
 
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloating is { } selFl)
             DrawFloatingSelection(context, selFl.Rect);
 
-        if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
+        // AV-HFEDIT: the header/footer caret renders independently of the body caret.
+        if (IsFocused && _hfCaret is not null && TryGetHfCaretRect(out var hfRect))
+            context.FillRectangle(Brushes.Black, hfRect);
+        else if (IsFocused && NormalizedSelection() is null && _hfCaret is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
+    }
+
+    // ── AV-HFEDIT: render the active header/footer edit region outline + label + caret ──────────────
+
+    private static readonly IPen HfRegionPen =
+        new Pen(new SolidColorBrush(Color.FromArgb(160, 90, 120, 200)), 1, DashStyle.Dash);
+    private static readonly IBrush HfRegionLabelBrush = new SolidColorBrush(Color.FromArgb(200, 90, 120, 200));
+
+    /// <summary>
+    /// Draws a dashed outline around the line band of the currently-edited header/footer paragraph plus a
+    /// "Header"/"Footer" label at its left edge. No-op when no H/F caret is active.
+    /// </summary>
+    private void DrawHeaderFooterEditRegion(DrawingContext context)
+    {
+        if (_hfCaret is not { } hc)
+            return;
+        // Find the rendered item(s) for this target's paragraph to derive the band.
+        double top = double.MaxValue, bottom = double.MinValue, lineH = 0;
+        var found = false;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is not { } t || !t.Equals(hc.Target))
+                continue;
+            found = true;
+            top = Math.Min(top, item.Y);
+            var h = item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3;
+            bottom = Math.Max(bottom, item.Y + h);
+            lineH = Math.Max(lineH, h);
+        }
+        if (!found)
+            return;
+
+        var pad = 3.0;
+        var rect = new Rect(_contentLeft - pad, top - pad,
+            _contentWidth + 2 * pad, (bottom - top) + 2 * pad);
+        context.DrawRectangle(null, HfRegionPen, rect);
+
+        // Label: "Header"/"Footer" above the band's top-left (clamped into the page).
+        var label = IsFooterSlot(hc.Target.Slot) ? "Footer" : "Header";
+        var labelFt = Build(label, RunFormatting.Default with { FontSizePt = 8 });
+        var labelY = Math.Max(0, top - pad - labelFt.Height);
+        context.DrawText(labelFt, new Point(_contentLeft - pad, labelY));
+    }
+
+    /// <summary>
+    /// Computes the caret rectangle for the active header/footer caret by measuring the prefix width up to
+    /// the caret offset within the target paragraph's first rendered line. Returns false when no item for
+    /// the target is laid out.
+    /// </summary>
+    private bool TryGetHfCaretRect(out Rect rect)
+    {
+        rect = default;
+        if (_hfCaret is not { } hc)
+            return false;
+
+        // Locate the rendered item whose model span contains the caret offset (or the line's last item).
+        HfRenderItem? hostItem = null;
+        HfRenderItem? firstForTarget = null;
+        foreach (var item in _headerFooterItems)
+        {
+            if (item.Target is not { } t || !t.Equals(hc.Target))
+                continue;
+            firstForTarget ??= item;
+            var start = item.ModelStartOffset;
+            var end = start + item.Text.Length;
+            if (hc.Offset >= start && hc.Offset <= end)
+            {
+                hostItem = item;
+                break;
+            }
+        }
+        hostItem ??= firstForTarget;
+        if (hostItem is null)
+        {
+            // Empty paragraph with no text segment: place caret at content-left on the band (use first item).
+            // firstForTarget is null here only when nothing was laid out → fail.
+            return false;
+        }
+
+        var ft = Build(hostItem.Text.Length == 0 ? " " : hostItem.Text, hostItem.Fmt);
+        var alignOffset = AlignmentOffset(hostItem.Alignment, hostItem.AvailableWidth,
+            ft.WidthIncludingTrailingWhitespace, isLast: true);
+        var localOffset = Math.Clamp(hc.Offset - hostItem.ModelStartOffset, 0, hostItem.Text.Length);
+        var prefixW = hostItem.Text.Length == 0 || localOffset == 0
+            ? 0
+            : Build(hostItem.Text[..localOffset], hostItem.Fmt).WidthIncludingTrailingWhitespace;
+        var caretX = hostItem.X + alignOffset + prefixW;
+        var caretH = hostItem.LineHeight > 0 ? hostItem.LineHeight : ft.Height;
+        rect = new Rect(caretX, hostItem.Y, 1.5, caretH);
+        return true;
     }
 
     /// <summary>
@@ -5582,8 +6242,21 @@ public sealed class DocumentView : Control
             InvalidateVisual();
         }
 
+        // AV-HFEDIT: a click inside a rendered header/footer region routes the caret into that region.
+        // Only in PrintLayout (the only mode that draws H/F bands). Checked before the body hit-test
+        // because H/F bands sit in the page margins, which the body hit-test does not own.
+        if (!shift && _viewMode == DocumentViewMode.PrintLayout && TryHitTestHeaderFooter(point))
+        {
+            CaretMoved?.Invoke();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHitTest(point, out var pos))
         {
+            // AV-HFEDIT: clicking back into the body exits any active header/footer caret.
+            _hfCaret = null;
+
             // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
             if (!shift)
             {
@@ -5753,6 +6426,33 @@ public sealed class DocumentView : Control
             // Any other key: pass through (don't consume).
         }
 
+        // AV-HFEDIT: when the caret is in a header/footer region, intercept navigation/exit keys.
+        // Editing keys (Back/Delete/Enter) route through the shared methods which already check _hfCaret.
+        if (_hfCaret is not null)
+        {
+            switch (e.Key)
+            {
+                case Key.Escape:
+                    ExitHeaderFooterCaret();
+                    e.Handled = true;
+                    return;
+                case Key.Left:
+                    HfMoveCaret(-1); e.Handled = true; return;
+                case Key.Right:
+                    HfMoveCaret(+1); e.Handled = true; return;
+                case Key.Home:
+                    _hfCaret = (_hfCaret.Value.Target, 0); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                case Key.End:
+                    _hfCaret = (_hfCaret.Value.Target, HfParaLength(_hfCaret.Value.Target)); InvalidateVisual(); CaretMoved?.Invoke(); e.Handled = true; return;
+                case Key.Back: Backspace(); e.Handled = true; return;
+                case Key.Delete: DeleteForward(); e.Handled = true; return;
+                case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
+                case Key.Z when ctrl: Undo(); e.Handled = true; return;
+                case Key.Y when ctrl: Redo(); e.Handled = true; return;
+            }
+            // Up/Down or other keys: fall through to default handling below (no-op for H/F).
+        }
+
         switch (e.Key)
         {
             case Key.Z when ctrl: Undo(); e.Handled = true; break;
@@ -5796,6 +6496,13 @@ public sealed class DocumentView : Control
 
     public void InsertText(string text)
     {
+        // AV-HFEDIT: route into a header/footer region when the caret is inside one.
+        if (_hfCaret is not null)
+        {
+            HfInsertText(text);
+            return;
+        }
+
         // AV-TBL: route into table cell when the caret is inside a cell.
         if (_cellCaret is { } cc)
         {
@@ -5862,6 +6569,13 @@ public sealed class DocumentView : Control
 
     private void Backspace()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfBackspace();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -5936,6 +6650,13 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfDeleteForward();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -6044,6 +6765,13 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        // AV-HFEDIT: route into a header/footer region.
+        if (_hfCaret is not null)
+        {
+            HfInsertParagraphBreak();
+            return;
+        }
+
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
@@ -8686,6 +9414,67 @@ public sealed class DocumentView : Control
         public TextDocument Document => view._doc;
     }
 
+    // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────
+
+    /// <summary>
+    /// Identifies one of the six header/footer slots of a section's <see cref="SectionHeadersFooters"/>.
+    /// </summary>
+    internal enum HfSlot
+    {
+        Header,
+        Footer,
+        FirstHeader,
+        FirstFooter,
+        EvenHeader,
+        EvenFooter,
+    }
+
+    /// <summary>
+    /// Fully-qualifies an editable header/footer paragraph: which section's HF store, which slot, and the
+    /// paragraph index within that slot. <see cref="SectionIndex"/> is an index into <c>_doc.Sections</c>;
+    /// <see cref="UseFinalSectionStore"/> is true when the target is the document-level final-section store
+    /// (<see cref="TextDocument.FinalSectionHeadersFooters"/>), which the document-level Header/Footer views
+    /// alias. Mirrors the <c>_cellCaret</c> address tuple but for the HF store.
+    /// </summary>
+    internal readonly record struct HfTarget(int SectionIndex, bool UseFinalSectionStore, HfSlot Slot, int ParaIdx);
+
+    /// <summary>
+    /// Resolves an <see cref="HfTarget"/> to the live <see cref="SectionHeadersFooters"/> store it addresses,
+    /// or null when the section index is out of range.
+    /// </summary>
+    private SectionHeadersFooters? ResolveHfStore(HfTarget target)
+    {
+        if (target.UseFinalSectionStore)
+            return _doc.FinalSectionHeadersFooters;
+        if (target.SectionIndex < 0 || target.SectionIndex >= _doc.Sections.Count)
+            return _doc.FinalSectionHeadersFooters;
+        return _doc.Sections[target.SectionIndex].HeadersFooters;
+    }
+
+    /// <summary>Returns the <see cref="HeaderFooter"/> slot for a target, or null when the slot is empty/unset.</summary>
+    private static HeaderFooter? GetHfSlot(SectionHeadersFooters store, HfSlot slot) => slot switch
+    {
+        HfSlot.Header      => store.Header,
+        HfSlot.Footer      => store.Footer,
+        HfSlot.FirstHeader => store.FirstHeader,
+        HfSlot.FirstFooter => store.FirstFooter,
+        HfSlot.EvenHeader  => store.EvenHeader,
+        HfSlot.EvenFooter  => store.EvenFooter,
+        _                  => null,
+    };
+
+    /// <summary>Resolves a target's <see cref="Paragraph"/> model, or null when unavailable.</summary>
+    private Paragraph? GetHfParagraph(HfTarget target)
+    {
+        var store = ResolveHfStore(target);
+        if (store is null)
+            return null;
+        var hf = GetHfSlot(store, target.Slot);
+        if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
+            return null;
+        return hf.Paragraphs[target.ParaIdx];
+    }
+
     // ── HF: header/footer render item ─────────────────────────────────────────────────────────────
 
     /// <summary>One pre-computed line to draw in a header or footer band.</summary>
@@ -8703,6 +9492,20 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+
+        // ── AV-HFEDIT: editing back-reference + offset mapping ────────────────────────────────────
+        /// <summary>
+        /// The header/footer target this rendered line belongs to (which section slot + paragraph index),
+        /// or null when the line is not editable (defensive — every emitted line carries a target).
+        /// </summary>
+        public HfTarget? Target;
+        /// <summary>Line height (DIP) used for the editing region band + caret height.</summary>
+        public double LineHeight;
+        /// <summary>
+        /// Model-text offset (index into the paragraph's literal plain text) at which this segment's
+        /// displayed text begins. A click X inside the segment maps to ModelStartOffset + (chars before X).
+        /// </summary>
+        public int ModelStartOffset;
     }
 
     // ── AV-NOTERENDER: footnote / endnote render item ─────────────────────────────────────────────────
