@@ -106,6 +106,9 @@ public static class SlideCloner
             Wrap              = tb.Wrap,
             AutoFit           = tb.AutoFit,
             WarpPreset        = tb.WarpPreset,       // Wave 16A
+            // Wave 22B: text columns
+            ColumnCount       = tb.ColumnCount,
+            ColumnSpacingEmu  = tb.ColumnSpacingEmu,
         };
 
         // BA4: deep-copy warp adjust guides

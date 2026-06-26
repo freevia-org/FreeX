@@ -417,6 +417,20 @@ public sealed class TextBody
     /// Round-trips the avLst so non-default warp shapes are preserved.
     /// </summary>
     public List<(string Name, string Formula)> WarpAdjusts { get; } = new();
+
+    // ── Wave 22B: text columns ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of text columns. 1 = single column (default).
+    /// Corresponds to <c>a:bodyPr numCol=</c>.
+    /// </summary>
+    public int ColumnCount { get; set; } = 1;
+
+    /// <summary>
+    /// Spacing between columns in EMU. 0 = default (457200 EMU = 0.5 inch).
+    /// Corresponds to <c>a:bodyPr spcCol=</c>.
+    /// </summary>
+    public long ColumnSpacingEmu { get; set; } = 0;
 }
 
 /// <summary>Vertical anchor (alignment) of a text body within its bounding box.</summary>
