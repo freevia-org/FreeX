@@ -28,5 +28,5 @@ public static class ChartDialogValueParser
         TryParseFiniteDouble(input, out value) && value >= min && value <= max;
 
     private static bool TryParseFiniteDouble(string text, out double value) =>
-        NumericInputParser.TryParseFiniteDouble(text, CultureInfo.InvariantCulture, out value);
+        NumericInputParser.TryParseFiniteDouble(text, CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out value);
 }

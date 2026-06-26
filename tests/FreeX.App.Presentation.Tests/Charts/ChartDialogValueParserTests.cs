@@ -57,4 +57,31 @@ public sealed class ChartDialogValueParserTests
     [InlineData("10.01", 0.5, 10, false)]
     public void TryParseClampedDouble_RequiresFiniteValueInsideRange(string text, double min, double max, bool expected) =>
         ChartDialogValueParser.TryParseClampedDouble(text, min, max, out _).Should().Be(expected);
+
+    [Fact]
+    public void TryParseNullableDouble_AcceptsCommaDecimalInCommaDecimalLocale()
+    {
+        using var _ = TestCultureScope.CurrentCulture("de-DE");
+
+        ChartDialogValueParser.TryParseNullableDouble("2,5", out var value).Should().BeTrue();
+        value.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void TryParseNullableDouble_AcceptsDotDecimalAsInvariantFallbackInCommaDecimalLocale()
+    {
+        using var _ = TestCultureScope.CurrentCulture("de-DE");
+
+        ChartDialogValueParser.TryParseNullableDouble("2.5", out var value).Should().BeTrue();
+        value.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void TryParsePositiveDouble_AcceptsCommaDecimalInCommaDecimalLocale()
+    {
+        using var _ = TestCultureScope.CurrentCulture("fr-FR");
+
+        ChartDialogValueParser.TryParsePositiveDouble("0,5", out var value).Should().BeTrue();
+        value.Should().Be(0.5);
+    }
 }

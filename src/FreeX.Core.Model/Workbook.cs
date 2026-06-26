@@ -369,6 +369,20 @@ public sealed class Workbook
         return NamedFormulas.TryGetValue(name, out var global) ? global : null;
     }
 
+    /// <summary>
+    /// Try to get Excel-style metadata for a sheet-scoped named range.
+    /// Returns false (and WorkbookScope sentinel) when not found.
+    /// </summary>
+    public bool TryGetScopedNamedRangeMetadata(string name, SheetId scopeSheetId, out NamedRangeMetadata metadata)
+    {
+        if (_scopedNamedRangeMetadata is not null &&
+            _scopedNamedRangeMetadata.TryGetValue((name, scopeSheetId), out metadata!))
+            return true;
+
+        metadata = NamedRangeMetadata.WorkbookScope;
+        return false;
+    }
+
     /// <summary>Remove a sheet-scoped named range. Returns true if found and removed.</summary>
     public bool RemoveScopedNamedRange(string name, SheetId scopeSheetId)
     {

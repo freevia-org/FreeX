@@ -12,37 +12,63 @@ internal static partial class RowColumnShiftHelpers
     /// The host-sheet name required by <see cref="FormulaRewriter"/> is taken from the first
     /// sheet in the workbook (NamedFormulas are workbook-scoped, so any sheet name suffices
     /// for absolute-reference rewriting).
+    /// Also rewrites sheet-scoped named formulas; changes are recorded in
+    /// <paramref name="scopedSnapshot"/> for undo.
     /// </summary>
     internal static void RewriteNamedFormulas(
-        Workbook workbook, RewriteOperation op, Dictionary<string, string> snapshot)
+        Workbook workbook, RewriteOperation op, Dictionary<string, string> snapshot,
+        Dictionary<(string Name, SheetId Sheet), string>? scopedSnapshot = null)
     {
-        if (workbook.NamedFormulas.Count == 0)
-            return;
-
-        var hostSheetName = workbook.Sheets.Count > 0 ? workbook.Sheets[0].Name : string.Empty;
-
-        foreach (var name in workbook.NamedFormulas.Keys.ToList())
+        if (workbook.NamedFormulas.Count > 0)
         {
-            var original = workbook.NamedFormulas[name];
-            var rewritten = FormulaRewriter.Rewrite(original, op, hostSheetName);
-            if (rewritten is null || rewritten == original)
-                continue;
+            var hostSheetName = workbook.Sheets.Count > 0 ? workbook.Sheets[0].Name : string.Empty;
 
-            snapshot[name] = original;
-            workbook.NamedFormulas[name] = rewritten;
+            foreach (var name in workbook.NamedFormulas.Keys.ToList())
+            {
+                var original = workbook.NamedFormulas[name];
+                var rewritten = FormulaRewriter.Rewrite(original, op, hostSheetName);
+                if (rewritten is null || rewritten == original)
+                    continue;
+
+                snapshot[name] = original;
+                workbook.NamedFormulas[name] = rewritten;
+            }
+        }
+
+        if (scopedSnapshot is not null && workbook.ScopedNamedFormulas.Count > 0)
+        {
+            foreach (var ((name, sheetId), original) in workbook.ScopedNamedFormulas.ToList())
+            {
+                // Use the scope sheet's name as the host-sheet context for the rewriter.
+                var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
+                var hostSheetName = sheet?.Name ?? string.Empty;
+                var rewritten = FormulaRewriter.Rewrite(original, op, hostSheetName);
+                if (rewritten is null || rewritten == original)
+                    continue;
+
+                scopedSnapshot[(name, sheetId)] = original;
+                workbook.DefineNamedFormula(name, rewritten, sheetId);
+            }
         }
     }
 
     /// <summary>
     /// Restores NamedFormulas from a snapshot captured by <see cref="RewriteNamedFormulas"/>.
     /// </summary>
-    internal static void RestoreNamedFormulas(Workbook workbook, Dictionary<string, string>? snapshot)
+    internal static void RestoreNamedFormulas(Workbook workbook, Dictionary<string, string>? snapshot,
+        Dictionary<(string Name, SheetId Sheet), string>? scopedSnapshot = null)
     {
-        if (snapshot is null)
-            return;
+        if (snapshot is not null)
+        {
+            foreach (var (name, original) in snapshot)
+                workbook.NamedFormulas[name] = original;
+        }
 
-        foreach (var (name, original) in snapshot)
-            workbook.NamedFormulas[name] = original;
+        if (scopedSnapshot is not null)
+        {
+            foreach (var ((name, sheetId), original) in scopedSnapshot)
+                workbook.DefineNamedFormula(name, original, sheetId);
+        }
     }
 
     internal static Dictionary<string, NamedRangeSnapshot> CaptureNamedRanges(Workbook workbook) =>
@@ -64,12 +90,57 @@ internal static partial class RowColumnShiftHelpers
             workbook.DefineNamedRange(name, namedRange.Range, namedRange.Metadata);
     }
 
+    /// <summary>
+    /// Captures a full snapshot of <see cref="Workbook.ScopedNamedRanges"/> so it can be
+    /// restored by <see cref="RestoreScopedNamedRanges"/> on undo.
+    /// </summary>
+    internal static Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>
+        CaptureScopedNamedRanges(Workbook workbook)
+    {
+        var result =
+            new Dictionary<(string, SheetId), (GridRange, NamedRangeMetadata)>();
+        foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges)
+        {
+            workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var metadata);
+            result[(name, sheetId)] = (range, metadata);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Restores <see cref="Workbook.ScopedNamedRanges"/> from a snapshot created by
+    /// <see cref="CaptureScopedNamedRanges"/>.
+    /// </summary>
+    internal static void RestoreScopedNamedRanges(
+        Workbook workbook,
+        Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        // Remove all current scoped ranges then re-add the snapshotted set.
+        foreach (var (name, sheetId) in workbook.ScopedNamedRanges.Keys.ToList())
+            workbook.RemoveScopedNamedRange(name, sheetId);
+
+        foreach (var ((name, sheetId), (range, metadata)) in snapshot)
+            workbook.DefineNamedRange(name, range, metadata, sheetId);
+    }
+
     internal static void ShiftNamedRangeRowsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
     {
         foreach (var (name, range) in workbook.NamedRanges.ToList())
         {
             if (range.Start.Sheet == sheetId)
                 workbook.NamedRanges[name] = ShiftRangeRowsUp(range, start, count);
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet == sheetId)
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, ShiftRangeRowsUp(range, start, count), metadata, scopeSheet);
+            }
         }
     }
 
@@ -82,6 +153,19 @@ internal static partial class RowColumnShiftHelpers
             if (shifted is null) workbook.RemoveNamedRange(name);
             else workbook.NamedRanges[name] = shifted.Value;
         }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            var shifted = ShiftRangeRowsDown(range, start, count);
+            if (shifted is null)
+                workbook.RemoveScopedNamedRange(name, scopeSheet);
+            else
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, shifted.Value, metadata, scopeSheet);
+            }
+        }
     }
 
     internal static void ShiftNamedRangeColumnsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
@@ -90,6 +174,15 @@ internal static partial class RowColumnShiftHelpers
         {
             if (range.Start.Sheet == sheetId)
                 workbook.NamedRanges[name] = ShiftRangeColumnsUp(range, start, count);
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet == sheetId)
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, ShiftRangeColumnsUp(range, start, count), metadata, scopeSheet);
+            }
         }
     }
 
@@ -101,6 +194,19 @@ internal static partial class RowColumnShiftHelpers
             var shifted = ShiftRangeColumnsDown(range, start, count);
             if (shifted is null) workbook.RemoveNamedRange(name);
             else workbook.NamedRanges[name] = shifted.Value;
+        }
+
+        foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
+        {
+            if (range.Start.Sheet != sheetId) continue;
+            var shifted = ShiftRangeColumnsDown(range, start, count);
+            if (shifted is null)
+                workbook.RemoveScopedNamedRange(name, scopeSheet);
+            else
+            {
+                workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
+                workbook.DefineNamedRange(name, shifted.Value, metadata, scopeSheet);
+            }
         }
     }
 }

@@ -417,6 +417,23 @@ public static class RtfReader
                         if (_pos < _rtf.Length && _rtf[_pos] == ' ')
                             _pos++;
                     }
+                    else if (_pos < _rtf.Length && _rtf[_pos] == '\'')
+                    {
+                        // \'XX hex escape inside a font name — decode the byte against the active code page
+                        // and append the resulting character(s) to the name, instead of discarding it.
+                        // This preserves high-bit characters (e.g. CJK/Windows-1252) in font names.
+                        _pos++; // consume "'"
+                        if (_pos + 1 < _rtf.Length)
+                        {
+                            var hex = _rtf.Substring(_pos, 2);
+                            _pos += 2;
+                            if (byte.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)
+                                && currentId >= 0)
+                            {
+                                name.Append(_state.Encoding.GetString(new[] { b }));
+                            }
+                        }
+                    }
                     else
                     {
                         // Skip any other control word/symbol (e.g. \fnil, \fcharsetN, \froman).

@@ -73,8 +73,15 @@ internal static partial class RowColumnShiftHelpers
             ? region.End.Col - count
             : startCol > 1 ? startCol - 1 : 0;
 
-        // Keep only if it still spans ≥2 columns (width > 1); a 1×1 merge is invalid per Excel.
-        if (newEnd > 0 && newEnd > newStart)
+        // Drop only when the column range is entirely consumed (no surviving columns) OR
+        // when the result is a true single cell (1 column wide AND 1 row tall).
+        // A region that becomes 1 column wide but still spans multiple rows is a valid
+        // vertical merge in Excel and must be kept.
+        bool colRangeGone = newEnd == 0 || newEnd < newStart;
+        bool singleCol = newEnd == newStart;
+        bool multiRow = region.Start.Row != region.End.Row;
+
+        if (!colRangeGone && (singleCol ? multiRow : true))
         {
             adjusted = new GridRange(
                 new CellAddress(region.Start.Sheet, region.Start.Row, newStart),

@@ -671,7 +671,7 @@ public static class PptxPackageReader
         {
             ["dm"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
             ["lo"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml",
-            ["qs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramQuickStyle+xml",
+            ["qs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
             ["cs"] = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml"
         };
 

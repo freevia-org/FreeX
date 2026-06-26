@@ -59,6 +59,25 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
         ReadSettings(archive, document);
+        // w:evenAndOddHeaders and w:mirrorMargins are document-global toggles stored in settings.xml, read
+        // into document.Page by ReadSettings. Non-final sections' PageSettings are constructed earlier (during
+        // body parsing), before ReadSettings runs, so their DifferentOddEvenPages/MirrorMargins stay false.
+        // Propagate the document-wide values now so the writer's per-section even-part emission gate
+        // (which keys off section.Page.DifferentOddEvenPages) correctly emits even header/footer parts for
+        // every non-final section whose sectPr carried even header/footer references.
+        if (document.Page.DifferentOddEvenPages || document.Page.MirrorMargins)
+        {
+            foreach (var block in document.Blocks)
+            {
+                if (block is Paragraph { SectionBreak: { } section })
+                {
+                    if (document.Page.DifferentOddEvenPages)
+                        section.Page.DifferentOddEvenPages = true;
+                    if (document.Page.MirrorMargins)
+                        section.Page.MirrorMargins = true;
+                }
+            }
+        }
         ReadBibliography(archive, document);
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
@@ -890,7 +909,9 @@ public static class DocxReader
 
             var colElements = cols.Elements(W + "col").ToList();
             var equalWidthOff = cols.Attribute(W + "equalWidth")?.Value is "0" or "false" or "off";
-            if (equalWidthOff && colElements.Count > 1
+            // A single w:col child with an explicit width is valid (e.g. a one-column section with an
+            // explicit w:col w:w="..."), so the guard is >= 1 (not > 1) when equalWidth is off.
+            if (equalWidthOff && colElements.Count >= 1
                 && colElements.All(c => c.Attribute(W + "w") is not null))
             {
                 var widths = colElements.Select(c => DxaToPoints(c.Attribute(W + "w")!.Value)).ToList();
@@ -4318,10 +4339,14 @@ public static class DocxReader
             var levels = abstractNum.Elements(W + "lvl")
                 .OrderBy(l => ParseInt(l.Attribute(W + "ilvl")?.Value))
                 .ToList();
+            // Evaluate IsMultiLevel before inspecting level-0's numFmt: a "fancy" multilevel template
+            // whose level-0 happens to be a bullet (e.g. Word's List Bullet Multilevel style) is
+            // MultiLevel, not Bullet — the deeper levels carry decimal/letter formats that the model
+            // must expose for correct display/editing of sub-levels.
             var numFmt = levels.FirstOrDefault()?.Element(W + "numFmt")?.Attribute(W + "val")?.Value;
-            abstractKinds[abstractNumId] = numFmt == "bullet"
-                ? ListKind.Bullet
-                : IsMultiLevel(abstractNum, levels) ? ListKind.MultiLevel : ListKind.Number;
+            abstractKinds[abstractNumId] = IsMultiLevel(abstractNum, levels)
+                ? ListKind.MultiLevel
+                : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
         }
 
         foreach (var num in root.Elements(W + "num"))
@@ -4348,13 +4373,17 @@ public static class DocxReader
 
     /// <summary>
     /// Recognizes an outline/legal numbering definition: either it carries
-    /// w:multiLevelType="multilevel", or its level-1 lvlText accumulates the ancestor counters (it
-    /// references both %1 and %2, as in "%1.%2."), which distinguishes it from a flat decimal list
-    /// whose level-1 text is just "%2.".
+    /// w:multiLevelType="multilevel" (as a child element per OOXML spec, or as an attribute in FreeW's own
+    /// emitted format), or its level-1 lvlText accumulates the ancestor counters (it references both %1 and
+    /// %2, as in "%1.%2."), which distinguishes it from a flat decimal list whose level-1 text is just "%2.".
     /// </summary>
     private static bool IsMultiLevel(XElement abstractNum, IReadOnlyList<XElement> levels)
     {
+        // FreeW writes multiLevelType as an attribute on abstractNum; real Word XML emits it as a child
+        // element <w:multiLevelType w:val="multilevel"/>. Check both forms.
         if (abstractNum.Attribute(W + "multiLevelType")?.Value == "multilevel")
+            return true;
+        if (abstractNum.Element(W + "multiLevelType")?.Attribute(W + "val")?.Value == "multilevel")
             return true;
 
         var level1Text = levels.ElementAtOrDefault(1)?.Element(W + "lvlText")?.Attribute(W + "val")?.Value;

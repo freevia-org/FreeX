@@ -488,4 +488,90 @@ public class PreservedNumberingRoundTripTests
         read.Preserved.IsEmpty.Should().BeTrue();
         read.Blocks.OfType<Paragraph>().Should().OnlyContain(p => p.PreservedNumbering == null);
     }
+
+    // P11 regression — a "fancy" multilevel abstractNum whose level 0 is a bullet (as in Word's
+    // "List Bullet Multilevel" template) must be classified MultiLevel, not Bullet.  Before the fix the
+    // IsMultiLevel check only ran in the else branch of (numFmt == "bullet"), so a bullet-level-0
+    // multilevel template was collapsed to ListKind.Bullet, dropping the numbered character of sub-levels.
+    [Fact]
+    public void AbstractNum_BulletLevel0_WithMultiLevelType_IsClassifiedMultiLevel()
+    {
+        // Build a minimal docx with a numbering.xml that has:
+        //   abstractNumId=1, w:multiLevelType="multilevel",
+        //   lvl 0 = bullet, lvl 1 = decimal  (Word's "List Bullet Multilevel" template shape).
+        // A body paragraph at ilvl 0 uses numId 1 → abstractNumId 1.
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Bullet top</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Decimal sub</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            // abstractNumId=1 has multiLevelType="multilevel", level 0 = bullet, level 1 = decimal.
+            // Without the P11 fix this was classified ListKind.Bullet (level-0 wins); with the fix it
+            // is classified ListKind.MultiLevel (IsMultiLevel checked first).
+            Add("word/numbering.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:abstractNum w:abstractNumId="1">
+                    <w:multiLevelType w:val="multilevel"/>
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="&#x2022;"/><w:lvlJc w:val="left"/></w:lvl>
+                    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%2."/><w:lvlJc w:val="left"/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
+                </w:numbering>
+                """);
+        }
+        stream.Position = 0;
+        var doc = ReadDoc(stream.ToArray());
+
+        // Both paragraphs reference numId 1 → abstractNumId 1 → classified MultiLevel (P11 fix).
+        doc.Blocks.OfType<Paragraph>().Should().OnlyContain(
+            p => p.Formatting.ListKind == ListKind.MultiLevel,
+            because: "an abstractNum with multiLevelType=multilevel must be MultiLevel even when level 0 is a bullet");
+    }
 }

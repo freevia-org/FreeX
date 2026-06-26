@@ -76,9 +76,23 @@ public sealed class RecalcEngine
         // cells and have no node in the dependency graph, so the topo sort cannot order them).
         var spillTargetsMayHaveChanged = false;
 
-        // Mark cyclic cells with error
-        foreach (var cyclic in plan.CyclicCells)
-            AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+        // Mark cyclic cells with error, or run iterative calc if enabled.
+        // seenIterativeCells tracks which cyclic cells have already been handled by the iterative
+        // loop so that a second plan (evaluationPlan below) does not re-run them.
+        HashSet<CellAddress>? seenIterativeCells = null;
+        if (plan.CyclicCells.Count > 0)
+        {
+            if (workbook.IterativeCalculation)
+            {
+                seenIterativeCells = [.. plan.CyclicCells];
+                RunIterativeCalc(workbook, plan.CyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors);
+            }
+            else
+            {
+                foreach (var cyclic in plan.CyclicCells)
+                    AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+            }
+        }
 
         var evaluationPlan = plan;
         IReadOnlyCollection<CellAddress>? directFormulaRoots = null;
@@ -111,8 +125,29 @@ public sealed class RecalcEngine
                     dirtyCells.Add(addr);
 
                 evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
-                foreach (var cyclic in evaluationPlan.CyclicCells)
-                    AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+                if (evaluationPlan.CyclicCells.Count > 0)
+                {
+                    if (workbook.IterativeCalculation)
+                    {
+                        // Only run iterative calc for cells not already handled above.
+                        List<CellAddress>? newCyclicCells = null;
+                        foreach (var cyclic in evaluationPlan.CyclicCells)
+                        {
+                            if (seenIterativeCells is null || !seenIterativeCells.Contains(cyclic))
+                            {
+                                newCyclicCells ??= [];
+                                newCyclicCells.Add(cyclic);
+                            }
+                        }
+                        if (newCyclicCells is not null)
+                            RunIterativeCalc(workbook, newCyclicCells, ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors);
+                    }
+                    else
+                    {
+                        foreach (var cyclic in evaluationPlan.CyclicCells)
+                            AddCyclicCell(workbook, cyclic, ref cyclicCells, ref seenCyclicCells, ref errors);
+                    }
+                }
             }
         }
 
@@ -371,6 +406,129 @@ public sealed class RecalcEngine
         errors ??= [];
         errors.Add((cell, error));
     }
+
+    /// <summary>
+    /// Run a bounded fixed-point iteration over a set of cyclic cells when
+    /// <see cref="Workbook.IterativeCalculation"/> is enabled.  Each pass re-evaluates every cell
+    /// in <paramref name="cyclicAddresses"/> in the order the dependency graph reported them, using
+    /// whatever value each cell currently holds as the previous iterate (Excel seeds unresolved cells
+    /// at 0 before the first pass, which is already the default for blank/error cells — we only
+    /// reset cells that currently hold <see cref="ErrorValue.Circular"/> so that prior non-iterative
+    /// runs do not pollute the seed).  Iteration stops early when the maximum absolute change across
+    /// all cells between two consecutive passes is &lt;= <see cref="Workbook.MaxCalculationChange"/>
+    /// (default 0.001), or after <see cref="Workbook.MaxCalculationIterations"/> passes (default 100),
+    /// whichever comes first.  Non-converging cycles always terminate — they return the last iterate.
+    /// </summary>
+    private void RunIterativeCalc(
+        Workbook workbook,
+        IReadOnlyList<CellAddress> cyclicAddresses,
+        ref int recalculatedCount,
+        ref CellAddress singleRecalculated,
+        ref List<CellAddress>? recalculated,
+        ref List<(CellAddress Cell, string Error)>? errors)
+    {
+        const int DefaultMaxIterations = 100;
+        const double DefaultMaxChange = 0.001;
+
+        var maxIterations = workbook.MaxCalculationIterations ?? DefaultMaxIterations;
+        // Guard: ensure a sane positive cap even if caller supplies 0 or negative.
+        if (maxIterations <= 0) maxIterations = DefaultMaxIterations;
+
+        var maxChange = workbook.MaxCalculationChange ?? DefaultMaxChange;
+
+        // Seed: cells that previously received #CIRCULAR! get reset to 0 (blank) so the first
+        // iteration starts from the Excel-compatible seed value, not from a prior error.
+        for (var i = 0; i < cyclicAddresses.Count; i++)
+        {
+            var addr = cyclicAddresses[i];
+            var seedSheet = workbook.GetSheet(addr.Sheet);
+            var seedCell = seedSheet?.GetCell(addr);
+            if (seedCell is not null && ReferenceEquals(seedCell.Value, ErrorValue.Circular))
+                seedCell.Value = new BlankValue();
+        }
+
+        for (var iteration = 0; iteration < maxIterations; iteration++)
+        {
+            var maxAbsChange = 0.0;
+
+            for (var i = 0; i < cyclicAddresses.Count; i++)
+            {
+                var addr = cyclicAddresses[i];
+                var sheet = workbook.GetSheet(addr.Sheet);
+                if (sheet is null) continue;
+
+                var cell = sheet.GetCell(addr);
+                if (cell is null || !cell.HasFormula) continue;
+
+                // Snapshot the value before this eval so we can compute the delta.
+                var prevNumeric = ToNumericForConvergence(cell.Value);
+
+                try
+                {
+                    if (cell.CachedAst is not FormulaNode cachedAst)
+                    {
+                        cachedAst = FormulaEvaluator.ParseFormula(cell.FormulaText!);
+                        cell.CachedAst = cachedAst;
+                        RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
+                    }
+
+                    var result = cell.ArrayMode == FormulaArrayMode.Dynamic
+                        ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr)
+                        : _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
+
+                    // Iterative calc does not support spilling out of cyclic cells — use the
+                    // scalar value at [0,0] to stay safe.
+                    cell.Value = result is RangeValue rv ? rv.Cells[0, 0] : result;
+                }
+                catch (FormulaParseException)
+                {
+                    cell.CachedAst = null;
+                    ClearFormulaDependencies(addr);
+                    cell.Value = ErrorValue.Value;
+                }
+                catch (FormulaEvalException ex)
+                {
+                    cell.Value = new ErrorValue(ex.ErrorCode);
+                }
+                catch (Exception)
+                {
+#if DEBUG
+                    throw;
+#else
+                    cell.Value = ErrorValue.Value;
+#endif
+                }
+
+                var newNumeric = ToNumericForConvergence(cell.Value);
+                var delta = Math.Abs(newNumeric - prevNumeric);
+                // Guard: NaN/Infinity in the delta (e.g. the formula produced #DIV/0! on this pass)
+                // must not prevent termination — treat them as "large but not infinite" change so
+                // the loop simply runs to maxIterations and returns the last value.
+                if (double.IsFinite(delta) && delta > maxAbsChange)
+                    maxAbsChange = delta;
+            }
+
+            // Converged: every cell changed by <= maxChange on this pass.
+            if (maxAbsChange <= maxChange)
+                break;
+        }
+
+        // Record the cyclic cells as recalculated (not as errors/cyclic).
+        for (var i = 0; i < cyclicAddresses.Count; i++)
+            AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, cyclicAddresses[i]);
+    }
+
+    /// <summary>
+    /// Extract a finite double from a cell value for use in the iterative-calc convergence check.
+    /// Returns 0 for blank/bool/text/error (matching Excel's seed behaviour).
+    /// </summary>
+    private static double ToNumericForConvergence(ScalarValue? value) =>
+        value switch
+        {
+            NumberValue nv when double.IsFinite(nv.Value) => nv.Value,
+            DateTimeValue dv when double.IsFinite(dv.Value) => dv.Value,
+            _ => 0.0
+        };
 
     /// <summary>
     /// Extract cell references from a formula AST and register them in the dependency graph.

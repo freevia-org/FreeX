@@ -14,7 +14,6 @@ using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
-using TextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Avalonia;
 
@@ -257,13 +256,19 @@ public sealed class MainWindow : Window
             Copy: () => _ = CopyAsync(),
             Paste: () => _ = PasteAsync(),
             Backstage: () => _ = ShowBackstageAsync(),
+            NewDocument: NewDocument,
             ToggleNavigationPane: ToggleNavigationPane,
             ToggleReviewingPane: ToggleReviewingPane,
             ToggleRevealFormatting: ToggleRevealFormatting,
             OpenFindReplaceDialog: OpenFindReplaceDialog,
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
-            SetDraftView:   () => SetViewMode(DocumentViewMode.Draft));
+            SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
+            ApplyZoom: (absolute, delta) =>
+            {
+                var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
+                ApplyZoom(newScale);
+            });
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(

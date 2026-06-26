@@ -458,6 +458,45 @@ public sealed partial class MainWindow
         menu.Open(anchor);
     }
 
+    /// <summary>
+    /// Opens the pivot header dropdown menu given a pre-resolved <see cref="PivotHeaderDropdownTargetModel"/>.
+    /// Used by <c>MainWindow.PivotAdornments.cs</c> when a cell-level pivot dropdown button is clicked —
+    /// the target was already computed during grid construction so no field-list item is needed.
+    /// </summary>
+    private void ShowPivotHeaderDropdownFromTarget(
+        PivotTableModel pivot,
+        PivotHeaderDropdownTargetModel target,
+        Control anchor)
+    {
+        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var menuModel = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
+        var validator = BuildPivotDragValidator(pivot);
+        var items = new List<Control>();
+        foreach (var item in menuModel.Items)
+        {
+            if (item.IsSeparator)
+            {
+                items.Add(new Separator());
+                continue;
+            }
+            var menuItem = new MenuItem { Header = item.Label, IsEnabled = item.IsEnabled };
+            if (item.IsChecked)
+                menuItem.Icon = new TextBlock { Text = "✓" };
+            var action = item.Action;
+            menuItem.Click += (_, _) => InvokePivotHeaderAction(pivot, headers, target, action, validator);
+            items.Add(menuItem);
+        }
+        if (target.Area is PivotHeaderArea.Row or PivotHeaderArea.Column or PivotHeaderArea.Page)
+        {
+            var itemFilter = new MenuItem { Header = UiText.Get("PivotLoc_FilterItemsMenu") };
+            itemFilter.Click += (_, _) => OpenPivotItemFilter(pivot, headers, target);
+            items.Add(new Separator());
+            items.Add(itemFilter);
+        }
+        var menu = new ContextMenu { ItemsSource = items };
+        menu.Open(anchor);
+    }
+
     private void InvokePivotHeaderAction(
         PivotTableModel pivot,
         IReadOnlyList<string> headers,

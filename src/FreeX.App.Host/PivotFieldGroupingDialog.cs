@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -236,10 +237,13 @@ public sealed class PivotFieldGroupingDialog : Window
         return null;
     }
 
-    private static double? ParseOptionalDouble(string? value) =>
-        double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
+    private static double? ParseOptionalDouble(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (NumericInputParser.TryParseFiniteDouble(trimmed ?? "", CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+        return null;
+    }
 
     private static bool TryParseOptionalFiniteDouble(string? value, out double? parsedValue)
     {
@@ -247,8 +251,7 @@ public sealed class PivotFieldGroupingDialog : Window
         if (string.IsNullOrWhiteSpace(value))
             return true;
 
-        if (!double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            || !double.IsFinite(parsed))
+        if (!NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out var parsed))
         {
             return false;
         }
@@ -260,8 +263,7 @@ public sealed class PivotFieldGroupingDialog : Window
     private static bool TryParsePositiveInterval(string? value, out double interval)
     {
         if (string.IsNullOrWhiteSpace(value)
-            || !double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out interval)
-            || !double.IsFinite(interval)
+            || !NumericInputParser.TryParseFiniteDouble(value.Trim(), CultureInfo.CurrentCulture, CultureInfo.InvariantCulture, out interval)
             || interval <= 0)
         {
             interval = 0;
@@ -272,7 +274,7 @@ public sealed class PivotFieldGroupingDialog : Window
     }
 
     private static string FormatDouble(double? value) =>
-        value?.ToString("G", CultureInfo.InvariantCulture) ?? "";
+        value?.ToString("G", CultureInfo.CurrentCulture) ?? "";
 
     private static void AddTextBox(Panel stack, string label, TextBox textBox)
     {

@@ -229,6 +229,12 @@ public static class Wordml2003Writer
             elements.Add(new XElement(W + "color", new XAttribute(W + "val", hex.ToUpperInvariant())));
         }
 
+        // w:vertAlign — superscript/subscript. Schema position: near the end of rPr, matching the DOCX
+        // EG_RPrBase ordering (after w:color, before w:rtl/w:cs).
+        if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            elements.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", fmt.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
+
         if (elements.Count == 0)
             return null;
 
