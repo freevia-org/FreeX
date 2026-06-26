@@ -21,7 +21,7 @@ public sealed class TimelineModel
     /// Maps to the Excel date hierarchy: 0=years, 1=quarters, 2=months, 3=days.
     /// Null when the attribute is absent (older files without explicit granularity).
     /// </summary>
-    public int? Level { get; init; }
+    public int? Level { get; set; }
     /// <summary>
     /// The OOXML <c>selectionLevel</c> attribute from the timeline definition part.
     /// Controls which date hierarchy level drives the current selection (independent of

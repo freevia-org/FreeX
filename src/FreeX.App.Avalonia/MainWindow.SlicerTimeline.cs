@@ -333,6 +333,15 @@ public sealed partial class MainWindow
         SlicerLayoutModel layout,
         LayoutPoint point)
     {
+        // Priority order: clear-filter icon > tile toggle.
+        // The clear icon sits in the header and does not overlap any tile, but we test it first so
+        // a click near the corner that just barely overlaps both is unambiguously handled as a clear.
+        if (SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(slicer, layout, point) is { } clearCmd)
+        {
+            CommitFilterCommand(clearCmd, $"Slicer: {layout.Caption}");
+            return;
+        }
+
         var command = SlicerTimelineInteractionPlanner.BuildSlicerToggleCommand(slicer, availableItems, layout, point);
         if (command is null)
             return;
@@ -342,6 +351,19 @@ public sealed partial class MainWindow
 
     private void HandleTimelinePointer(TimelineModel timeline, TimelineLayoutModel layout, LayoutPoint point)
     {
+        // Priority order: clear-filter icon > granularity dropdown > track/handle.
+        if (SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(timeline, layout, point) is { } clearCmd)
+        {
+            CommitFilterCommand(clearCmd, $"Timeline: {layout.Caption}");
+            return;
+        }
+
+        if (SlicerTimelineInteractionPlanner.BuildTimelineGranularityCommand(timeline, layout, point) is { } granCmd)
+        {
+            CommitFilterCommand(granCmd, $"Timeline: {layout.Caption}");
+            return;
+        }
+
         var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
         if (command is null)
             return;

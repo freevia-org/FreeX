@@ -394,4 +394,198 @@ public sealed class SlicerTimelineInteractionPlannerTests
         SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, layout.TrackRect.Center)
             .Should().BeNull();
     }
+
+    // ── ClearFilter ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildSlicerClearFilterCommand_HitsClearFilterRect_ReturnsEmptySelectionCommand()
+    {
+        var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region", ShowCaption = true };
+        slicer.SelectedItems.AddRange(["North", "South"]);
+        var bounds = new LayoutRect(0, 0, 160, 80);
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, AvailableItems, bounds);
+
+        // The layout must have an active filter and a non-zero ClearFilterIconRect.
+        layout.HasActiveFilter.Should().BeTrue();
+        layout.ClearFilterIconRect.Width.Should().BeGreaterThan(0);
+
+        var command = SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(
+            slicer, layout, layout.ClearFilterIconRect.Center);
+
+        command.Should().NotBeNull().And.BeOfType<SetSlicerSelectionCommand>();
+    }
+
+    [Fact]
+    public void BuildSlicerClearFilterCommand_NoActiveFilter_ReturnsNull()
+    {
+        // No selection → no active filter → clear should not be triggered.
+        var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region", ShowCaption = true };
+        var bounds = new LayoutRect(0, 0, 160, 80);
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, AvailableItems, bounds);
+
+        layout.HasActiveFilter.Should().BeFalse();
+        SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(
+                slicer, layout, layout.ClearFilterIconRect.Center)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildSlicerClearFilterCommand_PointMissesClearFilterRect_ReturnsNull()
+    {
+        var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region", ShowCaption = true };
+        slicer.SelectedItems.AddRange(["North"]);
+        var bounds = new LayoutRect(0, 0, 160, 80);
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, AvailableItems, bounds);
+
+        // A point in the tile body, far from the icon.
+        SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(
+                slicer, layout, layout.Tiles[0].Rect.Center)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildTimelineClearFilterCommand_HitsClearFilterRect_ReturnsClearRangeCommand()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            SelectedStartDate = "2024-03-01",
+            SelectedEndDate = "2024-06-30",
+        };
+        var bounds = new LayoutRect(0, 0, 300, 100);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        layout.HasActiveFilter.Should().BeTrue();
+        layout.ClearFilterIconRect.Width.Should().BeGreaterThan(0);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(
+            timeline, layout, layout.ClearFilterIconRect.Center);
+
+        command.Should().NotBeNull().And.BeOfType<SetTimelineRangeCommand>();
+        command!.SelectedStartDate.Should().BeNull();
+        command.SelectedEndDate.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildTimelineClearFilterCommand_NoActiveFilter_ReturnsNull()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 300, 100);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        layout.HasActiveFilter.Should().BeFalse();
+        SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(
+                timeline, layout, layout.ClearFilterIconRect.Center)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildTimelineClearFilterCommand_PointMissesClearFilterRect_ReturnsNull()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            SelectedStartDate = "2024-03-01",
+            SelectedEndDate = "2024-06-30",
+        };
+        var bounds = new LayoutRect(0, 0, 300, 100);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        // Point on the track — not on the clear icon.
+        SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(
+                timeline, layout, layout.TrackRect.Center)
+            .Should().BeNull();
+    }
+
+    // ── Granularity dropdown ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void BuildTimelineGranularityCommand_HitsDropdownRect_ReturnsCycledLevel()
+    {
+        // Level=2 (Months) → cycling should yield 3 (Days).
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            Level = 2, // Months
+        };
+        var bounds = new LayoutRect(0, 0, 300, 100);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        layout.GranularityDropdownRect.Width.Should().BeGreaterThan(0);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineGranularityCommand(
+            timeline, layout, layout.GranularityDropdownRect.Center);
+
+        command.Should().NotBeNull().And.BeOfType<SetTimelineGranularityCommand>();
+    }
+
+    [Fact]
+    public void BuildTimelineGranularityCommand_PointMissesDropdownRect_ReturnsNull()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            Level = 2,
+        };
+        var bounds = new LayoutRect(0, 0, 300, 100);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        SlicerTimelineInteractionPlanner.BuildTimelineGranularityCommand(
+                timeline, layout, layout.TrackRect.Center)
+            .Should().BeNull();
+    }
+
+    // ── SetTimelineGranularityCommand.CycleLevel ──────────────────────────────
+
+    [Theory]
+    [InlineData(0, 1)] // Years → Quarters
+    [InlineData(1, 2)] // Quarters → Months
+    [InlineData(2, 3)] // Months → Days
+    [InlineData(3, 0)] // Days → Years (wraps)
+    [InlineData(null, 3)] // null (default Month=2) → Days
+    public void CycleLevel_CyclesCorrectly(int? current, int expected)
+    {
+        SetTimelineGranularityCommand.CycleLevel(current).Should().Be(expected);
+    }
+
+    // ── Hit-test predicate: ClearFilter vs Tile — no overlap ────────────────────
+
+    [Fact]
+    public void SlicerHitTest_ClearFilterRect_DoesNotOverlapTiles()
+    {
+        // Verify that the ClearFilterIconRect sits entirely within the header band and does NOT
+        // overlap any tile rectangle, so the priority ordering is moot in practice.
+        var slicer = new SlicerModel { Name = "Region", SourceFieldName = "Region", ShowCaption = true };
+        slicer.SelectedItems.AddRange(["North", "South"]);
+        var bounds = new LayoutRect(0, 0, 160, 120);
+        var layout = SlicerLayoutBuilder.BuildFull(slicer, AvailableItems, bounds);
+
+        var clearRect = layout.ClearFilterIconRect;
+        foreach (var tile in layout.Tiles)
+        {
+            // Rectangles must NOT intersect.
+            var xOverlap = clearRect.Left < tile.Rect.Right && clearRect.Right > tile.Rect.Left;
+            var yOverlap = clearRect.Top < tile.Rect.Bottom && clearRect.Bottom > tile.Rect.Top;
+            (xOverlap && yOverlap).Should().BeFalse(
+                $"ClearFilterIconRect overlaps tile '{tile.Caption}'");
+        }
+    }
 }

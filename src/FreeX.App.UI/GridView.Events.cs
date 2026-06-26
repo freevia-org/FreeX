@@ -153,4 +153,34 @@ public partial class GridView
 
     /// <summary>Fired when the user requests in-place editing for an existing text box.</summary>
     public event Action<Guid>? TextBoxEditRequested;
+
+    /// <summary>
+    /// Fired when the user clicks the clear-filter icon on a native slicer header — carry the slicer
+    /// name. The host should commit a <c>SetSlicerSelectionCommand</c> with an empty selection list.
+    /// </summary>
+    public event Action<string>? NativeSlicerClearFilterRequested;
+
+    /// <summary>
+    /// Fired when the user clicks a tile in a native slicer — carry the slicer name and the tile
+    /// caption that was hit. The host computes the toggle and commits the filter command.
+    /// </summary>
+    public event Action<string, string>? NativeSlicerTileToggleRequested;
+
+    /// <summary>
+    /// Fired when the user clicks the clear-filter icon on a native timeline header — carry the
+    /// timeline name. The host should commit a <c>SetTimelineRangeCommand(null, null)</c>.
+    /// </summary>
+    public event Action<string>? NativeTimelineClearFilterRequested;
+
+    /// <summary>
+    /// Fired when the user clicks the granularity dropdown on a native timeline header — carry the
+    /// timeline name. The host cycles the granularity level and commits the command.
+    /// </summary>
+    public event Action<string>? NativeTimelineGranularityToggleRequested;
+
+    /// <summary>
+    /// Fired when the user clicks the track or a drag handle on a native timeline — carry the
+    /// timeline name and the new start/end date strings (yyyy-MM-dd, or null for open-ended).
+    /// </summary>
+    public event Action<string, string?, string?>? NativeTimelineRangeRequested;
 }

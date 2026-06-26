@@ -353,6 +353,11 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.NoteInlineEditSubmitted += SheetGrid_NoteInlineEditSubmitted;
         SheetGrid.ThreadedCommentInlineEditSubmitted += SheetGrid_ThreadedCommentInlineEditSubmitted;
         SheetGrid.TextBoxEditRequested += OnTextBoxEditRequested;
+        SheetGrid.NativeSlicerClearFilterRequested += OnNativeSlicerClearFilterRequested;
+        SheetGrid.NativeSlicerTileToggleRequested += OnNativeSlicerTileToggleRequested;
+        SheetGrid.NativeTimelineClearFilterRequested += OnNativeTimelineClearFilterRequested;
+        SheetGrid.NativeTimelineGranularityToggleRequested += OnNativeTimelineGranularityToggleRequested;
+        SheetGrid.NativeTimelineRangeRequested += OnNativeTimelineRangeRequested;
         WireFormControlEvents();
         DependencyPropertyDescriptor.FromProperty(
             FreeX.App.UI.GridView.SelectedObjectIdProperty,

@@ -4351,9 +4351,9 @@ public sealed partial class MainWindow : Window
         bool showHeadings,
         double zoomFactor)
     {
-        if (_session.FormulaEditAddress is not null)
-            return;
-
+        // Resolve cell bounds first — needed for both the input-message tooltip (which is
+        // type-agnostic and must show during edit, matching WPF/Excel) and the arrow button
+        // (which is list-DV-only and hidden during edit).
         if (!TryGetDisplayedCellBounds(
                 viewport,
                 _session.ActiveCell,
@@ -4366,6 +4366,23 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+
+        // BM1+BM2: Input-message tooltip is type-agnostic and stays visible during edit,
+        // matching WPF's independent RefreshDvInputMessage (no editing guard) and Excel's
+        // behaviour. Clamp against the visible scroll-viewport, not the full grid canvas
+        // (BM3), so the tooltip flips correctly near the viewport edge.
+        var viewportBounds = _sheetScrollViewer.Bounds;
+        AddDvInputMessageOverlay(
+            overlay,
+            left,
+            top + height,
+            viewportBounds.Width > 0 ? viewportBounds.Width : overlay.Width,
+            viewportBounds.Height > 0 ? viewportBounds.Height : overlay.Height);
+
+        // The dropdown arrow is only for List-DV and must be hidden while editing (the
+        // in-line editor is open), matching Excel and WPF's RefreshValidationDropdown guard.
+        if (_session.FormulaEditAddress is not null)
+            return;
 
         if (!DataValidationDropdownPlanner.TryPlan(
                 _session.Workbook,
@@ -4389,9 +4406,6 @@ public sealed partial class MainWindow : Window
         Canvas.SetTop(dropdown, plan.Bounds.Top);
         overlay.Children.Add(dropdown);
         _activeDataValidationDropdown = dropdown;
-
-        // Input-message tooltip anchored below-left of the active cell.
-        AddDvInputMessageOverlay(overlay, left, top + height, overlay.Width, overlay.Height);
     }
 
     private void AddDvInputMessageOverlay(

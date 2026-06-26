@@ -338,4 +338,89 @@ public sealed class SlideCanvasTests
         var act    = () => canvas.Measure(new Size(1280, 720));
         act.Should().NotThrow("warp+shadow text must not throw");
     }
+
+    // ── BO2: default tab stops (no explicit tabLst) — WPF ───────────────────────
+
+    /// <summary>
+    /// BO2 regression (WPF): a paragraph with a tab character and NO explicit tab stops must
+    /// route through RenderParaWithTabs and use the 96 DIP default interval rather than
+    /// collapsing \t via plain DrawText.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_TabWithNoExplicitStops_UsesDefaultInterval_DoesNotThrow()
+    {
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var tb   = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Before\tAfter" }); // tab, no explicit stops
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id            = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu    = 457200,
+            OffsetYEmu    = 274320,
+            ExtentCxEmu   = 8229600,
+            ExtentCyEmu   = 1143000,
+            TextBody      = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("BO2: tab with no explicit tab stops must use default interval without throwing");
+    }
+
+    // ── BO1: tab alignment — right/center/decimal stops — WPF ───────────────────
+
+    /// <summary>
+    /// BO1 regression (WPF): paragraphs with right, center, and decimal explicit tab stops must
+    /// render without throwing. The alignment-offset path is exercised end-to-end.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_TabWithRightAndCenterStops_DoesNotThrow()
+    {
+        const long EmuPerDip = 9525L;
+
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        // Right + Center stops
+        var tb1   = new TextBody();
+        var para1 = new Paragraph();
+        para1.Runs.Add(new Run { Text = "Left\tRight\tCenter" });
+        para1.TabStops.Add(new TabStop { PositionEmu = 192 * EmuPerDip, Alignment = TabStopAlignment.Right  });
+        para1.TabStops.Add(new TabStop { PositionEmu = 384 * EmuPerDip, Alignment = TabStopAlignment.Center });
+        tb1.Paragraphs.Add(para1);
+
+        // Decimal stop
+        var tb2   = new TextBody();
+        var para2 = new Paragraph();
+        para2.Runs.Add(new Run { Text = "Amount\t9876.54" });
+        para2.TabStops.Add(new TabStop { PositionEmu = 288 * EmuPerDip, Alignment = TabStopAlignment.Decimal });
+        tb2.Paragraphs.Add(para2);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            TextBody = tb1
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 1600000,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            TextBody = tb2
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("BO1: right/center/decimal tab alignment must not throw in WPF renderer");
+    }
 }

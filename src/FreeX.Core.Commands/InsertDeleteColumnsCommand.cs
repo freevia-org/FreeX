@@ -106,6 +106,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         _scopedNamedFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         _cfFormulaSnapshot.Clear();
+        _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new InsertColsOp(sheet.Name, _beforeCol, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
@@ -344,6 +345,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         _scopedNamedFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         _cfFormulaSnapshot.Clear();
+        _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteColsOp(sheet.Name, _startCol, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 

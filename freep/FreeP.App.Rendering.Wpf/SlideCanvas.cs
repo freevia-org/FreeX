@@ -1940,9 +1940,10 @@ public sealed class SlideCanvas : FrameworkElement
             // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
 
-            // Wave 18B: when the paragraph has explicit tab stops, render run-by-run with
-            // tab-stop advance so \t characters snap to the correct DIP position.
-            bool hasTabs = para.TabStops.Count > 0 && para.Runs.Any(r => r.Text.Contains('\t'));
+            // Wave 18B: render run-by-run whenever any run contains a tab character so that
+            // BO2 fix: paragraphs with NO explicit tab stops (relying on default ~96 DIP interval)
+            // also go through RenderParaWithTabs instead of plain DrawText (which ignores \t).
+            bool hasTabs = para.Runs.Any(r => r.Text.Contains('\t'));
 
             if (hasEffects)
             {
@@ -2006,46 +2007,75 @@ public sealed class SlideCanvas : FrameworkElement
         IReadOnlyList<ResolvedTabStop> tabStops)
     {
         const double DefaultTabDip = 96.0; // 1 inch fallback
-        double curX = startX;
 
+        // BO1: Flatten all runs into a sequence of (text, run, isTabBefore) tokens.
+        // Each entry is a text segment + the run it belongs to; a true isTab flag means
+        // a tab character precedes this segment (so alignment must be applied before drawing).
+        var tokens = new System.Collections.Generic.List<(string text, ResolvedRun run, bool isTab)>();
         foreach (var run in para.Runs)
         {
             if (run.Text.Length == 0) continue;
+            var segs = run.Text.Split('\t');
+            for (int si = 0; si < segs.Length; si++)
+                tokens.Add((segs[si], run, si > 0));
+        }
 
-            // Split on tab characters; render each segment, then advance to tab stop.
-            var segments = run.Text.Split('\t');
-            for (int si = 0; si < segments.Length; si++)
+        double curX = startX;
+
+        for (int ti = 0; ti < tokens.Count; ti++)
+        {
+            var (seg, run, isTab) = tokens[ti];
+
+            // Advance to the next tab stop before drawing this segment.
+            if (isTab)
             {
-                var seg = segments[si];
-                if (seg.Length > 0)
+                double relX = curX - startX;
+
+                // Find the matching tab stop.
+                double stopDip = DefaultTabDip;
+                ResolvedTabStop? matchedStop = null;
+                bool found = false;
+                foreach (var ts in tabStops)
                 {
-                    var ft = BuildSingleRunFormattedTextAt(run, seg);
-                    dc.DrawText(ft, new Point(curX, startY));
-                    curX += ft.Width;
+                    if (ts.PositionDip > relX + 0.5)
+                    {
+                        stopDip     = ts.PositionDip;
+                        matchedStop = ts;
+                        found       = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    stopDip = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
+
+                // BO1: compute alignment offset based on the NEXT segment's width.
+                double alignOffset = 0;
+                TabStopAlignment align = matchedStop?.Alignment ?? TabStopAlignment.Left;
+                if (align != TabStopAlignment.Left && seg.Length > 0)
+                {
+                    var nextFt = BuildSingleRunFormattedTextAt(run, seg);
+                    double segW = nextFt.Width;
+                    alignOffset = align switch
+                    {
+                        TabStopAlignment.Right   => -segW,                // segment ends at stop
+                        TabStopAlignment.Center  => -segW / 2.0,          // segment centred on stop
+                        TabStopAlignment.Decimal =>                        // decimal pt at stop
+                            -(seg.Contains('.')
+                                ? BuildSingleRunFormattedTextAt(run, seg[..(seg.IndexOf('.') + 1)]).Width
+                                : segW),
+                        _ => 0
+                    };
                 }
 
-                // Advance to next tab stop (except after last segment).
-                if (si < segments.Length - 1)
-                {
-                    double relX = curX - startX;
-                    double nextStop = DefaultTabDip;
-                    bool found = false;
-                    foreach (var ts in tabStops)
-                    {
-                        if (ts.PositionDip > relX + 0.5)
-                        {
-                            nextStop = ts.PositionDip;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found)
-                    {
-                        // Default tab: advance to next multiple of DefaultTabDip past current pos.
-                        nextStop = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
-                    }
-                    curX = startX + nextStop;
-                }
+                curX = startX + stopDip + alignOffset;
+            }
+
+            // Draw the segment.
+            if (seg.Length > 0)
+            {
+                var ft = BuildSingleRunFormattedTextAt(run, seg);
+                dc.DrawText(ft, new Point(curX, startY));
+                curX += ft.Width;
             }
         }
     }

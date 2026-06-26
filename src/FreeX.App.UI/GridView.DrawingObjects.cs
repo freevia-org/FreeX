@@ -2013,6 +2013,128 @@ public partial class GridView
         bool IsItalic,
         bool IsUnderline);
 
+    /// <summary>
+    /// Hit-tests <paramref name="pos"/> against all visible native slicer and timeline controls,
+    /// firing the matching event (clear-filter, tile-toggle, timeline-range, or granularity-cycle)
+    /// when a hit is found. Returns <c>true</c> when an event was fired and the caller should mark
+    /// the input event as handled; <c>false</c> when the point falls outside every control.
+    /// </summary>
+    internal bool TryHandleNativeSlicerTimelineClick(Point pos)
+    {
+        if (Viewport is not { } viewport)
+            return false;
+        if (NativeSlicers is not { Count: > 0 } && NativeTimelines is not { Count: > 0 })
+            return false;
+
+        var metricLookups = GetRenderMetricLookups(viewport);
+
+        if (NativeSlicers is not null)
+        {
+            foreach (var slicer in NativeSlicers)
+            {
+                if (slicer.DrawingAnchor is not { } anchor ||
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
+                    continue;
+
+                var controlRect = EnsureMinimumControlRect(rect);
+                if (!controlRect.Contains(pos))
+                    continue;
+
+                // Build the portable layout to access the icon rects, using the control bounds.
+                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                    controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
+                var availableItems = slicer.AvailableItems.Count > 0
+                    ? (IEnumerable<string>)slicer.AvailableItems
+                    : slicer.SelectedItems;
+                var layout = FreeX.App.Presentation.SlicerTimeline.SlicerLayoutBuilder.BuildFull(
+                    slicer, availableItems, modelBounds);
+                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+
+                // Clear-filter icon hit?
+                if (layout.HasActiveFilter &&
+                    ContainsLayoutPoint(layout.ClearFilterIconRect, hitPoint))
+                {
+                    NativeSlicerClearFilterRequested?.Invoke(slicer.Name);
+                    return true;
+                }
+
+                // Tile hit?
+                if (FreeX.App.Presentation.SlicerTimeline.SlicerLayoutBuilder.HitTest(layout, hitPoint) is
+                    { IsAllPreview: false } tile)
+                {
+                    NativeSlicerTileToggleRequested?.Invoke(slicer.Name, tile.Caption);
+                    return true;
+                }
+
+                // Click inside the control but not on an actionable region — consume to prevent
+                // inadvertent cell selection / object drag.
+                return true;
+            }
+        }
+
+        if (NativeTimelines is not null)
+        {
+            foreach (var timeline in NativeTimelines)
+            {
+                if (timeline.DrawingAnchor is not { } anchor ||
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
+                    continue;
+
+                var controlRect = EnsureMinimumControlRect(rect);
+                if (!controlRect.Contains(pos))
+                    continue;
+
+                var modelBounds = new FreeX.App.Presentation.Charts.LayoutRect(
+                    controlRect.Left, controlRect.Top, controlRect.Width, controlRect.Height);
+                var layout = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.Build(
+                    timeline, modelBounds, ResolveTimelineGranularity(timeline));
+                var hitPoint = new FreeX.App.Presentation.Charts.LayoutPoint(pos.X, pos.Y);
+
+                // Clear-filter icon hit?
+                if (layout.HasActiveFilter &&
+                    ContainsLayoutPoint(layout.ClearFilterIconRect, hitPoint))
+                {
+                    NativeTimelineClearFilterRequested?.Invoke(timeline.Name);
+                    return true;
+                }
+
+                // Granularity dropdown hit?
+                if (layout.GranularityDropdownRect.Width > 0 &&
+                    ContainsLayoutPoint(layout.GranularityDropdownRect, hitPoint))
+                {
+                    NativeTimelineGranularityToggleRequested?.Invoke(timeline.Name);
+                    return true;
+                }
+
+                // Track / handle hit → range command
+                var hit = FreeX.App.Presentation.SlicerTimeline.TimelineLayoutBuilder.HitTest(layout, hitPoint);
+                if (hit.Kind != FreeX.App.Presentation.SlicerTimeline.TimelineHitKind.None &&
+                    hit.Date is { } hitDate)
+                {
+                    var (newStart, newEnd) = FreeX.App.Presentation.SlicerTimeline.SlicerTimelineHitDateResolver.ResolveRange(
+                        layout, hit.Kind, hitDate);
+                    NativeTimelineRangeRequested?.Invoke(
+                        timeline.Name,
+                        newStart?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                        newEnd?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+                    return true;
+                }
+
+                // Click inside the control — consume.
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsLayoutPoint(
+        FreeX.App.Presentation.Charts.LayoutRect rect,
+        FreeX.App.Presentation.Charts.LayoutPoint point) =>
+        rect.Width > 0 && rect.Height > 0 &&
+        point.X >= rect.Left && point.X <= rect.Right &&
+        point.Y >= rect.Top && point.Y <= rect.Bottom;
+
 }
 
 public readonly record struct DrawingObjectColors(CellColor Fill, CellColor Outline);

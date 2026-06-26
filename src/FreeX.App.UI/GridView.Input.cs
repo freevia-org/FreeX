@@ -514,6 +514,16 @@ public partial class GridView
             return;
         }
 
+        // Native slicer / timeline hit test: fires clear-filter / tile-toggle / range / granularity
+        // events to the host. Runs before form-control and drawing-object drag so that header-icon
+        // clicks land on the right handler (the icons sit inside the slicer/timeline control rect
+        // and would otherwise be consumed as drawing-object moves).
+        if (TryHandleNativeSlicerTimelineClick(pos))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // Form-control hit test runs before the drawing-object drag path so that clicking a
         // checkbox / spinner / etc. fires the interaction event rather than starting a drag.
         if (TryHandleFormControlClick(pos))

@@ -73,58 +73,88 @@ public static class SlicerTimelineInteractionPlanner
         TimelineHitKind kind,
         DateOnly date)
     {
-        var g = layout.Granularity;
-        var selectedStart = layout.SelectedStart ?? layout.RangeStart ?? date;
-        var selectedEnd = layout.SelectedEnd ?? layout.RangeEnd ?? date;
+        // Delegate to the shared Presentation-layer resolver so WPF and Avalonia use the same math.
+        var (start, end) = SlicerTimelineHitDateResolver.ResolveRange(layout, kind, date);
+        // The resolver can return null only when hitDate was null — we pass a concrete date, so
+        // both are always non-null here. Fall back to (date, date) as a defensive guard.
+        return (start ?? date, end ?? date);
+    }
 
-        return kind switch
-        {
-            // QQ2: snap the start handle to the BEGINNING of the period under the pointer.
-            TimelineHitKind.StartHandle => (PeriodBounds(date, g).Start, selectedEnd),
-            // QQ2: snap the end handle to the END of the period under the pointer.
-            TimelineHitKind.EndHandle => (selectedStart, PeriodBounds(date, g).End),
-            // QQ1: a track or selection click jumps the whole range to the full clicked period.
-            _ => PeriodBounds(date, g),
-        };
+    // ── Clear-filter ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a <see cref="SetSlicerSelectionCommand"/> that clears the slicer's filter (selects
+    /// all items), or <c>null</c> when the point does not hit <see cref="SlicerLayoutModel.ClearFilterIconRect"/>
+    /// or when the slicer has no active filter (nothing to clear). Use this before the tile hit-test
+    /// so clicking the clear icon does not also toggle a tile.
+    /// </summary>
+    public static SetSlicerSelectionCommand? BuildSlicerClearFilterCommand(
+        SlicerModel slicer,
+        SlicerLayoutModel layout,
+        LayoutPoint point)
+    {
+        ArgumentNullException.ThrowIfNull(slicer);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        if (!layout.HasActiveFilter)
+            return null;
+        if (!Contains(layout.ClearFilterIconRect, point))
+            return null;
+
+        // Empty selected-items list = "no filter" in SetSlicerSelectionCommand.Apply.
+        return new SetSlicerSelectionCommand(slicer.Name, []);
     }
 
     /// <summary>
-    /// Returns the first and last day of the granularity period that contains <paramref name="date"/>.
-    /// Days: (date, date) — unchanged.
-    /// Months: (first-of-month, last-of-month).
-    /// Quarters: (first day of Q start month, last day of Q end month).
-    /// Years: (Jan 1, Dec 31) of that year.
+    /// Builds a <see cref="SetTimelineRangeCommand"/> that clears the timeline's date filter (both
+    /// bounds to null), or <c>null</c> when the point does not hit
+    /// <see cref="TimelineLayoutModel.ClearFilterIconRect"/> or there is no active filter.
     /// </summary>
-    private static (DateOnly Start, DateOnly End) PeriodBounds(DateOnly date, TimelineGranularity g)
+    public static SetTimelineRangeCommand? BuildTimelineClearFilterCommand(
+        TimelineModel timeline,
+        TimelineLayoutModel layout,
+        LayoutPoint point)
     {
-        return g switch
-        {
-            TimelineGranularity.Month =>
-                (new DateOnly(date.Year, date.Month, 1),
-                 new DateOnly(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month))),
+        ArgumentNullException.ThrowIfNull(timeline);
+        ArgumentNullException.ThrowIfNull(layout);
 
-            TimelineGranularity.Quarter =>
-                QuarterBounds(date),
+        if (!layout.HasActiveFilter)
+            return null;
+        if (!Contains(layout.ClearFilterIconRect, point))
+            return null;
 
-            TimelineGranularity.Year =>
-                (new DateOnly(date.Year, 1, 1),
-                 new DateOnly(date.Year, 12, 31)),
-
-            // Day (default): single-day range, unchanged.
-            _ => (date, date),
-        };
+        return new SetTimelineRangeCommand(timeline.Name, null, null);
     }
 
-    private static (DateOnly Start, DateOnly End) QuarterBounds(DateOnly date)
+    // ── Granularity dropdown ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a <see cref="SetTimelineGranularityCommand"/> that cycles the timeline's display
+    /// granularity one step (Years → Quarters → Months → Days → Years), or <c>null</c> when the
+    /// point does not hit <see cref="TimelineLayoutModel.GranularityDropdownRect"/>.
+    /// A simple cycle-on-click is used: no popup is opened.
+    /// </summary>
+    public static SetTimelineGranularityCommand? BuildTimelineGranularityCommand(
+        TimelineModel timeline,
+        TimelineLayoutModel layout,
+        LayoutPoint point)
     {
-        // Quarter number 1..4
-        var q = ((date.Month - 1) / 3) + 1;
-        var startMonth = ((q - 1) * 3) + 1;   // Q1→1, Q2→4, Q3→7, Q4→10
-        var endMonth = startMonth + 2;          // Q1→3, Q2→6, Q3→9, Q4→12
-        var start = new DateOnly(date.Year, startMonth, 1);
-        var end = new DateOnly(date.Year, endMonth, DateTime.DaysInMonth(date.Year, endMonth));
-        return (start, end);
+        ArgumentNullException.ThrowIfNull(timeline);
+        ArgumentNullException.ThrowIfNull(layout);
+
+        if (!Contains(layout.GranularityDropdownRect, point))
+            return null;
+
+        var nextLevel = SetTimelineGranularityCommand.CycleLevel(timeline.Level);
+        return new SetTimelineGranularityCommand(timeline.Name, nextLevel);
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private static bool Contains(LayoutRect rect, LayoutPoint point) =>
+        rect.Width > 0 && rect.Height > 0 &&
+        point.X >= rect.Left && point.X <= rect.Right &&
+        point.Y >= rect.Top && point.Y <= rect.Bottom;
 
     private static string Format(DateOnly date) => date.ToString(DateFormat, CultureInfo.InvariantCulture);
 }
