@@ -58,11 +58,12 @@ public sealed class SlideCanvas : FrameworkElement
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((SlideCanvas)d).Refresh();
 
-    // ── Editing (Wave 3C) ─────────────────────────────────────────────────────
+    // ── Editing (Wave 3C / 9A) ────────────────────────────────────────────────
 
-    private CanvasGestureHandler?  _gestureHandler;
-    private InCanvasTextEditor?    _textEditor;
-    private Canvas?                _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
+    private CanvasGestureHandler?      _gestureHandler;
+    private InCanvasTextEditor?        _textEditor;
+    private InCanvasTableCellEditor?   _tableCellEditor;   // Wave 9A
+    private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
 
     /// <summary>
     /// The current slide→screen transform (updated on every render pass).
@@ -78,10 +79,12 @@ public sealed class SlideCanvas : FrameworkElement
     public void AttachEditing(EditingSession editor, Canvas textOverlay)
     {
         // Detach previous handler if any (don't re-add adorner on every call)
-        _textEditor    = null;
-        _gestureHandler = new CanvasGestureHandler(this, editor);
-        _textOverlay   = textOverlay;
-        _textEditor    = new InCanvasTextEditor(this, editor, textOverlay);
+        _textEditor      = null;
+        _tableCellEditor = null;
+        _gestureHandler  = new CanvasGestureHandler(this, editor);
+        _textOverlay     = textOverlay;
+        _textEditor      = new InCanvasTextEditor(this, editor, textOverlay);
+        _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay); // Wave 9A
     }
 
     // ── Cached draw ops (invalidated on model change) ─────────────────────────

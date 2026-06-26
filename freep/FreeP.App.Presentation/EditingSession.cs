@@ -891,6 +891,199 @@ public sealed class EditingSession
             _fmtRun));
     }
 
+    // ════════════════════════════════════════════════════════════════════════════════
+    // TABLE EDITING API  (Wave 9A)
+    // ════════════════════════════════════════════════════════════════════════════════
+    //
+    // All table ops work on the currently-selected shape (must be Kind==Table).
+    // ActiveTableCell tracks the focused cell within that table.
+    //
+    // 9B should NOT touch this region.
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    // ── Active cell selection ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The currently focused (row, col) within the selected table shape.
+    /// Null when no table is selected or no cell is explicitly focused.
+    /// </summary>
+    public (int Row, int Col)? ActiveTableCell { get; private set; }
+
+    /// <summary>Fired when <see cref="ActiveTableCell"/> changes.</summary>
+    public event EventHandler? ActiveTableCellChanged;
+
+    /// <summary>
+    /// Sets the active cell to (<paramref name="row"/>, <paramref name="col"/>).
+    /// Clamps indices to the table's actual bounds.
+    /// Does nothing if the currently selected shape is not a table.
+    /// </summary>
+    public void SetActiveTableCell(int row, int col)
+    {
+        var table = GetSelectedTable();
+        if (table is null) return;
+        int r = Math.Clamp(row, 0, table.Rows.Count - 1);
+        int c = Math.Clamp(col, 0, table.ColumnWidthsEmu.Count - 1);
+        ActiveTableCell = (r, c);
+        ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Clears the active cell selection.</summary>
+    public void ClearActiveTableCell()
+    {
+        if (ActiveTableCell is null) return;
+        ActiveTableCell = null;
+        ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ── Cell text ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Replaces the text of the cell at (<paramref name="row"/>, <paramref name="col"/>)
+    /// in the selected table with a plain-text string. Undoable.
+    /// </summary>
+    public void SetTableCellText(int row, int col, string text)
+    {
+        var (shapeId, _) = RequireSelectedTable();
+        if (shapeId == 0) return;
+
+        TextBody? body = null;
+        if (!string.IsNullOrEmpty(text))
+        {
+            body = new TextBody { Wrap = true };
+            foreach (var line in text.Split('\n'))
+            {
+                var para = new Paragraph();
+                para.Runs.Add(new Run { Text = line });
+                body.Paragraphs.Add(para);
+            }
+        }
+
+        Bus.Execute(new SetTableCellTextCommand(_currentSlideIndex, shapeId, row, col, body));
+    }
+
+    /// <summary>
+    /// Replaces the <see cref="TextBody"/> of the specified cell in the selected table. Undoable.
+    /// </summary>
+    public void SetTableCellText(int row, int col, TextBody? newBody)
+        => ExecuteTableCommand((si, id) => new SetTableCellTextCommand(si, id, row, col, newBody));
+
+    // ── Row / column insert and delete ────────────────────────────────────────────
+
+    /// <summary>Inserts a row above the active cell's row. Undoable.</summary>
+    public void InsertRowAbove()
+    {
+        int row = ActiveTableCell?.Row ?? 0;
+        ExecuteTableCommand((si, id) => new InsertTableRowCommand(si, id, row));
+        // Active cell shifts down by one because a row was inserted above it.
+        if (ActiveTableCell.HasValue)
+            SetActiveTableCell(ActiveTableCell.Value.Row + 1, ActiveTableCell.Value.Col);
+    }
+
+    /// <summary>Inserts a row below the active cell's row. Undoable.</summary>
+    public void InsertRowBelow()
+    {
+        int row = (ActiveTableCell?.Row ?? -1) + 1;
+        ExecuteTableCommand((si, id) => new InsertTableRowCommand(si, id, row));
+    }
+
+    /// <summary>Deletes the active cell's row. Undoable.</summary>
+    public void DeleteRow()
+    {
+        int row = ActiveTableCell?.Row ?? 0;
+        ExecuteTableCommand((si, id) => new DeleteTableRowCommand(si, id, row));
+
+        // Clamp active cell after deletion.
+        var table = GetSelectedTable();
+        if (table is not null && ActiveTableCell.HasValue)
+        {
+            int r = Math.Clamp(ActiveTableCell.Value.Row, 0, Math.Max(0, table.Rows.Count - 1));
+            ActiveTableCell = (r, Math.Clamp(ActiveTableCell.Value.Col, 0, Math.Max(0, table.ColumnWidthsEmu.Count - 1)));
+            ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Inserts a column to the left of the active cell's column. Undoable.</summary>
+    public void InsertColumnLeft()
+    {
+        int col = ActiveTableCell?.Col ?? 0;
+        ExecuteTableCommand((si, id) => new InsertTableColumnCommand(si, id, col));
+        if (ActiveTableCell.HasValue)
+            SetActiveTableCell(ActiveTableCell.Value.Row, ActiveTableCell.Value.Col + 1);
+    }
+
+    /// <summary>Inserts a column to the right of the active cell's column. Undoable.</summary>
+    public void InsertColumnRight()
+    {
+        int col = (ActiveTableCell?.Col ?? -1) + 1;
+        ExecuteTableCommand((si, id) => new InsertTableColumnCommand(si, id, col));
+    }
+
+    /// <summary>Deletes the active cell's column. Undoable.</summary>
+    public void DeleteColumn()
+    {
+        int col = ActiveTableCell?.Col ?? 0;
+        ExecuteTableCommand((si, id) => new DeleteTableColumnCommand(si, id, col));
+
+        var table = GetSelectedTable();
+        if (table is not null && ActiveTableCell.HasValue)
+        {
+            int c = Math.Clamp(ActiveTableCell.Value.Col, 0, Math.Max(0, table.ColumnWidthsEmu.Count - 1));
+            ActiveTableCell = (Math.Clamp(ActiveTableCell.Value.Row, 0, Math.Max(0, table.Rows.Count - 1)), c);
+            ActiveTableCellChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    // ── Merge / split ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merges the rectangular region [r1,c1]..[r2,c2] in the selected table. Undoable.
+    /// </summary>
+    public void MergeTableCells(int r1, int c1, int r2, int c2)
+        => ExecuteTableCommand((si, id) => new MergeTableCellsCommand(si, id, r1, c1, r2, c2));
+
+    /// <summary>Merges a named selection range. Undoable.</summary>
+    public void MergeSelectedCells(int r1, int c1, int r2, int c2)
+        => MergeTableCells(r1, c1, r2, c2);
+
+    /// <summary>Splits the merged cell at (<paramref name="row"/>, <paramref name="col"/>). Undoable.
+    /// A no-op on an unmerged cell records no undo entry (the bus skips no-effect commands).</summary>
+    public void SplitTableCell(int row, int col)
+        => ExecuteTableCommand((si, id) => new SplitTableCellCommand(si, id, row, col));
+
+    /// <summary>Splits the merged anchor at the active cell (if any). Undoable.</summary>
+    public void SplitSelectedCell()
+    {
+        if (ActiveTableCell is null) return;
+        SplitTableCell(ActiveTableCell.Value.Row, ActiveTableCell.Value.Col);
+    }
+
+    // ── Table helpers ─────────────────────────────────────────────────────────────
+
+    /// <summary>Returns the TableShape of the first selected shape, or null if it is not a table.</summary>
+    public TableShape? GetSelectedTable()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return null;
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        return shape?.Kind == SlideShapeKind.Table ? shape.Table : null;
+    }
+
+    private (uint shapeId, TableShape? table) RequireSelectedTable()
+    {
+        var slide = CurrentSlide;
+        if (slide is null || _selectedShapeIds.Count == 0) return (0, null);
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null) return (0, null);
+        return (shape.Id, shape.Table);
+    }
+
+    private void ExecuteTableCommand(Func<int, uint, IPresentationCommand> factory)
+    {
+        var (shapeId, _) = RequireSelectedTable();
+        if (shapeId == 0) return;
+        Bus.Execute(factory(_currentSlideIndex, shapeId));
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────────
 
     private enum RunToggleKind { Bold, Italic, Underline }

@@ -9,6 +9,14 @@ public interface IPresentationCommand
     int EstimatedBytes => 256;
     void Apply(Presentation presentation);
     void Revert(Presentation presentation);
+
+    /// <summary>
+    /// Whether executing this command would actually change the presentation. When false, the bus
+    /// skips it entirely (no Apply, no undo entry) so no-op edits don't pollute the undo history.
+    /// Defaults to true — commands that can be invoked on a target where they'd do nothing
+    /// (e.g. splitting an unmerged cell) override this.
+    /// </summary>
+    bool HasEffect(Presentation presentation) => true;
 }
 
 /// <summary>
@@ -35,6 +43,9 @@ public sealed class PresentationCommandBus
     /// <summary>Applies a command and records it for undo (invalidating the redo history).</summary>
     public void Execute(IPresentationCommand command)
     {
+        // Skip no-op commands entirely so they don't create an empty undo entry.
+        if (!command.HasEffect(_presentation))
+            return;
         command.Apply(_presentation);
         _stack.Push(command, command.EstimatedBytes, payload: null, command.Label);
         Changed?.Invoke();
