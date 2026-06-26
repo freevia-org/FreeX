@@ -203,7 +203,14 @@ public sealed partial class XlsxFileAdapter
                 ShapeTextThemeColor = shapePart.ShapeTextThemeColor,
                 ShapeTextHAlign = shapePart.ShapeTextHAlign,
                 ShapeTextVAnchor = shapePart.ShapeTextVAnchor,
-                ShapeTextWrap = shapePart.ShapeTextWrap
+                ShapeTextWrap = shapePart.ShapeTextWrap,
+                IsWordArt = shapePart.IsWordArt,
+                WarpPreset = shapePart.WarpPreset,
+                ShapeTextGradientEndColor = shapePart.ShapeTextGradientEndColor,
+                ShapeTextGradientEndThemeColor = shapePart.ShapeTextGradientEndThemeColor,
+                ShapeTextOutlineColor = shapePart.ShapeTextOutlineColor,
+                ShapeTextOutlineThemeColor = shapePart.ShapeTextOutlineThemeColor,
+                ShapeTextOutlineWidthPoints = shapePart.ShapeTextOutlineWidthPoints
             };
             XlsxDrawingAnchorApplier.ApplyToShape(shape, shapePart.Anchor, sheet,
                 shapePart.XfrmWidthPixels, shapePart.XfrmHeightPixels);

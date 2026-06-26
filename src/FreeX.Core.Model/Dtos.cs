@@ -159,7 +159,12 @@ public sealed record DrawingObjectBounds(
     CellColor? ShapeTextColor = null,
     DrawingShapeTextHAlign ShapeTextHAlign = DrawingShapeTextHAlign.Left,
     DrawingShapeTextVAnchor ShapeTextVAnchor = DrawingShapeTextVAnchor.Middle,
-    bool ShapeTextWrap = true);
+    bool ShapeTextWrap = true,
+    // WordArt — populated only for WordArt-style shapes (IsWordArt = true).
+    bool IsWordArt = false,
+    CellColor? ShapeTextGradientEndColor = null,
+    CellColor? ShapeTextOutlineColor = null,
+    double ShapeTextOutlineWidthPoints = 0);
 
 /// <summary>
 /// Render-plan projection of a drawing object's authored visual effect (shadow / glow /

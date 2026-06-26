@@ -464,10 +464,41 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (shape.ShapeTextUnderline)
             rPr.Add(new XAttribute("u", "sng"));
 
-        // Text color
-        var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
-        if (textFill is not null)
-            rPr.Add(textFill);
+        // Text fill: gradient (WordArt) takes priority over solid fill.
+        // Gradient: emit <a:gradFill> with two stops (start = ShapeTextColor, end = GradientEndColor).
+        var hasGradEnd = shape.ShapeTextGradientEndColor is not null ||
+                         shape.ShapeTextGradientEndThemeColor is not null;
+        if (shape.IsWordArt && hasGradEnd)
+        {
+            // Build a simple linear gradient with two stops: position 0 = start, position 100000 = end.
+            var gradFill = new XElement(drawingNs + "gradFill",
+                new XElement(drawingNs + "gsLst",
+                    BuildGradStop(drawingNs, "0",      shape.ShapeTextThemeColor,       shape.ShapeTextColor),
+                    BuildGradStop(drawingNs, "100000", shape.ShapeTextGradientEndThemeColor, shape.ShapeTextGradientEndColor)),
+                new XElement(drawingNs + "lin",
+                    new XAttribute("ang", "5400000"),  // 90° = top-to-bottom
+                    new XAttribute("scaled", "0")));
+            rPr.Add(gradFill);
+        }
+        else
+        {
+            // Normal solid text fill.
+            var textFill = ToSolidFill(shape.ShapeTextThemeColor, shape.ShapeTextColor, drawingNs);
+            if (textFill is not null)
+                rPr.Add(textFill);
+        }
+
+        // WordArt text outline (<a:rPr><a:ln>).
+        if (shape.IsWordArt && (shape.ShapeTextOutlineColor is not null || shape.ShapeTextOutlineThemeColor is not null))
+        {
+            var textLn = new XElement(drawingNs + "ln");
+            if (shape.ShapeTextOutlineWidthPoints > 0)
+                textLn.Add(new XAttribute("w", ((long)Math.Round(shape.ShapeTextOutlineWidthPoints * 12700)).ToString(CultureInfo.InvariantCulture)));
+            var outlineFill = ToSolidFill(shape.ShapeTextOutlineThemeColor, shape.ShapeTextOutlineColor, drawingNs);
+            if (outlineFill is not null)
+                textLn.Add(outlineFill);
+            rPr.Add(textLn);
+        }
 
         // Paragraph alignment
         var algnValue = shape.ShapeTextHAlign switch
@@ -477,10 +508,16 @@ internal static class XlsxWorksheetDrawingObjectWriter
             _ => "l",
         };
 
+        // bodyPr: include prstTxWarp when a warp preset is preserved (warp rendering deferred).
+        var bodyPrElement = new XElement(drawingNs + "bodyPr",
+            new XAttribute("anchor", anchorValue),
+            new XAttribute("wrap", wrapValue));
+        if (!string.IsNullOrEmpty(shape.WarpPreset))
+            bodyPrElement.Add(new XElement(drawingNs + "prstTxWarp",
+                new XAttribute("prst", shape.WarpPreset)));
+
         return new XElement(spreadsheetDrawingNs + "txBody",
-            new XElement(drawingNs + "bodyPr",
-                new XAttribute("anchor", anchorValue),
-                new XAttribute("wrap", wrapValue)),
+            bodyPrElement,
             new XElement(drawingNs + "lstStyle"),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
@@ -727,6 +764,38 @@ internal static class XlsxWorksheetDrawingObjectWriter
             new XAttribute("type", typeVal),
             new XAttribute("w", wVal),
             new XAttribute("len", lenVal));
+    }
+
+    /// <summary>
+    /// Builds a gradient stop element <c>&lt;a:gs pos="..."&gt;</c> for a two-stop WordArt gradient.
+    /// </summary>
+    private static XElement BuildGradStop(
+        XNamespace drawingNs,
+        string position,
+        WorkbookThemeColorReference? themeColor,
+        CellColor? color)
+    {
+        XElement colorElement;
+        if (themeColor is { } theme)
+        {
+            colorElement = new XElement(drawingNs + "schemeClr",
+                new XAttribute("val", ToDrawingSchemeColor(theme.Slot)));
+            ApplyTint(colorElement, theme.Tint, drawingNs);
+        }
+        else if (color is { } concrete)
+        {
+            colorElement = new XElement(drawingNs + "srgbClr",
+                new XAttribute("val", FormatColor(concrete)));
+        }
+        else
+        {
+            // Fallback: transparent white.
+            colorElement = new XElement(drawingNs + "srgbClr", new XAttribute("val", "FFFFFF"));
+        }
+
+        return new XElement(drawingNs + "gs",
+            new XAttribute("pos", position),
+            colorElement);
     }
 
     private static XElement? ToSolidFill(

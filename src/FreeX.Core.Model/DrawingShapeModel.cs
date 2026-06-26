@@ -217,6 +217,54 @@ public sealed class DrawingShapeModel
     /// </summary>
     public DrawingArrowhead? TailArrowhead { get; set; }
 
+    // ── WordArt / text effects ──────────────────────────────────────────────
+
+    /// <summary>
+    /// When <see langword="true"/> the shape's txBody carries a WordArt-style text run:
+    /// a text fill (gradient or solid) and/or text outline that should be rendered using
+    /// styled text geometry rather than the plain body fill + white text fallback.
+    /// Detected when a run contains a gradient text fill, a text outline, or a
+    /// <c>&lt;a:prstTxWarp&gt;</c> element is present on the bodyPr.
+    /// </summary>
+    public bool IsWordArt { get; set; }
+
+    /// <summary>
+    /// The <c>prst</c> attribute value from <c>&lt;a:prstTxWarp prst="..."&gt;</c>, e.g. "textWave1".
+    /// Preserved for round-trip; warp rendering is deferred — the text is rendered flat.
+    /// <see langword="null"/> when no warp preset is authored.
+    /// </summary>
+    public string? WarpPreset { get; set; }
+
+    /// <summary>
+    /// Gradient end color for the shape's text fill (WordArt gradient text).
+    /// When non-null the text fill is a gradient from <see cref="ShapeTextColor"/> (or
+    /// <see cref="ShapeTextThemeColor"/>) to this color.
+    /// <see langword="null"/> means no gradient — solid fill using the existing color fields.
+    /// </summary>
+    public CellColor? ShapeTextGradientEndColor { get; set; }
+
+    /// <summary>
+    /// Theme-color reference for the gradient end stop of a WordArt gradient text fill.
+    /// </summary>
+    public WorkbookThemeColorReference? ShapeTextGradientEndThemeColor { get; set; }
+
+    /// <summary>
+    /// Outline color for WordArt text (from <c>&lt;a:rPr&gt;&lt;a:ln&gt;&lt;a:solidFill&gt;</c>).
+    /// <see langword="null"/> means no text outline.
+    /// </summary>
+    public CellColor? ShapeTextOutlineColor { get; set; }
+
+    /// <summary>
+    /// Theme-color reference for the WordArt text outline.
+    /// </summary>
+    public WorkbookThemeColorReference? ShapeTextOutlineThemeColor { get; set; }
+
+    /// <summary>
+    /// Width in points of the WordArt text outline stroke.
+    /// Zero means "use a thin default" (≈0.5 pt) when <see cref="ShapeTextOutlineColor"/> is set.
+    /// </summary>
+    public double ShapeTextOutlineWidthPoints { get; set; }
+
     // ── Shape text (txBody) properties ─────────────────────────────────────
 
     /// <summary>
@@ -281,6 +329,20 @@ public sealed class DrawingShapeModel
     /// </summary>
     public CellColor? ResolveShapeTextColor(WorkbookTheme theme) =>
         ShapeTextThemeColor?.Resolve(theme) ?? ShapeTextColor;
+
+    /// <summary>
+    /// Resolves the effective gradient-end color for a WordArt text fill.
+    /// Returns <see langword="null"/> when no gradient end color is authored.
+    /// </summary>
+    public CellColor? ResolveShapeTextGradientEndColor(WorkbookTheme theme) =>
+        ShapeTextGradientEndThemeColor?.Resolve(theme) ?? ShapeTextGradientEndColor;
+
+    /// <summary>
+    /// Resolves the effective text outline color for WordArt.
+    /// Returns <see langword="null"/> when no text outline is authored.
+    /// </summary>
+    public CellColor? ResolveShapeTextOutlineColor(WorkbookTheme theme) =>
+        ShapeTextOutlineThemeColor?.Resolve(theme) ?? ShapeTextOutlineColor;
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
         FillThemeColor?.Resolve(theme) ?? FillColor ?? fallback;
