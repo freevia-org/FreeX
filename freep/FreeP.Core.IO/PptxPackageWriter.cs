@@ -224,8 +224,8 @@ public static class PptxPackageWriter
             var layout = layouts.FirstOrDefault(l => l.Id == slide.LayoutId) ?? layouts[0];
             var layoutPath = layoutPaths.TryGetValue(layout.Id, out var lp2) ? lp2 : layoutPaths.Values.First();
 
-            // Write media (images) into the archive, get back rel-id map
-            var mediaRelIds = WriteSlideMedia(archive, slide, si + 1);
+            // Write media (images) into the archive, get back rel-id maps
+            var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide, si + 1);
 
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
@@ -237,14 +237,19 @@ public static class PptxPackageWriter
                 "rId1", // always reserved for slide layout
             };
             foreach (var (_, mediaRelId, _) in mediaRelIds)  usedRelIds.Add(mediaRelId);
+            foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
             foreach (var (_, chartRelId, _) in chartRelIds)  usedRelIds.Add(chartRelId);
 
             var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
-            // Combined shapeId→relId map for shape element building (images + charts)
+            // Combined shapeId→relId map for shape element building (picture shapes + charts)
             var mediaById = new Dictionary<uint, string>();
-            foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
-            foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
+            foreach (var (id, relId, _) in mediaRelIds)     mediaById[id] = relId;
+            foreach (var (id, relId, _) in chartRelIds)     mediaById[id] = relId;
+
+            // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
+            var fillBlipById = new Dictionary<uint, string>();
+            foreach (var (id, relId, _) in fillBlipRelIds)  fillBlipById[id] = relId;
 
             // Collect hyperlinks from this slide and assign rel IDs.
             // hlinkRelIds maps hyperlink key (url or "slide:"+slideId) to the rels r:id.
@@ -253,13 +258,15 @@ public static class PptxPackageWriter
             CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
 
             // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
 
-            // Slide rels: rId1=layout, images, charts, SmartArt, optional notesSlide
+            // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
+                slideRels.Add(fillBlipRelId, ImageRelType, $"../media/{fillBlipPath.Split('/').Last()}");
             foreach (var (_, chartRelId, chartPath) in chartRelIds)
                 slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
@@ -571,7 +578,8 @@ public static class PptxPackageWriter
         Dictionary<uint, string> mediaById,
         Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -587,7 +595,7 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                             .OfType<XElement>())),
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
@@ -1319,40 +1327,51 @@ public static class PptxPackageWriter
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
         Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null) =>
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides),
-            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById),
+            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds, fillBlipById),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
                     smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
-            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides)
+            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
     private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null) =>
-        new XElement(P + "sp",
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null)
+    {
+        string? fillBlipRelId = null;
+        fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
+        return new XElement(P + "sp",
             new XElement(P + "nvSpPr",
                 CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, allSlides),
                 new XElement(P + "cNvSpPr"),
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
-            BuildSpPrEl(shape, scheme),
+            BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId),
             shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides) : null);
+    }
 
     private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme,
-        Dictionary<string, string>? hlinkRelIds = null) =>
-        new XElement(P + "cxnSp",
+        Dictionary<string, string>? hlinkRelIds = null,
+        Dictionary<uint, string>? fillBlipById = null)
+    {
+        string? fillBlipRelId = null;
+        fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
+        return new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
                 CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, null),
                 new XElement(P + "cNvCxnSpPr"),
                 new XElement(P + "nvPr")),
-            BuildSpPrEl(shape, scheme));
+            BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
+    }
 
     private static XElement BuildPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
     {
@@ -1375,7 +1394,8 @@ public static class PptxPackageWriter
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
         Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
         Dictionary<string, string>? hlinkRelIds = null,
-        List<Slide>? allSlides = null) =>
+        List<Slide>? allSlides = null,
+        Dictionary<uint, string>? fillBlipById = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
@@ -1383,7 +1403,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                 .OfType<XElement>());
 
     /// <summary>
@@ -1406,7 +1426,11 @@ public static class PptxPackageWriter
         return new XElement(P + "grpSpPr", xfrm);
     }
 
-    private static XElement BuildSpPrEl(SlideShape shape, PresentationColorScheme scheme, string? forcePrst = null)
+    private static XElement BuildSpPrEl(
+        SlideShape shape,
+        PresentationColorScheme scheme,
+        string? forcePrst = null,
+        string? fillBlipRelId = null)
     {
         var xfrm = new XElement(A + "xfrm");
         if (shape.RotationDeg != 0)
@@ -1428,7 +1452,7 @@ public static class PptxPackageWriter
         return new XElement(P + "spPr",
             xfrm,
             geomEl,
-            shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
+            shape.Fill is not null ? BuildFillEl(shape.Fill, scheme, fillBlipRelId) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
             shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
             shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
@@ -1879,25 +1903,73 @@ public static class PptxPackageWriter
 
     // ── Fill elements ─────────────────────────────────────────────────────────────
 
-    private static XElement? BuildFillEl(ShapeFill fill, PresentationColorScheme scheme) =>
+    /// <param name="blipRelId">
+    /// When the fill is a <see cref="ShapeFill.Picture"/>, the relationship id to embed
+    /// (previously registered in the slide rels). Null means picture fill cannot be written.
+    /// </param>
+    private static XElement? BuildFillEl(
+        ShapeFill fill,
+        PresentationColorScheme scheme,
+        string? blipRelId = null) =>
         fill switch
         {
             ShapeFill.None => new XElement(A + "noFill"),
             ShapeFill.Solid s => new XElement(A + "solidFill", BuildColorEl(s.Color)),
             ShapeFill.Gradient g => BuildGradFillEl(g),
+            ShapeFill.Picture p when blipRelId is not null => BuildBlipFillEl(p, blipRelId),
+            ShapeFill.Pattern pat => BuildPattFillEl(pat),
             _ => null
         };
 
-    private static XElement BuildGradFillEl(ShapeFill.Gradient g) =>
-        new XElement(A + "gradFill",
-            new XElement(A + "gsLst",
-                new XElement(A + "gs", new XAttribute("pos", "0"),
-                    new XElement(A + "solidFill", BuildColorEl(g.StartColor))),
-                new XElement(A + "gs", new XAttribute("pos", "100000"),
-                    new XElement(A + "solidFill", BuildColorEl(g.EndColor)))),
-            new XElement(A + "lin",
+    private static XElement BuildGradFillEl(ShapeFill.Gradient g)
+    {
+        // Emit all N stops
+        var gsLst = new XElement(A + "gsLst");
+        foreach (var stop in g.Stops)
+        {
+            int pos = (int)Math.Round(stop.Position * 100000);
+            gsLst.Add(new XElement(A + "gs",
+                new XAttribute("pos", pos),
+                new XElement(A + "solidFill", BuildColorEl(stop.Color))));
+        }
+
+        XElement kindEl;
+        if (g.Kind == GradientKind.Radial)
+        {
+            kindEl = new XElement(A + "path",
+                new XAttribute("path", "circle"),
+                new XElement(A + "fillToRect",
+                    new XAttribute("l", "50000"),
+                    new XAttribute("t", "50000"),
+                    new XAttribute("r", "50000"),
+                    new XAttribute("b", "50000")));
+        }
+        else
+        {
+            kindEl = new XElement(A + "lin",
                 new XAttribute("ang", (long)Math.Round(g.AngleDegrees * 60000)),
-                new XAttribute("scaled", "0")));
+                new XAttribute("scaled", "0"));
+        }
+
+        return new XElement(A + "gradFill", gsLst, kindEl);
+    }
+
+    private static XElement BuildBlipFillEl(ShapeFill.Picture p, string blipRelId)
+    {
+        var blipFill = new XElement(A + "blipFill",
+            new XElement(A + "blip", new XAttribute(R + "embed", blipRelId)));
+        if (p.Tile)
+            blipFill.Add(new XElement(A + "tile"));
+        else
+            blipFill.Add(new XElement(A + "stretch", new XElement(A + "fillRect")));
+        return blipFill;
+    }
+
+    private static XElement BuildPattFillEl(ShapeFill.Pattern pat) =>
+        new XElement(A + "pattFill",
+            new XAttribute("prst", pat.Preset),
+            new XElement(A + "fgClr", BuildColorEl(pat.ForegroundColor)),
+            new XElement(A + "bgClr", BuildColorEl(pat.BackgroundColor)));
 
     private static XElement BuildColorEl(ThemeAwareColor color)
     {
@@ -2161,31 +2233,56 @@ public static class PptxPackageWriter
 
     // ── Media writing ─────────────────────────────────────────────────────────────
 
-    private static List<(uint shapeId, string relId, string mediaPath)> WriteSlideMedia(
-        ZipArchive archive, Slide slide, int slideIndex)
+    /// <summary>
+    /// Writes all media (picture shapes + picture fill blips) for a slide.
+    /// Returns two lists: one for picture shapes, one for fill blips (both as (shapeId, relId, mediaPath)).
+    /// </summary>
+    private static (
+        List<(uint shapeId, string relId, string mediaPath)> pictureShapeMedia,
+        List<(uint shapeId, string relId, string mediaPath)> fillBlipMedia)
+    WriteSlideMedia(ZipArchive archive, Slide slide, int slideIndex)
     {
-        var result = new List<(uint, string, string)>();
+        var pictureResult = new List<(uint, string, string)>();
+        var fillBlipResult = new List<(uint, string, string)>();
         int mediaIdx = 1;
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
-            if (shape.Kind != SlideShapeKind.Picture || shape.Picture?.Bytes is not { Length: > 0 } bytes)
+            // Picture shape
+            if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 } picBytes)
+            {
+                var ct = shape.Picture.ContentType ?? "image/png";
+                var ext = ContentTypeToExtension(ct);
+                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+
+                var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
+                using (var es = entry.Open())
+                    es.Write(picBytes);
+
+                var relId = $"rIdMedia{mediaIdx}";
+                pictureResult.Add((shape.Id, relId, mediaPath));
+                mediaIdx++;
                 continue;
+            }
 
-            var ct = shape.Picture.ContentType ?? "image/png";
-            var ext = ContentTypeToExtension(ct);
-            var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
+            // Picture fill on autoshape/connector
+            if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+            {
+                var ct = picFill.ContentType ?? "image/png";
+                var ext = ContentTypeToExtension(ct);
+                var mediaPath = $"ppt/media/slide{slideIndex}_media{mediaIdx}.{ext}";
 
-            var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
-            using (var es = entry.Open())
-                es.Write(bytes);
+                var entry = archive.CreateEntry(mediaPath, CompressionLevel.Optimal);
+                using (var es = entry.Open())
+                    es.Write(picFill.ImageBytes);
 
-            var relId = $"rIdMedia{mediaIdx}";
-            result.Add((shape.Id, relId, mediaPath));
-            mediaIdx++;
+                var relId = $"rIdMedia{mediaIdx}";
+                fillBlipResult.Add((shape.Id, relId, mediaPath));
+                mediaIdx++;
+            }
         }
 
-        return result;
+        return (pictureResult, fillBlipResult);
     }
 
     // ── Chart writing ─────────────────────────────────────────────────────────────

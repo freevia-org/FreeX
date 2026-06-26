@@ -80,7 +80,14 @@ internal static class PptxColorReader
     }
 
     /// <summary>Reads a ShapeFill from the parent element (spPr or similar). Returns null if no fill element found.</summary>
-    public static ShapeFill? TryReadFill(XElement spPr, PresentationColorScheme scheme)
+    /// <param name="resolveBlip">
+    /// Optional delegate to resolve a blip embed rId to (imageBytes, contentType).
+    /// When null, a:blipFill elements are skipped.
+    /// </param>
+    public static ShapeFill? TryReadFill(
+        XElement spPr,
+        PresentationColorScheme scheme,
+        Func<string, (byte[] bytes, string contentType)?>? resolveBlip = null)
     {
         // a:noFill
         if (spPr.Element(A + "noFill") is not null)
@@ -94,35 +101,116 @@ internal static class PptxColorReader
             return color is not null ? new ShapeFill.Solid(color) : null;
         }
 
-        // a:gradFill — read first and last stops
+        // a:gradFill — read ALL stops
         var gradFill = spPr.Element(A + "gradFill");
         if (gradFill is not null)
-        {
-            var gsLst = gradFill.Element(A + "gsLst");
-            var stops = gsLst?.Elements(A + "gs")
-                .OrderBy(g => ParseInt(g.Attribute("pos")?.Value))
-                .ToList();
+            return TryReadGradFill(gradFill, scheme);
 
-            if (stops is { Count: >= 2 })
-            {
-                // Each gs contains a color element directly or wrapped in a:solidFill.
-                var startColor = TryReadColor(stops[0].Element(A + "solidFill") ?? stops[0], scheme);
-                var endColor = TryReadColor(stops[^1].Element(A + "solidFill") ?? stops[^1], scheme);
+        // a:blipFill — picture fill on a shape
+        var blipFill = spPr.Element(A + "blipFill");
+        if (blipFill is not null && resolveBlip is not null)
+            return TryReadBlipFill(blipFill, resolveBlip);
 
-                if (startColor is not null && endColor is not null)
-                {
-                    // Read gradient angle from a:lin ang (in 1/60000 degree)
-                    var angAttr = gradFill.Element(A + "lin")?.Attribute("ang")?.Value;
-                    double angleDeg = 90; // default top→bottom
-                    if (long.TryParse(angAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var angRaw))
-                        angleDeg = angRaw / 60000.0;
-
-                    return new ShapeFill.Gradient(startColor, endColor, angleDeg);
-                }
-            }
-        }
+        // a:pattFill — pattern fill
+        var pattFill = spPr.Element(A + "pattFill");
+        if (pattFill is not null)
+            return TryReadPattFill(pattFill, scheme);
 
         return null;
+    }
+
+    /// <summary>
+    /// Parses a:gradFill into a <see cref="ShapeFill.Gradient"/> with all stops.
+    /// </summary>
+    internal static ShapeFill.Gradient? TryReadGradFill(XElement gradFill, PresentationColorScheme scheme)
+    {
+        var gsLst = gradFill.Element(A + "gsLst");
+        var gsElements = gsLst?.Elements(A + "gs")
+            .OrderBy(g => ParseInt(g.Attribute("pos")?.Value))
+            .ToList();
+
+        if (gsElements is not { Count: >= 1 })
+            return null;
+
+        var stops = new List<GradientStop>(gsElements.Count);
+        foreach (var gs in gsElements)
+        {
+            // pos is in 1/1000 % (0..100000)
+            int posRaw = ParseInt(gs.Attribute("pos")?.Value);
+            double position = posRaw / 100000.0;
+
+            // Each gs contains either a:solidFill, a:schemeClr, a:srgbClr, or a:sysClr directly.
+            var color = TryReadColor(gs.Element(A + "solidFill") ?? gs, scheme);
+            if (color is null) continue;
+
+            stops.Add(new GradientStop(position, color));
+        }
+
+        if (stops.Count < 1)
+            return null;
+
+        // Ensure 2-stop minimum by duplicating single stop
+        if (stops.Count == 1)
+            stops.Add(new GradientStop(1.0, stops[0].Color));
+
+        // Gradient kind: a:lin → linear, a:path → radial/rect
+        var linEl  = gradFill.Element(A + "lin");
+        var pathEl = gradFill.Element(A + "path");
+
+        if (pathEl is not null)
+        {
+            // Radial (circle or rect)
+            return new ShapeFill.Gradient(stops, GradientKind.Radial, 0);
+        }
+
+        // Linear: read angle
+        double angleDeg = 90; // default top→bottom
+        if (linEl is not null)
+        {
+            var angAttr = linEl.Attribute("ang")?.Value;
+            if (long.TryParse(angAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var angRaw))
+                angleDeg = angRaw / 60000.0;
+        }
+
+        return new ShapeFill.Gradient(stops, GradientKind.Linear, angleDeg);
+    }
+
+    /// <summary>
+    /// Parses a:blipFill into a <see cref="ShapeFill.Picture"/>.
+    /// </summary>
+    internal static ShapeFill.Picture? TryReadBlipFill(
+        XElement blipFill,
+        Func<string, (byte[] bytes, string contentType)?> resolveBlip)
+    {
+        var R_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var blip = blipFill.Element(A + "blip");
+        var embedId = blip?.Attribute(XName.Get("embed", R_ns))?.Value;
+        if (string.IsNullOrWhiteSpace(embedId)) return null;
+
+        var resolved = resolveBlip(embedId);
+        if (resolved is null) return null;
+
+        // Check for tile mode (a:tile) vs stretch (a:stretch/a:fillRect)
+        bool tile = blipFill.Element(A + "tile") is not null;
+
+        return new ShapeFill.Picture(resolved.Value.bytes, resolved.Value.contentType, tile);
+    }
+
+    /// <summary>
+    /// Parses a:pattFill into a <see cref="ShapeFill.Pattern"/>.
+    /// </summary>
+    internal static ShapeFill.Pattern? TryReadPattFill(XElement pattFill, PresentationColorScheme scheme)
+    {
+        var preset = pattFill.Attribute("prst")?.Value;
+        if (string.IsNullOrWhiteSpace(preset)) preset = "pct50";
+
+        var fgClr = pattFill.Element(A + "fgClr");
+        var bgClr = pattFill.Element(A + "bgClr");
+
+        var fg = TryReadColor(fgClr, scheme) ?? ThemeAwareColor.Black;
+        var bg = TryReadColor(bgClr, scheme) ?? ThemeAwareColor.White;
+
+        return new ShapeFill.Pattern(preset, fg, bg);
     }
 
     /// <summary>Reads a ShapeOutline from an a:ln element. Returns null if element missing.</summary>
