@@ -436,6 +436,18 @@ internal static class ExcelOpenSmoke
                 }
             }
 
+            if (options.GenerateExcelChartCorpusFixtures)
+            {
+                foreach (var fixturePath in GetExcelChartCorpusFixturePaths(Path.Combine(runDirectory, "generated-excel-chart")))
+                {
+                    AddUniqueInput(smokeInputs, new WorkbookSmokeInput(
+                        fixturePath,
+                        WorkbookValidationWorkflow.DirectExcel,
+                        "Excel-authored chart appearance baseline corpus fixture",
+                        GenerateWithExcel: true));
+                }
+            }
+
             if (smokeInputs.Count == 0)
             {
                 if (CorpusSelectionHasOnlyMissingOptionalPrivateRows(corpusSelection))

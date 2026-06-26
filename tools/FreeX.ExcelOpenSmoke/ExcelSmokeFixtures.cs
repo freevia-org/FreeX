@@ -160,6 +160,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_chart_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeChartCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         if (fileName.StartsWith("Excel_native_viewfeat_", StringComparison.OrdinalIgnoreCase))
         {
             GenerateExcelNativeViewfeatCorpusFixture(workbooks, outputPath, fileName);
@@ -6437,6 +6443,412 @@ internal static class ExcelSmokeFixtures
             ReleaseComObject(font);
             ReleaseComObject(chars);
             ReleaseComObject(cell);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // Excel-native chart corpus fixtures
+    // =========================================================================
+
+    public static IReadOnlyList<string> GetExcelChartCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_chart_column_001.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_bar_002.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_line_markers_003.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_pie_004.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_area_005.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_chart_scatter_006.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for chart corpus fixtures.</summary>
+    public static void GenerateExcelNativeChartCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("column_001", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Column(workbooks, outputPath);
+        else if (fileName.Contains("bar_002", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Bar(workbooks, outputPath);
+        else if (fileName.Contains("line_markers_003", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_LineMarkers(workbooks, outputPath);
+        else if (fileName.Contains("pie_004", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Pie(workbooks, outputPath);
+        else if (fileName.Contains("area_005", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Area(workbooks, outputPath);
+        else if (fileName.Contains("scatter_006", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Scatter(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown chart corpus fixture: {fileName}");
+    }
+
+    // ── Shared helpers ────────────────────────────────────────────────────────
+
+    private const int XlColumnClustered  = 51;  // xlColumnClustered
+    private const int XlBarClustered     = 57;  // xlBarClustered
+    private const int XlLineMarkers      = 65;  // xlLineMarkers
+    private const int XlPie              = 5;   // xlPie
+    private const int XlArea             = 1;   // xlArea
+    private const int XlXYScatter        = -4169; // xlXYScatter
+
+    /// <summary>
+    /// Write a 2-series data block into the worksheet (rows 1-5):
+    ///   row 1: header (blank, Series1Name, Series2Name)
+    ///   rows 2-5: Category label | value1 | value2
+    /// Returns the data range address for chart source.
+    /// </summary>
+    private static string WriteChartData(
+        object worksheet,
+        string series1Name,
+        string series2Name,
+        string[] categories,
+        double[] values1,
+        double[] values2)
+    {
+        // Headers
+        SetExcelCellValue(worksheet, 1, 1, "");
+        SetExcelCellValue(worksheet, 1, 2, series1Name);
+        SetExcelCellValue(worksheet, 1, 3, series2Name);
+
+        for (var i = 0; i < categories.Length; i++)
+        {
+            var row = i + 2;
+            SetExcelCellValue(worksheet, row, 1, categories[i]);
+            SetExcelCellValue(worksheet, row, 2, values1[i]);
+            SetExcelCellValue(worksheet, row, 3, values2[i]);
+        }
+
+        return $"A1:C{categories.Length + 1}";
+    }
+
+    /// <summary>Write XY scatter data (headers + 4 points) and return range address.</summary>
+    private static string WriteScatterData(object worksheet)
+    {
+        SetExcelCellValue(worksheet, 1, 1, "X");
+        SetExcelCellValue(worksheet, 1, 2, "Y1");
+        SetExcelCellValue(worksheet, 1, 3, "Y2");
+        double[] xv = [1, 2, 4, 8];
+        double[] y1 = [2, 5, 3, 9];
+        double[] y2 = [4, 2, 7, 5];
+        for (var i = 0; i < xv.Length; i++)
+        {
+            SetExcelCellValue(worksheet, i + 2, 1, xv[i]);
+            SetExcelCellValue(worksheet, i + 2, 2, y1[i]);
+            SetExcelCellValue(worksheet, i + 2, 3, y2[i]);
+        }
+        return "A1:C5";
+    }
+
+    /// <summary>
+    /// Add a chart to the worksheet using COM (Shapes.AddChart2). The chart is anchored at
+    /// the given cell-pixel offsets and sized 300x220 pts. Returns the chart COM object (caller must
+    /// ReleaseComObject it). The source data range must be selected/set by the caller.
+    /// </summary>
+    private static object AddChartToWorksheet(
+        object worksheet,
+        int xlChartType,
+        float left, float top, float width, float height)
+    {
+        object? shapes = null;
+        object? chartObject = null;
+        try
+        {
+            shapes = ((dynamic)worksheet).Shapes;
+            // AddChart2(Style, XlChartType, Left, Top, Width, Height, NewLayout)
+            // Style=-1 means default, NewLayout=true uses the new chart layout defaults.
+            var shape = ((dynamic)shapes).AddChart2(-1, xlChartType, left, top, width, height, true);
+            chartObject = ((dynamic)shape).Chart;
+            ReleaseComObject(shape);
+            return chartObject!;
+        }
+        finally
+        {
+            ReleaseComObject(shapes);
+            // chartObject intentionally NOT released here — caller owns it.
+        }
+    }
+
+    private static void SetChartSourceData(object chart, object worksheet, string rangeAddress)
+    {
+        object? range = null;
+        try
+        {
+            range = ((dynamic)worksheet).Range[rangeAddress];
+            ((dynamic)chart).SetSourceData(range);
+        }
+        finally
+        {
+            ReleaseComObject(range);
+        }
+    }
+
+    private static void SetChartTitle(object chart, string title)
+    {
+        try
+        {
+            ((dynamic)chart).HasTitle = true;
+            ((dynamic)chart).ChartTitle.Text = title;
+        }
+        catch { /* best effort */ }
+    }
+
+    private static void SetChartAxisTitle(object chart, int axisGroup /* xlPrimary=1 */, int axisType /* xlCategory=1, xlValue=2 */, string title)
+    {
+        object? axis = null;
+        try
+        {
+            axis = ((dynamic)chart).Axes(axisType, axisGroup);
+            ((dynamic)axis).HasTitle = true;
+            ((dynamic)axis).AxisTitle.Text = title;
+        }
+        catch { /* best effort — not all chart types support axis titles */ }
+        finally
+        {
+            ReleaseComObject(axis);
+        }
+    }
+
+    private static object OpenChartWorkbook(dynamic workbooks, string outputPath, string sheetName, out object worksheet)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        if (File.Exists(outputPath)) File.Delete(outputPath);
+        var workbook = workbooks.Add();
+        worksheet = ((dynamic)workbook).Worksheets[1];
+        try { ((dynamic)worksheet).Name = sheetName; } catch { /* best effort */ }
+        return workbook;
+    }
+
+    // ── case 001 — Clustered Column ───────────────────────────────────────────
+
+    private static void GenerateChartFixture_Column(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "ColumnData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["Q1", "Q2", "Q3", "Q4"];
+            double[] v1   = [120, 150, 180, 200];
+            double[] v2   = [80,  100, 130, 160];
+            var range = WriteChartData(worksheet, "Revenue", "Cost", cats, v1, v2);
+
+            // Anchor spacer so UsedRange covers chart area
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlColumnClustered, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Quarterly Revenue vs Cost");
+            SetChartAxisTitle(chart, 1, 1, "Quarter");
+            SetChartAxisTitle(chart, 1, 2, "Amount ($)");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 002 — Clustered Bar ──────────────────────────────────────────────
+
+    private static void GenerateChartFixture_Bar(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "BarData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["North", "South", "East", "West"];
+            double[] v1   = [340, 280, 410, 300];
+            double[] v2   = [210, 190, 250, 180];
+            var range = WriteChartData(worksheet, "Sales", "Target", cats, v1, v2);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlBarClustered, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Regional Sales vs Target");
+            SetChartAxisTitle(chart, 1, 1, "Region");
+            SetChartAxisTitle(chart, 1, 2, "Units");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 003 — Line with Markers ─────────────────────────────────────────
+
+    private static void GenerateChartFixture_LineMarkers(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "LineData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["Jan", "Feb", "Mar", "Apr"];
+            double[] v1   = [40, 55, 48, 70];
+            double[] v2   = [30, 42, 38, 60];
+            var range = WriteChartData(worksheet, "Actual", "Forecast", cats, v1, v2);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlLineMarkers, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Monthly Actuals vs Forecast");
+            SetChartAxisTitle(chart, 1, 1, "Month");
+            SetChartAxisTitle(chart, 1, 2, "Value");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 004 — Pie ────────────────────────────────────────────────────────
+
+    private static void GenerateChartFixture_Pie(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "PieData", out object ws);
+            worksheet = ws;
+
+            // Pie only uses one series (column B), so col C intentionally left blank.
+            string[] cats = ["Widgets", "Gadgets", "Doohickeys", "Thingamajigs"];
+            double[] v1   = [45, 25, 20, 10];
+            double[] v2   = [0, 0, 0, 0];
+            var range = WriteChartData(worksheet, "Share", "", cats, v1, v2);
+            // Narrow range to just A1:B5 so the empty series column is excluded.
+            range = "A1:B5";
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlPie, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Product Mix — Market Share");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 005 — Area ───────────────────────────────────────────────────────
+
+    private static void GenerateChartFixture_Area(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "AreaData", out object ws);
+            worksheet = ws;
+
+            string[] cats = ["2021", "2022", "2023", "2024"];
+            double[] v1   = [100, 130, 115, 160];
+            double[] v2   = [60,  80,  70,  95];
+            var range = WriteChartData(worksheet, "Total", "Base", cats, v1, v2);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlArea, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Annual Volume — Total vs Base");
+            SetChartAxisTitle(chart, 1, 1, "Year");
+            SetChartAxisTitle(chart, 1, 2, "Volume");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 006 — XY Scatter ─────────────────────────────────────────────────
+
+    private static void GenerateChartFixture_Scatter(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "ScatterData", out object ws);
+            worksheet = ws;
+
+            var range = WriteScatterData(worksheet);
+
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            chart = AddChartToWorksheet(worksheet, XlXYScatter, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, range);
+            SetChartTitle(chart, "Scatter — Two Series");
+            SetChartAxisTitle(chart, 1, 1, "X");
+            SetChartAxisTitle(chart, 1, 2, "Y");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);
