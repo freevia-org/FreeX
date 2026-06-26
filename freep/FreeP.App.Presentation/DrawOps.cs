@@ -49,6 +49,15 @@ public sealed class ResolvedRun
     public ResolvedRunShadow? TextShadow { get; init; }
 }
 
+/// <summary>A resolved tab stop with position in DIP.</summary>
+public sealed class ResolvedTabStop
+{
+    /// <summary>Position from left edge of text area in DIP.</summary>
+    public double PositionDip { get; init; }
+    /// <summary>Tab alignment.</summary>
+    public TabStopAlignment Alignment { get; init; }
+}
+
 /// <summary>
 /// A fully-resolved paragraph ready for the renderer.
 /// </summary>
@@ -61,6 +70,12 @@ public sealed class ResolvedParagraph
     public string? BulletChar { get; init; }
     public double SpaceBeforePt { get; init; }
     public double SpaceAfterPt { get; init; }
+
+    /// <summary>
+    /// Resolved tab stops for this paragraph in position order (DIP from text area left edge).
+    /// Empty means use the default tab spacing (1 inch = 96 DIP at default DPI).
+    /// </summary>
+    public IReadOnlyList<ResolvedTabStop> TabStops { get; init; } = Array.Empty<ResolvedTabStop>();
 }
 
 /// <summary>
@@ -90,6 +105,12 @@ public sealed class ResolvedTextLayout
     /// Null = no warp (flat text).  Used by renderers to apply glyph-path warping.
     /// </summary>
     public string? WarpPreset { get; init; }
+
+    /// <summary>
+    /// Text orientation for this body.  Renderers rotate the text block accordingly.
+    /// <see cref="TextVerticalType.Horizontal"/> = no extra rotation (default).
+    /// </summary>
+    public TextVerticalType VerticalType { get; init; } = TextVerticalType.Horizontal;
 }
 
 // ─── Resolved fill/outline ────────────────────────────────────────────────────────────────────────────────────────

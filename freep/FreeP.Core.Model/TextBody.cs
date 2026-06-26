@@ -1,5 +1,55 @@
 namespace FreeP.Core.Model;
 
+// ── Tab stops ──────────────────────────────────────────────────────────────────
+
+/// <summary>Horizontal alignment of text at a tab stop.</summary>
+public enum TabStopAlignment
+{
+    Left = 0,
+    Center = 1,
+    Right = 2,
+    Decimal = 3
+}
+
+/// <summary>
+/// A single tab stop in a paragraph's tab stop list.
+/// Position is in EMU from the text body's left inset (matches a:tab pos= semantics).
+/// </summary>
+public sealed class TabStop
+{
+    /// <summary>Tab stop position in EMU from the left edge of the text area.</summary>
+    public long PositionEmu { get; set; }
+
+    /// <summary>Alignment of text at this stop.</summary>
+    public TabStopAlignment Alignment { get; set; } = TabStopAlignment.Left;
+}
+
+// ── Vertical text orientation ──────────────────────────────────────────────────
+
+/// <summary>
+/// Text orientation for a body — corresponds to <c>a:bodyPr vert=</c>.
+/// </summary>
+public enum TextVerticalType
+{
+    /// <summary>Normal horizontal text (default). OOXML: "horz".</summary>
+    Horizontal = 0,
+
+    /// <summary>Text rotated 90° clockwise (top-to-bottom reading order). OOXML: "vert".</summary>
+    Vertical = 1,
+
+    /// <summary>Text rotated 270° clockwise (bottom-to-top). OOXML: "vert270".</summary>
+    Vertical270 = 2,
+
+    /// <summary>East-Asian vertical (each glyph upright, stacked). OOXML: "eaVert".</summary>
+    EastAsianVertical = 3,
+
+    /// <summary>WordArt stacked vertical (each glyph upright). OOXML: "wordArtVert".</summary>
+    WordArtVertical = 4,
+
+    /// <summary>WordArt stacked vertical RTL. OOXML: "wordArtVertRtl".</summary>
+    WordArtVerticalRtl = 5
+}
+
 /// <summary>
 /// A hyperlink target.  Exactly one of <see cref="Url"/> or <see cref="TargetSlideId"/> is set.
 /// </summary>
@@ -179,6 +229,13 @@ public sealed class Paragraph
 
     /// <summary>Spacing after this paragraph in points, or null to inherit.</summary>
     public double? SpaceAfterPt { get; set; }
+
+    /// <summary>
+    /// Explicit tab stops for this paragraph, in position order.
+    /// Corresponds to <c>a:pPr/a:tabLst/a:tab</c>.
+    /// Empty means use default tab spacing (inherited / PowerPoint default 914400 EMU = 1 inch).
+    /// </summary>
+    public List<TabStop> TabStops { get; } = new();
 }
 
 /// <summary>
@@ -224,6 +281,13 @@ public sealed class TextBody
     /// per-level defaults (alignment, font size, bullet) that the compositor inherits into slides.
     /// </summary>
     public TextStyleLevels? LstStyle { get; set; }
+
+    /// <summary>
+    /// Text orientation for this body.  Corresponds to <c>a:bodyPr vert=</c>.
+    /// <see cref="TextVerticalType.Horizontal"/> is the default and is NOT written
+    /// to XML (attribute absence = horizontal).
+    /// </summary>
+    public TextVerticalType VerticalType { get; set; } = TextVerticalType.Horizontal;
 
     /// <summary>
     /// WordArt warp preset name from <c>a:bodyPr/a:prstTxWarp @prst</c>, e.g.
