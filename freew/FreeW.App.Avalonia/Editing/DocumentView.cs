@@ -106,6 +106,21 @@ public sealed class DocumentView : Control
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
+    // ── AV-TBL: in-place table cell caret ─────────────────────────────────────────────────────────
+    // Non-null when the caret is inside a table cell. Stores the fully-qualified cell address and the
+    // character offset within that cell's paragraph. When _cellCaret is set, _caret.Block = the table
+    // block index and _caret.Offset = the PlacedChar.Offset emitted for that glyph (for hit-test lookup).
+    private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellCaret;
+    // Non-null when there is a selection anchor inside a cell (same encoding as _cellCaret).
+    private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellAnchor;
+
+    // ── AV-TBL2: cross-cell rectangular selection ─────────────────────────────────────────────────
+    // When a drag spans more than one cell, we switch from single-cell text selection to a rectangular
+    // block selection. _cellBlockAnchor is the cell where the drag started; _cellBlockFocus is the cell
+    // under the pointer. Non-null only while a multi-cell selection is active.
+    private (int TableBlock, int Row, int Col)? _cellBlockAnchor;
+    private (int TableBlock, int Row, int Col)? _cellBlockFocus;
+
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
     private DocPosition _caret;
@@ -150,8 +165,15 @@ public sealed class DocumentView : Control
     /// <summary>Raised when the caret moves (key navigation, click, find) so the shell can update the page indicator.</summary>
     public event Action? CaretMoved;
 
-    /// <summary>Raised when a table cell is double-clicked, so the shell can open a cell editor.</summary>
+    /// <summary>
+    /// Raised when a table cell double-click is received and no in-place caret placement is possible
+    /// (e.g., the cell has no placed glyphs yet). Kept for shell compatibility; normal editing now
+    /// routes the caret directly into the cell via <see cref="PlaceCaretInCell"/>.
+    /// AV-TBL: this event is now only fired as a fallback; in-place editing supersedes it.
+    /// </summary>
+#pragma warning disable CS0067 // event may remain un-raised when in-place path is always taken
     public event Action<CellEditRequest>? CellEditRequested;
+#pragma warning restore CS0067
 
     /// <summary>Raised when <see cref="ViewMode"/> changes so the shell can update the status bar / ribbon state.</summary>
     public event Action? ViewModeChanged;
@@ -205,6 +227,8 @@ public sealed class DocumentView : Control
         _bus.Changed += OnModelChanged;
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = null;
+        _cellCaret = null; // AV-TBL: clear cell state on document load
+        _cellAnchor = null;
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }
@@ -360,6 +384,140 @@ public sealed class DocumentView : Control
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
 
+    // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the current cell caret address (TableBlock, Row, Col, ParaIdx, Offset), or null
+    /// when the caret is in body text. Used by tests and the ribbon to check whether the caret
+    /// is inside a table cell.
+    /// </summary>
+    public (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellCaretInfo => _cellCaret;
+
+    /// <summary>
+    /// Programmatically place the caret at (row, col, paraIdx, offset) in the table at
+    /// <paramref name="tableBlockIndex"/>. Triggers a layout pass if needed, then sets
+    /// <c>_cellCaret</c> and updates <c>_caret</c> for caret rendering.
+    /// Used by tests and the host to drive cell editing without pointer events.
+    /// </summary>
+    public void PlaceCaretInCell(int tableBlockIndex, int row, int col, int paraIdx, int offset)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        var para = GetCellParagraph(tableBlockIndex, row, col, paraIdx);
+        if (para == null)
+            return;
+        var maxOffset = ParaCells(para).Count;
+        offset = Math.Clamp(offset, 0, maxOffset);
+        _cellCaret = (tableBlockIndex, row, col, paraIdx, offset);
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(tableBlockIndex, FindCellGlyphOffset(tableBlockIndex, row, col, paraIdx, offset));
+        _selectionAnchor = _caret;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
+    // ── AV-TBL2: row/column insert + delete ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Insert a blank row above the caret's current row in the table.
+    /// No-op when the caret is not inside a table cell. Undoable.
+    /// </summary>
+    public void InsertTableRowAbove() => MutateCaretTable((blockIdx, row, _) =>
+        new InsertTableRowCommand(blockIdx, row));
+
+    /// <summary>
+    /// Insert a blank row below the caret's current row in the table.
+    /// No-op when the caret is not inside a table cell. Undoable.
+    /// </summary>
+    public void InsertTableRowBelow() => MutateCaretTable((blockIdx, row, _) =>
+        new InsertTableRowCommand(blockIdx, row + 1));
+
+    /// <summary>
+    /// Delete the caret's current row from the table. No-op when not in a table or only one row remains.
+    /// Undoable.
+    /// </summary>
+    public void DeleteTableRow() => MutateCaretTable((blockIdx, row, _) =>
+        new DeleteTableRowCommand(blockIdx, row));
+
+    /// <summary>
+    /// Insert a blank column to the left of the caret's current column. Undoable.
+    /// </summary>
+    public void InsertTableColumnLeft() => MutateCaretTable((blockIdx, _, col) =>
+        new InsertTableColumnCommand(blockIdx, col));
+
+    /// <summary>
+    /// Insert a blank column to the right of the caret's current column. Undoable.
+    /// </summary>
+    public void InsertTableColumnRight() => MutateCaretTable((blockIdx, _, col) =>
+        new InsertTableColumnCommand(blockIdx, col + 1));
+
+    /// <summary>
+    /// Delete the caret's current column from the table. No-op when only one column remains. Undoable.
+    /// </summary>
+    public void DeleteTableColumn() => MutateCaretTable((blockIdx, _, col) =>
+        new DeleteTableColumnCommand(blockIdx, col));
+
+    /// <summary>
+    /// Executes a table mutation (insert/delete row or column) keyed on the caret's table location.
+    /// Locates the (blockIndex, row, col) from <see cref="_cellCaret"/>, builds the command with the
+    /// supplied factory, runs it through the command bus (undoable), clears the stale cell caret, and
+    /// triggers a re-layout.
+    /// </summary>
+    private void MutateCaretTable(Func<int, int, int, IDocumentCommand> build)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+        var cmd = build(blockIdx, cc.Row, cc.Col);
+        _bus.Execute(cmd);
+        // Clear the cell caret — row/col indices shift after mutations; ClampCaret handles safe reset.
+        _cellCaret = null;
+        _cellAnchor = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        InvalidateLayoutAndVisual();
+    }
+
+    // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
+
+    /// <summary>
+    /// The rectangular cell range currently selected by a cross-cell drag, or null when only a
+    /// single cell (or body text) is active. Returns (TableBlock, MinRow, MinCol, MaxRow, MaxCol)
+    /// with rows and cols clamped to the inclusive bounds of the anchor → focus rectangle.
+    /// Ribbon commands (delete/merge/format) should check this before falling back to
+    /// <see cref="CellCaretInfo"/>.
+    /// </summary>
+    public (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? SelectedCellRange
+    {
+        get
+        {
+            if (_cellBlockAnchor is not { } a || _cellBlockFocus is not { } f)
+                return null;
+            if (a.TableBlock != f.TableBlock)
+                return null;
+            return (a.TableBlock,
+                Math.Min(a.Row, f.Row), Math.Min(a.Col, f.Col),
+                Math.Max(a.Row, f.Row), Math.Max(a.Col, f.Col));
+        }
+    }
+
+    /// <summary>
+    /// Programmatically set the cross-cell selection anchor and focus for tests and external callers.
+    /// Both cells must be in the same table block.
+    /// </summary>
+    public void SetCellBlockSelection(int tableBlock, int anchorRow, int anchorCol, int focusRow, int focusCol)
+    {
+        _cellBlockAnchor = (tableBlock, anchorRow, anchorCol);
+        _cellBlockFocus  = (tableBlock, focusRow,  focusCol);
+        // Clear single-cell text selection state to avoid ambiguity.
+        _cellCaret  = null;
+        _cellAnchor = null;
+        _selectionAnchor = null;
+        InvalidateVisual();
+    }
+
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
 
     /// <summary>
@@ -509,6 +667,23 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title)).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Extended snapshot of floating chart data for tests — includes Categories and Series count.
+    /// (Rect, BehindText, ZOrder, Kind, Title, Categories, SeriesCount)
+    /// </summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, ChartKind Kind, string? Title,
+        IReadOnlyList<string> Categories, int SeriesCount)> FloatingChartDataSnapshots
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingCharts.Select(c =>
+                (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title,
+                 (IReadOnlyList<string>)c.Categories.AsReadOnly(),
+                 c.Series.Count)).ToList();
         }
     }
 
@@ -1646,21 +1821,29 @@ public sealed class DocumentView : Control
             if (rect.Right <= colLeft || rect.Left >= colRight)
                 continue;
 
-            // Is the float on the left or right half of the column?
-            var floatCentreX = rect.Left + rect.Width / 2;
-            var colCentreX   = colLeft + colW / 2;
+            // BB1: Classify by which side of the column has MORE free room, not by float centre.
+            // A wide left-anchored float (>50% col width) had its centre past colCentre and was
+            // incorrectly classified as a RIGHT float, squeezing text into the float's own area.
+            var freeLeft  = rect.Left  - colLeft;   // gap on the left  side of the float
+            var freeRight = colRight   - rect.Right; // gap on the right side of the float
 
-            if (floatCentreX <= colCentreX)
+            // If neither side has enough room (< 20 DIP each), this float is handled as
+            // TopAndBottom by TopAndBottomExclusionBottom + AdvancePastTopAndBottomExclusions.
+            // Skip it here so we do not apply a lateral exclusion (which would leave text over the float).
+            if (freeLeft < 20 && freeRight < 20)
+                continue;
+
+            if (freeLeft >= freeRight)
             {
-                // Float is on the LEFT — push the line start rightward.
-                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
-                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
+                // Float is on the RIGHT side (more free space on the left) — reduce the available width.
+                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
+                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
             }
             else
             {
-                // Float is on the RIGHT — reduce the available width.
-                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
-                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
+                // Float is on the LEFT side (more free space on the right) — push the line start rightward.
+                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
+                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
             }
         }
 
@@ -1682,16 +1865,31 @@ public sealed class DocumentView : Control
     /// intersects the vertical band [<paramref name="lineTopY"/>, <paramref name="lineTopY"/> +
     /// <paramref name="lineHeight"/>), or −1 if none does.  The caller should advance
     /// <c>_layoutContentY</c> past this bottom so the line lands below the float.
+    /// Also includes wide Square/Tight floats (BB1) that leave < 20 DIP free on BOTH sides,
+    /// as those behave like TopAndBottom — text must go below them rather than beside them.
     /// </summary>
     private double TopAndBottomExclusionBottom(double lineTopY, double lineHeight)
     {
         var lineBottomY = lineTopY + lineHeight;
+        var colW = _colCount > 1 ? _colWidth : _contentWidth;
         var maxBottom   = -1.0;
         foreach (var (rect, wrapping) in _wrapExclusions)
         {
-            if (wrapping != ImageWrapping.TopAndBottom) continue;
             if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY) continue;
-            if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+            if (wrapping == ImageWrapping.TopAndBottom)
+            {
+                if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+            }
+            else
+            {
+                // BB1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
+                var freeLeft  = rect.Left  - _contentLeft;
+                var freeRight = (_contentLeft + colW) - rect.Right;
+                if (freeLeft < 20 && freeRight < 20)
+                {
+                    if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+                }
+            }
         }
         return maxBottom;
     }
@@ -1702,6 +1900,8 @@ public sealed class DocumentView : Control
     /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
     /// for pathological documents.
     /// Only active when there are TopAndBottom exclusions registered.
+    /// BB2: In multi-column layout a TopAndBottom float blocks the entire page-width Y-band, so we
+    /// advance to the LAST column on the affected page (making all columns skip past the float's Y-band).
     /// </summary>
     private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight)
     {
@@ -1715,9 +1915,6 @@ public sealed class DocumentView : Control
 
             // Convert the exclusion bottom (page-space) back to content-space and advance past it.
             // Content Y = slot * textAreaHeight + offsetWithinPage.
-            // For the simple case: advance _layoutContentY so that PeekFirstLineContentY would land
-            // below exclusionBottom. We find the content Y that would produce a page-space Y of
-            // exclusionBottom by inverting ContentYToPageSpaceY.
             // PageSpaceY = DeskPadding + pageIndex*(pageHeight+gap) + marginTopDip + offsetWithinPage
             // We read the page index from the current slot, then:
             // offsetWithinPage = exclusionBottom - DeskPadding - pageIndex*(pageHeight+gap) - marginTopDip
@@ -1727,7 +1924,15 @@ public sealed class DocumentView : Control
                                     ? DeskPadding + pageIndex * (_pageHeightPx + PageGap)
                                     : 0;
             var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
-            var targetContentY = slot * _layoutTextAreaHeight + Math.Max(0, offsetInPage);
+            // Clamp offsetInPage so we never jump past this page's text area (wrong-page placement).
+            var clampedOffset = Math.Clamp(offsetInPage, 0, _layoutTextAreaHeight);
+
+            // BB2: A TopAndBottom float blocks ALL columns on this page. Advance to the last column
+            // slot of this page so that content does not flow into earlier sibling columns that share
+            // the same Y-band. lastSlotOnPage is the index of the rightmost column on pageIndex.
+            var lastSlotOnPage   = (pageIndex + 1) * _colCount - 1;
+            var targetContentY   = lastSlotOnPage * _layoutTextAreaHeight + clampedOffset;
+
             if (targetContentY <= _layoutContentY)
                 break; // safety: do not regress
             _layoutContentY = targetContentY;
@@ -2098,6 +2303,8 @@ public sealed class DocumentView : Control
         const double pad = 5;
         var borders = table.Formatting.Borders;
         var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
+        // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
         for (var r = 0; r < table.Rows.Count; r++)
@@ -2106,7 +2313,9 @@ public sealed class DocumentView : Control
             var isHeader = table.Formatting.HeaderRow && r == 0;
             var isBand = table.Formatting.BandedRows && !isHeader && (r - headerOffset) % 2 == 1;
 
-            var measured = new List<(int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
+            // AV-TBL: carry the TableCell model reference and actual column index so we can emit
+            // per-paragraph, per-character cell-aware PlacedChars for caret routing.
+            var measured = new List<(TableCell Cell, int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             foreach (var cell in row.Cells)
@@ -2129,7 +2338,7 @@ public sealed class DocumentView : Control
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((col, span, lines, fmt));
+                measured.Add((cell, col, span, lines, fmt));
                 col += span;
             }
 
@@ -2140,7 +2349,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (startCol, span, lines, fmt) in measured)
+            foreach (var (cellModel, startCol, span, lines, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
@@ -2152,17 +2361,71 @@ public sealed class DocumentView : Control
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
                 var ty = rowPageSpaceY + pad;
+                // AV-TBL: walk paragraphs so each PlacedChar carries its paragraph index and
+                // character offset within that paragraph. WrapCellLines flattens all paragraphs
+                // via cell.PlainText which joins them with '\n'. We skip '\n' separator chars
+                // (they belong to neither paragraph) and advance the paragraph index after each.
+                var paraIdx = 0;
+                var paraCharOffset = 0; // char position within current paragraph
+                var parasLengths = cellModel.Paragraphs.Count > 0
+                    ? cellModel.Paragraphs.Select(p => p.PlainText.Length).ToList()
+                    : new List<int> { 0 };
+
                 foreach (var (lineHeight, chars) in lines)
                 {
                     var tx = cellX + pad;
                     foreach (var (ch, w) in chars)
                     {
-                        _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, ty, w, lineHeight, fmt, ch, Sentinel: false));
+                        // Skip '\n' separator: it joins paragraphs in cell.PlainText but is not
+                        // part of any paragraph's own text content.
+                        if (ch == '\n')
+                        {
+                            if (paraIdx < parasLengths.Count - 1)
+                            {
+                                paraIdx++;
+                                paraCharOffset = 0;
+                            }
+                            // Do not emit a PlacedChar for the separator; skip it visually too.
+                            continue;
+                        }
+
+                        // Advance paragraph index if we've consumed this paragraph's text (safety).
+                        while (paraIdx < parasLengths.Count - 1 && paraCharOffset >= parasLengths[paraIdx])
+                        {
+                            paraIdx++;
+                            paraCharOffset = 0;
+                        }
+                        _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
+                            Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: paraIdx, CellParaOffset: paraCharOffset));
+                        glyphOffset++;
+                        paraCharOffset++;
                         tx += w;
                     }
 
                     ty += lineHeight;
                 }
+
+                // Emit a sentinel glyph for each paragraph in the cell (at the end of last para, or after all text).
+                // This allows the caret to sit after the last character in the cell.
+                // We emit exactly one sentinel per cell paragraph so caret can land "after" each para.
+                var sentinelParaIdx = parasLengths.Count - 1;
+                var sentinelParaOffset = parasLengths.Count > 0 ? parasLengths[sentinelParaIdx] : 0;
+                // Position the sentinel at the right edge of the last text line, or at pad if no text.
+                var sentinelX = ty > rowPageSpaceY + pad
+                    ? cellX + pad  // start of next line
+                    : cellX + pad;
+                var sentinelY = lines.Count > 0 ? rowPageSpaceY + pad + lines.Sum(l => l.Height) - lines[^1].Height : rowPageSpaceY + pad;
+                var sentinelH = lines.Count > 0 ? lines[^1].Height : Build("A", fmt).Height;
+                // Advance sentinel X past last character on last line
+                if (lines.Count > 0)
+                {
+                    var lastLineChars = lines[^1].Chars;
+                    var lastX = cellX + pad + lastLineChars.Sum(c => c.W);
+                    sentinelX = lastX;
+                }
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
+                    Sentinel: true, CellRow: r, CellCol: startCol, CellParaIdx: sentinelParaIdx, CellParaOffset: sentinelParaOffset));
+                glyphOffset++;
             }
 
             _layoutContentY = rowContentY + rowHeight;
@@ -2966,6 +3229,19 @@ public sealed class DocumentView : Control
         foreach (var sd in _inlineSmartArts)
             DrawFloatingSmartArt(context, sd);
 
+        // AV-TBL2: cross-cell block-selection highlight. Draw a semi-transparent overlay over each
+        // cell-hit rect that falls inside the selected row×col rectangle.
+        if (SelectedCellRange is { } cellSel)
+        {
+            foreach (var (cellRect, cellBlock, cellRow, cellCol) in _cellHits)
+            {
+                if (cellBlock != cellSel.TableBlock) continue;
+                if (cellRow < cellSel.MinRow || cellRow > cellSel.MaxRow) continue;
+                if (cellCol < cellSel.MinCol || cellCol > cellSel.MaxCol) continue;
+                context.FillRectangle(CellBlockSelectionBrush, cellRect);
+            }
+        }
+
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
         {
@@ -3269,6 +3545,35 @@ public sealed class DocumentView : Control
 
     private bool TryGetCaretRect(out Rect rect)
     {
+        // AV-TBL: when the caret is inside a cell, search by cell address + para-offset instead of
+        // block+glyph-offset. This is robust after model edits (which invalidate glyph offsets).
+        if (_cellCaret is { } cc)
+        {
+            foreach (var pc in _placed)
+            {
+                if (pc.Block == cc.TableBlock && pc.CellRow == cc.Row && pc.CellCol == cc.Col
+                    && pc.CellParaIdx == cc.ParaIdx && pc.CellParaOffset == cc.Offset)
+                {
+                    rect = new Rect(pc.X, pc.Y, 1.5, pc.LineHeight);
+                    return true;
+                }
+            }
+            // If no exact glyph found (e.g., caret is at end of text = sentinel position),
+            // look for the sentinel at that cell + para.
+            foreach (var pc in _placed)
+            {
+                if (pc.Block == cc.TableBlock && pc.CellRow == cc.Row && pc.CellCol == cc.Col
+                    && pc.CellParaIdx == cc.ParaIdx && pc.Sentinel)
+                {
+                    rect = new Rect(pc.X, pc.Y, 1.5, pc.LineHeight);
+                    return true;
+                }
+            }
+            rect = default;
+            return false;
+        }
+
+        // Body paragraph: search by block + glyph offset (original logic).
         foreach (var pc in _placed)
         {
             if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
@@ -3288,28 +3593,33 @@ public sealed class DocumentView : Control
     {
         base.OnPointerPressed(e);
 
-        // Double-click a table cell opens the modal cell editor; in-cell caret editing is not modelled yet.
-        if (e.ClickCount == 2)
-        {
-            var hit = e.GetPosition(this);
-            foreach (var cell in _cellHits)
-            {
-                if (cell.Rect.Contains(hit))
-                {
-                    CellEditRequested?.Invoke(new CellEditRequest(cell.Block, cell.Row, cell.Col, GetCellText(cell.Block, cell.Row, cell.Col)));
-                    return;
-                }
-            }
-        }
-
         Focus();
         var point = e.GetPosition(this);
+        var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+
         if (TryHitTest(point, out var pos))
         {
-            _selectionAnchor = (e.KeyModifiers & KeyModifiers.Shift) != 0 ? (_selectionAnchor ?? _caret) : null;
-            _caret = pos;
-            if ((e.KeyModifiers & KeyModifiers.Shift) == 0)
+            // AV-TBL2: clear any prior cross-cell block selection on a fresh (non-shift) press.
+            if (!shift)
+            {
+                _cellBlockAnchor = null;
+                _cellBlockFocus  = null;
+            }
+
+            // AV-TBL: When entering a cell, _cellCaret was set by TryHitTest.
+            // When leaving a cell (hitting body text), _cellCaret is cleared.
+            if (!shift)
+            {
                 _selectionAnchor = pos;
+                _cellAnchor = _cellCaret;
+            }
+            else
+            {
+                // Shift-click extends selection; keep existing anchor.
+                _selectionAnchor ??= _caret;
+                _cellAnchor ??= _cellCaret;
+            }
+            _caret = pos;
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
@@ -3318,11 +3628,36 @@ public sealed class DocumentView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && TryHitTest(e.GetPosition(this), out var pos))
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        var point = e.GetPosition(this);
+        if (!TryHitTest(point, out var pos))
+            return;
+
+        // AV-TBL2: when a drag starts inside a cell and moves to a DIFFERENT cell, switch to
+        // rectangular cross-cell block selection instead of single-cell text selection.
+        if (_cellAnchor is { } anchor && _cellCaret is { } focus
+            && anchor.TableBlock == focus.TableBlock
+            && (anchor.Row != focus.Row || anchor.Col != focus.Col))
         {
-            _caret = pos;
-            InvalidateVisual();
+            // Different cell than where the drag started → activate block selection.
+            _cellBlockAnchor = (anchor.TableBlock, anchor.Row, anchor.Col);
+            _cellBlockFocus  = (focus.TableBlock,  focus.Row,  focus.Col);
+            // Suppress the single-cell text selection anchor so IsWithin() doesn't highlight glyphs.
+            _selectionAnchor = _caret;
         }
+        else if (_cellAnchor is { } anch && _cellCaret is { } foc
+                 && anch.TableBlock == foc.TableBlock
+                 && anch.Row == foc.Row && anch.Col == foc.Col)
+        {
+            // Still in the same cell — clear block selection if it was set.
+            _cellBlockAnchor = null;
+            _cellBlockFocus  = null;
+        }
+
+        _caret = pos;
+        InvalidateVisual();
     }
 
     protected override void OnTextInput(TextInputEventArgs e)
@@ -3363,27 +3698,77 @@ public sealed class DocumentView : Control
 
     public void InsertText(string text)
     {
+        // AV-TBL: route into table cell when the caret is inside a cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var offset = cc.Offset;
+            var fmt = ActiveFormatting(para, offset);
+            _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+            {
+                var chars = ParaCells(p);
+                foreach (var ch in text)
+                    chars.Insert(Math.Clamp(offset, 0, chars.Count), new Cell(ch, fmt));
+                SetRuns(p, chars);
+            }));
+            _cellCaret = cc with { Offset = offset + text.Length };
+            _cellAnchor = _cellCaret;
+            // Update _caret.Offset to match so TryGetCaretRect can find the sentinel.
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, cc.Offset + text.Length));
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null)
             DeleteSelection();
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
 
         var block = _caret.Block;
-        var offset = _caret.Offset;
-        var fmt = ActiveFormatting(paragraph, offset);
+        var bodyOffset = _caret.Offset;
+        var bodyFmt = ActiveFormatting(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
             foreach (var ch in text)
-                cells.Insert(Math.Clamp(offset, 0, cells.Count), new Cell(ch, fmt));
+                cells.Insert(Math.Clamp(bodyOffset, 0, cells.Count), new Cell(ch, bodyFmt));
             SetRuns(p, cells);
         }));
-        _caret = new DocPosition(block, offset + text.Length);
+        _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
     }
 
     private void Backspace()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            if (cc.Offset > 0)
+            {
+                var offset = cc.Offset;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                {
+                    var chars = ParaCells(p);
+                    if (offset - 1 < chars.Count)
+                        chars.RemoveAt(offset - 1);
+                    SetRuns(p, chars);
+                }));
+                _cellCaret = cc with { Offset = offset - 1 };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, cc.Offset - 1));
+                _selectionAnchor = _caret;
+            }
+            else if (cc.ParaIdx > 0)
+            {
+                // At start of a non-first paragraph in a cell → merge with previous paragraph.
+                CellMergeWithPreviousParagraph(cc);
+            }
+            // else: at start of first paragraph in cell → do nothing (can't go back past cell boundary)
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
         if (_caret.Offset > 0)
         {
@@ -3407,11 +3792,49 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var len = ParaCells(para).Count;
+            if (cc.Offset < len)
+            {
+                var offset = cc.Offset;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                {
+                    var chars = ParaCells(p);
+                    if (offset < chars.Count)
+                        chars.RemoveAt(offset);
+                    SetRuns(p, chars);
+                }));
+                // Caret stays at same offset (now pointing at the next char).
+            }
+            // else at end of paragraph → delete paragraph break (join with next paragraph in cell)
+            else
+            {
+                var cellModel = GetCellModel(cc.TableBlock, cc.Row, cc.Col);
+                if (cellModel != null && cc.ParaIdx < cellModel.Paragraphs.Count - 1)
+                {
+                    // Merge current para + next para in cell.
+                    var curPara = cellModel.Paragraphs[cc.ParaIdx];
+                    var nextPara = cellModel.Paragraphs[cc.ParaIdx + 1];
+                    var merged = new Paragraph { Formatting = curPara.Formatting, StyleId = curPara.StyleId };
+                    var mergedCells = ParaCells(curPara);
+                    mergedCells.AddRange(ParaCells(nextPara));
+                    SetRuns(merged, mergedCells);
+                    _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 2, [merged]));
+                }
+            }
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        var len = ParaCells(paragraph).Count;
-        if (_caret.Offset < len)
+        var bodyLen = ParaCells(paragraph).Count;
+        if (_caret.Offset < bodyLen)
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
@@ -3427,20 +3850,61 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var offset = cc.Offset;
+            var chars = ParaCells(para);
+            var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
+            SetRuns(first, chars.Take(offset).ToList());
+            var second = new Paragraph { Formatting = para.Formatting };
+            SetRuns(second, chars.Skip(offset).ToList());
+            _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
+            // Move caret to start of the new second paragraph.
+            _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+            _cellAnchor = _cellCaret;
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null)
             DeleteSelection();
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
 
         var block = _caret.Block;
-        var offset = _caret.Offset;
-        var cells = ParaCells(paragraph);
-        var first = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
-        SetRuns(first, cells.Take(offset).ToList());
-        var second = new Paragraph { Formatting = paragraph.Formatting };
-        SetRuns(second, cells.Skip(offset).ToList());
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { first, second }));
+        var bodyOffset = _caret.Offset;
+        var bodyCells = ParaCells(paragraph);
+        var firstPara = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+        SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
+        var secondPara = new Paragraph { Formatting = paragraph.Formatting };
+        SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
         _caret = new DocPosition(block + 1, 0);
+        _selectionAnchor = _caret;
+    }
+
+    // AV-TBL: merge the current cell paragraph with the previous one (Backspace at start of para).
+    private void CellMergeWithPreviousParagraph((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
+    {
+        var prevParaIdx = cc.ParaIdx - 1;
+        var prevPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, prevParaIdx);
+        var curPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+        if (prevPara == null || curPara == null)
+            return;
+        var prevLen = ParaCells(prevPara).Count;
+        var merged = new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId };
+        var mergedCells = ParaCells(prevPara);
+        mergedCells.AddRange(ParaCells(curPara));
+        SetRuns(merged, mergedCells);
+        _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, prevParaIdx, 2, [merged]));
+        _cellCaret = cc with { ParaIdx = prevParaIdx, Offset = prevLen };
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, prevParaIdx, prevLen));
         _selectionAnchor = _caret;
     }
 
@@ -3967,21 +4431,71 @@ public sealed class DocumentView : Control
 
     private void MoveCaret(int delta, bool extend)
     {
-        var len = CurrentLength();
-        var newOffset = _caret.Offset + delta;
-        if (newOffset < 0)
+        // AV-TBL: when caret is in a cell, navigate within the cell's paragraph, then cross to
+        // adjacent cell paragraphs, then adjacent cells. Cross-row (up/down) navigation is handled
+        // by MoveCaretVertical.
+        if (_cellCaret is { } cc)
+        {
+            var newOffset = cc.Offset + delta;
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            var len = para != null ? ParaCells(para).Count : 0;
+
+            if (newOffset >= 0 && newOffset <= len)
+            {
+                // Still within the current paragraph.
+                _cellCaret = cc with { Offset = newOffset };
+            }
+            else if (newOffset < 0 && cc.ParaIdx > 0)
+            {
+                // Move to end of previous paragraph in same cell.
+                var prevParaIdx = cc.ParaIdx - 1;
+                var prevPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, prevParaIdx);
+                var prevLen = prevPara != null ? ParaCells(prevPara).Count : 0;
+                _cellCaret = cc with { ParaIdx = prevParaIdx, Offset = prevLen };
+            }
+            else if (newOffset > len && cc.ParaIdx < (GetCellModel(cc.TableBlock, cc.Row, cc.Col)?.Paragraphs.Count ?? 1) - 1)
+            {
+                // Move to start of next paragraph in same cell.
+                _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+            }
+            else if (newOffset < 0)
+            {
+                // At start of first paragraph in cell — move to previous cell.
+                MoveCaretToAdjacentCell(cc, -1, extend);
+                return;
+            }
+            else
+            {
+                // At end of last paragraph in cell — move to next cell.
+                MoveCaretToAdjacentCell(cc, +1, extend);
+                return;
+            }
+
+            // Update _caret.Offset to point at the corresponding glyph for TryGetCaretRect.
+            var nc = _cellCaret.Value;
+            _caret = new DocPosition(nc.TableBlock, FindCellGlyphOffset(nc.TableBlock, nc.Row, nc.Col, nc.ParaIdx, nc.Offset));
+            if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        // Body paragraph navigation.
+        var bodyLen = CurrentLength();
+        var bodyNewOffset = _caret.Offset + delta;
+        if (bodyNewOffset < 0)
         {
             var prev = PreviousEditableBlock(_caret.Block);
             _caret = prev < 0 ? _caret with { Offset = 0 } : new DocPosition(prev, BlockLength(prev));
         }
-        else if (newOffset > len)
+        else if (bodyNewOffset > bodyLen)
         {
             var next = NextEditableBlock(_caret.Block);
-            _caret = next < 0 ? _caret with { Offset = len } : new DocPosition(next, 0);
+            _caret = next < 0 ? _caret with { Offset = bodyLen } : new DocPosition(next, 0);
         }
         else
         {
-            _caret = _caret with { Offset = newOffset };
+            _caret = _caret with { Offset = bodyNewOffset };
         }
 
         if (!extend)
@@ -3990,8 +4504,92 @@ public sealed class DocumentView : Control
         CaretMoved?.Invoke();
     }
 
+    // AV-TBL: move caret to the previous (-1) or next (+1) cell in the same row, or across rows.
+    private void MoveCaretToAdjacentCell((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc, int direction, bool extend)
+    {
+        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        // Build a flat list of (row, startCol) pairs in reading order.
+        var cellOrder = new List<(int Row, int Col)>();
+        for (var ri = 0; ri < table.Rows.Count; ri++)
+        {
+            var col = 0;
+            foreach (var cell in table.Rows[ri].Cells)
+            {
+                cellOrder.Add((ri, col));
+                col += Math.Max(1, cell.GridSpan);
+            }
+        }
+
+        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
+        if (currentIdx < 0)
+            return;
+
+        var targetIdx = currentIdx + direction;
+        if (targetIdx < 0 || targetIdx >= cellOrder.Count)
+        {
+            // Past first/last cell in table — move to adjacent paragraph block.
+            if (direction < 0)
+            {
+                var prevBlock = PreviousEditableBlock(cc.TableBlock);
+                _cellCaret = null;
+                _caret = prevBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(prevBlock, BlockLength(prevBlock));
+            }
+            else
+            {
+                var nextBlock = NextEditableBlock(cc.TableBlock);
+                _cellCaret = null;
+                _caret = nextBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(nextBlock, 0);
+            }
+            if (!extend) { _selectionAnchor = _caret; _cellAnchor = null; }
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        var (targetRow, targetCol) = cellOrder[targetIdx];
+        var targetCell = GetCellModel(cc.TableBlock, targetRow, targetCol);
+        if (targetCell == null)
+            return;
+
+        int targetParaIdx, targetOffset;
+        if (direction > 0)
+        {
+            targetParaIdx = 0;
+            targetOffset = 0;
+        }
+        else
+        {
+            targetParaIdx = Math.Max(0, targetCell.Paragraphs.Count - 1);
+            var lastPara = targetCell.Paragraphs.Count > 0 ? targetCell.Paragraphs[targetParaIdx] : null;
+            targetOffset = lastPara != null ? ParaCells(lastPara).Count : 0;
+        }
+
+        _cellCaret = (cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset);
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset));
+        if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
     private void MoveToLineEdge(bool toStart, bool extend)
     {
+        // AV-TBL: Home/End within a cell moves to start/end of the current cell paragraph.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            var len = para != null ? ParaCells(para).Count : 0;
+            var newOffset = toStart ? 0 : len;
+            _cellCaret = cc with { Offset = newOffset };
+            _cellAnchor = _cellCaret;
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
+            _selectionAnchor = _caret;
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
         _caret = _caret with { Offset = toStart ? 0 : CurrentLength() };
         if (!extend)
             _selectionAnchor = _caret;
@@ -4008,7 +4606,10 @@ public sealed class DocumentView : Control
         {
             _caret = pos;
             if (!extend)
+            {
                 _selectionAnchor = _caret;
+                _cellAnchor = _cellCaret;
+            }
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
@@ -4036,15 +4637,101 @@ public sealed class DocumentView : Control
             }
         }
 
-        if (best is not { } b || _doc.Blocks[b.Block] is not Paragraph paragraph || !IsEditable(paragraph))
+        if (best is not { } b)
             return false;
 
+        // AV-TBL: if the best hit is inside a table cell, route into cell editing.
+        if (b.IsCell)
+        {
+            // Snap to the nearer edge of the hit glyph within the cell paragraph.
+            var cellOffset = b.CellParaOffset;
+            if (!b.Sentinel && point.X > b.X + b.W / 2)
+                cellOffset = b.CellParaOffset + 1;
+
+            // Clamp offset to paragraph length.
+            var cellPara = GetCellParagraph(b.Block, b.CellRow, b.CellCol, b.CellParaIdx);
+            var maxOffset = cellPara != null ? ParaCells(cellPara).Count : 0;
+            cellOffset = Math.Clamp(cellOffset, 0, maxOffset);
+
+            // Find the PlacedChar that matches the target cell address+offset so we can use its
+            // PlacedChar.Offset as _caret.Offset (needed for TryGetCaretRect lookup).
+            var matchingGlyphOffset = FindCellGlyphOffset(b.Block, b.CellRow, b.CellCol, b.CellParaIdx, cellOffset);
+            _cellCaret = (b.Block, b.CellRow, b.CellCol, b.CellParaIdx, cellOffset);
+            pos = new DocPosition(b.Block, matchingGlyphOffset);
+            return true;
+        }
+
+        // Body paragraph hit-test (original logic).
+        if (_doc.Blocks[b.Block] is not Paragraph paragraph || !IsEditable(paragraph))
+        {
+            _cellCaret = null;
+            return false;
+        }
+
+        _cellCaret = null;
         // Snap to the nearer edge of the hit glyph.
-        var offset = b.Offset;
+        var bodyOffset = b.Offset;
         if (!b.Sentinel && point.X > b.X + b.W / 2)
-            offset = b.Offset + 1;
-        pos = new DocPosition(b.Block, Math.Clamp(offset, 0, BlockLength(b.Block)));
+            bodyOffset = b.Offset + 1;
+        pos = new DocPosition(b.Block, Math.Clamp(bodyOffset, 0, BlockLength(b.Block)));
         return true;
+    }
+
+    // AV-TBL: find the PlacedChar.Offset value (unique within the table block) for a given cell
+    // address + paragraph offset, so _caret.Offset can be set correctly for TryGetCaretRect.
+    private int FindCellGlyphOffset(int tableBlock, int row, int col, int paraIdx, int paraOffset)
+    {
+        // Find the glyph (character or sentinel) at exactly that cell+para+offset.
+        // Prefer non-sentinel glyphs; fall back to sentinel if offset == para length.
+        PlacedChar? found = null;
+        foreach (var pc in _placed)
+        {
+            if (pc.Block == tableBlock && pc.CellRow == row && pc.CellCol == col && pc.CellParaIdx == paraIdx)
+            {
+                if (!pc.Sentinel && pc.CellParaOffset == paraOffset)
+                {
+                    found = pc;
+                    break;
+                }
+                if (pc.Sentinel && pc.CellParaOffset == paraOffset)
+                    found = pc; // sentinel match — keep searching for a non-sentinel match
+            }
+        }
+        return found?.Offset ?? (_caret.Block == tableBlock ? _caret.Offset : 0);
+    }
+
+    // AV-TBL: retrieve the Paragraph model for a given cell address + paragraph index.
+    private Paragraph? GetCellParagraph(int tableBlock, int row, int col, int paraIdx)
+    {
+        if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
+        if (_doc.Blocks[tableBlock] is not Table table) return null;
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var cells = table.Rows[row].Cells;
+        // Find the cell whose StartCol matches col (handles merged cells).
+        var colIdx = 0;
+        foreach (var cell in cells)
+        {
+            if (colIdx == col)
+                return (paraIdx >= 0 && paraIdx < cell.Paragraphs.Count) ? cell.Paragraphs[paraIdx] : null;
+            colIdx += Math.Max(1, cell.GridSpan);
+        }
+        return null;
+    }
+
+    // AV-TBL: retrieve the TableCell model for a given cell address.
+    private TableCell? GetCellModel(int tableBlock, int row, int col)
+    {
+        if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
+        if (_doc.Blocks[tableBlock] is not Table table) return null;
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var colIdx = 0;
+        foreach (var cell in table.Rows[row].Cells)
+        {
+            if (colIdx == col)
+                return cell;
+            colIdx += Math.Max(1, cell.GridSpan);
+        }
+        return null;
     }
 
     private (DocPosition Start, DocPosition End)? NormalizedSelection()
@@ -4093,6 +4780,12 @@ public sealed class DocumentView : Control
 
     private void ClampCaret()
     {
+        // AV-TBL: clear cell caret on undo/redo to avoid stale cell addresses.
+        _cellCaret = null;
+        _cellAnchor = null;
+        // AV-TBL2: also clear cross-cell block selection (indices may have shifted after mutation).
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
         if (_caret.Block >= _doc.Blocks.Count)
             _caret = new DocPosition(Math.Max(0, _doc.Blocks.Count - 1), 0);
         _caret = _caret with { Offset = Math.Clamp(_caret.Offset, 0, CurrentLength()) };
@@ -4314,6 +5007,9 @@ public sealed class DocumentView : Control
 
     private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
 
+    // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
+    private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
+
     private readonly record struct Cell(char Ch, RunFormatting Fmt);
 
     private readonly record struct DocPosition(int Block, int Offset);
@@ -4327,7 +5023,16 @@ public sealed class DocumentView : Control
         double LineHeight,
         RunFormatting Fmt,
         char Ch,
-        bool Sentinel);
+        bool Sentinel,
+        // AV-TBL: cell address (-1 = not in a table cell)
+        int CellRow = -1,
+        int CellCol = -1,
+        int CellParaIdx = -1,
+        int CellParaOffset = -1)
+    {
+        /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
+        public bool IsCell => CellRow >= 0;
+    }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
@@ -4796,15 +5501,39 @@ public sealed class DocumentView : Control
 
         var annotFmt = new RunFormatting { FontSizePt = 7 };
 
-        // ── Legend geometry (right side, each series gets a swatch + name row) ──
-        // Reserve right strip for legend when ShowLegend and at least one named series exists.
-        var legendW = 0.0;
-        var namedSeries = cd.Series.Where(s => !string.IsNullOrEmpty(s.Name)).ToList();
-        if (cd.ShowLegend && namedSeries.Count > 0)
+        // BC2: Legend is placed at the BOTTOM (matches WPF). Build legend entries for ALL series
+        // with "Series N" fallback; for Pie/Doughnut use categories with "Item N" fallback.
+        var isPieFamily = cd.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        List<(string label, int colorIdx)> legendEntries = [];
+        if (cd.ShowLegend)
         {
-            var maxNameW = namedSeries.Max(s => Build(s.Name!, annotFmt).WidthIncludingTrailingWhitespace);
-            legendW = Math.Min(rect.Width * 0.30, maxNameW + 18); // swatch(10)+gap(4)+text+pad(4)
+            if (isPieFamily)
+            {
+                // Pie/doughnut: one entry per slice from Categories (or "Item N").
+                var sliceCount = cd.Series.Count > 0 ? cd.Series[0].Values.Count : cd.Categories.Count;
+                for (var i = 0; i < sliceCount; i++)
+                {
+                    var lbl = i < cd.Categories.Count && !string.IsNullOrEmpty(cd.Categories[i])
+                        ? cd.Categories[i] : $"Item {i + 1}";
+                    legendEntries.Add((lbl, i));
+                }
+            }
+            else
+            {
+                // Non-pie: one entry per series, "Series N" fallback.
+                for (var si = 0; si < cd.Series.Count; si++)
+                {
+                    var name = string.IsNullOrEmpty(cd.Series[si].Name) ? $"Series {si + 1}" : cd.Series[si].Name!;
+                    legendEntries.Add((name, si));
+                }
+            }
         }
+
+        // Legend height: reserve at bottom when entries exist.
+        const double legendRowH  = 11;
+        const double legendSwSz  = 8;
+        const double legendPad   = 2;
+        var legendH = legendEntries.Count > 0 ? legendRowH + legendPad * 2 : 0.0;
 
         // ── Value-axis (Y) title — left strip ──
         const double valAxisTitleW = 12; // width of rotated text strip
@@ -4818,22 +5547,38 @@ public sealed class DocumentView : Control
 
         // ── Plot area bounds after reserving annotation strips ──
         var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 8 : titleH + 4);
-        var plotBottom = rect.Bottom - 18 - catTitleH; // x-axis labels + optional cat title
+        var plotBottom = rect.Bottom - 18 - catTitleH - legendH; // x-axis labels + optional cat title + legend
         var plotLeft   = rect.X + 32 + valTitleW;      // y-axis labels + optional val title
-        var plotRight  = rect.Right - 8 - legendW;
+        var plotRight  = rect.Right - 8;
         var plotW      = Math.Max(10, plotRight - plotLeft);
         var plotH      = Math.Max(10, plotBottom - plotTop);
 
         if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
             return;
 
-        // ── Gridlines ──
+        // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
+        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
+        var zeroFraction = -axisMin / axisRange;
+
+        // ── Gridlines + BC1: Y-axis tick labels ──
         const int gridLines = 4;
         var gridPen = new Pen(ChartGridlineBrush, 0.5);
         for (var g = 0; g <= gridLines; g++)
         {
             var gy = plotBottom - g * plotH / gridLines;
             context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
+
+            // BC1: Draw value-axis tick label in the reserved left strip.
+            if (!isPieFamily)
+            {
+                var tickVal = axisMin + (g * axisRange / gridLines);
+                var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+                var tickFt = Build(tickLabel, annotFmt);
+                var tx = plotLeft - tickFt.WidthIncludingTrailingWhitespace - 2;
+                var ty = gy - tickFt.Height / 2;
+                if (tx >= rect.X)
+                    context.DrawText(tickFt, new Point(tx, ty));
+            }
         }
 
         // ── Chart geometry ──
@@ -4861,6 +5606,62 @@ public sealed class DocumentView : Control
                 break;
         }
 
+        // BC1: Draw category-axis (X) labels under each bar/point group (mirrors WPF AddCategoryLabel).
+        if (!isPieFamily && cd.Categories.Count > 0)
+        {
+            var cats = cd.Categories.Count;
+            switch (cd.Kind)
+            {
+                case ChartKind.Column:
+                {
+                    var groupW = plotW / Math.Max(1, cats);
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var cx  = plotLeft + ci * groupW + groupW / 2;
+                        var tx  = cx - ft.WidthIncludingTrailingWhitespace / 2;
+                        var ty  = plotBottom + 2;
+                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
+                    }
+                    break;
+                }
+                case ChartKind.Bar:
+                {
+                    var groupH = plotH / Math.Max(1, cats);
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var cy  = plotTop + ci * groupH + groupH / 2;
+                        var ty  = cy - ft.Height / 2;
+                        // Label on the left side of the bar chart.
+                        var tx  = rect.X + 2;
+                        context.DrawText(ft, new Point(tx, ty));
+                    }
+                    break;
+                }
+                case ChartKind.Line:
+                case ChartKind.Scatter:
+                case ChartKind.Area:
+                {
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
+                        var tx  = px - ft.WidthIncludingTrailingWhitespace / 2;
+                        var ty  = plotBottom + 2;
+                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
+                    }
+                    break;
+                }
+            }
+        }
+
         // ── Data labels ──
         if (cd.ShowDataLabels && cd.Series.Count > 0)
         {
@@ -4886,38 +5687,49 @@ public sealed class DocumentView : Control
         {
             var catTitleFt = Build(cd.CategoryAxisTitle!, annotFmt);
             var catTitleX = plotLeft + (plotW - catTitleFt.WidthIncludingTrailingWhitespace) / 2;
-            var catTitleY = rect.Bottom - catTitleFt.Height - 1;
+            var catTitleY = rect.Bottom - legendH - catTitleFt.Height - 1;
             context.DrawText(catTitleFt, new Point(Math.Max(rect.X + 2, catTitleX), catTitleY));
         }
 
-        // ── Legend (right strip) ──
-        if (cd.ShowLegend && namedSeries.Count > 0)
+        // BC2: Legend (BOTTOM, matches WPF) — all series with "Series N" fallback; pie uses categories.
+        if (legendEntries.Count > 0)
         {
-            const double swatchSz = 8;
-            const double rowH     = 11;
-            const double pad      = 4;
-            var legendX     = plotRight + pad;
-            var legendTotalH = namedSeries.Count * rowH;
-            var legendY     = (plotTop + plotBottom) / 2 - legendTotalH / 2;
+            const double swatchSz = legendSwSz;
+            const double rowH     = legendRowH;
+            const double pad      = legendPad;
+
+            // Lay the entries out horizontally centred, wrapping if needed.
+            var legendY  = rect.Bottom - legendH + pad;
+            var legendX0 = plotLeft;
+            var curX     = legendX0;
+            // Measure total width to centre.
+            var totalLegendW = 0.0;
+            foreach (var (lbl, _) in legendEntries)
+            {
+                var w = Build(lbl, annotFmt).WidthIncludingTrailingWhitespace;
+                totalLegendW += swatchSz + 3 + w + 12;
+            }
+            curX = plotLeft + Math.Max(0, (plotW - totalLegendW) / 2);
 
             // Semi-transparent background.
             context.FillRectangle(ChartLegendBg,
-                new Rect(legendX - 2, legendY - 2, legendW, legendTotalH + 4));
+                new Rect(rect.X, rect.Bottom - legendH, rect.Width, legendH));
 
-            for (var si = 0; si < namedSeries.Count; si++)
+            foreach (var (lbl, colorIdx) in legendEntries)
             {
-                var (name, _) = namedSeries[si];
-                var originalIdx = cd.Series.IndexOf(namedSeries[si]);
-                var color = ChartSeriesColors[(originalIdx >= 0 ? originalIdx : si) % ChartSeriesColors.Length];
+                var color = ChartSeriesColors[colorIdx % ChartSeriesColors.Length];
                 var brush = new SolidColorBrush(color);
-                var rowY = legendY + si * rowH;
+                var nameFt = Build(lbl, annotFmt);
+                var entryW = swatchSz + 3 + nameFt.WidthIncludingTrailingWhitespace + 12;
+
+                if (curX + entryW > plotRight)
+                    break; // stop if no room
 
                 // Swatch.
-                context.FillRectangle(brush, new Rect(legendX, rowY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
-
+                context.FillRectangle(brush, new Rect(curX, legendY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
                 // Name.
-                var nameFt = Build(name!, annotFmt);
-                context.DrawText(nameFt, new Point(legendX + swatchSz + 2, rowY + (rowH - nameFt.Height) / 2));
+                context.DrawText(nameFt, new Point(curX + swatchSz + 3, legendY + (rowH - nameFt.Height) / 2));
+                curX += entryW;
             }
         }
 
@@ -4934,14 +5746,35 @@ public sealed class DocumentView : Control
     /// For pie/doughnut: percentage text at the slice midpoint angle.
     /// Approximation: text is positioned geometrically; no collision avoidance.
     /// </summary>
+    /// <summary>
+    /// Shared helper: compute the axis [axisMin, axisMax] range for bar/line data labels and axis labels.
+    /// Ensures the range includes 0, guards degenerate all-zero data.
+    /// </summary>
+    private static (double axisMin, double axisMax, double axisRange) ComputeAxisRange(FloatingChartData cd)
+    {
+        var minVal = 0.0;
+        var maxVal = 0.0;
+        foreach (var (_, vals) in cd.Series)
+            foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+            }
+        var axisMin   = Math.Min(0, minVal);
+        var axisMax   = Math.Max(0, maxVal);
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        return (axisMin, axisMax, axisMax - axisMin);
+    }
+
     private void DrawChartDataLabels(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, double plotBottom,
         RunFormatting fmt)
     {
-        var maxVal = 1.0;
-        foreach (var (_, vals) in cd.Series)
-            foreach (var v in vals)
-                if (v > maxVal) maxVal = v;
+        // BC3: Use axis range that includes negative values.
+        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
+        var zeroFraction = -axisMin / axisRange;
+        var zeroY = plotBottom - zeroFraction * plotH;
+        var zeroX = plotLeft   + zeroFraction * plotW;
 
         switch (cd.Kind)
         {
@@ -4959,18 +5792,27 @@ public sealed class DocumentView : Control
                     var (_, vals) = cd.Series[si];
                     for (var ci = 0; ci < cats; ci++)
                     {
-                        var val   = ci < vals.Count ? vals[ci] : 0;
-                        var ratio = maxVal > 0 ? val / maxVal : 0;
-                        var bw    = Math.Max(1, seriesW - 1);
-                        var barH  = Math.Max(1, ratio * plotH);
-                        var bx    = plotLeft + barPad + ci * groupW + si * seriesW;
-                        var barTopY = plotBottom - barH;
+                        var val     = ci < vals.Count ? vals[ci] : 0;
+                        var bw      = Math.Max(1, seriesW - 1);
+                        var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
+                        var valFrac = val / axisRange;
+                        var barH    = Math.Abs(valFrac) * plotH;
+                        var barTopY = val >= 0 ? zeroY - barH : zeroY;
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
                         var lx = bx + (bw - ft.WidthIncludingTrailingWhitespace) / 2;
-                        var ly = barTopY - ft.Height - 1;
-                        if (ly < plotTop) ly = barTopY + 1; // flip inside bar if clipped
+                        double ly;
+                        if (val >= 0)
+                        {
+                            ly = barTopY - ft.Height - 1;
+                            if (ly < plotTop) ly = barTopY + 1;
+                        }
+                        else
+                        {
+                            ly = barTopY + barH + 1; // below the bar for negative
+                            if (ly + ft.Height > plotBottom) ly = barTopY - ft.Height - 1;
+                        }
                         context.DrawText(ft, new Point(Math.Max(plotLeft, lx), ly));
                     }
                 }
@@ -4992,15 +5834,15 @@ public sealed class DocumentView : Control
                     for (var ci = 0; ci < cats; ci++)
                     {
                         var val   = ci < vals.Count ? vals[ci] : 0;
-                        var ratio = maxVal > 0 ? val / maxVal : 0;
-                        var barW  = Math.Max(1, ratio * plotW);
+                        var barW  = Math.Abs(val / axisRange) * plotW;
+                        var bx    = val >= 0 ? zeroX : zeroX - barW;
                         var by    = plotTop + (ci * (barGroupH + 2 * barPad) + barPad + si * seriesH);
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
-                        var lx = plotLeft + barW + 1;
+                        var lx = val >= 0 ? bx + barW + 1 : bx - ft.WidthIncludingTrailingWhitespace - 1;
                         var ly = by + (Math.Max(1, seriesH - 1) - ft.Height) / 2;
-                        context.DrawText(ft, new Point(Math.Min(lx, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
+                        context.DrawText(ft, new Point(Math.Clamp(lx, plotLeft, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
                     }
                 }
                 break;
@@ -5018,7 +5860,7 @@ public sealed class DocumentView : Control
                     {
                         var val = vals[ci];
                         var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                        var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+                        var py  = plotBottom - ((val - axisMin) / axisRange * plotH);
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
@@ -5068,16 +5910,32 @@ public sealed class DocumentView : Control
         var nSeries = cd.Series.Count;
         var nBars   = cats;
 
-        // Find max value across all series.
-        var maxVal = 1.0;
+        // BC3: Compute axis range that includes negative values and anchors the zero baseline.
+        var minVal = 0.0;
+        var maxVal = 0.0;
         foreach (var (_, vals) in cd.Series)
             foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
                 if (v > maxVal) maxVal = v;
+            }
+        var axisMin = Math.Min(0, minVal);
+        var axisMax = Math.Max(0, maxVal);
+        // Guard degenerate all-zero data.
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        var axisRange = axisMax - axisMin;
 
-        var groupW = plotW / Math.Max(1, nBars);
-        var barPad = Math.Max(1, groupW * 0.1);
+        // Zero baseline position within the plot area.
+        // In vertical bars:  zeroY   = plotBottom - (0 - axisMin)/axisRange * plotH
+        // In horizontal bars: zeroX  = plotLeft   + (0 - axisMin)/axisRange * plotW
+        var zeroFraction = -axisMin / axisRange; // fraction of plotH/plotW at which y=0 lives
+        var zeroY = plotBottom - zeroFraction * plotH;
+        var zeroX = plotLeft   + zeroFraction * plotW;
+
+        var groupW    = plotW / Math.Max(1, nBars);
+        var barPad    = Math.Max(1, groupW * 0.1);
         var barGroupW = groupW - 2 * barPad;
-        var seriesW = barGroupW / Math.Max(1, nSeries);
+        var seriesW   = barGroupW / Math.Max(1, nSeries);
 
         for (var si = 0; si < nSeries; si++)
         {
@@ -5087,37 +5945,75 @@ public sealed class DocumentView : Control
 
             for (var ci = 0; ci < nBars; ci++)
             {
-                var val   = ci < vals.Count ? vals[ci] : 0;
-                var ratio = maxVal > 0 ? val / maxVal : 0;
+                var val = ci < vals.Count ? vals[ci] : 0;
 
                 if (horizontal)
                 {
-                    var bh     = Math.Max(1, seriesW - 1);
-                    var barH   = Math.Max(1, ratio * plotW);
-                    var by     = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
-                    var barRect = new Rect(plotLeft, by, barH, bh);
-                    context.FillRectangle(brush, barRect);
+                    var bh       = Math.Max(1, seriesW - 1);
+                    var by       = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
+                    var valFrac  = val / axisRange;
+                    var barW     = Math.Abs(valFrac) * plotW;
+                    double bx;
+                    if (val >= 0)
+                        bx = zeroX;
+                    else
+                    {
+                        bx   = zeroX - barW;
+                        barW = Math.Abs(barW);
+                    }
+                    if (barW < 1) barW = 1;
+                    context.FillRectangle(brush, new Rect(bx, by, barW, bh));
                 }
                 else
                 {
-                    var bw     = Math.Max(1, seriesW - 1);
-                    var barH   = Math.Max(1, ratio * plotH);
-                    var bx     = plotLeft + barPad + ci * groupW + si * seriesW;
-                    var barRect = new Rect(bx, plotBottom - barH, bw, barH);
-                    context.FillRectangle(brush, barRect);
+                    var bw      = Math.Max(1, seriesW - 1);
+                    var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
+                    var valFrac = val / axisRange;
+                    var barH    = Math.Abs(valFrac) * plotH;
+                    double barTop;
+                    if (val >= 0)
+                        barTop = zeroY - barH;
+                    else
+                        barTop = zeroY;
+                    if (barH < 1) barH = 1;
+                    context.FillRectangle(brush, new Rect(bx, barTop, bw, barH));
                 }
             }
         }
+
+        // Draw zero-baseline axis line.
+        var axisLinePen = new Pen(ChartGridlineBrush, 1.0);
+        if (!horizontal)
+            context.DrawLine(axisLinePen, new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
+        else
+            context.DrawLine(axisLinePen, new Point(zeroX, plotTop), new Point(zeroX, plotBottom));
     }
 
     private void DrawChartLines(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool fillArea)
     {
-        var cats   = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
-        var maxVal = 1.0;
+        var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
+
+        // BC3: Compute axis range including negative values.
+        var minVal = 0.0;
+        var maxVal = 0.0;
         foreach (var (_, vals) in cd.Series)
             foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
                 if (v > maxVal) maxVal = v;
+            }
+        var axisMin   = Math.Min(0, minVal);
+        var axisMax   = Math.Max(0, maxVal);
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        var axisRange = axisMax - axisMin;
+
+        // Zero baseline Y position within the plot.
+        var zeroFraction = -axisMin / axisRange;
+        var zeroY = plotBottom - zeroFraction * plotH;
+
+        // Map a data value to a pixel Y within the plot.
+        double ValToY(double v) => plotBottom - ((v - axisMin) / axisRange) * plotH;
 
         for (var si = 0; si < cd.Series.Count; si++)
         {
@@ -5132,7 +6028,7 @@ public sealed class DocumentView : Control
             {
                 var val = ci < vals.Count ? vals[ci] : 0;
                 var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+                var py  = ValToY(val);
                 pts.Add(new Point(px, py));
             }
 
@@ -5143,13 +6039,17 @@ public sealed class DocumentView : Control
             {
                 var geo = new StreamGeometry();
                 using var ctx = geo.Open();
-                ctx.BeginFigure(new Point(pts[0].X, plotBottom), isFilled: true);
+                ctx.BeginFigure(new Point(pts[0].X, zeroY), isFilled: true);
                 foreach (var p in pts) ctx.LineTo(p);
-                ctx.LineTo(new Point(pts[^1].X, plotBottom));
+                ctx.LineTo(new Point(pts[^1].X, zeroY));
                 ctx.EndFigure(true);
                 context.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)), null, geo);
             }
         }
+
+        // Draw zero-baseline axis line.
+        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
+            new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
     }
 
     private static void DrawChartPie(DrawingContext context, FloatingChartData cd,

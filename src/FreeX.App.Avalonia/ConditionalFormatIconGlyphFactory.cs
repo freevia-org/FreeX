@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
@@ -20,7 +21,7 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 internal static class ConditionalFormatIconGlyphFactory
 {
-    private static readonly IBrush OutlineBrush = new SolidColorBrush(Color.FromRgb(96, 96, 96));
+    private static readonly IBrush OutlineBrush = new ImmutableSolidColorBrush(Color.FromRgb(96, 96, 96));
     private const double OutlineThickness = 0.75;
     private const double WhiteThinThickness = 1.2;
     private const double WhiteMediumThickness = 1.4;

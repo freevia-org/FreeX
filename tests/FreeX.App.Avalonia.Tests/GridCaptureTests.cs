@@ -27,6 +27,7 @@ namespace FreeX.App.Avalonia.Tests;
 ///   written to disk, and asserts that a non-empty PNG and a JSON log are written to the output directory.</item>
 /// </list>
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class GridCaptureTests
 {
     private static readonly HeadlessUnitTestSession Session =

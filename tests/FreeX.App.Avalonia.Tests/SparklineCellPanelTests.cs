@@ -364,6 +364,7 @@ public sealed class SparklineLayoutEngineOverloadTests
 /// because Avalonia <c>Line</c>, <c>Rectangle</c>, and <c>Ellipse</c> shapes need
 /// <c>IPlatformRenderInterface</c> when arranged (they compute geometry bounds via the platform).
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class SparklinePanelRenderTests
 {
     private static readonly HeadlessUnitTestSession Session =

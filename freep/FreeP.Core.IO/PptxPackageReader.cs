@@ -2105,10 +2105,20 @@ public static class PptxPackageReader
             if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
-            // Wave 16A: warp preset
+            // Wave 16A: warp preset + adjust guides (BA4)
             var prstTxWarp = bodyPr.Element(A + "prstTxWarp");
             if (prstTxWarp is not null)
+            {
                 body.WarpPreset = prstTxWarp.Attribute("prst")?.Value;
+                foreach (var gd in prstTxWarp.Element(A + "avLst")?.Elements(A + "gd")
+                                   ?? Enumerable.Empty<XElement>())
+                {
+                    var gdName = gd.Attribute("name")?.Value;
+                    var gdFmla = gd.Attribute("fmla")?.Value;
+                    if (gdName is not null && gdFmla is not null)
+                        body.WarpAdjusts.Add((gdName, gdFmla));
+                }
+            }
         }
 
         // Parse a:lstStyle — full per-level paragraph/run defaults.
@@ -2277,7 +2287,9 @@ public static class PptxPackageReader
             if (outerShdw is not null)
             {
                 var shdwColor = PptxColorReader.TryReadColor(outerShdw, scheme);
-                byte alpha = 128;
+                // DrawingML: absent a:alpha on the color element = fully opaque (255).
+                // Default was previously 128 (50%), which made opaque shadows half-transparent on read.
+                byte alpha = 255;
                 // a:outerShdw may have alpha on its color element
                 var schemeClrEl = outerShdw.Element(A + "schemeClr") ?? outerShdw.Element(A + "srgbClr");
                 if (schemeClrEl is not null)

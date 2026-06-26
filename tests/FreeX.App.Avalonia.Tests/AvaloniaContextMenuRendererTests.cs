@@ -13,6 +13,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// <see cref="RibbonMenu"/> into an Avalonia <see cref="ContextMenu"/> / <see cref="MenuItem"/> tree.
 /// Also exercises the worksheet cell-menu factory built on top of the shared planner/adapter.
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaContextMenuRendererTests
 {
     private static readonly HeadlessUnitTestSession Session =

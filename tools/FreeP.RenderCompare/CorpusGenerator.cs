@@ -1108,10 +1108,10 @@ internal static class CorpusGenerator
     private static void GenerateFills(dynamic app, string pptxPath, string refDir)
     {
         // PowerPoint COM fill constants
-        const int MsoGradientLinear        = 1;   // msoGradientLinear
-        const int MsoGradientFromCenter    = 4;   // msoGradientFromCenter (radial)
-        const int MsoPatternDiagonalStripe = 6;   // msoPatternDiagonalStripe
-        const int MsoPatternCross          = 51;  // msoPatternCross
+        const int MsoGradientHorizontal           = 1;   // msoGradientHorizontal (linear)
+        const int MsoGradientFromCenter           = 7;   // msoGradientFromCenter (radial)
+        const int MsoPatternLightDownwardDiagonal = 21;  // msoPatternLightDownwardDiagonal -> ltDnDiag
+        const int MsoPatternCross                 = 51;  // msoPatternCross
 
         dynamic? pres = null;
         try
@@ -1133,7 +1133,7 @@ internal static class CorpusGenerator
             sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
             try
             {
-                sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                sh1.Fill.TwoColorGradient(MsoGradientHorizontal, 1);
                 sh1.Fill.GradientStops.Insert(0x0000FF, 0.0f, 1);  // stop 1: red at 0%
                 sh1.Fill.GradientStops[1].Color.RGB = 0xFF0000;
                 sh1.Fill.GradientStops[1].Position = 0.0f;
@@ -1145,7 +1145,7 @@ internal static class CorpusGenerator
                 // Fallback: simple 2-color gradient
                 try
                 {
-                    sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                    sh1.Fill.TwoColorGradient(MsoGradientHorizontal, 1);
                     sh1.Fill.ForeColor.RGB = 0xFF0000;
                     sh1.Fill.BackColor.RGB = 0x0000FF;
                 }
@@ -1172,7 +1172,7 @@ internal static class CorpusGenerator
             sh3.TextFrame.TextRange.Font.Size = 13;
             try
             {
-                sh3.Fill.Patterned(MsoPatternDiagonalStripe);
+                sh3.Fill.Patterned(MsoPatternLightDownwardDiagonal);
                 sh3.Fill.ForeColor.RGB = 0x0000FF;
                 sh3.Fill.BackColor.RGB = 0xFFFFFF;
             }
@@ -1199,13 +1199,13 @@ internal static class CorpusGenerator
             try
             {
                 // msoGradientPresetColors=3, msoGradientSunrise=11
-                sh5.Fill.PresetGradient(MsoGradientLinear, 1, 11);
+                sh5.Fill.PresetGradient(MsoGradientHorizontal, 1, 11);
             }
             catch
             {
                 try
                 {
-                    sh5.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                    sh5.Fill.TwoColorGradient(MsoGradientHorizontal, 1);
                     sh5.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
                     sh5.Fill.BackColor.ObjectThemeColor = MsoThemeColorAccent3;
                 }
@@ -1226,7 +1226,7 @@ internal static class CorpusGenerator
 
     private static void GenerateWordArt(dynamic app, string pptxPath, string refDir)
     {
-        const int MsoGradientLinear = 1;
+        const int MsoGradientHorizontal = 1;
 
         dynamic? pres = null;
         try
@@ -1255,7 +1255,7 @@ internal static class CorpusGenerator
                 // as a:solidFill on the run via format-as-picture path.
                 // Alternatively, just set font color and add a shape gradient fill so the
                 // exported PPTX round-trips the gradient correctly via shape-level effects.
-                sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                sh1.Fill.TwoColorGradient(MsoGradientHorizontal, 1);
                 sh1.Fill.ForeColor.RGB = 0xFF6600;   // orange
                 sh1.Fill.BackColor.RGB = 0xCC0000;   // deep red
                 sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF; // white outline text

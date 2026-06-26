@@ -8,6 +8,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
@@ -76,17 +77,17 @@ public static class AvaloniaRibbonRenderer
     internal static readonly Color TabStripColor = Color.FromRgb(0xF7, 0xF8, 0xF8);
     internal static readonly Color TabTextColor = Color.FromRgb(0x1F, 0x1F, 0x1F);
 
-    private static readonly IBrush SurfaceBrush = new SolidColorBrush(SurfaceColor);
-    private static readonly IBrush AccentBrush = new SolidColorBrush(AccentColor);
-    private static readonly IBrush DividerBrush = new SolidColorBrush(DividerColor);
-    private static readonly IBrush InlineDividerBrush = new SolidColorBrush(InlineDividerColor);
-    private static readonly IBrush GroupLabelBrush = new SolidColorBrush(GroupLabelColor);
-    private static readonly IBrush HoverBrush = new SolidColorBrush(HoverColor);
-    private static readonly IBrush HoverBorderBrush = new SolidColorBrush(HoverBorderColor);
-    private static readonly IBrush CheckedBrush = new SolidColorBrush(CheckedColor);
-    private static readonly IBrush TabHoverBrush = new SolidColorBrush(TabHoverColor);
-    private static readonly IBrush TabStripBrush = new SolidColorBrush(TabStripColor);
-    private static readonly IBrush TabTextBrush = new SolidColorBrush(TabTextColor);
+    private static readonly IBrush SurfaceBrush = new ImmutableSolidColorBrush(SurfaceColor);
+    private static readonly IBrush AccentBrush = new ImmutableSolidColorBrush(AccentColor);
+    private static readonly IBrush DividerBrush = new ImmutableSolidColorBrush(DividerColor);
+    private static readonly IBrush InlineDividerBrush = new ImmutableSolidColorBrush(InlineDividerColor);
+    private static readonly IBrush GroupLabelBrush = new ImmutableSolidColorBrush(GroupLabelColor);
+    private static readonly IBrush HoverBrush = new ImmutableSolidColorBrush(HoverColor);
+    private static readonly IBrush HoverBorderBrush = new ImmutableSolidColorBrush(HoverBorderColor);
+    private static readonly IBrush CheckedBrush = new ImmutableSolidColorBrush(CheckedColor);
+    private static readonly IBrush TabHoverBrush = new ImmutableSolidColorBrush(TabHoverColor);
+    private static readonly IBrush TabStripBrush = new ImmutableSolidColorBrush(TabStripColor);
+    private static readonly IBrush TabTextBrush = new ImmutableSolidColorBrush(TabTextColor);
     private static readonly FontFamily RibbonFontFamily =
         new("Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, Noto Sans, DejaVu Sans, Helvetica, sans-serif");
     private static readonly FuncControlTemplate<Button> RibbonButtonTemplate = new((button, _) =>

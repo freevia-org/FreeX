@@ -88,6 +88,16 @@ public static class ShapeHitTester
                                       double px, double py)
     {
         var b = GetShapeBoundsDip(shape, presentation);
+
+        // AD4: Un-rotate the test point into the shape's local (axis-aligned) frame before
+        // comparing against the AABB.  For a 0° shape this is a no-op.
+        if (shape.RotationDeg != 0)
+        {
+            double cx = b.Left + b.Width  / 2.0;
+            double cy = b.Top  + b.Height / 2.0;
+            (px, py)  = SlideTransformCore.UnRotatePoint(px, py, cx, cy, shape.RotationDeg);
+        }
+
         return px >= b.Left && px <= b.Right && py >= b.Top && py <= b.Bottom;
     }
 }

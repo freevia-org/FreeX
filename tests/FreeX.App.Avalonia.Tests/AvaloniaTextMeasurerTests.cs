@@ -13,6 +13,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// headless UI thread; the empty-string short-circuit needs no backend and is checked directly. If no
 /// headless backend is available the measuring case opts out cleanly rather than failing.
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaTextMeasurerTests
 {
     private static readonly HeadlessUnitTestSession Session =

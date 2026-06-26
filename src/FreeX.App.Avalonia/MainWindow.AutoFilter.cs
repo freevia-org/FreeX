@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
@@ -19,9 +20,9 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
-    private static readonly IBrush AutoFilterBorderBrush = new SolidColorBrush(Color.FromRgb(142, 153, 166));
-    private static readonly IBrush AutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(45, 55, 65));
-    private static readonly IBrush ActiveAutoFilterGlyphBrush = new SolidColorBrush(Color.FromRgb(15, 109, 140));
+    private static readonly IBrush AutoFilterBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(142, 153, 166));
+    private static readonly IBrush AutoFilterGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(45, 55, 65));
+    private static readonly IBrush ActiveAutoFilterGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(15, 109, 140));
 
     /// <summary>
     /// Wraps a header cell's content with an AutoFilter dropdown button when the cell is a filter-button

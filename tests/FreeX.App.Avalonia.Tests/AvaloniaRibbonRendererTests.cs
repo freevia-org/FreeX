@@ -30,6 +30,7 @@ public sealed class RibbonHeadlessApp : Application
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
 }
 
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaRibbonRendererTests
 {
     private static readonly HeadlessUnitTestSession Session =

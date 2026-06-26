@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
@@ -603,5 +604,5 @@ public sealed class AvaloniaChartRenderer
     private static IBrush SolidBrush(CellColor color) => SolidBrush(color.R, color.G, color.B);
 
     private static IBrush SolidBrush(byte r, byte g, byte b, byte a = 0xFF) =>
-        new SolidColorBrush(Color.FromArgb(a, r, g, b));
+        new ImmutableSolidColorBrush(Color.FromArgb(a, r, g, b));
 }

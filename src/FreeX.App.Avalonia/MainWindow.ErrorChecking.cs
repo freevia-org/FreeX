@@ -149,7 +149,10 @@ public sealed partial class MainWindow
                     new ScrollViewer
                     {
                         Content = rowsPanel,
-                        HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                        // Disabled (not Auto) horizontal scrolling: the columns already truncate at the
+                        // right edge, and Windows shows no horizontal scrollbar here — Auto rendered a
+                        // stray black scrollbar bar under the issues list.
+                        HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                         VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                     },
                 },

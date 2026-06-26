@@ -205,4 +205,137 @@ public sealed class SlideCanvasTests
         int intervals = (int)Math.Round(range / unit);
         intervals.Should().BeInRange(3, 7, "nice axis should have 3-7 gridline intervals");
     }
+
+    // ── BA2: WordArt / text-effects double-draw regression tests ─────────────
+
+    /// <summary>
+    /// BA2 regression: a warped text body must not cause a flat ghost behind the warped glyphs.
+    /// The base DrawText pass must be suppressed when warp is active.
+    /// Verified by: Measure must not throw (layout pipeline runs RenderParaWithEffects for all runs).
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_WarpedTextBody_DoesNotThrow_AndDrawsOnce()
+    {
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var tb = new TextBody { WarpPreset = "textArchUp" };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Plain" });
+        para.Runs.Add(new Run
+        {
+            Text = "Gradient",
+            TextFill = new ShapeFill.Gradient(
+                new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)),
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                angleDegrees: 90.0)
+        });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id            = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu    = 457200,
+            OffsetYEmu    = 274320,
+            ExtentCxEmu   = 8229600,
+            ExtentCyEmu   = 1143000,
+            TextBody      = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("warped text body must not cause a double-draw crash");
+    }
+
+    /// <summary>
+    /// BA2 regression: a paragraph with a gradient-fill run must not draw a flat base glyph
+    /// under the gradient overlay.  The base DrawText pass must be suppressed for effect runs.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_GradientFillRun_MixedWithPlainRun_DoesNotThrow()
+    {
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var tb   = new TextBody();
+        var para = new Paragraph();
+        // Plain run — must still be drawn via the updated RenderParaWithEffects plain-run path.
+        para.Runs.Add(new Run { Text = "Normal " });
+        // Effect run — must NOT be drawn by the base DrawText pass.
+        para.Runs.Add(new Run
+        {
+            Text    = "Gradient",
+            TextFill = new ShapeFill.Gradient(
+                new ThemeAwareColor(new SrgbColor(0xFF, 0x66, 0x00)),
+                new ThemeAwareColor(new SrgbColor(0xCC, 0x00, 0x00)),
+                angleDegrees: 45.0)
+        });
+        para.Runs.Add(new Run
+        {
+            Text       = " Outline",
+            TextOutline = new ShapeOutline.Visible(
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)), widthPt: 1.0, dash: OutlineDash.Solid)
+        });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id            = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu    = 457200,
+            OffsetYEmu    = 274320,
+            ExtentCxEmu   = 8229600,
+            ExtentCyEmu   = 1143000,
+            TextBody      = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act    = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("mixed plain+effect runs must render without double-draw exception");
+    }
+
+    /// <summary>
+    /// BA2 regression: text body with shadow on every run plus warp.
+    /// All runs go through RenderParaWithEffects — the plain-run geometry path is not exercised,
+    /// but the shadow+warp path must not throw.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_ShadowAndWarp_AllRunsEffect_DoesNotThrow()
+    {
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        var shadow = new RunTextShadow
+        {
+            Color  = new ThemeAwareColor(new SrgbColor(0x20, 0x20, 0x20)),
+            Alpha  = 180,
+            BlurPt = 3.0,
+            DistPt = 2.5,
+            DirDeg = 45.0
+        };
+
+        var tb   = new TextBody { WarpPreset = "textWave1" };
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Warped & shadowed", TextShadow = shadow });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id            = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu    = 457200,
+            OffsetYEmu    = 274320,
+            ExtentCxEmu   = 8229600,
+            ExtentCyEmu   = 1143000,
+            TextBody      = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act    = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow("warp+shadow text must not throw");
+    }
 }

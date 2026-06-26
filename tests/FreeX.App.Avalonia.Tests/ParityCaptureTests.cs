@@ -13,6 +13,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// directory, and asserts the grid surface, at least one dialog surface, and PNG files are produced. Pixel
 /// fidelity is the comparison runner's concern; this proves the capture path produces real files headlessly.
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class ParityCaptureTests
 {
     private static readonly HeadlessUnitTestSession Session =

@@ -18,6 +18,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// The fix: set <c>border.Child = null</c> before adding the existing child to the new layer Grid so
 /// the control has no visual parent at the moment it is re-parented.
 /// </summary>
+[Collection("AvaloniaHeadless")]
 public sealed class MainWindowLaunchTests
 {
     private static readonly HeadlessUnitTestSession Session =

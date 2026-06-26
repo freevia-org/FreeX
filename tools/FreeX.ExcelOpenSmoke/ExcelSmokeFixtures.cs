@@ -4795,17 +4795,17 @@ internal static class ExcelSmokeFixtures
     private const int MsoShapeOval                   = 9;
     private const int MsoShapeIsoscelesTriangle      = 7;
     private const int MsoShapeDiamond                = 4;
-    private const int MsoShapeRightArrow             = 13;
+    private const int MsoShapeRightArrow             = 33;
     private const int MsoShapeLeftRightArrow         = 37;
-    private const int MsoShapePentagon               = 56;   // msoShapeChevron=52; pentagon=56
+    private const int MsoShapePentagon               = 51;   // msoShapePentagon=51; msoShapeChevron=52
     private const int MsoShapeChevron                = 52;
-    private const int MsoShapeFlowchartProcess       = 109;
-    private const int MsoShapeFlowchartDecision      = 110;
+    private const int MsoShapeFlowchartProcess       = 61;
+    private const int MsoShapeFlowchartDecision      = 63;
     private const int MsoShape5PointStar             = 92;
     private const int MsoShapeExplosion1             = 89;
-    private const int MsoShapeRectangularCallout     = 61;
+    private const int MsoShapeRectangularCallout     = 105;
     private const int MsoShapeOvalCallout            = 107;
-    private const int MsoShapeCan                    = 46;    // msoShapeCan (Office MsoAutoShapeType) — database/storage cylinder
+    private const int MsoShapeCan                    = 13;    // msoShapeCan (Office MsoAutoShapeType) — database/storage cylinder
 
     // MsoLineDashStyle
     private const int MsoLineSolid               = 1;

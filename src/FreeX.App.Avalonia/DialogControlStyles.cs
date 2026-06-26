@@ -7,6 +7,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 
 namespace FreeX.App.Avalonia;
@@ -41,15 +42,15 @@ internal static class DialogControlStyles
 
     // ── Colors (shared with the ribbon palette) ──────────────────────────────────────────────────────
     // WS-G divergence: BorderBrush (#ABABAB) has no matching FreeX token role — left as literal.
-    private static readonly IBrush BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB));
+    private static readonly IBrush BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB));
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush AccentBrush =
-        ResolveTokenBrush("FreeXAccentBrush") ?? new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+        ResolveTokenBrush("FreeXAccentBrush") ?? new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
     // WS-G note: SelectionBrush is derived (AccentSoft @ alpha 0x40) — no standalone token role; left as literal.
-    private static readonly IBrush SelectionBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x0F, 0x6D, 0x8C));
+    private static readonly IBrush SelectionBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x40, 0x0F, 0x6D, 0x8C));
     // WS-G token: FreeXTextBrush (#1F1F1F) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush SelectionForegroundBrush =
-        ResolveTokenBrush("FreeXTextBrush") ?? new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
+        ResolveTokenBrush("FreeXTextBrush") ?? new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
 
     /// <summary>
     /// Looks up a named brush from the Application's resource registry (populated by
@@ -312,5 +313,5 @@ internal static class DialogControlStyles
     }
 
     /// <summary>Light-blue text-selection highlight that keeps black text readable (Windows-like).</summary>
-    private static readonly IBrush TextSelectionBrush = new SolidColorBrush(Color.FromRgb(173, 214, 255));
+    private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(173, 214, 255));
 }

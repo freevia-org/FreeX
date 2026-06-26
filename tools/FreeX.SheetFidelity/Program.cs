@@ -10,6 +10,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FreeX.ToolsShared;
 using DOXV = DocumentFormat.OpenXml.FileFormatVersions;
 
 /// <summary>
@@ -484,59 +485,22 @@ internal static class Program
     // Helpers
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // Value-comparison helpers — delegated to FreeX.ToolsShared.FidelityValueCompare so the same
+    // semantics are shared with FormatFidelity and FormatCrossCheck.
+    // -------------------------------------------------------------------------
+
     private static bool ValuesMatch(ScalarValue a, ScalarValue b)
-    {
-        // A date serial and a plain number with the same value display identically (the cell's number
-        // format decides date-vs-number rendering, not the scalar type). FreeX loads date-formatted cells
-        // as DateTimeValue but recalc produces NumberValue; treat equal serials as a MATCH, not a mismatch,
-        // so the report counts real divergences only. Same for bool<->1/0.
-        if (TryNumeric(a, out var an) && TryNumeric(b, out var bn))
-            return NumbersMatch(an, bn);
+        => FidelityValueCompare.ValuesMatch(a, b);
 
-        return (a, b) switch
-        {
-            (BlankValue, BlankValue) => true,
-            (TextValue ta, TextValue tb) => string.Equals(ta.Value, tb.Value, StringComparison.Ordinal),
-            // Any error vs any error is a MATCH — the formula is genuinely erroneous on the available data;
-            // only error-vs-non-error (caught by the wildcard below) remains a mismatch.
-            (ErrorValue, ErrorValue) => true,
-            _ => false
-        };
-    }
-
-    // Numeric view of a scalar: numbers, dates (serial), and bools (1/0) are all comparable numerically.
     private static bool TryNumeric(ScalarValue v, out double value)
-    {
-        switch (v)
-        {
-            case NumberValue n: value = n.Value; return true;
-            case DateTimeValue d: value = d.Value; return true;
-            case BoolValue b: value = b.Value ? 1 : 0; return true;
-            default: value = 0; return false;
-        }
-    }
+        => FidelityValueCompare.TryNumeric(v, out value);
 
     private static bool NumbersMatch(double a, double b)
-    {
-        if (a == b) return true;
-        if (double.IsNaN(a) && double.IsNaN(b)) return true;
-        var absDiff = Math.Abs(a - b);
-        if (absDiff < 1e-9) return true;
-        var magnitude = Math.Max(Math.Abs(a), Math.Abs(b));
-        if (magnitude > 0 && absDiff / magnitude < 1e-6) return true;
-        return false;
-    }
+        => FidelityValueCompare.NumbersMatch(a, b);
 
-    private static string ScalarStr(ScalarValue v) => v switch
-    {
-        BlankValue => "(blank)",
-        NumberValue nv => nv.Value.ToString("G", CultureInfo.InvariantCulture),
-        DateTimeValue dv => $"Date({dv.Value:G})",
-        TextValue tv => $"\"{tv.Value}\"",
-        BoolValue bv => bv.Value ? "TRUE" : "FALSE",
-        ErrorValue ev => ev.ToString(),
-        _ => v.ToString() ?? "?"
-    };
+    private static string ScalarStr(ScalarValue v)
+        => FidelityValueCompare.ScalarStr(v);
 
     // Non-deterministic volatile builtins whose cached value (authoring time) cannot match a recalc.
     // Deliberately narrower than FreeX's full volatile set (which also includes INDIRECT/OFFSET/CELL/INFO):
@@ -678,16 +642,7 @@ internal static class Program
     }
 
     private static string ColToLetter(uint col)
-    {
-        var sb = new StringBuilder(3);
-        while (col > 0)
-        {
-            col--;
-            sb.Insert(0, (char)('A' + col % 26));
-            col /= 26;
-        }
-        return sb.ToString();
-    }
+        => FidelityValueCompare.ColToLetter(col);
 
     private static string Trunc(string? s, int max)
     {

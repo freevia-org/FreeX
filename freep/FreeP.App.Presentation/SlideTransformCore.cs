@@ -76,6 +76,55 @@ public sealed class SlideTransformCore
     /// <summary>True identity transform (for when no slide is loaded).</summary>
     public static readonly SlideTransformCore Identity = new(1, 0, 0, 0, 0);
 
+    // ── Rotation helpers ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rotates a point <paramref name="px"/>,<paramref name="py"/> by
+    /// <paramref name="angleDeg"/> degrees (counter-clockwise in standard math convention,
+    /// which is clockwise on screen when Y points down) about
+    /// <paramref name="cx"/>,<paramref name="cy"/>.
+    /// </summary>
+    public static (double X, double Y) RotatePoint(
+        double px, double py, double cx, double cy, double angleDeg)
+    {
+        if (angleDeg == 0) return (px, py);
+        double rad = angleDeg * (Math.PI / 180.0);
+        double cos = Math.Cos(rad);
+        double sin = Math.Sin(rad);
+        double dx  = px - cx;
+        double dy  = py - cy;
+        return (cx + dx * cos - dy * sin,
+                cy + dx * sin + dy * cos);
+    }
+
+    /// <summary>
+    /// Un-rotates the point (<paramref name="px"/>,<paramref name="py"/>) from world space
+    /// into the shape's local (un-rotated) frame.  Equivalent to rotating by
+    /// <c>-angleDeg</c> about the shape centre (<paramref name="cx"/>,<paramref name="cy"/>).
+    /// </summary>
+    public static (double X, double Y) UnRotatePoint(
+        double px, double py, double cx, double cy, double angleDeg)
+        => RotatePoint(px, py, cx, cy, -angleDeg);
+
+    /// <summary>
+    /// Un-rotates a drag delta (<paramref name="dx"/>,<paramref name="dy"/>) from world
+    /// (screen-aligned) space into the shape's local frame by rotating it by
+    /// <c>-angleDeg</c>.  The centre is irrelevant for a pure vector; this overload is
+    /// provided for symmetry.
+    /// </summary>
+    public static (double Dx, double Dy) UnRotateDelta(double dx, double dy, double angleDeg)
+    {
+        if (angleDeg == 0) return (dx, dy);
+        double rad = angleDeg * (Math.PI / 180.0);
+        double cos =  Math.Cos(rad);
+        double sin =  Math.Sin(rad);
+        //  Rotating a vector (dx,dy) by -θ:
+        //    dx' =  dx·cos θ + dy·sin θ
+        //    dy' = -dx·sin θ + dy·cos θ
+        return (dx * cos + dy * sin,
+               -dx * sin + dy * cos);
+    }
+
     /// <summary>
     /// Computes the transform from the control's actual render size and the known slide DIP dimensions.
     /// </summary>

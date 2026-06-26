@@ -2104,9 +2104,11 @@ public static class PptxPackageWriter
         foreach (var stop in stops)
         {
             int pos = (int)Math.Round(stop.Position * 100000);
+            // CT_GradientStop: a:gs must contain a color element directly (srgbClr/schemeClr/…),
+            // NOT wrapped in a:solidFill — that wrapper is invalid per ECMA-376 schema.
             gsLst.Add(new XElement(A + "gs",
                 new XAttribute("pos", pos),
-                new XElement(A + "solidFill", BuildColorEl(stop.Color))));
+                BuildColorEl(stop.Color)));
         }
 
         XElement kindEl;
@@ -2231,11 +2233,18 @@ public static class PptxPackageWriter
         if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", (long)Math.Round(body.InsetBottomPt.Value * 12700)));
         if (body.AutoFit) bodyPr.Add(new XElement(A + "normAutofit"));
 
-        // Wave 16A: warp preset
+        // Wave 16A: warp preset + adjust guides (BA4)
         if (!string.IsNullOrWhiteSpace(body.WarpPreset))
+        {
+            var avLst = new XElement(A + "avLst");
+            foreach (var (name, fmla) in body.WarpAdjusts)
+                avLst.Add(new XElement(A + "gd",
+                    new XAttribute("name", name),
+                    new XAttribute("fmla", fmla)));
             bodyPr.Add(new XElement(A + "prstTxWarp",
                 new XAttribute("prst", body.WarpPreset),
-                new XElement(A + "avLst")));
+                avLst));
+        }
 
         // In PresentationML, the text body inside p:sp is p:txBody (not a:txBody).
         // Body-level elements use a: namespace, paragraphs/runs use a: namespace.
@@ -2326,7 +2335,14 @@ public static class PptxPackageWriter
         if (run.FontSizePt.HasValue)
             rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
 
-        // Wave 16A: text fill — gradient takes precedence; solid color is the fallback
+        // CT_TextCharacterProperties child order (ECMA-376):
+        //   a:ln → fill group (noFill/solidFill/gradFill/…) → a:effectLst → a:latin/ea/cs → a:hlinkClick
+
+        // Wave 16A: text outline — a:ln FIRST
+        if (run.TextOutline is not null)
+            rPr.Add(BuildOutlineEl(run.TextOutline));
+
+        // Fill group: gradient takes precedence; solid color is the fallback
         if (run.TextFill is not null)
         {
             var fillEl = BuildFillEl(run.TextFill, PresentationColorScheme.CreateDefault());
@@ -2337,19 +2353,13 @@ public static class PptxPackageWriter
             rPr.Add(new XElement(A + "solidFill", BuildColorEl(run.Color)));
         }
 
-        if (run.FontFamily is not null)
-            rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
-
-        // Wave 16A: text outline (a:ln inside a:rPr)
-        if (run.TextOutline is not null)
-            rPr.Add(BuildOutlineEl(run.TextOutline));
-
-        // Wave 16A: text shadow (a:effectLst/a:outerShdw inside a:rPr)
+        // Wave 16A: text shadow — a:effectLst AFTER fill group
         if (run.TextShadow is not null)
         {
             var ts = run.TextShadow;
             var shdwColorEl = BuildColorEl(ts.Color);
-            // Embed alpha on the color element
+            // Embed alpha on the color element only when < fully opaque;
+            // omitting a:alpha means 100% opaque in DrawingML.
             if (ts.Alpha < 255)
                 shdwColorEl.Add(new XElement(A + "alpha",
                     new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
@@ -2361,7 +2371,11 @@ public static class PptxPackageWriter
                     shdwColorEl)));
         }
 
-        // Run-level hyperlink
+        // a:latin AFTER a:effectLst
+        if (run.FontFamily is not null)
+            rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
+
+        // Run-level hyperlink — last
         if (run.Hyperlink is not null)
         {
             var hlinkEl = BuildHlinkClickEl(run.Hyperlink, hlinkRelIds, allSlides);

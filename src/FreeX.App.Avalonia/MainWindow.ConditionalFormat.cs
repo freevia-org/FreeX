@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -940,6 +941,10 @@ public sealed partial class MainWindow
         });
         AutomationProperties.SetAutomationId(listBox, "ManageConditionalFormatsListBox");
         AutomationProperties.SetName(listBox, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
+        // Render each rule as a #/Rule-type/Format-swatch/Applies-to/Stop-if row matching the header
+        // columns (the WPF GridView), instead of the default single-string row.
+        listBox.ItemTemplate = new FuncDataTemplate<ConditionalFormatRuleListItem>(
+            (item, _) => BuildManageConditionalFormatRow(item), supportsRecycling: true);
 
         var emptyText = new TextBlock
         {
@@ -1211,7 +1216,7 @@ public sealed partial class MainWindow
         // inside its own cell.
         var headerGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("32,190,90,150,*"),
+            ColumnDefinitions = new ColumnDefinitions(ManageCfRuleColumns),
             Background = Brush(243, 243, 243),
             ClipToBounds = true,
             Children =
@@ -1296,5 +1301,122 @@ public sealed partial class MainWindow
         }
 
         await dialog.ShowDialog(this);
+    }
+
+    // Shared column layout for the Manage-rules header AND each rule row so they line up:
+    // # | Rule (Type) | Format | Applies To | Stop If True(*). Widths sum under the ~534px frame so
+    // the star "Stop If True" column absorbs the remainder (and fits its full header text).
+    private const string ManageCfRuleColumns = "32,170,92,128,*";
+
+    /// <summary>Builds one rules-manager row matching the column header (mirrors the WPF GridView rows).</summary>
+    private Control BuildManageConditionalFormatRow(ConditionalFormatRuleListItem item)
+    {
+        var rule = item.Rule;
+        var grid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions(ManageCfRuleColumns),
+            Height = 22,
+        };
+
+        void AddCell(Control control, int column)
+        {
+            AvaloniaGrid.SetColumn(control, column);
+            grid.Children.Add(control);
+        }
+
+        static TextBlock RowText(string text) => new()
+        {
+            Text = text,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(5, 0),
+            TextTrimming = global::Avalonia.Media.TextTrimming.CharacterEllipsis,
+        };
+
+        AddCell(RowText(rule.Priority.ToString(global::System.Globalization.CultureInfo.InvariantCulture)), 0);
+        AddCell(RowText(item.Description), 1);
+        AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
+        AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
+        // Stop-If-True shown as a read-only checkbox (display only; editing is via the rule editor).
+        var stopBox = new CheckBox
+        {
+            IsChecked = rule.StopIfTrue,
+            IsHitTestVisible = false,
+            MinWidth = 0,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(8, 0),
+        };
+        AddCell(stopBox, 4);
+        return grid;
+    }
+
+    /// <summary>A compact preview of a rule's effect for the Format column (mirrors the WPF swatch).</summary>
+    private Control BuildConditionalFormatPreviewSwatch(ConditionalFormat rule)
+    {
+        static IBrush RgbBrush(RgbColor c) => new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        static IBrush CellBrush(CellColor c) => new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+
+        var swatch = new Border
+        {
+            Width = 78,
+            Height = 16,
+            Margin = new Thickness(3, 0),
+            BorderBrush = Brush(150, 150, 150),
+            BorderThickness = new Thickness(0.5),
+            Background = Brushes.White,
+        };
+
+        switch (rule.RuleType)
+        {
+            case CfRuleType.DataBar:
+                swatch.Child = new Border
+                {
+                    Background = RgbBrush(rule.DataBarColor),
+                    Width = 46,
+                    Margin = new Thickness(1),
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                };
+                break;
+            case CfRuleType.ColorScale:
+                var gradient = new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                };
+                gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MinColor.R, rule.MinColor.G, rule.MinColor.B), 0));
+                if (rule.UseThreeColorScale)
+                    gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MidColor.R, rule.MidColor.G, rule.MidColor.B), 0.5));
+                gradient.GradientStops.Add(new GradientStop(Color.FromRgb(rule.MaxColor.R, rule.MaxColor.G, rule.MaxColor.B), 1));
+                swatch.Background = gradient;
+                break;
+            case CfRuleType.IconSet:
+                swatch.Child = new TextBlock
+                {
+                    Text = "▲ ◆ ▼",
+                    FontSize = 9,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                };
+                break;
+            default:
+                var format = rule.FormatIfTrue;
+                if (format?.FillColor is { } fill)
+                    swatch.Background = CellBrush(fill);
+                swatch.Child = new TextBlock
+                {
+                    Text = UiText.Get("ManageConditionalFormats_FormatPreviewSample"),
+                    FontSize = 10,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    Foreground = format is null ? Brushes.Black : CellBrush(format.FontColor),
+                    FontWeight = format?.Bold == true ? FontWeight.Bold : FontWeight.Normal,
+                    FontStyle = format?.Italic == true ? global::Avalonia.Media.FontStyle.Italic : global::Avalonia.Media.FontStyle.Normal,
+                    TextDecorations = format?.Underline == true ? global::Avalonia.Media.TextDecorations.Underline : null,
+                };
+                break;
+        }
+
+        return swatch;
     }
 }

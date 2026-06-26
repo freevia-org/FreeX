@@ -1367,12 +1367,13 @@ public sealed class SlideCanvas : FrameworkElement
             curY += spaceBefore;
 
             // Wave 16A: use geometry-based rendering when any run has text effects, or warp is active.
+            // BA2 fix: when effects/warp are active, skip the flat DrawText base pass entirely and
+            // let RenderParaWithEffects draw ALL runs (plain ones at their flat baseline, effect/warp
+            // ones with the appropriate transforms). This prevents each effect/warp run being drawn
+            // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
             if (hasEffects)
             {
-                // Draw the base text normally first for non-effect runs (effects path skips plain runs)
-                dc.DrawText(ft, new Point(textX, curY));
-                // Then overlay the effects-bearing runs via geometry
                 RenderParaWithEffects(dc, para, textX, curY, textAreaW, text.Wrap, text.WarpPreset, bounds);
             }
             else
@@ -1564,9 +1565,23 @@ public sealed class SlideCanvas : FrameworkElement
             int len = run.Text.Length;
             bool hasEffects = run.TextFill is not null || run.TextOutline is not null || run.TextShadow is not null;
 
+            // BA2 fix: plain runs are no longer drawn by an outer DrawText pass, so draw them here
+            // at their flat baseline (no warp, solid-color fill, no outline).
+            var runFt2 = BuildSingleRunFormattedText(run, wrap ? maxWidth : 0);
+            double runOffX = ComputeRunOffsetX(para, run, pos, maxWidth, wrap);
+            double drawX = x + runOffX;
+            double drawY = y;
+
             if (!hasEffects && warpYOffset is null)
             {
-                // Fast path: just advance position, plain runs drawn by the outer DrawText
+                // Plain run: draw at flat baseline with solid run colour and no outline.
+                var plainGeo = runFt2.BuildGeometry(new Point(drawX, drawY));
+                if (plainGeo is not null)
+                {
+                    var plainBrush = FreezeBrush(new SolidColorBrush(
+                        Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)));
+                    dc.DrawGeometry(plainBrush, null, plainGeo);
+                }
                 pos += len;
                 continue;
             }
@@ -1575,12 +1590,7 @@ public sealed class SlideCanvas : FrameworkElement
             // by building a per-run FormattedText at the run's character offset.
             // Strategy: build a FormattedText with only this run's text, positioned
             // to match where it would appear in the full paragraph.
-            var runFt = BuildSingleRunFormattedText(run, wrap ? maxWidth : 0);
-            // Compute run X by summing widths of previous runs
-            double runOffX = ComputeRunOffsetX(para, run, pos, maxWidth, wrap);
-
-            double drawX = x + runOffX;
-            double drawY = y;
+            var runFt = runFt2;   // already built above
 
             if (warpYOffset is not null)
                 drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
