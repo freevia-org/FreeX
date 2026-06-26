@@ -358,6 +358,12 @@ public sealed class MainWindow : Window
         r.Register("freep.undo", new RelayCommand(() => Editor.Undo()));
         r.Register("freep.redo", new RelayCommand(() => Editor.Redo()));
 
+        // Slide show
+        r.Register("freep.slideshow.from-beginning",
+            new RelayCommand(() => StartSlideShow(fromStart: true)));
+        r.Register("freep.slideshow.from-current",
+            new RelayCommand(() => StartSlideShow(fromStart: false)));
+
         return r;
     }
 
@@ -625,6 +631,22 @@ public sealed class MainWindow : Window
             }
         }
 
+        // ── Slide show keys (no modifier) ─────────────────────────────────────
+        if (!ctrl)
+        {
+            switch (e.Key)
+            {
+                case Key.F5 when (e.KeyModifiers & KeyModifiers.Shift) != 0:
+                    StartSlideShow(fromStart: false);
+                    e.Handled = true;
+                    return;
+                case Key.F5:
+                    StartSlideShow(fromStart: true);
+                    e.Handled = true;
+                    return;
+            }
+        }
+
         // ── Arrow / Delete keys — delegate to gesture handler (Theme 15) ────────
         if (_gestureHandler is not null)
         {
@@ -638,5 +660,24 @@ public sealed class MainWindow : Window
                 _slideCanvas.Refresh();
             }
         }
+    }
+
+    // ── Slide show launch ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens the Avalonia fullscreen slide show window.
+    /// </summary>
+    /// <param name="fromStart">
+    ///   true  = start from slide 0 (F5 / "From Beginning").
+    ///   false = start from the currently selected slide (Shift+F5 / "From Current").
+    /// </param>
+    internal void StartSlideShow(bool fromStart)
+    {
+        if (_presentation.Slides.Count == 0)
+            return; // nothing to show
+
+        int startIdx = fromStart ? 0 : Math.Max(0, Editor.CurrentSlideIndex);
+        var slideShow = new SlideShowWindow(_presentation, startIdx);
+        slideShow.Show();
     }
 }

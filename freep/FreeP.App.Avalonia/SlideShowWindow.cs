@@ -1,0 +1,1133 @@
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using FreeP.App.Compositor;
+using FreeP.App.Rendering.Avalonia;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Avalonia;
+
+/// <summary>
+/// Borderless fullscreen window that plays a FreeP presentation as a cross-platform slide show.
+///
+/// Rendering model
+/// ───────────────
+/// The window contains a black <see cref="Panel"/> that letter-boxes the slide content.
+/// We layer two <see cref="SlideCanvas"/> instances ("back" + "front") for cross-fade
+/// and directional transitions, and a <see cref="Canvas"/> animation overlay where per-shape
+/// entrance/emphasis/exit effects run.
+///
+/// Navigation state machine
+/// ────────────────────────
+/// Delegated to <see cref="SlideShowController"/>. When the user presses an advance key:
+///   1. If there are pending animation steps → play the next step group.
+///   2. If all steps are exhausted → play the incoming slide's transition, then show the slide.
+///
+/// Shape animation approach
+/// ────────────────────────
+/// When entering a slide that has entrance animations, all targeted shapes start hidden
+/// (Opacity=0 or translated off-screen). Each click-step reveals the step's shapes via
+/// Avalonia Animation. The per-shape visuals come from dedicated Image overlays rendered
+/// via RenderTargetBitmap (one per shape) so we can animate them individually without
+/// decomposing SlideCanvas's rendering internals.
+///
+/// Transition approach
+/// ────────────────────
+/// A snapshot of the outgoing slide is captured into a <see cref="RenderTargetBitmap"/>,
+/// displayed in the back layer. The front layer (new slide) is animated in according to
+/// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover/Wipe/Uncover
+/// (directional translate), others fall back to Fade.
+///
+/// Media
+/// ─────
+/// Media shapes display the poster bitmap + a play badge (same as the slide renderer).
+/// Actual audio/video playback is DEFERRED — Avalonia has no built-in MediaElement;
+/// cross-platform video would need LibVLCSharp (out of scope for Theme 24).
+/// </summary>
+public sealed class SlideShowWindow : Window
+{
+    // ── State ─────────────────────────────────────────────────────────────────────
+
+    private readonly Presentation    _presentation;
+    private readonly SlideShowController _controller;
+    private readonly DispatcherTimer  _autoAdvanceTimer;
+
+    // ── Visual tree ───────────────────────────────────────────────────────────────
+
+    // Root: black panel filling the whole window.
+    private readonly Panel _root;
+
+    // Back layer: snapshot image for transition outgoing state.
+    private readonly Image       _transitionBackImage;
+    // Front layer: the live SlideCanvas.
+    private readonly SlideCanvas _slideCanvas;
+    // Shape animation overlay: a Canvas placed on top of _slideCanvas.
+    private readonly Canvas _animOverlay;
+
+    // Per-shape animation state for the current slide.
+    // Maps shapeId → the Image element in _animOverlay that represents that shape.
+    private readonly Dictionary<uint, Control> _animElements = new();
+
+    // Track which shapes have been revealed.
+    private readonly HashSet<uint> _revealedShapes = new();
+    private List<uint> _entranceShapeIds = new();
+
+    // Current slide dimensions in DIP.
+    private double _slideDipW;
+    private double _slideDipH;
+
+    // ── Construction ─────────────────────────────────────────────────────────────
+
+    /// <param name="presentation">The presentation to play.</param>
+    /// <param name="startIndex">Zero-based slide index to start from.</param>
+    public SlideShowWindow(Presentation presentation, int startIndex = 0)
+    {
+        _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
+        _controller   = new SlideShowController(presentation.Slides, startIndex);
+
+        // Pre-compute slide DIP dimensions.
+        _slideDipW = presentation.SlideSizeCxEmu / 9525.0;
+        _slideDipH = presentation.SlideSizeCyEmu / 9525.0;
+
+        // Window chrome — fullscreen borderless.
+        WindowState        = WindowState.FullScreen;
+        ExtendClientAreaToDecorationsHint = true;
+        Topmost            = true;
+        Background         = Brushes.Black;
+        Focusable          = true;
+        CanResize          = false;
+
+        // ── Visual tree ────────────────────────────────────────────────────────
+
+        // Transition back image (snapshot of outgoing slide).
+        _transitionBackImage = new Image
+        {
+            Stretch             = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+            IsVisible           = false,
+        };
+
+        // Front layer: live SlideCanvas.
+        _slideCanvas = new SlideCanvas
+        {
+            Presentation        = _presentation,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+
+        // Animation overlay: sits on top of the slide canvas.
+        _animOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+
+        // Stack everything in a Grid (single cell).
+        var stage = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        stage.Children.Add(_transitionBackImage);
+        stage.Children.Add(_slideCanvas);
+        stage.Children.Add(_animOverlay);
+
+        _root = new Panel { Background = Brushes.Black };
+        _root.Children.Add(stage);
+
+        Content = _root;
+
+        // ── Auto-advance timer ─────────────────────────────────────────────────
+        _autoAdvanceTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            IsEnabled = false,
+        };
+        _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
+
+        // ── Event wiring ───────────────────────────────────────────────────────
+        KeyDown             += OnKeyDown;
+        PointerPressed      += OnPointerPressed;
+        PointerMoved        += OnPointerMoved;
+        Opened              += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Closed              += (_, _) => Teardown();
+    }
+
+    // ── Public API (callable by test code without showing the window) ─────────────
+
+    /// <summary>
+    /// Execute a single logical advance step and return what happened.
+    /// </summary>
+    public AdvanceResult ExecuteAdvance()
+    {
+        var result = _controller.Advance();
+        switch (result)
+        {
+            case AdvanceResult.PlayStep ps:
+                PlayAnimationStep(ps.Step);
+                break;
+            case AdvanceResult.NavigateToSlide nav:
+                NavigateToSlide(nav.Slide, nav.SlideIndex);
+                break;
+            case AdvanceResult.AtEnd:
+                CloseSlideShow();
+                break;
+        }
+        return result;
+    }
+
+    /// <summary>Execute a logical back step and return what happened.</summary>
+    public BackResult ExecuteBack()
+    {
+        var result = _controller.Back();
+        if (result is BackResult.NavigateToSlide nav)
+            NavigateToSlide(nav.Slide, nav.SlideIndex);
+        return result;
+    }
+
+    /// <summary>The underlying state machine (for test assertions).</summary>
+    public SlideShowController Controller => _controller;
+
+    // ── Keyboard navigation ───────────────────────────────────────────────────────
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape:
+                CloseSlideShow();
+                e.Handled = true;
+                break;
+
+            case Key.Right:
+            case Key.Space:
+            case Key.PageDown:
+            case Key.Enter:
+                DoAdvance();
+                e.Handled = true;
+                break;
+
+            case Key.Left:
+            case Key.PageUp:
+            case Key.Back:
+                DoBack();
+                e.Handled = true;
+                break;
+
+            case Key.Home:
+                _autoAdvanceTimer.Stop();
+                _controller.GoToSlide(0);
+                DisplayCurrentSlide(animated: false);
+                e.Handled = true;
+                break;
+
+            case Key.End:
+                _autoAdvanceTimer.Stop();
+                _controller.GoToSlide(_presentation.Slides.Count - 1);
+                DisplayCurrentSlide(animated: false);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // ── Pointer navigation ────────────────────────────────────────────────────────
+
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        var slide = _controller.CurrentSlide;
+
+        // Check for trigger shape click.
+        if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
+        {
+            var pt = e.GetPosition(_slideCanvas);
+            var triggerShapeId = HitTestTriggerShape(slide, pt.X, pt.Y);
+            if (triggerShapeId is not null)
+            {
+                PlayTriggerGroup(triggerShapeId.Value);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Check for hyperlink click.
+        if (slide is not null)
+        {
+            var pt    = e.GetPosition(_slideCanvas);
+            var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
+            if (hlink is not null)
+            {
+                ActivateHyperlink(hlink);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Regular advance.
+        DoAdvance();
+    }
+
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var slide = _controller.CurrentSlide;
+        if (slide is null) { Cursor = Cursor.Default; return; }
+        var pt    = e.GetPosition(_slideCanvas);
+        var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
+        Cursor = hlink is not null ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+    }
+
+    // ── Hyperlink hit-testing & activation ─────────────────────────────────────────
+
+    /// <summary>
+    /// Hit-tests the click point against shapes that carry a hyperlink.
+    /// Returns the first matching hyperlink, or null.
+    /// </summary>
+    internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
+    {
+        double slideX = CanvasToSlideX(canvasX);
+        double slideY = CanvasToSlideY(canvasY);
+        return HitTestHyperlinkInShapes(slide.Shapes, slideX, slideY);
+    }
+
+    private static Hyperlink? HitTestHyperlinkInShapes(
+        IReadOnlyList<SlideShape> shapes, double slideX, double slideY)
+    {
+        foreach (var shape in shapes)
+        {
+            if (!HitTestShape(shape, slideX, slideY)) continue;
+
+            if (shape.Hyperlink is not null) return shape.Hyperlink;
+
+            if (shape.Children.Count > 0)
+            {
+                var groupResult = HitTestHyperlinkInShapes(shape.Children, slideX, slideY);
+                if (groupResult is not null) return groupResult;
+            }
+
+            if (shape.TextBody is not null)
+            {
+                foreach (var para in shape.TextBody.Paragraphs)
+                    foreach (var run in para.Runs)
+                        if (run.Hyperlink is not null) return run.Hyperlink;
+            }
+        }
+        return null;
+    }
+
+    private static bool HitTestShape(SlideShape shape, double slideX, double slideY)
+    {
+        double sx  = shape.OffsetXEmu / 9525.0;
+        double sy  = shape.OffsetYEmu / 9525.0;
+        double scx = shape.ExtentCxEmu / 9525.0;
+        double scy = shape.ExtentCyEmu / 9525.0;
+        return slideX >= sx && slideX <= sx + scx && slideY >= sy && slideY <= sy + scy;
+    }
+
+    private double CanvasToSlideX(double canvasX)
+    {
+        double cw = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
+        return canvasX * (_slideDipW / cw);
+    }
+
+    private double CanvasToSlideY(double canvasY)
+    {
+        double ch = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
+        return canvasY * (_slideDipH / ch);
+    }
+
+    /// <summary>
+    /// Activates a hyperlink: external → open URL (http/https/mailto only);
+    /// internal → navigate to the target slide.
+    /// </summary>
+    internal void ActivateHyperlink(Hyperlink hlink)
+    {
+        if (hlink.IsExternal)
+        {
+            OpenExternalUrl(hlink.Url!);
+        }
+        else if (hlink.TargetSlideId is not null)
+        {
+            var targetIdx = _presentation.Slides
+                .FindIndex(s => s.Id == hlink.TargetSlideId);
+            if (targetIdx >= 0)
+            {
+                _autoAdvanceTimer.Stop();
+                _controller.GoToSlide(targetIdx);
+                DisplayCurrentSlide(animated: false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens an external URL in the default browser.
+    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// </summary>
+    internal static void OpenExternalUrl(string url)
+    {
+        try
+        {
+            var uri = new Uri(url, UriKind.Absolute);
+            if (uri.Scheme is not ("http" or "https" or "mailto"))
+                return; // security guard: reject file:// and other schemes
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Swallow — never crash the slideshow over a bad URL.
+        }
+    }
+
+    // ── Trigger shape hit-testing ─────────────────────────────────────────────────
+
+    private uint? HitTestTriggerShape(Slide slide, double canvasX, double canvasY)
+    {
+        double cw     = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : _slideDipW;
+        double ch     = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
+        double slideX = canvasX * (_slideDipW / cw);
+        double slideY = canvasY * (_slideDipH / ch);
+
+        var triggerShapeIds = slide.Animations
+            .Where(a => a.TriggerShapeId is not null)
+            .Select(a => a.TriggerShapeId!.Value)
+            .Distinct();
+
+        foreach (var spid in triggerShapeIds)
+        {
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == spid);
+            if (shape is null) continue;
+            double shapeX  = shape.OffsetXEmu / 9525.0;
+            double shapeY  = shape.OffsetYEmu / 9525.0;
+            double shapeCx = shape.ExtentCxEmu / 9525.0;
+            double shapeCy = shape.ExtentCyEmu / 9525.0;
+            if (slideX >= shapeX && slideX <= shapeX + shapeCx &&
+                slideY >= shapeY && slideY <= shapeY + shapeCy)
+                return spid;
+        }
+        return null;
+    }
+
+    private void PlayTriggerGroup(uint triggerShapeId)
+    {
+        var step = _controller.AdvanceTrigger(triggerShapeId);
+        if (step is not null)
+            PlayAnimationStep(step);
+    }
+
+    // ── Navigation helpers ────────────────────────────────────────────────────────
+
+    private void DoAdvance()
+    {
+        _autoAdvanceTimer.Stop();
+        ExecuteAdvance();
+    }
+
+    private void DoBack()
+    {
+        _autoAdvanceTimer.Stop();
+        ExecuteBack();
+    }
+
+    private void CloseSlideShow()
+    {
+        Teardown();
+        Close();
+    }
+
+    private void NavigateToSlide(Slide slide, int index)
+    {
+        _ = slide;
+        _ = index;
+        DisplayCurrentSlide(animated: true);
+    }
+
+    // ── Slide display + transitions ───────────────────────────────────────────────
+
+    private void DisplayCurrentSlide(bool animated)
+    {
+        var slide = _controller.CurrentSlide;
+        if (slide is null) return;
+
+        _slideDipW = _presentation.SlideSizeCxEmu / 9525.0;
+        _slideDipH = _presentation.SlideSizeCyEmu / 9525.0;
+
+        PrepareAnimationOverlay(slide);
+
+        if (animated && slide.Transition is { Kind: not TransitionKind.None } t)
+            PlayTransition(slide, t);
+        else
+            ShowSlideInstant(slide);
+
+        // Wire auto-advance timer.
+        _autoAdvanceTimer.Stop();
+        if (slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0)
+        {
+            _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
+            _autoAdvanceTimer.Start();
+        }
+    }
+
+    private void ShowSlideInstant(Slide slide)
+    {
+        _transitionBackImage.IsVisible = false;
+        _slideCanvas.Slide   = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Refresh();
+    }
+
+    /// <summary>
+    /// Captures the currently displayed slide as a bitmap for transition use.
+    /// Returns null if the canvas has no valid size.
+    /// </summary>
+    private RenderTargetBitmap? CaptureCurrentSlide()
+    {
+        double w = _slideCanvas.Bounds.Width;
+        double h = _slideCanvas.Bounds.Height;
+        if (w <= 0 || h <= 0) return null;
+
+        try
+        {
+            var rtb = new RenderTargetBitmap(new PixelSize((int)w, (int)h));
+            rtb.Render(_slideCanvas);
+            return rtb;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // ── Transition effects ────────────────────────────────────────────────────────
+
+    private void PlayTransition(Slide slide, SlideTransition t)
+    {
+        int ms = Math.Max(50, t.DurationMs);
+
+        switch (t.Kind)
+        {
+            case TransitionKind.Cut:
+                ShowSlideInstant(slide);
+                return;
+
+            case TransitionKind.Fade:
+            case TransitionKind.Dissolve:
+                PlayFadeTransition(slide, ms);
+                return;
+
+            case TransitionKind.Push:
+            case TransitionKind.Cover:
+            case TransitionKind.Wipe:
+            case TransitionKind.Uncover:
+                PlayPushTransition(slide, t, ms);
+                return;
+
+            default:
+                PlayFadeTransition(slide, ms);
+                return;
+        }
+    }
+
+    private void PlayFadeTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+
+        _slideCanvas.Slide   = slide;
+        _slideCanvas.Opacity = 0;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source    = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        // Animate opacity 0→1 on the front canvas.
+        AnimateOpacity(_slideCanvas, from: 0, to: 1, durationMs, onComplete: () =>
+        {
+            _transitionBackImage.IsVisible = false;
+            _slideCanvas.Opacity = 1;
+        });
+    }
+
+    private void PlayPushTransition(Slide slide, SlideTransition t, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var (dx, dy) = GetDirectionVector(t.Direction, t.Kind);
+
+        double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
+        double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        // Start the incoming slide off-screen.
+        _slideCanvas.RenderTransform = new TranslateTransform(dx * w, dy * h);
+        _slideCanvas.Slide   = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source    = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateTranslate(_slideCanvas, fromX: dx * w, fromY: dy * h, toX: 0, toY: 0, durationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static (double dx, double dy) GetDirectionVector(
+        TransitionDirection? dir, TransitionKind kind)
+    {
+        return dir switch
+        {
+            TransitionDirection.Right => (-1,  0),
+            TransitionDirection.Left  => ( 1,  0),
+            TransitionDirection.Down  => ( 0, -1),
+            TransitionDirection.Up    => ( 0,  1),
+            _                         => ( 1,  0),
+        };
+    }
+
+    // ── Animation helpers (Avalonia dispatcher-based) ─────────────────────────────
+
+    /// <summary>
+    /// Animates a control's Opacity from <paramref name="from"/> to <paramref name="to"/>
+    /// over <paramref name="durationMs"/> milliseconds, then calls <paramref name="onComplete"/>.
+    /// Uses a DispatcherTimer stepping approach for cross-platform compatibility.
+    /// </summary>
+    private void AnimateOpacity(Control target, double from, double to, int durationMs,
+        Action? onComplete = null)
+    {
+        target.Opacity = from;
+        if (durationMs <= 0) { target.Opacity = to; onComplete?.Invoke(); return; }
+
+        const int frameMs = 16; // ~60 fps
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) };
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double eased = EaseInOut(t);
+            target.Opacity = from + (to - from) * eased;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                target.Opacity = to;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    /// <summary>
+    /// Animates a TranslateTransform on a control from (fromX, fromY) to (toX, toY).
+    /// </summary>
+    private void AnimateTranslate(Control target,
+        double fromX, double fromY, double toX, double toY,
+        int durationMs, Action? onComplete = null)
+    {
+        var translate = new TranslateTransform(fromX, fromY);
+        target.RenderTransform = translate;
+        if (durationMs <= 0) { translate.X = toX; translate.Y = toY; onComplete?.Invoke(); return; }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) };
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double eased = EaseInOut(t);
+            translate.X = fromX + (toX - fromX) * eased;
+            translate.Y = fromY + (toY - fromY) * eased;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                translate.X = toX;
+                translate.Y = toY;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    /// <summary>Cubic ease-in-out: smooth start and end.</summary>
+    private static double EaseInOut(double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+    }
+
+    // ── Shape animation overlay ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets up per-shape animated elements for a new slide:
+    ///   1. Identifies shapes with Entrance animations → renders each to a bitmap
+    ///      and places it as an Image in _animOverlay, hidden.
+    ///   2. The main canvas paints all shapes; the overlay images are placed on top
+    ///      so they can be animated independently.
+    /// </summary>
+    private void PrepareAnimationOverlay(Slide slide)
+    {
+        _animOverlay.Children.Clear();
+        _animElements.Clear();
+        _revealedShapes.Clear();
+
+        _entranceShapeIds = slide.Animations
+            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                        && a.TriggerShapeId == null)
+            .Select(a => a.ShapeId)
+            .Distinct()
+            .ToList();
+
+        if (_entranceShapeIds.Count == 0) return;
+
+        double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
+        double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _animOverlay.Width  = w;
+        _animOverlay.Height = h;
+
+        foreach (var shapeId in _entranceShapeIds)
+        {
+            var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            if (shape is null) continue;
+
+            var shapeBitmap = RenderShapeToOverlayBitmap(slide, shape, w, h);
+            if (shapeBitmap is null) continue;
+
+            var img = new Image
+            {
+                Source           = shapeBitmap,
+                Width            = w,
+                Height           = h,
+                Stretch          = Stretch.None,
+                Opacity          = 0,
+                IsHitTestVisible = false,
+            };
+
+            Canvas.SetLeft(img, 0);
+            Canvas.SetTop(img, 0);
+
+            _animOverlay.Children.Add(img);
+            _animElements[shapeId] = img;
+        }
+    }
+
+    /// <summary>
+    /// Renders a single shape into a bitmap at the full slide canvas size.
+    /// </summary>
+    private RenderTargetBitmap? RenderShapeToOverlayBitmap(Slide slide, SlideShape shape, double w, double h)
+    {
+        try
+        {
+            var tempSlide = new Slide { Background = null };
+            tempSlide.Shapes.Add(shape);
+
+            var tempCanvas = new SlideCanvas
+            {
+                Presentation = _presentation,
+                Slide        = tempSlide,
+                Width        = w,
+                Height       = h,
+            };
+            tempCanvas.Measure(new Size(w, h));
+            tempCanvas.Arrange(new Rect(0, 0, w, h));
+
+            var rtb = new RenderTargetBitmap(new PixelSize((int)w, (int)h));
+            rtb.Render(tempCanvas);
+            return rtb;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // ── Animation step playback ───────────────────────────────────────────────────
+
+    private void PlayAnimationStep(AnimationStep step)
+    {
+        foreach (var anim in step.Animations)
+        {
+            if (!_animElements.TryGetValue(anim.ShapeId, out var element))
+            {
+                PlayFallbackAnimation(anim);
+                continue;
+            }
+
+            PlayShapeAnimation(element, anim);
+            _revealedShapes.Add(anim.ShapeId);
+        }
+    }
+
+    private void PlayShapeAnimation(Control element, ShapeAnimation anim)
+    {
+        int durationMs = Math.Max(50, anim.DurationMs);
+        int delayMs    = Math.Max(0,  anim.DelayMs);
+
+        // Motion-path animation takes priority.
+        if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
+        {
+            MotionPathEffect(element, anim.Motion, durationMs, delayMs);
+            return;
+        }
+
+        switch (anim.Preset)
+        {
+            case AnimationPreset.Appear:
+                AppearEffect(element, delayMs);
+                break;
+
+            case AnimationPreset.Fade:
+                FadeEffect(element, anim.Kind, durationMs, delayMs);
+                break;
+
+            case AnimationPreset.FlyIn:
+                FlyInEffect(element, anim, durationMs, delayMs);
+                break;
+
+            case AnimationPreset.Wipe:
+                WipeEffect(element, anim, durationMs, delayMs);
+                break;
+
+            case AnimationPreset.Zoom:
+                ZoomEffect(element, anim.Kind, durationMs, delayMs);
+                break;
+
+            case AnimationPreset.Pulse:
+            case AnimationPreset.Grow:
+                PulseEffect(element, durationMs, delayMs);
+                break;
+
+            case AnimationPreset.Spin:
+                SpinEffect(element, durationMs, delayMs);
+                break;
+
+            default:
+                AppearEffect(element, delayMs);
+                break;
+        }
+    }
+
+    private static void AppearEffect(Control el, int delayMs)
+    {
+        if (delayMs <= 0)
+        {
+            el.Opacity = 1;
+            return;
+        }
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(delayMs)
+        };
+        timer.Tick += (_, _) => { timer.Stop(); el.Opacity = 1; };
+        timer.Start();
+    }
+
+    private void FadeEffect(Control el, AnimationKind kind, int durationMs, int delayMs)
+    {
+        double from = kind == AnimationKind.Exit ? 1 : 0;
+        double to   = kind == AnimationKind.Exit ? 0 : 1;
+
+        DelayedAction(delayMs, () =>
+            AnimateOpacity(el, from, to, durationMs));
+    }
+
+    private void FlyInEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs)
+    {
+        double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
+        double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        var (dx, dy) = anim.Direction switch
+        {
+            AnimationDirection.FromLeft        => (-w,  0),
+            AnimationDirection.FromRight       => ( w,  0),
+            AnimationDirection.FromTop         => ( 0, -h),
+            AnimationDirection.FromBottom      => ( 0,  h),
+            AnimationDirection.FromTopLeft     => (-w, -h),
+            AnimationDirection.FromTopRight    => ( w, -h),
+            AnimationDirection.FromBottomLeft  => (-w,  h),
+            AnimationDirection.FromBottomRight => ( w,  h),
+            AnimationDirection.Left            => (-w,  0),
+            AnimationDirection.Right           => ( w,  0),
+            AnimationDirection.Up              => ( 0, -h),
+            AnimationDirection.Down            => ( 0,  h),
+            _                                  => ( 0,  h),
+        };
+
+        el.Opacity = 0;
+        el.RenderTransform = new TranslateTransform(dx, dy);
+
+        DelayedAction(delayMs, () =>
+        {
+            AnimateTranslate(el, dx, dy, 0, 0, durationMs);
+            AnimateOpacity(el, 0, 1, durationMs);
+        });
+    }
+
+    private void WipeEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs)
+    {
+        double w = el.Width  > 0 ? el.Width  : 960;
+        double h = el.Height > 0 ? el.Height : 540;
+
+        el.Opacity = 1;
+
+        bool horizontal = anim.Direction is
+            AnimationDirection.Left or AnimationDirection.Right or
+            AnimationDirection.FromLeft or AnimationDirection.FromRight or
+            AnimationDirection.Horizontal or null;
+
+        if (horizontal)
+        {
+            // Clip from 0 width → full width.
+            var clipRect = new RectangleGeometry(new Rect(0, 0, 0, h));
+            el.Clip = clipRect;
+            DelayedAction(delayMs, () =>
+                AnimateRectClip(el, clipRect, new Rect(0, 0, 0, h), new Rect(0, 0, w, h), durationMs));
+        }
+        else
+        {
+            var clipRect = new RectangleGeometry(new Rect(0, 0, w, 0));
+            el.Clip = clipRect;
+            DelayedAction(delayMs, () =>
+                AnimateRectClip(el, clipRect, new Rect(0, 0, w, 0), new Rect(0, 0, w, h), durationMs));
+        }
+    }
+
+    private void AnimateRectClip(Control target, RectangleGeometry clipRect,
+        Rect from, Rect to, int durationMs)
+    {
+        if (durationMs <= 0) { clipRect.Rect = to; return; }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        };
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double e = EaseInOut(t);
+            clipRect.Rect = new Rect(
+                from.X + (to.X - from.X) * e,
+                from.Y + (to.Y - from.Y) * e,
+                from.Width  + (to.Width  - from.Width)  * e,
+                from.Height + (to.Height - from.Height) * e);
+            if (frame >= steps) { timer.Stop(); clipRect.Rect = to; }
+        };
+        timer.Start();
+    }
+
+    private void ZoomEffect(Control el, AnimationKind kind, int durationMs, int delayMs)
+    {
+        double cx = (el.Width  > 0 ? el.Width  : _slideCanvas.Bounds.Width)  / 2;
+        double cy = (el.Height > 0 ? el.Height : _slideCanvas.Bounds.Height) / 2;
+
+        double fromScale = kind == AnimationKind.Exit ? 1.0 : 0.0;
+        double toScale   = kind == AnimationKind.Exit ? 0.0 : 1.0;
+        double fromOp    = kind == AnimationKind.Exit ? 1.0 : 0.0;
+        double toOp      = kind == AnimationKind.Exit ? 0.0 : 1.0;
+
+        el.Opacity = fromOp;
+        var scale = new ScaleTransform(fromScale, fromScale);
+        // Avalonia ScaleTransform doesn't take center point in the ctor like WPF.
+        // We'll adjust by setting RenderTransformOrigin.
+        el.RenderTransformOrigin = RelativePoint.Center;
+        el.RenderTransform = scale;
+
+        DelayedAction(delayMs, () =>
+        {
+            AnimateOpacity(el, fromOp, toOp, durationMs);
+            AnimateScale(el, scale, fromScale, toScale, durationMs);
+        });
+    }
+
+    private void AnimateScale(Control target, ScaleTransform scale,
+        double from, double to, int durationMs)
+    {
+        if (durationMs <= 0) { scale.ScaleX = scale.ScaleY = to; return; }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        };
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double eased = EaseInOut(t);
+            double v = from + (to - from) * eased;
+            scale.ScaleX = scale.ScaleY = v;
+            if (frame >= steps) { timer.Stop(); scale.ScaleX = scale.ScaleY = to; }
+        };
+        timer.Start();
+    }
+
+    private void PulseEffect(Control el, int durationMs, int delayMs)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var scale = new ScaleTransform(1, 1);
+        el.RenderTransform = scale;
+
+        DelayedAction(delayMs, () =>
+        {
+            // Scale up to 1.2 then back to 1.0.
+            AnimateScale(el, scale, 1.0, 1.2, durationMs / 2);
+            DelayedAction(durationMs / 2, () =>
+                AnimateScale(el, scale, 1.2, 1.0, durationMs / 2));
+        });
+    }
+
+    private void SpinEffect(Control el, int durationMs, int delayMs)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var rotate = new RotateTransform(0);
+        el.RenderTransform = rotate;
+
+        DelayedAction(delayMs, () =>
+            AnimateRotate(rotate, 0, 360, durationMs));
+    }
+
+    private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)
+    {
+        if (durationMs <= 0) { rotate.Angle = to; return; }
+
+        const int frameMs = 16;
+        int steps = Math.Max(1, durationMs / frameMs);
+        int frame = 0;
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        };
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            double t = Math.Min(1.0, (double)frame / steps);
+            double eased = EaseInOut(t);
+            rotate.Angle = from + (to - from) * eased;
+            if (frame >= steps) { timer.Stop(); rotate.Angle = to; }
+        };
+        timer.Start();
+    }
+
+    /// <summary>
+    /// Motion-path animation: translates the shape along the normalized path in DIP space.
+    /// </summary>
+    private void MotionPathEffect(Control element, MotionPath path, int durationMs, int delayMs)
+    {
+        double slideW = _slideDipW > 0 ? _slideDipW : 960;
+        double slideH = _slideDipH > 0 ? _slideDipH : 540;
+
+        element.Opacity = 1;
+
+        const int frames = 30;
+        // Pre-sample the path.
+        var pts = new (double dx, double dy)[frames + 1];
+        for (int f = 0; f <= frames; f++)
+        {
+            double t = f / (double)frames;
+            var (dx, dy) = MotionPathEvaluator.Sample(path, t);
+            pts[f] = (dx * slideW, dy * slideH);
+        }
+
+        var translate = new TranslateTransform(pts[0].dx, pts[0].dy);
+        element.RenderTransform = translate;
+
+        if (durationMs <= 0)
+        {
+            translate.X = pts[frames].dx;
+            translate.Y = pts[frames].dy;
+            return;
+        }
+
+        DelayedAction(delayMs, () =>
+        {
+            const int frameMs = 16;
+            int steps = Math.Max(1, durationMs / frameMs);
+            int frame = 0;
+            var timer = new DispatcherTimer(DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(frameMs)
+            };
+            timer.Tick += (_, _) =>
+            {
+                frame++;
+                double t = Math.Min(1.0, (double)frame / steps);
+                // Sample the pre-sampled array.
+                double scaledT = t * frames;
+                int lo = Math.Min((int)scaledT, frames - 1);
+                int hi = Math.Min(lo + 1, frames);
+                double frac = scaledT - lo;
+                translate.X = pts[lo].dx + (pts[hi].dx - pts[lo].dx) * frac;
+                translate.Y = pts[lo].dy + (pts[hi].dy - pts[lo].dy) * frac;
+                if (frame >= steps)
+                {
+                    timer.Stop();
+                    translate.X = pts[frames].dx;
+                    translate.Y = pts[frames].dy;
+                }
+            };
+            timer.Start();
+        });
+    }
+
+    /// <summary>Best-effort fallback for shapes without an overlay element.</summary>
+    private void PlayFallbackAnimation(ShapeAnimation anim)
+    {
+        if (anim.Kind != AnimationKind.Emphasis) return;
+
+        int ms = Math.Max(100, anim.DurationMs);
+        DelayedAction(anim.DelayMs, () =>
+        {
+            AnimateOpacity(_slideCanvas, 1.0, 0.5, ms / 2, onComplete: () =>
+                AnimateOpacity(_slideCanvas, 0.5, 1.0, ms / 2));
+        });
+    }
+
+    // ── Utility ───────────────────────────────────────────────────────────────────
+
+    /// <summary>Runs <paramref name="action"/> after <paramref name="delayMs"/> milliseconds.</summary>
+    private static void DelayedAction(int delayMs, Action action)
+    {
+        if (delayMs <= 0) { action(); return; }
+
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(delayMs)
+        };
+        timer.Tick += (_, _) => { timer.Stop(); action(); };
+        timer.Start();
+    }
+
+    // ── Teardown ──────────────────────────────────────────────────────────────────
+
+    private void Teardown()
+    {
+        _autoAdvanceTimer.Stop();
+        // Active DispatcherTimers will stop naturally as they are not referenced; the
+        // dispatcher will clean them up. No explicit teardown needed.
+    }
+}

@@ -35,6 +35,13 @@ internal static class FreePRibbonAvalonia
                     g.Large("freep.undo", "Undo", RibbonCommandIconKind.Undo, "U");
                     g.Large("freep.redo", "Redo", RibbonCommandIconKind.Redo, "R");
                 });
+                tab.Group("slideshow", "Slide Show", "W", 70, g =>
+                {
+                    g.Large("freep.slideshow.from-beginning", "From Beginning",
+                        RibbonCommandIconKind.Next, "B");
+                    g.Large("freep.slideshow.from-current",   "From Current Slide",
+                        RibbonCommandIconKind.Next, "C");
+                });
             })
             .Build();
     }
