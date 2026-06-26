@@ -98,6 +98,8 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterFontColorPalette(r, editor);
 
         r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
+        // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
+        r.Register("freew.font-dialog",      new RelayCommand(callbacks.OpenFontDialog));
 
         // ── Paragraph ────────────────────────────────────────────────────────
         r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
@@ -125,6 +127,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.line-spacing-115",  new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
         r.Register("freew.line-spacing-15",   new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
         r.Register("freew.line-spacing-2",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
+        // Paragraph dialog launcher.
+        r.Register("freew.paragraph-dialog",  new RelayCommand(callbacks.OpenParagraphDialog));
 
         // ── Styles ───────────────────────────────────────────────────────────
         r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));

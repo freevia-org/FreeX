@@ -97,6 +97,7 @@ internal static class FreeWRibbon
                     g.Button("freew.clear-formatting", "Clear");
                     g.Dropdown("freew.font-color", "Font Color", BuildFontColorMenu());
                     g.Button("freew.change-case",     "Aa");
+                    g.Button("freew.font-dialog",     "Font…");
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>
                 {
@@ -115,6 +116,7 @@ internal static class FreeWRibbon
                     g.Button("freew.line-spacing-15",   "1.5×");
                     g.Button("freew.line-spacing-2",    "2×");
                     g.Toggle("freew.show-hide-para",    "¶");
+                    g.Button("freew.paragraph-dialog",  "Paragraph…");
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
                 {
@@ -234,6 +236,10 @@ internal sealed record RibbonHostCallbacks(
     Action SetPrintLayout,
     Action SetWebLayout,
     Action SetDraftView,
+    /// <summary>Opens the Font dialog (modal); reads current caret formatting and applies on OK.</summary>
+    Action OpenFontDialog,
+    /// <summary>Opens the Paragraph dialog (modal); reads current paragraph formatting and applies on OK.</summary>
+    Action OpenParagraphDialog,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.

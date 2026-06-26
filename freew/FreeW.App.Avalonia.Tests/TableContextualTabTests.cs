@@ -41,6 +41,8 @@ public sealed class TableContextualTabTests
             SetPrintLayout: () => { },
             SetWebLayout: () => { },
             SetDraftView: () => { },
+            OpenFontDialog: () => { },
+            OpenParagraphDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Registry completeness ─────────────────────────────────────────────────
