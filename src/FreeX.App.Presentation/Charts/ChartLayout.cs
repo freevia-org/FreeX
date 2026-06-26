@@ -34,7 +34,11 @@ public enum SeriesGeometryKind
     PieSlices,
     Bubbles,
     RadarPolyline,
-    StockBars
+    StockBars,
+    /// <summary>Box-and-whisker overlay lines (median + whisker segments). Rendered as paired line segments.</summary>
+    BoxWhiskers,
+    /// <summary>Treemap tiles: solid colored rectangles with labels centered inside each tile.</summary>
+    TreemapTiles,
 }
 
 /// <summary>The fit a trendline overlay was computed with, so consumers can label/style it.</summary>
