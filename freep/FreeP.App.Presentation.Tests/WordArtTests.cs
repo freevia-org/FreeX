@@ -33,7 +33,7 @@ public sealed class WordArtTests : IDisposable
     private static SlideShape TextShape(Action<TextBody> tbConfig)
     {
         var tb = new TextBody();
-        var para = new TextParagraph();
+        var para = new Paragraph();
         var run = new Run { Text = "Hello" };
         para.Runs.Add(run);
         tb.Paragraphs.Add(para);
@@ -181,7 +181,7 @@ public sealed class WordArtTests : IDisposable
 
         var tb = new TextBody();
         var run = new Run { Text = "Shadow", TextShadow = shadow };
-        tb.Paragraphs.Add(new TextParagraph { Runs = { run } });
+        tb.Paragraphs.Add(new Paragraph { Runs = { run } });
 
         p.Slides[0].Shapes.Add(new SlideShape
         {
@@ -217,7 +217,7 @@ public sealed class WordArtTests : IDisposable
 
         var tb = new TextBody();
         var run = new Run { Text = "GradFill", TextFill = fill };
-        tb.Paragraphs.Add(new TextParagraph { Runs = { run } });
+        tb.Paragraphs.Add(new Paragraph { Runs = { run } });
 
         p.Slides[0].Shapes.Add(new SlideShape
         {
@@ -245,7 +245,7 @@ public sealed class WordArtTests : IDisposable
         p.Slides[0].Shapes.Clear();
 
         var tb = new TextBody { WarpPreset = "textWave1" };
-        tb.Paragraphs.Add(new TextParagraph { Runs = { new Run { Text = "Warp" } } });
+        tb.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Warp" } } });
 
         p.Slides[0].Shapes.Add(new SlideShape
         {
@@ -275,7 +275,7 @@ public sealed class WordArtTests : IDisposable
 
         var tb = new TextBody { WarpPreset = "textCircle" };
         var run = new Run { Text = "Clone", TextFill = fill, TextShadow = shadow };
-        tb.Paragraphs.Add(new TextParagraph { Runs = { run } });
+        tb.Paragraphs.Add(new Paragraph { Runs = { run } });
 
         var shape = new SlideShape
         {
@@ -288,7 +288,7 @@ public sealed class WordArtTests : IDisposable
         var src = new Slide();
         src.Shapes.Add(shape);
 
-        var dst = SlideCloner.Clone(src);
+        var dst = SlideCloner.CloneSlide(src);
 
         var clonedShape = dst.Shapes[0];
         var clonedTb    = clonedShape.TextBody!;
