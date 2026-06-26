@@ -845,8 +845,23 @@ public static class SlideCompositor
             ThemeColorResolver.Resolve(v.Color, theme, effectiveClrMap),
             PointsToDip(v.WidthPt),
             v.Dash),
+        // Wave 22B: gradient outline — resolve each gradient stop color
+        ShapeOutline.GradientVisible gv => new ResolvedOutline.Gradient(
+            ResolveGradientFill(gv.Gradient, theme, effectiveClrMap),
+            PointsToDip(gv.WidthPt),
+            gv.Dash),
         _ => ResolvedOutline.None.Instance
     };
+
+    private static ResolvedFill.Gradient ResolveGradientFill(ShapeFill.Gradient g, PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        var resolvedStops = g.Stops.Select(s =>
+            new ResolvedFill.ResolvedGradientStop(
+                s.Position,
+                ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap))).ToArray();
+        return new ResolvedFill.Gradient(resolvedStops, g.Kind, g.AngleDegrees);
+    }
 
     // ─── Text layout resolution ──────────────────────────────────────────────────────────────
 
@@ -1222,6 +1237,9 @@ public static class SlideCompositor
             VerticalType = body.VerticalType,  // Wave 18B
             FontScale = fontScale,            // Wave 19A
             LnSpcReduction = lnSpcReduc,      // Wave 19A
+            // Wave 22B: text columns
+            ColumnCount = Math.Max(1, body.ColumnCount),
+            ColumnSpacingDip = body.ColumnSpacingEmu > 0 ? body.ColumnSpacingEmu / 9525.0 : 0.0,
         };
     }
 

@@ -2072,8 +2072,77 @@ public sealed class SlideCanvas : Control
         RenderTextCore(dc, text, bounds);
     }
 
+    // Wave 22B: multi-column text layout helper for Avalonia.
+    // Mirrors the WPF version — greedy paragraph-level assignment across N columns.
+    private static void RenderTextCoreColumns(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    {
+        int n = Math.Max(1, text.ColumnCount);
+        double insetLeft   = text.InsetLeftDip;
+        double insetTop    = text.InsetTopDip;
+        double insetRight  = text.InsetRightDip;
+        double insetBottom = text.InsetBottomDip;
+        double textAreaW   = Math.Max(0, bounds.Width  - insetLeft - insetRight);
+        double textAreaH   = Math.Max(0, bounds.Height - insetTop  - insetBottom);
+        const double DefaultSpacingDip = 48.5;
+        double spacingDip = text.ColumnSpacingDip > 0 ? text.ColumnSpacingDip : DefaultSpacingDip;
+        double colWidth   = Math.Max(1, (textAreaW - (n - 1) * spacingDip) / n);
+        double lnSpcScale = 1.0 - text.LnSpcReduction;
+
+        var measured = new List<(ResolvedParagraph para, FormattedText? ft, double sb, double sa)>();
+        foreach (var para in text.Paragraphs)
+        {
+            if (para.Runs.Count == 0) { measured.Add((para, null, 0, 0)); continue; }
+            var ft = BuildFormattedText(para, colWidth, text.Wrap);
+            double sb = para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
+            double sa = para.SpaceAfterPt  * (96.0 / 72.0) * lnSpcScale;
+            measured.Add((para, ft, sb, sa));
+        }
+
+        int col = 0;
+        double curY = bounds.Y + insetTop;
+        double colX = bounds.X + insetLeft;
+        double colHeight = textAreaH;
+
+        foreach (var (para, ft, sb, sa) in measured)
+        {
+            if (para.Runs.Count == 0 || ft is null) continue;
+            double paraH = sb + ft.Height * lnSpcScale + sa;
+            if (curY + paraH > bounds.Y + insetTop + colHeight && col < n - 1)
+            {
+                col++;
+                colX = bounds.X + insetLeft + col * (colWidth + spacingDip);
+                curY = bounds.Y + insetTop;
+            }
+            curY += sb;
+            double paraTextX = colX + para.IndentDip;
+            if (!string.IsNullOrEmpty(para.BulletText))
+                DrawBulletAvalonia(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
+                    para.BulletColor, paraTextX - para.HangingDip, curY);
+            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
+            bool hasTabs    = para.Runs.Any(r => r.Text.Contains('\t'));
+            if (hasEffects)
+                RenderParaWithEffects(dc, para, paraTextX, curY, bounds, text.WarpPreset);
+            else if (hasTabs)
+                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
+            else
+            {
+                if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
+                    ft.MaxTextWidth = Math.Max(1, colWidth - para.IndentDip);
+                dc.DrawText(ft, new Point(paraTextX, curY));
+            }
+            curY += ft.Height * lnSpcScale + sa;
+        }
+    }
+
     private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
+        // Wave 22B: multi-column layout
+        if (text.ColumnCount > 1)
+        {
+            RenderTextCoreColumns(dc, text, bounds);
+            return;
+        }
+
         double insetLeft   = text.InsetLeftDip;
         double insetTop    = text.InsetTopDip;
         double insetRight  = text.InsetRightDip;
@@ -2706,25 +2775,52 @@ public sealed class SlideCanvas : Control
 
     private static Pen? MakePen(ResolvedOutline outline)
     {
-        if (outline is not ResolvedOutline.Visible vis) return null;
-        var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
-        var pen   = new Pen(brush, vis.WidthDip)
+        if (outline is ResolvedOutline.Visible vis)
         {
-            DashStyle = vis.Dash switch
+            var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
+            return new Pen(brush, vis.WidthDip)
             {
-                OutlineDash.Dash           => DashStyle.Dash,
-                OutlineDash.Dot            => DashStyle.Dot,
-                OutlineDash.DashDot        => DashStyle.DashDot,
-                OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
-                OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
-                OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
-                OutlineDash.SystemDash     => DashStyle.Dash,
-                OutlineDash.SystemDot      => DashStyle.Dot,
-                OutlineDash.SystemDashDot  => DashStyle.DashDot,
-                _                          => null   // null = solid (Avalonia default)
-            }
-        };
-        return pen;
+                DashStyle = vis.Dash switch
+                {
+                    OutlineDash.Dash           => DashStyle.Dash,
+                    OutlineDash.Dot            => DashStyle.Dot,
+                    OutlineDash.DashDot        => DashStyle.DashDot,
+                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
+                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.SystemDash     => DashStyle.Dash,
+                    OutlineDash.SystemDot      => DashStyle.Dot,
+                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
+                    _                          => null
+                }
+            };
+        }
+
+        // Wave 22B: gradient outline — build a gradient brush for the stroke.
+        if (outline is ResolvedOutline.Gradient grad)
+        {
+            IBrush gradBrush = grad.Fill.Kind == GradientKind.Radial
+                ? MakeRadialGradientBrush(grad.Fill)
+                : MakeLinearGradientBrush(grad.Fill);
+            return new Pen(gradBrush, grad.WidthDip)
+            {
+                DashStyle = grad.Dash switch
+                {
+                    OutlineDash.Dash           => DashStyle.Dash,
+                    OutlineDash.Dot            => DashStyle.Dot,
+                    OutlineDash.DashDot        => DashStyle.DashDot,
+                    OutlineDash.LongDash       => new DashStyle([8.0, 3.0], 0),
+                    OutlineDash.LongDashDot    => new DashStyle([8.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.LongDashDotDot => new DashStyle([8.0, 3.0, 1.0, 3.0, 1.0, 3.0], 0),
+                    OutlineDash.SystemDash     => DashStyle.Dash,
+                    OutlineDash.SystemDot      => DashStyle.Dot,
+                    OutlineDash.SystemDashDot  => DashStyle.DashDot,
+                    _                          => null
+                }
+            };
+        }
+
+        return null;
     }
 
     // ── Composition helper ───────────────────────────────────────────────────

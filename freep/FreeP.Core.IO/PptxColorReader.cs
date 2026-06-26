@@ -225,10 +225,6 @@ internal static class PptxColorReader
         if (lnElement.Element(A + "noFill") is not null)
             return ShapeOutline.None.Instance;
 
-        var solidFill = lnElement.Element(A + "solidFill");
-        var color = solidFill is not null ? TryReadColor(solidFill, scheme) : null;
-        color ??= ThemeAwareColor.Black; // fallback
-
         // w attribute in EMU; convert to points
         var wAttr = lnElement.Attribute("w")?.Value;
         double widthPt = 0.75;
@@ -238,6 +234,19 @@ internal static class PptxColorReader
         // a:prstDash
         var dashVal = lnElement.Element(A + "prstDash")?.Attribute("val")?.Value;
         var dash = MapDash(dashVal);
+
+        // Wave 22B: a:gradFill → gradient outline
+        var gradFill = lnElement.Element(A + "gradFill");
+        if (gradFill is not null)
+        {
+            var gradient = TryReadGradFill(gradFill, scheme);
+            if (gradient is not null)
+                return new ShapeOutline.GradientVisible(gradient, widthPt, dash);
+        }
+
+        var solidFill = lnElement.Element(A + "solidFill");
+        var color = solidFill is not null ? TryReadColor(solidFill, scheme) : null;
+        color ??= ThemeAwareColor.Black; // fallback
 
         return new ShapeOutline.Visible(color, widthPt, dash);
     }
