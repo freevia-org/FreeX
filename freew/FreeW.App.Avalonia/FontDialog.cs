@@ -14,15 +14,32 @@ namespace FreeW.App.Avalonia;
 /// the character formatting of the current caret / selection.
 ///
 /// <para>
-/// Pre-populated from <see cref="DocumentView.GetCaretFormatting"/> on open; on OK the changed
-/// properties are applied in sequence via the <see cref="DocumentView"/> formatting methods.
-/// Cancel (or OS-close) makes no changes.
+/// Pre-populated from <see cref="DocumentView.GetSelectionFormatting"/> on open; on OK the changed
+/// properties are applied in sequence via the <see cref="DocumentView"/> formatting methods,
+/// wrapped in a single undo group (BZ4).
 /// </para>
 ///
 /// <para>
 /// The apply path is exposed as <see cref="ApplyResult"/> so tests can call it without displaying
 /// a window.
 /// </para>
+///
+/// BZ1: the family + size combos are editable; <see cref="OnOk"/> reads <c>.Text</c> (not
+/// <c>SelectedItem</c>) so a typed value that is not in the preset list is preserved. The dialog
+/// constructor seeds <c>_sizeBox.Text</c> so a non-ladder size (e.g. 13pt) shows correctly.
+///
+/// BZ3: when the selection has mixed bold/italic/underline/strikethrough the checkboxes are shown
+/// with <c>IsChecked = null</c> (three-state). Mixed family/size leaves the combo text blank. On
+/// OK, a null checkbox or a blank combo box means "user did not change this field" — ApplyResult
+/// skips those fields so mixed runs are not clobbered.
+///
+/// BZ4: <see cref="ApplyResult"/> wraps every individual editor call in a single undo group so
+/// one Ctrl+Z reverts the whole dialog OK.
+///
+/// BZ5 (collapsed caret): handled in <see cref="DocumentView.ApplyRunFormatting"/> and
+/// <see cref="DocumentView.ToggleRunFlag"/> — they store a pending format for the next typed
+/// character instead of reformatting the whole paragraph. The dialog code is unchanged; the fix
+/// is in the editor layer.
 ///
 /// Fields covered:
 /// <list type="bullet">
@@ -46,6 +63,11 @@ public sealed class FontDialog : Window
 
     private static readonly string[] FamilyPresets =
         ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
+
+    // Maximum allowed font size in points (Word clamps at 1638; we use 409 = the dialog
+    // input limit in Word's UI which rejects values above 1638 but the size box only shows 3 digits).
+    private const double MinFontSizePt = 1;
+    private const double MaxFontSizePt = 1638;
 
     // ── Colour palettes ───────────────────────────────────────────────────────
     private static readonly (string Label, string? Hex)[] FontColorPalette =
@@ -83,14 +105,21 @@ public sealed class FontDialog : Window
 
     // ── Snapshot of the initial formatting ───────────────────────────────────
     private readonly RunFormatting _original;
+    // BZ3: indeterminate flags set from SelectionFormatting at dialog-open.
+    private readonly bool _boldIndeterminate;
+    private readonly bool _italicIndeterminate;
+    private readonly bool _underlineIndeterminate;
+    private readonly bool _strikeIndeterminate;
+    private readonly bool _familyIndeterminate;
+    private readonly bool _sizeIndeterminate;
 
     // ── Controls ─────────────────────────────────────────────────────────────
     private readonly ComboBox _familyBox;
     private readonly ComboBox _sizeBox;
-    private readonly CheckBox _boldChk   = new() { Content = "Bold",          Margin = new Thickness(0, 4, 12, 0) };
-    private readonly CheckBox _italicChk = new() { Content = "Italic",        Margin = new Thickness(0, 4, 12, 0) };
-    private readonly CheckBox _underlineChk = new() { Content = "Underline",  Margin = new Thickness(0, 4, 12, 0) };
-    private readonly CheckBox _strikeChk    = new() { Content = "Strikethrough", Margin = new Thickness(0, 4, 12, 0) };
+    private readonly CheckBox _boldChk   = new() { Content = "Bold",          Margin = new Thickness(0, 4, 12, 0), IsThreeState = true };
+    private readonly CheckBox _italicChk = new() { Content = "Italic",        Margin = new Thickness(0, 4, 12, 0), IsThreeState = true };
+    private readonly CheckBox _underlineChk = new() { Content = "Underline",  Margin = new Thickness(0, 4, 12, 0), IsThreeState = true };
+    private readonly CheckBox _strikeChk    = new() { Content = "Strikethrough", Margin = new Thickness(0, 4, 12, 0), IsThreeState = true };
     private readonly CheckBox _superChk = new() { Content = "Superscript",    Margin = new Thickness(0, 4, 12, 0) };
     private readonly CheckBox _subChk   = new() { Content = "Subscript",      Margin = new Thickness(0, 4, 12, 0) };
     private readonly CheckBox _smallCapsChk = new() { Content = "Small Caps", Margin = new Thickness(0, 4, 12, 0) };
@@ -109,9 +138,30 @@ public sealed class FontDialog : Window
 
     // ── Construction ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Creates the dialog pre-populated from <paramref name="current"/>. Use the overload that
+    /// takes <see cref="DocumentView.SelectionFormatting"/> when opening from the editor so
+    /// mixed-selection indeterminate state is preserved.
+    /// </summary>
     public FontDialog(RunFormatting current)
+        : this(new DocumentView.SelectionFormatting(current, ParagraphFormatting.Default))
     {
+    }
+
+    /// <summary>
+    /// Creates the dialog pre-populated from <paramref name="sel"/>, respecting indeterminate
+    /// flags from a mixed selection (BZ3).
+    /// </summary>
+    public FontDialog(DocumentView.SelectionFormatting sel)
+    {
+        var current = sel.Run;
         _original = current;
+        _boldIndeterminate       = sel.BoldIndeterminate;
+        _italicIndeterminate     = sel.ItalicIndeterminate;
+        _underlineIndeterminate  = sel.UnderlineIndeterminate;
+        _strikeIndeterminate     = sel.StrikethroughIndeterminate;
+        _familyIndeterminate     = sel.FamilyIndeterminate;
+        _sizeIndeterminate       = sel.SizeIndeterminate;
 
         Title = "Font";
         Width = 420;
@@ -127,10 +177,22 @@ public sealed class FontDialog : Window
             IsEditable = true,
         };
         _familyBox.ItemsSource = FamilyPresets;
-        if (!string.IsNullOrEmpty(current.FontFamily))
+        if (_familyIndeterminate)
+        {
+            // BZ3: mixed family → show blank; SelectedItem/Text stays empty.
+            _familyBox.SelectedIndex = -1;
+        }
+        else if (!string.IsNullOrEmpty(current.FontFamily))
+        {
+            // BZ1: seed Text so a non-preset family (e.g. "Cambria") is visible.
             _familyBox.SelectedItem = current.FontFamily;
+            if (_familyBox.SelectedItem is null)
+                _familyBox.Text = current.FontFamily; // not in preset list
+        }
         else
+        {
             _familyBox.SelectedIndex = 0; // Calibri
+        }
 
         // ── Size combo ───────────────────────────────────────────────────────
         _sizeBox = new ComboBox
@@ -139,21 +201,33 @@ public sealed class FontDialog : Window
             IsEditable = true,
         };
         _sizeBox.ItemsSource = SizeLadder;
-        var currentSizeStr = current.FontSizePt.HasValue
-            ? current.FontSizePt.Value.ToString("G", CultureInfo.InvariantCulture)
-            : "11";
-        _sizeBox.SelectedItem = currentSizeStr;
-        if (_sizeBox.SelectedItem is null)
+        if (_sizeIndeterminate)
         {
-            // Size not in the standard ladder (e.g. 13pt) — set text directly.
+            // BZ3: mixed size → blank.
             _sizeBox.SelectedIndex = -1;
+        }
+        else if (current.FontSizePt.HasValue)
+        {
+            var currentSizeStr = current.FontSizePt.Value.ToString("G", CultureInfo.InvariantCulture);
+            _sizeBox.SelectedItem = currentSizeStr;
+            if (_sizeBox.SelectedItem is null)
+            {
+                // BZ1: size not in the standard ladder (e.g. 13pt) — seed Text directly so
+                // the combo shows "13" instead of blank.
+                _sizeBox.Text = currentSizeStr;
+            }
+        }
+        else
+        {
+            _sizeBox.SelectedIndex = -1; // no font size set
         }
 
         // ── Style checkboxes ─────────────────────────────────────────────────
-        _boldChk.IsChecked        = current.Bold;
-        _italicChk.IsChecked      = current.Italic;
-        _underlineChk.IsChecked   = current.Underline;
-        _strikeChk.IsChecked      = current.Strikethrough;
+        // BZ3: null IsChecked = indeterminate (three-state).
+        _boldChk.IsChecked        = _boldIndeterminate       ? null : current.Bold;
+        _italicChk.IsChecked      = _italicIndeterminate     ? null : current.Italic;
+        _underlineChk.IsChecked   = _underlineIndeterminate  ? null : current.Underline;
+        _strikeChk.IsChecked      = _strikeIndeterminate     ? null : current.Strikethrough;
         _superChk.IsChecked       = current.VerticalAlign == VerticalAlign.Superscript;
         _subChk.IsChecked         = current.VerticalAlign == VerticalAlign.Subscript;
         _smallCapsChk.IsChecked   = current.SmallCaps;
@@ -221,15 +295,28 @@ public sealed class FontDialog : Window
         };
     }
 
-    /// <summary>Result record produced by the dialog on OK.</summary>
+    /// <summary>
+    /// Result record produced by the dialog on OK.
+    ///
+    /// BZ3: <c>Bold</c>, <c>Italic</c>, <c>Underline</c>, <c>Strikethrough</c> are <c>bool?</c>:
+    /// <c>null</c> means the user left the field indeterminate (mixed selection, unchanged) — the
+    /// apply step skips those fields so mixed runs are not clobbered.
+    ///
+    /// Similarly <c>Family</c> and <c>SizePt</c> being <c>null</c> can mean either "no value" or
+    /// "indeterminate/unchanged" — the apply step uses <c>FamilyChanged</c> / <c>SizeChanged</c>
+    /// to distinguish an explicit clear from an indeterminate skip.
+    /// </summary>
     public sealed record FontDialogResult(
         string? Family,
         double? SizePt,
-        bool Bold, bool Italic, bool Underline, bool Strikethrough,
+        bool? Bold, bool? Italic, bool? Underline, bool? Strikethrough,
         VerticalAlign VerticalAlign,
         bool SmallCaps, bool AllCaps,
         string? ColorHex,
-        string? HighlightHex);
+        string? HighlightHex,
+        // BZ3: true when the user explicitly changed the family/size field (false = indeterminate, skip).
+        bool FamilyChanged = true,
+        bool SizeChanged   = true);
 
     // ── OK handler ────────────────────────────────────────────────────────────
 
@@ -237,23 +324,42 @@ public sealed class FontDialog : Window
     {
         _status.IsVisible = false;
 
-        // Parse size.
-        var sizeText = (_sizeBox.SelectedItem as string ?? string.Empty).Trim();
+        // BZ1: read .Text (not .SelectedItem) so a typed value that is not in the list is captured.
+        var sizeText = (_sizeBox.Text ?? (_sizeBox.SelectedItem as string) ?? string.Empty).Trim();
         double? sizePt = null;
-        if (!string.IsNullOrEmpty(sizeText))
+        var sizeChanged = true;
+        if (_sizeIndeterminate && string.IsNullOrEmpty(sizeText))
         {
-            if (!double.TryParse(sizeText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) || parsed <= 0)
+            // User left the size blank in an indeterminate combo → do not apply size.
+            sizeChanged = false;
+        }
+        else if (!string.IsNullOrEmpty(sizeText))
+        {
+            if (!double.TryParse(sizeText, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+                || parsed < MinFontSizePt || parsed > MaxFontSizePt)
             {
-                _status.Text = $"Invalid font size: \"{sizeText}\". Enter a positive number.";
+                _status.Text = $"Invalid font size: \"{sizeText}\". Enter a number between {MinFontSizePt} and {MaxFontSizePt}.";
                 _status.IsVisible = true;
                 return;
             }
-            sizePt = parsed;
+            sizePt = Math.Clamp(parsed, MinFontSizePt, MaxFontSizePt);
         }
 
-        // Resolve family.
-        var family = (_familyBox.SelectedItem as string ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(family)) family = null;
+        // BZ1: read family from .Text; fall back to SelectedItem for backwards compat.
+        var familyText = (_familyBox.Text ?? (_familyBox.SelectedItem as string) ?? string.Empty).Trim();
+        var family = string.IsNullOrWhiteSpace(familyText) ? null : familyText;
+        var familyChanged = true;
+        if (_familyIndeterminate && string.IsNullOrWhiteSpace(familyText))
+        {
+            // User left family blank in an indeterminate combo → do not apply family.
+            familyChanged = false;
+        }
+
+        // BZ3: a checkbox left at null (indeterminate by user) means "do not apply".
+        bool? boldResult       = _boldChk.IsChecked;
+        bool? italicResult     = _italicChk.IsChecked;
+        bool? underlineResult  = _underlineChk.IsChecked;
+        bool? strikeResult     = _strikeChk.IsChecked;
 
         // Resolve vertical alignment.
         var va = _superChk.IsChecked == true ? VerticalAlign.Superscript
@@ -267,15 +373,17 @@ public sealed class FontDialog : Window
         var result = new FontDialogResult(
             Family:       family,
             SizePt:       sizePt,
-            Bold:         _boldChk.IsChecked    == true,
-            Italic:       _italicChk.IsChecked  == true,
-            Underline:    _underlineChk.IsChecked == true,
-            Strikethrough: _strikeChk.IsChecked  == true,
+            Bold:         boldResult,
+            Italic:       italicResult,
+            Underline:    underlineResult,
+            Strikethrough: strikeResult,
             VerticalAlign: va,
             SmallCaps:    _smallCapsChk.IsChecked == true,
             AllCaps:      _allCapsChk.IsChecked   == true,
             ColorHex:     colorHex,
-            HighlightHex: highlightHex);
+            HighlightHex: highlightHex,
+            FamilyChanged: familyChanged,
+            SizeChanged:  sizeChanged);
 
         Close(result);
     }
@@ -285,89 +393,88 @@ public sealed class FontDialog : Window
     /// <summary>
     /// Apply <paramref name="result"/> to <paramref name="editor"/>, changing only properties that
     /// differ from <paramref name="original"/>. Safe to call without showing the window (used by tests).
+    ///
+    /// BZ4: all individual editor calls are wrapped in a single undo group so OK = one undo step.
+    /// BZ3: null Bool? fields and indeterminate family/size are skipped, preserving mixed runs.
     /// </summary>
     public static void ApplyResult(DocumentView editor, FontDialogResult result, RunFormatting original)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(result);
 
-        // Font family
-        if (result.Family != original.FontFamily)
+        // BZ4: wrap all changes in a single undo group.
+        editor.BeginFontUndoGroup();
+        try
         {
-            editor.SetSelectionFontFamily(result.Family ?? string.Empty);
-        }
-
-        // Font size
-        if (result.SizePt != original.FontSizePt)
-        {
-            if (result.SizePt.HasValue)
-                editor.SetSelectionFontSize(result.SizePt.Value);
-        }
-
-        // Bold
-        if (result.Bold != original.Bold)
-            editor.ToggleBold();
-
-        // Italic
-        if (result.Italic != original.Italic)
-            editor.ToggleItalic();
-
-        // Underline
-        if (result.Underline != original.Underline)
-            editor.ToggleUnderline();
-
-        // Strikethrough
-        if (result.Strikethrough != original.Strikethrough)
-            editor.ToggleStrikethrough();
-
-        // Vertical alignment (super/subscript)
-        if (result.VerticalAlign != original.VerticalAlign)
-        {
-            switch (result.VerticalAlign)
+            // Font family — BZ3: skip when indeterminate (FamilyChanged = false).
+            if (result.FamilyChanged && result.Family != original.FontFamily)
             {
-                case VerticalAlign.Superscript:
-                    // Ensure we're not already in superscript.
-                    if (original.VerticalAlign != VerticalAlign.Superscript)
-                        editor.ToggleSuperscript();
-                    break;
-                case VerticalAlign.Subscript:
-                    if (original.VerticalAlign != VerticalAlign.Subscript)
-                        editor.ToggleSubscript();
-                    break;
-                case VerticalAlign.Baseline:
-                    // Clear: toggle whichever is active.
-                    if (original.VerticalAlign == VerticalAlign.Superscript)
-                        editor.ToggleSuperscript();
-                    else if (original.VerticalAlign == VerticalAlign.Subscript)
-                        editor.ToggleSubscript();
-                    break;
+                editor.SetSelectionFontFamily(result.Family ?? string.Empty);
             }
+
+            // Font size — BZ3: skip when indeterminate (SizeChanged = false).
+            if (result.SizeChanged && result.SizePt != original.FontSizePt)
+            {
+                if (result.SizePt.HasValue)
+                    editor.SetSelectionFontSize(result.SizePt.Value);
+            }
+
+            // Bold — BZ3: skip when null (indeterminate).
+            if (result.Bold.HasValue && result.Bold.Value != original.Bold)
+                editor.ToggleBold();
+
+            // Italic — BZ3: skip when null.
+            if (result.Italic.HasValue && result.Italic.Value != original.Italic)
+                editor.ToggleItalic();
+
+            // Underline — BZ3: skip when null.
+            if (result.Underline.HasValue && result.Underline.Value != original.Underline)
+                editor.ToggleUnderline();
+
+            // Strikethrough — BZ3: skip when null.
+            if (result.Strikethrough.HasValue && result.Strikethrough.Value != original.Strikethrough)
+                editor.ToggleStrikethrough();
+
+            // Vertical alignment (super/subscript)
+            if (result.VerticalAlign != original.VerticalAlign)
+            {
+                switch (result.VerticalAlign)
+                {
+                    case VerticalAlign.Superscript:
+                        if (original.VerticalAlign != VerticalAlign.Superscript)
+                            editor.ToggleSuperscript();
+                        break;
+                    case VerticalAlign.Subscript:
+                        if (original.VerticalAlign != VerticalAlign.Subscript)
+                            editor.ToggleSubscript();
+                        break;
+                    case VerticalAlign.Baseline:
+                        if (original.VerticalAlign == VerticalAlign.Superscript)
+                            editor.ToggleSuperscript();
+                        else if (original.VerticalAlign == VerticalAlign.Subscript)
+                            editor.ToggleSubscript();
+                        break;
+                }
+            }
+
+            // Font color
+            if (result.ColorHex != original.ColorHex)
+                editor.SetFontColor(result.ColorHex);
+
+            // Highlight
+            if (result.HighlightHex != original.HighlightColorHex)
+                editor.SetHighlightColor(result.HighlightHex);
+
+            // SmallCaps / AllCaps: DocumentView does not yet expose ToggleSmallCaps /
+            // ToggleAllCaps. These flags round-trip through the model but the dialog can
+            // already read them. Applying them requires adding methods; we leave this for
+            // the next wave (deferred) — marked below.
+            // TODO(deferred): editor.ToggleSmallCaps() / editor.ToggleAllCaps() when added.
         }
-
-        // Font color
-        if (result.ColorHex != original.ColorHex)
-            editor.SetFontColor(result.ColorHex);
-
-        // Highlight
-        if (result.HighlightHex != original.HighlightColorHex)
-            editor.SetHighlightColor(result.HighlightHex);
-
-        // SmallCaps / AllCaps — these don't have dedicated toggle methods yet, so we
-        // apply via SetSelectionRunFormatting-equivalent; reuse the ApplyRunFormatting
-        // path by checking if a dedicated method exists. Since there is none, we patch
-        // via the same trick as SetFontColor: a single ApplyRunFormatting lambda via the
-        // editor's public surface. The only available hook is to toggle bold/etc. For
-        // SmallCaps and AllCaps the DocumentView doesn't have a dedicated method yet —
-        // we apply them by calling SetFontColor with a special side-effect path is NOT
-        // available. Instead, expose helpers on DocumentView (or skip for now since the
-        // model fields exist but no toggle method is defined). We apply them below via
-        // dedicated helper calls where available.
-        //
-        // SmallCaps / AllCaps: DocumentView does not yet expose ToggleSmallCaps /
-        // ToggleAllCaps. These flags round-trip through the model but the dialog can
-        // already read them. Applying them requires adding methods; we leave this for
-        // the next wave (deferred) — marked below.
-        // TODO(deferred): editor.ToggleSmallCaps() / editor.ToggleAllCaps() when added.
+        finally
+        {
+            editor.CommitFontUndoGroup("Font");
+        }
     }
 
     // ── Static factory ────────────────────────────────────────────────────────
@@ -381,11 +488,12 @@ public sealed class FontDialog : Window
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(editor);
 
-        var (runFmt, _) = editor.GetCaretFormatting();
-        var dialog = new FontDialog(runFmt);
+        // BZ3: use GetSelectionFormatting to detect mixed bools and blank family/size.
+        var sel = editor.GetSelectionFormatting();
+        var dialog = new FontDialog(sel);
         var result = await dialog.ShowDialog<FontDialogResult?>(owner);
         if (result is null) return;
-        ApplyResult(editor, result, runFmt);
+        ApplyResult(editor, result, sel.Run);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

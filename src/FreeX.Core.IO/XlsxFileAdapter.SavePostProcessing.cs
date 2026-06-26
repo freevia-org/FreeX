@@ -52,6 +52,17 @@ public sealed partial class XlsxFileAdapter
             XlsxStyleOnlyCellWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // BX1: ClosedXML emits <color rgb="00000000"/> (transparent black) as a sentinel for
+        // CellRunColorKind.Auto, which it cannot express as <color auto="1"/>.  Rewrite the
+        // shared-strings part so every rgb="00000000" becomes auto="1", restoring correct
+        // round-trip semantics.  Transparent black (alpha=0) is never written by Excel for a
+        // real color, so this substitution is safe and unambiguous.
+        if (featurePlan.HasRichAutoColorRuns)
+        {
+            packageStream.Position = 0;
+            FixRichAutoColorRunsInSharedStrings(packageStream);
+        }
+
         if (featurePlan.HasFullCalculationOnLoad)
         {
             packageStream.Position = 0;
@@ -519,6 +530,87 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
+    /// <summary>
+    /// Returns true when <paramref name="sheet"/> has at least one rich-text run whose color kind
+    /// is <see cref="CellRunColorKind.Auto"/>.  Used to gate the BX1 shared-strings post-processing
+    /// pass so workbooks without Auto-color runs pay no cost.
+    /// </summary>
+    private static bool HasRichTextAutoColorRuns(Sheet sheet)
+    {
+        foreach (var runs in sheet.RichTextRuns.Values)
+        {
+            foreach (var run in runs)
+            {
+                if (run.FontColor is { Kind: CellRunColorKind.Auto })
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Rewrites the <c>xl/sharedStrings.xml</c> part in the package stream, replacing every
+    /// <c>&lt;color rgb="00000000"/&gt;</c> (the transparent-black sentinel emitted by the
+    /// full-save path for <see cref="CellRunColorKind.Auto"/>) with <c>&lt;color auto="1"/&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// ClosedXML cannot emit <c>&lt;color auto="1"/&gt;</c> for rich-text runs, so
+    /// <see cref="MapRunColorToXLColor"/> uses the sentinel <c>XLColor.FromArgb(0,0,0,0)</c>
+    /// (transparent black, <c>rgb="00000000"</c>).  That value is impossible in a real Excel
+    /// file — Excel always writes alpha=FF for opaque colors — so the substitution is safe.
+    /// The reader (<see cref="XlsxRichRunReader.TryReadRunColor"/>) already handles
+    /// <c>auto="1"</c> and returns <see cref="CellRunColor.Auto()"/>.
+    /// </remarks>
+    private static void FixRichAutoColorRunsInSharedStrings(Stream packageStream)
+    {
+        const string sharedStringsPath = "xl/sharedStrings.xml";
+
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+        var entry = archive.GetEntry(sharedStringsPath);
+        if (entry is null)
+            return;
+
+        XDocument doc;
+        using (var entryStream = entry.Open())
+        {
+            doc = XDocument.Load(entryStream, LoadOptions.PreserveWhitespace);
+        }
+
+        var root = doc.Root;
+        if (root is null)
+            return;
+
+        XNamespace ns = root.Name.Namespace;
+        var modified = false;
+
+        // Walk every <color rgb="00000000"> in the shared strings and replace with <color auto="1"/>.
+        // These arise only from the full-save sentinel for Auto run colors.
+        foreach (var colorEl in root.Descendants(ns + "color").ToList())
+        {
+            var rgbAttr = colorEl.Attribute("rgb");
+            if (rgbAttr is null)
+                continue;
+            if (!string.Equals(rgbAttr.Value, "00000000", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // Replace <color rgb="00000000"/> with <color auto="1"/>
+            rgbAttr.Remove();
+            colorEl.SetAttributeValue("auto", "1");
+            modified = true;
+        }
+
+        if (!modified)
+            return;
+
+        // Rewrite the shared strings entry.
+        entry.Delete();
+        var newEntry = archive.CreateEntry(sharedStringsPath);
+        using var outStream = newEntry.Open();
+        doc.Save(outStream);
+    }
+
     private static bool HasIgnoredFormulaErrors(Sheet sheet)
     {
         foreach (var pair in sheet.GetOccupiedCellMap())
@@ -590,6 +682,13 @@ public sealed partial class XlsxFileAdapter
         public bool HasCustomViews;
         public bool HasCellFormulas;
         public bool HasLegacyNotes;
+        /// <summary>
+        /// True when any sheet has a rich-text run with <see cref="CellRunColorKind.Auto"/> color.
+        /// The full-save (ClosedXML) path cannot emit <c>&lt;color auto="1"/&gt;</c> directly;
+        /// instead it emits the sentinel <c>rgb="00000000"</c> (transparent black, never a real color),
+        /// which the post-processing pass replaces with <c>auto="1"</c> in the shared-strings part.
+        /// </summary>
+        public bool HasRichAutoColorRuns;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
@@ -633,6 +732,8 @@ public sealed partial class XlsxFileAdapter
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
             HasLegacyNotes |= sheet.Comments.Count > 0;
             HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
+            if (!HasRichAutoColorRuns)
+                HasRichAutoColorRuns = HasRichTextAutoColorRuns(sheet);
         }
 
         private void IncludeCellFeatures(Sheet sheet)

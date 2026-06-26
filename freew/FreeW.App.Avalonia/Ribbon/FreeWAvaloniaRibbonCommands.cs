@@ -163,17 +163,28 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.table-select-table", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, int.MaxValue, int.MaxValue);
+            {
+                // BY1: clamp to actual table bounds — passing int.MaxValue triggers an overflow
+                // loop in ExpandForMergedCells (r++ overflows int.MaxValue → infinite loop).
+                var (lastRow, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, lastRow, lastGridCol);
+            }
         }));
         r.Register("freew.table-select-row", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, int.MaxValue);
+            {
+                var (_, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, lastGridCol);
+            }
         }));
         r.Register("freew.table-select-col", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, int.MaxValue, cc.Col);
+            {
+                var (lastRow, _) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, lastRow, cc.Col);
+            }
         }));
         r.Register("freew.table-select-cell", new RelayCommand(() =>
         {
@@ -197,6 +208,10 @@ internal static class FreeWAvaloniaRibbonCommands
         // Merge / split.
         r.Register("freew.table-merge-cells", new RelayCommand(editor.MergeSelectedCells));
         r.Register("freew.table-split-cell",  new RelayCommand(() => editor.SplitCurrentCell()));
+
+        // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
+        // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
+        RegisterCellAlignmentCommands(r, editor);
 
         // ── View ─────────────────────────────────────────────────────────────
         r.Register("freew.printlayout",       new RelayCommand(callbacks.SetPrintLayout));
@@ -258,5 +273,27 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.table-borders.bottom",  CellBorderEdges.Bottom);
         Add(r, editor, "freew.table-borders.left",    CellBorderEdges.Left);
         Add(r, editor, "freew.table-borders.right",   CellBorderEdges.Right);
+    }
+
+    /// <summary>
+    /// Registers the 9 cell-alignment commands (3 vertical × 3 horizontal) for the
+    /// table-layout Alignment group. Command ids are identical to the WPF host so
+    /// keyboard macros and tests are interchangeable.
+    /// </summary>
+    private static void RegisterCellAlignmentCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id,
+            TableCellVerticalAlignment vAlign, TextAlignment hAlign) =>
+            reg.Register(id, new RelayCommand(() => ed.SetCaretCellAlignment(vAlign, hAlign)));
+
+        Add(r, editor, "freew.cell-align-top-left",       TableCellVerticalAlignment.Top,    TextAlignment.Left);
+        Add(r, editor, "freew.cell-align-top-center",     TableCellVerticalAlignment.Top,    TextAlignment.Center);
+        Add(r, editor, "freew.cell-align-top-right",      TableCellVerticalAlignment.Top,    TextAlignment.Right);
+        Add(r, editor, "freew.cell-align-middle-left",    TableCellVerticalAlignment.Center, TextAlignment.Left);
+        Add(r, editor, "freew.cell-align-middle-center",  TableCellVerticalAlignment.Center, TextAlignment.Center);
+        Add(r, editor, "freew.cell-align-middle-right",   TableCellVerticalAlignment.Center, TextAlignment.Right);
+        Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
+        Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
+        Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
     }
 }

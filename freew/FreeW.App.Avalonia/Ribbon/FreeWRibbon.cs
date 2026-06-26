@@ -206,6 +206,20 @@ internal static class FreeWRibbon
                         g.Button("freew.table-merge-cells", "Merge Cells");
                         g.Button("freew.table-split-cell",  "Split Cell");
                     });
+                    // BY2: cell alignment parity with WPF's table-layout Alignment group.
+                    // 9 buttons = 3 vertical (Top/Middle/Bottom) × 3 horizontal (Left/Center/Right).
+                    tab.Group("table-alignment", "Alignment", null, 110, g =>
+                    {
+                        g.Button("freew.cell-align-top-left",      "Top Left");
+                        g.Button("freew.cell-align-top-center",    "Top Center");
+                        g.Button("freew.cell-align-top-right",     "Top Right");
+                        g.Button("freew.cell-align-middle-left",   "Middle Left");
+                        g.Button("freew.cell-align-middle-center", "Middle Center");
+                        g.Button("freew.cell-align-middle-right",  "Middle Right");
+                        g.Button("freew.cell-align-bottom-left",   "Bottom Left");
+                        g.Button("freew.cell-align-bottom-center", "Bottom Center");
+                        g.Button("freew.cell-align-bottom-right",  "Bottom Right");
+                    });
                 })
             .Build();
 

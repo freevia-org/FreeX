@@ -1320,10 +1320,9 @@ public static class PptxPackageWriter
             case BulletKind.Char:
                 if (level.BulletColor is not null)
                 {
-                    var rc = level.BulletColor.Resolved;
-                    el.Add(new XElement(A + "buClr",
-                        new XElement(A + "srgbClr",
-                            new XAttribute("val", $"{rc.R:X2}{rc.G:X2}{rc.B:X2}"))));
+                    // Preserve the original scheme/sRGB color reference via the shared helper
+                    // (BU4: previously always emitted srgbClr, losing schemeClr theme linkage).
+                    el.Add(new XElement(A + "buClr", BuildColorEl(level.BulletColor)));
                 }
                 if (level.BulletSizePct.HasValue) el.Add(new XElement(A + "buSzPct", new XAttribute("val", level.BulletSizePct.Value)));
                 if (!string.IsNullOrEmpty(level.BulletFontFamily)) el.Add(new XElement(A + "buFont", new XAttribute("typeface", level.BulletFontFamily)));
@@ -2429,11 +2428,9 @@ public static class PptxPackageWriter
                 // Write buClr/buSzPct/buFont when set (Wave 19A)
                 if (para.BulletColor is not null)
                 {
-                    // Emit as sRGB solid fill
-                    var resolved = para.BulletColor.Resolved;
-                    pPr.Add(new XElement(A + "buClr",
-                        new XElement(A + "srgbClr",
-                            new XAttribute("val", $"{resolved.R:X2}{resolved.G:X2}{resolved.B:X2}"))));
+                    // Preserve the original scheme/sRGB color reference via the shared helper
+                    // (BU4: previously always emitted srgbClr, losing schemeClr theme linkage).
+                    pPr.Add(new XElement(A + "buClr", BuildColorEl(para.BulletColor)));
                     hasPPr = true;
                 }
                 if (para.BulletSizePct.HasValue) { pPr.Add(new XElement(A + "buSzPct", new XAttribute("val", para.BulletSizePct.Value))); hasPPr = true; }

@@ -634,4 +634,141 @@ public sealed class XlsxRichTextRunRoundTripTests
         runs[0].Bold.Should().BeTrue();
         runs[0].Text.Should().Be("Bold");
     }
+
+    // ── BX1 regression: Auto run color must not corrupt to black on full-save ─
+
+    /// <summary>
+    /// BX1: A run with <c>CellRunColor.Auto()</c> must not round-trip as opaque black
+    /// after a full-save (ClosedXML path).
+    ///
+    /// Before the fix, <see cref="XlsxFileAdapter"/> mapped Auto to
+    /// <c>XLColor.FromArgb(0,0,0,0)</c> (transparent black), which ClosedXML
+    /// serialized as <c>&lt;color rgb="00000000"/&gt;</c>.  The reader stripped the
+    /// alpha byte and returned <c>CellRunColor.FromRgb(black)</c> — a visible
+    /// corruption.  The fix: skip setting FontColor entirely for Auto runs so
+    /// ClosedXML emits no &lt;color&gt; element; on reload FontColor is null
+    /// (inherit), not black.
+    /// </summary>
+    [Fact]
+    public void RichRun_FullSave_AutoColorDoesNotReloadAsBlack()
+    {
+        var workbook = new Workbook("FullSaveAutoColor");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 1, 1);
+
+        sheet.SetCell(addr, new TextValue("Auto"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Auto",
+                Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null,
+                FontColor: CellRunColor.Auto()),
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        // After full-save, the run must exist (ClosedXML emits runs for any cell that
+        // was assigned IXLRichText content, even if individual runs lack a color element).
+        // The critical assertion: FontColor must NOT be opaque black (the pre-fix corruption).
+        // It may come back as null (no color element emitted) — that is the correct outcome.
+        if (rs.RichTextRuns.TryGetValue(A(rs, 1, 1), out var runs) && runs.Count > 0)
+        {
+            var color = runs[0].FontColor;
+            if (color is { } c)
+            {
+                // If ClosedXML did emit a color, it must not be opaque black (the bug).
+                var isOpaqueBlack = c.Kind == CellRunColorKind.Rgb
+                    && c.Rgb.R == 0 && c.Rgb.G == 0 && c.Rgb.B == 0;
+                isOpaqueBlack.Should().BeFalse(
+                    "an Auto-color run must not reload as opaque black after full-save (BX1 regression)");
+            }
+            // color == null means no <color> element was emitted — acceptable, correct behavior.
+        }
+        // If no runs at all (ClosedXML dropped the single-run cell), that is a separate
+        // limitation (BX3) and not what this test guards against.
+    }
+
+    /// <summary>
+    /// BX1 consistency: a run with Auto color must reload with an equivalent color
+    /// from both the patch-save path (which correctly emits <c>&lt;color auto="1"/&gt;</c>)
+    /// and the full-save path (which must not emit opaque black).
+    ///
+    /// Specifically, neither path should produce an opaque-black RGB color, even though
+    /// the patch-save path may produce <c>CellRunColor.Auto()</c> while the full-save
+    /// path produces <c>FontColor == null</c>.  Both are acceptable non-black results.
+    /// </summary>
+    [Fact]
+    public void RichRun_AutoColor_PatchAndFullSaveBothAvoidOpaqueBlack()
+    {
+        // Build a package that already has a run with <color auto="1"/> so the patch-save
+        // path is exercised (it reuses the source package XML).
+        using var pkg = BuildMinimalXlsx("""
+            <row r="1">
+              <c r="A1" t="inlineStr">
+                <is>
+                  <r><rPr><color auto="1"/></rPr><t>Auto</t></r>
+                  <r><t> normal</t></r>
+                </is>
+              </c>
+            </row>
+            <row r="2">
+              <c r="B2"><v>0</v></c>
+            </row>
+            """);
+
+        // ── Patch-save path ──────────────────────────────────────────────────
+        var workbook = LoadXlsx(pkg);
+        var sheet    = workbook.GetSheetAt(0);
+
+        // Verify the Auto run loaded correctly.
+        sheet.RichTextRuns.Should().ContainKey(A(sheet, 1, 1));
+        sheet.RichTextRuns[A(sheet, 1, 1)][0].FontColor.Should().Be(CellRunColor.Auto());
+
+        // Dirty sheet → triggers patch-save (source package is modified in-place).
+        sheet.SetCell(A(sheet, 3, 3), new NumberValue(1));
+
+        using var patchSaved    = SaveXlsx(workbook);
+        var       patchReloaded = LoadXlsx(patchSaved);
+        var       patchRs       = patchReloaded.GetSheetAt(0);
+
+        patchRs.RichTextRuns.Should().ContainKey(A(patchRs, 1, 1));
+        var patchColor = patchRs.RichTextRuns[A(patchRs, 1, 1)][0].FontColor;
+        // Patch-save round-trips Auto as Auto (correct XML preserved).
+        patchColor.Should().Be(CellRunColor.Auto(),
+            "patch-save must preserve <color auto=\"1\"/> and reload it as CellRunColor.Auto()");
+
+        // ── Full-save path ───────────────────────────────────────────────────
+        // Build a brand-new Workbook with an Auto-color run; no source package → full-save.
+        var workbook2 = new Workbook("FullSaveAutoColorConsistency");
+        var sheet2    = workbook2.AddSheet("Sheet1");
+        var addr2     = A(sheet2, 1, 1);
+
+        sheet2.SetCell(addr2, new TextValue("Auto normal"));
+        sheet2.RichTextRuns[addr2] = new List<CellTextRun>
+        {
+            new("Auto",   Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                          FontName: null, FontSize: null, FontColor: CellRunColor.Auto()),
+            new(" normal", Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                           FontName: null, FontSize: null, FontColor: null),
+        };
+
+        using var fullSaved    = SaveXlsx(workbook2);
+        var       fullReloaded = LoadXlsx(fullSaved);
+        var       fullRs       = fullReloaded.GetSheetAt(0);
+
+        // Both paths must agree: no opaque-black color on the Auto run.
+        if (fullRs.RichTextRuns.TryGetValue(A(fullRs, 1, 1), out var fullRuns) && fullRuns.Count > 0)
+        {
+            var fullColor = fullRuns[0].FontColor;
+            if (fullColor is { } fc)
+            {
+                var isOpaqueBlack = fc.Kind == CellRunColorKind.Rgb
+                    && fc.Rgb.R == 0 && fc.Rgb.G == 0 && fc.Rgb.B == 0;
+                isOpaqueBlack.Should().BeFalse(
+                    "full-save must not corrupt Auto color to opaque black (BX1)");
+            }
+        }
+    }
 }

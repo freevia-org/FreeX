@@ -577,6 +577,14 @@ public sealed partial class XlsxFileAdapter
     /// Converts a <see cref="CellRunColor"/> to an <see cref="XLColor"/>, preserving theme
     /// and indexed references so they survive the round-trip without being flattened to RGB.
     /// </summary>
+    /// <remarks>
+    /// ClosedXML cannot express <c>&lt;color auto="1"/&gt;</c>.  For <see cref="CellRunColorKind.Auto"/>,
+    /// we intentionally use <c>FromArgb(0,0,0,0)</c> (fully-transparent black, <c>rgb="00000000"</c>)
+    /// as a sentinel value — it is an impossible color in real OOXML (alpha=0 is never written by Excel)
+    /// so a post-processing pass in <see cref="ApplyPackagePostProcessing"/> can safely replace every
+    /// <c>rgb="00000000"</c> in the shared-strings part with <c>auto="1"</c>, restoring the correct
+    /// round-trip semantics without ambiguity.
+    /// </remarks>
     private static XLColor MapRunColorToXLColor(CellRunColor color) => color.Kind switch
     {
         CellRunColorKind.Theme =>
@@ -586,7 +594,9 @@ public sealed partial class XlsxFileAdapter
         CellRunColorKind.Indexed =>
             XLColor.FromIndex(color.IndexedIndex),
         CellRunColorKind.Auto =>
-            XLColor.FromArgb(0, 0, 0, 0),  // auto → transparent black; best available in ClosedXML
+            // BX1 sentinel: transparent black is never emitted by Excel for a real color,
+            // so the post-processing pass can safely rewrite it to <color auto="1"/>.
+            XLColor.FromArgb(0, 0, 0, 0),
         _ => // Rgb
             XLColor.FromArgb(255, color.Rgb.R, color.Rgb.G, color.Rgb.B),
     };

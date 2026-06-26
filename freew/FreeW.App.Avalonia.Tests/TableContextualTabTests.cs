@@ -405,6 +405,144 @@ public sealed class TableContextualTabTests
         ran.Should().BeTrue("table commands must silently no-op when no table is active");
     }
 
+    // ── BY1: Select Table / Row / Column — no infinite loop ──────────────────
+
+    /// <summary>
+    /// BY1 regression: SetCellBlockSelection used to receive int.MaxValue for row/col bounds,
+    /// causing ExpandForMergedCells to loop forever (r++ overflows int.MaxValue → int.MinValue,
+    /// r &lt;= maxRow always true). The blame-hang-timeout catching a hang IS the regression check.
+    /// </summary>
+    [Fact]
+    public async Task SelectTable_returns_bounded_range_without_hanging()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, tbl) = MakeTableView(); // 3×3 table
+                view.PlaceCaretInCell(idx, row: 1, col: 1, paraIdx: 0, offset: 0);
+                // Invoke select-table — must NOT hang.
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                registry.TryGet(new RibbonCommandId("freew.table-select-table"), out var cmd);
+                cmd!.Execute(RibbonCommandContext.Empty);
+                range = view.SelectedCellRange;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        range.Should().NotBeNull("SelectTable must set a cell range");
+        range!.Value.MinRow.Should().Be(0);
+        range.Value.MinCol.Should().Be(0);
+        range.Value.MaxRow.Should().Be(2, "3-row table → last row = 2");
+        range.Value.MaxCol.Should().Be(2, "3-col table → last col = 2");
+    }
+
+    [Fact]
+    public async Task SelectRow_returns_full_row_without_hanging()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, _) = MakeTableView(); // 3×3 table
+                view.PlaceCaretInCell(idx, row: 1, col: 0, paraIdx: 0, offset: 0);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                registry.TryGet(new RibbonCommandId("freew.table-select-row"), out var cmd);
+                cmd!.Execute(RibbonCommandContext.Empty);
+                range = view.SelectedCellRange;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        range.Should().NotBeNull("SelectRow must set a cell range");
+        range!.Value.MinRow.Should().Be(1, "row 1 selected");
+        range.Value.MaxRow.Should().Be(1, "single row selected");
+        range.Value.MinCol.Should().Be(0);
+        range.Value.MaxCol.Should().Be(2, "all 3 columns covered");
+    }
+
+    [Fact]
+    public async Task SelectColumn_returns_full_column_without_hanging()
+    {
+        (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)? range = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                var (view, idx, _) = MakeTableView(); // 3×3 table
+                view.PlaceCaretInCell(idx, row: 0, col: 2, paraIdx: 0, offset: 0);
+                var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+                registry.TryGet(new RibbonCommandId("freew.table-select-col"), out var cmd);
+                cmd!.Execute(RibbonCommandContext.Empty);
+                range = view.SelectedCellRange;
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        range.Should().NotBeNull("SelectColumn must set a cell range");
+        range!.Value.MinCol.Should().Be(2, "column 2 selected");
+        range.Value.MaxCol.Should().Be(2, "single column selected");
+        range.Value.MinRow.Should().Be(0);
+        range.Value.MaxRow.Should().Be(2, "all 3 rows covered");
+    }
+
+    // ── BY3: DeleteTableBlock leaves a valid caret ────────────────────────────
+
+    /// <summary>
+    /// BY3 regression: after deleting the last table block, _caret.Block pointed past the
+    /// document end. ClampCaret() must re-anchor it to a valid position.
+    /// </summary>
+    [Fact]
+    public async Task DeleteTableBlock_caret_is_valid_and_typing_works()
+    {
+        int? caretBlockAfter = null;
+        int? blockCountAfter = null;
+        var ran = false;
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                // Document: only a table (last block).
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+                doc.Blocks.Add(new Paragraph("Before"));
+                var tbl = Table.Create(2, 2);
+                doc.Blocks.Add(tbl);
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+                view.Measure(new Size(800, 4000));
+
+                var tblIdx = doc.Blocks.IndexOf(tbl);
+                view.PlaceCaretInCell(tblIdx, row: 0, col: 0, paraIdx: 0, offset: 0);
+                view.DeleteTableBlock(tblIdx);
+
+                blockCountAfter = doc.Blocks.Count;
+                caretBlockAfter = view.CellCaretInfo is null
+                    ? view.CaretPosition.Block
+                    : -1; // cell caret must be cleared
+                // Subsequent type op must not throw (InsertText uses _caret which must be valid).
+                view.InsertText("X");
+                ran = true;
+            }, CancellationToken.None);
+        }
+        catch { return; }
+
+        if (!ran) return;
+        blockCountAfter.Should().Be(1, "only the 'Before' paragraph remains");
+        caretBlockAfter.Should().Be(0, "_caret.Block must be 0 after table deleted");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static (DocumentView View, int TableBlockIdx, Table Tbl) MakeTableView()

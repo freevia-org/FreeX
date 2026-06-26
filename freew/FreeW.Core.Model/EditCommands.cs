@@ -942,6 +942,64 @@ public sealed class SetCellShadingCommand(
 }
 
 /// <summary>
+/// Set the vertical alignment and all paragraphs' horizontal alignment of a single table cell.
+/// <para><paramref name="verticalAlignment"/> maps to <c>tc/tcPr/w:vAlign</c>; each paragraph's
+/// <see cref="ParagraphFormatting.Alignment"/> is set to <paramref name="horizontalAlignment"/>.</para>
+/// The previous values are snapshot-ed so <see cref="Revert"/> restores them exactly.
+/// Coordinates: same as <see cref="SetCellShadingCommand"/>.
+/// </summary>
+public sealed class SetCellAlignmentCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    TableCellVerticalAlignment verticalAlignment,
+    TextAlignment horizontalAlignment) : IDocumentCommand
+{
+    private TableCellVerticalAlignment _prevVertical;
+    private ParagraphFormatting[]? _prevParaFormattings;
+    private bool _applied;
+
+    public string Label => "Set Cell Alignment";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _prevVertical = cell.VerticalAlignment;
+        _prevParaFormattings = cell.Paragraphs.Select(p => p.Formatting).ToArray();
+        cell.VerticalAlignment = verticalAlignment;
+        foreach (var paragraph in cell.Paragraphs)
+            paragraph.Formatting = paragraph.Formatting with { Alignment = horizontalAlignment };
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.VerticalAlignment = _prevVertical;
+        if (_prevParaFormattings is not null)
+        {
+            for (var i = 0; i < Math.Min(cell.Paragraphs.Count, _prevParaFormattings.Length); i++)
+                cell.Paragraphs[i].Formatting = _prevParaFormattings[i];
+        }
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table table) return false;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count) return false;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count) return false;
+        cell = cells[colIndex];
+        return true;
+    }
+}
+
+/// <summary>
 /// Set the per-edge borders of a single table cell, merging with any existing per-edge settings.
 /// <para>Only the edges specified in <paramref name="edges"/> are touched; the others are preserved
 /// from the cell's current <see cref="CellBorders"/> (or left null when no borders existed).</para>
@@ -2617,3 +2675,4 @@ public sealed class SetTableFormattingCommand(int blockIndex, TableFormatting ne
         return true;
     }
 }
+
