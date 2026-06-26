@@ -38,6 +38,8 @@ public static class PptxPackageWriter
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
     private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+    private const string CommentsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
 
     // SmartArt diagram relationship types (slide rels point to the named sub-parts)
     private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
@@ -60,6 +62,12 @@ public static class PptxPackageWriter
     private const string ChartCT         = PptxChartWriter.ChartCT;
     private const string NotesSlideCT    = "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
     private const string NotesMasterCT   = "application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml";
+    private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
+    private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
+
+    // p14 section extension
+    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -271,6 +279,15 @@ public static class PptxPackageWriter
                 slideRels.Add(notesRelId, NotesSlideRelType, $"../notesSlides/notesSlide{si + 1}.xml");
             }
 
+            // Write comments part and add rel when the slide has comments
+            if (slide.Comments.Count > 0)
+            {
+                var cmPath  = $"ppt/comments/comment{si + 1}.xml";
+                var cmRelId = $"rIdCm{si + 1}";
+                WriteEntry(archive, cmPath, BuildCommentsXml(slide.Comments));
+                slideRels.Add(cmRelId, CommentsRelType, $"../comments/comment{si + 1}.xml");
+            }
+
             WriteRels(archive, slidePath, slideRels);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
@@ -278,6 +295,11 @@ public static class PptxPackageWriter
                 new XAttribute("id", sldIdCounter++),
                 new XAttribute(R + "id", slideRelId)));
         }
+
+        // --- 8b. commentAuthors.xml (if any slides have comments) ---
+        bool hasSomeComments = presentation.Slides.Any(s => s.Comments.Count > 0);
+        if (hasSomeComments)
+            WriteEntry(archive, "ppt/commentAuthors.xml", BuildCommentAuthorsXml(presentation.Slides));
 
         // --- 9. Presentation rels ---
         presRels.Add("rId1", PresPropsRelType, "presProps.xml");
@@ -289,8 +311,14 @@ public static class PptxPackageWriter
         }
         presRels.Add($"rId{masterRelIdStart + masters.Count}", ViewPropsRelType, "viewProps.xml");
         presRels.Add($"rId{masterRelIdStart + masters.Count + 1}", TableStylesRelType, "tableStyles.xml");
+        int extraPresRelOffset = 2; // next available offset after tableStyles
         if (hasSomeNotes)
-            presRels.Add($"rId{masterRelIdStart + masters.Count + 2}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
+        {
+            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
+            extraPresRelOffset++;
+        }
+        if (hasSomeComments)
+            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", CommentAuthorsRelType, "commentAuthors.xml");
 
         WriteRels(archive, "ppt/presentation.xml", presRels);
 
@@ -387,6 +415,18 @@ public static class PptxPackageWriter
             }
         }
 
+        // Comments content types
+        bool hasSomeComments = p.Slides.Any(s => s.Comments.Count > 0);
+        if (hasSomeComments)
+        {
+            overrides.Add(Override(CT, "/ppt/commentAuthors.xml", CommentAuthorsCT));
+            for (int si = 0; si < p.Slides.Count; si++)
+            {
+                if (p.Slides[si].Comments.Count > 0)
+                    overrides.Add(Override(CT, $"/ppt/comments/comment{si + 1}.xml", CommentsCT));
+            }
+        }
+
         // Collect SmartArt diagram part content types (from the stored DiagramPart objects)
         var seenSmartArtParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in p.Slides)
@@ -425,25 +465,91 @@ public static class PptxPackageWriter
     private static XDocument BuildPresentationXml(
         Presentation p,
         List<XElement> sldIdElements,
-        List<(string relId, string masterPath)> masterRelIds) =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(P + "presentation",
-                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
-                new XAttribute("saveSubsetFonts", "1"),
-                new XElement(P + "sldMasterIdLst",
-                    masterRelIds.Select((mr, i) =>
-                        new XElement(P + "sldMasterId",
-                            new XAttribute("id", 2147483648u + (uint)i),
-                            new XAttribute(R + "id", mr.relId)))),
-                new XElement(P + "sldIdLst", sldIdElements),
-                new XElement(P + "sldSz",
-                    new XAttribute("cx", p.SlideSizeCxEmu),
-                    new XAttribute("cy", p.SlideSizeCyEmu),
-                    new XAttribute("type", "screen16x9")),
-                new XElement(P + "notesSz",
-                    new XAttribute("cx", 6858000),
-                    new XAttribute("cy", 9144000))));
+        List<(string relId, string masterPath)> masterRelIds)
+    {
+        var presEl = new XElement(P + "presentation",
+            NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+            new XAttribute("saveSubsetFonts", "1"),
+            new XElement(P + "sldMasterIdLst",
+                masterRelIds.Select((mr, i) =>
+                    new XElement(P + "sldMasterId",
+                        new XAttribute("id", 2147483648u + (uint)i),
+                        new XAttribute(R + "id", mr.relId)))),
+            new XElement(P + "sldIdLst", sldIdElements),
+            new XElement(P + "sldSz",
+                new XAttribute("cx", p.SlideSizeCxEmu),
+                new XAttribute("cy", p.SlideSizeCyEmu),
+                new XAttribute("type", "screen16x9")),
+            new XElement(P + "notesSz",
+                new XAttribute("cx", 6858000),
+                new XAttribute("cy", 9144000)));
+
+        // Emit p14:sectionLst inside p:extLst when sections are present.
+        if (p.Sections.Count > 0)
+        {
+            // Build a map from sldId rId → the numeric id counter (mirroring WriteArchive).
+            // sldIdElements were built with ids 256, 257, … in WriteArchive order.
+            // We re-derive the mapping by matching the r:id attribute of each sldId element.
+            var rIdToNumId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            uint counter = 256;
+            foreach (var el in sldIdElements)
+            {
+                var rId = el.Attribute(R + "id")?.Value;
+                if (rId is not null)
+                    rIdToNumId[rId] = counter.ToString();
+                counter++;
+            }
+
+            // Build a map from Slide.Id (rId) → numeric sldId
+            // sldIdElements[i] has r:id = "rId{i+2}" (because presRels starts at rId2 for slides)
+            // Use Slide order index to match.
+            // Actually, sldIdElements[i].Attribute("id") already holds the numeric id.
+            var slideRIdToNumId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < sldIdElements.Count; i++)
+            {
+                var rId   = sldIdElements[i].Attribute(R + "id")?.Value;
+                var numId = sldIdElements[i].Attribute("id")?.Value;
+                if (rId is not null && numId is not null)
+                    slideRIdToNumId[rId] = numId;
+            }
+
+            // Build a map from Slide.Id (presentation-level rId) → numeric sldId.
+            // Slide.Id is set to the rId during ReadSlide; on new slides it is a GUID.
+            // We need Slide index → numeric sldId.
+            var sldIdByIndex = new List<string>();
+            foreach (var el in sldIdElements)
+                sldIdByIndex.Add(el.Attribute("id")?.Value ?? string.Empty);
+
+            // Section membership refers to Slide.Id.  Convert Slide.Id → numeric sldId.
+            // Slide.Id = rId during read; but for new slides it is a GUID.
+            // Use the robust approach: map Slide.Id to numeric sldId via index.
+            var slideIdToNumericSldId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < p.Slides.Count && i < sldIdByIndex.Count; i++)
+                slideIdToNumericSldId[p.Slides[i].Id] = sldIdByIndex[i];
+
+            var sectionElements = p.Sections.Select(sec =>
+            {
+                var sldIdLstEl = new XElement(P14 + "sldIdLst",
+                    sec.SlideIds
+                        .Select(numId => new XElement(P14 + "sldId",
+                            new XAttribute("id", numId))));
+
+                return (XElement)new XElement(P14 + "section",
+                    new XAttribute("name", sec.Name),
+                    new XAttribute("id",   sec.Id),
+                    sldIdLstEl);
+            }).ToList();
+
+            presEl.Add(new XElement(P + "extLst",
+                new XElement(P + "ext",
+                    new XAttribute("uri", SectionExtUri),
+                    new XElement(P14 + "sectionLst",
+                        new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                        sectionElements))));
+        }
+
+        return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), presEl);
+    }
 
     // ── slide.xml ────────────────────────────────────────────────────────────────
 
@@ -554,6 +660,96 @@ public static class PptxPackageWriter
                     new XAttribute("accent3", "accent3"), new XAttribute("accent4", "accent4"),
                     new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
                     new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink"))));
+
+    // ── commentAuthors.xml ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a ppt/commentAuthors.xml that de-duplicates authors across all slides.
+    /// Authors are keyed by (name, initials); they get assigned a stable numeric id
+    /// 0, 1, 2, … in first-encounter order.
+    /// </summary>
+    private static XDocument BuildCommentAuthorsXml(List<Slide> slides)
+    {
+        // De-duplicate: key = (name, initials) → id
+        var authorMap  = new Dictionary<(string name, string initials), int>();
+        int nextId = 0;
+
+        var authorLastIdx = new Dictionary<int, int>();
+
+        foreach (var slide in slides)
+        {
+            foreach (var cm in slide.Comments)
+            {
+                var key = (cm.Author, cm.Initials);
+                if (!authorMap.TryGetValue(key, out var authorId))
+                {
+                    authorId = nextId++;
+                    authorMap[key] = authorId;
+                    authorLastIdx[authorId] = 0;
+                }
+                // Track the highest idx seen per author (for lastIdx attribute).
+                if (cm.Idx > authorLastIdx[authorId])
+                    authorLastIdx[authorId] = cm.Idx;
+            }
+        }
+
+        var authorElements = authorMap.Select(kv =>
+            new XElement(P + "cmAuthor",
+                new XAttribute("id",       kv.Value),
+                new XAttribute("name",     kv.Key.name),
+                new XAttribute("initials", kv.Key.initials),
+                new XAttribute("lastIdx",  authorLastIdx[kv.Value]),
+                new XAttribute("clrIdx",   kv.Value % 8)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P + "cmAuthorLst",
+                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+                authorElements));
+    }
+
+    // ── comments/commentN.xml ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a ppt/comments/commentN.xml for a single slide's comments.
+    /// Author ids are derived by matching author name+initials against the global author list;
+    /// since this method is called after BuildCommentAuthorsXml we replicate the same lookup.
+    /// Indices are recalculated from list position (1-based).
+    /// </summary>
+    private static XDocument BuildCommentsXml(List<SlideComment> comments)
+    {
+        // Re-derive author id by name+initials so the file is self-consistent.
+        var authorIdMap = new Dictionary<(string, string), int>();
+        int nextId = 0;
+        foreach (var cm in comments)
+        {
+            var key = (cm.Author, cm.Initials);
+            if (!authorIdMap.ContainsKey(key))
+                authorIdMap[key] = nextId++;
+        }
+
+        var cmElements = comments.Select((cm, i) =>
+        {
+            authorIdMap.TryGetValue((cm.Author, cm.Initials), out var authorId);
+            var dtStr = cm.DateTime?.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)
+                        ?? System.DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+            return (XElement)new XElement(P + "cm",
+                new XAttribute("authorId", authorId),
+                new XAttribute("dt",       dtStr),
+                new XAttribute("idx",      cm.Idx > 0 ? cm.Idx : (i + 1)),
+                new XElement(P + "pos",
+                    new XAttribute("x", cm.Xemu),
+                    new XAttribute("y", cm.Yemu)),
+                new XElement(P + "text", cm.Text));
+        });
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(P + "cmLst",
+                NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
+                cmElements));
+    }
 
     // ── p:transition ─────────────────────────────────────────────────────────────
 

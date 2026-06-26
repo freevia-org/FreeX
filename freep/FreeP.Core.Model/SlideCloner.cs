@@ -36,6 +36,9 @@ public static class SlideCloner
         foreach (var anim in slide.Animations)
             copy.Animations.Add(CloneAnimation(anim));
 
+        foreach (var comment in slide.Comments)
+            copy.Comments.Add(CloneComment(comment));
+
         return copy;
     }
 
@@ -215,6 +218,18 @@ public static class SlideCloner
         Max               = a.Max,
         HasMajorGridlines = a.HasMajorGridlines,
         Delete            = a.Delete,
+    };
+
+    private static SlideComment CloneComment(SlideComment c) => new()
+    {
+        AuthorId = c.AuthorId,
+        Author   = c.Author,
+        Initials = c.Initials,
+        Text     = c.Text,
+        DateTime = c.DateTime,
+        Xemu     = c.Xemu,
+        Yemu     = c.Yemu,
+        Idx      = c.Idx,
     };
 
     private static SlideTransition CloneTransition(SlideTransition t) => new()
