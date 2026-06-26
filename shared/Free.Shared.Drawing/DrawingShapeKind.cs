@@ -81,5 +81,11 @@ public enum SlideShapeKind
     SmartArt = 6,
 
     /// <summary>An audio or video media object. The poster image is in <c>Picture</c>; the media bytes are in <c>Media</c>.</summary>
-    Media = 7
+    Media = 7,
+
+    /// <summary>
+    /// An embedded OLE object (p:graphicFrame / p:oleObj). The embedded binary is in
+    /// <c>SlideShape.OleObject</c>; the fallback preview image is in <c>SlideShape.Picture</c>.
+    /// </summary>
+    Ole = 8
 }

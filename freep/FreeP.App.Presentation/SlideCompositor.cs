@@ -152,6 +152,12 @@ public static class SlideCompositor
                     ComposeSmartArt(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
+            // Theme 21: OLE — render the fallback preview image (same as Picture path).
+            // Live OLE activation is deferred; fallback image is the visual floor.
+            case SlideShapeKind.Ole:
+                ComposeOle(shape, slide, presentation, theme, ops, effectiveClrMap);
+                break;
+
             default:
                 ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
                 break;
@@ -376,6 +382,50 @@ public static class SlideCompositor
             Contrast     = pf?.Contrast,
             AlphaModPct  = pf?.AlphaModPct,
         });
+    }
+
+    // ─── OLE embedded object (Theme 21) ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Renders an OLE embedded object by drawing its fallback preview image (same as ComposePicture).
+    /// Live OLE activation is deferred; the fallback image is the visual floor.
+    /// When no fallback image is present a grey placeholder rectangle is rendered instead.
+    /// </summary>
+    private static void ComposeOle(
+        SlideShape shape,
+        Slide slide,
+        PresentationModel presentation,
+        PresentationTheme theme,
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
+        var boundsDip = AnchorToBounds(anchor);
+
+        if (shape.Picture is { Bytes.Length: > 0 } pic)
+        {
+            // Use the same DrawOp.Picture path as regular pictures.
+            ops.Add(new DrawOp.Picture
+            {
+                Bytes       = pic.Bytes,
+                ContentType = pic.ContentType,
+                DestDip     = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+                Outline     = ResolvedOutline.None.Instance,
+            });
+        }
+        else
+        {
+            // No fallback image — emit a grey rectangle placeholder.
+            ops.Add(new DrawOp.Shape
+            {
+                Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
+                Fill        = new ResolvedFill.Solid(new SrgbColor(0xC0, 0xC0, 0xC0)),
+                Outline     = ResolvedOutline.None.Instance,
+                BoundsDip   = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+            });
+        }
     }
 
     // ─── Media (audio/video) ────────────────────────────────────────────────────────────────

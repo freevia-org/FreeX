@@ -43,6 +43,12 @@ public static class PptxPackageWriter
     private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
     private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
 
+    // OLE relationship types (Theme 21)
+    private const string OleObjectRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
+    private const string PackageRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+
     // SmartArt diagram relationship types (slide rels point to the named sub-parts)
     private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
     private const string DiagramLayoutRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
@@ -282,12 +288,24 @@ public static class PptxPackageWriter
 
             var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
-            // Combined shapeId→relId map for shape element building (picture shapes + charts)
+            // Theme 21: Write OLE embedded object binaries + fallback images.
+            foreach (var kv in smartArtRelIdRemap)
+                foreach (var (_, saRelId) in kv.Value)
+                    usedRelIds.Add(saRelId);
+            // Returns: embRels = (shapeId, embRelId, embRelType, embPath)
+            //          imgRels = (shapeId, imgRelId, imgPath)
+            var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds);
+
+            // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
             foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
             // Media file rel IDs use synthetic key: shape.Id | 0x80000000
             foreach (var (id, relId, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
+            // OLE embedded rel IDs keyed by shape.Id (used in BuildOleGraphicFrameEl)
+            foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
+            // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
+            foreach (var (shapeId, imgRelId, _) in oleImgRels)     mediaById[shapeId | 0x40000000u] = imgRelId;
 
             // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
             var fillBlipById = new Dictionary<uint, string>();
@@ -316,6 +334,11 @@ public static class PptxPackageWriter
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
             foreach (var (relId, relType, target) in smartArtSlideRels)
                 slideRels.Add(relId, relType, target);
+            // Theme 21: OLE embedded object + fallback image rels
+            foreach (var (_, embRelId, embRelType, embPath) in oleEmbRels)
+                slideRels.Add(embRelId, embRelType, $"../embeddings/{embPath.Split('/').Last()}");
+            foreach (var (_, imgRelId, imgPath) in oleImgRels)
+                slideRels.Add(imgRelId, ImageRelType, $"../media/{imgPath.Split('/').Last()}");
             // Hyperlink rels (external with TargetMode=External; internal slide rels without)
             foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
                 slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
@@ -492,6 +515,27 @@ public static class PptxPackageWriter
             {
                 if (p.Slides[si].Comments.Count > 0)
                     overrides.Add(Override(CT, $"/ppt/comments/comment{si + 1}.xml", CommentsCT));
+            }
+        }
+
+        // Theme 21: Collect OLE embedded object content types
+        // OLE embedded binaries live in ppt/embeddings/ — each needs an Override entry.
+        var seenOleParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int oleEmbIdx = 1;
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind == SlideShapeKind.Ole && shape.OleObject is { } oleObj
+                    && oleObj.EmbeddedBytes.Length > 0)
+                {
+                    var partPath = $"/ppt/embeddings/oleObject{oleEmbIdx}.{oleObj.EmbeddedExtension}";
+                    if (seenOleParts.Add(shape.Id.ToString()))
+                    {
+                        overrides.Add(Override(CT, partPath, oleObj.EmbeddedContentType));
+                    }
+                    oleEmbIdx++;
+                }
             }
         }
 
@@ -1472,6 +1516,9 @@ public static class PptxPackageWriter
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
                     smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
+            // Theme 21: OLE embedded objects — emit the verbatim graphicFrame wrapper
+            SlideShapeKind.Ole when shape.OleObject is not null =>
+                BuildOleGraphicFrameEl(shape, mediaById),
             _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
@@ -2490,6 +2537,21 @@ public static class PptxPackageWriter
     {
         if (run.Text == "\n") return new XElement(A + "br");
 
+        // Theme 21: math run — re-emit the preserved OMML XML verbatim.
+        // The raw XML is the entire element (a14:m or mc:AlternateContent); parse it back
+        // to an XElement so it slots cleanly into the parent a:p's element list.
+        if (run.Math is { RawXml: { Length: > 0 } rawXml })
+        {
+            try
+            {
+                return XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+            }
+            catch
+            {
+                // If the stored XML is malformed, fall through to emit plain text as a:r
+            }
+        }
+
         // Field run: emit a:fld instead of a:r
         if (run.Field is not null)
         {
@@ -2947,6 +3009,192 @@ public static class PptxPackageWriter
 
         return smart.Parts.Keys
             .FirstOrDefault(p => p.Contains(nameKeyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ── OLE embedded object writing (Theme 21) ────────────────────────────────────
+
+    /// <summary>
+    /// Writes all OLE embedded object binaries and fallback images for a slide.
+    /// Returns two lists:
+    ///   embRels: (shapeId, embRelId, embRelType, embPath) — one per embedded binary
+    ///   imgRels: (shapeId, imgRelId, imgPath)             — one per fallback image
+    /// rel IDs are allocated from a monotonically increasing counter, avoiding conflicts
+    /// with the <paramref name="usedRelIds"/> set.
+    /// </summary>
+    private static (
+        List<(uint shapeId, string embRelId, string embRelType, string embPath)> embRels,
+        List<(uint shapeId, string imgRelId, string imgPath)> imgRels)
+    WriteSlideOleObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds)
+    {
+        var embRels = new List<(uint, string, string, string)>();
+        var imgRels = new List<(uint, string, string)>();
+
+        int embCounter = 1;
+        int relCounter = 1;
+
+        string NextRelId()
+        {
+            string id;
+            do { id = $"rIdOle{relCounter++}"; } while (usedRelIds.Contains(id));
+            usedRelIds.Add(id);
+            return id;
+        }
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Ole || shape.OleObject is not { } ole)
+                continue;
+
+            // ── Write embedded binary ──────────────────────────────────────────
+            if (ole.EmbeddedBytes.Length > 0)
+            {
+                var ext = string.IsNullOrWhiteSpace(ole.EmbeddedExtension)
+                    ? "bin" : ole.EmbeddedExtension;
+                var embPath = $"ppt/embeddings/oleObject{embCounter++}.{ext}";
+                var embEntry = archive.CreateEntry(embPath, CompressionLevel.Optimal);
+                using (var s = embEntry.Open())
+                    s.Write(ole.EmbeddedBytes, 0, ole.EmbeddedBytes.Length);
+
+                var relType = string.IsNullOrWhiteSpace(ole.RelType) ? PackageRelType : ole.RelType;
+                var embRelId = NextRelId();
+                embRels.Add((shape.Id, embRelId, relType, embPath));
+            }
+
+            // ── Write fallback image ───────────────────────────────────────────
+            if (shape.Picture is { Bytes.Length: > 0 } pic)
+            {
+                var imgExt = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgPath = $"ppt/media/oleImg{slideIdx}_{shape.Id}.{imgExt}";
+                var imgEntry = archive.CreateEntry(imgPath, CompressionLevel.Optimal);
+                using (var s = imgEntry.Open())
+                    s.Write(pic.Bytes, 0, pic.Bytes.Length);
+
+                var imgRelId = NextRelId();
+                imgRels.Add((shape.Id, imgRelId, imgPath));
+            }
+        }
+
+        return (embRels, imgRels);
+    }
+
+    // ── OLE graphicFrame element building (Theme 21) ──────────────────────────────
+
+    private const string DrawingOleUri =
+        "http://schemas.openxmlformats.org/presentationml/2006/ole";
+
+    /// <summary>
+    /// Builds the p:graphicFrame element (or mc:AlternateContent wrapper) for an OLE shape.
+    /// Uses:
+    ///   mediaById[shape.Id]                — the r:id for the embedded binary
+    ///   mediaById[shape.Id | 0x40000000u]  — the r:id for the fallback image
+    /// Deserializes the stored OleObjXml verbatim and re-inserts the fallback p:pic child.
+    /// </summary>
+    private static XElement? BuildOleGraphicFrameEl(
+        SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        if (shape.OleObject is not { } ole) return null;
+
+        mediaById.TryGetValue(shape.Id, out var embRelId);
+        mediaById.TryGetValue(shape.Id | 0x40000000u, out var imgRelId);
+
+        // Build the transform (xfrm) element
+        var xfrm = new XElement(P + "xfrm",
+            new XElement(A + "off",
+                new XAttribute("x", shape.OffsetXEmu),
+                new XAttribute("y", shape.OffsetYEmu)),
+            new XElement(A + "ext",
+                new XAttribute("cx", shape.ExtentCxEmu),
+                new XAttribute("cy", shape.ExtentCyEmu)));
+
+        // Parse the stored oleObj XML back into an XElement and patch the r:id
+        XElement oleObjEl;
+        try
+        {
+            oleObjEl = XElement.Parse(ole.OleObjXml);
+        }
+        catch
+        {
+            // Malformed stored XML — build a minimal oleObj
+            oleObjEl = new XElement(P + "oleObj",
+                new XAttribute("progId", ole.ProgId));
+        }
+
+        // Patch (or add) the r:id attribute so it references the freshly-written embedded binary
+        if (!string.IsNullOrWhiteSpace(embRelId))
+        {
+            // Remove any existing r:id to avoid duplicates, then add the fresh one
+            oleObjEl.Attribute(XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + "id")?.Remove();
+            oleObjEl.SetAttributeValue(
+                XName.Get("id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
+                embRelId);
+        }
+
+        // Append the fallback p:pic child (rebuilt from shape.Picture + imgRelId)
+        if (!string.IsNullOrWhiteSpace(imgRelId) && shape.Picture is { Bytes.Length: > 0 })
+        {
+            oleObjEl.Add(BuildOleFallbackPicEl(shape, imgRelId));
+        }
+
+        // Build the p:graphicFrame
+        var graphicFrame = new XElement(P + "graphicFrame",
+            new XElement(P + "nvGraphicFramePr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id),
+                    new XAttribute("name", shape.Name)),
+                new XElement(P + "cNvGraphicFramePr"),
+                new XElement(P + "nvPr")),
+            xfrm,
+            new XElement(A + "graphic",
+                new XElement(A + "graphicData",
+                    new XAttribute("uri", DrawingOleUri),
+                    oleObjEl)));
+
+        // Re-wrap in mc:AlternateContent if the original was wrapped
+        if (ole.WasAlternateContent)
+        {
+            // XLinq: an XElement can only live in one parent, so the Fallback gets a deep clone.
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",
+                    "http://schemas.openxmlformats.org/markup-compatibility/2006"),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p14"),
+                    graphicFrame),
+                new XElement(MC + "Fallback",
+                    new XElement(graphicFrame)));   // deep clone for the Fallback branch
+        }
+
+        return graphicFrame;
+    }
+
+    /// <summary>
+    /// Builds a minimal p:pic element used as the OLE fallback preview inside p:oleObj.
+    /// </summary>
+    private static XElement BuildOleFallbackPicEl(SlideShape shape, string imgRelId)
+    {
+        var R2 = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        return new XElement(P + "pic",
+            new XElement(P + "nvPicPr",
+                new XElement(P + "cNvPr",
+                    new XAttribute("id", shape.Id + 1u),
+                    new XAttribute("name", $"{shape.Name}_img")),
+                new XElement(P + "cNvPicPr"),
+                new XElement(P + "nvPr")),
+            new XElement(P + "blipFill",
+                new XElement(A + "blip",
+                    new XAttribute(R2 + "embed", imgRelId)),
+                new XElement(A + "stretch",
+                    new XElement(A + "fillRect"))),
+            new XElement(P + "spPr",
+                new XElement(A + "xfrm",
+                    new XElement(A + "off",
+                        new XAttribute("x", shape.OffsetXEmu),
+                        new XAttribute("y", shape.OffsetYEmu)),
+                    new XElement(A + "ext",
+                        new XAttribute("cx", shape.ExtentCxEmu),
+                        new XAttribute("cy", shape.ExtentCyEmu))),
+                new XElement(A + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(A + "avLst"))));
     }
 
     // ── Zip helpers ───────────────────────────────────────────────────────────────

@@ -73,10 +73,14 @@ public static class SlideCloner
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
             TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
-            Table          = shape.Table  is null ? null : CloneTable(shape.Table),
-            Chart          = shape.Chart  is null ? null : CloneChart(shape.Chart),
+            Table          = shape.Table    is null ? null : CloneTable(shape.Table),
+            Chart          = shape.Chart    is null ? null : CloneChart(shape.Chart),
+            SmartArt       = shape.SmartArt,  // SmartArtShape bytes are immutable once loaded — share
             Hyperlink      = CloneHyperlink(shape.Hyperlink),
         };
+
+        // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
+        copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 
         foreach (var child in shape.Children)
             copy.Children.Add(CloneShape(child));
@@ -169,6 +173,8 @@ public static class SlideCloner
         TextFill    = run.TextFill,
         TextOutline = run.TextOutline,
         TextShadow  = CloneRunShadow(run.TextShadow),
+        // Theme 21: math — MathRunInfo is a small immutable-in-practice container; share reference
+        Math        = run.Math,
     };
 
     private static Hyperlink? CloneHyperlink(Hyperlink? h) =>
@@ -321,5 +327,17 @@ public static class SlideCloner
         Brightness        = f.Brightness,
         Contrast          = f.Contrast,
         AlphaModPct       = f.AlphaModPct,
+    };
+
+    // Theme 21: OLE cloner — byte arrays are treated as immutable; share the reference.
+    private static OleObjectInfo CloneOleObject(OleObjectInfo src) => new()
+    {
+        EmbeddedBytes        = src.EmbeddedBytes,   // immutable byte[]
+        EmbeddedContentType  = src.EmbeddedContentType,
+        ProgId               = src.ProgId,
+        RelType              = src.RelType,
+        OleObjXml            = src.OleObjXml,
+        WasAlternateContent  = src.WasAlternateContent,
+        EmbeddedExtension    = src.EmbeddedExtension,
     };
 }

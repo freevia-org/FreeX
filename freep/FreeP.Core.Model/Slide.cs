@@ -366,6 +366,14 @@ public sealed class SlideShape
     /// <summary>SmartArt data when Kind == SmartArt.</summary>
     public SmartArtShape? SmartArt { get; set; }
 
+    // ── OLE embedded object ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// OLE embedded object data when Kind == Ole.
+    /// The fallback preview image is stored in <see cref="Picture"/> for rendering.
+    /// </summary>
+    public OleObjectInfo? OleObject { get; set; }
+
     // ── Group children ────────────────────────────────────────────────────────────
 
     /// <summary>Child shapes when Kind == Group.</summary>

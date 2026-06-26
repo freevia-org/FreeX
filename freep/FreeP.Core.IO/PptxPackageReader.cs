@@ -760,13 +760,32 @@ public static class PptxPackageReader
     {
         foreach (var child in spTree.Elements())
         {
-            SlideShape? shape = child.Name.LocalName switch
+            // Theme 21: mc:AlternateContent at shape-tree level wraps OLE objects (and some
+            // modern elements that older PowerPoint cannot read).  We look for the first
+            // recognisable element in mc:Choice; if none found we fall back to mc:Fallback.
+            var effectiveEl = child;
+            if (child.Name == MC + "AlternateContent")
             {
-                "sp"           => ReadSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
-                "pic"          => ReadPic(child, archive, partPath, scheme),
-                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
-                "grpSp"        => ReadGrpSp(child, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
-                "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
+                var choiceEl = child.Element(MC + "Choice");
+                var choiceChild = choiceEl?.Elements().FirstOrDefault();
+                if (choiceChild is not null)
+                    effectiveEl = choiceChild;
+                else
+                {
+                    var fallbackChild = child.Element(MC + "Fallback")?.Elements().FirstOrDefault();
+                    if (fallbackChild is not null)
+                        effectiveEl = fallbackChild;
+                }
+            }
+
+            SlideShape? shape = effectiveEl.Name.LocalName switch
+            {
+                "sp"           => ReadSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
+                "pic"          => ReadPic(effectiveEl, archive, partPath, scheme),
+                "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
+                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
+                "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
+                                      wasAlternateContent: child != effectiveEl),
                 _ => null
             };
 
@@ -888,6 +907,29 @@ public static class PptxPackageReader
     private static readonly XNamespace Dsp =
         "http://schemas.microsoft.com/office/drawing/2008/diagram";
 
+    // ── OLE / math namespaces (Theme 21) ──────────────────────────────────────
+
+    // OLE graphicData URI
+    private const string DrawingOleUri =
+        "http://schemas.openxmlformats.org/presentationml/2006/ole";
+
+    // a14: namespace — hosts a14:m math element
+    private static readonly XNamespace A14 =
+        "http://schemas.microsoft.com/office/drawing/2010/main";
+
+    // m: namespace — OOXML OMML (Office Math Markup Language)
+    private static readonly XNamespace M =
+        "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+    // OLE relationship types
+    private const string OleObjectRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
+    private const string PackageRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+    // MS-proprietary OLE image rel type used by some encoders
+    private const string OleImageRelType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
     // Relationship types for SmartArt diagram parts
     private const string DiagramDataRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
     private const string DiagramLayoutRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
@@ -898,7 +940,8 @@ public static class PptxPackageReader
     private static SlideShape? ReadGraphicFrame(
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
-        Dictionary<string, TableStyleData>? tableStyles)
+        Dictionary<string, TableStyleData>? tableStyles,
+        bool wasAlternateContent = false)
     {
         var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
 
@@ -984,6 +1027,30 @@ public static class PptxPackageReader
                 ExtentCyEmu = extCy,
                 SmartArt = smartArt
             };
+        }
+
+        // ── OLE embedded object ────────────────────────────────────────────────
+        // p:graphicFrame with uri=".../ole" or any graphicFrame containing p:oleObj
+        if (string.Equals(uri, DrawingOleUri, StringComparison.OrdinalIgnoreCase)
+            || graphicData.Descendants(P + "oleObj").Any())
+        {
+            // Find the p:oleObj element — it may be a direct child of graphicData or nested
+            var oleObjEl = graphicData.Descendants(P + "oleObj").FirstOrDefault();
+            if (oleObjEl is not null)
+            {
+                var oleShape = ReadOleObject(oleObjEl, gfEl, archive, partPath, scheme,
+                    wasAlternateContent);
+                if (oleShape is not null)
+                {
+                    oleShape.Id = ParseUint(cNvPr?.Attribute("id")?.Value);
+                    oleShape.Name = cNvPr?.Attribute("name")?.Value ?? string.Empty;
+                    oleShape.OffsetXEmu = offX;
+                    oleShape.OffsetYEmu = offY;
+                    oleShape.ExtentCxEmu = extCx;
+                    oleShape.ExtentCyEmu = extCy;
+                    return oleShape;
+                }
+            }
         }
 
         // Unknown graphicFrame type — skip for now.
@@ -1115,6 +1182,144 @@ public static class PptxPackageReader
 
         return smart;
     }
+
+    // ── OLE embedded object parsing (Theme 21) ────────────────────────────────────
+
+    /// <summary>
+    /// Reads an OLE embedded-object frame.
+    ///
+    /// Structure (both forms accepted):
+    ///   (A) p:graphicFrame / a:graphic / a:graphicData[@uri="…/ole"] / p:oleObj
+    ///   (B) mc:AlternateContent / mc:Choice / p:graphicFrame / … (same nested structure)
+    ///
+    /// The p:oleObj element carries:
+    ///   - @r:id → relationship to the embedded binary (xlsx/bin/…)
+    ///   - @progId → e.g. "Excel.Sheet.12"
+    ///   - p:pic child → the fallback preview image (has its own r:id → an image rel)
+    ///
+    /// We store:
+    ///   - shape.OleObject  : progId, embedded bytes, rel type, verbatim oleObj XML
+    ///   - shape.Picture    : fallback image bytes (so the compositor can render it)
+    /// </summary>
+    private static SlideShape? ReadOleObject(
+        XElement oleObjEl,
+        XElement gfEl,
+        ZipArchive archive,
+        string partPath,
+        PresentationColorScheme scheme,
+        bool wasAlternateContent)
+    {
+        var slideRels = LoadRels(archive, GetRelsPath(partPath));
+        var slideDir  = GetDirectory(partPath);
+
+        var ole = new OleObjectInfo
+        {
+            ProgId              = oleObjEl.Attribute("progId")?.Value ?? string.Empty,
+            WasAlternateContent = wasAlternateContent,
+        };
+
+        // ── Load embedded binary ───────────────────────────────────────────────
+        var embRelId = oleObjEl.Attribute(R + "id")?.Value;
+        if (!string.IsNullOrWhiteSpace(embRelId))
+        {
+            var embRel = slideRels.FirstOrDefault(r => r.id == embRelId);
+            if (!string.IsNullOrWhiteSpace(embRel.target))
+            {
+                var embPath = ResolvePath(slideDir, embRel.target);
+                var embBytes = ReadEntryBytes(archive, embPath);
+                if (embBytes is not null)
+                    ole.EmbeddedBytes = embBytes;
+
+                // Infer content type and extension from path
+                var ext = embRel.target.Split('.').LastOrDefault() ?? "bin";
+                ole.EmbeddedExtension = ext;
+                ole.EmbeddedContentType = OleExtensionToContentType(ext);
+
+                // Capture the rel type for round-trip (package vs oleObject vs other)
+                ole.RelType = string.IsNullOrWhiteSpace(embRel.type)
+                    ? PackageRelType
+                    : embRel.type;
+            }
+        }
+
+        // ── Store verbatim oleObj XML for round-trip ───────────────────────────
+        // Strip the p:pic child — we will rebuild it from shape.Picture on write.
+        var oleObjCopy = new XElement(oleObjEl);
+        oleObjCopy.Elements(P + "pic").Remove();
+        // Also strip any sub-shape picture picker (mc:AlternateContent inside oleObj)
+        oleObjCopy.Descendants(MC + "AlternateContent").ToList().ForEach(e => e.Remove());
+        using (var sw = new System.IO.StringWriter())
+        {
+            oleObjCopy.Save(sw, SaveOptions.DisableFormatting);
+            ole.OleObjXml = sw.ToString();
+        }
+
+        // ── Load fallback preview image ────────────────────────────────────────
+        // The fallback image may be:
+        //   (a) p:oleObj/p:pic/p:blipFill/a:blip r:embed
+        //   (b) a:blip r:embed directly under oleObj
+        ImagePart? fallbackImage = null;
+        var picEl = oleObjEl.Element(P + "pic");
+        if (picEl is not null)
+        {
+            var blip = picEl.Descendants(A + "blip").FirstOrDefault();
+            fallbackImage = LoadImageFromBlip(blip, slideRels, slideDir, archive);
+        }
+        if (fallbackImage is null)
+        {
+            // Fallback: look for any a:blip directly under oleObj
+            var blip = oleObjEl.Descendants(A + "blip").FirstOrDefault();
+            fallbackImage = LoadImageFromBlip(blip, slideRels, slideDir, archive);
+        }
+
+        var shape = new SlideShape
+        {
+            Kind      = SlideShapeKind.Ole,
+            OleObject = ole,
+            Picture   = fallbackImage,
+        };
+        return shape;
+    }
+
+    /// <summary>
+    /// Loads an image referenced by an a:blip element via r:embed in the slide rels.
+    /// Returns null when the blip or image is absent.
+    /// </summary>
+    private static ImagePart? LoadImageFromBlip(
+        XElement? blip,
+        List<(string id, string type, string target)> slideRels,
+        string slideDir,
+        ZipArchive archive)
+    {
+        if (blip is null) return null;
+        var embedId = blip.Attribute(R + "embed")?.Value;
+        if (string.IsNullOrWhiteSpace(embedId)) return null;
+
+        var rel = slideRels.FirstOrDefault(r => r.id == embedId);
+        if (string.IsNullOrWhiteSpace(rel.target)) return null;
+
+        var imgPath = ResolvePath(slideDir, rel.target);
+        var bytes = ReadEntryBytes(archive, imgPath);
+        if (bytes is null) return null;
+
+        return new ImagePart
+        {
+            Bytes = bytes,
+            ContentType = GuessContentType(imgPath)
+        };
+    }
+
+    /// <summary>Derives an IANA content type from an embedded-object file extension.</summary>
+    private static string OleExtensionToContentType(string ext) =>
+        ext.ToLowerInvariant() switch
+        {
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "bin"  => "application/vnd.ms-office.activeX+xml",
+            _      => "application/octet-stream"
+        };
 
     /// <summary>
     /// Theme 17: Parses the SmartArtData model (node tree + family) from the verbatim
@@ -2285,9 +2490,65 @@ public static class PptxPackageReader
                 para.Runs.Add(new Run { Text = "\n" });
             else if (child.Name == A + "fld")
                 para.Runs.Add(ReadFieldRun(child, scheme));
+            // Theme 21: OMML math — a14:m is the compact form; mc:AlternateContent wraps the
+            // full m:oMathPara form with a plain-text mc:Fallback.
+            else if (child.Name == A14 + "m")
+                para.Runs.Add(ReadMathRun(child, isAlternateContent: false));
+            else if (child.Name == MC + "AlternateContent")
+            {
+                // Check whether this mc:AlternateContent contains math (m:oMath or m:oMathPara)
+                var hasMath = child.Descendants(M + "oMath").Any()
+                           || child.Descendants(M + "oMathPara").Any()
+                           || child.Descendants(A14 + "m").Any();
+                if (hasMath)
+                    para.Runs.Add(ReadMathRun(child, isAlternateContent: true));
+                // Non-math mc:AlternateContent inside a paragraph — ignore (unsupported extension).
+            }
         }
 
         return para;
+    }
+
+    // ── OMML math run parsing (Theme 21) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Reads an OMML math element into a Run with MathRunInfo.
+    /// The run's Text is the flattened m:t plain text (used as the render fallback).
+    /// RawXml is the verbatim serialization of the element (re-emitted on write).
+    /// </summary>
+    private static Run ReadMathRun(XElement mathEl, bool isAlternateContent)
+    {
+        // Flatten all m:t text nodes for the plain-text fallback used by the compositor.
+        var plainTextSb = new System.Text.StringBuilder();
+        foreach (var tEl in mathEl.Descendants(M + "t"))
+            plainTextSb.Append(tEl.Value);
+
+        // Also capture mc:Fallback plain text when present and m:t gave nothing
+        if (plainTextSb.Length == 0 && isAlternateContent)
+        {
+            var fallbackEl = mathEl.Element(MC + "Fallback");
+            if (fallbackEl is not null)
+                foreach (var rEl in fallbackEl.Descendants(A + "r"))
+                    plainTextSb.Append(rEl.Element(A + "t")?.Value ?? string.Empty);
+        }
+
+        // Serialize the element verbatim for round-trip preservation.
+        string rawXml;
+        using (var sw = new System.IO.StringWriter())
+        {
+            mathEl.Save(sw, SaveOptions.DisableFormatting);
+            rawXml = sw.ToString();
+        }
+
+        return new Run
+        {
+            Text = plainTextSb.ToString(),
+            Math = new MathRunInfo
+            {
+                RawXml              = rawXml,
+                IsAlternateContent  = isAlternateContent,
+            }
+        };
     }
 
     private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)

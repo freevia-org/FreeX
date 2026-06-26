@@ -237,6 +237,16 @@ public sealed class Run
     /// Null = no shadow.
     /// </summary>
     public RunTextShadow? TextShadow { get; set; }
+
+    // ── OMML Math (Theme 21) ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// When non-null this run represents an OMML math equation embedded via
+    /// <c>a14:m</c> or <c>mc:AlternateContent</c> in the paragraph.
+    /// <see cref="Text"/> carries the flattened fallback plain text (m:t concatenated
+    /// or mc:Fallback run text) for rendering.
+    /// </summary>
+    public MathRunInfo? Math { get; set; }
 }
 
 /// <summary>
