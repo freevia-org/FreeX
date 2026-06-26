@@ -891,6 +891,99 @@ public sealed class EditingSession
             _fmtRun));
     }
 
+    // ── Chart data API (Wave 9B) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the <see cref="ChartShape"/> for the currently selected chart shape, or null
+    /// if the selection is empty or the first selected shape is not a chart.
+    /// </summary>
+    public ChartShape? SelectedChart
+    {
+        get
+        {
+            if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
+            var shape = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == _selectedShapeIds[0]);
+            return shape?.Kind == SlideShapeKind.Chart ? shape.Chart : null;
+        }
+    }
+
+    /// <summary>
+    /// Sets the numeric value at [<paramref name="seriesIndex"/>][<paramref name="categoryIndex"/>]
+    /// in the selected chart.  Undoable.
+    /// </summary>
+    public void SetChartValue(int seriesIndex, int categoryIndex, double value)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartCellValueCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            seriesIndex, categoryIndex, value));
+    }
+
+    /// <summary>Renames the category at <paramref name="categoryIndex"/>. Undoable.</summary>
+    public void SetChartCategory(int categoryIndex, string label)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartCategoryLabelCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categoryIndex, label));
+    }
+
+    /// <summary>Renames the series at <paramref name="seriesIndex"/>. Undoable.</summary>
+    public void SetChartSeriesName(int seriesIndex, string name)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SetChartSeriesNameCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            seriesIndex, name));
+    }
+
+    /// <summary>Appends a new series to the selected chart. Undoable.</summary>
+    public void AddChartSeries(string name = "New Series")
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AddChartSeriesCommand(
+            _currentSlideIndex, _selectedShapeIds[0], name));
+    }
+
+    /// <summary>Removes the series at <paramref name="seriesIndex"/> from the selected chart. Undoable.</summary>
+    public void RemoveChartSeries(int seriesIndex)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new RemoveChartSeriesCommand(
+            _currentSlideIndex, _selectedShapeIds[0], seriesIndex));
+    }
+
+    /// <summary>Appends a new category to the selected chart. Undoable.</summary>
+    public void AddChartCategory(string label = "New Category")
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AddChartCategoryCommand(
+            _currentSlideIndex, _selectedShapeIds[0], label));
+    }
+
+    /// <summary>Removes the category at <paramref name="categoryIndex"/> from the selected chart. Undoable.</summary>
+    public void RemoveChartCategory(int categoryIndex)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new RemoveChartCategoryCommand(
+            _currentSlideIndex, _selectedShapeIds[0], categoryIndex));
+    }
+
+    /// <summary>
+    /// Replaces the entire data payload of the selected chart in one undoable batch command.
+    /// Used by <c>ChartDataDialog</c> so all grid edits become a single undo step.
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>              categories,
+        IEnumerable<string>              seriesNames,
+        IEnumerable<IEnumerable<double>> values)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categories, seriesNames, values));
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────────
 
     private enum RunToggleKind { Bold, Italic, Underline }
