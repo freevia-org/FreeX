@@ -4281,14 +4281,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("BorderRight: borderRightSide");
         source.Should().Contain("BorderBottom: borderBottomSide");
         source.Should().Contain("BorderLeft: borderLeftSide");
-        // Each outer edge reads ITS OWN per-edge style box + color picker (not the shared Line).
-        source.Should().Contain("var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox);");
-        source.Should().Contain("var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox);");
-        source.Should().Contain("var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox);");
-        source.Should().Contain("var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox);");
-        // A real style => CellBorder with that edge's color; "None" => null (no border).
-        source.Should().Contain("CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox) =>");
-        source.Should().Contain("EdgeStyle(styleBox) is { } style ? new CellBorder(style, EdgeColor(colorBox)) : null;");
+        // Each outer edge reads ITS OWN per-edge style box + color picker (not the shared Line),
+        // diffed against the value the dialog seeded from the cell's current border.
+        source.Should().Contain("var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox, seededTopBorder);");
+        source.Should().Contain("var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox, seededRightBorder);");
+        source.Should().Contain("var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox, seededBottomBorder);");
+        source.Should().Contain("var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox, seededLeftBorder);");
+        // The dialog seeds per-edge controls from the active cell's existing borders (WPF-parity)…
+        source.Should().Contain("SeedBorderEdge(borderTopStyleBox, borderTopColorBox, borderTopToggle, currentStyle.BorderTop);");
+        // …and an edge still at its seeded value reads back as "no change"; an edit applies style+color.
+        source.Should().Contain("CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox, (BorderStyle? Style, CellColor Color) seeded)");
+        source.Should().Contain("if (style == seeded.Style && (style is null || color == seeded.Color))");
         source.Should().Contain("\"FormatCellsDoubleUnderlineBox\"");
         source.Should().Contain("\"FormatCellsShrinkToFitBox\"");
         source.Should().Contain("\"FormatCellsIndentLevelBox\"");
