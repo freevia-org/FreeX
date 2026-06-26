@@ -6567,6 +6567,8 @@ internal static class ExcelSmokeFixtures
             GenerateChartFixture_3DColumn(workbooks, outputPath);
         else if (fileName.Contains("3dbar_008", StringComparison.OrdinalIgnoreCase))
             GenerateChartFixture_3DBar(workbooks, outputPath);
+        else if (fileName.Contains("surface_009", StringComparison.OrdinalIgnoreCase))
+            GenerateChartFixture_Surface(workbooks, outputPath);
         else
             throw new ArgumentException($"Unknown chart corpus fixture: {fileName}");
     }
@@ -6581,6 +6583,7 @@ internal static class ExcelSmokeFixtures
     private const int XlXYScatter        = -4169; // xlXYScatter
     private const int Xl3DColumnClustered = 54; // xl3DColumnClustered
     private const int Xl3DBarClustered    = 60; // xl3DBarClustered
+    private const int XlSurface          = 83;  // xlSurface
 
     /// <summary>
     /// Write a 2-series data block into the worksheet (rows 1-5):
@@ -6967,6 +6970,68 @@ internal static class ExcelSmokeFixtures
             SetChartTitle(chart, "3-D Column — Revenue vs Cost");
             SetChartAxisTitle(chart, 1, 1, "Quarter");
             SetChartAxisTitle(chart, 1, 2, "Amount ($)");
+            ((dynamic)chart).HasLegend = true;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(chart);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // ── case 009 — Surface (heatmap) ─────────────────────────────────────────
+
+    private static void GenerateChartFixture_Surface(dynamic workbooks, string outputPath)
+    {
+        // Surface charts require a 2D data block: columns = series, rows = categories.
+        // Header row: blank, S1, S2, S3.
+        // Each data row: category label | z-values per series.
+        object? workbook  = null;
+        object? worksheet = null;
+        object? chart     = null;
+        try
+        {
+            workbook = OpenChartWorkbook(workbooks, outputPath, "SurfaceData", out object ws);
+            worksheet = ws;
+
+            // Write 4 categories × 3 series grid
+            string[] cats     = ["Row1", "Row2", "Row3", "Row4"];
+            string[] serNames = ["S1", "S2", "S3"];
+            double[,] zValues =
+            {
+                { 10, 30, 60 },
+                { 20, 70, 50 },
+                { 80, 40, 20 },
+                { 50, 90, 10 },
+            };
+
+            // Header row
+            SetExcelCellValue(worksheet, 1, 1, "");
+            for (var c = 0; c < serNames.Length; c++)
+                SetExcelCellValue(worksheet, 1, c + 2, serNames[c]);
+
+            // Data rows
+            for (var r = 0; r < cats.Length; r++)
+            {
+                SetExcelCellValue(worksheet, r + 2, 1, cats[r]);
+                for (var c = 0; c < serNames.Length; c++)
+                    SetExcelCellValue(worksheet, r + 2, c + 2, zValues[r, c]);
+            }
+
+            // Data range: A1:D5
+            var dataRange = "A1:D5";
+            SetExcelCellValue(worksheet, 25, 14, " ");
+
+            // xlSurface = 83
+            chart = AddChartToWorksheet(worksheet, XlSurface, 10, 110, 320, 220);
+            SetChartSourceData(chart, worksheet, dataRange);
+            SetChartTitle(chart, "Surface — Z Values");
             ((dynamic)chart).HasLegend = true;
 
             SaveExcelWorkbook(workbook, outputPath);
