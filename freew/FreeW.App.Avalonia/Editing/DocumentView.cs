@@ -839,6 +839,11 @@ public sealed class DocumentView : Control
         _cellAnchor = null;
         _cellBlockAnchor = null;
         _cellBlockFocus = null;
+        // BY3: re-anchor _caret to a valid block — if the deleted table was the last block (or
+        // _caret.Block >= the new Blocks.Count), _caret now points past the document end and
+        // subsequent body ops read the wrong block. ClampCaret() handles all edge cases
+        // (empty doc, last-block deletion) exactly as Undo/Redo does.
+        ClampCaret();
         InvalidateLayoutAndVisual();
     }
 
@@ -898,11 +903,41 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// BY1: Returns (lastRow, lastGridCol) — the inclusive zero-based bounds of the table at
+    /// <paramref name="tableBlock"/>. Used by select-table/row/column to clamp the focus
+    /// instead of passing int.MaxValue (which causes an overflow loop in ExpandForMergedCells).
+    /// Returns (0, 0) when the table is empty or the block is not a table.
+    /// </summary>
+    internal (int LastRow, int LastGridCol) GetTableBounds(int tableBlock)
+    {
+        if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return (0, 0);
+        if (_doc.Blocks[tableBlock] is not Table tbl) return (0, 0);
+        var lastRow = Math.Max(0, tbl.Rows.Count - 1);
+        // Max grid width = widest row measured by summing cell GridSpans.
+        var maxGridWidth = tbl.Rows.Count == 0 ? 1
+            : tbl.Rows.Max(row => row.Cells.Sum(c => Math.Max(1, c.GridSpan)));
+        return (lastRow, Math.Max(0, maxGridWidth - 1));
+    }
+
+    /// <summary>
     /// Programmatically set the cross-cell selection anchor and focus for tests and external callers.
     /// Both cells must be in the same table block.
     /// </summary>
     public void SetCellBlockSelection(int tableBlock, int anchorRow, int anchorCol, int focusRow, int focusCol)
     {
+        // BY1 defensive clamp: guard against callers passing int.MaxValue (or any value beyond the
+        // actual table bounds), which would cause ExpandForMergedCells to loop forever via integer
+        // overflow (r++ on int.MaxValue → int.MinValue, so r <= maxRow is always true).
+        if (tableBlock >= 0 && tableBlock < _doc.Blocks.Count
+            && _doc.Blocks[tableBlock] is Table tblDefensive)
+        {
+            var (clampLastRow, clampLastCol) = GetTableBounds(tableBlock);
+            anchorRow = Math.Clamp(anchorRow, 0, clampLastRow);
+            anchorCol = Math.Clamp(anchorCol, 0, clampLastCol);
+            focusRow  = Math.Clamp(focusRow,  0, clampLastRow);
+            focusCol  = Math.Clamp(focusCol,  0, clampLastCol);
+            _ = tblDefensive; // suppress unused-variable warning
+        }
         _cellBlockAnchor = (tableBlock, anchorRow, anchorCol);
         _cellBlockFocus  = (tableBlock, focusRow,  focusCol);
         // Clear single-cell text selection state to avoid ambiguity.
@@ -1093,6 +1128,24 @@ public sealed class DocumentView : Control
                 // Word numbering continues across an intervening table; the helper must match.
                 continue;
             }
+
+            // BW1: mirror the render loop's inline-object detection (~1767-1789).
+            // A paragraph that routes through LayoutImageParagraphPaged (has an inline image)
+            // or LayoutInlineObjectParagraphPaged (has an inline chart/WordArt/SmartArt) resets
+            // levelCounters and is treated as non-list — exactly what we must replicate here so
+            // the helper and render agree for ALL paragraph kinds.
+            var hasInlineImage   = p.Runs.Any(r => r.Image    is { IsFloating: false });
+            var hasInlineChart   = p.Runs.Any(r => r.Chart    is { IsFloating: false });
+            var hasInlineWordArt = p.Runs.Any(r => r.WordArt  is { IsFloating: false });
+            var hasInlineSmArt   = p.Runs.Any(r => r.SmartArt is { IsFloating: false });
+            if (hasInlineImage || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
+            {
+                // Render loop resets all counters and skips list numbering for this paragraph.
+                Array.Clear(levelCounters, 0, MaxListDepth);
+                if (i == blockIdx) return null;
+                continue;
+            }
+
             var kind = p.Formatting.ListKind;
             if (kind is ListKind.Number or ListKind.MultiLevel)
             {

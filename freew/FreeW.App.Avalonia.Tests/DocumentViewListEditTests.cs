@@ -535,4 +535,56 @@ public sealed class DocumentViewListEditTests
         m1.Should().Be("2.", "second item is 2.");
         m2.Should().Be("3.", "third item is 3.");
     }
+
+    // ── BW1: inline-image paragraph resets counter, matching the render loop ─────────────────────
+
+    /// <summary>
+    /// BW1: the render loop routes paragraphs with inline images through LayoutImageParagraphPaged,
+    /// which resets levelCounters and emits no list marker.  The helper must agree.
+    /// Layout: numbered "1.", image-para (resets → null), numbered "1." (restarts from 1).
+    /// </summary>
+    [Fact]
+    public async Task BW1_inline_image_paragraph_resets_counter_and_gets_no_marker()
+    {
+        string? markerBefore = null, markerImage = null, markerAfter = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Block 0: numbered item "1."
+            doc.Blocks.Add(new Paragraph("Item before image")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            // Block 1: paragraph with an inline (non-floating) image — the render loop resets
+            // levelCounters and skips list numbering for this paragraph (routes through
+            // LayoutImageParagraphPaged). The helper must do the same.
+            var imagePara = new Paragraph("") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } };
+            var img = new InlineImage(new byte[] { 0 }, 72, 72) { Wrapping = ImageWrapping.Inline };
+            imagePara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = img });
+            doc.Blocks.Add(imagePara);
+
+            // Block 2: numbered item — counter was reset by block 1, so this is "1." again.
+            doc.Blocks.Add(new Paragraph("Item after image")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            markerBefore = view.GetListMarkerForBlockPublic(0);
+            markerImage  = view.GetListMarkerForBlockPublic(1);
+            markerAfter  = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        markerBefore.Should().Be("1.", "first numbered item before the image paragraph is 1.");
+        markerImage.Should().BeNull("inline-image paragraph resets the counter and gets no number marker");
+        markerAfter.Should().Be("1.", "numbered item after the image-reset paragraph restarts at 1.");
+    }
 }

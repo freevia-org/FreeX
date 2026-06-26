@@ -163,17 +163,28 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.table-select-table", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, int.MaxValue, int.MaxValue);
+            {
+                // BY1: clamp to actual table bounds — passing int.MaxValue triggers an overflow
+                // loop in ExpandForMergedCells (r++ overflows int.MaxValue → infinite loop).
+                var (lastRow, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, lastRow, lastGridCol);
+            }
         }));
         r.Register("freew.table-select-row", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, int.MaxValue);
+            {
+                var (_, lastGridCol) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, lastGridCol);
+            }
         }));
         r.Register("freew.table-select-col", new RelayCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
-                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, int.MaxValue, cc.Col);
+            {
+                var (lastRow, _) = editor.GetTableBounds(cc.TableBlock);
+                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, lastRow, cc.Col);
+            }
         }));
         r.Register("freew.table-select-cell", new RelayCommand(() =>
         {
