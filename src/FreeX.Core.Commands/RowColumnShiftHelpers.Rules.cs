@@ -7,17 +7,39 @@ internal static partial class RowColumnShiftHelpers
 {
     // ── CF/DV formula-text rewrites for structural insert/delete ─────────────
 
+    // Slot constants for cfThresholdSnapshot keys (Guid = rule.Id, int = slot below).
+    // 0 = FormulaText (not a threshold — kept in cfSnapshot, listed here for reference only)
+    // 1 = MinThresholdValue   (colorScale)
+    // 2 = MidThresholdValue   (colorScale)
+    // 3 = MaxThresholdValue   (colorScale)
+    // 4 = DataBarMinThresholdValue
+    // 5 = DataBarMaxThresholdValue
+    // 10 + i = IconSetThresholds[i].Value  (i = 0..n-1)
+    private const int SlotColorScaleMin = 1;
+    private const int SlotColorScaleMax = 3;
+    private const int SlotColorScaleMid = 2;
+    private const int SlotDataBarMin    = 4;
+    private const int SlotDataBarMax    = 5;
+    private const int SlotIconSetBase   = 10;
+
     /// <summary>
     /// After geometry has already been shifted, rewrites FormulaText on any
     /// ConditionalFormat rule and Formula1/Formula2 on any DataValidation rule
     /// through <see cref="FormulaRewriter"/> with the supplied structural op.
     /// Changed values are recorded in <paramref name="cfSnapshot"/> /
-    /// <paramref name="dvSnapshot"/> for undo by <see cref="RestoreRuleFormulas"/>.
+    /// <paramref name="cfThresholdSnapshot"/> / <paramref name="dvSnapshot"/>
+    /// for undo by <see cref="RestoreRuleFormulas"/>.
+    /// <para>
+    /// <paramref name="cfThresholdSnapshot"/> captures colorScale/dataBar/iconSet cfvo
+    /// threshold values whose <c>ThresholdType</c> is <see cref="CfThresholdType.Formula"/>.
+    /// The key is <c>(rule.Id, slot)</c> where slot is one of the <c>Slot*</c> constants above.
+    /// </para>
     /// </summary>
     internal static void RewriteRuleFormulas(
         Sheet sheet,
         RewriteOperation op,
         Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
         Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
     {
         foreach (var rule in sheet.ConditionalFormats)
@@ -29,6 +51,40 @@ internal static partial class RowColumnShiftHelpers
                 {
                     cfSnapshot[rule.Id] = ft;
                     rule.FormulaText = rewritten;
+                }
+            }
+
+            // colorScale thresholds
+            RewriteThreshold(rule, SlotColorScaleMin, rule.MinThresholdType, rule.MinThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MinThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotColorScaleMid, rule.MidThresholdType, rule.MidThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MidThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotColorScaleMax, rule.MaxThresholdType, rule.MaxThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.MaxThresholdValue = rewritten);
+
+            // dataBar thresholds
+            RewriteThreshold(rule, SlotDataBarMin, rule.DataBarMinThresholdType, rule.DataBarMinThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.DataBarMinThresholdValue = rewritten);
+            RewriteThreshold(rule, SlotDataBarMax, rule.DataBarMaxThresholdType, rule.DataBarMaxThresholdValue,
+                op, sheet.Name, cfThresholdSnapshot,
+                rewritten => rule.DataBarMaxThresholdValue = rewritten);
+
+            // iconSet thresholds
+            for (var i = 0; i < rule.IconSetThresholds.Count; i++)
+            {
+                var threshold = rule.IconSetThresholds[i];
+                if (threshold.Type == CfThresholdType.Formula && threshold.Value is { } tv)
+                {
+                    var rewritten = FormulaRewriter.Rewrite(tv, op, sheet.Name);
+                    if (rewritten is not null && rewritten != tv)
+                    {
+                        cfThresholdSnapshot[(rule.Id, SlotIconSetBase + i)] = tv;
+                        rule.IconSetThresholds[i] = threshold with { Value = rewritten };
+                    }
                 }
             }
         }
@@ -56,21 +112,62 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    private static void RewriteThreshold(
+        ConditionalFormat rule,
+        int slot,
+        CfThresholdType type,
+        string? value,
+        RewriteOperation op,
+        string sheetName,
+        Dictionary<(Guid Id, int Slot), string?> snapshot,
+        Action<string> apply)
+    {
+        if (type != CfThresholdType.Formula || value is null)
+            return;
+        var rewritten = FormulaRewriter.Rewrite(value, op, sheetName);
+        if (rewritten is not null && rewritten != value)
+        {
+            snapshot[(rule.Id, slot)] = value;
+            apply(rewritten);
+        }
+    }
+
     /// <summary>
-    /// Restores CF/DV formula text from snapshots captured by <see cref="RewriteRuleFormulas"/>.
+    /// Restores CF/DV formula text (and CF Formula-type threshold values) from snapshots
+    /// captured by <see cref="RewriteRuleFormulas"/>.
     /// Looks up each rule by its <see cref="ConditionalFormat.Id"/> / <see cref="DataValidation.Id"/>.
     /// </summary>
     internal static void RestoreRuleFormulas(
         Sheet sheet,
         Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
         Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
     {
-        if (cfSnapshot.Count > 0)
+        if (cfSnapshot.Count > 0 || cfThresholdSnapshot.Count > 0)
         {
             foreach (var rule in sheet.ConditionalFormats)
             {
                 if (cfSnapshot.TryGetValue(rule.Id, out var original))
                     rule.FormulaText = original;
+
+                if (cfThresholdSnapshot.Count > 0)
+                {
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMin), out var minVal))
+                        rule.MinThresholdValue = minVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMid), out var midVal))
+                        rule.MidThresholdValue = midVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotColorScaleMax), out var maxVal))
+                        rule.MaxThresholdValue = maxVal;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotDataBarMin), out var dbMin))
+                        rule.DataBarMinThresholdValue = dbMin;
+                    if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotDataBarMax), out var dbMax))
+                        rule.DataBarMaxThresholdValue = dbMax;
+                    for (var i = 0; i < rule.IconSetThresholds.Count; i++)
+                    {
+                        if (cfThresholdSnapshot.TryGetValue((rule.Id, SlotIconSetBase + i), out var iconVal))
+                            rule.IconSetThresholds[i] = rule.IconSetThresholds[i] with { Value = iconVal };
+                    }
+                }
             }
         }
 

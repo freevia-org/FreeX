@@ -155,6 +155,13 @@ public sealed class ConditionalFormat
     // ── DataBar rule ────────────────────────────────────────────────────────
 
     public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
+
+    /// <summary>
+    /// When the dataBar fill color originated from a workbook theme reference in the source file,
+    /// this carries the raw theme index and tint so the writer can round-trip the original
+    /// attributes instead of flattening to sRGB.
+    /// </summary>
+    public CfColorStopSource? DataBarColorSource { get; set; }
     public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
     public string? DataBarMinThresholdValue { get; set; }
     public CfThresholdType DataBarMaxThresholdType { get; set; } = CfThresholdType.Max;
@@ -262,6 +269,7 @@ public sealed class ConditionalFormat
             MaxThresholdValue = MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = MaxThresholdGreaterThanOrEqual,
             DataBarColor = DataBarColor,
+            DataBarColorSource = DataBarColorSource,
             DataBarMinThresholdType = DataBarMinThresholdType,
             DataBarMinThresholdValue = DataBarMinThresholdValue,
             DataBarMaxThresholdType = DataBarMaxThresholdType,

@@ -405,4 +405,125 @@ public sealed class MoveRangeCommandTests
         cfRule.FormulaText.Should().Be("A1>0", "undo restores CF formula after move");
         dvRule.Formula1.Should().Be("A1<>\"\"", "undo restores DV formula after move");
     }
+
+    // ── BJ1: MoveRange translates CF AdditionalRanges ────────────────────────
+
+    [Fact]
+    public void Apply_MultiRangeCfRule_FullyInsideMovedRange_TranslatesAdditionalRanges()
+    {
+        // CF rule sqref "A1:A5 C1:C5" (AppliesTo=A1:A5, AdditionalRanges=[C1:C5]).
+        // Both ranges are fully inside the moved selection A1:C5 → destination D6.
+        // After move: AppliesTo should shift to D6:D10, AdditionalRanges to F6:F10.
+        // Undo should restore both to the original positions.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),   // A1
+            new CellAddress(sheet.Id, 5, 3));   // C5
+
+        var destination = new CellAddress(sheet.Id, 6, 4); // D6
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo        = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)), // A1:A5
+            AdditionalRanges = [new GridRange(new CellAddress(sheet.Id, 1, 3), new CellAddress(sheet.Id, 5, 3))], // C1:C5
+            RuleType         = CfRuleType.ColorScale,
+            Priority         = 1
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var cmd = new MoveRangeCommand(sheet.Id, sourceRange, destination);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // AppliesTo A1:A5 → rowDelta=+5, colDelta=+3 → D6:D10
+        cfRule.AppliesTo.Start.Row.Should().Be(6,  "AppliesTo row start should shift by +5");
+        cfRule.AppliesTo.Start.Col.Should().Be(4,  "AppliesTo col start should shift by +3 (A→D)");
+        cfRule.AppliesTo.End.Row.Should().Be(10,   "AppliesTo row end should shift by +5");
+        cfRule.AppliesTo.End.Col.Should().Be(4,    "AppliesTo col end should remain in D");
+
+        // AdditionalRanges C1:C5 → F6:F10
+        cfRule.AdditionalRanges.Should().ContainSingle("rule has one additional range");
+        var additional = cfRule.AdditionalRanges![0];
+        additional.Start.Row.Should().Be(6,  "AdditionalRanges row start should shift by +5");
+        additional.Start.Col.Should().Be(6,  "AdditionalRanges col start should shift by +3 (C→F)");
+        additional.End.Row.Should().Be(10,   "AdditionalRanges row end should shift by +5");
+        additional.End.Col.Should().Be(6,    "AdditionalRanges col end should remain in F");
+
+        // Undo restores both
+        cmd.Revert(ctx);
+
+        cfRule.AppliesTo.Start.Row.Should().Be(1, "undo restores AppliesTo to A1:A5");
+        cfRule.AppliesTo.Start.Col.Should().Be(1);
+        cfRule.AppliesTo.End.Row.Should().Be(5);
+        cfRule.AppliesTo.End.Col.Should().Be(1);
+
+        cfRule.AdditionalRanges.Should().ContainSingle("undo preserves AdditionalRanges count");
+        var restoredAdditional = cfRule.AdditionalRanges![0];
+        restoredAdditional.Start.Row.Should().Be(1, "undo restores AdditionalRanges to C1:C5");
+        restoredAdditional.Start.Col.Should().Be(3);
+        restoredAdditional.End.Row.Should().Be(5);
+        restoredAdditional.End.Col.Should().Be(3);
+    }
+
+    [Fact]
+    public void Apply_SingleRangeCfRule_FullyInsideMovedRange_StillTranslates()
+    {
+        // Regression guard: a CF rule with no AdditionalRanges still moves correctly.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var source = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3));
+        var dest   = new CellAddress(sheet.Id, 5, 5);
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo        = source,
+            AdditionalRanges = null,
+            RuleType         = CfRuleType.CellValue,
+            Operator         = CfOperator.GreaterThan,
+            Value1           = "0"
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var cmd = new MoveRangeCommand(sheet.Id, source, dest);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cfRule.AppliesTo.Start.Row.Should().Be(5, "single-range rule AppliesTo should shift to E5");
+        cfRule.AppliesTo.Start.Col.Should().Be(5);
+        cfRule.AdditionalRanges.Should().BeNull("no AdditionalRanges to translate");
+    }
+
+    [Fact]
+    public void Apply_MultiRangeCfRule_AdditionalRangePartiallyOutsideMovedRange_LeavesNonContainedUnchanged()
+    {
+        // AppliesTo=A1:A5 fully inside A1:B5; AdditionalRanges=[C1:C5] NOT inside A1:B5.
+        // Only AppliesTo should translate; AdditionalRanges stays at C1:C5.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceRange  = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)); // A1:B5
+        var destination  = new CellAddress(sheet.Id, 1, 5); // E1
+
+        var cfRule = new ConditionalFormat
+        {
+            AppliesTo        = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)), // A1:A5 — inside
+            AdditionalRanges = [new GridRange(new CellAddress(sheet.Id, 1, 3), new CellAddress(sheet.Id, 5, 3))], // C1:C5 — outside
+            RuleType         = CfRuleType.ColorScale,
+            Priority         = 1
+        };
+        sheet.ConditionalFormats.Add(cfRule);
+
+        var cmd = new MoveRangeCommand(sheet.Id, sourceRange, destination);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        // AppliesTo A1:A5 → E1:E5 (colDelta=+4)
+        cfRule.AppliesTo.Start.Col.Should().Be(5, "AppliesTo is inside moved range and should shift");
+        // AdditionalRanges C1:C5 → unchanged (C is outside A1:B5)
+        cfRule.AdditionalRanges.Should().ContainSingle();
+        cfRule.AdditionalRanges![0].Start.Col.Should().Be(3, "AdditionalRanges outside moved range must NOT shift");
+    }
 }

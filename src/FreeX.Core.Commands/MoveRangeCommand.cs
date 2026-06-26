@@ -20,6 +20,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
     private Dictionary<Guid, string?>? _cfFormulaSnapshot;
+    private Dictionary<(Guid Id, int Slot), string?>? _cfThresholdSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
 
@@ -104,8 +105,9 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _formulaSnapshot = [];
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, moveOp, _formulaSnapshot);
         _cfFormulaSnapshot = [];
+        _cfThresholdSnapshot = [];
         _dvFormulaSnapshot = [];
-        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, moveOp, _cfFormulaSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, moveOp, sheet.Name);
 
@@ -129,8 +131,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (_formulaSnapshot is not null)
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        if (_cfFormulaSnapshot is not null || _dvFormulaSnapshot is not null)
-            RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _dvFormulaSnapshot ?? []);
+        if (_cfFormulaSnapshot is not null || _cfThresholdSnapshot is not null || _dvFormulaSnapshot is not null)
+            RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
 
         foreach (var snapshot in _snapshot)
@@ -386,6 +388,29 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             {
                 rule.AppliesTo = TranslateRange(rule.AppliesTo, rowDelta, colDelta);
                 cfChanged = true;
+            }
+
+            if (rule.AdditionalRanges is { Count: > 0 })
+            {
+                var result = new List<GridRange>(rule.AdditionalRanges.Count);
+                var anyChanged = false;
+                foreach (var ar in rule.AdditionalRanges)
+                {
+                    if (IsFullyContained(ar, sourceRange))
+                    {
+                        result.Add(TranslateRange(ar, rowDelta, colDelta));
+                        anyChanged = true;
+                    }
+                    else
+                    {
+                        result.Add(ar);
+                    }
+                }
+                if (anyChanged)
+                {
+                    rule.AdditionalRanges = result;
+                    cfChanged = true;
+                }
             }
         }
 

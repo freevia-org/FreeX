@@ -35,6 +35,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
     private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
@@ -146,8 +147,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         _scopedNamedFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         _cfFormulaSnapshot.Clear();
+        _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), _cfFormulaSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -163,7 +165,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         foreach (var snapshot in _shiftedSnapshot)
             sheet.ClearCell(snapshot.Row - _count, snapshot.Col);

@@ -192,4 +192,123 @@ public sealed class CfShiftMultiRangeTests
             Range(sheet.Id, 1, 4, 5, 4), because: "E1:E5 → D1:D5");
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // BJ3: colorScale/dataBar/iconSet Formula-type threshold shifting
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void InsertRow_ShiftsColorScaleFormulaThreshold_AndUndoRestores()
+    {
+        // colorScale with Min = Formula "$A$10", Mid = Percentile "50" (should not change),
+        // Max = Formula "$A$20". Insert 1 row before row 1 → $A$10→$A$11, $A$20→$A$21.
+        var (wb, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo          = Range(sheet.Id, 1, 1, 30, 1),
+            RuleType           = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType   = CfThresholdType.Formula,
+            MinThresholdValue  = "$A$10",
+            MidThresholdType   = CfThresholdType.Percentile,
+            MidThresholdValue  = "50",
+            MaxThresholdType   = CfThresholdType.Formula,
+            MaxThresholdValue  = "$A$20"
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 1);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cf.MinThresholdValue.Should().Be("$A$11", because: "Formula-type min threshold $A$10 must shift down by 1 after inserting row 1");
+        cf.MidThresholdValue.Should().Be("50",    because: "Percentile-type mid threshold must NOT be shifted");
+        cf.MaxThresholdValue.Should().Be("$A$21", because: "Formula-type max threshold $A$20 must shift down by 1 after inserting row 1");
+
+        cmd.Revert(ctx);
+
+        cf.MinThresholdValue.Should().Be("$A$10", because: "undo must restore original min threshold formula");
+        cf.MidThresholdValue.Should().Be("50",    because: "undo must not disturb Percentile mid threshold");
+        cf.MaxThresholdValue.Should().Be("$A$20", because: "undo must restore original max threshold formula");
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsDataBarFormulaThresholds_AndUndoRestores()
+    {
+        // dataBar with Formula min "$B$5" and Number max "100" (number must not shift).
+        var (wb, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo                = Range(sheet.Id, 1, 1, 20, 1),
+            RuleType                 = CfRuleType.DataBar,
+            DataBarMinThresholdType  = CfThresholdType.Formula,
+            DataBarMinThresholdValue = "$B$5",
+            DataBarMaxThresholdType  = CfThresholdType.Number,
+            DataBarMaxThresholdValue = "100"
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 2);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cf.DataBarMinThresholdValue.Should().Be("$B$7", because: "Formula dataBar min $B$5 shifts down by 2");
+        cf.DataBarMaxThresholdValue.Should().Be("100",  because: "Number dataBar max must not shift");
+
+        cmd.Revert(ctx);
+
+        cf.DataBarMinThresholdValue.Should().Be("$B$5", because: "undo restores dataBar min threshold formula");
+        cf.DataBarMaxThresholdValue.Should().Be("100",  because: "undo does not disturb Number type max");
+    }
+
+    [Fact]
+    public void InsertRow_ShiftsIconSetFormulaThreshold_AndUndoRestores()
+    {
+        // iconSet with two thresholds: [0] Formula "$C$3", [1] Percentile "67" (must not shift).
+        var (wb, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo    = Range(sheet.Id, 1, 1, 10, 1),
+            RuleType     = CfRuleType.IconSet,
+            IconSetStyle = "3Arrows"
+        };
+        cf.IconSetThresholds.Add(new CfThresholdModel(CfThresholdType.Formula, "$C$3"));
+        cf.IconSetThresholds.Add(new CfThresholdModel(CfThresholdType.Percentile, "67"));
+        sheet.ConditionalFormats.Add(cf);
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 3);
+        cmd.Apply(ctx).Success.Should().BeTrue();
+
+        cf.IconSetThresholds[0].Value.Should().Be("$C$6",  because: "Formula iconSet threshold $C$3 shifts down by 3");
+        cf.IconSetThresholds[1].Value.Should().Be("67",    because: "Percentile iconSet threshold must not shift");
+
+        cmd.Revert(ctx);
+
+        cf.IconSetThresholds[0].Value.Should().Be("$C$3", because: "undo restores Formula iconSet threshold");
+        cf.IconSetThresholds[1].Value.Should().Be("67",   because: "undo does not disturb Percentile iconSet threshold");
+    }
+
+    [Fact]
+    public void InsertRow_NumberTypeColorScaleThresholds_AreNotShifted()
+    {
+        // Guard: all three thresholds are Number type — none should be rewritten.
+        var (wb, sheet, ctx) = Setup();
+        var cf = new ConditionalFormat
+        {
+            AppliesTo          = Range(sheet.Id, 1, 1, 10, 1),
+            RuleType           = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType   = CfThresholdType.Number,
+            MinThresholdValue  = "1",
+            MidThresholdType   = CfThresholdType.Number,
+            MidThresholdValue  = "50",
+            MaxThresholdType   = CfThresholdType.Number,
+            MaxThresholdValue  = "100"
+        };
+        sheet.ConditionalFormats.Add(cf);
+
+        new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 5).Apply(ctx);
+
+        cf.MinThresholdValue.Should().Be("1",   because: "Number-type min threshold must not be rewritten");
+        cf.MidThresholdValue.Should().Be("50",  because: "Number-type mid threshold must not be rewritten");
+        cf.MaxThresholdValue.Should().Be("100", because: "Number-type max threshold must not be rewritten");
+    }
+
 }

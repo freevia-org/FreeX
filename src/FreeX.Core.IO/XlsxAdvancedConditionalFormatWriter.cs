@@ -164,7 +164,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     new XAttribute("showValue", cf.DataBarShowValue ? "1" : "0"),
                     ToCfvoXml(worksheetNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue),
                     ToCfvoXml(worksheetNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue),
-                    ToColorXml(worksheetNs, cf.DataBarColor));
+                    ToColorXml(worksheetNs, cf.DataBarColor, cf.DataBarColorSource));
                 if (cf.DataBarMinLength.HasValue)
                     dataBar.SetAttributeValue("minLength", cf.DataBarMinLength.Value.ToString(CultureInfo.InvariantCulture));
                 if (cf.DataBarMaxLength.HasValue)
