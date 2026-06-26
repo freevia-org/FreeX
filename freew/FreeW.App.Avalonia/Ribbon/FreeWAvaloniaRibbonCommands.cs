@@ -50,12 +50,21 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <summary>
     /// Build and return the complete command registry for the Avalonia ribbon.
     /// </summary>
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks)
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks) =>
+        Build(editor, callbacks, out _);
+
+    /// <summary>
+    /// Build the registry and also surface the <see cref="MailMergeEngine"/> that backs the Mailings tab
+    /// (AV-MAIL), so the shell can drive its dialog-bound commands (Select Recipients / Insert Merge Field)
+    /// with the async file-picker / prompt and keep the same session the ribbon commands use.
+    /// </summary>
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks, out MailMergeEngine mailMerge)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(callbacks);
 
         var r = new RibbonCommandRegistry();
+        mailMerge = new MailMergeEngine(editor, callbacks);
 
         // ── File ─────────────────────────────────────────────────────────────
         r.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
@@ -302,6 +311,9 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── References (AV-REF) ──────────────────────────────────────────────
         RegisterReferencesCommands(r, editor);
+
+        // ── Mailings (AV-MAIL) ───────────────────────────────────────────────
+        RegisterMailingsCommands(r, mailMerge);
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);
@@ -674,5 +686,40 @@ internal static class FreeWAvaloniaRibbonCommands
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new RelayCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
+    }
+
+    /// <summary>
+    /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The
+    /// in-scope subset is: Select Recipients (load a CSV recipient list), Insert Merge Field (insert a
+    /// «Field» placeholder at the caret), Address Block / Greeting Line (insert the composite placeholders),
+    /// Preview Results (toggle a live preview of record 1) with Next / Previous record stepping, and
+    /// Finish &amp; Merge (merge to a new in-memory document). Mail-SEND (e-mail merge) is OUT OF SCOPE and
+    /// intentionally not wired.
+    ///
+    /// <para>
+    /// A single <see cref="MailMergeSession"/> is captured by every command (so they share the loaded data,
+    /// mapping and preview cursor). Commands that mutate the document (merge-field / address-block /
+    /// greeting-line insertion) go through the editor's undoable <see cref="DocumentView.InsertText"/>; the
+    /// preview / finish commands swap the whole document via <see cref="DocumentView.LoadDocument"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// The two dialog-driven entry points (recipient CSV + field-name picker) are supplied as <b>optional</b>
+    /// host callbacks (<see cref="RibbonHostCallbacks.AskRecipientCsv"/> /
+    /// <see cref="RibbonHostCallbacks.AskMergeFieldName"/>); when the shell didn't supply them (tests,
+    /// parallel waves) those two commands degrade to safe no-ops while the rest of the tab stays usable
+    /// (a recipient list can also be loaded directly via <see cref="MailMergeEngine.LoadRecipientsCsv"/>).
+    /// </para>
+    /// </summary>
+    private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
+    {
+        r.Register("freew.select-recipients", new RelayCommand(engine.SelectRecipients));
+        r.Register("freew.merge-field",       new RelayCommand(engine.InsertMergeField));
+        r.Register("freew.address-block",     new RelayCommand(engine.InsertAddressBlock));
+        r.Register("freew.greeting-line",     new RelayCommand(engine.InsertGreetingLine));
+        r.Register("freew.preview-results",   new RelayCommand(engine.TogglePreview));
+        r.Register("freew.next-record",       new RelayCommand(engine.NextRecord));
+        r.Register("freew.prev-record",       new RelayCommand(engine.PreviousRecord));
+        r.Register("freew.finish-merge",      new RelayCommand(() => engine.FinishMerge()));
     }
 }
