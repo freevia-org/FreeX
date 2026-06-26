@@ -315,6 +315,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Mailings (AV-MAIL) ───────────────────────────────────────────────
         RegisterMailingsCommands(r, mailMerge);
 
+        // ── Design (AV-DESIGN) ───────────────────────────────────────────────
+        RegisterDesignCommands(r, editor, callbacks);
+
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);
 
@@ -721,5 +724,86 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.next-record",       new RelayCommand(engine.NextRecord));
         r.Register("freew.prev-record",       new RelayCommand(engine.PreviousRecord));
         r.Register("freew.finish-merge",      new RelayCommand(() => engine.FinishMerge()));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Registers the Design-tab commands — Themes / Colors / Fonts / Paragraph-Spacing galleries
+    /// (document-wide style mutations), Page Color, Page Borders, and Watermark. Each gallery dropdown's
+    /// top-level id is a no-op opener; the per-item ids resolve to a model-backed, undoable
+    /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
+    /// <see cref="RibbonHostCallbacks"/> dialog launchers and safely no-op when the shell did not supply one
+    /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
+    /// </summary>
+    private static void RegisterDesignCommands(
+        RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        // ── Themes ───────────────────────────────────────────────────────────
+        r.Register("freew.theme", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var theme in DocumentTheme.Catalog)
+        {
+            var t = theme;
+            r.Register($"freew.theme.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyTheme(t)));
+        }
+
+        // ── Colors (palette only — preserves fonts) ──────────────────────────
+        r.Register("freew.theme-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var theme in DocumentTheme.Catalog)
+        {
+            var t = theme;
+            r.Register($"freew.theme-colors.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyThemeColors(t)));
+        }
+
+        // ── Fonts (heading/body pairing — preserves colours) ─────────────────
+        r.Register("freew.theme-fonts", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var fontSet in DocumentFontSet.Catalog)
+        {
+            var f = fontSet;
+            r.Register($"freew.theme-fonts.{f.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyDocumentFontSet(f)));
+        }
+
+        // ── Paragraph Spacing presets ────────────────────────────────────────
+        r.Register("freew.para-spacing", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+        {
+            var s = spacingSet;
+            r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
+                new RelayCommand(() => editor.ApplyParagraphSpacingSet(s)));
+        }
+
+        // ── Page Color swatches (+ No Color) ─────────────────────────────────
+        r.Register("freew.page-color", new RelayCommand(() => { /* dropdown opener */ }));
+        RegisterPageColorPalette(r, editor);
+
+        // ── Page Borders — dialog launcher (optional callback) ───────────────
+        r.Register("freew.page-borders", new RelayCommand(callbacks.OpenPageBordersDialog ?? (() => { })));
+
+        // ── Watermark — built-in presets + Custom (dialog) + Remove ──────────
+        r.Register("freew.watermark", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.watermark.confidential", new RelayCommand(() => editor.SetWatermarkText("CONFIDENTIAL")));
+        r.Register("freew.watermark.do-not-copy",  new RelayCommand(() => editor.SetWatermarkText("DO NOT COPY")));
+        r.Register("freew.watermark.draft",        new RelayCommand(() => editor.SetWatermarkText("DRAFT")));
+        r.Register("freew.watermark.urgent",       new RelayCommand(() => editor.SetWatermarkText("URGENT")));
+        r.Register("freew.watermark.custom",       new RelayCommand(callbacks.OpenWatermarkDialog ?? (() => { })));
+        r.Register("freew.watermark.none",         new RelayCommand(() => editor.SetWatermark(null)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Registers the per-swatch sub-commands for the Page Color palette. Each id matches an entry
+    /// in <see cref="FreeWRibbon.PageColors"/> and calls <see cref="DocumentView.SetPageColor"/> with the
+    /// swatch hex (or null for "No Color", which clears the background back to white).
+    /// </summary>
+    private static void RegisterPageColorPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new RelayCommand(() => ed.SetPageColor(hex)));
+
+        Add(r, editor, "freew.page-color.none",         null);
+        Add(r, editor, "freew.page-color.white",        "#FFFFFF");
+        Add(r, editor, "freew.page-color.light-gray",   "#D9D9D9");
+        Add(r, editor, "freew.page-color.tan",          "#EAD9C0");
+        Add(r, editor, "freew.page-color.light-blue",   "#DDEBF7");
+        Add(r, editor, "freew.page-color.light-green",  "#E2EFDA");
+        Add(r, editor, "freew.page-color.light-yellow", "#FFF2CC");
+        Add(r, editor, "freew.page-color.rose",         "#FCE4EC");
     }
 }
