@@ -33,6 +33,27 @@ public enum DocumentViewMode
 }
 
 /// <summary>
+/// AV-HANDLES: identifies which manipulation handle a pointer is over (or that a drag is operating on)
+/// for a selected floating object. <see cref="None"/> = not on the object at all; <see cref="Body"/> =
+/// inside the object but not on a resize handle (a press there starts a drag-move). The eight remaining
+/// values are the resize handles: four corners (resize both dimensions) and four edge midpoints
+/// (resize one dimension, anchoring the opposite edge).
+/// </summary>
+public enum FloatHandle
+{
+    None,
+    Body,
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+}
+
+/// <summary>
 /// FreeW's editing surface. The WPF host used a RichTextBox/FlowDocument; Avalonia has no
 /// FlowDocument, so this is a custom <see cref="Control"/> that lays out the
 /// <see cref="TextDocument"/> per character, renders runs with their formatting, and routes every
@@ -160,10 +181,11 @@ public sealed class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
-    // Drag-move state: non-null while the user is dragging a selected float.
-    // PointerDown: stores the pointer's page-space position when the drag started and the float's
-    // Rect at that moment so we can compute delta offsets for the move.
-    private (Point PointerDown, Rect FloatRect)? _floatDragState;
+    // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
+    // PointerDown : pointer page-space position when the drag started.
+    // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
+    // Handle      : which manipulation is active (Body = move; any edge/corner = resize from that handle).
+    private (Point PointerDown, Rect FloatRect, FloatHandle Handle)? _floatDragState;
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -6028,20 +6050,285 @@ public sealed class DocumentView : Control
     {
         context.DrawRectangle(null, FloatSelectionPen, rect);
 
-        // 8 handle positions: corners + edge midpoints.
+        foreach (var (_, hRect) in HandleRects(rect))
+        {
+            context.FillRectangle(FloatHandleFill, hRect);
+            context.DrawRectangle(null, FloatHandlePen, hRect);
+        }
+    }
+
+    // ── AV-HANDLES: handle geometry, hit-test, cursors, resize-drag commit ──────────────────────────
+
+    // Minimum floating-object size in points (Word clamps tiny drags so the object never collapses).
+    private const double MinFloatSizePt = 9; // ~0.125in
+
+    /// <summary>
+    /// Returns the eight resize-handle squares (corners + edge midpoints) for a selection
+    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents.
+    /// Shared by the renderer and the pointer hit-test so the drawn squares and the clickable
+    /// targets never drift apart.
+    /// </summary>
+    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
+    {
         var hx = new[] { rect.X, rect.X + rect.Width / 2, rect.Right };
         var hy = new[] { rect.Y, rect.Y + rect.Height / 2, rect.Bottom };
         var half = FloatHandleSize / 2;
-        for (var row = 0; row < 3; row++)
+        // Row/col → handle map (centre is skipped).
+        var map = new[,]
         {
-            for (var col = 0; col < 3; col++)
-            {
-                if (row == 1 && col == 1) continue; // skip centre
-                var hRect = new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize);
-                context.FillRectangle(FloatHandleFill, hRect);
-                context.DrawRectangle(null, FloatHandlePen, hRect);
-            }
+            { FloatHandle.TopLeft,    FloatHandle.Top,    FloatHandle.TopRight    },
+            { FloatHandle.Left,       FloatHandle.None,   FloatHandle.Right       },
+            { FloatHandle.BottomLeft, FloatHandle.Bottom, FloatHandle.BottomRight },
+        };
+        for (var row = 0; row < 3; row++)
+        for (var col = 0; col < 3; col++)
+        {
+            if (row == 1 && col == 1) continue; // centre is not a handle
+            yield return (map[row, col],
+                new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize));
         }
+    }
+
+    /// <summary>
+    /// AV-HANDLES test seam: the eight resize-handle rects for the CURRENT floating selection,
+    /// keyed by <see cref="FloatHandle"/>. Empty when nothing is selected. Lets tests assert that
+    /// selecting a float exposes exactly eight handles in the expected geometry.
+    /// </summary>
+    public IReadOnlyDictionary<FloatHandle, Rect> HandleRectsForSelection()
+    {
+        var dict = new Dictionary<FloatHandle, Rect>();
+        if (_selectedFloating is { } sel)
+            foreach (var (h, r) in HandleRects(sel.Rect))
+                dict[h] = r;
+        return dict;
+    }
+
+    /// <summary>
+    /// Hit-tests <paramref name="point"/> against the current selection's handles + body. A handle
+    /// hit (within the handle square, padded slightly for easier grabbing) wins; otherwise a point
+    /// inside the selection rect is <see cref="FloatHandle.Body"/>; anything else is
+    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>.
+    /// </summary>
+    private FloatHandle HitTestHandle(Point point)
+    {
+        if (_selectedFloating is not { } sel) return FloatHandle.None;
+        const double pad = 2; // grab tolerance around each handle square
+        foreach (var (h, r) in HandleRects(sel.Rect))
+            if (r.Inflate(pad).Contains(point)) return h;
+        return sel.Rect.Contains(point) ? FloatHandle.Body : FloatHandle.None;
+    }
+
+    /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
+    private static Cursor CursorForHandle(FloatHandle handle) => handle switch
+    {
+        FloatHandle.TopLeft or FloatHandle.BottomRight => new Cursor(StandardCursorType.TopLeftCorner),
+        FloatHandle.TopRight or FloatHandle.BottomLeft => new Cursor(StandardCursorType.TopRightCorner),
+        FloatHandle.Left or FloatHandle.Right          => new Cursor(StandardCursorType.SizeWestEast),
+        FloatHandle.Top or FloatHandle.Bottom          => new Cursor(StandardCursorType.SizeNorthSouth),
+        FloatHandle.Body                               => new Cursor(StandardCursorType.SizeAll),
+        _                                              => Cursor.Default,
+    };
+
+    /// <summary>
+    /// Computes the new page-space rect while dragging a resize <paramref name="handle"/> from the
+    /// drag-start <paramref name="baseRect"/> to the current pointer position. The opposite edge(s)
+    /// stay anchored; corners move both dimensions, edges only one. <paramref name="aspect"/> (Shift on
+    /// a corner) preserves the base aspect ratio. The result is clamped so width/height never fall below
+    /// <see cref="MinFloatSizePt"/> (converted to px).
+    /// </summary>
+    private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
+    {
+        var minPx = MinFloatSizePt * PxPerPoint;
+        double left = baseRect.Left, top = baseRect.Top, right = baseRect.Right, bottom = baseRect.Bottom;
+
+        bool movesLeft   = handle is FloatHandle.TopLeft or FloatHandle.Left or FloatHandle.BottomLeft;
+        bool movesRight  = handle is FloatHandle.TopRight or FloatHandle.Right or FloatHandle.BottomRight;
+        bool movesTop    = handle is FloatHandle.TopLeft or FloatHandle.Top or FloatHandle.TopRight;
+        bool movesBottom = handle is FloatHandle.BottomLeft or FloatHandle.Bottom or FloatHandle.BottomRight;
+
+        if (movesLeft)   left   = Math.Min(pointer.X, right  - minPx);
+        if (movesRight)  right  = Math.Max(pointer.X, left   + minPx);
+        if (movesTop)    top    = Math.Min(pointer.Y, bottom - minPx);
+        if (movesBottom) bottom = Math.Max(pointer.Y, top    + minPx);
+
+        var newW = right - left;
+        var newH = bottom - top;
+
+        // Aspect lock (corners only — an edge handle changes a single dimension by definition).
+        bool isCorner = handle is FloatHandle.TopLeft or FloatHandle.TopRight
+                                or FloatHandle.BottomLeft or FloatHandle.BottomRight;
+        if (aspect && isCorner && baseRect.Width > 0 && baseRect.Height > 0)
+        {
+            var ratio = baseRect.Width / baseRect.Height;
+            // Drive the larger relative change so the box tracks the pointer along its dominant axis.
+            if (newW / baseRect.Width >= newH / baseRect.Height)
+                newH = newW / ratio;
+            else
+                newW = newH * ratio;
+            newW = Math.Max(minPx, newW);
+            newH = Math.Max(minPx, newH);
+            // Re-anchor the moved corner so the OPPOSITE corner stays fixed.
+            if (movesLeft) left = right - newW; else right = left + newW;
+            if (movesTop)  top  = bottom - newH; else bottom = top + newH;
+        }
+
+        return new Rect(left, top, Math.Max(minPx, right - left), Math.Max(minPx, bottom - top));
+    }
+
+    /// <summary>
+    /// Commits a handle-resize: converts the dragged page-space <paramref name="newRect"/> to model
+    /// width/height (and a position delta when the anchored edge actually moved) and issues the
+    /// undoable command(s). When only the size changed, a single <see cref="SetFloatingSizeCommand"/>
+    /// (or image-size command) is pushed; when the top/left edge moved too, the size + position commands
+    /// are wrapped in one <see cref="CompositeDocumentCommand"/> so a single undo reverts the whole drag.
+    /// </summary>
+    private void CommitFloatResize(int blockIndex, int runIndex, string kind, Rect baseRect, Rect newRect)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
+        var run = para.Runs[runIndex];
+
+        var newWidthPt  = newRect.Width  / PxPerPoint;
+        var newHeightPt = newRect.Height / PxPerPoint;
+        // Offset delta in points: how far the top-left corner moved (non-zero only for top/left handles).
+        var dxPt = (newRect.Left - baseRect.Left) / PxPerPoint;
+        var dyPt = (newRect.Top  - baseRect.Top)  / PxPerPoint;
+        bool anchorMoved = Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01;
+
+        var sizeCmd = new SetFloatingSizeCommand(blockIndex, runIndex, newWidthPt, newHeightPt);
+
+        if (!anchorMoved)
+        {
+            _bus.Execute(sizeCmd);
+        }
+        else if (kind == "Image" && run.Image is { IsFloating: true } img)
+        {
+            var posCmd = new NudgeImagePositionCommand(blockIndex, runIndex,
+                img.HorizontalOffsetPt + dxPt, img.VerticalOffsetPt + dyPt);
+            _bus.Execute(new CompositeDocumentCommand("Resize",
+                new IDocumentCommand[] { sizeCmd, posCmd }));
+        }
+        else if (SetFloatingPositionCommand.GetFloatingPlacement(run) is { } pl)
+        {
+            var posCmd = new SetFloatingPositionCommand(blockIndex, runIndex,
+                pl.HorizontalOffsetPt + dxPt, pl.VerticalOffsetPt + dyPt,
+                pl.HorizontalAnchor, pl.VerticalAnchor);
+            _bus.Execute(new CompositeDocumentCommand("Resize",
+                new IDocumentCommand[] { sizeCmd, posCmd }));
+        }
+        else
+        {
+            _bus.Execute(sizeCmd);
+        }
+
+        InvalidateLayoutAndVisual();
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    // ── AV-HANDLES: pointer-driven drag test seams ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Test seam: begin a drag on the current floating selection at page-space <paramref name="start"/>.
+    /// The handle under that point decides whether the drag moves or resizes the object. Returns the
+    /// resolved handle (<see cref="FloatHandle.None"/> if the point is off the selection, in which case
+    /// no drag starts). Mirrors what <see cref="OnPointerPressed"/> does for a real press.
+    /// </summary>
+    public FloatHandle BeginFloatDrag(Point start)
+    {
+        if (_selectedFloating is not { } sel) return FloatHandle.None;
+        var handle = HitTestHandle(start);
+        if (handle == FloatHandle.None) return FloatHandle.None;
+        _floatDragState = (start, sel.Rect, handle);
+        return handle;
+    }
+
+    /// <summary>
+    /// Test seam: drive an in-flight drag (started via <see cref="BeginFloatDrag"/>) to page-space
+    /// <paramref name="to"/>, optionally holding <paramref name="shift"/> for aspect-locked corner
+    /// resizing. Updates the transient selection rect exactly as live pointer movement would. No-op
+    /// when no drag is active.
+    /// </summary>
+    public void SimulateDragTo(Point to, bool shift = false)
+    {
+        UpdateFloatDrag(to, shift);
+    }
+
+    /// <summary>
+    /// Test seam: release an in-flight drag at page-space <paramref name="to"/>, committing the move or
+    /// resize through the undoable command bus (a single undo reverts it). No-op when no drag is active.
+    /// </summary>
+    public void EndFloatDrag(Point to, bool shift = false)
+    {
+        CommitFloatDrag(to, shift);
+    }
+
+    /// <summary>
+    /// Test seam: cancel an in-flight drag, reverting the transient rect to the drag-start geometry
+    /// without touching the model — exactly what pressing Esc mid-drag does.
+    /// </summary>
+    public bool CancelFloatDrag()
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+            return false;
+        _selectedFloating = sel with { Rect = drag.FloatRect };
+        _floatDragState = null;
+        InvalidateVisual();
+        return true;
+    }
+
+    /// <summary>
+    /// Updates the transient selection rect for an in-flight drag (move or resize). Shared by the live
+    /// pointer handler and the <see cref="SimulateDragTo"/> test seam.
+    /// </summary>
+    private void UpdateFloatDrag(Point point, bool shift)
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel) return;
+        Rect newRect;
+        if (drag.Handle == FloatHandle.Body)
+        {
+            var dx = point.X - drag.PointerDown.X;
+            var dy = point.Y - drag.PointerDown.Y;
+            newRect = new Rect(drag.FloatRect.X + dx, drag.FloatRect.Y + dy,
+                               drag.FloatRect.Width, drag.FloatRect.Height);
+        }
+        else
+        {
+            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift);
+        }
+        _selectedFloating = sel with { Rect = newRect };
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Commits an in-flight drag at the release point: a move routes to
+    /// <see cref="CommitFloatDragMove"/>; a resize routes to <see cref="CommitFloatResize"/>. Below a
+    /// 1px threshold the drag is treated as a plain click (no model change). Clears the drag state.
+    /// </summary>
+    private void CommitFloatDrag(Point releasePoint, bool shift)
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+        {
+            _floatDragState = null;
+            return;
+        }
+
+        if (drag.Handle == FloatHandle.Body)
+        {
+            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
+            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
+            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
+                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
+        }
+        else
+        {
+            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift);
+            if (Math.Abs(newRect.Width - drag.FloatRect.Width) >= 1 ||
+                Math.Abs(newRect.Height - drag.FloatRect.Height) >= 1)
+                CommitFloatResize(sel.BlockIndex, sel.RunIndex, sel.Kind, drag.FloatRect, newRect);
+        }
+        _floatDragState = null;
     }
 
     /// <summary>
@@ -6706,24 +6993,39 @@ public sealed class DocumentView : Control
             return;
         }
 
+        // AV-HANDLES: when a float is already selected, a press on one of its 8 resize handles starts a
+        // resize drag (checked BEFORE the float hit-test so the handle squares, which sit on/outside the
+        // object's edge, win over whatever object lies under them).
+        if (!shift && _selectedFloating is { } curSel)
+        {
+            var handle = HitTestHandle(point);
+            if (handle is not FloatHandle.None and not FloatHandle.Body)
+            {
+                _floatDragState = (point, curSel.Rect, handle);
+                Cursor = CursorForHandle(handle);
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+        }
+
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
         if (!shift && TryHitTestFloat(point, out var floatHit))
         {
-            if (_selectedFloating.HasValue &&
-                _selectedFloating.Value.BlockIndex == floatHit.BlockIndex &&
-                _selectedFloating.Value.RunIndex   == floatHit.RunIndex)
-            {
-                // Second click on the same float: start drag-move.
-                _floatDragState = (point, floatHit.Rect);
-            }
-            else
+            if (!_selectedFloating.HasValue ||
+                _selectedFloating.Value.BlockIndex != floatHit.BlockIndex ||
+                _selectedFloating.Value.RunIndex   != floatHit.RunIndex)
             {
                 // New selection.
                 _selectedFloating = floatHit;
-                _floatDragState   = (point, floatHit.Rect);
                 RaiseFloatingSelectionChangedIfIdentityChanged();
             }
+            // AV-HANDLES: a press inside the (now-)selected float's body starts a drag-move. Whether it
+            // becomes a real move or stays a plain selecting click is decided on release by the 1px
+            // threshold in CommitFloatDrag.
+            _floatDragState = (point, _selectedFloating!.Value.Rect, FloatHandle.Body);
+            Cursor = CursorForHandle(FloatHandle.Body);
             InvalidateVisual();
             e.Handled = true;
             return;
@@ -6734,6 +7036,7 @@ public sealed class DocumentView : Control
         {
             _selectedFloating = null;
             _floatDragState   = null;
+            Cursor = Cursor.Default;
             RaiseFloatingSelectionChangedIfIdentityChanged();
             InvalidateVisual();
         }
@@ -6782,25 +7085,25 @@ public sealed class DocumentView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            return;
-
         var point = e.GetPosition(this);
 
-        // AV-FLSEL: drag-move the selected floating object.
-        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            var dx = (point.X - drag.PointerDown.X) / PxPerPoint;
-            var dy = (point.Y - drag.PointerDown.Y) / PxPerPoint;
-            if (Math.Abs(dx) >= 1 || Math.Abs(dy) >= 1)
+            // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
+            // advertise their resize direction (and the body shows a move cursor).
+            if (_selectedFloating is not null && _floatDragState is null)
             {
-                // Apply the visual displacement without committing — update the stored Rect so handles track.
-                var newRect = new Rect(drag.FloatRect.X + dx * PxPerPoint,
-                                       drag.FloatRect.Y + dy * PxPerPoint,
-                                       drag.FloatRect.Width, drag.FloatRect.Height);
-                _selectedFloating = sel with { Rect = newRect };
+                var hover = HitTestHandle(point);
+                Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
-            InvalidateVisual();
+            return;
+        }
+
+        // AV-HANDLES: live drag (move or resize) of the selected floating object.
+        if (_floatDragState is { })
+        {
+            var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            UpdateFloatDrag(point, shift);
             e.Handled = true;
             return;
         }
@@ -6849,19 +7152,16 @@ public sealed class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        // AV-FLSEL: commit drag-move when the left button is released.
-        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        // AV-HANDLES: commit the in-flight drag (move or resize) when the left button is released.
+        // _selectedFloating is refreshed via the commit path's relayout; the cursor is reset to the
+        // hover cursor for wherever the pointer ended up.
+        if (_floatDragState is not null)
         {
-            var releasePoint = e.GetPosition(this);
-            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
-            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
-            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
-            {
-                // Commit the move: update the model offsets through the command bus.
-                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
-            }
-            _floatDragState = null;
-            // Note: _selectedFloating is refreshed via InvalidateLayoutAndVisual in the commit path.
+            var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            CommitFloatDrag(e.GetPosition(this), shift);
+            Cursor = _selectedFloating is null
+                ? Cursor.Default
+                : CursorForHandle(HitTestHandle(e.GetPosition(this)));
         }
     }
 
@@ -6887,8 +7187,17 @@ public sealed class DocumentView : Control
             switch (e.Key)
             {
                 case Key.Escape:
+                    // AV-HANDLES: Esc mid-drag cancels the drag (reverts the transient rect) and KEEPS
+                    // the selection; a second Esc (no drag in flight) then deselects.
+                    if (CancelFloatDrag())
+                    {
+                        Cursor = Cursor.Default;
+                        e.Handled = true;
+                        return;
+                    }
                     _selectedFloating = null;
                     _floatDragState   = null;
+                    Cursor = Cursor.Default;
                     RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
                     e.Handled = true;
