@@ -2104,7 +2104,7 @@ public static class PptxPackageReader
                         long.TryParse(alphaEl.Attribute("val")?.Value,
                             System.Globalization.NumberStyles.Integer,
                             System.Globalization.CultureInfo.InvariantCulture, out var av))
-                        alpha = (byte)Math.Clamp((int)(av / 100000.0 * 255), 0, 255);
+                        alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
                 if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = blurEmu / 12700.0;
