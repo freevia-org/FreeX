@@ -91,8 +91,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(box, label);
         AutomationProperties.SetAutomationId(box, "CommentTextBox");
 
-        var ok = new Button { Content = "OK", IsDefault = true, MinWidth = 84, Padding = new Thickness(10, 4) };
-        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 84, Padding = new Thickness(10, 4), Margin = new Thickness(8, 0, 0, 0) };
+        var ok = new Button { Content = "OK", IsDefault = true };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+        ApplyDialogButtonChrome(ok, 84, isDefault: true);
+        ApplyDialogButtonChrome(cancel, 84);
 
         var dialog = new Window
         {

@@ -232,6 +232,22 @@ public sealed class MainWindow : Window
         _findReplaceDialog.Show(this);
     }
 
+    /// <summary>
+    /// Opens the Font dialog (modal). Pre-populates from the caret formatting; on OK applies the
+    /// changes to the selection via <see cref="DocumentView"/> formatting methods.
+    /// Wired to <c>freew.font-dialog</c> ribbon command (Home → Font group).
+    /// </summary>
+    private Task OpenFontDialogAsync() =>
+        FontDialog.ShowAndApplyAsync(this, _editor);
+
+    /// <summary>
+    /// Opens the Paragraph dialog (modal). Pre-populates from the current paragraph's formatting;
+    /// on OK applies the changes via <see cref="DocumentView"/> paragraph methods.
+    /// Wired to <c>freew.paragraph-dialog</c> ribbon command (Home → Paragraph group).
+    /// </summary>
+    private Task OpenParagraphDialogAsync() =>
+        ParagraphDialog.ShowAndApplyAsync(this, _editor);
+
     private static TextDocument LoadStartupDocument(IReadOnlyList<string> startupArguments)
     {
         var path = startupArguments.FirstOrDefault(a => a.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) && File.Exists(a));
@@ -264,6 +280,8 @@ public sealed class MainWindow : Window
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
+            OpenFontDialog:      () => _ = OpenFontDialogAsync(),
+            OpenParagraphDialog: () => _ = OpenParagraphDialogAsync(),
             ApplyZoom: (absolute, delta) =>
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
@@ -271,9 +289,11 @@ public sealed class MainWindow : Window
             });
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        var tableContext = new TableRibbonContextSource(_editor);
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             FreeWRibbon.BuildDefinition(),
             registry,
+            contextSource: tableContext,
             afterExecute: () => _editor.Focus());
         HasToolbar = true;
         return new Border

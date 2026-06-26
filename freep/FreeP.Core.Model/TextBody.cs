@@ -252,6 +252,14 @@ public sealed class Paragraph
 
     public BulletKind BulletKind { get; set; } = BulletKind.None;
 
+    /// <summary>
+    /// True when the paragraph contains an explicit <c>a:buNone</c> element, meaning the
+    /// paragraph actively suppresses any bullet inherited from lstStyle / master.
+    /// False (the default) means no bullet element was present — the paragraph does NOT
+    /// suppress inheritance; the compositor will re-inherit the style bullet normally.
+    /// </summary>
+    public bool BulletSuppressed { get; set; }
+
     /// <summary>The bullet character when <see cref="BulletKind"/> == Char (e.g. "•").</summary>
     public string? BulletChar { get; set; }
 

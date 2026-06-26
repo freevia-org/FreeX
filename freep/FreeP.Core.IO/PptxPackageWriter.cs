@@ -2404,6 +2404,23 @@ public static class PptxPackageWriter
         if (para.MarginLeftEmu.HasValue) { pPr.Add(new XAttribute("marL", para.MarginLeftEmu.Value)); hasPPr = true; }
         if (para.IndentEmu.HasValue)     { pPr.Add(new XAttribute("indent", para.IndentEmu.Value)); hasPPr = true; }
 
+        // BU2: CT_TextParagraphProperties child ORDER per ECMA-376:
+        //   lnSpc → spcBef → spcAft → bullet group (buClr/buSz/buFont/buNone/buAutoNum/buChar)
+        //   → tabLst → defRPr
+        // spcBef/spcAft must come BEFORE the bullet group elements.
+        if (para.SpaceBeforePt.HasValue)
+        {
+            pPr.Add(new XElement(A + "spcBef",
+                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceBeforePt.Value * 100)))));
+            hasPPr = true;
+        }
+        if (para.SpaceAfterPt.HasValue)
+        {
+            pPr.Add(new XElement(A + "spcAft",
+                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceAfterPt.Value * 100)))));
+            hasPPr = true;
+        }
+
         switch (para.BulletKind)
         {
             case BulletKind.None:
@@ -2442,19 +2459,6 @@ public static class PptxPackageWriter
                 var autoNumEl = new XElement(A + "buAutoNum", new XAttribute("type", autoNumTypeStr));
                 if (para.AutoNumStartAt != 1) autoNumEl.Add(new XAttribute("startAt", para.AutoNumStartAt));
                 pPr.Add(autoNumEl); hasPPr = true; break;
-        }
-
-        if (para.SpaceBeforePt.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcBef",
-                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceBeforePt.Value * 100)))));
-            hasPPr = true;
-        }
-        if (para.SpaceAfterPt.HasValue)
-        {
-            pPr.Add(new XElement(A + "spcAft",
-                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceAfterPt.Value * 100)))));
-            hasPPr = true;
         }
 
         // Wave 18B: tab stops (a:tabLst)

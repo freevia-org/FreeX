@@ -334,4 +334,205 @@ public sealed class DocumentViewListEditTests
         if (!ran) return;
         text.Should().Be("A\tB", "Tab in non-list para inserts a literal tab");
     }
+
+    // ── 12. BS1: per-level counter — demoted item restarts at 1, parent continues ────────────────
+
+    /// <summary>
+    /// BS1: A(level 0)=1, B(level 0)=2, then C is demoted to level 1 → C should be "1." (restarted
+    /// at level 1), and the next level-0 item D should be "3." (parent counter continues).
+    /// </summary>
+    [Fact]
+    public async Task BS1_demoted_item_restarts_at_one_and_parent_continues()
+    {
+        string? markerA = null, markerB = null, markerC = null, markerD = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            // A: level 0 → should be "1."
+            doc.Blocks.Add(new Paragraph("A") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            // B: level 0 → should be "2."
+            doc.Blocks.Add(new Paragraph("B") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            // C: level 1 (demoted) → should be "1." (restarts under B)
+            doc.Blocks.Add(new Paragraph("C") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 1 } });
+            // D: level 0 → should be "3." (parent counter was at 2, continues to 3)
+            doc.Blocks.Add(new Paragraph("D") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            markerA = view.GetListMarkerForBlockPublic(0);
+            markerB = view.GetListMarkerForBlockPublic(1);
+            markerC = view.GetListMarkerForBlockPublic(2);
+            markerD = view.GetListMarkerForBlockPublic(3);
+        });
+
+        if (!ran) return;
+        markerA.Should().Be("1.", "first level-0 item is 1");
+        markerB.Should().Be("2.", "second level-0 item is 2");
+        markerC.Should().Be("1.", "demoted level-1 item restarts at 1");
+        markerD.Should().Be("3.", "level-0 item after a demoted child continues from 2 → 3");
+    }
+
+    // ── 13. BS2: MultiLevel list produces dotted accumulated markers ─────────────────────────────
+
+    /// <summary>
+    /// BS2: A MultiLevel list at level 0 → "1.", level 1 → "1.1.", level 2 → "1.1.1.", then
+    /// a second level-0 item → "2.", and a new level-1 under it → "2.1.".
+    /// </summary>
+    [Fact]
+    public async Task BS2_multilevel_list_produces_dotted_markers()
+    {
+        string? m0 = null, m1 = null, m2 = null, m3 = null, m4 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("L0-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("L1-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 } });
+            doc.Blocks.Add(new Paragraph("L2-A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 2 } });
+            doc.Blocks.Add(new Paragraph("L0-B") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("L1-B") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 1 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+            m3 = view.GetListMarkerForBlockPublic(3);
+            m4 = view.GetListMarkerForBlockPublic(4);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.", "level 0 → 1.");
+        m1.Should().Be("1.1.", "level 1 under first level-0 → 1.1.");
+        m2.Should().Be("1.1.1.", "level 2 under 1.1 → 1.1.1.");
+        m3.Should().Be("2.", "second level-0 item → 2. (level-1 and deeper reset)");
+        m4.Should().Be("2.1.", "level-1 under second level-0 → 2.1.");
+    }
+
+    // ── 14. BS3: numbered list continues across an interleaved sub-bullet ────────────────────────
+
+    /// <summary>
+    /// BS3: Number 1 (level 0), then a Bullet (level 1), then Number again (level 0) → second
+    /// number should be "2.", not "1.". The bullet does not reset the level-0 counter.
+    /// </summary>
+    [Fact]
+    public async Task BS3_numbered_list_continues_across_interleaved_bullet()
+    {
+        string? markerFirst = null, markerSecond = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            // First numbered item: level 0 → "1."
+            doc.Blocks.Add(new Paragraph("One") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            // Interleaved sub-bullet: should NOT reset numbered counters.
+            doc.Blocks.Add(new Paragraph("SubBullet") { Formatting = new ParagraphFormatting { ListKind = ListKind.Bullet, ListLevel = 1 } });
+            // Second numbered item: level 0 → "2." (continues, not "1.")
+            doc.Blocks.Add(new Paragraph("Two") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            markerFirst  = view.GetListMarkerForBlockPublic(0);
+            markerSecond = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        markerFirst.Should().Be("1.", "first numbered item is 1.");
+        markerSecond.Should().Be("2.", "numbered list continues as 2. after interleaved sub-bullet");
+    }
+
+    // ── 16. BT1: numbered list continues across an intervening Table block ───────────────────────
+
+    /// <summary>
+    /// BT1 regression: numbered para (level 0) → Table block → numbered para (level 0).
+    /// The second numbered paragraph must be "2." (counters preserved across the table),
+    /// matching both Word behaviour and the render loop which leaves levelCounters untouched
+    /// when processing a Table block.
+    /// </summary>
+    [Fact]
+    public async Task BT1_numbered_list_continues_across_intervening_table()
+    {
+        string? markerFirst = null, markerSecond = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Block 0: first numbered item → "1."
+            doc.Blocks.Add(new Paragraph("One")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            // Block 1: a Table — must NOT reset numbered-list counters (Word behaviour).
+            var tbl = new Table();
+            var row = new TableRow();
+            row.Cells.Add(new TableCell("Cell"));
+            tbl.Rows.Add(row);
+            tbl.ColumnWidthsPt.Add(120.0);
+            doc.Blocks.Add(tbl);
+
+            // Block 2: second numbered item → "2." (continues from before the table).
+            doc.Blocks.Add(new Paragraph("Two")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            markerFirst  = view.GetListMarkerForBlockPublic(0);
+            markerSecond = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        markerFirst.Should().Be("1.", "first numbered item is 1.");
+        markerSecond.Should().Be("2.", "numbered list continues as 2. after an intervening Table block");
+    }
+
+    // ── 15. Flat single-level list still numbers 1,2,3 (no regression) ──────────────────────────
+
+    /// <summary>
+    /// Regression guard: a simple flat Number list at level 0 must still produce sequential
+    /// markers "1.", "2.", "3." — the per-level counter array must not break this.
+    /// </summary>
+    [Fact]
+    public async Task Flat_single_level_list_numbers_sequentially_no_regression()
+    {
+        string? m0 = null, m1 = null, m2 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Alpha")   { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Beta")    { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Gamma")   { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.", "first item is 1.");
+        m1.Should().Be("2.", "second item is 2.");
+        m2.Should().Be("3.", "third item is 3.");
+    }
 }

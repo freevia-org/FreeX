@@ -139,6 +139,16 @@ public sealed partial class XlsxFileAdapter
                         xlCell.FormulaA1 = formula;
                     }
                 }
+                else if (cell.Value is TextValue &&
+                         sheet.RichTextRuns.TryGetValue(new CellAddress(sheet.Id, row, col), out var richRuns) &&
+                         richRuns is { Count: > 0 })
+                {
+                    // Full-save rich-text path: write runs via ClosedXML's IXLRichText API so
+                    // that per-run formatting (bold, subscript, color, …) is preserved in the
+                    // shared-string table.  The patch-save path is mutually exclusive (it exits
+                    // early at line 80-84 before this ClosedXML block is ever reached).
+                    ApplyRichTextRuns(xlCell, richRuns);
+                }
                 else if (cell.Value is not BlankValue)
                 {
                     xlCell.Value = XlsxClosedXmlCellMapper.MapValueInverse(cell.Value);
@@ -501,4 +511,83 @@ public sealed partial class XlsxFileAdapter
                 xlStyleValueCache[styleId] = captured;
         }
     }
+
+    /// <summary>
+    /// Writes per-run rich-text formatting on <paramref name="xlCell"/> via ClosedXML's
+    /// <see cref="IXLRichText"/> API.  Used by the full-save (ClosedXML) path only — the
+    /// patch-save path exits early before this code is reached, so there is no double-apply risk.
+    /// </summary>
+    /// <remarks>
+    /// ClosedXML serialises rich-text cells as shared strings (<c>t="s"</c>).  On reload
+    /// <see cref="XlsxRichRunLoader"/> reads both inline-string and shared-string sources, so the
+    /// round-trip is fully transparent to the rest of the stack.
+    ///
+    /// Limitation: ClosedXML materialises default font properties (Calibri 11pt black) into every
+    /// run even when the model run has <c>null</c> (inherit-from-cell).  After a full-save the
+    /// reloaded run will carry explicit FontName/FontSize/FontColor values instead of <c>null</c>.
+    /// Theme and indexed colors ARE round-tripped faithfully via
+    /// <c>XLColor.FromTheme</c>/<c>XLColor.FromIndex</c>.
+    /// </remarks>
+    private static void ApplyRichTextRuns(
+        IXLCell xlCell,
+        IReadOnlyList<CellTextRun> runs)
+    {
+        var richText = xlCell.CreateRichText();
+
+        foreach (var run in runs)
+        {
+            var xlRun = richText.AddText(run.Text);
+
+            // Only set properties that are explicitly specified in the model run (non-null).
+            // Null means "inherit from cell style" — ClosedXML will use its workbook default
+            // when unset, which is the closest approximation available.
+            if (run.Bold is { } bold)
+                xlRun.Bold = bold;
+
+            if (run.Italic is { } italic)
+                xlRun.Italic = italic;
+
+            if (run.Underline is { } underline)
+                xlRun.Underline = underline
+                    ? XLFontUnderlineValues.Single
+                    : XLFontUnderlineValues.None;
+
+            if (run.Strikethrough is { } strike)
+                xlRun.Strikethrough = strike;
+
+            if (run.FontName is { } fontName)
+                xlRun.FontName = fontName;
+
+            if (run.FontSize is { } fontSize)
+                xlRun.FontSize = fontSize;
+
+            if (run.FontColor is { } runColor)
+                xlRun.FontColor = MapRunColorToXLColor(runColor);
+
+            xlRun.VerticalAlignment = run.VertAlign switch
+            {
+                CellTextRunVertAlign.Superscript => XLFontVerticalTextAlignmentValues.Superscript,
+                CellTextRunVertAlign.Subscript   => XLFontVerticalTextAlignmentValues.Subscript,
+                _                                => XLFontVerticalTextAlignmentValues.Baseline,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Converts a <see cref="CellRunColor"/> to an <see cref="XLColor"/>, preserving theme
+    /// and indexed references so they survive the round-trip without being flattened to RGB.
+    /// </summary>
+    private static XLColor MapRunColorToXLColor(CellRunColor color) => color.Kind switch
+    {
+        CellRunColorKind.Theme =>
+            color.Tint is { } tint && Math.Abs(tint) > 0.000001
+                ? XLColor.FromTheme((XLThemeColor)color.ThemeIndex, tint)
+                : XLColor.FromTheme((XLThemeColor)color.ThemeIndex),
+        CellRunColorKind.Indexed =>
+            XLColor.FromIndex(color.IndexedIndex),
+        CellRunColorKind.Auto =>
+            XLColor.FromArgb(0, 0, 0, 0),  // auto → transparent black; best available in ClosedXML
+        _ => // Rgb
+            XLColor.FromArgb(255, color.Rgb.R, color.Rgb.G, color.Rgb.B),
+    };
 }

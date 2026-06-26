@@ -576,10 +576,11 @@ public static class SlideCompositor
 
         SrgbColor[] seriesColors;
 
-        if (chart.ChartType == ChartType.Pie && chart.Series.Count > 0)
+        if (chart.ChartType is ChartType.Pie or ChartType.Doughnut && chart.Series.Count > 0)
         {
-            // For pie charts emit one color per data POINT (cycling accent1-6) so the
-            // renderer can pick the right slice fill without re-resolving the theme.
+            // BV1: For pie AND doughnut charts emit one color per data POINT (cycling accent1-6)
+            // so the renderer can pick the right slice fill without re-resolving the theme.
+            // Doughnut charts (like pie) color each slice by point, not per-series.
             var firstSeries = chart.Series[0];
             int ptCount = firstSeries.Values.Count;
             seriesColors = new SrgbColor[ptCount];
@@ -1069,8 +1070,10 @@ public static class SlideCompositor
             int? effectiveBulletSizePct = para.BulletSizePct ?? inheritedStyle?.BulletSizePct;
             string? effectiveBulletFont = para.BulletFontFamily ?? inheritedStyle?.BulletFontFamily;
 
-            // When paragraph has no explicit bullet set, check inherited style.
-            if (effectiveBulletKind == BulletKind.None && inheritedStyle?.BulletKind.HasValue == true)
+            // BU1: When paragraph has an explicit <a:buNone/>, BulletSuppressed is true — do NOT
+            // re-inherit the style bullet; the paragraph actively opts out of any inherited bullet.
+            // Only inherit when the bullet element is simply absent (BulletSuppressed == false).
+            if (!para.BulletSuppressed && effectiveBulletKind == BulletKind.None && inheritedStyle?.BulletKind.HasValue == true)
             {
                 effectiveBulletKind = inheritedStyle.BulletKind!.Value;
                 if (effectiveBulletKind == BulletKind.Char && effectiveBulletChar is null)
@@ -1115,7 +1118,10 @@ public static class SlideCompositor
 
                 case BulletKind.Auto:
                 {
-                    int level = para.Level;
+                    // BU3: clamp level to valid array range [0,8] as defense-in-depth.
+                    // The reader also clamps, but this guard catches programmatically-set
+                    // out-of-range values (e.g. Level=9 set directly on the model).
+                    int level = Math.Clamp(para.Level, 0, 8);
                     // Reset inner levels when we move to an outer level.
                     if (level < lastAutoNumLevel)
                         for (int li = level + 1; li < 9; li++) autoNumCounters[li] = 0;

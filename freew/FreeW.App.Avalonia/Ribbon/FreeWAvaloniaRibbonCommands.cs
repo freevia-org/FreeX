@@ -98,6 +98,8 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterFontColorPalette(r, editor);
 
         r.Register("freew.change-case",   new RelayCommand(editor.ChangeCase));
+        // Dialog launchers — open modal dialogs via shell callbacks (no direct editor method).
+        r.Register("freew.font-dialog",      new RelayCommand(callbacks.OpenFontDialog));
 
         // ── Paragraph ────────────────────────────────────────────────────────
         r.Register("freew.bullets",          new RelayCommand(() => editor.ToggleList(ListKind.Bullet)));
@@ -125,6 +127,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.line-spacing-115",  new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.15)));
         r.Register("freew.line-spacing-15",   new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 1.5)));
         r.Register("freew.line-spacing-2",    new RelayCommand(() => editor.SetLineSpacing(LineSpacingRule.Multiple, 2.0)));
+        // Paragraph dialog launcher.
+        r.Register("freew.paragraph-dialog",  new RelayCommand(callbacks.OpenParagraphDialog));
 
         // ── Styles ───────────────────────────────────────────────────────────
         r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
@@ -141,6 +145,58 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Insert ───────────────────────────────────────────────────────────
         r.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
+
+        // ── Table Design contextual tab ───────────────────────────────────────
+        // Table Style Options toggles — DocumentView guards no-op when outside a table.
+        r.Register("freew.table-header-row",  new RelayCommand(editor.ToggleTableHeaderRow));
+        r.Register("freew.table-banded-rows", new RelayCommand(editor.ToggleBandedRows));
+
+        // Table shading: apply a quick neutral fill. Full color picker is deferred.
+        r.Register("freew.table-shading", new RelayCommand(() => editor.SetCellShading("#D9D9D9")));
+
+        // Borders dropdown — opener no-op; sub-commands apply specific edges.
+        r.Register("freew.table-borders", new RelayCommand(() => { /* flyout opener */ }));
+        RegisterTableBorderCommands(r, editor);
+
+        // ── Table Layout contextual tab ───────────────────────────────────────
+        // Selection helpers.
+        r.Register("freew.table-select-table", new RelayCommand(() =>
+        {
+            if (editor.CellCaretInfo is { } cc)
+                editor.SetCellBlockSelection(cc.TableBlock, 0, 0, int.MaxValue, int.MaxValue);
+        }));
+        r.Register("freew.table-select-row", new RelayCommand(() =>
+        {
+            if (editor.CellCaretInfo is { } cc)
+                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, int.MaxValue);
+        }));
+        r.Register("freew.table-select-col", new RelayCommand(() =>
+        {
+            if (editor.CellCaretInfo is { } cc)
+                editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, int.MaxValue, cc.Col);
+        }));
+        r.Register("freew.table-select-cell", new RelayCommand(() =>
+        {
+            if (editor.CellCaretInfo is { } cc)
+                editor.SetCellBlockSelection(cc.TableBlock, cc.Row, cc.Col, cc.Row, cc.Col);
+        }));
+
+        // Row / column mutations.
+        r.Register("freew.table-insert-above",     new RelayCommand(editor.InsertTableRowAbove));
+        r.Register("freew.table-insert-below",     new RelayCommand(editor.InsertTableRowBelow));
+        r.Register("freew.table-insert-col-left",  new RelayCommand(editor.InsertTableColumnLeft));
+        r.Register("freew.table-insert-col-right", new RelayCommand(editor.InsertTableColumnRight));
+        r.Register("freew.table-delete-row",       new RelayCommand(editor.DeleteTableRow));
+        r.Register("freew.table-delete-col",       new RelayCommand(editor.DeleteTableColumn));
+        r.Register("freew.table-delete",           new RelayCommand(() =>
+        {
+            if (editor.CellCaretInfo is { } cc)
+                editor.DeleteTableBlock(cc.TableBlock);
+        }));
+
+        // Merge / split.
+        r.Register("freew.table-merge-cells", new RelayCommand(editor.MergeSelectedCells));
+        r.Register("freew.table-split-cell",  new RelayCommand(() => editor.SplitCurrentCell()));
 
         // ── View ─────────────────────────────────────────────────────────────
         r.Register("freew.printlayout",       new RelayCommand(callbacks.SetPrintLayout));
@@ -182,5 +238,25 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.font-color.dark-blue", "#00008B");
         Add(r, editor, "freew.font-color.purple",    "#7030A0");
         Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+    }
+
+    /// <summary>
+    /// Registers the per-edge sub-commands for the Table Borders dropdown.
+    /// Each command calls <see cref="DocumentView.SetCellBorders"/> with the appropriate
+    /// <see cref="CellBorderEdges"/> flag. The "No Border" entry clears all edges.
+    /// </summary>
+    private static void RegisterTableBorderCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
+            reg.Register(id, new RelayCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
+
+        Add(r, editor, "freew.table-borders.all",     CellBorderEdges.All);
+        Add(r, editor, "freew.table-borders.outside", CellBorderEdges.Outside);
+        Add(r, editor, "freew.table-borders.inside",  CellBorderEdges.Inside);
+        Add(r, editor, "freew.table-borders.none",    CellBorderEdges.All, clear: true);
+        Add(r, editor, "freew.table-borders.top",     CellBorderEdges.Top);
+        Add(r, editor, "freew.table-borders.bottom",  CellBorderEdges.Bottom);
+        Add(r, editor, "freew.table-borders.left",    CellBorderEdges.Left);
+        Add(r, editor, "freew.table-borders.right",   CellBorderEdges.Right);
     }
 }

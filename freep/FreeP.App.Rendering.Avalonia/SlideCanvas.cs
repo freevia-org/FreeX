@@ -1149,8 +1149,9 @@ public sealed class SlideCanvas : Control
             double total = values.Sum();
             if (total <= 0) continue;
 
-            double outerR = rOut - si * (ringW + ringGap);
-            double innerR = Math.Max(0, outerR - ringW);
+            // BV3: si=0 → innermost ring (nearest hole); si=serCount-1 → outermost (matches PowerPoint order)
+            double innerR = Math.Max(0, rIn + si * (ringW + ringGap));
+            double outerR = innerR + ringW;
             double startAngle = -Math.PI / 2;
 
             for (int pi = 0; pi < values.Count; pi++)

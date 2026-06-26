@@ -344,4 +344,174 @@ public sealed class BulletsAutofitTests
         rtBody.FontScalePPT.Should().Be(62500);
         rtBody.LnSpcReductionPPT.Should().Be(20000);
     }
+
+    // ─── BU1: explicit buNone suppresses inherited bullet ─────────────────────
+
+    /// <summary>
+    /// BU1: A paragraph with BulletSuppressed=true (explicit a:buNone) must NOT inherit
+    /// the bullet from the master's OtherStyle even when the style has BulletKind.Char.
+    /// </summary>
+    [Fact]
+    public void BU1_BulletSuppressed_True_DoesNotInheritStyleBullet()
+    {
+        var p = MakePresentation();
+
+        // Seed the master's OtherStyle level 0 with a char bullet — simulates lstStyle inheritance.
+        var master = p.Masters[0];
+        master.TextStyles ??= new MasterTextStyles();
+        master.TextStyles.OtherStyle[0] = new TextStyleLevel
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "•"
+        };
+
+        var body = new TextBody();
+        // Paragraph with explicit buNone — BulletSuppressed prevents inheritance.
+        var suppressed = new Paragraph { BulletSuppressed = true };
+        suppressed.Runs.Add(new Run { Text = "No bullet", FontSizePt = 18 });
+        body.Paragraphs.Add(suppressed);
+
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        var layout = ComposeText(body, p);
+
+        layout.Paragraphs[0].BulletKind.Should().Be(BulletKind.None,
+            "explicit buNone (BulletSuppressed) must block style inheritance");
+        layout.Paragraphs[0].BulletText.Should().BeEmpty(
+            "no bullet text when suppressed");
+    }
+
+    /// <summary>
+    /// BU1 regression: A paragraph with NO bullet element (BulletSuppressed=false, the default)
+    /// MUST still inherit the style bullet — this is the existing behavior that must not regress.
+    /// </summary>
+    [Fact]
+    public void BU1_BulletSuppressed_False_StillInheritsStyleBullet()
+    {
+        var p = MakePresentation();
+
+        var master = p.Masters[0];
+        master.TextStyles ??= new MasterTextStyles();
+        master.TextStyles.OtherStyle[0] = new TextStyleLevel
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "▶"
+        };
+
+        var body = new TextBody();
+        // Paragraph with NO bullet element set (BulletSuppressed defaults to false).
+        var inheriting = new Paragraph(); // BulletSuppressed = false by default
+        inheriting.Runs.Add(new Run { Text = "Should inherit bullet", FontSizePt = 18 });
+        body.Paragraphs.Add(inheriting);
+
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        var layout = ComposeText(body, p);
+
+        layout.Paragraphs[0].BulletKind.Should().Be(BulletKind.Char,
+            "absent bullet element (not suppressed) must inherit style bullet");
+        layout.Paragraphs[0].BulletText.Should().Be("▶",
+            "inherited bullet char must flow through");
+    }
+
+    // ─── BU3: unclamped para.Level does not crash autoNumCounters ─────────────
+
+    /// <summary>
+    /// BU3: A paragraph with lvl=9 (out-of-range) must be clamped to 8 by the reader
+    /// so that autoNumCounters[level] never throws IndexOutOfRangeException.
+    /// </summary>
+    [Fact]
+    public void BU3_AutoNum_LevelClamped_ToMax8_DoesNotThrow()
+    {
+        var body = new TextBody();
+        // Manually construct a paragraph with Level=9 (as if read from a malformed PPTX).
+        // The reader now clamps to 8, but we also test the compositor guard directly.
+        var para = new Paragraph
+        {
+            Level      = 9,   // out of range — compositor must not IndexOutOfRange
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod
+        };
+        para.Runs.Add(new Run { Text = "High level", FontSizePt = 14 });
+        body.Paragraphs.Add(para);
+
+        // Must not throw.
+        var act = () => ComposeText(body);
+        act.Should().NotThrow<IndexOutOfRangeException>(
+            "para.Level=9 must be tolerated; reader clamps it and compositor guards the index");
+    }
+
+    // ─── Overloaded helper that accepts an explicit PresentationModel ──────────
+
+    private static ResolvedTextLayout ComposeText(TextBody body, PresentationModel p)
+    {
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+        var ops = SlideCompositor.Compose(p, p.Slides[0]);
+        var shapeOp = ops.OfType<DrawOp.Shape>().First();
+        return shapeOp.Text!;
+    }
+
+    // ─── BU2: CT_TextParagraphProperties child order ──────────────────────────
+
+    /// <summary>
+    /// BU2: A paragraph with spcBef + buChar must emit a:spcBef BEFORE a:buChar in
+    /// the a:pPr element.  CT_TextParagraphProperties schema order:
+    ///   lnSpc → spcBef → spcAft → bullet group (buClr/buSz/buFont/buNone/buChar/buAutoNum)
+    ///   → tabLst → defRPr.
+    /// A reversed order is flagged as a schema error by OpenXmlValidator and can cause
+    /// PowerPoint to drop the bullet or spacing when it repairs the file.
+    /// </summary>
+    [Fact]
+    public void BU2_PprChildOrder_SpcBefAndSpcAft_BeforeBuChar_InWrittenXml()
+    {
+        var body = new TextBody();
+        var para = new Paragraph
+        {
+            BulletKind    = BulletKind.Char,
+            BulletChar    = "•",
+            SpaceBeforePt = 6.0,
+            SpaceAfterPt  = 3.0,
+        };
+        para.Runs.Add(new Run { Text = "Bullet with spacing", FontSizePt = 18 });
+        body.Paragraphs.Add(para);
+
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var ms = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(p, ms);
+        var bytes = ms.ToArray();
+
+        // Inspect a:pPr child element order from the raw slide ZIP entry.
+        using var zip = new System.IO.Compression.ZipArchive(
+            new System.IO.MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        slideEntry.Should().NotBeNull("slide XML entry must exist in the PPTX");
+        using var entryStream = slideEntry!.Open();
+        var doc = System.Xml.Linq.XDocument.Load(entryStream);
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var pPr = doc.Descendants(a + "pPr").FirstOrDefault();
+        pPr.Should().NotBeNull("a:pPr must be written when spacing or bullets are set");
+
+        var childNames = pPr!.Elements().Select(e => e.Name.LocalName).ToList();
+        var spcBefIdx = childNames.IndexOf("spcBef");
+        var spcAftIdx = childNames.IndexOf("spcAft");
+        var buCharIdx = childNames.IndexOf("buChar");
+
+        spcBefIdx.Should().BeGreaterThanOrEqualTo(0, "a:spcBef must be present");
+        spcAftIdx.Should().BeGreaterThanOrEqualTo(0, "a:spcAft must be present");
+        buCharIdx.Should().BeGreaterThanOrEqualTo(0, "a:buChar must be present");
+        spcBefIdx.Should().BeLessThan(buCharIdx,
+            "BU2: a:spcBef must come BEFORE a:buChar per CT_TextParagraphProperties schema order");
+        spcAftIdx.Should().BeLessThan(buCharIdx,
+            "BU2: a:spcAft must come BEFORE a:buChar per CT_TextParagraphProperties schema order");
+        spcBefIdx.Should().BeLessThan(spcAftIdx,
+            "a:spcBef must come before a:spcAft");
+    }
 }

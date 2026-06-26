@@ -49,6 +49,20 @@ internal static class FreeWRibbon
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
 
+    private static RibbonMenu BuildTableBordersMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("All Borders",      new RibbonCommandId("freew.table-borders.all")),
+            new("Outside Borders",  new RibbonCommandId("freew.table-borders.outside")),
+            new("Inside Borders",   new RibbonCommandId("freew.table-borders.inside")),
+            new("No Border",        new RibbonCommandId("freew.table-borders.none")),
+            RibbonMenuItem.Separator(),
+            new("Top Border",       new RibbonCommandId("freew.table-borders.top")),
+            new("Bottom Border",    new RibbonCommandId("freew.table-borders.bottom")),
+            new("Left Border",      new RibbonCommandId("freew.table-borders.left")),
+            new("Right Border",     new RibbonCommandId("freew.table-borders.right")),
+        });
+
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
             .Tab("file", "File", "F", tab =>
@@ -83,6 +97,7 @@ internal static class FreeWRibbon
                     g.Button("freew.clear-formatting", "Clear");
                     g.Dropdown("freew.font-color", "Font Color", BuildFontColorMenu());
                     g.Button("freew.change-case",     "Aa");
+                    g.Button("freew.font-dialog",     "Font…");
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>
                 {
@@ -101,6 +116,7 @@ internal static class FreeWRibbon
                     g.Button("freew.line-spacing-15",   "1.5×");
                     g.Button("freew.line-spacing-2",    "2×");
                     g.Toggle("freew.show-hide-para",    "¶");
+                    g.Button("freew.paragraph-dialog",  "Paragraph…");
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
                 {
@@ -148,6 +164,49 @@ internal static class FreeWRibbon
                 {
                     g.Toggle("freew.reviewingpane", "Reviewing Pane");
                 }))
+            // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
+            .ContextualTab("table-design", "Table Design",
+                new RibbonTabContext(TableRibbonContextSource.TableContextKey, "Table Tools", RibbonContextColor.Teal),
+                tab =>
+                {
+                    tab.Group("table-style-options", "Table Style Options", null, 100, g =>
+                    {
+                        g.Toggle("freew.table-header-row",   "Header Row");
+                        g.Toggle("freew.table-banded-rows",  "Banded Rows");
+                    });
+                    tab.Group("table-style", "Table Style", null, 90, g =>
+                    {
+                        g.Button("freew.table-shading", "Shading");
+                        g.Dropdown("freew.table-borders", "Borders", BuildTableBordersMenu());
+                    });
+                })
+            .ContextualTab("table-layout", "Table Layout",
+                new RibbonTabContext(TableRibbonContextSource.TableContextKey, "Table Tools", RibbonContextColor.Teal),
+                tab =>
+                {
+                    tab.Group("table-select", "Table", null, 110, g =>
+                    {
+                        g.Button("freew.table-select-table", "Select Table");
+                        g.Button("freew.table-select-row",   "Select Row");
+                        g.Button("freew.table-select-col",   "Select Column");
+                        g.Button("freew.table-select-cell",  "Select Cell");
+                    });
+                    tab.Group("table-rows-cols", "Rows & Columns", null, 100, g =>
+                    {
+                        g.Button("freew.table-insert-above",     "Insert Above");
+                        g.Button("freew.table-insert-below",     "Insert Below");
+                        g.Button("freew.table-insert-col-left",  "Insert Left");
+                        g.Button("freew.table-insert-col-right", "Insert Right");
+                        g.Button("freew.table-delete-row",       "Delete Row");
+                        g.Button("freew.table-delete-col",       "Delete Column");
+                        g.Button("freew.table-delete",           "Delete Table");
+                    });
+                    tab.Group("table-merge", "Merge", null, 90, g =>
+                    {
+                        g.Button("freew.table-merge-cells", "Merge Cells");
+                        g.Button("freew.table-split-cell",  "Split Cell");
+                    });
+                })
             .Build();
 
     /// <summary>
@@ -177,6 +236,10 @@ internal sealed record RibbonHostCallbacks(
     Action SetPrintLayout,
     Action SetWebLayout,
     Action SetDraftView,
+    /// <summary>Opens the Font dialog (modal); reads current caret formatting and applies on OK.</summary>
+    Action OpenFontDialog,
+    /// <summary>Opens the Paragraph dialog (modal); reads current paragraph formatting and applies on OK.</summary>
+    Action OpenParagraphDialog,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
