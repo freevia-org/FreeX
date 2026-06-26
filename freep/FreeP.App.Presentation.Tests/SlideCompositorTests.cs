@@ -1695,4 +1695,272 @@ public sealed class SlideCompositorTests
         runText.Should().Be("Custom Footer",
             "fields with non-empty cached text must always render the cache");
     }
+
+    // ─── MM3: master/layout text-style inheritance ────────────────────────────────
+
+    /// <summary>
+    /// A master bodyStyle lvl1 defining sz=2800 (28pt) should supply the font size for a body
+    /// run that has no explicit FontSizePt, instead of falling back to the hard-coded 18pt.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_NoExplicitSize_InheritsFromMasterBodyStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // bodyStyle lvl1 (index 0) defines 28pt.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 28.0 };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with NO explicit FontSizePt — should inherit 28pt from master bodyStyle.
+        para.Runs.Add(new Run { Text = "Body text" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(28.0,
+            "body run with no explicit size must inherit 28pt from master bodyStyle lvl1");
+    }
+
+    /// <summary>
+    /// A master titleStyle lvl1 with a specific font and solid color must supply
+    /// those defaults to a title run that has no explicit font or color.
+    /// </summary>
+    [Fact]
+    public void Compose_TitleRun_NoExplicitFontOrColor_InheritsFromMasterTitleStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // titleStyle lvl1 defines a specific font and red color.
+        master.TextStyles.TitleStyle[0] = new TextStyleLevel
+        {
+            LatinFont = "Arial",
+            Color = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)),
+            FontSizePt = 40.0
+        };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run has no explicit font or color — should inherit from master titleStyle.
+        para.Runs.Add(new Run { Text = "Title text" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontFamily.Should().Be("Arial",
+            "title run with no explicit font must inherit 'Arial' from master titleStyle lvl1");
+        run.Color.R.Should().Be(0xFF,
+            "title run with no explicit color must inherit red from master titleStyle lvl1");
+        run.Color.G.Should().Be(0x00);
+        run.Color.B.Should().Be(0x00);
+    }
+
+    /// <summary>
+    /// A layout placeholder's a:lstStyle overrides the master's p:txStyles for a body run.
+    /// The layout wins over the master when both define font size at the same level.
+    /// </summary>
+    [Fact]
+    public void Compose_BodyRun_LayoutLstStyleOverridesMasterBodyStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master defines 24pt for body lvl1.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 24.0 };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout placeholder has its own lstStyle overriding to 32pt.
+        var layoutLstStyle = new TextStyleLevels();
+        layoutLstStyle[0] = new TextStyleLevel { FontSizePt = 32.0 };
+        var layoutBodyPh = new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963,
+            TextBody = new TextBody { LstStyle = layoutLstStyle }
+        };
+        layout.Placeholders.Add(layoutBodyPh);
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with no explicit size — layout (32pt) must beat master (24pt).
+        para.Runs.Add(new Run { Text = "Body run" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(32.0,
+            "layout lstStyle (32pt) must override master bodyStyle (24pt)");
+    }
+
+    /// <summary>
+    /// An explicit run font size always wins over the master's inherited style.
+    /// Regression guard: explicit formatting must not be overridden by the inheritance chain.
+    /// </summary>
+    [Fact]
+    public void Compose_ExplicitRunSize_WinsOverMasterBodyStyle()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master defines 28pt for body lvl1.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { FontSizePt = 28.0 };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run WITH explicit FontSizePt=12 — must win over master's 28pt.
+        para.Runs.Add(new Run { Text = "Small text", FontSizePt = 12.0 });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontSizePt.Should().Be(12.0,
+            "explicit run FontSizePt=12 must win over master bodyStyle's 28pt");
+    }
+
+    /// <summary>
+    /// The +mn-lt font token in a master style must resolve to the theme's minor latin font.
+    /// </summary>
+    [Fact]
+    public void Compose_MasterBodyStyle_PlusMinLt_ResolvesToThemeMinorFont()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master bodyStyle defines font as "+mn-lt" (theme minor font token).
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { LatinFont = "+mn-lt" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with no explicit font — should inherit +mn-lt resolved to theme minor font.
+        para.Runs.Add(new Run { Text = "Body" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.FontFamily.Should().Be(p.Theme.FontScheme.MinorLatinFont,
+            "+mn-lt must resolve to the theme minor latin font");
+    }
+
+    /// <summary>
+    /// Regression: a plain non-placeholder shape with no master TextStyles should still
+    /// compose correctly — inheriting defaults by placeholder type (or hard-coded fallback).
+    /// </summary>
+    [Fact]
+    public void Compose_NonPlaceholderShape_NoMasterTextStyles_StillUsesHardCodedDefaults()
+    {
+        var p = MakePresentation();  // uses CreateEmpty — master has no TextStyles
+        p.Slides[0].Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 4572000, ExtentCyEmu = 1371600
+        };
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Plain text" });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, p.Slides[0]);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        // Hard-coded fallback: body font size = 18pt, minor font.
+        run.FontSizePt.Should().Be(18.0, "non-placeholder shape without master styles falls back to 18pt");
+        run.FontFamily.Should().Be(p.Theme.FontScheme.MinorLatinFont);
+        run.Color.Should().Be(SrgbColor.Black);
+    }
 }

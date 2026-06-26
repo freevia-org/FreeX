@@ -376,6 +376,9 @@ public class ProtectionGuardCoverageTests
         ["SetFormulaErrorIgnoredCommand"] = "Formula error ignore; metadata; not protection-blocked.",
         ["SetWorksheetBackgroundCommand"] = "Worksheet background; not protection-blocked.",
         ["ClearWorksheetBackgroundCommand"] = "Worksheet background clear; not protection-blocked.",
+
+        // Form control interaction — delegates to EditCellsCommand which is protection-guarded.
+        ["FormControlInteractionCommand"] = "Wraps EditCellsCommand; protection enforced by the inner cell-edit.",
     };
 
     // ---------------------------------------------------------------------------

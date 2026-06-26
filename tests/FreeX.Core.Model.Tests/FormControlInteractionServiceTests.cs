@@ -19,7 +19,7 @@ public sealed class FormControlInteractionServiceTests
         return (wb, sheet);
     }
 
-    private static void ApplyAndVerify(EditCellsCommand? cmd, Workbook wb, CellAddress addr, ScalarValue expected)
+    private static void ApplyAndVerify(IWorkbookCommand? cmd, Workbook wb, CellAddress addr, ScalarValue expected)
     {
         cmd.Should().NotBeNull();
         var ctx = new TestCommandContext(wb);
