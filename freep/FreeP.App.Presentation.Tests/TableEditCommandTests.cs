@@ -721,4 +721,315 @@ public sealed class TableEditCommandTests
         // Should resolve to anchor (0,0).
         result.Should().Be((0, 0));
     }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W2 regression tests — DeleteTableColumnCommand + horizontal merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Helper: build table [A(gridSpan=2)][HMerge][C] in one row.
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) MakeHMergedTable()
+    {
+        // 1 row × 3 grid-columns: cell[0]=anchor(GridSpan=2), cell[1]=HMerge, cell[2]=C
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L); // col 0
+        table.ColumnWidthsEmu.Add(914400L); // col 1
+        table.ColumnWidthsEmu.Add(914400L); // col 2
+
+        var row = new TableRow { HeightEmu = 457200L };
+        row.Cells.Add(new TableCell { GridSpan = 2, TextBody = MakeBody("A") }); // anchor
+        row.Cells.Add(new TableCell { HMerge = true });                           // continuation
+        row.Cells.Add(new TableCell { TextBody = MakeBody("C") });                // independent
+
+        table.Rows.Add(row);
+
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L * 3, ExtentCyEmu = 457200L,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    private static TextBody MakeBody(string text)
+    {
+        var body = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = text });
+        body.Paragraphs.Add(para);
+        return body;
+    }
+
+    [Fact]
+    public void W2_DeleteCol_InsideAnchorSpan_DecrementsGridSpan()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Delete col 1 (inside A's span).
+        // Expected: [A gridSpan=1][C], 2 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        CellText(shape, 0, 1).Should().Be("C");
+    }
+
+    [Fact]
+    public void W2_DeleteCol_AnchorColumn_PromotesContinuation()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Delete col 0 (anchor's leading column).
+        // Expected: [NewAnchor gridSpan=1 (text=A)][C], 2 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 0));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().HaveCount(2);
+        // Former HMerge continuation is now an independent anchor.
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+        CellText(shape, 0, 1).Should().Be("C");
+    }
+
+    [Fact]
+    public void W2_DeleteCol_Undo_RestoresExactSpans()
+    {
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(3);
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W2_DeleteCol_GridIntegrity_AfterDelete()
+    {
+        // In FreeP's model, every row must have exactly one cell per grid column.
+        // After any delete, Cells.Count == ColumnWidthsEmu.Count.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new DeleteTableColumnCommand(0, 1, 0));
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        table.Rows[0].Cells.Should().HaveCount(gridWidth);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W3 regression tests — DeleteTableRowCommand + vertical merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    // Helper: 2-row × 1-col table with a vertical span.
+    private static (Presentation p, PresentationCommandBus bus, SlideShape shape) MakeVMergedTable()
+    {
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+
+        var row0 = new TableRow { HeightEmu = 457200L };
+        row0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("TOP") }); // anchor
+
+        var row1 = new TableRow { HeightEmu = 457200L };
+        row1.Cells.Add(new TableCell { VMerge = true }); // continuation
+
+        table.Rows.Add(row0);
+        table.Rows.Add(row1);
+
+        var shape = new SlideShape
+        {
+            Id          = 2,
+            Kind        = SlideShapeKind.Table,
+            OffsetXEmu  = 0, OffsetYEmu  = 0,
+            ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 2,
+            Table       = table,
+        };
+        p.Slides[0].Shapes.Add(shape);
+        return (p, bus, shape);
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Continuation_DecrementsAnchorRowSpan()
+    {
+        // Row 0 = anchor(RowSpan=2), Row 1 = VMerge. Delete row 1.
+        // Expected: row 0 anchor RowSpan becomes 1; table has 1 row.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 2, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(1);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Anchor_PromotesContinuation()
+    {
+        // 3-row table: row0=anchor(RowSpan=2), row1=VMerge, row2=independent.
+        // Delete row 0 (the anchor). Row 1's cell must become the new anchor (VMerge cleared,
+        // RowSpan=1), row 2 unchanged.
+        var p = new Presentation();
+        p.Slides.Add(new Slide());
+        var bus = new PresentationCommandBus(p);
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(914400L);
+        var r0 = new TableRow { HeightEmu = 457200L };
+        r0.Cells.Add(new TableCell { RowSpan = 2, TextBody = MakeBody("ANCHOR") });
+        var r1 = new TableRow { HeightEmu = 457200L };
+        r1.Cells.Add(new TableCell { VMerge = true });
+        var r2 = new TableRow { HeightEmu = 457200L };
+        r2.Cells.Add(new TableCell { TextBody = MakeBody("IND") });
+        table.Rows.Add(r0); table.Rows.Add(r1); table.Rows.Add(r2);
+        var shape = new SlideShape { Id = 3, Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400L, ExtentCyEmu = 457200L * 3,
+            Table = table };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new DeleteTableRowCommand(0, 3, 0));
+
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[0].Cells[0].RowSpan.Should().Be(1);
+        CellText(shape, 1, 0).Should().Be("IND");
+    }
+
+    [Fact]
+    public void W3_DeleteRow_Undo_RestoresExactRowSpans()
+    {
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new DeleteTableRowCommand(0, 2, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W4 regression tests — InsertTableColumnCommand + horizontal merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void W4_InsertCol_InsideAnchorSpan_WidensAnchorAndAddsContinuation()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Insert at col 1 (inside A's span).
+        // Expected: [A gridSpan=3][HMerge][HMerge][C], 4 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+        table.Rows[0].Cells.Should().HaveCount(4);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(3);
+        table.Rows[0].Cells[0].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[2].HMerge.Should().BeTrue();
+        CellText(shape, 0, 3).Should().Be("C");
+    }
+
+    [Fact]
+    public void W4_InsertCol_AtBoundary_AddsIndependentCell()
+    {
+        // Row: [A gridSpan=2][HMerge][C]. Insert at col 2 (boundary before C).
+        // Expected: [A gridSpan=2][HMerge][new cell][C], 4 grid columns.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 2));
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(4);
+        table.Rows[0].Cells.Should().HaveCount(4);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[2].HMerge.Should().BeFalse();
+        table.Rows[0].Cells[2].GridSpan.Should().Be(1);
+        CellText(shape, 0, 3).Should().Be("C");
+    }
+
+    [Fact]
+    public void W4_InsertCol_Undo_RestoresExactStructure()
+    {
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.ColumnWidthsEmu.Should().HaveCount(3);
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W4_InsertCol_GridIntegrity_AfterInsert()
+    {
+        // In FreeP's model, every row must have exactly one cell per grid column (HMerge cells
+        // stay in the list).  After any insert, Cells.Count == ColumnWidthsEmu.Count.
+        var (p, bus, shape) = MakeHMergedTable();
+        bus.Execute(new InsertTableColumnCommand(0, 1, 1));
+        var table = shape.Table!;
+        int gridWidth = table.ColumnWidthsEmu.Count;
+        table.Rows[0].Cells.Should().HaveCount(gridWidth);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // W5 regression tests — InsertTableRowCommand + vertical merges
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void W5_InsertRow_InsideVSpan_AddsVMergeContinuationAndWidensAnchor()
+    {
+        // 2-row × 1-col: row0=anchor(RowSpan=2), row1=VMerge. Insert at row 1 (inside span).
+        // Expected: 3 rows, anchor RowSpan=3, inserted row has VMerge=true.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 1));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(3);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+        table.Rows[2].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void W5_InsertRow_AtSpanBoundary_AddsIndependentCell()
+    {
+        // 2-row × 1-col: row0=anchor(RowSpan=2), row1=VMerge. Insert at row 2 (after span).
+        // Expected: 3 rows, anchor RowSpan stays 2, new row has an independent cell.
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 2));
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[2].Cells[0].VMerge.Should().BeFalse();
+        table.Rows[2].Cells[0].RowSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void W5_InsertRow_Undo_RestoresExactSpans()
+    {
+        var (p, bus, shape) = MakeVMergedTable();
+        bus.Execute(new InsertTableRowCommand(0, 2, 1));
+        bus.Undo();
+
+        var table = shape.Table!;
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[1].Cells[0].VMerge.Should().BeTrue();
+    }
 }

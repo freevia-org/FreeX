@@ -402,4 +402,243 @@ public sealed class ChartDataCommandTests
         sess.SetChartValue(0, 0, 1.0);
         fired.Should().BeGreaterThan(0);
     }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // W6 — ReplaceChartDataCommand undo must preserve gap (null) values
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// W6 regression: a gap (null at index 2) in the original data must survive
+    /// ReplaceChartData + Undo — it must come back as null, not 0.0.
+    /// </summary>
+    [Fact]
+    public void W6_ReplaceChartData_Undo_RestoresGapAsNull()
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+
+        var s1 = new ChartSeries { Name = "Gap Series" };
+        // Q3 is a gap (null) — the reader would produce this for a missing <c:pt idx="2">
+        s1.Values.AddRange(new double?[] { 10.0, 20.0, null });
+        chart.Series.Add(s1);
+
+        var shape = new SlideShape
+        {
+            Id = 1, Name = "C", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+        var bus = new PresentationCommandBus(p);
+
+        // Replace with new data (no gap in new data).
+        bus.Execute(new ReplaceChartDataCommand(
+            0, 1,
+            new[] { "Q1", "Q2", "Q3" },
+            new[] { "Gap Series" },
+            new[] { new double?[] { 11.0, 22.0, 33.0 } }.Select(r => (IEnumerable<double?>)r)));
+
+        // Undo → original gap must be restored.
+        bus.Undo();
+
+        var restoredValues = p.Slides[0].Shapes[0].Chart!.Series[0].Values;
+        restoredValues.Should().HaveCount(3);
+        restoredValues[0].Should().Be(10.0);
+        restoredValues[1].Should().Be(20.0);
+        restoredValues[2].Should().BeNull("gap was null before the edit and must be null after undo, not 0.0");
+    }
+
+    /// <summary>
+    /// W6 regression: verifies that the nullable overload on EditingSession also preserves gaps.
+    /// </summary>
+    [Fact]
+    public void W6_EditingSession_ReplaceChartData_NullableOverload_PreservesGaps()
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "A", "B", "C" });
+
+        var s1 = new ChartSeries { Name = "S1" };
+        s1.Values.AddRange(new double?[] { 1.0, null, 3.0 });  // B is a gap
+        chart.Series.Add(s1);
+
+        var shape = new SlideShape
+        {
+            Id = 2, Name = "C2", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+        sess.Select(2);
+
+        // Apply via nullable overload.
+        sess.ReplaceChartData(
+            new[] { "A", "B", "C" },
+            new[] { "S1" },
+            new[] { new double?[] { 9.0, null, 7.0 } }.Select(r => (IEnumerable<double?>)r));
+
+        // The new data has a gap at B.
+        sess.SelectedChart!.Series[0].Values[1].Should().BeNull("null passed in nullable overload stays null");
+
+        // Undo restores original gap.
+        sess.Undo();
+        sess.SelectedChart.Series[0].Values[1].Should().BeNull("original gap at B survives undo");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // W7 — Dialog working-copy nullability (tested at command/payload level)
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// W7 regression: simulates "open dialog, make no value changes, press OK" —
+    /// the payload issued to ReplaceChartDataCommand must preserve the original null.
+    ///
+    /// This tests the command/model path; the WPF dialog UI itself is tested in
+    /// ChartDataDialogTests (StaFact / WPF-required project).
+    /// </summary>
+    [Fact]
+    public void W7_ReplaceChartData_WithNullPayload_GapPreservedInModel()
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "X", "Y" });
+
+        var s = new ChartSeries { Name = "Sparse" };
+        s.Values.AddRange(new double?[] { 5.0, null });  // Y is a gap
+        chart.Series.Add(s);
+
+        var shape = new SlideShape
+        {
+            Id = 3, Name = "C3", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+        var bus = new PresentationCommandBus(p);
+
+        // Simulate: dialog read the chart values (ToList() preserving nulls), pressed OK
+        // with no edits — the same nullable payload goes back into the command.
+        var workingValues = chart.Series.Select(sr => sr.Values.ToList()).ToList();  // List<List<double?>>
+        bus.Execute(new ReplaceChartDataCommand(
+            0, 3,
+            chart.Categories.ToList(),
+            chart.Series.Select(sr => sr.Name),
+            workingValues.Select(sv => (IEnumerable<double?>)sv)));
+
+        // Gap must still be null after "no-op" dialog OK.
+        p.Slides[0].Shapes[0].Chart!.Series[0].Values[1]
+            .Should().BeNull("a gap that the dialog didn't touch must remain null after OK");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // W8 — Series FillColor / PointColors restored on remove-then-undo
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// W8 regression: a series with a custom FillColor that is removed during the dialog
+    /// edit (the new payload has fewer series) must have its FillColor restored on Undo.
+    /// </summary>
+    [Fact]
+    public void W8_ReplaceChartData_Undo_RestoresFillColor()
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+
+        var customColor = new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00));
+
+        var s1 = new ChartSeries { Name = "Red Series", FillColor = customColor };
+        s1.Values.AddRange(new double?[] { 10.0, 20.0 });
+        chart.Series.Add(s1);
+
+        var s2 = new ChartSeries { Name = "Normal Series" };
+        s2.Values.AddRange(new double?[] { 5.0, 15.0 });
+        chart.Series.Add(s2);
+
+        var shape = new SlideShape
+        {
+            Id = 4, Name = "C4", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+        var bus = new PresentationCommandBus(p);
+
+        // Edit: remove s1 (keep only "Normal Series") — simulates user deleting the first series.
+        bus.Execute(new ReplaceChartDataCommand(
+            0, 4,
+            new[] { "Q1", "Q2" },
+            new[] { "Normal Series" },
+            new[] { new double?[] { 5.0, 15.0 } }.Select(r => (IEnumerable<double?>)r)));
+
+        chart.Series.Should().HaveCount(1, "only one series after edit");
+
+        // Undo → s1 (with its FillColor) must come back.
+        bus.Undo();
+
+        var restored = p.Slides[0].Shapes[0].Chart!;
+        restored.Series.Should().HaveCount(2, "both series restored after undo");
+        restored.Series[0].Name.Should().Be("Red Series");
+        restored.Series[0].FillColor.Should().NotBeNull("FillColor must be restored on undo");
+        restored.Series[0].FillColor!.Resolved.R.Should().Be(0xFF, "restored FillColor is red");
+    }
+
+    /// <summary>
+    /// W8 regression: a series with per-point PointColors (pie chart style) that is removed
+    /// during an edit must have its PointColors restored on Undo.
+    /// </summary>
+    [Fact]
+    public void W8_ReplaceChartData_Undo_RestoresPointColors()
+    {
+        var p     = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.Pie };
+        chart.Categories.AddRange(new[] { "Slice A", "Slice B", "Slice C" });
+
+        var ptColor = new ThemeAwareColor(new SrgbColor(0x00, 0x80, 0x00));
+        var s = new ChartSeries { Name = "Pie" };
+        s.Values.AddRange(new double?[] { 40.0, 35.0, 25.0 });
+        s.PointColors[1] = ptColor;  // Slice B has a custom point color
+        chart.Series.Add(s);
+
+        var shape = new SlideShape
+        {
+            Id = 5, Name = "C5", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+        var bus = new PresentationCommandBus(p);
+
+        // Edit: replace all values (series count unchanged, but values differ).
+        bus.Execute(new ReplaceChartDataCommand(
+            0, 5,
+            new[] { "Slice A", "Slice B", "Slice C" },
+            new[] { "Pie" },
+            new[] { new double?[] { 50.0, 30.0, 20.0 } }.Select(r => (IEnumerable<double?>)r)));
+
+        // Undo → PointColors must be restored.
+        bus.Undo();
+
+        var restored = p.Slides[0].Shapes[0].Chart!.Series[0];
+        restored.PointColors.Should().ContainKey(1, "point color at index 1 must survive undo");
+        restored.PointColors[1].Resolved.G.Should().Be(0x80, "point color is green");
+    }
 }

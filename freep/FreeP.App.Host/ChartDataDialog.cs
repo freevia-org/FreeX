@@ -36,10 +36,10 @@ public sealed class ChartDataDialog : Window
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
-    private readonly EditingSession _editor;
-    private readonly List<string>   _categories;  // mutable working copy
-    private readonly List<string>   _seriesNames; // mutable working copy
-    private readonly List<List<double>> _values;  // [seriesIndex][categoryIndex]
+    private readonly EditingSession     _editor;
+    private readonly List<string>       _categories;  // mutable working copy
+    private readonly List<string>       _seriesNames; // mutable working copy
+    private readonly List<List<double?>> _values;     // [seriesIndex][categoryIndex]; null = gap
 
     // ── Controls ──────────────────────────────────────────────────────────────────
 
@@ -63,10 +63,11 @@ public sealed class ChartDataDialog : Window
             ?? throw new InvalidOperationException("No chart is currently selected.");
 
         // Deep-copy the data so we don't mutate the live model until OK is pressed.
+        // W7: preserve gap (null) entries — do NOT coerce to 0.0 here.
         _categories  = chart.Categories.ToList();
         _seriesNames = chart.Series.Select(s => s.Name).ToList();
         _values      = chart.Series
-            .Select(s => s.Values.Select(v => v ?? 0.0).ToList())
+            .Select(s => s.Values.ToList())   // List<double?> — nulls kept as nulls
             .ToList();
 
         // Ensure matrix is rectangular.
@@ -188,7 +189,7 @@ public sealed class ChartDataDialog : Window
                 {
                     Mode = BindingMode.TwoWay,
                     UpdateSourceTrigger = UpdateSourceTrigger.LostFocus,
-                    Converter = new DoubleConverter()
+                    Converter = new NullableDoubleConverter()
                 }
             };
             _grid.Columns.Add(col);
@@ -199,18 +200,19 @@ public sealed class ChartDataDialog : Window
         for (int ci = 0; ci < _categories.Count; ci++)
         {
             int capturedCi = ci;
-            var rowValues = new ObservableDoubleArray(
-                _values.Select(sv => capturedCi < sv.Count ? sv[capturedCi] : 0.0).ToArray(),
+            // W7: pass nullable values to ObservableDoubleNullableArray; display converts null↔blank.
+            var rowValues = new ObservableDoubleNullableArray(
+                _values.Select(sv => capturedCi < sv.Count ? sv[capturedCi] : null).ToArray(),
                 (si, v) =>
                 {
-                    while (_values.Count <= si) _values.Add(new List<double>());
-                    while (_values[si].Count <= capturedCi) _values[si].Add(0.0);
+                    while (_values.Count <= si) _values.Add(new List<double?>());
+                    while (_values[si].Count <= capturedCi) _values[si].Add(null);
                     _values[si][capturedCi] = v;
                 });
 
             rows.Add(new ChartRowViewModel(
                 category: _categories[capturedCi],
-                values: rowValues,
+                values:   rowValues,
                 onCategoryChanged: label => _categories[capturedCi] = label));
         }
 
@@ -238,7 +240,8 @@ public sealed class ChartDataDialog : Window
     private void OnAddSeries()
     {
         _seriesNames.Add($"Series {_seriesNames.Count + 1}");
-        _values.Add(Enumerable.Repeat(0.0, _categories.Count).ToList());
+        // New series slots start as null (no plotted value) rather than 0.0.
+        _values.Add(Enumerable.Repeat((double?)null, _categories.Count).ToList());
         EnsureRectangular();
         RebuildGrid();
     }
@@ -254,7 +257,7 @@ public sealed class ChartDataDialog : Window
     private void OnAddCategory()
     {
         _categories.Add($"Cat {_categories.Count + 1}");
-        foreach (var sv in _values) sv.Add(0.0);
+        foreach (var sv in _values) sv.Add(null);
         RebuildGrid();
     }
 
@@ -282,11 +285,11 @@ public sealed class ChartDataDialog : Window
                 _categories[ci] = rows[ci].Category;
         }
 
-        // Issue the batch replace command through the session → one undo entry.
+        // W7: pass nullable values so gaps stay null in the committed model.
         _editor.ReplaceChartData(
             _categories,
             _seriesNames,
-            _values.Select(sv => (IEnumerable<double>)sv));
+            _values.Select(sv => (IEnumerable<double?>)sv));
 
         DialogResult = true;
         Close();
@@ -312,7 +315,7 @@ public sealed class ChartDataDialog : Window
         int catCount = _categories.Count;
         foreach (var sv in _values)
         {
-            while (sv.Count < catCount) sv.Add(0.0);
+            while (sv.Count < catCount) sv.Add(null);  // new slots = gap, not 0.0
             while (sv.Count > catCount) sv.RemoveAt(sv.Count - 1);
         }
     }
@@ -326,9 +329,9 @@ public sealed class ChartDataDialog : Window
         private readonly Action<string> _onCategoryChanged;
 
         public ChartRowViewModel(
-            string               category,
-            ObservableDoubleArray values,
-            Action<string>       onCategoryChanged)
+            string                      category,
+            ObservableDoubleNullableArray values,
+            Action<string>              onCategoryChanged)
         {
             _category          = category;
             Values             = values;
@@ -341,28 +344,32 @@ public sealed class ChartDataDialog : Window
             set { _category = value; _onCategoryChanged(value); }
         }
 
-        /// <summary>Indexed value array — bound by DataGridTextColumn Binding("Values[si]").</summary>
-        public ObservableDoubleArray Values { get; }
+        /// <summary>Indexed nullable-value array — bound by DataGridTextColumn Binding("Values[si]").</summary>
+        public ObservableDoubleNullableArray Values { get; }
     }
 
     /// <summary>
     /// A simple indexable array that calls back into the _values matrix on set,
     /// allowing DataGrid bindings to mutate the working copy directly.
+    ///
+    /// W7: Stores <see cref="double?"/> so that gap (null) values survive the dialog
+    /// round-trip.  The WPF DataGrid binding pairs this with <see cref="NullableDoubleConverter"/>
+    /// which renders null as an empty cell and parses an empty/blank cell back to null.
     /// </summary>
-    internal sealed class ObservableDoubleArray
+    internal sealed class ObservableDoubleNullableArray
     {
-        private readonly double[]              _data;
-        private readonly Action<int, double>   _onSet;
+        private readonly double?[]              _data;
+        private readonly Action<int, double?>   _onSet;
 
-        public ObservableDoubleArray(double[] data, Action<int, double> onSet)
+        public ObservableDoubleNullableArray(double?[] data, Action<int, double?> onSet)
         {
             _data  = data;
             _onSet = onSet;
         }
 
-        public double this[int index]
+        public double? this[int index]
         {
-            get => index >= 0 && index < _data.Length ? _data[index] : 0.0;
+            get => index >= 0 && index < _data.Length ? _data[index] : null;
             set
             {
                 if (index >= 0 && index < _data.Length)
@@ -374,17 +381,33 @@ public sealed class ChartDataDialog : Window
         }
     }
 
-    /// <summary>Converts between <see cref="double"/> and string for the DataGrid binding.</summary>
-    private sealed class DoubleConverter : System.Windows.Data.IValueConverter
+    /// <summary>
+    /// Converts between <see cref="double?"/> and string for the DataGrid binding.
+    ///
+    /// W7 display boundary:
+    ///  - null  → empty string  (gap cell appears blank)
+    ///  - value → G6 string
+    ///  - empty/whitespace ← null  (user clearing a cell creates a gap)
+    ///  - numeric string  ← parsed double
+    /// </summary>
+    private sealed class NullableDoubleConverter : System.Windows.Data.IValueConverter
     {
-        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-            => value is double d ? d.ToString("G6", culture) : "0";
-
-        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
         {
-            if (value is string s && double.TryParse(s, System.Globalization.NumberStyles.Any, culture, out double d))
-                return d;
-            return 0.0;
+            if (value is double d) return d.ToString("G6", culture);
+            return string.Empty;  // null or other → blank
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is string s)
+            {
+                var trimmed = s.Trim();
+                if (trimmed.Length == 0) return (double?)null;  // blank → gap
+                if (double.TryParse(trimmed, System.Globalization.NumberStyles.Any, culture, out double d))
+                    return (double?)d;
+            }
+            return (double?)null;  // unparseable → gap
         }
     }
 }

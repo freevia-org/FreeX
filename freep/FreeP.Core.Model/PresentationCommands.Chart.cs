@@ -342,32 +342,58 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
 /// Atomically replaces the entire data payload of a chart — categories, series names,
 /// and the full values matrix — in one undoable command.  Used by <c>ChartDataDialog</c>
 /// so that all edits made in the dialog become a single undo step.
+///
+/// Gap (null) values are preserved throughout: the command accepts nullable values in its
+/// new-data payload, captures the existing nullable values for undo, and restores the
+/// original <see cref="ChartSeries"/> instances (including <see cref="ChartSeries.FillColor"/>
+/// and <see cref="ChartSeries.PointColors"/>) on Revert so that per-series styling survives
+/// a remove-then-undo cycle.
 /// </summary>
 public sealed class ReplaceChartDataCommand : IPresentationCommand
 {
-    private readonly int              _slideIndex;
-    private readonly uint             _shapeId;
-    private readonly List<string>     _newCategories;
-    private readonly List<string>     _newSeriesNames;
-    private readonly List<List<double>> _newValues;   // [seriesIndex][categoryIndex]
+    private readonly int               _slideIndex;
+    private readonly uint              _shapeId;
+    private readonly List<string>      _newCategories;
+    private readonly List<string>      _newSeriesNames;
+    private readonly List<List<double?>> _newValues;   // [seriesIndex][categoryIndex], nulls = gaps
 
-    // Captured prior state:
-    private List<string>       _oldCategories   = new();
-    private List<string>       _oldSeriesNames  = new();
-    private List<List<double>> _oldValues       = new();
+    // Captured prior state (W6: nullable to preserve gaps; W8: full series list for styling).
+    private List<string>        _oldCategories  = new();
+    private List<string>        _oldSeriesNames = new();
+    private List<List<double?>> _oldValues      = new();
+    private List<ChartSeries>   _oldSeries      = new();  // W8: snapshot for FillColor / PointColors
 
+    /// <summary>
+    /// Nullable-aware constructor — gaps (null entries) in <paramref name="values"/> are
+    /// preserved as null in the model and round-trip through OOXML as missing &lt;c:pt&gt; nodes.
+    /// </summary>
     public ReplaceChartDataCommand(
         int slideIndex,
         uint shapeId,
-        IEnumerable<string>           categories,
-        IEnumerable<string>           seriesNames,
-        IEnumerable<IEnumerable<double>> values)
+        IEnumerable<string>             categories,
+        IEnumerable<string>             seriesNames,
+        IEnumerable<IEnumerable<double?>> values)
     {
         _slideIndex     = slideIndex;
         _shapeId        = shapeId;
         _newCategories  = categories.ToList();
         _newSeriesNames = seriesNames.ToList();
         _newValues      = values.Select(row => row.ToList()).ToList();
+    }
+
+    /// <summary>
+    /// Non-nullable overload for callers that already have <c>double</c> sequences (no gaps).
+    /// Delegates to the nullable constructor.
+    /// </summary>
+    public ReplaceChartDataCommand(
+        int slideIndex,
+        uint shapeId,
+        IEnumerable<string>              categories,
+        IEnumerable<string>              seriesNames,
+        IEnumerable<IEnumerable<double>> values)
+        : this(slideIndex, shapeId, categories, seriesNames,
+               values.Select(row => row.Select(v => (double?)v)))
+    {
     }
 
     public string Label => "Edit Chart Data";
@@ -378,29 +404,37 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
         if (chart is null) return;
 
-        // Capture old state.
+        // W6: Capture old values as nullable — preserves gap (null) entries for undo.
+        // W8: Capture the actual ChartSeries instances so FillColor/PointColors survive undo.
         _oldCategories  = chart.Categories.ToList();
         _oldSeriesNames = chart.Series.Select(s => s.Name).ToList();
         _oldValues      = chart.Series
-            .Select(s => s.Values.Select(v => v ?? 0.0).ToList())
+            .Select(s => s.Values.ToList())   // ToList() of List<double?> — nulls preserved
             .ToList();
+        _oldSeries      = chart.Series.ToList();  // snapshot series references
 
         // Apply new state.
-        ApplyData(chart, _newCategories, _newSeriesNames, _newValues);
+        ApplyForward(chart, _newCategories, _newSeriesNames, _newValues);
     }
 
     public void Revert(Presentation p)
     {
         var chart = ChartHelper.Find(p, _slideIndex, _shapeId);
         if (chart is null) return;
-        ApplyData(chart, _oldCategories, _oldSeriesNames, _oldValues);
+
+        // W8: Restore original series instances (restores FillColor, PointColors, etc.).
+        // W6: Restore values with their original nullable shape (gaps stay null).
+        // Also restore original Names — ApplyForward mutates Name in place.
+        RestoreOriginal(chart, _oldCategories, _oldSeries, _oldSeriesNames, _oldValues);
     }
 
-    private static void ApplyData(
-        ChartShape          chart,
-        List<string>        categories,
-        List<string>        seriesNames,
-        List<List<double>>  values)
+    // ── Forward apply: produce the new data, keeping existing series when possible ─
+
+    private static void ApplyForward(
+        ChartShape            chart,
+        List<string>          categories,
+        List<string>          seriesNames,
+        List<List<double?>>   values)
     {
         // Replace categories.
         chart.Categories.Clear();
@@ -408,9 +442,12 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
 
         int catCount = categories.Count;
 
-        // Add/remove series to match desired count.
+        // Shrink: remove surplus series from the tail.
         while (chart.Series.Count > seriesNames.Count)
             chart.Series.RemoveAt(chart.Series.Count - 1);
+
+        // Grow: add new blank series (styling will be default — only needed for net-new series
+        // that didn't exist before the edit, so there's nothing to restore).
         while (chart.Series.Count < seriesNames.Count)
             chart.Series.Add(new ChartSeries());
 
@@ -418,10 +455,42 @@ public sealed class ReplaceChartDataCommand : IPresentationCommand
         for (int si = 0; si < chart.Series.Count; si++)
         {
             chart.Series[si].Name = seriesNames[si];
-            var vs = si < values.Count ? values[si] : new List<double>();
+            var vs = si < values.Count ? values[si] : new List<double?>();
             chart.Series[si].Values.Clear();
             for (int ci = 0; ci < catCount; ci++)
-                chart.Series[si].Values.Add(ci < vs.Count ? vs[ci] : 0.0);
+                chart.Series[si].Values.Add(ci < vs.Count ? vs[ci] : null);
+        }
+    }
+
+    // ── Undo restore: put back original series instances verbatim ────────────────
+
+    private static void RestoreOriginal(
+        ChartShape            chart,
+        List<string>          categories,
+        List<ChartSeries>     originalSeries,
+        List<string>          originalSeriesNames,
+        List<List<double?>>   originalValues)
+    {
+        // Restore categories.
+        chart.Categories.Clear();
+        foreach (var c in categories) chart.Categories.Add(c);
+
+        // Replace the entire series list with the original instances
+        // (this restores FillColor, PointColors, etc. exactly).
+        chart.Series.Clear();
+        foreach (var s in originalSeries)
+            chart.Series.Add(s);
+
+        // Restore Name and Values on each series — both may have been mutated by ApplyForward.
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            if (si < originalSeriesNames.Count)
+                chart.Series[si].Name = originalSeriesNames[si];
+
+            chart.Series[si].Values.Clear();
+            var vs = si < originalValues.Count ? originalValues[si] : new List<double?>();
+            foreach (var v in vs)
+                chart.Series[si].Values.Add(v);
         }
     }
 }

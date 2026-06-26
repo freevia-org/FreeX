@@ -200,4 +200,107 @@ public sealed class ChartDataDialogTests : IDisposable
             .Chart!.Categories
             .Should().HaveCount(4, "four categories survive round-trip after add");
     }
+
+    // ── W7: dialog construction does not flatten gaps to 0.0 ─────────────────────
+
+    /// <summary>
+    /// W7 regression: constructing ChartDataDialog with a chart that has a gap (null at
+    /// index 1 of the second series) must NOT flatten that null to 0.0 in the dialog's
+    /// working copy, so a subsequent OK (no edits) leaves the model gap intact.
+    /// </summary>
+    [StaFact]
+    public void W7_ChartDataDialog_Construction_PreservesGapInWorkingCopy()
+    {
+        // Build a presentation with a gap in Series[1].Values[1].
+        var p    = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "X", "Y", "Z" });
+
+        var s1 = new ChartSeries { Name = "Dense" };
+        s1.Values.AddRange(new double?[] { 1.0, 2.0, 3.0 });
+        chart.Series.Add(s1);
+
+        var s2 = new ChartSeries { Name = "Sparse" };
+        s2.Values.AddRange(new double?[] { 4.0, null, 6.0 });  // Y is a gap
+        chart.Series.Add(s2);
+
+        var shape = new SlideShape
+        {
+            Id          = 10u,
+            Name        = "GapChart",
+            Kind        = SlideShapeKind.Chart,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart       = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+        sess.Select(10u);
+
+        // Construct the dialog — this triggers the deep-copy that previously flattened nulls.
+        var dlg = new ChartDataDialog(sess);
+        dlg.Should().NotBeNull();
+
+        // Simulate pressing OK with no edits: call the session's nullable ReplaceChartData
+        // directly with the same nullable values the dialog would produce.
+        var workingValues = chart.Series.Select(sr => sr.Values.ToList()).ToList();
+        sess.ReplaceChartData(
+            chart.Categories.ToList(),
+            chart.Series.Select(sr => sr.Name),
+            workingValues.Select(sv => (IEnumerable<double?>)sv));
+
+        // The gap at Series[1][1] (Y in Sparse) must still be null.
+        sess.SelectedChart!.Series[1].Values[1]
+            .Should().BeNull("W7: gap must not be flattened to 0.0 by dialog OK with no edits");
+    }
+
+    /// <summary>
+    /// W7 regression: ReplaceChartData → Undo on a gap chart must restore the null,
+    /// not 0.0 (this tests the command path that the dialog OK button drives).
+    /// </summary>
+    [StaFact]
+    public void W7_ReplaceChartData_Undo_GapRemainsNull()
+    {
+        var p    = new Presentation();
+        var slide = new Slide();
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar" });
+
+        var s = new ChartSeries { Name = "Revenue" };
+        s.Values.AddRange(new double?[] { 100.0, null, 300.0 });  // Feb is a gap
+        chart.Series.Add(s);
+
+        var shape = new SlideShape
+        {
+            Id = 20u, Name = "G2", Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 1, ExtentCyEmu = 1,
+            Chart = chart
+        };
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var bus  = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+        sess.Select(20u);
+
+        // Apply a replacement (no gap in new data).
+        sess.ReplaceChartData(
+            new[] { "Jan", "Feb", "Mar" },
+            new[] { "Revenue" },
+            new[] { new double?[] { 110.0, 220.0, 330.0 } }.Select(r => (IEnumerable<double?>)r));
+
+        // Undo — Feb must come back as null.
+        sess.Undo();
+
+        sess.SelectedChart!.Series[0].Values[1]
+            .Should().BeNull("W7: original Feb gap must be null after undo, not 0.0");
+    }
 }

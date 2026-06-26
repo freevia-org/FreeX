@@ -214,19 +214,33 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    // Rewrites a single verbatim formula string that may contain a '=' prefix
-    // and/or a comma-separated multi-area union (e.g. "=Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5").
+    // Rewrites a single verbatim formula string that may contain a '=' prefix and/or
+    // surrounding parentheses and/or a comma-separated multi-area union.
+    //
+    // The REAL OOXML <c:f> format for multi-area unions is:
+    //   (Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5)   — parentheses, NO leading '='
+    // This parenthesised form is exactly why these formulas land on the verbatim path:
+    // the leading '(' makes TryParseFormulaRange fail.  A formula that also happens to
+    // carry a '=' prefix (an edge-case form) is handled too.
     //
     // FormulaRewriter handles single range/cell expressions but not top-level comma unions,
-    // so we split on unquoted commas, rewrite each area individually, then rejoin.
+    // so we strip the wrapper characters, split on unquoted commas, rewrite each area
+    // individually, then re-wrap with the original wrapper characters.
     private static string? RewriteVerbatimFormula(
         string? formula, RewriteOperation op, string hostSheetName)
     {
         if (formula is null) return null;
 
-        // Verbatim chart series formulas include a leading '='.
+        // Strip optional leading '=' (not present in the <c:f> form, but kept for safety).
         bool hasPrefix = formula.Length > 0 && formula[0] == '=';
         var body = hasPrefix ? formula[1..] : formula;
+
+        // Strip balanced surrounding parentheses — the OOXML multi-area form is
+        // "(Area1,Area2,...)" with NO '='.  We detect this so SplitOnUnquotedCommas
+        // receives clean area strings without unbalanced '(' or ')' fragments.
+        bool hasParens = body.Length >= 2 && body[0] == '(' && body[^1] == ')';
+        if (hasParens)
+            body = body[1..^1];
 
         // Split on unquoted commas to handle multi-area unions.
         var areas = SplitOnUnquotedCommas(body);
@@ -251,6 +265,8 @@ internal static partial class RowColumnShiftHelpers
             return formula; // no change — return original (same reference for caller)
 
         var newBody = string.Join(",", rewrittenAreas);
+        if (hasParens)
+            newBody = "(" + newBody + ")";
         return hasPrefix ? "=" + newBody : newBody;
     }
 
