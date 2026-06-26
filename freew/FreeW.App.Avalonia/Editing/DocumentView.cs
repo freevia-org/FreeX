@@ -4998,6 +4998,68 @@ public sealed class DocumentView : Control
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
     }
 
+    // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
+    // page borders a fixed offset from the page edge (its "Measure from: Edge of page" default is 24pt); we
+    // mirror that with a small inset so the border sits between the chrome edge and the body text.
+    private const double PageBorderInsetDip = 24.0;
+
+    private void DrawPageBorder(DrawingContext context, Rect pageRect)
+    {
+        if (_doc.Page.PageBorder is not { } pb)
+            return;
+
+        var color = TryParseAvaloniaColor(pb.ColorHex, out var c) ? c : Colors.Black;
+        var widthDip = Math.Max(0.5, pb.WidthPt * PxPerPoint);
+        var pen = new Pen(new SolidColorBrush(color), widthDip)
+        {
+            DashStyle = pb.LineStyle switch
+            {
+                BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+                BorderLineStyle.Dashed => new DashStyle([3, 2], 0),
+                _ => null,
+            },
+        };
+
+        var inset = Math.Min(PageBorderInsetDip, Math.Min(pageRect.Width, pageRect.Height) / 4);
+        var rect = pageRect.Deflate(new Thickness(inset));
+        context.DrawRectangle(null, pen, rect);
+        // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
+        if (pb.LineStyle == BorderLineStyle.Double)
+            context.DrawRectangle(null, pen, rect.Deflate(new Thickness(widthDip + 1.5)));
+    }
+
+    // AV-DESIGN: faint watermark text drawn behind the body on each page. Mirrors Word's Design >
+    // Watermark: a large, low-opacity, optionally 45°-diagonal label centred on the page. Picture
+    // watermarks are deferred (text only) — a picture watermark renders nothing here.
+    private void DrawWatermark(DrawingContext context, Rect pageRect)
+    {
+        if (_doc.Page.EffectiveWatermark is not { } wm || wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text))
+            return;
+
+        var color = TryParseAvaloniaColor(wm.FontColorHex, out var c) ? c : Color.FromRgb(0x80, 0x80, 0x80);
+        var opacity = Math.Clamp(wm.Opacity, 0.0, 1.0);
+        var brush = new SolidColorBrush(color, opacity);
+
+        // Size the text to span most of the page width (Word auto-scales). Cap the point size sensibly.
+        var typeface = new Typeface(
+            wm.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            FontStyle.Normal, FontWeight.Bold);
+        var fontSize = Math.Min(pageRect.Width, 480) / Math.Max(4, wm.Text.Length) * 1.6;
+        fontSize = Math.Clamp(fontSize, 24, 130);
+
+        var ft = new FormattedText(
+            wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+        var center = pageRect.Center;
+        using var _ = context.PushTransform(
+            Matrix.CreateTranslation(-ft.Width / 2, -ft.Height / 2)
+            * (wm.Layout == WatermarkLayout.Diagonal
+                ? Matrix.CreateRotation(-Math.PI / 4)
+                : Matrix.Identity)
+            * Matrix.CreateTranslation(center.X, center.Y));
+        context.DrawText(ft, new Point(0, 0));
+    }
+
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
@@ -5024,26 +5086,34 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
+        // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
+        // else white. The page border (w:pgBorders) and watermark draw on top of the sheet fill.
+        var pageFill = ParseSolidBrush(_doc.Page.BackgroundColorHex) ?? Brushes.White;
+
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             // Grey desk fills the full control area.
             context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
 
-            // Draw each discrete page rectangle: white page with drop-shadow + border.
+            // Draw each discrete page rectangle: page-coloured sheet with drop-shadow + chrome border.
             for (var pi = 0; pi < _pageCount; pi++)
             {
                 var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
                 var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
                 var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
                 context.FillRectangle(PageShadowBrush, shadowRect);
-                context.FillRectangle(Brushes.White, pageRect);
+                context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
+                // AV-DESIGN: the model's page border (inset just inside the chrome border).
+                DrawPageBorder(context, pageRect);
+                // AV-DESIGN: the watermark draws faintly behind the body text on each page.
+                DrawWatermark(context, pageRect);
             }
         }
         else
         {
-            // Web Layout / Draft: plain white background — no desk, no page chrome.
-            context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+            // Web Layout / Draft: plain page-coloured background — no desk, no page chrome.
+            context.FillRectangle(pageFill, new Rect(Bounds.Size));
         }
 
         // AV-VIEW: faint layout-gridlines behind the body text (Print Layout only). Drawn after the
@@ -8761,6 +8831,95 @@ public sealed class DocumentView : Control
         }
         return styleId;
     }
+
+    // ---- AV-DESIGN: Design-tab document mutations -----------------------------------------------
+
+    /// <summary>
+    /// AV-DESIGN: apply a built-in document theme (colour + font scheme) to the style catalog and document
+    /// defaults via <see cref="DocumentTheme.Apply"/>, undoable and re-rendered. Mirrors the WPF host's
+    /// Design &gt; Themes dropdown.
+    /// </summary>
+    public void ApplyTheme(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        _bus.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply only a theme's colour palette (Design &gt; Colors), preserving the current
+    /// heading/body fonts. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyThemeColors(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        _bus.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply a Design &gt; Fonts heading/body font pairing to the theme + style catalog,
+    /// preserving colours. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyDocumentFontSet(DocumentFontSet fontSet)
+    {
+        ArgumentNullException.ThrowIfNull(fontSet);
+        _bus.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply a Design &gt; Paragraph Spacing preset (Compact / Relaxed / Double / …) to the
+    /// document default + built-in paragraph styles. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
+    {
+        ArgumentNullException.ThrowIfNull(spacingSet);
+        _bus.Execute(new DesignCatalogCommand("Paragraph Spacing",
+            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
+    /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
+    /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
+    /// </summary>
+    public void SetPageColor(string? colorHex) =>
+        _bus.Execute(new SetPageColorCommand(NormalizePageColor(colorHex)));
+
+    private static string? NormalizePageColor(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return null;
+        var trimmed = colorHex.Trim();
+        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+    }
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
+    /// Undoable; the border draws around the page immediately and round-trips through <c>w:pgBorders</c>.
+    /// </summary>
+    public void SetPageBorder(PageBorder? border) =>
+        _bus.Execute(new SetPageBorderCommand(border));
+
+    /// <summary>
+    /// AV-DESIGN: toggle the page border on/off with the given colour/width (Design &gt; Page Borders quick
+    /// action). When no border is set one is added; otherwise it is cleared. Undoable.
+    /// </summary>
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
+        SetPageBorder(_doc.Page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the page watermark with full options (text, font, colour, layout,
+    /// opacity). Pass null to remove it. Undoable; the faint diagonal text draws behind the body and
+    /// round-trips on save.
+    /// </summary>
+    public void SetWatermark(WatermarkOptions? options) =>
+        _bus.Execute(new SetWatermarkCommand(options));
+
+    /// <summary>
+    /// AV-DESIGN: convenience to set a plain-text watermark with sensible defaults (Word's preset
+    /// watermarks like CONFIDENTIAL / DRAFT). A null/empty value removes the watermark.
+    /// </summary>
+    public void SetWatermarkText(string? text) =>
+        SetWatermark(string.IsNullOrWhiteSpace(text) ? null : new WatermarkOptions(text.Trim()));
 
     /// <summary>
     /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document

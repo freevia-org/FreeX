@@ -233,6 +233,78 @@ internal static class FreeWRibbon
             .Select(s => new RibbonMenuItem($"{s.Glyph}   {s.Label}", new RibbonCommandId(s.Id)))
             .ToArray());
 
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Themes dropdown — one item per built-in <see cref="DocumentTheme.Catalog"/>
+    /// entry. Command ids are <c>freew.theme.&lt;name&gt;</c> (lower-case), matching the registry wiring.
+    /// </summary>
+    private static RibbonMenu BuildThemeMenu() =>
+        new(DocumentTheme.Catalog
+            .Select(t => new RibbonMenuItem(t.Name,
+                new RibbonCommandId($"freew.theme.{t.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Colors dropdown — one item per theme palette.</summary>
+    private static RibbonMenu BuildThemeColorsMenu() =>
+        new(DocumentTheme.Catalog
+            .Select(t => new RibbonMenuItem(t.Name,
+                new RibbonCommandId($"freew.theme-colors.{t.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Fonts dropdown — one item per <see cref="DocumentFontSet.Catalog"/> entry.</summary>
+    private static RibbonMenu BuildThemeFontsMenu() =>
+        new(DocumentFontSet.Catalog
+            .Select(f => new RibbonMenuItem($"{f.Name}  ({f.HeadingFont} / {f.BodyFont})",
+                new RibbonCommandId($"freew.theme-fonts.{f.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Paragraph Spacing dropdown — one item per spacing preset.</summary>
+    private static RibbonMenu BuildParaSpacingMenu() =>
+        new(DocumentParagraphSpacingSet.Catalog
+            .Select(s => new RibbonMenuItem(s.Name,
+                new RibbonCommandId($"freew.para-spacing.{ParaSpacingId(s.Name)}")))
+            .ToArray());
+
+    /// <summary>Normalises a spacing-set display name to a stable command-id suffix (e.g. "No Paragraph Space" → "no-paragraph-space").</summary>
+    internal static string ParaSpacingId(string name) =>
+        name.ToLowerInvariant().Replace(' ', '-');
+
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Page Color swatch palette + No Color. Command ids are
+    /// <c>freew.page-color.&lt;name&gt;</c>; "No Color" clears the background.
+    /// </summary>
+    internal static readonly (string CommandId, string Label)[] PageColors =
+    [
+        ("freew.page-color.none",       "No Color"),
+        ("freew.page-color.white",      "White"),
+        ("freew.page-color.light-gray", "Light Gray"),
+        ("freew.page-color.tan",        "Tan"),
+        ("freew.page-color.light-blue", "Light Blue"),
+        ("freew.page-color.light-green","Light Green"),
+        ("freew.page-color.light-yellow","Light Yellow"),
+        ("freew.page-color.rose",       "Rose"),
+    ];
+
+    private static RibbonMenu BuildPageColorMenu() =>
+        new(PageColors
+            .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
+            .ToArray());
+
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Watermark gallery — the built-in presets (CONFIDENTIAL / DRAFT / …), a custom
+    /// opener, and a Remove entry. Command ids are <c>freew.watermark.&lt;preset&gt;</c>.
+    /// </summary>
+    private static RibbonMenu BuildWatermarkMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("CONFIDENTIAL", new RibbonCommandId("freew.watermark.confidential")),
+            new("DO NOT COPY",  new RibbonCommandId("freew.watermark.do-not-copy")),
+            new("DRAFT",        new RibbonCommandId("freew.watermark.draft")),
+            new("URGENT",       new RibbonCommandId("freew.watermark.urgent")),
+            RibbonMenuItem.Separator(),
+            new("Custom Watermark…", new RibbonCommandId("freew.watermark.custom")),
+            new("Remove Watermark",  new RibbonCommandId("freew.watermark.none")),
+        });
+
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
             .Tab("file", "File", "F", tab =>
@@ -366,6 +438,27 @@ internal static class FreeWRibbon
                     g.Button("freew.page-margins-wide",   "Wide Margins");
                     g.Button("freew.page-size-letter",    "Letter");
                     g.Button("freew.page-size-a4",        "A4");
+                });
+            })
+            .Tab("design", "Design", "G", tab =>
+            {
+                // AV-DESIGN: Document Formatting — Themes + Colors / Fonts / Paragraph Spacing galleries.
+                tab.Group("themes", "Themes", null, 110, g =>
+                {
+                    g.Dropdown("freew.theme", "Themes", BuildThemeMenu());
+                });
+                tab.Group("document-formatting", "Document Formatting", null, 100, g =>
+                {
+                    g.Dropdown("freew.theme-colors", "Colors", BuildThemeColorsMenu());
+                    g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
+                    g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
+                });
+                // AV-DESIGN: Page Background — Watermark, Page Color, Page Borders.
+                tab.Group("page-background", "Page Background", null, 90, g =>
+                {
+                    g.Dropdown("freew.watermark",  "Watermark",  BuildWatermarkMenu());
+                    g.Dropdown("freew.page-color", "Page Color", BuildPageColorMenu());
+                    g.Button("freew.page-borders", "Page Borders");
                 });
             })
             .Tab("view", "View", "V", tab =>
@@ -742,7 +835,19 @@ internal sealed record RibbonHostCallbacks(
     /// AV-MAIL: surface a short mail-merge status / info message to the user (e.g. "Merged 3 records").
     /// Optional: when null the messages are simply dropped (the merge still happens).
     /// </summary>
-    Action<string>? ShowMailMergeInfo = null);
+    Action<string>? ShowMailMergeInfo = null,
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Page Borders — opens a dialog (style / colour / width) and applies the chosen
+    /// border via <see cref="DocumentView.SetPageBorder"/>. Optional (default null); the registry no-ops
+    /// when null (so test call sites and parallel waves keep compiling).
+    /// </summary>
+    Action? OpenPageBordersDialog = null,
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Watermark &gt; Custom Watermark — opens a dialog (text / font / colour / layout)
+    /// and applies it via <see cref="DocumentView.SetWatermark"/>. Optional (default null); the registry
+    /// no-ops when null.
+    /// </summary>
+    Action? OpenWatermarkDialog = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

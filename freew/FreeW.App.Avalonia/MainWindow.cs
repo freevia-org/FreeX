@@ -261,6 +261,36 @@ public sealed class MainWindow : Window
         PageSetupDialog.ShowAndApplyAsync(this, _editor);
 
     /// <summary>
+    /// AV-DESIGN: Opens the Page Borders dialog (modal); on OK applies the chosen border via
+    /// <see cref="DocumentView.SetPageBorder"/> (undoable), or removes it on "None". Wired to
+    /// <c>freew.page-borders</c> (Design → Page Background group).
+    /// </summary>
+    private async Task OpenPageBordersDialogAsync()
+    {
+        var dialog = new PageBordersDialog(_editor.Document.Page.PageBorder);
+        await dialog.ShowDialog(this);
+        if (dialog.RemoveRequested)
+            _editor.SetPageBorder(null);
+        else if (dialog.Result is { } border)
+            _editor.SetPageBorder(border);
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Opens the Custom Watermark dialog (modal); on OK applies the chosen text watermark via
+    /// <see cref="DocumentView.SetWatermark"/> (undoable), or removes it on "No Watermark". Wired to
+    /// <c>freew.watermark.custom</c> (Design → Page Background group).
+    /// </summary>
+    private async Task OpenWatermarkDialogAsync()
+    {
+        var dialog = new WatermarkDialog(_editor.Document.Page.EffectiveWatermark);
+        await dialog.ShowDialog(this);
+        if (dialog.RemoveRequested)
+            _editor.SetWatermark(null);
+        else if (dialog.Result is { } options)
+            _editor.SetWatermark(options);
+    }
+
+    /// <summary>
     /// AV-REVIEW: Opens the Word Count dialog (modal), showing words/characters/paragraphs/lines computed
     /// from the document model. Wired to <c>freew.word-count</c> ribbon command (Review → Proofing group).
     /// </summary>
@@ -444,7 +474,10 @@ public sealed class MainWindow : Window
             OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
-            ShowMailMergeInfo: msg => _status.Text = msg);
+            ShowMailMergeInfo: msg => _status.Text = msg,
+            // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
+            OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
+            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
