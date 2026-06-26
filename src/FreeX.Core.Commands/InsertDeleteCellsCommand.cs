@@ -26,6 +26,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
@@ -80,6 +81,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandRight(sheet.Hyperlinks, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
             _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             ShiftAnnotationsInBandRight(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
+            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
+            ShiftAnnotationsInBandRight(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, width);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -131,6 +134,8 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             ShiftAnnotationsInBandDown(sheet.Hyperlinks, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
             _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             ShiftAnnotationsInBandDown(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
+            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
+            ShiftAnnotationsInBandDown(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, height);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -198,6 +203,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
     }
 
     private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
@@ -504,6 +510,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
@@ -556,6 +563,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandLeft(sheet.Hyperlinks, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
             _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             DeleteAnnotationsInBandLeft(sheet.HyperlinkMetadata, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
+            DeleteAnnotationsInBandLeft(sheet.RichTextRuns, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -605,6 +614,8 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             DeleteAnnotationsInBandUp(sheet.Hyperlinks, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
             _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
             DeleteAnnotationsInBandUp(sheet.HyperlinkMetadata, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
+            DeleteAnnotationsInBandUp(sheet.RichTextRuns, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
 
             // Snapshot and update merged regions
             _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -663,6 +674,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
     }
 
     private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)

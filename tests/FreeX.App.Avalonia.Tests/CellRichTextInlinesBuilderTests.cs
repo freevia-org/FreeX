@@ -50,7 +50,7 @@ public sealed class CellRichTextInlinesBuilderTests
         var runs = CellRichRunLayoutPlanner.Resolve(
             [
                 new CellTextRun("Hello", Bold: true,  Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null),
-                new CellTextRun(" World", Bold: null, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: new CellColor(255, 0, 0)),
+                new CellTextRun(" World", Bold: null, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: CellRunColor.FromRgb(new CellColor(255, 0, 0))),
             ],
             style);
 

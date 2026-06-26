@@ -16,6 +16,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, ThreadedComment>? _threadedCommentSnapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<Guid, string?>? _cfFormulaSnapshot;
@@ -93,6 +94,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         _threadedCommentSnapshot = CaptureDictionary(sheet.ThreadedComments, affected);
         _hyperlinkSnapshot = CaptureDictionary(sheet.Hyperlinks, affected);
         _hyperlinkMetadataSnapshot = CaptureDictionary(sheet.HyperlinkMetadata, affected);
+        _richTextRunsSnapshot = CaptureDictionary(sheet.RichTextRuns, affected);
         _payloadAffectedCells = affected;
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
@@ -138,6 +140,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot, _payloadAffectedCells);
         RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot, _payloadAffectedCells);
+        RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot, _payloadAffectedCells);
         // Restore DV/CF rule ranges that were translated during the move.
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
     }
@@ -186,7 +189,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
                     ? CloneThreadedComment(threadedComment)
                     : null,
                 sheet.Hyperlinks.TryGetValue(source, out var hyperlink) ? hyperlink : null,
-                sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null));
+                sheet.HyperlinkMetadata.TryGetValue(source, out var metadata) ? metadata : null,
+                sheet.RichTextRuns.TryGetValue(source, out var richRuns) ? richRuns : null));
         }
 
         return payloads;
@@ -263,6 +267,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         sheet.ThreadedComments.Remove(address);
         sheet.Hyperlinks.Remove(address);
         sheet.HyperlinkMetadata.Remove(address);
+        sheet.RichTextRuns.Remove(address);
     }
 
     private static void WritePayload(Sheet sheet, MovePayload payload)
@@ -285,6 +290,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.Hyperlinks[payload.Target] = payload.Hyperlink;
         if (payload.HyperlinkMetadata is not null)
             sheet.HyperlinkMetadata[payload.Target] = payload.HyperlinkMetadata;
+        if (payload.RichTextRuns is not null)
+            sheet.RichTextRuns[payload.Target] = payload.RichTextRuns;
     }
 
     private static void RestoreCellSnapshot(Sheet sheet, CellSnapshot snapshot)
@@ -409,5 +416,6 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         string? Comment,
         ThreadedComment? ThreadedComment,
         string? Hyperlink,
-        HyperlinkMetadata? HyperlinkMetadata);
+        HyperlinkMetadata? HyperlinkMetadata,
+        IReadOnlyList<CellTextRun>? RichTextRuns);
 }

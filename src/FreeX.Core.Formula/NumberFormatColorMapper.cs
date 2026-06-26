@@ -64,9 +64,9 @@ internal static class NumberFormatColorMapper
         if (token.Equals("RED", StringComparison.OrdinalIgnoreCase))
             return "#FF0000";
         if (token.Equals("GREEN", StringComparison.OrdinalIgnoreCase))
-            return "#00B050";
+            return "#00FF00";
         if (token.Equals("BLUE", StringComparison.OrdinalIgnoreCase))
-            return "#0070C0";
+            return "#0000FF";
         if (token.Equals("YELLOW", StringComparison.OrdinalIgnoreCase))
             return "#FFFF00";
         if (token.Equals("CYAN", StringComparison.OrdinalIgnoreCase))

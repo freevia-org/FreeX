@@ -259,6 +259,55 @@ public sealed class PresentationTextSearchTests
         results.Should().HaveCount(1);
         results[0].ShapeId.Should().Be(2u);
     }
+
+    // ── GG1 regression: non-overlapping match advance ─────────────────────────
+
+    [Fact]
+    public void FindAll_OverlappingQuery_ReturnsNonOverlappingMatches()
+    {
+        // GG1 regression: query "aa" in "aaaa" must return 2 non-overlapping matches
+        // at positions 0 and 2, NOT 3 overlapping ones at 0,1,2.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeShape(1, "aaaa"));
+
+        var results = PresentationTextSearch.FindAll(p, "aa");
+
+        results.Should().HaveCount(2);
+        results[0].CharStart.Should().Be(0);
+        results[0].CharEnd.Should().Be(2);
+        results[1].CharStart.Should().Be(2);
+        results[1].CharEnd.Should().Be(4);
+    }
+
+    [Fact]
+    public void FindAll_PartialOverlapPattern_SingleMatch()
+    {
+        // GG1 regression: "ana" in "banana" — only one non-overlapping match at index 1.
+        // "banana": b(0) a(1) n(2) a(3) n(4) a(5)
+        // "ana" matches at index 1 (ana); next search starts at 4; no match from 4.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeShape(1, "banana"));
+
+        var results = PresentationTextSearch.FindAll(p, "ana");
+
+        results.Should().HaveCount(1);
+        results[0].CharStart.Should().Be(1);
+    }
+
+    [Fact]
+    public void FindAll_NonOverlapping_StillFindsAll()
+    {
+        // Sanity: non-overlapping repeated query still returns all occurrences.
+        var p = Helpers.MakePresentation(1);
+        p.Slides[0].Shapes.Add(Helpers.MakeShape(1, "catcatcat"));
+
+        var results = PresentationTextSearch.FindAll(p, "cat");
+
+        results.Should().HaveCount(3);
+        results[0].CharStart.Should().Be(0);
+        results[1].CharStart.Should().Be(3);
+        results[2].CharStart.Should().Be(6);
+    }
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -394,6 +443,37 @@ public sealed class FindReplaceCommandTests
             .Should().Be("Hello REPLACED HELLO");
     }
 
+    // ── GG1 regression: overlapping match → ReplaceAll must not corrupt ───────
+
+    [Fact]
+    public void ReplaceAll_OverlappingQuery_NonOverlappingReplace()
+    {
+        // GG1: "aa" in "aaaa" — 2 non-overlapping matches, replace each with "X" → "XX".
+        // Before fix: 3 overlapping matches caused Remove/Insert collision and produced "X".
+        var (p, sess) = MakeSessionWithShape(1, "aaaa");
+
+        int count = sess.ReplaceAll("aa", "X");
+
+        count.Should().Be(2);
+        p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("XX");
+    }
+
+    [Fact]
+    public void ReplaceAll_OverlappingQuery_CountIsCorrect()
+    {
+        // GG1: "aa" in "aaa" — 1 non-overlapping match (at 0), rest starts at 2 which is < length
+        // "aaa" → find "aa" at 0 → advance to 2; find "aa" from 2 → not found (only 1 char left).
+        // So count = 1.
+        var (p, sess) = MakeSessionWithShape(1, "aaa");
+
+        int count = sess.ReplaceAll("aa", "X");
+
+        count.Should().Be(1);
+        p.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Xa");
+    }
+
     // ── NavigateTo ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -450,30 +530,44 @@ public sealed class SnapEngineTests
     // ── grid snap ─────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Snap_Grid_DefaultPitch_IsExactlyEightDip()
+    {
+        // GG2 regression: DefaultGridPitchDip must be exactly 8.0 (PowerPoint default:
+        // 1/12 inch = 914400 EMU/inch / 12 / 9525 EMU/DIP = exactly 8.0 DIP).
+        SnapEngine.DefaultGridPitchDip.Should().Be(8.0);
+    }
+
+    [Fact]
     public void Snap_Grid_SnapsToNearestGridLine()
     {
-        // Moving rect: narrow rect whose center X is within threshold of a grid line.
-        // Center X = 47.5, nearest grid = Round(47.5/7.9375)*7.9375 = 6*7.9375 = 47.625.
-        // Delta = 47.625 - 47.5 = +0.125 (center snaps to grid). Dist = 0.125 < threshold = 6.
-        // All three probes (47, 47.5, 48) map to grid 47.625 — center has smallest dist.
-        // Slide edges (0, 720, 360) are all far away, so grid wins.
+        // GG2 regression: shape near a grid multiple lands on N*8.0 DIP.
+        // Moving rect left=79, right=80 (width=1 DIP).
+        // Probe X values: 79 (left), 79.5 (center), 80 (right).
+        // pitch=8.0: nearest grid for 80 = Round(80/8)*8 = 80, dist=0 → snaps with SnapDx=0
+        //            nearest grid for 79 = Round(79/8)*8 = Round(9.875)*8 = 10*8 = 80, dist=1
+        //            nearest grid for 79.5 = Round(79.5/8)*8 = Round(9.9375)*8 = 10*8 = 80, dist=0.5
+        // Best snap: probe=80 (dist=0) → SnapDx = 80-80 = 0. Shape is already on grid.
+        //
+        // Use left=79, right=87 (width=8, center=83):
+        //   probe 79: nearest=80 (dist=1), probe 83: nearest=80 (dist=3) or 88 (dist=5), probe 87: nearest=88 (dist=1).
+        //   Best: 79→80 or 87→88 both dist=1. First wins: SnapDx = 80-79 = +1.
         var result = SnapEngine.Snap(
-            (47, 0, 48, 10),
+            (79, 200, 87, 280),
             candidates: null,
             slideWidthDip: W, slideHeightDip: H,
             snapEnabled: true,
             gridPitchDip: SnapEngine.DefaultGridPitchDip,
             thresholdDip: SnapEngine.DefaultThresholdDip);
 
-        // Center snaps to 47.625, so SnapDx = +0.125.
-        result.SnapDx.Should().BeApproximately(0.125, 0.001);
+        // Dragged edge snaps to 80.0 (nearest multiple of 8.0 within threshold).
+        result.SnapDx.Should().BeApproximately(1.0, 0.001);
         result.Guides.Should().NotBeEmpty();
     }
 
     [Fact]
     public void Snap_Grid_NoSnapBeyondThreshold()
     {
-        // Left edge at x=10 — nearest grid line is 7.9375 (delta ~2.06) or 0 (delta=10).
+        // Left edge at x=10 — nearest grid line is 8 (delta=2) or 16 (delta=6).
         // With threshold=1, neither qualifies.
         var result = SnapEngine.Snap(
             (10, 10, 110, 90),

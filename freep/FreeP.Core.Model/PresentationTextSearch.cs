@@ -212,7 +212,11 @@ public static class PresentationTextSearch
                         MatchedText    = text.Substring(idx, query.Length),
                     });
 
-                    startIdx = idx + 1;
+                    // Advance past the END of the matched text so overlapping
+                    // occurrences are not reported as separate matches (matches
+                    // Word/PowerPoint find semantics).  Guard against an empty
+                    // query (Math.Max) to avoid an infinite loop.
+                    startIdx = idx + Math.Max(1, query.Length);
                     if (startIdx >= text.Length) break;
                 }
             }

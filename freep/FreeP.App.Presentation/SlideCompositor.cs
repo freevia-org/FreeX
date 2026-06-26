@@ -54,40 +54,52 @@ public static class SlideCompositor
         var ops = new List<DrawOp>();
         var theme = presentation.Theme;
 
+        // Compute the effective color map for this slide (ECMA-376 §19.3.1.20 / §14.2.9):
+        //   slide.ColorMapOverride (from p:clrMapOvr/a:overrideClrMapping)
+        //     ?? master's ColorMap (from p:clrMap)
+        //     ?? null (ThemeColorResolver falls back to the default Office mapping).
+        var layout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
+        var master = presentation.Masters.Find(m => m.Id == layout?.MasterId)
+                  ?? presentation.Masters.FirstOrDefault();
+        IReadOnlyDictionary<string, string>? effectiveClrMap =
+            slide.ColorMapOverride as IReadOnlyDictionary<string, string>
+            ?? master?.ColorMap as IReadOnlyDictionary<string, string>;
+
         // Slide bounds in DIP (origin at 0,0)
         double slideWidthDip = presentation.SlideSizeCxEmu / EmuPerDip;
         double slideHeightDip = presentation.SlideSizeCyEmu / EmuPerDip;
         var slideBounds = new LayoutRect(0, 0, slideWidthDip, slideHeightDip);
 
         // 1. Background
-        var bgFill = ResolveBackground(slide, presentation, theme);
+        var bgFill = ResolveBackground(slide, presentation, theme, effectiveClrMap);
         ops.Add(new DrawOp.Background { Fill = bgFill, BoundsDip = slideBounds });
 
         // 2. Shapes in z-order (back to front)
         foreach (var shape in slide.Shapes)
-            ComposeShape(shape, slide, presentation, theme, ops, slideIndex);
+            ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
 
         return ops;
     }
 
     // ─── Background ───────────────────────────────────────────────────────────────────────────
 
-    private static ResolvedFill ResolveBackground(Slide slide, PresentationModel presentation, PresentationTheme theme)
+    private static ResolvedFill ResolveBackground(Slide slide, PresentationModel presentation, PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         // Slide-level background overrides layout/master.
         if (slide.Background is not null)
-            return ResolveFill(slide.Background, theme);
+            return ResolveFill(slide.Background, theme, effectiveClrMap);
 
         // Try layout background.
         var layout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
         if (layout?.Background is not null)
-            return ResolveFill(layout.Background, theme);
+            return ResolveFill(layout.Background, theme, effectiveClrMap);
 
         // Try master background.
         var master = presentation.Masters.Find(m => m.Id == layout?.MasterId)
                   ?? presentation.Masters.FirstOrDefault();
         if (master?.Background is not null)
-            return ResolveFill(master.Background, theme);
+            return ResolveFill(master.Background, theme, effectiveClrMap);
 
         // Default: white.
         return new ResolvedFill.Solid(SrgbColor.White);
@@ -101,41 +113,42 @@ public static class SlideCompositor
         PresentationModel presentation,
         PresentationTheme theme,
         List<DrawOp> ops,
-        int slideIndex = 0)
+        int slideIndex = 0,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         switch (shape.Kind)
         {
             case SlideShapeKind.Picture:
-                ComposePicture(shape, slide, presentation, theme, ops);
+                ComposePicture(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
             case SlideShapeKind.Media:
-                ComposeMedia(shape, slide, presentation, theme, ops);
+                ComposeMedia(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
             case SlideShapeKind.Group:
                 // Flatten group children (simplified — no group-level transform for now).
                 foreach (var child in shape.Children)
-                    ComposeShape(child, slide, presentation, theme, ops, slideIndex);
+                    ComposeShape(child, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
                 break;
 
             case SlideShapeKind.Table:
                 if (shape.Table is not null)
-                    ComposeTable(shape, theme, ops);
+                    ComposeTable(shape, theme, ops, effectiveClrMap);
                 break;
 
             case SlideShapeKind.Chart:
                 if (shape.Chart is not null)
-                    ComposeChart(shape, theme, ops);
+                    ComposeChart(shape, theme, ops, effectiveClrMap);
                 break;
 
             case SlideShapeKind.SmartArt:
                 if (shape.SmartArt is not null)
-                    ComposeSmartArt(shape, slide, presentation, theme, ops);
+                    ComposeSmartArt(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
 
             default:
-                ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex);
+                ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
                 break;
         }
     }
@@ -148,7 +161,8 @@ public static class SlideCompositor
         PresentationModel presentation,
         PresentationTheme theme,
         List<DrawOp> ops,
-        int slideIndex = 0)
+        int slideIndex = 0,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         // Resolve anchor (placeholder inheritance).
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
@@ -161,12 +175,12 @@ public static class SlideCompositor
 
         // Resolve fill.
         var fill = shape.Fill is not null
-            ? ResolveFill(shape.Fill, theme)
+            ? ResolveFill(shape.Fill, theme, effectiveClrMap)
             : InferDefaultFill(shape, theme);
 
         // Resolve outline.
         var outline = shape.Outline is not null
-            ? ResolveOutline(shape.Outline, theme)
+            ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
         // Resolve text.
@@ -185,7 +199,7 @@ public static class SlideCompositor
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
 
-            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme, slideIndex);
+            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme, slideIndex, effectiveClrMap);
         }
 
         ops.Add(new DrawOp.Shape
@@ -318,7 +332,8 @@ public static class SlideCompositor
         Slide slide,
         PresentationModel presentation,
         PresentationTheme theme,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         if (shape.Picture is null) return;
 
@@ -327,7 +342,7 @@ public static class SlideCompositor
 
         // P3: resolve picture outline from shape's spPr a:ln.
         var outline = shape.Outline is not null
-            ? ResolveOutline(shape.Outline, theme)
+            ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
         ops.Add(new DrawOp.Picture
@@ -347,13 +362,14 @@ public static class SlideCompositor
         Slide slide,
         PresentationModel presentation,
         PresentationTheme theme,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
 
         var outline = shape.Outline is not null
-            ? ResolveOutline(shape.Outline, theme)
+            ? ResolveOutline(shape.Outline, theme, effectiveClrMap)
             : ResolvedOutline.None.Instance;
 
         if (shape.Picture is { Bytes.Length: > 0 })
@@ -384,7 +400,8 @@ public static class SlideCompositor
 
     // ─── Table ───────────────────────────────────────────────────────────────────────────────
 
-    private static void ComposeTable(SlideShape shape, PresentationTheme theme, List<DrawOp> ops)
+    private static void ComposeTable(SlideShape shape, PresentationTheme theme, List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         var table = shape.Table!;
         var frameBounds = new LayoutRect(
@@ -443,7 +460,7 @@ public static class SlideCompositor
                 // Effective fill.
                 var effectiveFill = table.ComputeEffectiveFill(r, c, cell);
                 var resolvedFill = effectiveFill is not null
-                    ? ResolveFill(effectiveFill, theme)
+                    ? ResolveFill(effectiveFill, theme, effectiveClrMap)
                     : ResolvedFill.None.Instance;
 
                 // Effective border.
@@ -451,9 +468,9 @@ public static class SlideCompositor
 
                 ResolvedOutline ResolveOneBorder(ShapeOutline? explicit_border) =>
                     explicit_border is not null
-                        ? ResolveOutline(explicit_border, theme)
+                        ? ResolveOutline(explicit_border, theme, effectiveClrMap)
                         : (effectiveBorder is not null
-                            ? ResolveOutline(effectiveBorder, theme)
+                            ? ResolveOutline(effectiveBorder, theme, effectiveClrMap)
                             : ResolvedOutline.None.Instance);
 
                 var borderLeft   = ResolveOneBorder(cell.Borders?.Left);
@@ -464,7 +481,7 @@ public static class SlideCompositor
                 // Effective text color (for cells that have no explicit run color).
                 var effectiveTextColor = table.ComputeEffectiveTextColor(r, c);
                 var resolvedTextColor = effectiveTextColor is not null
-                    ? ThemeColorResolver.Resolve(effectiveTextColor, theme)
+                    ? ThemeColorResolver.Resolve(effectiveTextColor, theme, effectiveClrMap)
                     : (SrgbColor?)null;
 
                 // Text layout.
@@ -487,7 +504,7 @@ public static class SlideCompositor
 
                     textLayout = ResolveTableCellTextLayout(
                         cell.TextBody, insetL, insetR, insetT, insetB,
-                        resolvedTextColor, theme);
+                        resolvedTextColor, theme, effectiveClrMap);
                 }
 
                 cellOps.Add(new TableCellOp
@@ -513,7 +530,8 @@ public static class SlideCompositor
 
     // ─── Chart ──────────────────────────────────────────────────────────────────────────────────
 
-    private static void ComposeChart(SlideShape shape, PresentationTheme theme, List<DrawOp> ops)
+    private static void ComposeChart(SlideShape shape, PresentationTheme theme, List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         var chart = shape.Chart!;
 
@@ -535,7 +553,7 @@ public static class SlideCompositor
             for (int pi = 0; pi < ptCount; pi++)
             {
                 if (firstSeries.PointColors.TryGetValue(pi, out var ptColor))
-                    seriesColors[pi] = ThemeColorResolver.Resolve(ptColor, theme);
+                    seriesColors[pi] = ThemeColorResolver.Resolve(ptColor, theme, effectiveClrMap);
                 else
                     seriesColors[pi] = DefaultAccentColor(pi, theme);
             }
@@ -548,7 +566,7 @@ public static class SlideCompositor
             {
                 var fillColor = chart.Series[i].FillColor;
                 seriesColors[i] = fillColor is not null
-                    ? ThemeColorResolver.Resolve(fillColor, theme)
+                    ? ThemeColorResolver.Resolve(fillColor, theme, effectiveClrMap)
                     : DefaultAccentColor(i, theme);
             }
         }
@@ -574,7 +592,8 @@ public static class SlideCompositor
         Slide slide,
         PresentationModel presentation,
         PresentationTheme theme,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         var smart = shape.SmartArt!;
 
@@ -582,7 +601,7 @@ public static class SlideCompositor
         {
             // Render each fallback shape as an ordinary AutoShape.
             foreach (var fallback in smart.FallbackShapes)
-                ComposeShape(fallback, slide, presentation, theme, ops);
+                ComposeShape(fallback, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
         }
         else
         {
@@ -622,7 +641,8 @@ public static class SlideCompositor
         TextBody body,
         double insetL, double insetR, double insetT, double insetB,
         SrgbColor? styleTextColor,
-        PresentationTheme theme)
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         string defaultFont   = theme.FontScheme.MinorLatinFont;
         double defaultSizePt = 14.0; // typical table text default
@@ -635,7 +655,7 @@ public static class SlideCompositor
             foreach (var run in para.Runs)
             {
                 SrgbColor color = run.Color is not null
-                    ? ThemeColorResolver.Resolve(run.Color, theme)
+                    ? ThemeColorResolver.Resolve(run.Color, theme, effectiveClrMap)
                     : (styleTextColor ?? SrgbColor.Black);
 
                 resolvedRuns.Add(new ResolvedRun
@@ -677,21 +697,22 @@ public static class SlideCompositor
 
     // ─── Fill resolution ─────────────────────────────────────────────────────────────────────
 
-    private static ResolvedFill ResolveFill(ShapeFill fill, PresentationTheme theme) => fill switch
+    private static ResolvedFill ResolveFill(ShapeFill fill, PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null) => fill switch
     {
         ShapeFill.None => ResolvedFill.None.Instance,
-        ShapeFill.Solid s => new ResolvedFill.Solid(ThemeColorResolver.Resolve(s.Color, theme)),
+        ShapeFill.Solid s => new ResolvedFill.Solid(ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap)),
         ShapeFill.Gradient g => new ResolvedFill.Gradient(
             g.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
                 stop.Position,
-                ThemeColorResolver.Resolve(stop.Color, theme))).ToArray(),
+                ThemeColorResolver.Resolve(stop.Color, theme, effectiveClrMap))).ToArray(),
             g.Kind,
             g.AngleDegrees),
         ShapeFill.Picture p => new ResolvedFill.Picture(p.ImageBytes, p.ContentType, p.Tile),
         ShapeFill.Pattern pat => new ResolvedFill.PatternFill(
             pat.Preset,
-            ThemeColorResolver.Resolve(pat.ForegroundColor, theme),
-            ThemeColorResolver.Resolve(pat.BackgroundColor, theme)),
+            ThemeColorResolver.Resolve(pat.ForegroundColor, theme, effectiveClrMap),
+            ThemeColorResolver.Resolve(pat.BackgroundColor, theme, effectiveClrMap)),
         _ => ResolvedFill.None.Instance
     };
 
@@ -711,11 +732,12 @@ public static class SlideCompositor
 
     // ─── Outline resolution ──────────────────────────────────────────────────────────────────
 
-    private static ResolvedOutline ResolveOutline(ShapeOutline outline, PresentationTheme theme) => outline switch
+    private static ResolvedOutline ResolveOutline(ShapeOutline outline, PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null) => outline switch
     {
         ShapeOutline.None => ResolvedOutline.None.Instance,
         ShapeOutline.Visible v => new ResolvedOutline.Visible(
-            ThemeColorResolver.Resolve(v.Color, theme),
+            ThemeColorResolver.Resolve(v.Color, theme, effectiveClrMap),
             PointsToDip(v.WidthPt),
             v.Dash),
         _ => ResolvedOutline.None.Instance
@@ -730,11 +752,17 @@ public static class SlideCompositor
         if (t.Contains("slidenum") || t == "\\slidenum" || t == "ppslidenum")
             return (slideIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        // DateTime: use cached text as the deterministic value — DO NOT call DateTime.Now here.
-        // Footer: fall through to cached text as well.
-        return string.IsNullOrEmpty(field.CachedText)
-            ? field.FieldType   // last-resort: show type string
-            : field.CachedText;
+        // For cached text always use it (cached text is PowerPoint's baked-in value).
+        if (!string.IsNullOrEmpty(field.CachedText))
+            return field.CachedText;
+
+        // No cached text — render a sensible fallback instead of the raw type token.
+        // datetime / datetime1‥datetime13 → format current date in a readable form.
+        if (t.StartsWith("datetime", StringComparison.Ordinal) || t == "date" || t == "time")
+            return DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+        // footer / header / slidename with no cache → render empty (not the type token).
+        return string.Empty;
     }
 
     private static ResolvedTextLayout ResolveTextLayout(
@@ -743,7 +771,8 @@ public static class SlideCompositor
         TextAlign? effectiveDefaultAlign,
         Placeholder? placeholder,
         PresentationTheme theme,
-        int slideIndex = 0)
+        int slideIndex = 0,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         // Determine the default font size based on placeholder type.
         double defaultFontSizePt = placeholder?.Type switch
@@ -787,7 +816,7 @@ public static class SlideCompositor
                 if (run.Field?.Color is SrgbColor fieldColor)
                     color = fieldColor;
                 else if (run.Color is not null)
-                    color = ThemeColorResolver.Resolve(run.Color, theme);
+                    color = ThemeColorResolver.Resolve(run.Color, theme, effectiveClrMap);
                 else
                     color = SrgbColor.Black;
 

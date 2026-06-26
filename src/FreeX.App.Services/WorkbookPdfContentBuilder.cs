@@ -1,3 +1,5 @@
+using System.Globalization;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using Free.Shared.Pdf;
 
@@ -10,17 +12,208 @@ namespace FreeX.App.Services;
 /// dependency-free <see cref="PortablePdfWriter"/> or the Unicode-capable Skia writer — can emit.
 /// Both FreeX exporters build identical pages from this builder, so portable and Skia output share
 /// one geometry.
+///
+/// <para>
+/// <b>Page-setup-aware path</b> (<see cref="BuildWithPageSetup"/>): honors each sheet's
+/// <see cref="Sheet.PaperSize"/>, <see cref="Sheet.PageOrientation"/>, <see cref="Sheet.PageMargins"/>,
+/// <see cref="Sheet.HeaderMargin"/>/<see cref="Sheet.FooterMargin"/>, <see cref="Sheet.PrintGridlines"/>,
+/// <see cref="Sheet.ScaleToFit"/>, and header/footer format strings. Each page emits the correct
+/// MediaBox (PDF points) and renders the cell grid, optional gridlines, and header/footer text bands.
+/// </para>
+/// <para>
+/// <b>Legacy path</b> (<see cref="Build"/>): accepts caller-supplied <see cref="PortablePdfDocumentOptions"/>
+/// so existing tests and usages that supply fixed geometry are unaffected.
+/// </para>
 /// </summary>
 public static class WorkbookPdfContentBuilder
 {
-    private static readonly PdfColor GridStrokeColor = new(196, 202, 210);
-    private static readonly PdfColor TitleFillColor = new(238, 242, 247);
-    private static readonly PdfColor HeaderTextColor = new(31, 41, 55);
-    private static readonly PdfColor FooterTextColor = new(97, 106, 117);
+    private static readonly PdfColor GridStrokeColor  = new(196, 202, 210);
+    private static readonly PdfColor TitleFillColor   = new(238, 242, 247);
+    private static readonly PdfColor HeaderTextColor  = new(31, 41, 55);
+    private static readonly PdfColor FooterTextColor  = new(97, 106, 117);
+    private static readonly PdfColor GridLineColor    = new(180, 185, 190);
+
+    // -----------------------------------------------------------------------
+    // Page-setup-aware path (new)
+    // -----------------------------------------------------------------------
 
     /// <summary>
-    /// Builds the full draw-op document. Assumes <paramref name="exportPlan"/> is ready (callers
-    /// validate); throws if a page's content plan is not ready.
+    /// Builds a PDF document where each page's dimensions, margins, scale, gridlines, and
+    /// header/footer are derived from the exporting sheet's OOXML page setup. Prefers this path
+    /// over <see cref="Build(Workbook,PortablePdfExportPlan,PortablePdfDocumentOptions)"/> for
+    /// the Avalonia/Skia PDF export.
+    /// </summary>
+    public static PdfContentDocument BuildWithPageSetup(
+        Workbook workbook,
+        PortablePdfExportPlan exportPlan)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(exportPlan);
+
+        var pages = exportPlan.PageRequests
+            .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request))
+            .ToArray();
+        return new PdfContentDocument(pages);
+    }
+
+    /// <summary>
+    /// Builds one PDF page honoring the sheet's page setup.
+    /// </summary>
+    public static PdfContentPage BuildPageWithPageSetup(
+        Workbook workbook,
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request)
+    {
+        var sheet = workbook.GetSheetAt(request.SheetIndex);
+        var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
+        if (!contentPlan.IsReady)
+            throw new InvalidOperationException(contentPlan.StatusText);
+
+        var (pageW, pageH, mL, mR, mT, mB, headerBandPt, footerBandPt) =
+            SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
+
+        // Effective scale for rendering (percent / 100).
+        var scaleRatio = ResolveScaleRatio(sheet, exportPlan, request);
+
+        // Content rect: page minus margins. y-origin is bottom-left in PDF space.
+        var contentLeft   = mL;
+        var contentBottom = mB;
+        var contentRight  = pageW - mR;
+        var contentTop    = pageH - mT;
+        var contentWidth  = Math.Max(1.0, contentRight - contentLeft);
+        var contentHeight = Math.Max(1.0, contentTop - contentBottom);
+
+        // Header band: sits between the top of the page and the content rect.
+        // In PDF y-up: header band top = pageH - headerEdge, header band bottom = pageH - mT.
+        // Footer band: sits between the bottom of the content rect and the bottom of the page.
+        var headerEdgePt  = sheet.HeaderMargin * SheetPdfPageSetupResolver.PdfPointsPerInch;
+        var footerEdgePt  = sheet.FooterMargin * SheetPdfPageSetupResolver.PdfPointsPerInch;
+        _ = headerBandPt;
+        _ = footerBandPt;
+
+        var ops = new List<PdfDrawOp>();
+
+        // ── Cell grid ──────────────────────────────────────────────────────────
+        var columnCount = Math.Max(1, contentPlan.ColumnCount);
+        var rowCount    = Math.Max(1, contentPlan.RowCount);
+
+        // Distribute available width/height proportionally to actual column/row sizes.
+        var (colWidths, rowHeights) = ComputeActualGridSizes(
+            sheet, contentPlan, contentWidth * scaleRatio, contentHeight * scaleRatio);
+
+        // Grid origin: top-left corner in PDF y-up (top = high y).
+        // We position the grid at the top of the content rect.
+        var gridLeft = contentLeft;
+        var gridTop  = contentTop;   // PDF y-up: top edge = high y value
+
+        // Build a cumulative column-x lookup (left edge of each column).
+        var colXs  = BuildCumulative(colWidths,  gridLeft);
+        var rowYs  = BuildCumulativeDown(rowHeights, gridTop);  // row y-bottom (PDF y-up, going down)
+
+        // ── Draw cell fills and text ───────────────────────────────────────────
+        foreach (var cell in contentPlan.Cells)
+        {
+            var rowIndex = FindRowIndex(contentPlan.Rows, cell.Row);
+            var colIndex = FindColumnIndex(contentPlan.Columns, cell.Column);
+            if (rowIndex < 0 || colIndex < 0)
+                continue;
+
+            if (rowIndex >= rowHeights.Length || colIndex >= colWidths.Length)
+                continue;
+
+            var x = colXs[colIndex];
+            var w = colWidths[colIndex];
+            var h = rowHeights[rowIndex];
+            var y = rowYs[rowIndex];  // bottom of this row in PDF y-up
+
+            var style = workbook.GetStyle(cell.StyleId);
+            var fill  = style.ResolveFillColor(workbook.Theme);
+
+            // B&W mode: suppress colored cell fills (treat as white / transparent).
+            // The page background is already white so simply omitting the fill rect is correct.
+            var bw = sheet.PrintBlackAndWhite;
+            if (!bw && (fill is not null || cell.IsTitle))
+                ops.Add(new PdfFillRect(x, y, w, h, ToPdfColor(fill) ?? TitleFillColor));
+
+            if (!string.IsNullOrEmpty(cell.DisplayText))
+            {
+                var fontSize  = Math.Clamp(style.FontSize, 7, 10);
+                var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
+                // B&W mode: force font colour to black regardless of style.
+                var fontColor = bw ? PdfColor.Black : (ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black);
+                // Text baseline: ~3 pt from bottom of row.
+                var baseline = y + 3.0;
+                ops.Add(new PdfText(
+                    x + 2,
+                    baseline,
+                    fontSize,
+                    fontFace,
+                    fontColor,
+                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64)));
+            }
+        }
+
+        // ── Gridlines ─────────────────────────────────────────────────────────
+        if (sheet.PrintGridlines)
+        {
+            var gridBottom = rowYs.Length > 0 ? rowYs[rowCount - 1] : contentBottom;
+            var gridRight  = colXs.Length > 0 ? colXs[columnCount - 1] + colWidths[columnCount - 1] : contentRight;
+
+            // Horizontal lines (one per row boundary + bottom).
+            for (var ri = 0; ri <= rowCount; ri++)
+            {
+                double lineY;
+                if (ri == 0)
+                    lineY = gridTop;
+                else if (ri <= rowYs.Length)
+                    lineY = rowYs[ri - 1];  // bottom of row ri-1
+                else
+                    break;
+
+                ops.Add(new PdfLine(gridLeft, lineY, gridRight, lineY, GridLineColor, 0.4));
+            }
+
+            // Vertical lines (one per column boundary + right).
+            for (var ci = 0; ci <= columnCount; ci++)
+            {
+                double lineX;
+                if (ci < colXs.Length)
+                    lineX = colXs[ci];
+                else if (ci == columnCount && colXs.Length > 0)
+                    lineX = colXs[columnCount - 1] + colWidths[columnCount - 1];
+                else
+                    break;
+
+                ops.Add(new PdfLine(lineX, gridTop, lineX, gridBottom, GridLineColor, 0.4));
+            }
+        }
+
+        // ── Header band ────────────────────────────────────────────────────────
+        var (header, footer) = ResolveHeaderFooterForPage(sheet, request.SheetPageNumber);
+        var pageNumber = request.SheetPageNumber;
+        var totalPages = exportPlan.TotalPageCount;
+
+        // Header text: rendered just below the header margin from the top of the page.
+        var headerY = pageH - headerEdgePt - 8;   // baseline approx 8pt below header edge
+        RenderHeaderFooterBand(ops, header, pageW, mL, mR, headerY, 8,
+            workbook.Name, sheet.Name, pageNumber, totalPages, HeaderTextColor);
+
+        // Footer text: rendered just above the footer edge from the bottom.
+        var footerY = footerEdgePt + 2;            // baseline approx 2pt above footer edge
+        RenderHeaderFooterBand(ops, footer, pageW, mL, mR, footerY, 8,
+            workbook.Name, sheet.Name, pageNumber, totalPages, FooterTextColor);
+
+        return new PdfContentPage(pageW, pageH, ops);
+    }
+
+    // -----------------------------------------------------------------------
+    // Legacy path (unchanged API — options supplied by caller)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the full draw-op document using caller-supplied <paramref name="options"/>. Assumes
+    /// <paramref name="exportPlan"/> is ready (callers validate); throws if a page's content plan
+    /// is not ready.
     /// </summary>
     public static PdfContentDocument Build(
         Workbook workbook,
@@ -110,6 +303,284 @@ public static class WorkbookPdfContentBuilder
 
         return new PdfContentPage(options.PageWidthPoints, options.PageHeightPoints, ops);
     }
+
+    // -----------------------------------------------------------------------
+    // Page-setup helpers
+    // -----------------------------------------------------------------------
+
+    private static double ResolveScaleRatio(
+        Sheet sheet,
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request)
+    {
+        var scaleToFit = sheet.ScaleToFit;
+        if (scaleToFit.ScalePercent is { } pct && pct is >= 10 and <= 400)
+            return pct / 100.0;
+
+        // fit-to-pages: derive scale from actual page count vs. requested count.
+        var sheetPlan = exportPlan.ExportPrintPlan.SheetPlans[request.SheetIndex];
+        double ratio = 1.0;
+        if (scaleToFit.FitToPagesWide is { } wide and >= 1 && sheetPlan.ColumnPageCount > wide)
+            ratio = Math.Min(ratio, wide / (double)sheetPlan.ColumnPageCount);
+        if (scaleToFit.FitToPagesTall is { } tall and >= 1 && sheetPlan.RowPageCount > tall)
+            ratio = Math.Min(ratio, tall / (double)sheetPlan.RowPageCount);
+
+        return Math.Max(0.1, ratio);
+    }
+
+    /// <summary>
+    /// Computes per-column widths and per-row heights in PDF points for the content plan,
+    /// scaled to fill the available content area proportionally to the sheet's actual sizes.
+    /// </summary>
+    private static (double[] ColWidths, double[] RowHeights) ComputeActualGridSizes(
+        Sheet sheet,
+        PortablePdfPageContentPlan contentPlan,
+        double availableWidth,
+        double availableHeight)
+    {
+        const double layoutDpi = 96.0;
+        const double ptPerPx   = SheetPdfPageSetupResolver.PdfPointsPerInch / layoutDpi;
+
+        // Convert actual column widths from character units → pixels → points.
+        var colWidthsPt = new double[contentPlan.ColumnCount];
+        var totalColWidthPt = 0.0;
+        for (var i = 0; i < contentPlan.Columns.Count; i++)
+        {
+            var col = contentPlan.Columns[i].Column;
+            var chars = sheet.ColumnWidths.TryGetValue(col, out var w) && w > 0
+                ? w
+                : sheet.DefaultColumnWidth;
+            var px  = Math.Max(4.0, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
+            var pt  = px * ptPerPx;
+            colWidthsPt[i]   = pt;
+            totalColWidthPt += pt;
+        }
+
+        // Convert actual row heights from pixels → points.
+        var rowHeightsPt = new double[contentPlan.RowCount];
+        var totalRowHeightPt = 0.0;
+        for (var i = 0; i < contentPlan.Rows.Count; i++)
+        {
+            var row = contentPlan.Rows[i].Row;
+            var px  = sheet.RowHeights.TryGetValue(row, out var h) && h > 0 ? h : sheet.DefaultRowHeight;
+            var pt  = Math.Max(1.0, px * ptPerPx);
+            rowHeightsPt[i]   = pt;
+            totalRowHeightPt += pt;
+        }
+
+        // Scale proportionally so the grid fits the available area.
+        if (totalColWidthPt > 0 && totalColWidthPt > availableWidth)
+        {
+            var scale = availableWidth / totalColWidthPt;
+            for (var i = 0; i < colWidthsPt.Length; i++)
+                colWidthsPt[i] *= scale;
+        }
+
+        if (totalRowHeightPt > 0 && totalRowHeightPt > availableHeight)
+        {
+            var scale = availableHeight / totalRowHeightPt;
+            for (var i = 0; i < rowHeightsPt.Length; i++)
+                rowHeightsPt[i] *= scale;
+        }
+
+        return (colWidthsPt, rowHeightsPt);
+    }
+
+    /// <summary>
+    /// Builds cumulative left-x positions for each column from a starting x.
+    /// </summary>
+    private static double[] BuildCumulative(double[] widths, double startX)
+    {
+        var xs = new double[widths.Length];
+        var x = startX;
+        for (var i = 0; i < widths.Length; i++)
+        {
+            xs[i] = x;
+            x += widths[i];
+        }
+
+        return xs;
+    }
+
+    /// <summary>
+    /// Builds bottom-y positions for each row going down from the top edge (PDF y-up).
+    /// Row 0's bottom = topY - rowHeight[0]; row 1's bottom = topY - rowHeight[0] - rowHeight[1]; etc.
+    /// </summary>
+    private static double[] BuildCumulativeDown(double[] heights, double topY)
+    {
+        var ys = new double[heights.Length];
+        var y = topY;
+        for (var i = 0; i < heights.Length; i++)
+        {
+            y -= heights[i];
+            ys[i] = y;
+        }
+
+        return ys;
+    }
+
+    private static void RenderHeaderFooterBand(
+        List<PdfDrawOp> ops,
+        WorksheetHeaderFooter band,
+        double pageW,
+        double mL,
+        double mR,
+        double baselineY,
+        double fontSize,
+        string workbookName,
+        string sheetName,
+        int pageNumber,
+        int totalPages,
+        PdfColor color)
+    {
+        var now = DateTime.Now;
+        var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
+
+        // Left section.
+        var leftText = ExpandHF(band.Left, pageNumber, totalPages, workbookName, sheetName, now);
+        if (!string.IsNullOrEmpty(leftText))
+            ops.Add(new PdfText(mL, baselineY, fontSize, PdfFontFace.Regular, color,
+                PortablePdfWinAnsiTextCapability.Truncate(leftText, 128)));
+
+        // Center section.
+        var centerText = ExpandHF(band.Center, pageNumber, totalPages, workbookName, sheetName, now);
+        if (!string.IsNullOrEmpty(centerText))
+        {
+            var centerX = mL + sectionWidth;  // approximate — no text measurement available here
+            ops.Add(new PdfText(centerX, baselineY, fontSize, PdfFontFace.Regular, color,
+                PortablePdfWinAnsiTextCapability.Truncate(centerText, 128)));
+        }
+
+        // Right section.
+        var rightText = ExpandHF(band.Right, pageNumber, totalPages, workbookName, sheetName, now);
+        if (!string.IsNullOrEmpty(rightText))
+        {
+            var rightX = pageW - mR - sectionWidth;
+            ops.Add(new PdfText(rightX, baselineY, fontSize, PdfFontFace.Regular, color,
+                PortablePdfWinAnsiTextCapability.Truncate(rightText, 128)));
+        }
+    }
+
+    /// <summary>
+    /// Simple header/footer token expansion without formatting codes (bold/italic/etc. are stripped;
+    /// value placeholders &P/&N/&D/&T/&F/&A are substituted).
+    /// </summary>
+    private static string ExpandHF(
+        string raw,
+        int pageNumber,
+        int totalPages,
+        string workbookName,
+        string sheetName,
+        DateTime now)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return "";
+
+        var sb = new System.Text.StringBuilder(raw.Length);
+        var span = raw.AsSpan();
+        var i = 0;
+        while (i < span.Length)
+        {
+            if (span[i] != '&')
+            {
+                sb.Append(span[i]);
+                i++;
+                continue;
+            }
+
+            if (i + 1 >= span.Length) { sb.Append('&'); i++; continue; }
+            var next = span[i + 1];
+
+            if (next == '[')
+            {
+                var close = span[(i + 2)..].IndexOf(']');
+                if (close < 0) { sb.Append('&'); i++; continue; }
+                var token = span.Slice(i + 2, close).ToString().ToUpperInvariant();
+                i += 3 + close;
+                switch (token)
+                {
+                    case "PAGE":   sb.Append(pageNumber.ToString(CultureInfo.InvariantCulture)); break;
+                    case "PAGES":  sb.Append(totalPages.ToString(CultureInfo.InvariantCulture)); break;
+                    case "DATE":   sb.Append(now.ToString("d", CultureInfo.CurrentCulture)); break;
+                    case "TIME":   sb.Append(now.ToString("t", CultureInfo.CurrentCulture)); break;
+                    case "FILE":   sb.Append(workbookName); break;
+                    case "TAB":    sb.Append(sheetName); break;
+                }
+                continue;
+            }
+
+            if (next == '&') { sb.Append('&'); i += 2; continue; }
+
+            // Font/style codes — skip them.
+            var code = char.ToUpperInvariant(next);
+            switch (code)
+            {
+                case 'B': case 'I': case 'U': case 'E': case 'S': case 'G':
+                case '+': case '-':
+                    i += 2;
+                    continue;
+                case '"':
+                {
+                    var close = span[(i + 2)..].IndexOf('"');
+                    i += close >= 0 ? 3 + close : 2;
+                    continue;
+                }
+                case 'K':
+                    i += i + 7 < span.Length ? 8 : 2;
+                    continue;
+                case 'P':
+                    sb.Append(pageNumber.ToString(CultureInfo.InvariantCulture));
+                    i += 2; continue;
+                case 'N':
+                    sb.Append(totalPages.ToString(CultureInfo.InvariantCulture));
+                    i += 2; continue;
+                case 'D':
+                    sb.Append(now.ToString("d", CultureInfo.CurrentCulture));
+                    i += 2; continue;
+                case 'T':
+                    sb.Append(now.ToString("t", CultureInfo.CurrentCulture));
+                    i += 2; continue;
+                case 'F':
+                    sb.Append(workbookName);
+                    i += 2; continue;
+                case 'A':
+                    sb.Append(sheetName);
+                    i += 2; continue;
+                default:
+                    if (char.IsAsciiDigit(next))
+                    {
+                        // font-size code — skip digits
+                        var end = i + 2;
+                        if (end < span.Length && char.IsAsciiDigit(span[end])) end++;
+                        i = end;
+                    }
+                    else
+                    {
+                        sb.Append('&');
+                        i++;
+                    }
+                    continue;
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)
+        ResolveHeaderFooterForPage(Sheet sheet, int pageNumber)
+    {
+        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
+            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
+
+        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
+            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
+
+        return (sheet.PageHeader, sheet.PageFooter);
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared helpers
+    // -----------------------------------------------------------------------
 
     private static PdfColor? ToPdfColor(CellColor? color) =>
         color is { } c ? new PdfColor(c.R, c.G, c.B) : null;

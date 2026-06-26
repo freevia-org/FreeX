@@ -38,6 +38,9 @@ public static class AvaloniaPdfDocumentExporter
         // text (Cyrillic, Greek, CJK, accented Latin) exports correctly without bundling a font. When
         // the Skia native asset is missing (headless/no-Skia), it throws on first use; we then fall
         // back to the dependency-free WinAnsi writer so export still works for ASCII/WinAnsi content.
+        // When no explicit options are supplied the page-setup-aware path is used (page dimensions,
+        // gridlines, and header/footer derived from each sheet's OOXML page setup). Passing non-null
+        // options bypasses page-setup awareness and uses the fixed geometry supplied by the caller.
         try
         {
             var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);

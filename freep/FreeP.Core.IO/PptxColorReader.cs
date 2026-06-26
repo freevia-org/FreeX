@@ -53,13 +53,16 @@ internal static class PptxColorReader
                 if (shadeFraction < 1.0)
                     resolved = ApplyShade(resolved, shadeFraction);
 
+                // Store the raw role name (val) so ThemeColorResolver can apply clrMap indirection
+                // at render time (master's clrMap may remap tx1→lt1, bg1→dk1, etc.).
                 return new ThemeAwareColor(resolved, new SchemeColorRef
                 {
-                    Slot    = slot,
-                    LumMod  = lumMod,
-                    LumOff  = lumOff,
-                    Tint    = tintFraction,
-                    Shade   = shadeFraction,
+                    RoleName = val!.Trim(),
+                    Slot     = slot,
+                    LumMod   = lumMod,
+                    LumOff   = lumOff,
+                    Tint     = tintFraction,
+                    Shade    = shadeFraction,
                 });
             }
         }

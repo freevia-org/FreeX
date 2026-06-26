@@ -55,7 +55,7 @@ public sealed class GridViewRichRunFormattingTests
             var runs = CellRichRunLayoutPlanner.Resolve(
                 [
                     new CellTextRun("Hello", Bold: true,  Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null),
-                    new CellTextRun(" World", Bold: false, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: new CellColor(255, 0, 0)),
+                    new CellTextRun(" World", Bold: false, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: CellRunColor.FromRgb(new CellColor(255, 0, 0))),
                 ],
                 style);
 
@@ -126,11 +126,11 @@ public sealed class GridViewRichRunFormattingTests
         {
             var ft = MakeFormattedText("Hello World");
             var style = new CellStyle { FontName = "Calibri", FontSize = 11 };
-            var redColor = new CellColor(255, 0, 0);
+            var redRunColor = CellRunColor.FromRgb(new CellColor(255, 0, 0));
             var runs = CellRichRunLayoutPlanner.Resolve(
                 [
                     new CellTextRun("Hello", Bold: null, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: null),
-                    new CellTextRun(" World", Bold: null, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: redColor),
+                    new CellTextRun(" World", Bold: null, Italic: null, Underline: null, Strikethrough: null, FontName: null, FontSize: null, FontColor: redRunColor),
                 ],
                 style);
 
@@ -138,7 +138,7 @@ public sealed class GridViewRichRunFormattingTests
             GridView.ApplyRichRunFormatting(ft, runs, brushCache);
 
             // Red color should be in the cache after applying.
-            brushCache.Should().ContainKey(redColor);
+            brushCache.Should().ContainKey(new CellColor(255, 0, 0));
         });
     }
 

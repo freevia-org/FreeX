@@ -604,6 +604,283 @@ public sealed class ArrangeGroupAlignTests
         slide.Shapes[2].Id.Should().Be(12, "12 restored to index 2");
     }
 
+    // ── FF1/FF3: grpSpPr chOff/chExt PPTX XML assertions ────────────────────────
+
+    /// <summary>
+    /// FF1: The emitted grpSpPr a:xfrm must have chOff == off so that PowerPoint renders
+    /// children at their stored absolute positions (identity group→child transform).
+    /// Previously chOff was (0,0) which caused PowerPoint to displace every grouped shape
+    /// by the group origin.
+    /// </summary>
+    [Fact]
+    public void GroupShape_PptxXml_ChOffEqualsOff()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Group 1",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = 914400,   // 1 inch
+            OffsetYEmu  = 457200,   // 0.5 inch
+            ExtentCxEmu = 2743200,  // 3 inches
+            ExtentCyEmu = 1371600,  // 1.5 inches
+        };
+        group.Children.Add(MakeRect(2, 914400,  457200,  914400, 914400));
+        group.Children.Add(MakeRect(3, 2286000, 457200, 1371600, 914400));
+        slide.Shapes.Add(group);
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        // Open the zip and read the slide XML to inspect chOff/chExt.
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.FirstOrDefault(e => e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase));
+        slideEntry.Should().NotBeNull("slide XML must exist in PPTX");
+
+        System.Xml.Linq.XDocument doc;
+        using (var stream = slideEntry!.Open())
+            doc = System.Xml.Linq.XDocument.Load(stream);
+
+        System.Xml.Linq.XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        // Find the p:grpSp element (the actual group, not the slide-level spTree wrapper).
+        var grpSp = doc.Descendants(p + "grpSp").FirstOrDefault();
+        grpSp.Should().NotBeNull("p:grpSp must be present in slide XML");
+
+        // The group's xfrm lives in p:grpSp > p:grpSpPr > a:xfrm.
+        var grpSpPr = grpSp!.Element(p + "grpSpPr")?.Element(a + "xfrm");
+        grpSpPr.Should().NotBeNull("grpSpPr xfrm must be present");
+
+        var off   = grpSpPr!.Element(a + "off");
+        var ext   = grpSpPr.Element(a + "ext");
+        var chOff = grpSpPr.Element(a + "chOff");
+        var chExt = grpSpPr.Element(a + "chExt");
+
+        off.Should().NotBeNull();
+        ext.Should().NotBeNull();
+        chOff.Should().NotBeNull("chOff must be present in grpSpPr");
+        chExt.Should().NotBeNull("chExt must be present in grpSpPr");
+
+        // FF1: chOff must equal off (identity mapping for absolute child coords).
+        chOff!.Attribute("x")?.Value.Should().Be(off!.Attribute("x")?.Value,
+            "chOff.x must equal off.x so PowerPoint renders children at absolute positions");
+        chOff.Attribute("y")?.Value.Should().Be(off.Attribute("y")?.Value,
+            "chOff.y must equal off.y so PowerPoint renders children at absolute positions");
+
+        // FF1: chExt must equal ext.
+        chExt!.Attribute("cx")?.Value.Should().Be(ext!.Attribute("cx")?.Value,
+            "chExt.cx must equal ext.cx for identity child scale");
+        chExt.Attribute("cy")?.Value.Should().Be(ext.Attribute("cy")?.Value,
+            "chExt.cy must equal ext.cy for identity child scale");
+    }
+
+    /// <summary>
+    /// FF1 + round-trip: children read back after write still carry their original absolute offsets,
+    /// confirming the reader/compositor pipeline is consistent with chOff=off.
+    /// </summary>
+    [Fact]
+    public void GroupShape_PptxRoundTrip_ChildrenRetainAbsoluteOffsets_AfterFF1Fix()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Group 1",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1371600,
+        };
+        group.Children.Add(MakeRect(2, 914400,  457200,  914400, 914400));   // child A at absolute (914400, 457200)
+        group.Children.Add(MakeRect(3, 2286000, 457200, 1371600, 914400));   // child B at absolute (2286000, 457200)
+        slide.Shapes.Add(group);
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        Presentation loaded;
+        using (var ms = new MemoryStream(bytes))
+            loaded = PptxPackageReader.Read(ms);
+
+        var loadedGroup = loaded.Slides[0].Shapes[0];
+        var childA = loadedGroup.Children.First(c => c.Id == 2);
+        var childB = loadedGroup.Children.First(c => c.Id == 3);
+
+        // Children must read back at their original ABSOLUTE slide offsets.
+        childA.OffsetXEmu.Should().Be(914400,  "child A absolute X preserved after round-trip");
+        childA.OffsetYEmu.Should().Be(457200,  "child A absolute Y preserved after round-trip");
+        childB.OffsetXEmu.Should().Be(2286000, "child B absolute X preserved after round-trip");
+        childB.OffsetYEmu.Should().Be(457200,  "child B absolute Y preserved after round-trip");
+    }
+
+    /// <summary>
+    /// FF3: A degenerate group (zero extent) must emit chExt cx/cy ≥ 1 EMU so PowerPoint
+    /// does not divide by zero during rendering.
+    /// </summary>
+    [Fact]
+    public void GroupShape_DegenerateZeroExtent_ChExtClamped()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+
+        // Degenerate group: all children at the same point → extent = (0,0).
+        var group = new SlideShape
+        {
+            Id          = 1,
+            Name        = "Degenerate",
+            Kind        = SlideShapeKind.Group,
+            OffsetXEmu  = 500,
+            OffsetYEmu  = 500,
+            ExtentCxEmu = 0,   // degenerate
+            ExtentCyEmu = 0,   // degenerate
+        };
+        group.Children.Add(MakeRect(2, 500, 500, 0, 0));
+        slide.Shapes.Add(group);
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.First(e => e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase));
+        System.Xml.Linq.XDocument doc;
+        using (var stream = slideEntry.Open())
+            doc = System.Xml.Linq.XDocument.Load(stream);
+
+        System.Xml.Linq.XNamespace pNs = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        System.Xml.Linq.XNamespace a   = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        // Navigate to p:grpSp > p:grpSpPr > a:xfrm (the group's xfrm, not the slide spTree xfrm).
+        var grpSp = doc.Descendants(pNs + "grpSp").First();
+        var xfrm  = grpSp.Element(pNs + "grpSpPr")!.Element(a + "xfrm")!;
+        var ext   = xfrm.Element(a + "ext");
+        var chExt = xfrm.Element(a + "chExt");
+
+        long extCx   = long.Parse(ext!.Attribute("cx")!.Value);
+        long extCy   = long.Parse(ext.Attribute("cy")!.Value);
+        long chExtCx = long.Parse(chExt!.Attribute("cx")!.Value);
+        long chExtCy = long.Parse(chExt.Attribute("cy")!.Value);
+
+        extCx.Should().BeGreaterThanOrEqualTo(1, "ext.cx must be ≥ 1 EMU (FF3 clamp)");
+        extCy.Should().BeGreaterThanOrEqualTo(1, "ext.cy must be ≥ 1 EMU (FF3 clamp)");
+        chExtCx.Should().BeGreaterThanOrEqualTo(1, "chExt.cx must be ≥ 1 EMU (FF3 clamp)");
+        chExtCy.Should().BeGreaterThanOrEqualTo(1, "chExt.cy must be ≥ 1 EMU (FF3 clamp)");
+    }
+
+    // ── FF2: multi-select BringToFront / SendToBack ───────────────────────────────
+
+    /// <summary>
+    /// FF2: BringToFront with 3 selected shapes must move ALL of them to the top,
+    /// preserving their relative z-order.
+    /// Setup: z-order = [A(10), B(11), C(12), D(13), E(14)]; select B(11), C(12), E(14).
+    /// Expected: [A(10), D(13), B(11), C(12), E(14)] — non-selected stay below, selected
+    /// arrive on top preserving B<C<E relative order.
+    /// </summary>
+    [Fact]
+    public void BringToFront_MultiSelect_AllShapesMoveToTopPreservingRelativeOrder()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100)); // z=0
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100)); // z=1
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100)); // z=2
+        slide.Shapes.Add(MakeRect(13, 0, 0, 100, 100)); // z=3
+        slide.Shapes.Add(MakeRect(14, 0, 0, 100, 100)); // z=4
+
+        session.SelectSlide(0);
+        session.Select(11);
+        session.Select(12, addToSelection: true);
+        session.Select(14, addToSelection: true);
+
+        session.BringToFront();
+
+        // Expected final order: [10, 13, 11, 12, 14]
+        slide.Shapes.Select(s => s.Id).Should().Equal(new uint[] { 10, 13, 11, 12, 14 },
+            "BringToFront should move all selected to top preserving their relative order");
+    }
+
+    /// <summary>
+    /// FF2: SendToBack with 3 selected shapes must move ALL of them to the bottom,
+    /// preserving their relative z-order.
+    /// Setup: z-order = [A(10), B(11), C(12), D(13), E(14)]; select A(10), C(12), D(13).
+    /// Expected: [A(10), C(12), D(13), B(11), E(14)].
+    /// </summary>
+    [Fact]
+    public void SendToBack_MultiSelect_AllShapesMoveToBottomPreservingRelativeOrder()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100)); // z=0
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100)); // z=1
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100)); // z=2
+        slide.Shapes.Add(MakeRect(13, 0, 0, 100, 100)); // z=3
+        slide.Shapes.Add(MakeRect(14, 0, 0, 100, 100)); // z=4
+
+        session.SelectSlide(0);
+        session.Select(10);
+        session.Select(12, addToSelection: true);
+        session.Select(13, addToSelection: true);
+
+        session.SendToBack();
+
+        // Expected final order: [10, 12, 13, 11, 14]
+        slide.Shapes.Select(s => s.Id).Should().Equal(new uint[] { 10, 12, 13, 11, 14 },
+            "SendToBack should move all selected to bottom preserving their relative order");
+    }
+
+    /// <summary>
+    /// FF2: BringToFront multi-select must be undoable in a single Undo step,
+    /// restoring the original z-order of all shapes.
+    /// </summary>
+    [Fact]
+    public void BringToFront_MultiSelect_SingleUndoRestoresOriginalOrder()
+    {
+        var (pres, session) = CreateSession();
+        var slide = pres.Slides[0];
+        slide.Shapes.Add(MakeRect(10, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(11, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(12, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(13, 0, 0, 100, 100));
+        slide.Shapes.Add(MakeRect(14, 0, 0, 100, 100));
+
+        session.SelectSlide(0);
+        session.Select(11);
+        session.Select(12, addToSelection: true);
+        session.Select(14, addToSelection: true);
+        session.BringToFront();
+
+        // Verify moved.
+        slide.Shapes.Last().Id.Should().Be(14);
+
+        // Single undo.
+        session.Undo();
+
+        // Original order restored.
+        slide.Shapes.Select(s => s.Id).Should().Equal(new uint[] { 10, 11, 12, 13, 14 },
+            "single Undo must restore all shapes to original z-order");
+    }
+
     // ── BringForward / SendBackward (existing, sanity check) ─────────────────────
 
     [Fact]

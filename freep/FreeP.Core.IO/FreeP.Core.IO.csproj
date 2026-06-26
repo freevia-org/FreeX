@@ -5,6 +5,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>FreeP.App.Presentation.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>FreeP.App.Host.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <!-- Hardened XML reader settings (DTD prohibit, char cap, no resolver) shared with FreeX/FreeW. -->
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />

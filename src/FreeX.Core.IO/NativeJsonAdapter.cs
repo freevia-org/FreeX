@@ -166,7 +166,20 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadata(sDto.IgnoredErrorsMetadata);
             sheet.AdditionalViews = ToWorksheetAdditionalViews(sDto.AdditionalViews);
             sheet.PrimaryViewMetadata = ToWorksheetPrimaryViewMetadata(sDto.PrimaryViewMetadata);
-            if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
+            // Multi-area print areas (new field takes precedence; fall back to legacy single-area field).
+            if (sDto.PrintAreas is { Length: > 0 })
+            {
+                var areas = new List<GridRange>(sDto.PrintAreas.Length);
+                foreach (var raw in sDto.PrintAreas)
+                {
+                    if (string.IsNullOrWhiteSpace(raw)) continue;
+                    try { areas.Add(GridRange.Parse(raw, sheet.Id)); }
+                    catch (FormatException) { /* skip unparseable */ }
+                }
+                if (areas.Count > 0)
+                    sheet.SetPrintAreas(areas);
+            }
+            else if (!string.IsNullOrWhiteSpace(sDto.PrintArea))
             {
                 try { sheet.PrintArea = GridRange.Parse(sDto.PrintArea, sheet.Id); }
                 catch (FormatException) { /* skip unparseable print areas */ }

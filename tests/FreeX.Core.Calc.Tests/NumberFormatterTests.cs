@@ -202,7 +202,7 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("[Blue] [>100]0;0", 50, "50", null)]
-    [InlineData("[Blue] [>100]0;0", 150, "150", "#0070C0")]
+    [InlineData("[Blue] [>100]0;0", 150, "150", "#0000FF")] // [Blue] = legacy palette pure blue
     public void CustomNumberSubset_AllowsWhitespaceBetweenLeadingBracketDirectives(
         string format,
         double value,
@@ -218,7 +218,7 @@ public class NumberFormatterTests
     [Theory]
     [InlineData("[$€-407][Red][>100]0.0;[$€-407]0.00", 150, "€150,0", "#FF0000")]
     [InlineData("[$€-407][Red][>100]0.0;[$€-407]0.00", 50, "€50,00", null)]
-    [InlineData("[DBNum1][$-804][Blue][>100]0.0;[DBNum1][$-804]0.00", 150, "\u4E00\u4E94\u3007.\u3007", "#0070C0")]
+    [InlineData("[DBNum1][$-804][Blue][>100]0.0;[DBNum1][$-804]0.00", 150, "\u4E00\u4E94\u3007.\u3007", "#0000FF")] // [Blue] = legacy palette pure blue
     [InlineData("[DBNum1][$-804][Blue][>100]0.0;[DBNum1][$-804]0.00", 50, "\u4E94\u3007.\u3007\u3007", null)]
     public void CustomNumberSubset_ParsesConditionsAndColorsAfterLocaleDirectives(
         string format,
@@ -281,7 +281,7 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
-    [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0070C0")]
+    [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0000FF")] // [Blue] = legacy palette pure blue
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", 2.5, "2.50", "#0070C0")]
     [InlineData("[Color6]0.00", 2.5, "2.50", "#FFFF00")]
@@ -449,7 +449,7 @@ public class NumberFormatterTests
     }
 
     [Theory]
-    [InlineData("[$-407][Blue]dd/mm/yyyy", 45292, "01.01.2024", "#0070C0")]
+    [InlineData("[$-407][Blue]dd/mm/yyyy", 45292, "01.01.2024", "#0000FF")] // [Blue] = legacy palette pure blue
     [InlineData("0;0;0;[$-409][Red]@", 0, "hello", "#FF0000")]
     public void CustomNumberSubset_ParsesDateAndTextColorsAfterLocaleDirectives(
         string format,
@@ -469,7 +469,7 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45292, "1/1/2024", "#FF0000")]
-    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45294, "1/3/2024", "#0070C0")]
+    [InlineData("[<45293][Red]m/d/yyyy;[Blue]m/d/yyyy", 45294, "1/3/2024", "#0000FF")] // [Blue] = legacy palette pure blue
     public void CustomNumberSubset_SelectsConditionalDateTimeSections(
         string format,
         double numericValue,

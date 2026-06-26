@@ -271,7 +271,12 @@ public sealed class AvaloniaShellSourceTests
         normalizedOverwriteDialog.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"PdfExportOverwriteReplaceButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"PdfExportOverwriteCancelButton\")");
-        source.Should().Contain("WorkbookExportPrintPlanner.CreatePlan(");
+        // The PDF export plan is created via the page-setup-aware overload (honours paper size / margins /
+        // fit-to-page); the test accepts either the legacy or the new entry point so a future refactor does not
+        // break a purely cosmetic name constraint.
+        (source.Contains("WorkbookExportPrintPlanner.CreatePlan(") ||
+         source.Contains("WorkbookExportPrintPlanner.CreatePlanFromPageSetup("))
+            .Should().BeTrue("MainWindow must call WorkbookExportPrintPlanner to build the export-print plan");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
         source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.

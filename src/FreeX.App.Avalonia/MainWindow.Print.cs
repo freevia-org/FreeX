@@ -407,10 +407,9 @@ public sealed partial class MainWindow
         if (_isSaving)
             return;
 
-        var jobPlan = PrintJobPlanner.CreatePlan(
+        var jobPlan = PrintJobPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             request,
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
 
         if (!jobPlan.IsReady)

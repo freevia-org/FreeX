@@ -21,11 +21,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
+    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
-    private GridRange? _printAreaSnapshot;
+    private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
@@ -80,13 +81,15 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.HyperlinkMetadata, _startRow, _count);
         RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), sheet.Name);
+        _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
+        RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.RichTextRuns, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsDown(sheet, _startRow, _count);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
         _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
-        _printAreaSnapshot = sheet.PrintArea;
+        _printAreaSnapshot = sheet.PrintAreas.ToList();
         RowColumnShiftHelpers.ShiftPrintAreaRowsDown(sheet, _startRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
@@ -181,11 +184,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
         RowColumnShiftHelpers.RestoreRuleRanges(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
-        sheet.PrintArea = _printAreaSnapshot;
+        sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);

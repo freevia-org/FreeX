@@ -20890,13 +20890,12 @@ public sealed partial class MainWindow : Window
     }
 
     private WorkbookExportPrintPlan CreateActiveSheetPortablePdfPrintPlan() =>
-        WorkbookExportPrintPlanner.CreatePlan(
+        WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             new WorkbookExportPrintIntent(
                 WorkbookExportPrintScope.ActiveSheet,
                 WorkbookExportPrintOutputKind.Pdf,
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
 
     /// <summary>
@@ -20984,14 +20983,13 @@ public sealed partial class MainWindow : Window
             ? _session.SelectedRange
             : (GridRange?)null;
 
-        return WorkbookExportPrintPlanner.CreatePlan(
+        return WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             _session.Workbook,
             new WorkbookExportPrintIntent(
                 scope,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
                 SelectedRange: selectedRange),
-            new WorkbookExportPrintPageCapacity(PortablePdfRowsPerPage, PortablePdfColumnsPerPage),
             WorkbookExportPrintSurface.MacOs);
     }
 

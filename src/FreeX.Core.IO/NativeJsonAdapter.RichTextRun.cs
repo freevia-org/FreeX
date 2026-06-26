@@ -78,7 +78,11 @@ public sealed partial class NativeJsonAdapter
         Strikethrough = run.Strikethrough,
         FontName     = run.FontName,
         FontSize     = run.FontSize,
-        FontColor    = FormatDtoColor(run.FontColor),
+        // Native JSON stores run colors as plain RGB hex (theme/indexed refs cannot round-trip
+        // through JSON without workbook context; use XLSX for lossless theme-color round-trips).
+        FontColor    = run.FontColor is { } rc && rc.Kind == CellRunColorKind.Rgb
+                           ? FormatDtoColor(rc.Rgb)
+                           : null,
         VertAlign    = run.VertAlign,
     };
 
@@ -117,7 +121,7 @@ public sealed partial class NativeJsonAdapter
         dto.Strikethrough,
         dto.FontName,
         dto.FontSize,
-        ParseDtoColor(dto.FontColor),
+        ParseDtoColor(dto.FontColor) is { } c ? CellRunColor.FromRgb(c) : (CellRunColor?)null,
         Enum.IsDefined(dto.VertAlign) ? dto.VertAlign : CellTextRunVertAlign.None);
 
     // FormatDtoColor / ParseDtoColor are shared helpers defined in NativeJsonAdapter.Sparkline.cs.

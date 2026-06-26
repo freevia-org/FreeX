@@ -143,8 +143,55 @@ public sealed partial class Sheet
     /// <summary>Saved active cell column from the worksheet view, when present.</summary>
     public uint? ActiveCol { get; set; }
 
-    /// <summary>Optional worksheet print area. Null means print the used range.</summary>
-    public GridRange? PrintArea { get; set; }
+    /// <summary>
+    /// Optional worksheet print areas (Excel supports comma-separated ranges on the
+    /// <c>_xlnm.Print_Area</c> defined name). Each area prints starting on its own page.
+    /// Null / empty means print the used range.
+    /// </summary>
+    /// <remarks>
+    /// Use <see cref="PrintArea"/> for single-area access (first element or null).
+    /// Setting <see cref="PrintArea"/> replaces the entire list with that single range (or clears).
+    /// </remarks>
+    private List<GridRange>? _printAreas;
+
+    /// <summary>
+    /// All configured print areas for this sheet (may be multiple for multi-area print ranges).
+    /// Empty list is equivalent to null (print the used range).
+    /// </summary>
+    public IReadOnlyList<GridRange> PrintAreas => _printAreas ?? (IReadOnlyList<GridRange>)[];
+
+    /// <summary>
+    /// Sets the print areas, replacing any previously configured areas.
+    /// Pass an empty collection to clear the print area (revert to used range).
+    /// </summary>
+    public void SetPrintAreas(IEnumerable<GridRange> areas)
+    {
+        var list = areas.ToList();
+        if (list.Count == 0)
+        {
+            _printAreas = null;
+        }
+        else
+        {
+            _printAreas = list;
+        }
+    }
+
+    /// <summary>
+    /// Convenience accessor: the first (or only) print area, or null if none is set.
+    /// Setting this replaces all print areas with the single specified range, or clears if null.
+    /// </summary>
+    public GridRange? PrintArea
+    {
+        get => _printAreas is { Count: > 0 } areas ? areas[0] : null;
+        set
+        {
+            if (value is null)
+                _printAreas = null;
+            else
+                _printAreas = [value.Value];
+        }
+    }
 
     /// <summary>Worksheet-level Excel AutoFilter metadata loaded from XLSX.</summary>
     public WorksheetAutoFilterModel? AutoFilter { get; set; }

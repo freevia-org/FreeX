@@ -83,8 +83,9 @@ public readonly struct SnapCandidate
 /// </summary>
 public static class SnapEngine
 {
-    // Default grid pitch: 0.083 inch = ~8 pt ≈ 7.94 DIP  (914400 EMU/inch / 9525 EMU/DIP / 12)
-    public const double DefaultGridPitchDip = 7.9375;
+    // Default grid pitch: 1/12 inch = 76200 EMU = 76200/9525 = exactly 8.0 DIP
+    // (PowerPoint default grid: 914400 EMU/inch / 12 divisions / 9525 EMU/DIP = 8.0)
+    public const double DefaultGridPitchDip = 8.0;
 
     // Default snap threshold in DIP (~6 screen px at 1× zoom; ~0.5pt)
     public const double DefaultThresholdDip = 6.0;

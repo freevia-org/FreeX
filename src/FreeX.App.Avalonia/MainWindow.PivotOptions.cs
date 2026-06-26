@@ -370,7 +370,7 @@ public sealed partial class MainWindow
     // them), matching the WPF reference structure.
     private static TextBlock OptionLabel(string text) => new()
     {
-        Text = text,
+        Text = StripDisplayMnemonic(text),
         FontSize = 12,
         FontFamily = FormulaBarFontFamily,
         Foreground = HeaderForeground,
@@ -378,7 +378,7 @@ public sealed partial class MainWindow
 
     private static CheckBox OptionCheckBox(string text, bool isChecked) => new()
     {
-        Content = text,
+        Content = StripDisplayMnemonic(text),
         IsChecked = isChecked,
         FontSize = 12,
         FontFamily = FormulaBarFontFamily,

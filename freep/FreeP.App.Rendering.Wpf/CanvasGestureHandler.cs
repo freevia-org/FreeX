@@ -435,14 +435,132 @@ public sealed class CanvasGestureHandler
     /// <summary>
     /// Given the current drag screen point, computes the new shape bounds in EMU.
     /// Handles all 8 resize directions.
+    /// Wave 12B: the DRAGGED edge is snapped to the grid / shape edges using the same
+    /// SnapEngine path as move.  The opposite (anchored) edge is never moved.
     /// </summary>
     public (long newX, long newY, long newCx, long newCy) ComputeResizeBounds(
         Point screenPt, SlideTransform xf)
     {
         double dxPx = screenPt.X - _dragStartScreen.X;
         double dyPx = screenPt.Y - _dragStartScreen.Y;
-        long   dx   = xf.ScreenDeltaToEmu(dxPx);
-        long   dy   = xf.ScreenDeltaToEmu(dyPx);
+
+        // Work in DIP so we can apply snap before the final EMU conversion.
+        double origXDip  = SlideTransform.EmuToDip(_resizeOrigX);
+        double origYDip  = SlideTransform.EmuToDip(_resizeOrigY);
+        double origCxDip = SlideTransform.EmuToDip(_resizeOrigCx);
+        double origCyDip = SlideTransform.EmuToDip(_resizeOrigCy);
+        double dxDip     = xf.ScaleScreenToDip(dxPx);
+        double dyDip     = xf.ScaleScreenToDip(dyPx);
+
+        // Wave 12B: snap the dragged edge if snap is enabled.
+        // Alt disables snapping (PowerPoint convention), same as move.
+        bool altHeld     = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+
+        if (snapEnabled && _editor.CurrentSlide is not null)
+        {
+            var slide      = _editor.CurrentSlide;
+            var candidates = SnapToShapes
+                ? SnapEngine.BuildShapeCandidates(slide, new[] { _resizeShapeId })
+                : null;
+            double slideW  = xf.SlideWidthDip;
+            double slideH  = xf.SlideHeightDip;
+            double pitch   = SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0;
+
+            // Snap only the dragged edge(s).  Pass a degenerate rect whose left=right
+            // (or top=bottom) equals the dragged edge so all three probes collapse to
+            // that single value, giving the cleanest snap delta for that edge alone.
+            switch (_resizeHandle)
+            {
+                // ── horizontal (Y) dragged edges ─────────────────────────────────
+                case SelectionAdorner.HandleKind.ResizeN:
+                {
+                    double draggedY = origYDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+                case SelectionAdorner.HandleKind.ResizeS:
+                {
+                    double draggedY = origYDip + origCyDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (origXDip, draggedY, origXDip + origCxDip, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+                // ── vertical (X) dragged edges ────────────────────────────────────
+                case SelectionAdorner.HandleKind.ResizeW:
+                {
+                    double draggedX = origXDip + dxDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    break;
+                }
+                case SelectionAdorner.HandleKind.ResizeE:
+                {
+                    double draggedX = origXDip + origCxDip + dxDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, origYDip, draggedX, origYDip + origCyDip),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    break;
+                }
+                // ── corner handles: snap both dragged edges ───────────────────────
+                case SelectionAdorner.HandleKind.ResizeNE:
+                {
+                    double draggedX = origXDip + origCxDip + dxDip;
+                    double draggedY = origYDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, draggedY, draggedX, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+                case SelectionAdorner.HandleKind.ResizeNW:
+                {
+                    double draggedX = origXDip + dxDip;
+                    double draggedY = origYDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, draggedY, draggedX, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+                case SelectionAdorner.HandleKind.ResizeSE:
+                {
+                    double draggedX = origXDip + origCxDip + dxDip;
+                    double draggedY = origYDip + origCyDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, draggedY, draggedX, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+                case SelectionAdorner.HandleKind.ResizeSW:
+                {
+                    double draggedX = origXDip + dxDip;
+                    double draggedY = origYDip + origCyDip + dyDip;
+                    var snap = SnapEngine.Snap(
+                        (draggedX, draggedY, draggedX, draggedY),
+                        candidates, slideW, slideH, true, pitch);
+                    dxDip += snap.SnapDx;
+                    dyDip += snap.SnapDy;
+                    break;
+                }
+            }
+        }
+
+        // Convert snapped DIP deltas to EMU.
+        long dx = xf.ScreenDeltaToEmu(dxDip * xf.Scale);
+        long dy = xf.ScreenDeltaToEmu(dyDip * xf.Scale);
 
         long x  = _resizeOrigX;
         long y  = _resizeOrigY;

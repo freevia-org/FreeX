@@ -143,10 +143,10 @@ public sealed partial class MainWindow
             OptionsDescription(OptionsText("Options_CustomDictionaryDescription")));
 
         // ── View ────────────────────────────────────────────────────────────────
-        var showFormulaBarBox = new CheckBox { Content = UiText.Get("Options_ShowFormulaBar"), IsChecked = current.ShowFormulaBar };
+        var showFormulaBarBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowFormulaBar")), IsChecked = current.ShowFormulaBar };
         ApplyOptionsCheckBoxChrome(showFormulaBarBox);
         AutomationProperties.SetAutomationId(showFormulaBarBox, "OptionsShowFormulaBarCheckBox");
-        var showGridlinesBox = new CheckBox { Content = UiText.Get("Options_ShowGridlines"), IsChecked = current.ShowGridlines };
+        var showGridlinesBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowGridlines")), IsChecked = current.ShowGridlines };
         ApplyOptionsCheckBoxChrome(showGridlinesBox);
         AutomationProperties.SetAutomationId(showGridlinesBox, "OptionsShowGridlinesCheckBox");
         var showHeadingsBox = new CheckBox { Content = UiText.Get("Options_ShowHeadings"), IsChecked = current.ShowHeadings };

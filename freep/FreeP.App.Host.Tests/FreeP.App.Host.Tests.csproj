@@ -24,6 +24,7 @@
     <Using Include="FluentAssertions" />
     <Using Include="FreeP.Core.Model" />
     <Using Include="FreeP.Core.IO" />
+    <Using Include="Free.Shared.Drawing" />
   </ItemGroup>
 
   <ItemGroup>

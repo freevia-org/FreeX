@@ -229,6 +229,209 @@ public sealed class SlideCompositorTests
         anchor.ExtentCxEmu.Should().Be(300000);
     }
 
+    // â"€â"€â"€ MM2: placeholder type-compatibility matching â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+    /// <summary>
+    /// PowerPoint "Title and Content" layouts declare their content placeholder as
+    /// ph type="obj" idx="1", while the slide’s placeholder has no explicit type
+    /// and therefore defaults to Body.  Body and Object are in the same content group
+    /// so the match must succeed and the layout geometry must be inherited.
+    /// </summary>
+    [Fact]
+    public void PlaceholderResolver_BodySlide_MatchesObjectLayout_InheritsGeometry()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout declares the content placeholder as type=Object idx=1
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Object, Idx = 1 },
+            OffsetXEmu  = 457200,
+            OffsetYEmu  = 1371600,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 4525963
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide shape has no explicit type â†’ defaults to Body; idx=1
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            // No geometry â†’ must inherit from layout
+        });
+        p.Slides.Add(slide);
+
+        var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
+
+        anchor.OffsetXEmu.Should().Be(457200,   "should inherit layout X");
+        anchor.OffsetYEmu.Should().Be(1371600,  "should inherit layout Y");
+        anchor.ExtentCxEmu.Should().Be(8229600, "should inherit layout width");
+        anchor.ExtentCyEmu.Should().Be(4525963, "should inherit layout height");
+    }
+
+    /// <summary>
+    /// A slide ctrTitle placeholder must match a layout title placeholder (and vice-versa);
+    /// they are interchangeable within the Title group.
+    /// </summary>
+    [Fact]
+    public void PlaceholderResolver_CtrTitle_MatchesLayoutTitle_InheritsGeometry()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout declares a plain Title placeholder (idx 0)
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Title, Idx = 0 },
+            OffsetXEmu  = 1524000,
+            OffsetYEmu  = 1122363,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 2387600
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide uses CenteredTitle (idx 0) â€" must match the layout Title
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.CenteredTitle, Idx = 0 },
+            // No geometry â†’ must inherit from layout
+        });
+        p.Slides.Add(slide);
+
+        var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
+
+        anchor.ExtentCxEmu.Should().Be(9144000, "ctrTitle slide ph must inherit geometry from layout title ph");
+        anchor.ExtentCyEmu.Should().Be(2387600);
+    }
+
+    /// <summary>
+    /// Negative test: a Body placeholder at idx=1 must NOT match a Footer placeholder at idx=1.
+    /// Body and Footer are in different groups; idx alone is not enough.
+    /// </summary>
+    [Fact]
+    public void PlaceholderResolver_Body_DoesNotMatch_Footer_SameIdx()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        // Layout only has a Footer placeholder at idx=1 (no body placeholder)
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Footer, Idx = 1 },
+            OffsetXEmu  = 0,
+            OffsetYEmu  = 6400000,
+            ExtentCxEmu = 9999999,
+            ExtentCyEmu = 457200
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide has a Body placeholder at idx=1 â€" must NOT match the layout Footer
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            // No geometry â†’ should fall through to zero (no match found)
+        });
+        p.Slides.Add(slide);
+
+        var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
+
+        // No match â†’ falls back to the shape’s own (zero) extents
+        anchor.ExtentCxEmu.Should().Be(0, "Body ph must not match Footer ph at the same idx");
+        anchor.ExtentCyEmu.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Exact type+idx match must still work (regression guard for existing behavior).
+    /// </summary>
+    [Fact]
+    public void PlaceholderResolver_ExactTypeAndIdx_StillMatches()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        layout.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.SubTitle, Idx = 2 },
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 4000000,
+            ExtentCxEmu = 7315200,
+            ExtentCyEmu = 1143000
+        });
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.SubTitle, Idx = 2 },
+        });
+        p.Slides.Add(slide);
+
+        var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
+
+        anchor.ExtentCxEmu.Should().Be(7315200, "exact type+idx match must still resolve geometry");
+    }
+
+    /// <summary>
+    /// Master fallback via the same matching: an Object(idx=1) on the slide should fall through
+    /// to the master when the layout has no content placeholder, matching a master Body(idx=1)
+    /// via content-group compatibility.
+    /// </summary>
+    [Fact]
+    public void PlaceholderResolver_ObjectSlide_FallsThrough_ToMasterBodyPlaceholder()
+    {
+        var p = new PresentationModel();
+
+        var master = new SlideMaster { Id = "m1" };
+        // Master has Body idx=1
+        master.Placeholders.Add(new SlideShape
+        {
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu  = 457200,
+            OffsetYEmu  = 1600200,
+            ExtentCxEmu = 8229600,
+            ExtentCyEmu = 4525963
+        });
+        p.Masters.Add(master);
+
+        // Layout has no content placeholder at all
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        // Slide has Object idx=1 â†’ should match master’s Body idx=1 via content-group compat
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Object, Idx = 1 },
+        });
+        p.Slides.Add(slide);
+
+        var anchor = PlaceholderResolver.ResolveAnchor(slide.Shapes[0], slide, p);
+
+        anchor.ExtentCxEmu.Should().Be(8229600, "Object ph must fall through to master Body ph via content-group compat");
+        anchor.ExtentCyEmu.Should().Be(4525963);
+    }
+
     [Fact]
     public void Compose_PlaceholderShape_InheritsPositionFromLayout()
     {
@@ -361,7 +564,153 @@ public sealed class SlideCompositorTests
         result.Should().Be(SrgbColor.Black);
     }
 
-    // â”€â”€â”€ Background resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── MM1: clrMap indirection (ECMA-376 §19.3.1.20) ───────────────────────────────────────────
+
+    /// <summary>
+    /// A master with an inverted clrMap (tx1→lt1, bg1→dk1) must cause schemeClr val="tx1"
+    /// to resolve to the theme's Lt1 color, NOT the default Dk1.
+    /// </summary>
+    [Fact]
+    public void ThemeColorResolver_InvertedClrMap_Tx1ResolvesToLt1()
+    {
+        var theme = PresentationTheme.CreateDefault(); // Lt1=#FFFFFF, Dk1=#000000
+
+        var color = new ThemeAwareColor(
+            SrgbColor.Black,
+            new SchemeColorRef { RoleName = "tx1", Slot = ThemeColorSlot.Dk1, LumMod = 1.0 });
+
+        // Without a clrMap: tx1 default → Dk1 → #000000
+        var withoutMap = ThemeColorResolver.Resolve(color, theme, effectiveClrMap: null);
+        withoutMap.Should().Be(new SrgbColor(0, 0, 0),
+            "without clrMap, tx1 maps to Dk1 = black");
+
+        // Inverted master clrMap: tx1 → lt1 → Lt1 → #FFFFFF
+        var invertedClrMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bg1"] = "dk1", ["tx1"] = "lt1", ["bg2"] = "dk2", ["tx2"] = "lt2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+
+        var withMap = ThemeColorResolver.Resolve(color, theme, effectiveClrMap: invertedClrMap);
+        withMap.Should().Be(new SrgbColor(0xFF, 0xFF, 0xFF),
+            "inverted clrMap (tx1→lt1) must resolve tx1 to Lt1 = white");
+    }
+
+    /// <summary>
+    /// The default (no clrMap) mapping: bg1→Lt1. Regression guard.
+    /// </summary>
+    [Fact]
+    public void ThemeColorResolver_DefaultClrMap_Bg1ResolvesToLt1()
+    {
+        var theme = PresentationTheme.CreateDefault(); // Lt1=#FFFFFF
+
+        var color = new ThemeAwareColor(
+            SrgbColor.Black,
+            new SchemeColorRef { RoleName = "bg1", Slot = ThemeColorSlot.Lt1, LumMod = 1.0 });
+
+        var result = ThemeColorResolver.Resolve(color, theme, effectiveClrMap: null);
+        result.Should().Be(new SrgbColor(0xFF, 0xFF, 0xFF),
+            "default map: bg1 → lt1 slot = #FFFFFF");
+    }
+
+    /// <summary>
+    /// accent1 resolves identically with and without a clrMap (maps identity).
+    /// </summary>
+    [Fact]
+    public void ThemeColorResolver_Accent1_ResolvesCorrectly_ThroughClrMap()
+    {
+        var theme = PresentationTheme.CreateDefault(); // Accent1=#4472C4
+
+        var color = new ThemeAwareColor(
+            SrgbColor.Black,
+            new SchemeColorRef { RoleName = "accent1", Slot = ThemeColorSlot.Accent1, LumMod = 1.0 });
+
+        var withoutMap = ThemeColorResolver.Resolve(color, theme, effectiveClrMap: null);
+        withoutMap.R.Should().Be(0x44);
+        withoutMap.G.Should().Be(0x72);
+        withoutMap.B.Should().Be(0xC4);
+
+        var clrMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bg1"] = "dk1", ["tx1"] = "lt1", ["bg2"] = "dk2", ["tx2"] = "lt2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+
+        var withMap = ThemeColorResolver.Resolve(color, theme, effectiveClrMap: clrMap);
+        withMap.R.Should().Be(0x44, "accent1 must resolve the same with any clrMap that keeps accent1→accent1");
+        withMap.G.Should().Be(0x72);
+        withMap.B.Should().Be(0xC4);
+    }
+
+    /// <summary>
+    /// MM5: A slide with ColorMapOverride (inverted) must override the master map during Compose().
+    /// Validates that SlideCompositor.Compose threads the override correctly.
+    /// </summary>
+    [Fact]
+    public void Compose_SlideColorMapOverride_OverridesMasterClrMapForShapeFill()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault(); // Lt1=#FFFFFF, Dk1=#000000
+
+        var master = new SlideMaster { Id = "m1" };
+        master.ColorMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bg1"] = "lt1", ["tx1"] = "dk1", ["bg2"] = "lt2", ["tx2"] = "dk2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        // Shape fill references tx1 (parsed from XML with RoleName set).
+        var shapeFill = new ShapeFill.Solid(new ThemeAwareColor(
+            SrgbColor.Black,
+            new SchemeColorRef { RoleName = "tx1", Slot = ThemeColorSlot.Dk1, LumMod = 1.0 }));
+
+        // Slide without override: tx1 → master map (dk1) → Dk1 → black
+        var slidePlain = new Slide { LayoutId = "l1" };
+        slidePlain.Shapes.Add(new SlideShape
+        {
+            Id = 1, OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            Fill = shapeFill
+        });
+        p.Slides.Add(slidePlain);
+
+        var opsPlain = SlideCompositor.Compose(p, slidePlain);
+        ((ResolvedFill.Solid)opsPlain.OfType<DrawOp.Shape>().Single().Fill).Color
+            .Should().Be(new SrgbColor(0, 0, 0),
+            "plain slide: tx1 via master map → Dk1 = black");
+
+        // Slide with inverted ColorMapOverride: tx1 → lt1 → Lt1 → white
+        var slideOvr = new Slide { LayoutId = "l1" };
+        slideOvr.ColorMapOverride = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bg1"] = "dk1", ["tx1"] = "lt1", ["bg2"] = "dk2", ["tx2"] = "lt2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+        slideOvr.Shapes.Add(new SlideShape
+        {
+            Id = 1, OffsetXEmu = 0, OffsetYEmu = 0, ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            Fill = shapeFill
+        });
+        p.Slides.Add(slideOvr);
+
+        var opsOvr = SlideCompositor.Compose(p, slideOvr);
+        ((ResolvedFill.Solid)opsOvr.OfType<DrawOp.Shape>().Single().Fill).Color
+            .Should().Be(new SrgbColor(0xFF, 0xFF, 0xFF),
+            "override slide: tx1 via ColorMapOverride (inverted: tx1→lt1) → Lt1 = white");
+    }
+
+    //â”€â”€â”€ Background resolution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]
     public void Compose_SlideSolidFillBackground_IsResolvedCorrectly()
@@ -1158,5 +1507,192 @@ public sealed class SlideCompositorTests
         // row 1 = band 1 (after first row header, row 1 is band index 0 = Band1H)
         var fill1 = table.ComputeEffectiveFill(1, 0, table.Rows[1].Cells[0]);
         fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
+    }
+
+    // ─── II3: slidenum field always shows correct slide number ────────────────
+
+    /// <summary>
+    /// A 3-slide deck with a slidenum field on each slide: compositing slide at
+    /// index 2 (0-based) must render "3", not "1".
+    /// Regression guard for the EnsureOps bug that left slideIndex=0 (default).
+    /// </summary>
+    [Fact]
+    public void Compose_SlidenuFieldOnThirdSlide_RendersThree()
+    {
+        // Arrange: 3-slide presentation; each slide has a slidenum field.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        for (int i = 0; i < 3; i++)
+        {
+            var slide = new Slide();
+            var para  = new Paragraph();
+            para.Runs.Add(new Run
+            {
+                Text  = (i + 1).ToString(),
+                Field = new FieldRun { FieldType = "slidenum", CachedText = (i + 1).ToString() }
+            });
+            var body = new TextBody();
+            body.Paragraphs.Add(para);
+            slide.Shapes.Add(new SlideShape
+            {
+                Id          = (uint)(i + 1),
+                Kind        = SlideShapeKind.AutoShape,
+                OffsetXEmu  = 914400,
+                OffsetYEmu  = 6400000,
+                ExtentCxEmu = 4572000,
+                ExtentCyEmu = 457200,
+                TextBody    = body
+            });
+            p.Slides.Add(slide);
+        }
+
+        // Act: compose slide at 0-based index 2 (third slide).
+        var thirdSlide = p.Slides[2];
+        var ops        = SlideCompositor.Compose(p, thirdSlide, slideIndex: 2);
+        var shapeOp    = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: rendered text must be "3", not "1".
+        var runText = string.Concat(shapeOp.Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+        runText.Should().Be("3",
+            "slidenum field on slide index 2 must render slide number 3");
+    }
+
+    [Fact]
+    public void Compose_SlidenuField_IndexZeroGivesOne_IndexTwoGivesThree()
+    {
+        // Confirm that the slideIndex parameter is the only difference between
+        // "shows 1" (old bug: always index 0) and "shows 3" (correct: index 2).
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "?",
+            Field = new FieldRun { FieldType = "slidenum", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        string TextAt(int idx) =>
+            string.Concat(SlideCompositor.Compose(p, slide, idx)
+                .OfType<DrawOp.Shape>().Single()
+                .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        TextAt(0).Should().Be("1", "index 0 → slide 1");
+        TextAt(2).Should().Be("3", "index 2 → slide 3");
+    }
+
+    // ─── II6: empty-cache field fallback ─────────────────────────────────────
+
+    [Fact]
+    public void ResolveField_DatetimeEmptyCache_RendersDateString_NotTypeToken()
+    {
+        // A datetime field with no cached text must NOT render the literal token
+        // "datetime1" — it should render something date-like.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "datetime1", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops    = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().NotBe("datetime1",
+            "empty-cache datetime field must not render the raw field-type token");
+        runText.Should().MatchRegex(@"\d",
+            "empty-cache datetime field should contain at least one digit (a date)");
+    }
+
+    [Fact]
+    public void ResolveField_FooterEmptyCache_RendersEmpty_NotTypeToken()
+    {
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "footer", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().BeEmpty(
+            "empty-cache footer field must render empty, not the raw type token 'footer'");
+    }
+
+    [Fact]
+    public void ResolveField_WithCachedText_AlwaysUsesCacheOverFallback()
+    {
+        // A field that HAS cached text must always render the cache, regardless of type.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "Custom Footer",
+            Field = new FieldRun { FieldType = "footer", CachedText = "Custom Footer" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().Be("Custom Footer",
+            "fields with non-empty cached text must always render the cache");
     }
 }

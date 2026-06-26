@@ -1,4 +1,7 @@
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Xml.Linq;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -179,8 +182,9 @@ public sealed class MediaFieldsTests
         Assert.Contains("1/1/2026", runText);
     }
 
+    // II2: p:hf is NOT allowed on p:sld (CT_Slide schema). Verify the writer never emits it.
     [Fact]
-    public void Field_Hf_RoundTrips()
+    public void Slide_HfVisibility_DoesNotEmitHfOnSld()
     {
         var pres  = new Presentation();
         var slide = new Slide
@@ -196,14 +200,16 @@ public sealed class MediaFieldsTests
 
         using var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
-        ms.Position = 0;
-        var pres2 = PptxPackageReader.Read(ms);
 
-        var hf = pres2.Slides[0].HfVisibility;
-        Assert.NotNull(hf);
-        Assert.True(hf!.ShowFooter);
-        Assert.False(hf.ShowDate);
-        Assert.True(hf.ShowSlideNum);
+        // Verify the written slide XML has NO p:hf child of p:sld (schema-invalid)
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = slideEntry.Open();
+        var doc = XDocument.Load(sr);
+        var P = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var hfEl = doc.Root!.Element(P + "hf");
+        Assert.Null(hfEl); // must NOT be present on p:sld
     }
 
     [Fact]
@@ -244,6 +250,226 @@ public sealed class MediaFieldsTests
         Assert.NotNull(run2.Field);
         Assert.Equal("slidenum", run2.Field!.FieldType);
         Assert.Equal("5", run2.Field.CachedText);
+    }
+
+    // II1: embedded mp4 media → [Content_Types].xml must have Default Extension="mp4"
+    [Fact]
+    public void ContentTypes_MediaShape_HasVideoExtensionDefault()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "Video 1",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media   = new MediaInfo { IsVideo = true, Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 }, ContentType = "video/mp4" },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var ctEntry = zip.GetEntry("[Content_Types].xml")!;
+        using var ctStream = ctEntry.Open();
+        var ct = XDocument.Load(ctStream);
+        var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        var mp4Default = ct.Root!.Elements(CT + "Default")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Extension")?.Value, "mp4", System.StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(mp4Default); // must have Default Extension="mp4" for video/mp4
+        Assert.Equal("video/mp4", mp4Default!.Attribute("ContentType")?.Value);
+    }
+
+    // HH1: picture-fill-only deck → [Content_Types].xml must have Default for fill image extension
+    [Fact]
+    public void ContentTypes_PictureFillOnly_HasImageExtensionDefault()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        // AutoShape with a jpeg picture fill — no Picture shape — only fill contributes extension
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 2,
+            Name        = "Rect 1",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Fill = new ShapeFill.Picture(imageBytes: CreateMinimal1x1Png(), contentType: "image/png", tile: false),
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var ctEntry = zip.GetEntry("[Content_Types].xml")!;
+        using var ctStream = ctEntry.Open();
+        var ct = XDocument.Load(ctStream);
+        var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        var pngDefault = ct.Root!.Elements(CT + "Default")
+            .FirstOrDefault(e => string.Equals(e.Attribute("Extension")?.Value, "png", System.StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(pngDefault); // picture-fill image must register its extension
+        Assert.Equal("image/png", pngDefault!.Attribute("ContentType")?.Value);
+    }
+
+    // II4: media shape with no poster bytes → no dangling rIdMedia1 in blipFill
+    [Fact]
+    public void MediaShape_NoPoster_NoDanglingBlipRef()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 3,
+            Name        = "Audio 1",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = null, // no poster
+            Media   = new MediaInfo { IsVideo = false, Bytes = new byte[] { 0xFF, 0xFB, 0x90, 0x00 }, ContentType = "audio/mpeg" },
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = slideEntry.Open();
+        var doc = XDocument.Load(sr);
+        var P = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var A = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var R = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        // KK1: CT_Picture requires a:blipFill (minOccurs=1); it must always be present.
+        var blipFill = doc.Descendants(P + "blipFill").FirstOrDefault();
+        Assert.NotNull(blipFill); // schema-required — must always be emitted
+        // When there is no poster the blipFill must NOT carry a dangling r:embed relationship.
+        var embedVal = blipFill!.Descendants(A + "blip")
+            .Select(b => b.Attribute(R + "embed")?.Value)
+            .FirstOrDefault();
+        Assert.Null(embedVal); // no-poster path: either no a:blip or blip has no r:embed attribute
+    }
+
+    // HH2: out-of-order gradient stops are sorted on write (ascending pos)
+    // HH3: single-stop gradient is synthesised to 2 stops
+    [Fact]
+    public void Gradient_OutOfOrder_WrittenSorted()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        // Two stops in reverse order (1.0 before 0.0) → writer must sort to ascending
+        var stops = new System.Collections.Generic.List<GradientStop>
+        {
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0, 0, 0))),   // black at end
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(255, 255, 255))), // white at start
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 4,
+            Name        = "Rect 2",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 0),
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = slideEntry.Open();
+        var doc = XDocument.Load(sr);
+        var A = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var gsElements = doc.Descendants(A + "gs").ToList();
+        Assert.True(gsElements.Count >= 2, "gradient must have at least 2 stops");
+        var positions = gsElements.Select(e => int.Parse(e.Attribute("pos")?.Value ?? "0")).ToList();
+        for (int i = 1; i < positions.Count; i++)
+            Assert.True(positions[i] >= positions[i - 1], $"stop {i} pos {positions[i]} must be >= stop {i-1} pos {positions[i-1]}");
+    }
+
+    [Fact]
+    public void Gradient_SingleStop_SynthesisedToTwoStops()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        var stops = new System.Collections.Generic.List<GradientStop>
+        {
+            new GradientStop(0.5, new ThemeAwareColor(new SrgbColor(128, 0, 0))),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 5,
+            Name        = "Rect 3",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 45),
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = slideEntry.Open();
+        var doc = XDocument.Load(sr);
+        var A = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var gsElements = doc.Descendants(A + "gs").ToList();
+        Assert.True(gsElements.Count >= 2, "1-stop gradient must be synthesised to >=2 stops");
+    }
+
+    [Fact]
+    public void Gradient_ZeroStops_SynthesisedToTwoStops()
+    {
+        var pres  = new Presentation();
+        var slide = new Slide();
+        var stops = new System.Collections.Generic.List<GradientStop>();  // empty
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 6,
+            Name        = "Rect 4",
+            Kind        = SlideShapeKind.AutoShape,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 90),
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.GetEntry("ppt/slides/slide1.xml")!;
+        using var sr = slideEntry.Open();
+        var doc = XDocument.Load(sr);
+        var A = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var gsElements = doc.Descendants(A + "gs").ToList();
+        Assert.True(gsElements.Count >= 2, "0-stop gradient must be synthesised to >=2 stops");
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

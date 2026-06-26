@@ -53,6 +53,14 @@ public sealed class DocumentView : Control
     private const double FallbackWidth = 816; // 8.5in * 96dpi
     private const double ListIndentStep = 24;
 
+    // Superscript / subscript rendering approximation (matches Word's ~58% size + ~33% raise/lower).
+    // SuperSubScale: font shrinks to ~58% of the run's size (Word uses 58.3%).
+    private const double SuperSubScale = 0.583;
+    // SuperYRaiseFraction: superscript baseline sits at ~33% from the top of the line box.
+    private const double SuperYRaiseFraction = 0.15;
+    // SubYLowerFraction: subscript baseline sits at ~60% from the top of the line box.
+    private const double SubYLowerFraction = 0.55;
+
     // Web/Draft layout constants.
     // Web: content column capped at this width (responsive up to this limit).
     private const double WebMaxContentWidth = 1000;
@@ -662,7 +670,17 @@ public sealed class DocumentView : Control
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
-        var availableWidth = Math.Max(60, textWidth - leftInset);
+
+        // Paragraph indents: left/right reduce available width; first-line applies only to line 0.
+        var indentLeft  = pf.IndentLeftPt  * PxPerPoint;
+        var indentRight = pf.IndentRightPt * PxPerPoint;
+        var indentFirst = pf.FirstLineIndentPt * PxPerPoint; // positive = first-line, negative = hanging
+
+        // Total left offset = list inset (already in leftInset) + paragraph indent.
+        var paraLeftInset = leftInset + indentLeft;
+        // Available width shrinks by both left+right paragraph indents.
+        var availableWidth = Math.Max(60, textWidth - leftInset - indentLeft - indentRight);
+
         _layoutContentY += pf.SpaceBeforePt * PxPerPoint;
 
         if (marker is not null)
@@ -671,7 +689,7 @@ public sealed class DocumentView : Control
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
             // Place the marker at the current content-space Y converted to page-space.
             var markerY = ContentYToPageSpaceY(_layoutContentY);
-            _markers.Add((_contentLeft + leftInset - markerWidth - 6, markerY, marker, markerFmt));
+            _markers.Add((_contentLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.
@@ -688,15 +706,24 @@ public sealed class DocumentView : Control
             heights[c] = ft.Height;
         }
 
+        var lineIndex = 0;
         while (i < cells.Count)
         {
             if (cells[i].Ch == ' ')
                 lastBreak = i;
 
-            if (lineWidth + measured[i] > availableWidth && i > lineStart)
+            // First-line indent: the first line has extra width consumed by the indent.
+            var firstLineExtra = (lineIndex == 0 && indentFirst > 0) ? indentFirst : 0.0;
+            var lineAvail = availableWidth - firstLineExtra;
+
+            if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
-                EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment, availableWidth, leftInset);
+                var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                     (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+                EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
+                    availableWidth, paraLeftInset + lineExtraInset, pf);
+                lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
@@ -708,7 +735,12 @@ public sealed class DocumentView : Control
             i++;
         }
 
-        EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment, availableWidth, leftInset, isLast: true);
+        {
+            var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                 (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+            EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
+                availableWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
+        }
         _layoutContentY += spaceAfter;
     }
 
@@ -721,27 +753,47 @@ public sealed class DocumentView : Control
         int to,
         TextAlignment alignment,
         double availableWidth,
-        double leftInset = 0,
+        double leftInset,
+        ParagraphFormatting pf,
         bool isLast = false)
     {
         double lineWidth = 0;
-        double lineHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+        // Natural line height: use the tallest glyph but also respect line-spacing rule.
+        double naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
         for (var c = from; c < to; c++)
         {
             lineWidth += measured[c];
-            if (heights[c] > lineHeight)
-                lineHeight = heights[c];
+            if (heights[c] > naturalHeight)
+                naturalHeight = heights[c];
         }
+
+        // Apply line-spacing rule from paragraph formatting.
+        double lineHeight = ApplyLineSpacing(naturalHeight, pf);
 
         // Ensure the whole line fits on one page (push to next page if it overflows).
         var contentY = ReserveContentY(lineHeight);
         var pageSpaceY = ContentYToPageSpaceY(contentY);
 
-        var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth);
+        // Word-spacing expansion for justify (last line stays left).
+        double wordGap = 0;
+        if (alignment == TextAlignment.Justify && !isLast)
+        {
+            var spaceCount = 0;
+            for (var c = from; c < to; c++)
+                if (cells[c].Ch == ' ')
+                    spaceCount++;
+            if (spaceCount > 0)
+                wordGap = Math.Max(0, availableWidth - lineWidth) / spaceCount;
+        }
+
+        var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
             x += measured[c];
+            // Extra inter-word gap for justify alignment.
+            if (wordGap > 0 && cells[c].Ch == ' ')
+                x += wordGap;
         }
 
         // End-of-line / end-of-paragraph sentinel carries the caret slot after the last char.
@@ -751,10 +803,35 @@ public sealed class DocumentView : Control
         _layoutContentY = contentY + lineHeight;
     }
 
-    private static double AlignmentOffset(TextAlignment alignment, double textWidth, double lineWidth) => alignment switch
+    /// <summary>
+    /// Applies the paragraph line-spacing rule to the natural line height and returns the final
+    /// line height to use for layout. Matches Word's line-spacing semantics:
+    /// <list type="bullet">
+    ///   <item><see cref="LineSpacingRule.Multiple"/> — multiply natural height by <c>LineSpacing</c> (default 1.15).</item>
+    ///   <item><see cref="LineSpacingRule.Exact"/> — always use <c>LineHeightPt * PxPerPoint</c> exactly.</item>
+    ///   <item><see cref="LineSpacingRule.AtLeast"/> — use <c>LineHeightPt * PxPerPoint</c> as a floor, allow taller glyphs.</item>
+    /// </list>
+    /// Approximation: we use a 1.2× leading factor on the raw glyph height as the "natural" height
+    /// baseline (Avalonia <see cref="FormattedText.Height"/> already includes leading). The
+    /// multiplier is applied on top of that.
+    /// </summary>
+    private static double ApplyLineSpacing(double naturalHeight, ParagraphFormatting pf)
     {
-        TextAlignment.Center => Math.Max(0, (textWidth - lineWidth) / 2),
-        TextAlignment.Right => Math.Max(0, textWidth - lineWidth),
+        return pf.LineRule switch
+        {
+            LineSpacingRule.Exact   => Math.Max(1, pf.LineHeightPt  * PxPerPoint),
+            LineSpacingRule.AtLeast => Math.Max(naturalHeight, pf.LineHeightPt * PxPerPoint),
+            // Multiple (default): multiply by the line-spacing factor (1.15 Word default).
+            _ => naturalHeight * (pf.LineSpacing > 0 ? pf.LineSpacing : 1.15),
+        };
+    }
+
+    private static double AlignmentOffset(TextAlignment alignment, double textWidth, double lineWidth, bool isLast = false) => alignment switch
+    {
+        TextAlignment.Center  => Math.Max(0, (textWidth - lineWidth) / 2),
+        TextAlignment.Right   => Math.Max(0, textWidth - lineWidth),
+        // Justify: last line (or single-line paragraphs) fall back to left.
+        TextAlignment.Justify => isLast ? 0 : 0, // x already adjusted by wordGap in caller
         _ => 0,
     };
 
@@ -771,7 +848,7 @@ public sealed class DocumentView : Control
             heights[c] = ft.Height;
         }
 
-        EmitLinePaged(blockIndex, cells, measured, heights, 0, cells.Count, TextAlignment.Left, textWidth, isLast: true);
+        EmitLinePaged(blockIndex, cells, measured, heights, 0, cells.Count, TextAlignment.Left, textWidth, 0, ParagraphFormatting.Default, isLast: true);
     }
 
     private static string TablePlainText(Table table) =>
@@ -1042,8 +1119,32 @@ public sealed class DocumentView : Control
             if (selection is { } sel && IsWithin(sel, pc.Block, pc.Offset))
                 context.FillRectangle(SelectionBrush, new Rect(pc.X, pc.Y, Math.Max(2, pc.W), pc.LineHeight));
 
-            var ft = Build(pc.Ch.ToString(), pc.Fmt);
-            context.DrawText(ft, new Point(pc.X, pc.Y));
+            // Highlight: fill a background rect behind the glyph before drawing text.
+            if (!string.IsNullOrEmpty(pc.Fmt.HighlightColorHex))
+            {
+                var hlBrush = BrushFor(pc.Fmt.HighlightColorHex);
+                context.FillRectangle(hlBrush, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
+            }
+
+            // Superscript/subscript: draw at a smaller size + vertical offset.
+            // Word approximation: ~58% of the font size, raised/lowered by ~33% of line height.
+            var drawFmt = pc.Fmt;
+            var drawY   = pc.Y;
+            if (pc.Fmt.VerticalAlign == VerticalAlign.Superscript)
+            {
+                var sz = (drawFmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale;
+                drawFmt = drawFmt with { FontSizePt = sz };
+                drawY   = pc.Y + pc.LineHeight * SuperYRaiseFraction;
+            }
+            else if (pc.Fmt.VerticalAlign == VerticalAlign.Subscript)
+            {
+                var sz = (drawFmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale;
+                drawFmt = drawFmt with { FontSizePt = sz };
+                drawY   = pc.Y + pc.LineHeight * SubYLowerFraction;
+            }
+
+            var ft = Build(pc.Ch.ToString(), drawFmt);
+            context.DrawText(ft, new Point(pc.X, drawY));
 
             if (pc.Fmt.Underline)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
@@ -1310,6 +1411,104 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+
+    /// <summary>
+    /// Toggle superscript on the selection (clears subscript if set; clears superscript if already set).
+    /// Word semantics: superscript and subscript are mutually exclusive.
+    /// </summary>
+    public void ToggleSuperscript()
+    {
+        var cells = SelectionOrParagraphCells();
+        var allSuper = cells.Count > 0 && cells.All(c => c.Fmt.VerticalAlign == VerticalAlign.Superscript);
+        ApplyRunFormatting(f => f with { VerticalAlign = allSuper ? VerticalAlign.Baseline : VerticalAlign.Superscript });
+    }
+
+    /// <summary>
+    /// Toggle subscript on the selection (clears superscript if set; clears subscript if already set).
+    /// </summary>
+    public void ToggleSubscript()
+    {
+        var cells = SelectionOrParagraphCells();
+        var allSub = cells.Count > 0 && cells.All(c => c.Fmt.VerticalAlign == VerticalAlign.Subscript);
+        ApplyRunFormatting(f => f with { VerticalAlign = allSub ? VerticalAlign.Baseline : VerticalAlign.Subscript });
+    }
+
+    /// <summary>
+    /// Set the highlight (background) colour of the selection. Pass null or empty to clear.
+    /// </summary>
+    public void SetHighlightColor(string? colorHex) =>
+        ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    /// <summary>
+    /// Set the paragraph space-before (in points) for the current paragraph.
+    /// </summary>
+    public void SetSpaceBefore(double pt)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block,
+            paragraph.Formatting with { SpaceBeforePt = Math.Max(0, pt), SpaceBeforeIsSet = true }));
+    }
+
+    /// <summary>
+    /// Set the paragraph space-after (in points) for the current paragraph.
+    /// </summary>
+    public void SetSpaceAfter(double pt)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block,
+            paragraph.Formatting with { SpaceAfterPt = Math.Max(0, pt), SpaceAfterIsSet = true }));
+    }
+
+    /// <summary>
+    /// Set the paragraph line-spacing rule. For <see cref="LineSpacingRule.Multiple"/> pass
+    /// <paramref name="value"/> as the multiplier (e.g. 1.5 or 2.0). For
+    /// <see cref="LineSpacingRule.Exact"/> or <see cref="LineSpacingRule.AtLeast"/> pass the
+    /// absolute line height in points.
+    /// </summary>
+    public void SetLineSpacing(LineSpacingRule rule, double value)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        var fmt = paragraph.Formatting;
+        fmt = rule == LineSpacingRule.Multiple
+            ? fmt with { LineRule = rule, LineSpacing = Math.Max(0.5, value), LineSpacingIsSet = true }
+            : fmt with { LineRule = rule, LineHeightPt = Math.Max(1, value), LineSpacingIsSet = true };
+        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt));
+    }
+
+    /// <summary>
+    /// Set the left/right/first-line indents (in points) for the current paragraph.
+    /// Pass null to leave a particular indent unchanged.
+    /// </summary>
+    public void SetIndents(double? leftPt = null, double? rightPt = null, double? firstLinePt = null)
+    {
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+        var fmt = paragraph.Formatting;
+        if (leftPt.HasValue)     fmt = fmt with { IndentLeftPt      = Math.Max(0, leftPt.Value) };
+        if (rightPt.HasValue)    fmt = fmt with { IndentRightPt     = Math.Max(0, rightPt.Value) };
+        if (firstLinePt.HasValue) fmt = fmt with { FirstLineIndentPt = firstLinePt.Value };
+        _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, fmt));
+    }
+
+    /// <summary>
+    /// Returns the cells in the current selection (if any and single-block), or all cells in the
+    /// current paragraph. Used for toggle-state queries (e.g. "are all selected chars superscript?").
+    /// </summary>
+    private IReadOnlyList<Cell> SelectionOrParagraphCells()
+    {
+        var sel = NormalizedSelection();
+        if (sel is { } s && s.Start.Block == s.End.Block && _doc.Blocks[s.Start.Block] is Paragraph selPara && IsEditable(selPara))
+        {
+            var all = ParaCells(selPara);
+            var a = Math.Clamp(s.Start.Offset, 0, all.Count);
+            var b = Math.Clamp(s.End.Offset, 0, all.Count);
+            return all.Skip(a).Take(b - a).ToList();
+        }
+        return CurrentParagraph() is { } p && IsEditable(p) ? ParaCells(p) : [];
+    }
 
     /// <summary>
     /// Increase the font size of the selection (or whole paragraph when no selection) to the next

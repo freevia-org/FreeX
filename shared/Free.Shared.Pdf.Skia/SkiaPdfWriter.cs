@@ -129,6 +129,18 @@ public static class SkiaPdfWriter
                     textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
                     break;
                 }
+
+                case PdfLine line:
+                {
+                    // PDF coordinates are y-up; flip y for Skia's y-down canvas.
+                    strokePaint.Color = ToSkColor(line.Color);
+                    strokePaint.StrokeWidth = (float)line.LineWidth;
+                    canvas.DrawLine(
+                        (float)line.X1, pageHeight - (float)line.Y1,
+                        (float)line.X2, pageHeight - (float)line.Y2,
+                        strokePaint);
+                    break;
+                }
             }
         }
     }

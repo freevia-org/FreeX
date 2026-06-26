@@ -366,4 +366,93 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
         rt.Slides[0].LayoutId.Should().NotBeNullOrEmpty();
         rt.Slides[1].LayoutId.Should().NotBeNullOrEmpty();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // MM5: per-slide p:clrMapOvr / a:overrideClrMapping round-trip
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A slide with a non-null ColorMapOverride must survive a write→read cycle:
+    /// the override attributes must be preserved exactly and the masterClrMapping
+    /// variant must NOT appear (i.e. a:overrideClrMapping must be emitted).
+    /// </summary>
+    [Fact]
+    public void Synthetic_SlideClrMapOvr_Override_RoundTrips()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1" };
+        master.ColorMap = new Dictionary<string, string>
+        {
+            ["bg1"] = "lt1", ["tx1"] = "dk1", ["bg2"] = "lt2", ["tx2"] = "dk2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+        pres.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Title Slide", LayoutType = SlideLayoutType.Title };
+        pres.Layouts.Add(layout);
+
+        // Slide with inverted clrMapOvr: tx1→lt1, bg1→dk1
+        var invertedOverride = new Dictionary<string, string>
+        {
+            ["bg1"] = "dk1", ["tx1"] = "lt1", ["bg2"] = "dk2", ["tx2"] = "lt2",
+            ["accent1"] = "accent1", ["accent2"] = "accent2", ["accent3"] = "accent3",
+            ["accent4"] = "accent4", ["accent5"] = "accent5", ["accent6"] = "accent6",
+            ["hlink"] = "hlink", ["folHlink"] = "folHlink"
+        };
+        var slideWithOvr = new Slide { LayoutId = "rIdL1", ColorMapOverride = invertedOverride };
+        pres.Slides.Add(slideWithOvr);
+
+        // Slide without override (uses master map)
+        var slideNoOvr = new Slide { LayoutId = "rIdL1" };
+        pres.Slides.Add(slideNoOvr);
+
+        var path = Path.Combine(_tempDir, "clrmapovr-roundtrip.pptx");
+        PptxPackageWriter.Write(pres, path);
+        var rt = PptxPackageReader.Read(path);
+
+        rt.Slides.Should().HaveCount(2);
+
+        // Slide 0: must have the override preserved with inverted values
+        var rtSlideOvr = rt.Slides[0];
+        rtSlideOvr.ColorMapOverride.Should().NotBeNull(
+            "slide with a:overrideClrMapping must have ColorMapOverride after round-trip");
+        rtSlideOvr.ColorMapOverride!.Should().ContainKey("tx1");
+        rtSlideOvr.ColorMapOverride["tx1"].Should().Be("lt1",
+            "tx1→lt1 must survive write→read cycle");
+        rtSlideOvr.ColorMapOverride.Should().ContainKey("bg1");
+        rtSlideOvr.ColorMapOverride["bg1"].Should().Be("dk1",
+            "bg1→dk1 must survive write→read cycle");
+
+        // Slide 1: no override → ColorMapOverride must be null
+        var rtSlideNoOvr = rt.Slides[1];
+        rtSlideNoOvr.ColorMapOverride.Should().BeNull(
+            "slide with a:masterClrMapping must have null ColorMapOverride after round-trip");
+    }
+
+    /// <summary>
+    /// A slide without a ColorMapOverride must emit a:masterClrMapping on write,
+    /// which must round-trip as null ColorMapOverride (inherit from master).
+    /// </summary>
+    [Fact]
+    public void Synthetic_SlideClrMapOvr_MasterClrMapping_RoundTrips_AsNull()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1" };
+        pres.Masters.Add(master);
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "rIdL1" }; // no ColorMapOverride
+        pres.Slides.Add(slide);
+
+        var path = Path.Combine(_tempDir, "masterclrmapping-roundtrip.pptx");
+        PptxPackageWriter.Write(pres, path);
+        var rt = PptxPackageReader.Read(path);
+
+        rt.Slides.Should().HaveCount(1);
+        rt.Slides[0].ColorMapOverride.Should().BeNull(
+            "slide without override must round-trip as null ColorMapOverride (a:masterClrMapping)");
+    }
 }

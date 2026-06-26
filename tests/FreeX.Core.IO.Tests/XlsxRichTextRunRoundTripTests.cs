@@ -207,7 +207,7 @@ public sealed class XlsxRichTextRunRoundTripTests
         runs[0].Text.Should().Be("Hello");
         runs[0].Bold.Should().BeTrue();
         runs[2].Text.Should().Be("World");
-        runs[2].FontColor.Should().Be(new CellColor(255, 0, 0));
+        runs[2].FontColor.Should().Be(CellRunColor.FromRgb(new CellColor(255, 0, 0)));
     }
 
     [Fact]
@@ -293,7 +293,7 @@ public sealed class XlsxRichTextRunRoundTripTests
                 Strikethrough: false,
                 FontName:      "Arial",
                 FontSize:      14.0,
-                FontColor:     new CellColor(0x12, 0x34, 0x56)),
+                FontColor:     CellRunColor.FromRgb(new CellColor(0x12, 0x34, 0x56))),
             new("st",
                 Bold:          null,
                 Italic:        null,
@@ -320,7 +320,7 @@ public sealed class XlsxRichTextRunRoundTripTests
         runs[0].Strikethrough.Should().BeFalse();
         runs[0].FontName.Should().Be("Arial");
         runs[0].FontSize.Should().BeApproximately(14.0, 0.001);
-        runs[0].FontColor.Should().Be(new CellColor(0x12, 0x34, 0x56));
+        runs[0].FontColor.Should().Be(CellRunColor.FromRgb(new CellColor(0x12, 0x34, 0x56)));
 
         runs[1].Text.Should().Be("st");
         runs[1].Bold.Should().BeNull();

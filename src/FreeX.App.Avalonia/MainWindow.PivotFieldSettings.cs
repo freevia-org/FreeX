@@ -121,7 +121,7 @@ public sealed partial class MainWindow
 
         var numberFormatButton = new Button
         {
-            Content = UiText.Get("PivotValueFieldSettings_NumberFormat3"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_NumberFormat3")),
             MinWidth = 128,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             Margin = new Thickness(0, 12, 0, 0),

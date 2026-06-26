@@ -125,6 +125,86 @@ public sealed record WorkbookExportPrintPlan(
 
 public static class WorkbookExportPrintPlanner
 {
+    /// <summary>
+    /// Creates an export print plan where the row/column page capacity is derived from each sheet's
+    /// own page setup (paper size, orientation, margins, scale-to-fit, and actual row/column sizes)
+    /// via <see cref="SheetPdfPageSetupResolver.ResolveCapacity"/>. This is the page-setup-aware
+    /// path — prefer it over the fixed-capacity overload for PDF export.
+    /// </summary>
+    public static WorkbookExportPrintPlan CreatePlanFromPageSetup(
+        Workbook workbook,
+        WorkbookExportPrintIntent intent,
+        WorkbookExportPrintSurface? surface = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(intent);
+
+        surface ??= WorkbookExportPrintSurface.PortablePdf;
+        var supportedOutputKinds = surface.SupportedOutputKinds;
+        var readiness = WorkbookExportReadinessPlanner.Create(
+            workbook,
+            hasSelection: intent.SelectedRange.HasValue);
+
+        if (!readiness.IsReady)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.ExportUnavailable,
+                readiness.StatusText,
+                supportedOutputKinds,
+                []);
+        }
+
+        if (!surface.Supports(intent.OutputKind))
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.OutputKindUnavailable,
+                FormatUnsupportedOutputStatus(surface, intent.OutputKind, supportedOutputKinds),
+                supportedOutputKinds,
+                []);
+        }
+
+        var requestedRanges = ResolveRequestedRanges(workbook, intent, out var invalidStatus, out var invalidStatusText);
+        if (invalidStatus is not null)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                invalidStatus.Value,
+                invalidStatusText,
+                supportedOutputKinds,
+                []);
+        }
+
+        var sheetPlans = BuildSheetPlansFromPageSetup(requestedRanges);
+        if (sheetPlans.Count == 0)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.NoPrintableRanges,
+                "No printable sheet ranges were found for the requested export scope.",
+                supportedOutputKinds,
+                sheetPlans);
+        }
+
+        return CreatePlan(
+            intent,
+            surface,
+            readiness,
+            WorkbookExportPrintValidationStatus.Ready,
+            FormatReadyStatus(surface, intent, sheetPlans.Count, sheetPlans.Sum(sheet => sheet.PageCount)),
+            supportedOutputKinds,
+            sheetPlans);
+    }
+
     public static WorkbookExportPrintPlan CreatePlan(
         Workbook workbook,
         WorkbookExportPrintIntent intent,
@@ -287,8 +367,7 @@ public static class WorkbookExportPrintPlanner
             if (sheet.IsHidden)
                 continue;
 
-            if (TryResolvePrintRange(sheet, ignorePrintAreas, out var printRange, out var rangeSource))
-                requests.Add(new SheetRangeRequest(sheet, printRange, rangeSource));
+            requests.AddRange(ResolveSheetPrintRanges(sheet, ignorePrintAreas));
         }
 
         return requests;
@@ -311,9 +390,8 @@ public static class WorkbookExportPrintPlanner
             return [];
         }
 
-        return TryResolvePrintRange(sheet, intent.IgnorePrintAreas, out var printRange, out var rangeSource)
-            ? [new SheetRangeRequest(sheet, printRange, rangeSource)]
-            : [];
+        var ranges = ResolveSheetPrintRanges(sheet, intent.IgnorePrintAreas);
+        return ranges.Count > 0 ? ranges : [];
     }
 
     private static Sheet? ResolveActiveSheet(Workbook workbook, int? requestedIndex)
@@ -351,11 +429,10 @@ public static class WorkbookExportPrintPlanner
         out GridRange printRange,
         out WorkbookExportPrintRangeSource rangeSource)
     {
-        if (!ignorePrintAreas &&
-            sheet.PrintArea is { } explicitPrintArea &&
-            explicitPrintArea.Start.Sheet == sheet.Id)
+        // For single-range callers: use the first area when multiple are configured.
+        if (!ignorePrintAreas && sheet.PrintAreas.Count > 0)
         {
-            printRange = explicitPrintArea;
+            printRange = sheet.PrintAreas[0];
             rangeSource = WorkbookExportPrintRangeSource.PrintArea;
             return true;
         }
@@ -372,6 +449,31 @@ public static class WorkbookExportPrintPlanner
         return false;
     }
 
+    /// <summary>
+    /// Resolves print ranges for a sheet, returning one <see cref="SheetRangeRequest"/> per configured
+    /// print area (each area prints on its own page). Falls back to the used range when no print area
+    /// is configured.
+    /// </summary>
+    private static IReadOnlyList<SheetRangeRequest> ResolveSheetPrintRanges(
+        Sheet sheet,
+        bool ignorePrintAreas)
+    {
+        if (!ignorePrintAreas && sheet.PrintAreas.Count > 0)
+        {
+            var areas = sheet.PrintAreas
+                .Where(a => a.Start.Sheet == sheet.Id)
+                .Select(a => new SheetRangeRequest(sheet, a, WorkbookExportPrintRangeSource.PrintArea))
+                .ToList();
+            if (areas.Count > 0)
+                return areas;
+        }
+
+        if (sheet.GetUsedRange() is { } usedRange)
+            return [new SheetRangeRequest(sheet, usedRange, WorkbookExportPrintRangeSource.UsedRange)];
+
+        return [];
+    }
+
     private static IReadOnlyList<WorkbookSheetExportPrintPlanSummary> BuildSheetPlans(
         IReadOnlyList<SheetRangeRequest> requestedRanges,
         WorkbookExportPrintPageCapacity pageCapacity)
@@ -379,6 +481,45 @@ public static class WorkbookExportPrintPlanner
         var sheetPlans = new List<WorkbookSheetExportPrintPlanSummary>(requestedRanges.Count);
         foreach (var request in requestedRanges)
         {
+            var rowPlans = PrintLayoutPlanner.BuildRowPlans(
+                request.PrintRange,
+                request.Sheet.PrintTitleRows,
+                pageCapacity.RowsPerPage,
+                request.Sheet.RowPageBreaks);
+            var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
+                request.PrintRange,
+                request.Sheet.PrintTitleColumns,
+                pageCapacity.ColumnsPerPage,
+                request.Sheet.ColumnPageBreaks);
+
+            sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
+                request.Sheet.Name,
+                request.PrintRange,
+                request.RangeSource,
+                rowPlans.Count,
+                columnPlans.Count,
+                rowPlans.Count * columnPlans.Count,
+                rowPlans,
+                columnPlans,
+                request.Sheet.PageOrder));
+        }
+
+        return sheetPlans;
+    }
+
+    /// <summary>
+    /// Builds per-sheet plans where each sheet's row/column page capacity is derived from its own
+    /// page setup (paper, orientation, margins, scale, actual row/column sizes) via
+    /// <see cref="SheetPdfPageSetupResolver.ResolveCapacity"/>.
+    /// </summary>
+    private static IReadOnlyList<WorkbookSheetExportPrintPlanSummary> BuildSheetPlansFromPageSetup(
+        IReadOnlyList<SheetRangeRequest> requestedRanges)
+    {
+        var sheetPlans = new List<WorkbookSheetExportPrintPlanSummary>(requestedRanges.Count);
+        foreach (var request in requestedRanges)
+        {
+            var pageCapacity = SheetPdfPageSetupResolver.ResolveCapacity(request.Sheet, request.PrintRange);
+
             var rowPlans = PrintLayoutPlanner.BuildRowPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleRows,

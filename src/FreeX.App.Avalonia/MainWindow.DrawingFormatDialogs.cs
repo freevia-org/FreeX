@@ -124,7 +124,7 @@ public sealed partial class MainWindow
 
         var lockAspectBox = new CheckBox
         {
-            Content = UiText.Get("FormatPicture_LockAspectRatio"),
+            Content = StripDisplayMnemonic(UiText.Get("FormatPicture_LockAspectRatio")),
             IsChecked = values.LockAspectRatio,
             IsVisible = values.LockAspectRatioSupported,
         };

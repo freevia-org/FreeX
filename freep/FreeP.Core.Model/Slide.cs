@@ -405,6 +405,16 @@ public sealed class Slide
     /// </summary>
     public HfFlags? HfVisibility { get; set; }
 
+    // ── Color map override (p:clrMapOvr) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Per-slide color-role override from <c>p:clrMapOvr/a:overrideClrMapping</c>.
+    /// When non-null, this map takes precedence over the master's <c>p:clrMap</c> when
+    /// resolving scheme-color role names (tx1, bg1, …) to theme slots for shapes on this slide.
+    /// Null means "use master mapping" (<c>&lt;a:masterClrMapping/&gt;</c>).
+    /// </summary>
+    public Dictionary<string, string>? ColorMapOverride { get; set; }
+
     // ── Comments ──────────────────────────────────────────────────────────────────
 
     /// <summary>

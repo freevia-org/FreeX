@@ -115,6 +115,20 @@ public static class PptxPackageWriter
                     var ct = shape.Picture.ContentType ?? "image/png";
                     mediaExtensions.Add(ContentTypeToExtension(ct));
                 }
+
+                // HH1: also register picture-fill images so their extension gets a Default
+                if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+                {
+                    var ct = picFill.ContentType ?? "image/png";
+                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+
+                // II1: register audio/video file extensions for Media shapes
+                if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
+                {
+                    var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
+                    mediaExtensions.Add(mediaExt);
+                }
             }
         }
 
@@ -370,6 +384,15 @@ public static class PptxPackageWriter
             ["svg"]  = "image/svg+xml",
             ["wmf"]  = "image/x-wmf",
             ["emf"]  = "image/x-emf",
+            // Audio/video types (II1: required so media parts have a declared content type)
+            ["mp4"]  = "video/mp4",
+            ["mov"]  = "video/quicktime",
+            ["avi"]  = "video/x-msvideo",
+            ["wmv"]  = "video/x-ms-wmv",
+            ["mp3"]  = "audio/mpeg",
+            ["m4a"]  = "audio/mp4",
+            ["wav"]  = "audio/wav",
+            ["wma"]  = "audio/x-ms-wma",
         };
 
     private static XDocument BuildContentTypesXml(
@@ -608,14 +631,33 @@ public static class PptxPackageWriter
                         slide.Shapes
                             .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                             .OfType<XElement>())),
-                slide.HfVisibility is not null
-                    ? new XElement(P + "hf",
-                        new XAttribute("ftr",    slide.HfVisibility.ShowFooter   ? "1" : "0"),
-                        new XAttribute("dt",     slide.HfVisibility.ShowDate     ? "1" : "0"),
-                        new XAttribute("sldNum", slide.HfVisibility.ShowSlideNum ? "1" : "0"))
-                    : null,
+                // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
+                // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
+                // We intentionally do NOT emit p:hf here to avoid PowerPoint repair.
+                // HfVisibility is preserved on the model for read-back from real .pptx files
+                // that carry it on the master/layout (which the reader already handles).
+                BuildSlideClrMapOvrEl(slide.ColorMapOverride),
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
+    }
+
+    /// <summary>
+    /// Builds the <c>p:clrMapOvr</c> element for a slide.
+    /// When <paramref name="colorMapOverride"/> is non-null, emits
+    /// <c>&lt;p:clrMapOvr&gt;&lt;a:overrideClrMapping .../&gt;&lt;/p:clrMapOvr&gt;</c>
+    /// with the stored role→slot attributes.
+    /// When null, emits <c>&lt;p:clrMapOvr&gt;&lt;a:masterClrMapping/&gt;&lt;/p:clrMapOvr&gt;</c>.
+    /// </summary>
+    private static XElement BuildSlideClrMapOvrEl(Dictionary<string, string>? colorMapOverride)
+    {
+        if (colorMapOverride is { Count: > 0 })
+        {
+            var overrideEl = new XElement(A + "overrideClrMapping");
+            foreach (var (key, val) in colorMapOverride)
+                overrideEl.Add(new XAttribute(key, val));
+            return new XElement(P + "clrMapOvr", overrideEl);
+        }
+        return new XElement(P + "clrMapOvr", new XElement(A + "masterClrMapping"));
     }
 
     // ── notesSlide.xml ────────────────────────────────────────────────────────────
@@ -1412,7 +1454,9 @@ public static class PptxPackageWriter
     {
         // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
         mediaById.TryGetValue(shape.Id, out var posterRelId);
-        posterRelId ??= "rIdMedia1";
+        // II4: do NOT fall back to a hard-coded "rIdMedia1" — that would emit a dangling
+        // r:embed reference when no poster was written for this shape, causing repair.
+        // If no real poster rel exists, omit the blipFill entirely.
 
         // Media file rel id (written by WriteSlideMediaFiles using shape.Id | 0x80000000 key)
         mediaById.TryGetValue(shape.Id | 0x80000000u, out var mediaFileRelId);
@@ -1423,15 +1467,25 @@ public static class PptxPackageWriter
             ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
             : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
 
+        // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image
+        // is available emit a minimal VALID blipFill — just a:stretch/a:fillRect, no a:blip —
+        // so there is no dangling r:embed relationship and the element is schema-compliant.
+        // (CT_BlipFillProperties: a:blip is optional; a:stretch is valid without it.)
+        // When a real poster rel exists, emit the blip with r:embed as before (II4).
+        XElement blipFillEl = posterRelId is not null
+            ? new XElement(P + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect")))
+            : new XElement(P + "blipFill",
+                new XElement(A + "stretch", new XElement(A + "fillRect")));
+
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr",
                     mediaFileEl)),
-            new XElement(P + "blipFill",
-                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
-                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+            blipFillEl,
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
     }
 
@@ -1454,6 +1508,16 @@ public static class PptxPackageWriter
     /// <summary>
     /// Builds the <c>&lt;p:grpSpPr&gt;</c> required for <c>&lt;p:grpSp&gt;</c>.
     /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
+    ///
+    /// FF1 fix: FreeP stores group children with ABSOLUTE slide offsets (the compositor and reader
+    /// treat child coords as absolute with no group transform applied).  PowerPoint maps a child's
+    /// rendered position as: groupOff + (childOff - chOff) * (ext / chExt).
+    /// To make that identity for absolute coords we must emit chOff == off and chExt == ext, so:
+    ///   rendered = groupOff + (childAbsOff - groupOff) * 1 = childAbsOff  ✓
+    /// The old chOff=(0,0) was wrong: it displaced every child by the group origin in PowerPoint.
+    ///
+    /// FF3 fix: clamp ext/chExt cx and cy to a minimum of 1 EMU to prevent PowerPoint from
+    /// dividing by zero when a degenerate (zero-size) group is encountered.
     /// </summary>
     private static XElement BuildGrpSpPrEl(SlideShape shape)
     {
@@ -1462,11 +1526,16 @@ public static class PptxPackageWriter
             xfrm.Add(new XAttribute("rot", (long)Math.Round(shape.RotationDeg * 60000)));
         if (shape.FlipH) xfrm.Add(new XAttribute("flipH", "1"));
         if (shape.FlipV) xfrm.Add(new XAttribute("flipV", "1"));
+
+        // FF3: clamp to ≥1 EMU so PowerPoint never divides by chExt=0.
+        long extCx = Math.Max(1L, shape.ExtentCxEmu);
+        long extCy = Math.Max(1L, shape.ExtentCyEmu);
+
         xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
-        // Child coordinate space: use the group's own extent as the identity child space.
-        xfrm.Add(new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")));
-        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", shape.ExtentCxEmu), new XAttribute("cy", shape.ExtentCyEmu)));
+        xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
+        // FF1: chOff == off so the group→child transform is identity for absolute child coords.
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
 
         return new XElement(P + "grpSpPr", xfrm);
     }
@@ -1968,9 +2037,31 @@ public static class PptxPackageWriter
 
     private static XElement BuildGradFillEl(ShapeFill.Gradient g)
     {
-        // Emit all N stops
+        // HH2: stops MUST be in ascending position order per OOXML CT_GradientStopList.
+        // HH3: a:gsLst requires at least 2 stops; synthesise when model has fewer.
+        var stops = g.Stops.OrderBy(s => s.Position).ToList();
+        if (stops.Count == 0)
+        {
+            // No stops at all: emit white@0 → black@100k
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, ThemeAwareColor.White),
+                new GradientStop(1.0, ThemeAwareColor.Black),
+            };
+        }
+        else if (stops.Count == 1)
+        {
+            // Duplicate the single stop at position 0 and 100000
+            var singleColor = stops[0].Color;
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, singleColor),
+                new GradientStop(1.0, singleColor),
+            };
+        }
+
         var gsLst = new XElement(A + "gsLst");
-        foreach (var stop in g.Stops)
+        foreach (var stop in stops)
         {
             int pos = (int)Math.Round(stop.Position * 100000);
             gsLst.Add(new XElement(A + "gs",
@@ -2714,6 +2805,21 @@ public static class PptxPackageWriter
             "image/x-wmf" or "image/wmf" => "wmf",
             "image/x-emf" or "image/emf" => "emf",
             _ => "png"
+        };
+
+    // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
+    private static string MediaContentTypeToExtension(string ct) =>
+        ct.ToLowerInvariant() switch
+        {
+            "video/mp4"       => "mp4",
+            "video/quicktime" => "mov",
+            "video/x-msvideo" => "avi",
+            "video/x-ms-wmv"  => "wmv",
+            "audio/mpeg"      => "mp3",
+            "audio/mp4"       => "m4a",
+            "audio/wav"       => "wav",
+            "audio/x-ms-wma"  => "wma",
+            _                 => "mp4"
         };
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>

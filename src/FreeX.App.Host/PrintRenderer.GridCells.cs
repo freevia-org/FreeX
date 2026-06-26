@@ -7,6 +7,11 @@ namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
+    // The WPF print path renders only black text on a white page background with optional
+    // light-gray gridlines — it never renders cell fill colours or coloured fonts.
+    // Black-and-white mode is therefore satisfied by construction on this path; there is
+    // no blackAndWhite parameter here (unlike the Avalonia/Skia path which does render
+    // fills and must suppress them when B&W is requested).
     private static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -74,13 +79,16 @@ public static partial class PrintRenderer
                 if (string.IsNullOrEmpty(displayText))
                     continue;
 
+                var textBrush = Brushes.Black;
+                var textColor = Colors.Black;
+
                 var ft = new FormattedText(
                     displayText,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
                     PrintedCellTypeface,
                     PrintFontSize,
-                    Brushes.Black,
+                    textBrush,
                     1.0)
                 {
                     MaxTextWidth = Math.Max(1, colWidth - 4),
@@ -99,7 +107,7 @@ public static partial class PrintRenderer
                     PrintedCellTypeface.FontFamily.Source,
                     Bold: false,
                     Italic: false,
-                    Colors.Black));
+                    textColor));
             }
         }
     }

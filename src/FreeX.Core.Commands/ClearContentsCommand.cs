@@ -9,6 +9,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
+    private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
 
     public string Label => "Clear Contents";
 
@@ -37,6 +38,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         _hyperlinkMetadataSnapshot = sheet.HyperlinkMetadata
             .Where(pair => _range.Contains(pair.Key))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
+        _richTextRunsSnapshot = sheet.RichTextRuns
+            .Where(pair => _range.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
         var affected = new List<CellAddress>();
         foreach (var address in _range.AllCells())
         {
@@ -44,10 +48,12 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             var oldStyleOnly = sheet.GetStyleOnly(address.Row, address.Col);
             var hasHyperlink = sheet.Hyperlinks.ContainsKey(address);
             var hasHyperlinkMetadata = sheet.HyperlinkMetadata.ContainsKey(address);
+            var hasRichTextRuns = sheet.RichTextRuns.ContainsKey(address);
             if (oldCell is null &&
                 !oldStyleOnly.HasValue &&
                 !hasHyperlink &&
-                !hasHyperlinkMetadata)
+                !hasHyperlinkMetadata &&
+                !hasRichTextRuns)
             {
                 continue;
             }
@@ -62,6 +68,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             sheet.SetCell(address, cleared);
             sheet.Hyperlinks.Remove(address);
             sheet.HyperlinkMetadata.Remove(address);
+            sheet.RichTextRuns.Remove(address);
             affected.Add(address);
         }
 
@@ -91,6 +98,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         {
             sheet.Hyperlinks.Remove(address);
             sheet.HyperlinkMetadata.Remove(address);
+            sheet.RichTextRuns.Remove(address);
         }
         if (_hyperlinkSnapshot is not null)
         {
@@ -101,6 +109,11 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         {
             foreach (var (address, metadata) in _hyperlinkMetadataSnapshot)
                 sheet.HyperlinkMetadata[address] = metadata;
+        }
+        if (_richTextRunsSnapshot is not null)
+        {
+            foreach (var (address, runs) in _richTextRunsSnapshot)
+                sheet.RichTextRuns[address] = runs;
         }
     }
 

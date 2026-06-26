@@ -517,7 +517,10 @@ public sealed partial class NativeJsonAdapter
         public WorksheetIgnoredErrorsMetadataDto? IgnoredErrorsMetadata { get; set; }
         public WorksheetAdditionalViewsDto? AdditionalViews { get; set; }
         public WorksheetPrimaryViewMetadataDto? PrimaryViewMetadata { get; set; }
+        /// <summary>Legacy single-range field; superseded by <see cref="PrintAreas"/>. Kept for backward-compatible JSON round-trips.</summary>
         public string? PrintArea { get; set; }
+        /// <summary>Multi-area print areas; takes precedence over <see cref="PrintArea"/> when present.</summary>
+        public string[]? PrintAreas { get; set; }
         public WorksheetPageOrientation? PageOrientation { get; set; }
         public WorksheetPaperSize? PaperSize { get; set; }
         public int? PaperSizeCode { get; set; }

@@ -400,4 +400,59 @@ public sealed class TimelineLayoutBuilderTests
         // Thumb width < 1 (window smaller than full range).
         layout.ScrollThumbWidthRatio.Should().BeGreaterThan(0).And.BeLessThan(1);
     }
+
+    // --- Header chrome: GranularityDropdownRect + ClearFilterIconRect --------------------------------
+
+    [Fact]
+    public void Build_WithHeader_ProducesGranularityDropdownRectInHeaderBand()
+    {
+        var layout = TimelineLayoutBuilder.Build(Timeline(), Bounds);
+
+        // Granularity dropdown rect must be non-empty and inside the header band.
+        layout.GranularityDropdownRect.Width.Should().BeGreaterThan(0,
+            because: "MONTHS ▾ dropdown affordance should always render in the header");
+        layout.GranularityDropdownRect.Top.Should().BeGreaterThanOrEqualTo(layout.HeaderRect.Top);
+        layout.GranularityDropdownRect.Bottom.Should().BeLessThanOrEqualTo(layout.HeaderRect.Bottom + 1);
+        layout.GranularityDropdownRect.Right.Should().BeLessThanOrEqualTo(layout.HeaderRect.Right + 1);
+    }
+
+    [Fact]
+    public void Build_NoActiveFilter_ClearFilterRectIsEmpty()
+    {
+        // No selected dates → no active filter → clear-filter icon should not be shown.
+        var layout = TimelineLayoutBuilder.Build(Timeline(selStart: null, selEnd: null), Bounds);
+
+        layout.HasActiveFilter.Should().BeFalse();
+        layout.ClearFilterIconRect.Width.Should().Be(0,
+            because: "clear-filter icon is only shown when HasActiveFilter is true");
+    }
+
+    [Fact]
+    public void Build_WithActiveFilter_ClearFilterRectIsInHeaderBand()
+    {
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(selStart: "2024-03-01", selEnd: "2024-06-30"),
+            Bounds);
+
+        layout.HasActiveFilter.Should().BeTrue();
+        layout.ClearFilterIconRect.Width.Should().BeGreaterThan(0,
+            because: "clear-filter icon appears when a date range is selected");
+        // Clear-filter must sit inside the header band.
+        layout.ClearFilterIconRect.Top.Should().BeGreaterThanOrEqualTo(layout.HeaderRect.Top);
+        layout.ClearFilterIconRect.Bottom.Should().BeLessThanOrEqualTo(layout.HeaderRect.Bottom + 1);
+        // Clear-filter is the rightmost element — to the right of the dropdown.
+        layout.ClearFilterIconRect.Left.Should().BeGreaterThan(layout.GranularityDropdownRect.Left);
+    }
+
+    [Fact]
+    public void Build_WithActiveFilter_DropdownIsLeftOfClearFilter()
+    {
+        var layout = TimelineLayoutBuilder.Build(
+            Timeline(selStart: "2024-03-01", selEnd: "2024-06-30"),
+            Bounds);
+
+        layout.GranularityDropdownRect.Right.Should().BeLessThanOrEqualTo(
+            layout.ClearFilterIconRect.Left,
+            because: "dropdown label must not overlap the clear-filter icon");
+    }
 }

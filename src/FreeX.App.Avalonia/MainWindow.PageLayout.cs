@@ -379,7 +379,7 @@ public sealed partial class MainWindow
 
         var adjustRadio = new RadioButton
         {
-            Content = UiText.Get("PageSetup_AdjustTo"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_AdjustTo")),
             GroupName = "PageSetupScaling",
             IsChecked = initial.ScalingMode == PageSetupScalingMode.AdjustToPercent,
         };
@@ -391,7 +391,7 @@ public sealed partial class MainWindow
 
         var fitRadio = new RadioButton
         {
-            Content = UiText.Get("PageSetup_FitTo"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_FitTo")),
             GroupName = "PageSetupScaling",
             IsChecked = initial.ScalingMode == PageSetupScalingMode.FitToPages,
         };
@@ -436,14 +436,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(footerMarginBox, "PageSetupFooterMarginBox");
         var centerHorizontallyCheck = new CheckBox
         {
-            Content = UiText.Get("PageSetup_CenterHorizontally"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_CenterHorizontally")),
             IsChecked = initial.CenterHorizontally,
         };
         ApplyPageLayoutCheckBoxChrome(centerHorizontallyCheck);
         AutomationProperties.SetAutomationId(centerHorizontallyCheck, "PageSetupCenterHorizontallyCheck");
         var centerVerticallyCheck = new CheckBox
         {
-            Content = UiText.Get("PageSetup_CenterVertically"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_CenterVertically")),
             IsChecked = initial.CenterVertically,
         };
         ApplyPageLayoutCheckBoxChrome(centerVerticallyCheck);
@@ -516,7 +516,7 @@ public sealed partial class MainWindow
 
         var differentFirstPageCheck = new CheckBox
         {
-            Content = UiText.Get("PageSetup_DifferentFirstPage"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_DifferentFirstPage")),
             IsChecked = initial.DifferentFirstPage,
         };
         ApplyPageLayoutCheckBoxChrome(differentFirstPageCheck);
@@ -530,7 +530,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(differentOddEvenCheck, "PageSetupDifferentOddEvenCheck");
         var scaleWithDocumentCheck = new CheckBox
         {
-            Content = UiText.Get("PageSetup_ScaleWithDocument"),
+            Content = StripDisplayMnemonic(UiText.Get("PageSetup_ScaleWithDocument")),
             IsChecked = initial.ScaleHeaderFooterWithDocument,
         };
         ApplyPageLayoutCheckBoxChrome(scaleWithDocumentCheck);
@@ -559,16 +559,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(repeatColumnsBox, "PageSetupRepeatColumnsBox");
         AutomationProperties.SetHelpText(repeatColumnsBox, UiText.Get("PageSetup_RepeatColumnsHelp"));
 
-        var gridlinesCheck = new CheckBox { Content = UiText.Get("PageSetup_PrintGridlines"), IsChecked = initial.PrintGridlines };
+        var gridlinesCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("PageSetup_PrintGridlines")), IsChecked = initial.PrintGridlines };
         ApplyPageLayoutCheckBoxChrome(gridlinesCheck);
         AutomationProperties.SetAutomationId(gridlinesCheck, "PageSetupPrintGridlinesCheck");
         var headingsCheck = new CheckBox { Content = UiText.Get("PageSetup_PrintHeadings"), IsChecked = initial.PrintHeadings };
         ApplyPageLayoutCheckBoxChrome(headingsCheck);
         AutomationProperties.SetAutomationId(headingsCheck, "PageSetupPrintHeadingsCheck");
-        var blackAndWhiteCheck = new CheckBox { Content = UiText.Get("PageSetup_BlackAndWhite"), IsChecked = initial.PrintBlackAndWhite };
+        var blackAndWhiteCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("PageSetup_BlackAndWhite")), IsChecked = initial.PrintBlackAndWhite };
         ApplyPageLayoutCheckBoxChrome(blackAndWhiteCheck);
         AutomationProperties.SetAutomationId(blackAndWhiteCheck, "PageSetupBlackAndWhiteCheck");
-        var draftQualityCheck = new CheckBox { Content = UiText.Get("PageSetup_DraftQuality"), IsChecked = initial.PrintDraftQuality };
+        var draftQualityCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("PageSetup_DraftQuality")), IsChecked = initial.PrintDraftQuality };
         ApplyPageLayoutCheckBoxChrome(draftQualityCheck);
         AutomationProperties.SetAutomationId(draftQualityCheck, "PageSetupDraftQualityCheck");
 

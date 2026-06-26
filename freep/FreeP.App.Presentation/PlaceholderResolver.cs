@@ -146,9 +146,55 @@ public static class PlaceholderResolver
     private static bool MatchesPlaceholder(SlideShape candidate, Placeholder target)
     {
         if (candidate.Placeholder is null) return false;
-        return candidate.Placeholder.Type == target.Type &&
-               candidate.Placeholder.Idx == target.Idx;
+        return candidate.Placeholder.Idx == target.Idx &&
+               AreCompatibleTypes(candidate.Placeholder.Type, target.Type);
     }
+
+    /// <summary>
+    /// Returns true when two placeholder types are "compatible" for inheritance matching,
+    /// following PowerPoint's matching semantics.
+    /// <para>
+    /// Title group: <see cref="PlaceholderType.Title"/> and <see cref="PlaceholderType.CenteredTitle"/>
+    /// are interchangeable (a slide ctrTitle matches a layout title and vice-versa).
+    /// </para>
+    /// <para>
+    /// Body/Content group: <see cref="PlaceholderType.Body"/>, <see cref="PlaceholderType.Object"/>,
+    /// <see cref="PlaceholderType.Chart"/>, <see cref="PlaceholderType.Table"/>,
+    /// <see cref="PlaceholderType.ClipArt"/>, <see cref="PlaceholderType.Diagram"/>,
+    /// <see cref="PlaceholderType.Media"/>, and <see cref="PlaceholderType.Picture"/> are
+    /// interchangeable.  A slide placeholder with no explicit type (defaults to Body) will
+    /// therefore match a layout "obj" placeholder at the same idx.
+    /// </para>
+    /// <para>
+    /// All other types (SubTitle, Footer, DateTime, SlideNumber, Header) require an exact
+    /// type match.
+    /// </para>
+    /// </summary>
+    private static bool AreCompatibleTypes(PlaceholderType a, PlaceholderType b)
+    {
+        if (a == b) return true;
+
+        // Title group: Title ↔ CenteredTitle
+        if (IsTitleGroup(a) && IsTitleGroup(b)) return true;
+
+        // Body/Content group: Body, Object, and the specialized content subtypes
+        if (IsContentGroup(a) && IsContentGroup(b)) return true;
+
+        return false;
+    }
+
+    private static bool IsTitleGroup(PlaceholderType t) =>
+        t == PlaceholderType.Title || t == PlaceholderType.CenteredTitle;
+
+    private static bool IsContentGroup(PlaceholderType t) =>
+        t == PlaceholderType.Body    ||
+        t == PlaceholderType.Object  ||
+        t == PlaceholderType.Chart   ||
+        t == PlaceholderType.Table   ||
+        t == PlaceholderType.ClipArt ||
+        t == PlaceholderType.Diagram ||
+        t == PlaceholderType.Media   ||
+        t == PlaceholderType.Picture;
 }
 
 /// <summary>Fully-resolved anchor for a shape: EMU absolute coordinates.</summary>
