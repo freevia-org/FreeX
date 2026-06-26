@@ -72,6 +72,7 @@ internal static class CorpusGenerator
                 ("09-smartart",     GenerateSmartArt),
                 ("11-bevel3d",      GenerateBevel3d),
                 ("12-fills",        GenerateFills),
+                ("13-wordart",      GenerateWordArt),
             };
 
             var errors = 0;
@@ -1208,6 +1209,156 @@ internal static class CorpusGenerator
                     sh5.Fill.BackColor.ObjectThemeColor = MsoThemeColorAccent3;
                 }
                 catch { }
+            }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 13-wordart: gradient-filled + outlined + shadowed text + warp presets
+    // -----------------------------------------------------------------------
+
+    private static void GenerateWordArt(dynamic app, string pptxPath, string refDir)
+    {
+        const int MsoGradientLinear = 1;
+
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Title label
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 32f);
+            tb.TextFrame.TextRange.Text = "WordArt / Text Effects";
+            tb.TextFrame.TextRange.Font.Size = 18;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            // ── Shape 1: gradient-filled text ─────────────────────────────
+            // A textbox with large bold text whose fill is a two-color linear gradient.
+            dynamic sh1 = slide.Shapes.AddTextbox(1, 40f, 50f, 380f, 100f);
+            sh1.Name = "GradText";
+            var r1 = sh1.TextFrame.TextRange;
+            r1.Text = "Gradient Fill";
+            r1.Font.Size = 44;
+            r1.Font.Bold = MsoTrue;
+            try
+            {
+                // Apply gradient fill to the text characters via TextEffectFormat is not
+                // COM-accessible; instead apply a shape fill which PowerPoint will store
+                // as a:solidFill on the run via format-as-picture path.
+                // Alternatively, just set font color and add a shape gradient fill so the
+                // exported PPTX round-trips the gradient correctly via shape-level effects.
+                sh1.Fill.TwoColorGradient(MsoGradientLinear, 1);
+                sh1.Fill.ForeColor.RGB = 0xFF6600;   // orange
+                sh1.Fill.BackColor.RGB = 0xCC0000;   // deep red
+                sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF; // white outline text
+            }
+            catch { }
+
+            // ── Shape 2: text with shadow ──────────────────────────────────
+            dynamic sh2 = slide.Shapes.AddTextbox(1, 450f, 50f, 480f, 100f);
+            sh2.Name = "ShadowText";
+            var r2 = sh2.TextFrame.TextRange;
+            r2.Text = "Text Shadow";
+            r2.Font.Size = 40;
+            r2.Font.Bold = MsoTrue;
+            r2.Font.Color.RGB = 0x0070C0; // blue
+            try
+            {
+                sh2.Shadow.Visible = MsoTrue;
+                sh2.Shadow.OffsetX = 4f;
+                sh2.Shadow.OffsetY = 4f;
+                sh2.Shadow.Blur = 5f;
+                sh2.Shadow.ForeColor.RGB = 0x404040;
+                sh2.Shadow.Transparency = 0.3f;
+            }
+            catch { }
+
+            // ── Shape 3: text with outline ────────────────────────────────
+            dynamic sh3 = slide.Shapes.AddTextbox(1, 40f, 170f, 380f, 100f);
+            sh3.Name = "OutlineText";
+            var r3 = sh3.TextFrame.TextRange;
+            r3.Text = "Text Outline";
+            r3.Font.Size = 44;
+            r3.Font.Bold = MsoTrue;
+            r3.Font.Color.RGB = 0x00B050; // green fill
+            try
+            {
+                // pp line / text outline via Font
+                r3.Font.Size = 44;
+                // TextEffectFormat is not easily COM-addressable; at minimum set shape outline
+                sh3.Line.Visible = MsoTrue;
+                sh3.Line.ForeColor.RGB = 0x004000;
+                sh3.Line.Weight = 1.5f;
+            }
+            catch { }
+
+            // ── Shape 4: WordArt warp — textArchUp ───────────────────────
+            // Use WordArt style via AddTextEffect
+            dynamic sh4;
+            try
+            {
+                // WordArt preset 29 = textArchUp in most PowerPoint versions
+                sh4 = slide.Shapes.AddTextEffect(
+                    /*PresetTextEffect*/ 29,
+                    "Arch Up Text", "Arial Black", 36f, MsoFalse, MsoFalse,
+                    450f, 170f);
+                sh4.Name = "WarpArchUp";
+                sh4.Width  = 460f;
+                sh4.Height = 100f;
+                sh4.TextEffect.FontName = "Arial Black";
+                sh4.TextEffect.FontSize = 32f;
+                sh4.TextEffect.FontBold = MsoTrue;
+                try
+                {
+                    sh4.Fill.ForeColor.RGB = 0x7030A0; // purple
+                    sh4.Fill.Solid();
+                }
+                catch { }
+            }
+            catch
+            {
+                // Fallback: plain text
+                sh4 = slide.Shapes.AddTextbox(1, 450f, 170f, 460f, 100f);
+                sh4.Name = "WarpArchUpFallback";
+                sh4.TextFrame.TextRange.Text = "Arch Up Text";
+                sh4.TextFrame.TextRange.Font.Size = 36;
+                sh4.TextFrame.TextRange.Font.Color.RGB = 0x7030A0;
+            }
+
+            // ── Shape 5: WordArt warp — textWave ─────────────────────────
+            dynamic sh5;
+            try
+            {
+                // WordArt preset 34 ≈ textWave
+                sh5 = slide.Shapes.AddTextEffect(
+                    34,
+                    "Wave Text", "Arial Black", 32f, MsoFalse, MsoFalse,
+                    40f, 290f);
+                sh5.Name = "WarpWave";
+                sh5.Width  = 860f;
+                sh5.Height = 100f;
+                sh5.TextEffect.FontBold = MsoTrue;
+                try
+                {
+                    sh5.Fill.ForeColor.RGB = 0xC00000;
+                    sh5.Fill.Solid();
+                }
+                catch { }
+            }
+            catch
+            {
+                sh5 = slide.Shapes.AddTextbox(1, 40f, 290f, 860f, 100f);
+                sh5.Name = "WarpWaveFallback";
+                sh5.TextFrame.TextRange.Text = "Wave Text — warp best-effort";
+                sh5.TextFrame.TextRange.Font.Size = 32;
+                sh5.TextFrame.TextRange.Font.Color.RGB = 0xC00000;
             }
 
             SaveAndExport(pres, pptxPath, refDir);
