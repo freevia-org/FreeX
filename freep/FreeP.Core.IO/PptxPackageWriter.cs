@@ -1545,10 +1545,22 @@ public static class PptxPackageWriter
     {
         string? fillBlipRelId = null;
         fillBlipById?.TryGetValue(shape.Id, out fillBlipRelId);
+
+        // Build cNvCxnSpPr — add stCxn/endCxn when the connector is attached.
+        var cNvCxnSpPrEl = new XElement(P + "cNvCxnSpPr");
+        if (shape.ConnectionStart is { } cs)
+            cNvCxnSpPrEl.Add(new XElement(A + "stCxn",
+                new XAttribute("id",  cs.ShapeId),
+                new XAttribute("idx", cs.SiteIndex)));
+        if (shape.ConnectionEnd is { } ce)
+            cNvCxnSpPrEl.Add(new XElement(A + "endCxn",
+                new XAttribute("id",  ce.ShapeId),
+                new XAttribute("idx", ce.SiteIndex)));
+
         return new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
                 CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, null),
-                new XElement(P + "cNvCxnSpPr"),
+                cNvCxnSpPrEl,
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme, fillBlipRelId: fillBlipRelId));
     }

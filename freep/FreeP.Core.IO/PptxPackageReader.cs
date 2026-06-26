@@ -1931,6 +1931,27 @@ public static class PptxPackageReader
         if (shapeHlink is not null)
             shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
+        // Connector attachment: a:stCxn / a:endCxn inside p:nvCxnSpPr/p:cNvCxnSpPr.
+        var cNvCxnSpPr = cxnSp.Element(P + "nvCxnSpPr")?.Element(P + "cNvCxnSpPr");
+        if (cNvCxnSpPr is not null)
+        {
+            var stCxnEl = cNvCxnSpPr.Element(A + "stCxn");
+            if (stCxnEl is not null &&
+                uint.TryParse(stCxnEl.Attribute("id")?.Value, out var stId) &&
+                int.TryParse(stCxnEl.Attribute("idx")?.Value, out var stIdx))
+            {
+                shape.ConnectionStart = new ConnectorAttachment { ShapeId = stId, SiteIndex = stIdx };
+            }
+
+            var endCxnEl = cNvCxnSpPr.Element(A + "endCxn");
+            if (endCxnEl is not null &&
+                uint.TryParse(endCxnEl.Attribute("id")?.Value, out var endId) &&
+                int.TryParse(endCxnEl.Attribute("idx")?.Value, out var endIdx))
+            {
+                shape.ConnectionEnd = new ConnectorAttachment { ShapeId = endId, SiteIndex = endIdx };
+            }
+        }
+
         var spPr = cxnSp.Element(P + "spPr");
         var blipResolver = (archive is not null && slideRels is not null && partPath is not null)
             ? BuildBlipResolver(archive, slideRels, partPath)
