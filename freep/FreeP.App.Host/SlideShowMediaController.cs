@@ -1,0 +1,393 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using Free.Shared.Drawing;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Host;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SlideShowMediaController
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Manages the lifecycle of WPF MediaElement overlays for a single slide in the
+// fullscreen slideshow.
+//
+// Design:
+//   • For each Media shape on the entering slide we:
+//       1. Write the embedded bytes to a unique temp file (or use the http/https
+//          LinkUrl directly if link-only).  Temp files are deleted on tear-down.
+//       2. Create a MediaElement positioned over the same on-screen rect that
+//          SlideCanvas paints the poster/play-button into.
+//       3. Add it to the provided WPF Panel overlay.
+//   • Click-to-toggle: a MouseLeftButtonDown handler on each MediaElement
+//     (and a transparent hit-rect for audio shapes, which have no visual) plays /
+//     pauses and marks the event Handled so it does not reach the slideshow advance.
+//   • Teardown (called on slide-leave or window close) stops playback, removes the
+//     elements from the panel, and deletes temp files.
+//
+// Headless safety:
+//   MediaElement instantiation is deferred into a try/catch; any display-level
+//   failure (PlatformNotSupportedException in unit tests) is silently caught and
+//   the slot left null.  EnterSlide therefore never throws.
+//
+// Testability:
+//   The rect-computation logic (ComputeMediaRect) is a static method with no WPF
+//   dependency so it can be called from pure [Fact] tests.
+//   The file-write step is abstracted behind ITempMediaFileWriter so tests can
+//   inject a fake implementation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Abstraction over temp-file creation so tests can inject a fake that does not
+/// touch the real file system.
+/// </summary>
+public interface ITempMediaFileWriter
+{
+    /// <summary>
+    /// Writes <paramref name="bytes"/> to a unique temp file whose extension matches
+    /// <paramref name="contentType"/> (e.g. "video/mp4" → ".mp4").
+    /// Returns the absolute path to the created file.
+    /// </summary>
+    string Write(byte[] bytes, string contentType);
+
+    /// <summary>Deletes the file at <paramref name="path"/> (best-effort, ignores errors).</summary>
+    void Delete(string path);
+}
+
+/// <summary>Default implementation that writes to <see cref="Path.GetTempPath"/>.</summary>
+internal sealed class TempMediaFileWriter : ITempMediaFileWriter
+{
+    public string Write(byte[] bytes, string contentType)
+    {
+        string ext = ContentTypeToExtension(contentType);
+        string path = Path.Combine(Path.GetTempPath(), $"freep_media_{Guid.NewGuid():N}{ext}");
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
+    public void Delete(string path)
+    {
+        try { File.Delete(path); } catch { /* best-effort */ }
+    }
+
+    internal static string ContentTypeToExtension(string contentType) =>
+        contentType.ToLowerInvariant() switch
+        {
+            "video/mp4"             => ".mp4",
+            "video/mpeg"            => ".mpg",
+            "video/avi"             => ".avi",
+            "video/x-msvideo"       => ".avi",
+            "video/quicktime"       => ".mov",
+            "video/x-ms-wmv"        => ".wmv",
+            "video/x-ms-asf"        => ".asf",
+            "video/webm"            => ".webm",
+            "audio/mpeg"            => ".mp3",
+            "audio/mp3"             => ".mp3",
+            "audio/wav"             => ".wav",
+            "audio/x-wav"           => ".wav",
+            "audio/ogg"             => ".ogg",
+            "audio/x-ms-wma"        => ".wma",
+            "audio/aac"             => ".aac",
+            "audio/flac"            => ".flac",
+            _                       => ".bin",
+        };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Compute result returned by <see cref="SlideShowMediaController.ComputeMediaRect"/>.
+/// </summary>
+public sealed class MediaShapeRect
+{
+    /// <summary>On-screen canvas DIP X (top-left).</summary>
+    public double X      { get; }
+    /// <summary>On-screen canvas DIP Y (top-left).</summary>
+    public double Y      { get; }
+    /// <summary>Width in DIP.</summary>
+    public double Width  { get; }
+    /// <summary>Height in DIP.</summary>
+    public double Height { get; }
+
+    public MediaShapeRect(double x, double y, double w, double h)
+    {
+        X = x; Y = y; Width = w; Height = h;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Manages MediaElement overlays for media shapes on a single slide visit.
+/// </summary>
+public sealed class SlideShowMediaController
+{
+    // ── injected / constructed ────────────────────────────────────────────────
+
+    private readonly Panel               _overlay;      // the canvas/panel to add elements into
+    private readonly ITempMediaFileWriter _fileWriter;
+
+    // Slide DIP dimensions — used to compute on-screen rect.
+    private double _slideDipW;
+    private double _slideDipH;
+
+    // ── per-slide state ───────────────────────────────────────────────────────
+
+    // For each media shape: the MediaElement (null if creation failed) + optional temp path.
+    private readonly record struct MediaSlot(MediaElement? Element, string? TempPath);
+    private readonly List<MediaSlot> _slots = new();
+
+    // ── construction ──────────────────────────────────────────────────────────
+
+    /// <param name="overlay">Panel (Canvas/Grid) to add MediaElement children to.</param>
+    /// <param name="fileWriter">Override for tests; pass null to use the real file system.</param>
+    public SlideShowMediaController(Panel overlay, ITempMediaFileWriter? fileWriter = null)
+    {
+        _overlay    = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        _fileWriter = fileWriter ?? new TempMediaFileWriter();
+    }
+
+    // ── public API ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Compute the on-screen DIP rect for a media shape given the canvas size and slide DIP size.
+    /// This is the same coordinate-space conversion used by hit-testing in SlideShowWindow.
+    /// </summary>
+    public static MediaShapeRect ComputeMediaRect(
+        SlideShape shape,
+        double slideDipW, double slideDipH,
+        double canvasW,   double canvasH)
+    {
+        // Uniform-fit scale (same as SlideCanvas.OnRender)
+        double scale   = (canvasW > 0 && canvasH > 0 && slideDipW > 0 && slideDipH > 0)
+            ? Math.Min(canvasW / slideDipW, canvasH / slideDipH)
+            : 1.0;
+        double offsetX = (canvasW - slideDipW * scale) / 2;
+        double offsetY = (canvasH - slideDipH * scale) / 2;
+
+        double shapeX  = shape.OffsetXEmu / 9525.0;
+        double shapeY  = shape.OffsetYEmu / 9525.0;
+        double shapeW  = shape.ExtentCxEmu / 9525.0;
+        double shapeH  = shape.ExtentCyEmu / 9525.0;
+
+        return new MediaShapeRect(
+            offsetX + shapeX * scale,
+            offsetY + shapeY * scale,
+            shapeW  * scale,
+            shapeH  * scale);
+    }
+
+    /// <summary>
+    /// Called when entering a slide. Collects all Media shapes and creates a
+    /// (possibly hidden) MediaElement for each.
+    /// </summary>
+    /// <param name="slide">The slide just entered.</param>
+    /// <param name="slideDipW">Slide width in DIP (presentation.SlideSizeCxEmu / 9525.0).</param>
+    /// <param name="slideDipH">Slide height in DIP.</param>
+    /// <param name="canvasW">Actual pixel width of the slide canvas at the moment of entry.</param>
+    /// <param name="canvasH">Actual pixel height of the slide canvas.</param>
+    public void EnterSlide(Slide slide, double slideDipW, double slideDipH,
+                           double canvasW, double canvasH)
+    {
+        // Teardown any previous slide's media first (guard against double-call).
+        Teardown();
+
+        _slideDipW = slideDipW;
+        _slideDipH = slideDipH;
+
+        foreach (var shape in slide.Shapes)
+        {
+            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
+                continue;
+
+            var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
+            var slot = CreateSlot(shape.Media, rect, shape.Media.IsVideo);
+            _slots.Add(slot);
+        }
+    }
+
+    /// <summary>
+    /// Update all existing MediaElement positions/sizes when the canvas is resized.
+    /// Call from a SlideCanvas SizeChanged handler if desired (optional).
+    /// </summary>
+    public void UpdateLayout(Slide slide, double canvasW, double canvasH)
+    {
+        int idx = 0;
+        foreach (var shape in slide.Shapes)
+        {
+            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
+                continue;
+            if (idx >= _slots.Count) break;
+
+            var slot = _slots[idx++];
+            if (slot.Element is null) continue;
+
+            var r = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
+            ApplyRect(slot.Element, r);
+        }
+    }
+
+    /// <summary>
+    /// Stops all players, removes all MediaElement children from the overlay, and
+    /// deletes all temp files.  Safe to call multiple times.
+    /// </summary>
+    public void Teardown()
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.Element is not null)
+            {
+                try
+                {
+                    slot.Element.Stop();
+                    _overlay.Children.Remove(slot.Element);
+                }
+                catch { /* ignore */ }
+            }
+
+            if (slot.TempPath is not null)
+                _fileWriter.Delete(slot.TempPath);
+        }
+        _slots.Clear();
+    }
+
+    /// <summary>
+    /// Hit-tests a point (in canvas DIP coords) against any active media slot.
+    /// Returns true and toggles play/pause if a slot was hit; the caller must
+    /// set e.Handled = true to consume the click.
+    /// </summary>
+    public bool TryHandleClick(double canvasX, double canvasY, Slide slide,
+                               double canvasW, double canvasH)
+    {
+        int idx = 0;
+        foreach (var shape in slide.Shapes)
+        {
+            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
+                continue;
+            if (idx >= _slots.Count) break;
+
+            var slot = _slots[idx++];
+            var r    = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
+
+            if (canvasX >= r.X && canvasX <= r.X + r.Width &&
+                canvasY >= r.Y && canvasY <= r.Y + r.Height)
+            {
+                TogglePlayPause(slot.Element);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ── internal helpers ──────────────────────────────────────────────────────
+
+    private MediaSlot CreateSlot(MediaInfo media, MediaShapeRect rect, bool isVideo)
+    {
+        // Resolve source first (writes temp file if needed).
+        // This is done OUTSIDE the element-creation try/catch so the temp path
+        // is always recorded and cleaned up on Teardown, even if MediaElement
+        // construction fails (e.g. headless / no display in unit tests).
+        // NOTE: tempPath is set even when source is null (e.g. invalid URI from a fake writer),
+        // so we always have it for cleanup.
+        Uri? source = ResolveSource(media, out string? tempPath);
+        if (source is null)
+        {
+            // Still record the tempPath for cleanup (written but URI was unparseable).
+            return new MediaSlot(null, tempPath);
+        }
+
+        MediaElement? element = null;
+        try
+        {
+            element = new MediaElement
+            {
+                LoadedBehavior   = MediaState.Manual,
+                UnloadedBehavior = MediaState.Stop,
+                Source           = source,
+                // For audio: collapse the visual (no video frame to show).
+                Visibility       = isVideo ? Visibility.Visible : Visibility.Collapsed,
+                IsHitTestVisible = false,   // we do our own hit-testing
+            };
+
+            ApplyRect(element, rect);
+
+            // Handle media failure gracefully — just hide the element.
+            element.MediaFailed += (_, _) =>
+            {
+                element.Visibility = Visibility.Collapsed;
+            };
+
+            _overlay.Children.Add(element);
+        }
+        catch
+        {
+            // Headless / no-display: swallow — tempPath is still set so cleanup works.
+            element = null;
+        }
+
+        return new MediaSlot(element, tempPath);
+    }
+
+    private Uri? ResolveSource(MediaInfo media, out string? tempPath)
+    {
+        tempPath = null;
+
+        // 1. Embedded bytes: write to a temp file.
+        if (media.Bytes is { Length: > 0 })
+        {
+            tempPath = _fileWriter.Write(media.Bytes, media.ContentType);
+            // Build a file:// URI; tolerate fake/relative paths from tests by falling back
+            // gracefully — the MediaElement will simply never receive a source.
+            if (!Uri.TryCreate(tempPath, UriKind.Absolute, out var fileUri))
+                return null;
+            return fileUri;
+        }
+
+        // 2. Link-only: only allow http/https (same safety guard as OpenExternalUrl).
+        if (!string.IsNullOrEmpty(media.LinkUrl))
+        {
+            if (Uri.TryCreate(media.LinkUrl, UriKind.Absolute, out var uri) &&
+                uri.Scheme is "http" or "https")
+            {
+                return uri;
+            }
+            // Non-safe scheme (e.g. file:// or blank) — skip.
+            return null;
+        }
+
+        return null; // nothing to play
+    }
+
+    private static void ApplyRect(MediaElement el, MediaShapeRect r)
+    {
+        el.Width  = Math.Max(1, r.Width);
+        el.Height = Math.Max(1, r.Height);
+        Canvas.SetLeft(el, r.X);
+        Canvas.SetTop(el, r.Y);
+    }
+
+    private static void TogglePlayPause(MediaElement? el)
+    {
+        if (el is null) return;
+        try
+        {
+            // Check CanPause: if playing → pause; else → play.
+            // We track state by observing the SpeedRatio + Position heuristic.
+            // The simplest safe approach: try Pause first; if it fails, Play.
+            // MediaElement does not expose a clean "IsPlaying" property,
+            // so we use a tag flag.
+            if (el.Tag is true)
+            {
+                el.Pause();
+                el.Tag = false;
+            }
+            else
+            {
+                el.Play();
+                el.Tag = true;
+            }
+        }
+        catch { /* ignore */ }
+    }
+}

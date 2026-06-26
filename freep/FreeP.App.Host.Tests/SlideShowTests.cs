@@ -587,3 +587,349 @@ public sealed class SlideShowMainWindowTests
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 16C: SlideShowMediaController tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Pure-logic tests for the media rect computation and the temp-file lifecycle.
+/// No WPF display is required — we use a fake ITempMediaFileWriter and avoid
+/// creating any MediaElement.
+/// </summary>
+public sealed class SlideShowMediaControllerTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static SlideShape MakeMediaShape(
+        long offX = 0, long offY = 0,
+        long cx   = 9144000, long cy = 6858000) =>
+        new()
+        {
+            Id            = 1,
+            Name          = "Video1",
+            Kind          = SlideShapeKind.Media,
+            OffsetXEmu    = offX,
+            OffsetYEmu    = offY,
+            ExtentCxEmu   = cx,
+            ExtentCyEmu   = cy,
+            Media         = new MediaInfo
+            {
+                IsVideo     = true,
+                Bytes       = new byte[] { 0x00, 0x01, 0x02 },
+                ContentType = "video/mp4",
+            }
+        };
+
+    private static Slide SlideWithMedia(SlideShape shape)
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(shape);
+        return slide;
+    }
+
+    // ── ComputeMediaRect ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void ComputeMediaRect_FullSlide_MatchesCanvasBounds()
+    {
+        // A shape that covers the full 10" x 7.5" slide (in EMU), display 960×540.
+        var shape = MakeMediaShape(0, 0, cx: 9144000, cy: 6858000);
+
+        // Slide DIP: 9144000/9525=960, 6858000/9525=720
+        var r = SlideShowMediaController.ComputeMediaRect(
+            shape, slideDipW: 960, slideDipH: 720, canvasW: 960, canvasH: 720);
+
+        r.X.Should().BeApproximately(0, 0.5);
+        r.Y.Should().BeApproximately(0, 0.5);
+        r.Width.Should().BeApproximately(960, 0.5);
+        r.Height.Should().BeApproximately(720, 0.5);
+    }
+
+    [Fact]
+    public void ComputeMediaRect_QuarterSlide_TopLeft()
+    {
+        // Shape in top-left quarter: offset 0,0 size half-slide
+        var shape = MakeMediaShape(0, 0, cx: 4572000, cy: 3429000);
+
+        var r = SlideShowMediaController.ComputeMediaRect(
+            shape, slideDipW: 960, slideDipH: 720, canvasW: 960, canvasH: 720);
+
+        r.X.Should().BeApproximately(0, 0.5);
+        r.Y.Should().BeApproximately(0, 0.5);
+        r.Width.Should().BeApproximately(480, 1.0);
+        r.Height.Should().BeApproximately(360, 1.0);
+    }
+
+    [Fact]
+    public void ComputeMediaRect_LetterboxedCanvas_OffsetApplied()
+    {
+        // Canvas is wider than slide → horizontal letterbox bars
+        // Slide DIP: 960×720, canvas: 1280×720
+        // scale = min(1280/960, 720/720) = min(1.333, 1.0) = 1.0
+        // offsetX = (1280 - 960*1.0)/2 = 160, offsetY = 0
+        var shape = MakeMediaShape(0, 0, cx: 9144000, cy: 6858000); // full slide
+
+        var r = SlideShowMediaController.ComputeMediaRect(
+            shape, slideDipW: 960, slideDipH: 720, canvasW: 1280, canvasH: 720);
+
+        r.X.Should().BeApproximately(160, 0.5);
+        r.Y.Should().BeApproximately(0, 0.5);
+        r.Width.Should().BeApproximately(960, 1.0);
+        r.Height.Should().BeApproximately(720, 1.0);
+    }
+
+    [Fact]
+    public void ComputeMediaRect_ZeroCanvas_DoesNotThrow()
+    {
+        var shape = MakeMediaShape();
+        var act = () => SlideShowMediaController.ComputeMediaRect(shape, 960, 720, 0, 0);
+        act.Should().NotThrow();
+    }
+
+    // ── TempMediaFileWriter.ContentTypeToExtension ────────────────────────────
+
+    [Theory]
+    [InlineData("video/mp4",        ".mp4")]
+    [InlineData("video/x-ms-wmv",   ".wmv")]
+    [InlineData("audio/mpeg",       ".mp3")]
+    [InlineData("audio/x-ms-wma",   ".wma")]
+    [InlineData("audio/wav",        ".wav")]
+    [InlineData("application/octet-stream", ".bin")]
+    public void ContentTypeToExtension_KnownTypes_ReturnExpectedExtension(
+        string contentType, string expected)
+    {
+        TempMediaFileWriter.ContentTypeToExtension(contentType)
+            .Should().Be(expected);
+    }
+
+    // ── Fake file writer: lifecycle ───────────────────────────────────────────
+
+    /// <summary>In-memory fake that records writes and deletes for lifecycle assertions.</summary>
+    private sealed class FakeFileWriter : ITempMediaFileWriter
+    {
+        private int _nextId;
+        public readonly List<string> Written  = new();
+        public readonly List<string> Deleted  = new();
+
+        public string Write(byte[] bytes, string contentType)
+        {
+            var path = $"fake_media_{_nextId++}.tmp";
+            Written.Add(path);
+            return path;
+        }
+
+        public void Delete(string path) => Deleted.Add(path);
+    }
+
+    [StaFact]
+    public void EnterSlide_WithMediaShape_WritesFile()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = MakeMediaShape();
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        fakeWriter.Written.Should().HaveCount(1);
+    }
+
+    [StaFact]
+    public void Teardown_AfterEnter_DeletesWrittenFiles()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = MakeMediaShape();
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+        ctrl.Teardown();
+
+        // Every written file must be deleted.
+        fakeWriter.Deleted.Should().Contain(fakeWriter.Written);
+    }
+
+    [StaFact]
+    public void Teardown_CalledTwice_DoesNotThrow()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = MakeMediaShape();
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        var act = () => { ctrl.Teardown(); ctrl.Teardown(); };
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
+    public void EnterSlide_SecondCall_TearsDownFirst()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape1 = MakeMediaShape();
+        var slide1 = SlideWithMedia(shape1);
+        ctrl.EnterSlide(slide1, 960, 720, 960, 720);
+
+        var shape2 = MakeMediaShape();
+        var slide2 = SlideWithMedia(shape2);
+        ctrl.EnterSlide(slide2, 960, 720, 960, 720); // should teardown slide1 first
+
+        // slide1's file deleted; slide2's written.
+        fakeWriter.Written.Should().HaveCount(2);
+        fakeWriter.Deleted.Should().Contain(fakeWriter.Written[0]); // first file was cleaned up
+    }
+
+    [StaFact]
+    public void EnterSlide_NoMediaShapes_WritesNoFiles()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id   = 1,
+            Kind = SlideShapeKind.AutoShape,
+        });
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        fakeWriter.Written.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void EnterSlide_LinkOnlyHttp_WritesNoFile()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = new SlideShape
+        {
+            Id   = 1,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes   = Array.Empty<byte>(),   // link-only: no bytes
+                LinkUrl = "https://example.com/video.mp4",
+                ContentType = "video/mp4",
+            }
+        };
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        // No bytes → no temp file written; the link is used directly.
+        fakeWriter.Written.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void EnterSlide_LinkOnlyFileScheme_WritesNoFile()
+    {
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = new SlideShape
+        {
+            Id   = 1,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes   = Array.Empty<byte>(),
+                LinkUrl = "file:///C:/unsafe.mp4",  // security-rejected scheme
+                ContentType = "video/mp4",
+            }
+        };
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        fakeWriter.Written.Should().BeEmpty();
+    }
+
+    // ── Play/pause toggle state machine ──────────────────────────────────────
+
+    [StaFact]
+    public void TryHandleClick_OnMediaShapeRect_ReturnsTrue()
+    {
+        // We verify the hit-test returns true for a click inside the shape's rect.
+        // The shape is at (0,0) 960×720 filling the full slide.
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = MakeMediaShape(0, 0, cx: 9144000, cy: 6858000);
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        // Click at centre of slide/canvas (480, 360) — inside the full-slide media rect.
+        bool hit = ctrl.TryHandleClick(480, 360, slide, 960, 720);
+        hit.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void TryHandleClick_OutsideMediaShapeRect_ReturnsFalse()
+    {
+        // Shape is in the top-left quarter only (0,0 to 480,360).
+        var fakeWriter = new FakeFileWriter();
+        var overlay    = new System.Windows.Controls.Canvas();
+        var ctrl       = new SlideShowMediaController(overlay, fakeWriter);
+
+        var shape = MakeMediaShape(0, 0, cx: 4572000, cy: 3429000); // half-slide
+        var slide = SlideWithMedia(shape);
+
+        ctrl.EnterSlide(slide, 960, 720, 960, 720);
+
+        // Click at bottom-right corner (outside the half-slide media rect).
+        bool hit = ctrl.TryHandleClick(900, 680, slide, 960, 720);
+        hit.Should().BeFalse();
+    }
+
+    // ── SlideShowWindow headless construction with media shape ───────────────
+
+    [StaFact]
+    public void SlideShowWindow_WithMediaShape_ConstructsWithoutThrowing()
+    {
+        var pres  = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+
+        // Add a media shape (embedded bytes).
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 10,
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            Media       = new MediaInfo
+            {
+                IsVideo     = true,
+                Bytes       = new byte[] { 0x00, 0x01, 0x02 },
+                ContentType = "video/mp4",
+            }
+        });
+
+        // Should not throw — MediaElement creation is guarded by try/catch when headless.
+        SlideShowWindow? window = null;
+        var act = () => { window = new SlideShowWindow(pres, 0); };
+        act.Should().NotThrow();
+        window?.Close();
+    }
+}

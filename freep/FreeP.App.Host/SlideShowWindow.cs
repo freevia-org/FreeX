@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Free.Shared.Drawing;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -60,6 +61,12 @@ public sealed class SlideShowWindow : Window
 
     // Shape animation overlay: a Canvas placed on top of _slideCanvas; populated per-slide.
     private readonly Canvas _animOverlay;
+
+    // Media playback overlay: a Canvas layered above _animOverlay; populated per-slide.
+    private readonly Canvas _mediaOverlay;
+
+    // Manages MediaElement lifecycle for the current slide's media shapes.
+    private readonly SlideShowMediaController _mediaController;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -128,6 +135,19 @@ public sealed class SlideShowWindow : Window
             VerticalAlignment   = VerticalAlignment.Center,
         };
         stage.Children.Add(_animOverlay);
+
+        // Media overlay: sits above anim overlay so MediaElements are on top.
+        // IsHitTestVisible=false here; we do our own hit-testing in the click handler.
+        _mediaOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment   = VerticalAlignment.Center,
+        };
+        stage.Children.Add(_mediaOverlay);
+
+        // Media controller: created now; EnterSlide is called per-slide in DisplayCurrentSlide.
+        _mediaController = new SlideShowMediaController(_mediaOverlay);
 
         _root.Children.Add(stage);
 
@@ -233,6 +253,20 @@ public sealed class SlideShowWindow : Window
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         var slide = _controller.CurrentSlide;
+
+        // Check if the click lands on a media shape — toggle play/pause and consume the click
+        // so it does NOT also advance the slideshow.
+        if (slide is not null && slide.Shapes.Any(s => s.Kind == SlideShapeKind.Media))
+        {
+            var clickPt = e.GetPosition(_slideCanvas);
+            double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+            double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+            if (_mediaController.TryHandleClick(clickPt.X, clickPt.Y, slide, cw, ch))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
 
         // Check if the click lands on a trigger shape first.
         if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
@@ -483,6 +517,12 @@ public sealed class SlideShowWindow : Window
 
         // Prepare animation overlay for the new slide.
         PrepareAnimationOverlay(slide);
+
+        // Set up media playback for any media shapes on the new slide.
+        // Use actual canvas dimensions when available; fall back to slide DIP size.
+        double mediaCanvasW = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+        double mediaCanvasH = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        _mediaController.EnterSlide(slide, _slideDipW, _slideDipH, mediaCanvasW, mediaCanvasH);
 
         // Apply transition if requested.
         if (animated && slide.Transition is { Kind: not TransitionKind.None } t)
@@ -1134,5 +1174,8 @@ public sealed class SlideShowWindow : Window
             try { sb.Stop(); } catch { /* ignore */ }
         }
         _pendingStoryboards.Clear();
+
+        // Stop all media players and delete temp files.
+        _mediaController.Teardown();
     }
 }
