@@ -82,6 +82,11 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _controller   = new SlideShowController(presentation.Slides, startIndex);
 
+        // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
+        // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
+        _slideDipW = presentation.SlideSizeCxEmu / 9525.0;
+        _slideDipH = presentation.SlideSizeCyEmu / 9525.0;
+
         // Window chrome
         WindowStyle  = WindowStyle.None;
         WindowState  = WindowState.Maximized;
@@ -136,10 +141,11 @@ public sealed class SlideShowWindow : Window
         _autoAdvanceTimer.Tick += (_, _) => DoAdvance();
 
         // ── Event wiring ───────────────────────────────────────────────────────
-        KeyDown     += OnKeyDown;
-        MouseLeftButtonDown += OnMouseLeftButtonDown;
-        Loaded      += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
-        Closed      += (_, _) => Teardown();
+        KeyDown              += OnKeyDown;
+        MouseLeftButtonDown  += OnMouseLeftButtonDown;
+        MouseMove            += OnMouseMove;
+        Loaded               += (_, _) => { Focus(); DisplayCurrentSlide(animated: false); };
+        Closed               += (_, _) => Teardown();
     }
 
     // ── Public API (callable by test code without showing the window) ─────────────
@@ -226,8 +232,9 @@ public sealed class SlideShowWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Check if the click lands on a trigger shape first.
         var slide = _controller.CurrentSlide;
+
+        // Check if the click lands on a trigger shape first.
         if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
         {
             var clickPt = e.GetPosition(_slideCanvas);
@@ -240,8 +247,126 @@ public sealed class SlideShowWindow : Window
             }
         }
 
-        // Not a trigger — regular advance.
+        // Check if the click lands on a hyperlinked shape.
+        if (slide is not null)
+        {
+            var clickPt = e.GetPosition(_slideCanvas);
+            var hlink = HitTestHyperlink(slide, clickPt.X, clickPt.Y);
+            if (hlink is not null)
+            {
+                ActivateHyperlink(hlink);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Not a trigger or hyperlink — regular advance.
         DoAdvance();
+    }
+
+    private void OnMouseMove(object sender, MouseEventArgs e)
+    {
+        var slide = _controller.CurrentSlide;
+        if (slide is null) { Cursor = Cursors.Arrow; return; }
+        var pt = e.GetPosition(_slideCanvas);
+        var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
+        Cursor = hlink is not null ? Cursors.Hand : Cursors.Arrow;
+    }
+
+    // ── Hyperlink hit-testing & activation ─────────────────────────────────────────
+
+    /// <summary>
+    /// Hit-tests the click point against shapes that carry a hyperlink.
+    /// Returns the first matching hyperlink, or null.
+    /// Run-precise hit-testing for run-level links is approximated to the containing shape (v1).
+    /// </summary>
+    internal Hyperlink? HitTestHyperlink(Slide slide, double canvasX, double canvasY)
+    {
+        double slideX = CanvasToSlideX(canvasX);
+        double slideY = CanvasToSlideY(canvasY);
+
+        foreach (var shape in slide.Shapes)
+        {
+            if (!HitTestShape(shape, slideX, slideY)) continue;
+
+            // Shape-level hyperlink takes priority.
+            if (shape.Hyperlink is not null) return shape.Hyperlink;
+
+            // Run-level: return the first hyperlink found in any run (shape-level approximation).
+            if (shape.TextBody is not null)
+            {
+                foreach (var para in shape.TextBody.Paragraphs)
+                    foreach (var run in para.Runs)
+                        if (run.Hyperlink is not null) return run.Hyperlink;
+            }
+        }
+        return null;
+    }
+
+    private static bool HitTestShape(SlideShape shape, double slideX, double slideY)
+    {
+        double sx  = shape.OffsetXEmu / 9525.0;
+        double sy  = shape.OffsetYEmu / 9525.0;
+        double scx = shape.ExtentCxEmu / 9525.0;
+        double scy = shape.ExtentCyEmu / 9525.0;
+        return slideX >= sx && slideX <= sx + scx && slideY >= sy && slideY <= sy + scy;
+    }
+
+    private double CanvasToSlideX(double canvasX)
+    {
+        double cw = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
+        return canvasX * (_slideDipW / cw);
+    }
+
+    private double CanvasToSlideY(double canvasY)
+    {
+        double ch = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
+        return canvasY * (_slideDipH / ch);
+    }
+
+    /// <summary>
+    /// Activates a hyperlink: external → open URL in browser (http/https/mailto only);
+    /// internal → navigate the controller to the target slide.
+    /// </summary>
+    internal void ActivateHyperlink(Hyperlink hlink)
+    {
+        if (hlink.IsExternal)
+        {
+            OpenExternalUrl(hlink.Url!);
+        }
+        else if (hlink.TargetSlideId is not null)
+        {
+            var targetIdx = _presentation.Slides
+                .FindIndex(s => s.Id == hlink.TargetSlideId);
+            if (targetIdx >= 0)
+            {
+                _autoAdvanceTimer.Stop();
+                _controller.GoToSlide(targetIdx);
+                DisplayCurrentSlide(animated: false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens an external URL in the default browser.
+    /// Only http, https, and mailto schemes are allowed; all others are silently ignored.
+    /// </summary>
+    internal static void OpenExternalUrl(string url)
+    {
+        try
+        {
+            var uri = new Uri(url, UriKind.Absolute);
+            if (uri.Scheme is not ("http" or "https" or "mailto"))
+                return; // security guard: reject file:// and other schemes
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Swallow — never crash the slideshow over a bad URL.
+        }
     }
 
     /// <summary>

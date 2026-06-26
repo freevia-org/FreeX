@@ -260,6 +260,14 @@ public sealed class SlideShape
     /// </summary>
     public string? LegacyFxpKind { get; set; }
 
+    // ── Hyperlink ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Shape-level hyperlink.  Corresponds to <c>a:hlinkClick</c> inside <c>p:cNvPr</c>.
+    /// When set, a click anywhere on the shape navigates to the hyperlink target.
+    /// </summary>
+    public Hyperlink? Hyperlink { get; set; }
+
     // ── Convenience helpers ───────────────────────────────────────────────────────
 
     /// <summary>

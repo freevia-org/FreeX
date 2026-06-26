@@ -49,6 +49,10 @@ internal static class FreePRibbonCommands
     ///   place content on the OS clipboard; ribbon Paste checks the OS clipboard first.
     ///   When null the ribbon uses the internal clipboard only (original Wave 5B behaviour).
     /// </param>
+    /// <param name="onInsertLink">
+    ///   Wave 11A: callback that opens the Insert Hyperlink dialog.
+    ///   Provided by MainWindow which builds and owns the dialog.
+    /// </param>
     public static RibbonCommandRegistry Build(
         RibbonStateStore    stateStore,
         EditingSession      editor,
@@ -57,7 +61,8 @@ internal static class FreePRibbonCommands
         Action?             onEditChartData    = null,
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Action?             onCustomSlideSize  = null,
-        OsClipboardService? osClipboard        = null)
+        OsClipboardService? osClipboard        = null,
+        Action?             onInsertLink       = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -405,6 +410,16 @@ internal static class FreePRibbonCommands
                 if (onEditChartData is not null)
                     onEditChartData();
             }));
+
+        // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
+
+        // Insert/edit hyperlink — opens HyperlinkDialog (supplied by MainWindow).
+        registry.Register("freep.insert-link",
+            new ActionCommand(() => onInsertLink?.Invoke()));
+
+        // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
+        registry.Register("freep.remove-link",
+            new ActionCommand(() => editor.RemoveShapeHyperlink()));
 
         return registry;
     }

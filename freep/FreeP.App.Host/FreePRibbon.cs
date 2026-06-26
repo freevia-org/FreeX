@@ -66,6 +66,12 @@ internal static class FreePRibbon
                     // Wave 9B: Edit selected chart's data via grid dialog.
                     g.Medium("freep.chart.edit-data",     "Edit Data", RibbonCommandIconKind.ChartTitle,  "E");
                 });
+                // Wave 11A: Links group — Insert / Remove hyperlink.
+                tab.Group("links", "Links", "L", 92, g =>
+                {
+                    g.Large("freep.insert-link", "Hyperlink", RibbonCommandIconKind.Link, "K");
+                    g.Medium("freep.remove-link", "Remove Link", RibbonCommandIconKind.Delete, "R");
+                });
                 tab.Group("illustrations", "Illustrations", "I", 90, g =>
                 {
                     g.Large("freep.picture", "Picture", RibbonCommandIconKind.Picture, "P");

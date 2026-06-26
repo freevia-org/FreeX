@@ -63,6 +63,7 @@ public static class SlideCloner
             TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
             Table          = shape.Table  is null ? null : CloneTable(shape.Table),
             Chart          = shape.Chart  is null ? null : CloneChart(shape.Chart),
+            Hyperlink      = CloneHyperlink(shape.Hyperlink),
         };
 
         foreach (var child in shape.Children)
@@ -124,7 +125,11 @@ public static class SlideCloner
         Underline     = run.Underline,
         Strikethrough = run.Strikethrough,
         Color         = run.Color,           // ThemeAwareColor is a struct — copied by value
+        Hyperlink     = CloneHyperlink(run.Hyperlink),
     };
+
+    private static Hyperlink? CloneHyperlink(Hyperlink? h) =>
+        h is null ? null : new Hyperlink { Url = h.Url, TargetSlideId = h.TargetSlideId, Tooltip = h.Tooltip };
 
     private static TableShape CloneTable(TableShape src)
     {

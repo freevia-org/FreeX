@@ -1,5 +1,6 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
+using System.Linq;
 
 namespace FreeP.App.Compositor;
 
@@ -826,6 +827,42 @@ public sealed class EditingSession
 
         AddShape(shape);
         return shape;
+    }
+
+    // ── Hyperlinks ────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets a shape-level hyperlink on every selected shape.  Undoable.
+    /// Pass <paramref name="url"/> for an external link or <paramref name="targetSlideId"/> for
+    /// an internal slide jump; exactly one should be non-null.
+    /// </summary>
+    public void SetShapeHyperlink(string? url = null, string? targetSlideId = null, string? tooltip = null)
+    {
+        if (CurrentSlide is null) return;
+        var link = (url is not null || targetSlideId is not null)
+            ? new Hyperlink { Url = url, TargetSlideId = targetSlideId, Tooltip = tooltip }
+            : null;
+        foreach (var id in _selectedShapeIds)
+            Bus.Execute(new SetShapeHyperlinkCommand(_currentSlideIndex, id, link));
+    }
+
+    /// <summary>Removes the shape-level hyperlink from every selected shape.  Undoable.</summary>
+    public void RemoveShapeHyperlink()
+        => SetShapeHyperlink(); // null link = remove
+
+    /// <summary>
+    /// Returns the shape-level hyperlink of the first selected shape, if any.
+    /// Used to pre-fill the HyperlinkDialog when editing an existing link.
+    /// </summary>
+    public Hyperlink? SelectedShapeHyperlink
+    {
+        get
+        {
+            if (CurrentSlide is null || _selectedShapeIds.Count == 0) return null;
+            var firstId = _selectedShapeIds[0];
+            var shape   = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == firstId);
+            return shape?.Hyperlink;
+        }
     }
 
     // ── Font family (named overload matching 5B contract) ─────────────────────────

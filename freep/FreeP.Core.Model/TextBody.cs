@@ -1,5 +1,26 @@
 namespace FreeP.Core.Model;
 
+/// <summary>
+/// A hyperlink target.  Exactly one of <see cref="Url"/> or <see cref="TargetSlideId"/> is set.
+/// </summary>
+public sealed class Hyperlink
+{
+    /// <summary>External URL (http/https/mailto).  Set for external hyperlinks.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>
+    /// Internal slide jump target.  Value is the <see cref="Slide.Id"/> of the destination slide.
+    /// Set for in-presentation jump links (<c>ppaction://hlinksldjump</c>).
+    /// </summary>
+    public string? TargetSlideId { get; set; }
+
+    /// <summary>Optional tooltip text shown on hover.</summary>
+    public string? Tooltip { get; set; }
+
+    /// <summary>True if this is an external link (Url is set).</summary>
+    public bool IsExternal => Url is not null;
+}
+
 /// <summary>Horizontal text alignment within a paragraph.</summary>
 public enum TextAlign
 {
@@ -39,6 +60,9 @@ public sealed class Run
 
     /// <summary>Run color, or null to inherit.</summary>
     public ThemeAwareColor? Color { get; set; }
+
+    /// <summary>Hyperlink on this run, or null.  Corresponds to <c>a:hlinkClick</c> inside <c>a:rPr</c>.</summary>
+    public Hyperlink? Hyperlink { get; set; }
 }
 
 /// <summary>

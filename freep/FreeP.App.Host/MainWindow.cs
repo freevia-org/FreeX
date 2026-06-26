@@ -160,7 +160,9 @@ public sealed class MainWindow : Window
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
             // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
-            osClipboard:        _osClipboard);
+            osClipboard:        _osClipboard,
+            // Wave 11A: Insert Hyperlink dialog.
+            onInsertLink:       () => OpenHyperlinkDialog());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -534,6 +536,21 @@ public sealed class MainWindow : Window
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
+    }
+
+    /// <summary>
+    /// Opens the <see cref="HyperlinkDialog"/> for the currently selected shape(s).
+    /// Wave 11A: pre-fills the dialog with the existing hyperlink if exactly one shape is selected.
+    /// On OK, calls <see cref="EditingSession.SetShapeHyperlink"/> (undoable).
+    /// </summary>
+    internal void OpenHyperlinkDialog()
+    {
+        var slides   = (IReadOnlyList<Slide>)Editor.Presentation.Slides;
+        var current  = Editor.SelectedShapeHyperlink;
+        var dialog   = new HyperlinkDialog(slides, current);
+        if (IsVisible) dialog.Owner = this;
+        if (dialog.ShowDialog() == true && dialog.Result is not null)
+            Editor.SetShapeHyperlink(dialog.Result.Url, dialog.Result.TargetSlideId, dialog.Result.Tooltip);
     }
 
     // ── Backstage ─────────────────────────────────────────────────────────────────

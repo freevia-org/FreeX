@@ -37,6 +37,7 @@ public static class PptxPackageWriter
     private const string ChartRelType       = PptxChartWriter.ChartRelType;
     private const string NotesSlideRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
     private const string NotesMasterRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster";
+    private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
     // SmartArt diagram relationship types (slide rels point to the named sub-parts)
     private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
@@ -231,8 +232,14 @@ public static class PptxPackageWriter
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
             foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
 
+            // Collect hyperlinks from this slide and assign rel IDs.
+            // hlinkRelIds maps hyperlink key (url or "slide:"+slideId) to the rels r:id.
+            var hlinkRelIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            var hlinkRelEntries = new List<(string relId, string relType, string target, bool external)>();
+            CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
+
             // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap));
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides));
 
             // Slide rels: rId1=layout, images, charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
@@ -244,6 +251,9 @@ public static class PptxPackageWriter
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
             foreach (var (relId, relType, target) in smartArtSlideRels)
                 slideRels.Add(relId, relType, target);
+            // Hyperlink rels (external with TargetMode=External; internal slide rels without)
+            foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
+                slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
 
             // Write notes slide and add rel when the slide has speaker notes
             if (slide.Notes is not null)
@@ -440,7 +450,9 @@ public static class PptxPackageWriter
     private static XDocument BuildSlideXml(
         Slide slide, PresentationColorScheme scheme,
         Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap)
+        Dictionary<uint, Dictionary<string, string>> smartArtRelIdRemap,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -456,7 +468,7 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slide.Shapes
-                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap))
+                            .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides))
                             .OfType<XElement>())),
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
@@ -1085,34 +1097,39 @@ public static class PptxPackageWriter
 
     private static XElement? BuildShapeEl(
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null) =>
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
-            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap),
-            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme),
+            SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides),
+            SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
             SlideShapeKind.Chart when shape.Chart is not null => BuildChartGraphicFrameEl(shape, mediaById),
             SlideShapeKind.SmartArt when shape.SmartArt is not null =>
                 BuildSmartArtGraphicFrameEl(shape,
                     smartArtRelIdRemap?.GetValueOrDefault(shape.Id)),
-            _ => BuildSpEl(shape, scheme)
+            _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides)
         };
 
-    private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme) =>
+    private static XElement BuildSpEl(SlideShape shape, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null) =>
         new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, allSlides),
                 new XElement(P + "cNvSpPr"),
                 new XElement(P + "nvPr",
                     shape.Placeholder is not null ? BuildPhEl(shape.Placeholder) : null)),
             BuildSpPrEl(shape, scheme),
-            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme) : null);
+            shape.TextBody is not null ? BuildTxBodyEl(shape.TextBody, scheme, hlinkRelIds, allSlides) : null);
 
-    private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme) =>
+    private static XElement BuildCxnSpEl(SlideShape shape, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null) =>
         new XElement(P + "cxnSp",
             new XElement(P + "nvCxnSpPr",
-                CnvPr(shape.Id, shape.Name),
+                CnvPrWithHlink(shape.Id, shape.Name, shape.Hyperlink, hlinkRelIds, null),
                 new XElement(P + "cNvCxnSpPr"),
                 new XElement(P + "nvPr")),
             BuildSpPrEl(shape, scheme));
@@ -1136,7 +1153,9 @@ public static class PptxPackageWriter
 
     private static XElement BuildGrpSpEl(
         SlideShape shape, PresentationColorScheme scheme, Dictionary<uint, string> mediaById,
-        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null) =>
+        Dictionary<uint, Dictionary<string, string>>? smartArtRelIdRemap = null,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null) =>
         new XElement(P + "grpSp",
             new XElement(P + "nvGrpSpPr",
                 CnvPr(shape.Id, shape.Name),
@@ -1144,7 +1163,7 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             BuildGrpSpPrEl(shape),
             shape.Children
-                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap))
+                .Select(c => BuildShapeEl(c, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides))
                 .OfType<XElement>());
 
     /// <summary>
@@ -1719,7 +1738,9 @@ public static class PptxPackageWriter
 
     // ── TextBody elements ─────────────────────────────────────────────────────────
 
-    private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme)
+    private static XElement BuildTxBodyEl(TextBody body, PresentationColorScheme scheme,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         // Write anchor only when explicitly set; omit when null (inherited from layout/master).
         var bodyPr = new XElement(A + "bodyPr");
@@ -1747,10 +1768,12 @@ public static class PptxPackageWriter
         return new XElement(P + "txBody",
             bodyPr,
             BuildLstStyleEl(body.LstStyle),
-            body.Paragraphs.Select(p => BuildParaEl(p)));
+            body.Paragraphs.Select(p => BuildParaEl(p, hlinkRelIds, allSlides)));
     }
 
-    private static XElement BuildParaEl(Paragraph para)
+    private static XElement BuildParaEl(Paragraph para,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         var pPr = new XElement(A + "pPr");
         bool hasPPr = false;
@@ -1794,10 +1817,12 @@ public static class PptxPackageWriter
 
         return new XElement(A + "p",
             hasPPr ? pPr : null,
-            para.Runs.Select(BuildRunEl));
+            para.Runs.Select(r => BuildRunEl(r, hlinkRelIds, allSlides)));
     }
 
-    private static XElement BuildRunEl(Run run)
+    private static XElement BuildRunEl(Run run,
+        Dictionary<string, string>? hlinkRelIds = null,
+        List<Slide>? allSlides = null)
     {
         if (run.Text == "\n") return new XElement(A + "br");
 
@@ -1815,6 +1840,13 @@ public static class PptxPackageWriter
             rPr.Add(new XElement(A + "solidFill", BuildColorEl(run.Color)));
         if (run.FontFamily is not null)
             rPr.Add(new XElement(A + "latin", new XAttribute("typeface", run.FontFamily)));
+
+        // Run-level hyperlink
+        if (run.Hyperlink is not null)
+        {
+            var hlinkEl = BuildHlinkClickEl(run.Hyperlink, hlinkRelIds, allSlides);
+            if (hlinkEl is not null) rPr.Add(hlinkEl);
+        }
 
         return new XElement(A + "r", rPr, new XElement(A + "t", run.Text));
     }
@@ -1843,6 +1875,68 @@ public static class PptxPackageWriter
         var el = new XElement(P + "ph", new XAttribute("type", typeStr));
         if (ph.Idx > 0) el.Add(new XAttribute("idx", ph.Idx));
         return el;
+    }
+
+    // ── Hyperlink rel collection ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Walks all shapes and runs in <paramref name="slide"/>, collects unique hyperlinks, assigns
+    /// monotonically-increasing rel IDs ("rIdHlinkN"), and populates:
+    /// <list type="bullet">
+    ///   <item><paramref name="hlinkRelIds"/> — maps hyperlink key → rel ID (for use in BuildShapeEl/BuildRunEl)</item>
+    ///   <item><paramref name="entries"/> — list of (relId, relType, target, isExternal) for the slide rels file</item>
+    /// </list>
+    /// For external URLs the rel type is the hyperlink rel type with TargetMode=External.
+    /// For internal slide jumps the rel type is the slide rel type (no TargetMode).
+    /// </summary>
+    private static void CollectHyperlinkRels(
+        Slide slide, List<Slide> allSlides, int slideIndex,
+        Dictionary<string, string> hlinkRelIds,
+        List<(string relId, string relType, string target, bool external)> entries)
+    {
+        int counter = 1;
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Hyperlink is not null)
+                EnsureHlinkRel(shape.Hyperlink, allSlides, slideIndex, hlinkRelIds, entries, ref counter);
+
+            if (shape.TextBody is not null)
+            {
+                foreach (var para in shape.TextBody.Paragraphs)
+                    foreach (var run in para.Runs)
+                        if (run.Hyperlink is not null)
+                            EnsureHlinkRel(run.Hyperlink, allSlides, slideIndex, hlinkRelIds, entries, ref counter);
+            }
+        }
+    }
+
+    private static void EnsureHlinkRel(
+        Hyperlink hlink, List<Slide> allSlides, int slideIndex,
+        Dictionary<string, string> hlinkRelIds,
+        List<(string relId, string relType, string target, bool external)> entries,
+        ref int counter)
+    {
+        string key = HlinkKey(hlink, allSlides);
+        if (string.IsNullOrEmpty(key)) return;
+        if (hlinkRelIds.ContainsKey(key)) return; // already registered
+
+        var relId = $"rIdHlink{counter++}";
+        hlinkRelIds[key] = relId;
+
+        if (hlink.Url is not null)
+        {
+            // External hyperlink — TargetMode="External"
+            entries.Add((relId, HyperlinkRelType, hlink.Url, external: true));
+        }
+        else if (hlink.TargetSlideId is not null)
+        {
+            // Internal slide jump — find the target slide index.
+            int targetIdx = allSlides.FindIndex(s => s.Id == hlink.TargetSlideId);
+            string target = targetIdx >= 0
+                ? $"../slides/slide{targetIdx + 1}.xml"
+                : "../slides/slide1.xml"; // fallback
+            entries.Add((relId, SlideRelType, target, external: false));
+        }
     }
 
     // ── Media writing ─────────────────────────────────────────────────────────────
@@ -2103,6 +2197,52 @@ public static class PptxPackageWriter
     private static XElement CnvPr(uint id, string name) =>
         new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
 
+    /// <summary>
+    /// Builds a cNvPr element and, when the shape carries a hyperlink, appends an a:hlinkClick child.
+    /// </summary>
+    private static XElement CnvPrWithHlink(uint id, string name, Hyperlink? hlink,
+        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    {
+        var el = new XElement(P + "cNvPr", new XAttribute("id", id), new XAttribute("name", name));
+        if (hlink is not null)
+        {
+            var hlinkEl = BuildHlinkClickEl(hlink, hlinkRelIds, allSlides);
+            if (hlinkEl is not null) el.Add(hlinkEl);
+        }
+        return el;
+    }
+
+    /// <summary>
+    /// Builds an <c>a:hlinkClick</c> element for the given hyperlink, resolving to the stored rel ID.
+    /// Returns null when no rel ID could be found for the hyperlink target.
+    /// </summary>
+    private static XElement? BuildHlinkClickEl(Hyperlink hlink,
+        Dictionary<string, string>? hlinkRelIds, List<Slide>? allSlides)
+    {
+        if (hlinkRelIds is null) return null;
+
+        string key = HlinkKey(hlink, allSlides);
+        if (!hlinkRelIds.TryGetValue(key, out var relId)) return null;
+
+        var el = new XElement(A + "hlinkClick", new XAttribute(R + "id", relId));
+        if (!string.IsNullOrEmpty(hlink.Tooltip))
+            el.Add(new XAttribute("tooltip", hlink.Tooltip));
+
+        // Internal slide jump: add the action attribute.
+        if (hlink.TargetSlideId is not null)
+            el.Add(new XAttribute("action", "ppaction://hlinksldjump"));
+
+        return el;
+    }
+
+    /// <summary>Compute the canonical key used in the hlinkRelIds dictionary for a Hyperlink.</summary>
+    private static string HlinkKey(Hyperlink h, List<Slide>? allSlides)
+    {
+        if (h.Url is not null) return "ext:" + h.Url;
+        if (h.TargetSlideId is not null) return "slide:" + h.TargetSlideId;
+        return string.Empty;
+    }
+
     private static IEnumerable<object?> GrpSpHeader() => new object?[]
     {
         new XElement(P + "nvGrpSpPr",
@@ -2175,9 +2315,10 @@ public static class PptxPackageWriter
 
     private sealed class RelsDoc
     {
-        private readonly List<(string id, string type, string target)> _rels = new();
+        private readonly List<(string id, string type, string target, bool external)> _rels = new();
 
-        public void Add(string id, string type, string target) => _rels.Add((id, type, target));
+        public void Add(string id, string type, string target, bool external = false)
+            => _rels.Add((id, type, target, external));
 
         public XDocument ToXDocument() =>
             new XDocument(
@@ -2186,10 +2327,15 @@ public static class PptxPackageWriter
                 // not a prefixed namespace (PowerPoint rejects r:Relationships).
                 new XElement(PkgRels + "Relationships",
                     _rels.Select(r =>
-                        new XElement(PkgRels + "Relationship",
+                    {
+                        var el = new XElement(PkgRels + "Relationship",
                             new XAttribute("Id", r.id),
                             new XAttribute("Type", r.type),
-                            new XAttribute("Target", r.target)))));
+                            new XAttribute("Target", r.target));
+                        if (r.external)
+                            el.Add(new XAttribute("TargetMode", "External"));
+                        return el;
+                    })));
 
         // Re-expose PkgRels from outer class
         private static readonly XNamespace PkgRels = PptxPackageWriter.PkgRels;
