@@ -364,6 +364,179 @@ public sealed class DocumentViewTableNavMergeTests
         // If we got here without throwing, the no-op guard works.
         true.Should().BeTrue("SplitCurrentCell outside a table must not throw");
     }
+
+    // ── BH1: MergeSelectedCells with a preceding horizontal merge ────────────────────────────────
+
+    /// <summary>
+    /// BH1 regression: when a row already has a preceding cell with GridSpan=2 (occupying grid
+    /// columns 0-1), selecting the next two grid columns (2 and 3) must merge the two LOGICAL cells
+    /// at those positions — not the wrong cells or a silent no-op that a direct grid-index lookup
+    /// would produce.
+    /// Table layout: Row0 = [A(GridSpan=2), B, C] (grid widths: 0-1, 2, 3).
+    /// Selection: grid cols 2..3 → should collapse B+C into one cell (GridSpan=2).
+    /// </summary>
+    [Fact]
+    public async Task MergeSelectedCells_horizontal_with_preceding_merge_targets_correct_cells()
+    {
+        int cellCountAfter = -1;
+        int gridSpanAfter  = -1;
+        var ran = await OnUiThread(() =>
+        {
+            // Build a 1-row table: cell A spans grid cols 0-1, then B at col 2, C at col 3.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 3);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            tbl.Rows[0].Cells[2] = new TableCell("C");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select grid columns 2..3 (B and C). These are GRID cols, not cell-list indices.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 2, focusRow: 0, focusCol: 3);
+            view.MergeSelectedCells();
+
+            cellCountAfter = tbl.Rows[0].Cells.Count;
+            gridSpanAfter  = tbl.Rows[0].Cells[1].GridSpan; // cell at cell-list index 1 (B+C merged)
+        });
+
+        if (!ran) return;
+        cellCountAfter.Should().Be(2, "merging B and C leaves 2 logical cells in the row (A, B+C)");
+        gridSpanAfter.Should().Be(2, "the merged B+C cell must have GridSpan=2");
+    }
+
+    // ── BH2: SplitCurrentCell with a preceding horizontal merge ──────────────────────────────────
+
+    /// <summary>
+    /// BH2 regression: when the caret is in a cell that lives AFTER a preceding merged cell,
+    /// _cellCaret.Col is a GRID column. SplitCurrentCell must convert it to a cell-list index
+    /// before calling SplitCellCommand — otherwise it targets the wrong cell or goes out of range.
+    /// Table: Row0 = [A(GridSpan=2), B(GridSpan=2)] — grid cols 0-1 and 2-3.
+    /// Caret in B (grid col 2). SplitCurrentCell must split B (cell-list index 1), not A.
+    /// </summary>
+    [Fact]
+    public async Task SplitCurrentCell_with_preceding_merge_splits_correct_cell()
+    {
+        int cellCountAfter = -1;
+        int gridSpanA      = -1;
+        int gridSpanB1     = -1;
+        var ran = await OnUiThread(() =>
+        {
+            // Row has two merged cells: A (grid 0-1, span=2) and B (grid 2-3, span=2).
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 2);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { GridSpan = 2 };
+            tbl.Rows[0].Cells[1] = new TableCell("B") { GridSpan = 2 };
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Place caret in B — grid col 2, which is cell-list index 1.
+            view.PlaceCaretInCell(idx, row: 0, col: 2, paraIdx: 0, offset: 0);
+            view.SplitCurrentCell();
+
+            cellCountAfter = tbl.Rows[0].Cells.Count;
+            gridSpanA      = tbl.Rows[0].Cells[0].GridSpan; // A must be unchanged
+            gridSpanB1     = tbl.Rows[0].Cells[1].GridSpan; // first half of the split B
+        });
+
+        if (!ran) return;
+        cellCountAfter.Should().Be(3, "splitting B (span=2) adds one cell → total 3 cells");
+        gridSpanA.Should().Be(2, "A must remain untouched (GridSpan=2)");
+        gridSpanB1.Should().Be(1, "first part of split B must have GridSpan=1");
+    }
+
+    // ── BH3: Tab skips VerticalMerge.Continue cells ──────────────────────────────────────────────
+
+    /// <summary>
+    /// BH3 regression: in a 2-column × 2-row table where column 0 has a vertical merge
+    /// (R0C0 = Restart, R1C0 = Continue), Tab from R0C0 must land on R0C1 (skipping the Continue
+    /// cell R1C0 entirely). Tab count from R0C0 to last real cell must match Word semantics
+    /// (3 stops: R0C0 → R0C1 → R1C1, skipping R1C0 Continue).
+    /// </summary>
+    [Fact]
+    public async Task Tab_skips_verticalmerge_continue_cells()
+    {
+        var tabOrder = new List<(int Row, int Col)>();
+        var ran = await OnUiThread(() =>
+        {
+            // 2×2 table: col 0 vertically merged (rows 0-1), col 1 plain.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(2, 2);
+            tbl.Rows[0].Cells[0] = new TableCell("A") { VerticalMerge = VerticalMergeState.Restart };
+            tbl.Rows[0].Cells[1] = new TableCell("B");
+            tbl.Rows[1].Cells[0] = new TableCell("") { VerticalMerge = VerticalMergeState.Continue };
+            tbl.Rows[1].Cells[1] = new TableCell("C");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Start at R0C0 and Tab through the table; record each stop.
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+            tabOrder.Add((view.CellCaretInfo!.Value.Row, view.CellCaretInfo!.Value.Col));
+
+            // Tab once → should skip Continue cell and land on R0C1.
+            view.SimulateTabCell(forward: true);
+            if (view.CellCaretInfo is { } s1) tabOrder.Add((s1.Row, s1.Col));
+
+            // Tab again → R1C1 (Continue at R1C0 is skipped).
+            view.SimulateTabCell(forward: true);
+            if (view.CellCaretInfo is { } s2) tabOrder.Add((s2.Row, s2.Col));
+        });
+
+        if (!ran) return;
+        tabOrder.Should().HaveCount(3, "3 tab stops: R0C0, R0C1, R1C1 (R1C0 Continue is skipped)");
+        tabOrder[0].Should().Be((0, 0), "start at R0C0");
+        tabOrder[1].Should().Be((0, 1), "Tab from R0C0 must land on R0C1, not the Continue cell");
+        tabOrder[2].Should().Be((1, 1), "Tab from R0C1 must land on R1C1");
+    }
+
+    // ── BG1: ExpandForMergedCells expands row range for vertical merges ───────────────────────────
+
+    /// <summary>
+    /// BG1 regression: ExpandForMergedCells must grow minRow/maxRow to fully include vertical
+    /// merge runs that are partially selected. Table: 4 rows × 2 cols; col 0 has a vertical merge
+    /// spanning rows 1-3 (R1C0=Restart, R2C0=Continue, R3C0=Continue). Selecting rows 0-1 with
+    /// col 0 in range must expand to include rows 1-3 (the full vertical merge run).
+    /// </summary>
+    [Fact]
+    public async Task ExpandForMergedCells_expands_row_range_for_vertical_merge()
+    {
+        (int MinRow, int MaxRow)? selRange = null;
+        var ran = await OnUiThread(() =>
+        {
+            // 4-row × 2-col table; col 0 rows 1-3 are vertically merged.
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(4, 2);
+            tbl.Rows[0].Cells[0] = new TableCell("top");
+            tbl.Rows[1].Cells[0] = new TableCell("merge-head") { VerticalMerge = VerticalMergeState.Restart };
+            tbl.Rows[2].Cells[0] = new TableCell("") { VerticalMerge = VerticalMergeState.Continue };
+            tbl.Rows[3].Cells[0] = new TableCell("") { VerticalMerge = VerticalMergeState.Continue };
+            for (var r = 0; r < 4; r++) tbl.Rows[r].Cells[1] = new TableCell($"B{r}");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            var idx = doc.Blocks.IndexOf(tbl);
+
+            // Select rows 0..1 in col 0 — this cuts the vertical merge run in half.
+            // ExpandForMergedCells (called inside SelectedCellRange) must grow maxRow to 3.
+            view.SetCellBlockSelection(idx, anchorRow: 0, anchorCol: 0, focusRow: 1, focusCol: 0);
+            var sel = view.SelectedCellRange;
+            if (sel is { } s) selRange = (s.MinRow, s.MaxRow);
+        });
+
+        if (!ran) return;
+        selRange.Should().NotBeNull("SelectedCellRange must return a value");
+        selRange!.Value.MinRow.Should().Be(0, "minRow must remain 0 (row 0 is above the merge)");
+        selRange!.Value.MaxRow.Should().Be(3, "maxRow must expand to 3 to include the full vertical merge run");
+    }
 }
 
 /// <summary>

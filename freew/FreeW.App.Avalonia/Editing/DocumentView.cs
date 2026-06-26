@@ -499,20 +499,35 @@ public sealed class DocumentView : Control
         if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
             return;
 
+        var table = (Table)_doc.Blocks[blockIdx];
         if (sel.MinRow == sel.MaxRow)
         {
             // Same row — horizontal merge.
-            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, sel.MinCol, sel.MaxCol));
+            // BH1: SelectedCellRange returns GRID columns; MergeCellsHorizontalCommand expects
+            // CELL-LIST indices. Convert via GridColumnToCellIndex for the relevant row.
+            var row = table.Rows[sel.MinRow];
+            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
+            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
+            if (firstCellIdx < 0 || lastCellIdx < 0)
+                return;
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
         }
         else if (sel.MinCol == sel.MaxCol)
         {
             // Same column — vertical merge.
+            // MergeCellsVerticalCommand takes a GRID column and converts internally — pass as-is.
             _bus.Execute(new MergeCellsVerticalCommand(blockIdx, sel.MinCol, sel.MinRow, sel.MaxRow));
         }
         else
         {
             // Mixed — best-effort: horizontal merge on the first row only.
-            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, sel.MinCol, sel.MaxCol));
+            // BH1: same grid→cell-list conversion for the best-effort path.
+            var row = table.Rows[sel.MinRow];
+            var firstCellIdx = GridColumnToCellIndex(row, sel.MinCol);
+            var lastCellIdx  = GridColumnToCellIndex(row, sel.MaxCol);
+            if (firstCellIdx < 0 || lastCellIdx < 0)
+                return;
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, firstCellIdx, lastCellIdx));
         }
 
         // Clear block selection and place caret in the surviving top-left cell.
@@ -538,7 +553,13 @@ public sealed class DocumentView : Control
         if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
             return;
 
-        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, cc.Col));
+        // BH2: _cellCaret.Col is a GRID column; SplitCellCommand expects a CELL-LIST index.
+        // Convert via GridColumnToCellIndex before issuing the command.
+        var splitTable = (Table)_doc.Blocks[blockIdx];
+        var splitCellIdx = GridColumnToCellIndex(splitTable.Rows[cc.Row], cc.Col);
+        if (splitCellIdx < 0)
+            return;
+        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, splitCellIdx));
         // Re-place caret in the same cell (which is now split back to span=1).
         PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
         InvalidateLayoutAndVisual();
@@ -4755,13 +4776,16 @@ public sealed class DocumentView : Control
             return;
 
         // Build a flat reading-order list of (row, gridCol) entries, honouring GridSpan.
+        // BH3: Skip VerticalMerge.Continue cells — they are visually part of the merge anchor
+        // above them. Tab should only land on Restart/None cells (Word semantics).
         var cellOrder = new List<(int Row, int Col)>();
         for (var ri = 0; ri < table.Rows.Count; ri++)
         {
             var col = 0;
             foreach (var cell in table.Rows[ri].Cells)
             {
-                cellOrder.Add((ri, col));
+                if (cell.VerticalMerge != VerticalMergeState.Continue)
+                    cellOrder.Add((ri, col));
                 col += Math.Max(1, cell.GridSpan);
             }
         }
@@ -4962,6 +4986,10 @@ public sealed class DocumentView : Control
         do
         {
             changed = false;
+
+            // ── Horizontal expansion ─────────────────────────────────────────────────────────────
+            // For every row in the current range, extend minCol/maxCol to fully cover any
+            // horizontally merged cell (GridSpan > 1) that straddles the boundary.
             for (var r = minRow; r <= maxRow; r++)
             {
                 if (r < 0 || r >= table.Rows.Count) continue;
@@ -4981,9 +5009,69 @@ public sealed class DocumentView : Control
                     col += span;
                 }
             }
+
+            // ── Vertical expansion (BG1) ─────────────────────────────────────────────────────────
+            // For every grid column in [minCol, maxCol], walk UP from minRow while the cell is a
+            // VerticalMerge.Continue (include its Restart head), and walk DOWN from maxRow while
+            // the next row's cell is Continue, expanding minRow/maxRow until stable.
+            for (var gridCol = minCol; gridCol <= maxCol; gridCol++)
+            {
+                // Walk UP: if minRow contains a Continue cell, include the Restart head.
+                while (minRow > 0)
+                {
+                    var cell = GetCellModelGridCol(table, minRow, gridCol);
+                    if (cell?.VerticalMerge != VerticalMergeState.Continue)
+                        break;
+                    minRow--;
+                    changed = true;
+                }
+
+                // Walk DOWN: if the row just below maxRow is Continue, include it.
+                while (maxRow + 1 < table.Rows.Count)
+                {
+                    var cell = GetCellModelGridCol(table, maxRow + 1, gridCol);
+                    if (cell?.VerticalMerge != VerticalMergeState.Continue)
+                        break;
+                    maxRow++;
+                    changed = true;
+                }
+            }
         } while (changed);
 
         return (block, minRow, minCol, maxRow, maxCol);
+    }
+
+    // BH1/BH2: map a GRID column to the Cells list index for a row.
+    // TableColumnHelpers.GridColumnToCellIndex is internal to FreeW.Core.Model, so we replicate the
+    // same logic here. Returns the index of the first cell whose cumulative span covers gridCol,
+    // or -1 if gridCol is beyond the row's total grid width.
+    private static int GridColumnToCellIndex(TableRow row, int targetGridCol)
+    {
+        var gridPos = 0;
+        for (var i = 0; i < row.Cells.Count; i++)
+        {
+            var span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridCol < gridPos + span)
+                return i;
+            gridPos += span;
+        }
+        return -1;
+    }
+
+    // BG1: retrieve a cell by GRID column from a Table instance directly (no block lookup).
+    // Returns the first cell whose cumulative grid span covers gridCol, or null if out of range.
+    private static TableCell? GetCellModelGridCol(Table table, int row, int gridCol)
+    {
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var colIdx = 0;
+        foreach (var cell in table.Rows[row].Cells)
+        {
+            var span = Math.Max(1, cell.GridSpan);
+            if (gridCol >= colIdx && gridCol < colIdx + span)
+                return cell;
+            colIdx += span;
+        }
+        return null;
     }
 
     // AV-TBL: retrieve the TableCell model for a given cell address.

@@ -231,14 +231,27 @@ public sealed class SmartArtLayoutTests
         result.Should().BeNull("unknown family must return null so compositor uses cached drawing");
     }
 
+    // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
     [Fact]
-    public void EmptyNodes_SupportedFamily_ReturnsEmptyList()
+    public void EmptyNodes_SupportedFamily_ReturnsNull_SoCompositorUsesFallback()
     {
         var data = new SmartArtData { Family = SmartArtFamily.Process };
-        // No nodes added
+        // No nodes added — supported family but zero nodes
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
-        result.Should().NotBeNull("supported family with no nodes returns empty list (not null)");
-        result!.Should().BeEmpty();
+        result.Should().BeNull(
+            "BI2: supported family with 0 nodes must return null so the compositor proceeds " +
+            "to the cached-drawing fallback instead of rendering blank");
+    }
+
+    [Theory]
+    [InlineData(SmartArtFamily.List)]
+    [InlineData(SmartArtFamily.Cycle)]
+    [InlineData(SmartArtFamily.Hierarchy)]
+    public void EmptyNodes_AllSupportedFamilies_ReturnNull(SmartArtFamily family)
+    {
+        var data = new SmartArtData { Family = family };
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+        result.Should().BeNull($"BI2: {family} with 0 nodes must return null");
     }
 
     // ── Compositor integration ─────────────────────────────────────────────────────
@@ -360,5 +373,200 @@ public sealed class SmartArtLayoutTests
         d.Family.Should().Be(SmartArtFamily.Unknown);
         d.Nodes.Should().BeEmpty();
         d.LayoutUniqueId.Should().BeEmpty();
+    }
+
+    // ── BI1: unbalanced-tree no-overlap ──────────────────────────────────────────
+
+    /// <summary>
+    /// BI1: Root → A(3 leaves) + B(1 leaf).
+    /// With even slot distribution, A's children each get availW/8 but boxW=availW/4
+    /// → boxX goes negative → overlap.  With proportional slots (GetTreeWidth) each
+    /// child gets a slot at least as wide as boxW, so boxes must be disjoint.
+    /// </summary>
+    [Fact]
+    public void Hierarchy_UnbalancedTree_BoxesDontOverlap()
+    {
+        // Root
+        //   A  (3 children: L1, L2, L3)
+        //   B  (1 child:    L4)
+        var root = new SmartArtNode { Text = "Root", Level = 0 };
+        var a    = new SmartArtNode { Text = "A",    Level = 1 };
+        var b    = new SmartArtNode { Text = "B",    Level = 1 };
+        a.Children.Add(new SmartArtNode { Text = "L1", Level = 2 });
+        a.Children.Add(new SmartArtNode { Text = "L2", Level = 2 });
+        a.Children.Add(new SmartArtNode { Text = "L3", Level = 2 });
+        b.Children.Add(new SmartArtNode { Text = "L4", Level = 2 });
+        root.Children.Add(a);
+        root.Children.Add(b);
+
+        var data = new SmartArtData { Family = SmartArtFamily.Hierarchy };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+        shapes.Should().NotBeNull();
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCountGreaterThan(0);
+
+        // Assert all box rects are disjoint (no two boxes overlap).
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            for (int j = i + 1; j < boxes.Count; j++)
+            {
+                var bi = boxes[i];
+                var bj = boxes[j];
+
+                // Two rects overlap iff neither is entirely to the left/right/above/below the other.
+                // Only check boxes on the same level (same Y band) for horizontal overlap.
+                bool sameLevel = Math.Abs(bi.OffsetYEmu - bj.OffsetYEmu) < bi.ExtentCyEmu / 2;
+                if (!sameLevel) continue;
+
+                long riRight  = bi.OffsetXEmu + bi.ExtentCxEmu;
+                long rjRight  = bj.OffsetXEmu + bj.ExtentCxEmu;
+                long riLeft   = bi.OffsetXEmu;
+                long rjLeft   = bj.OffsetXEmu;
+
+                bool horizontalOverlap = riLeft < rjRight && rjLeft < riRight;
+                horizontalOverlap.Should().BeFalse(
+                    $"BI1: box {i} [{riLeft}..{riRight}] overlaps box {j} [{rjLeft}..{rjRight}] on the same level");
+            }
+        }
+    }
+
+    /// <summary>BI1: A balanced tree (root + 2 children each with 1 leaf) should still lay out correctly.</summary>
+    [Fact]
+    public void Hierarchy_BalancedTree_BoxesDontOverlap()
+    {
+        var root = new SmartArtNode { Text = "Root", Level = 0 };
+        var c1   = new SmartArtNode { Text = "C1",   Level = 1 };
+        var c2   = new SmartArtNode { Text = "C2",   Level = 1 };
+        c1.Children.Add(new SmartArtNode { Text = "L1", Level = 2 });
+        c2.Children.Add(new SmartArtNode { Text = "L2", Level = 2 });
+        root.Children.Add(c1);
+        root.Children.Add(c2);
+
+        var data = new SmartArtData { Family = SmartArtFamily.Hierarchy };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(5, "root + 2 mid + 2 leaves");
+
+        for (int i = 0; i < boxes.Count; i++)
+        {
+            for (int j = i + 1; j < boxes.Count; j++)
+            {
+                var bi = boxes[i];
+                var bj = boxes[j];
+                bool sameLevel = Math.Abs(bi.OffsetYEmu - bj.OffsetYEmu) < bi.ExtentCyEmu / 2;
+                if (!sameLevel) continue;
+
+                bool horizontalOverlap = bi.OffsetXEmu < bj.OffsetXEmu + bj.ExtentCxEmu
+                                      && bj.OffsetXEmu < bi.OffsetXEmu + bi.ExtentCxEmu;
+                horizontalOverlap.Should().BeFalse($"BI1: balanced tree — box {i} overlaps box {j}");
+            }
+        }
+    }
+
+    // ── BI3: many-node process fits within frame ──────────────────────────────────
+
+    [Fact]
+    public void Process_18Nodes_AllBoxesWithinFrame()
+    {
+        // 18 nodes far exceeds the threshold at which fixed gap/connectorW overflow the frame
+        var nodes = Enumerable.Range(1, 18).Select(i => $"Step{i}").ToArray();
+        var data  = MakeData(SmartArtFamily.Process, nodes);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+        shapes.Should().NotBeNull();
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(18, "one box per node");
+
+        long frameRight = FrameX + FrameCx;
+        foreach (var box in boxes)
+        {
+            long boxRight = box.OffsetXEmu + box.ExtentCxEmu;
+            boxRight.Should().BeLessThanOrEqualTo(frameRight,
+                $"BI3: box right edge {boxRight} must not exceed frame right {frameRight}");
+            box.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX,
+                "BI3: box left edge must not be left of frame left");
+            box.ExtentCxEmu.Should().BeGreaterThan(0, "BI3: box width must be positive");
+        }
+    }
+
+    // ── BI4: multi-root hierarchy renders all roots ───────────────────────────────
+
+    [Fact]
+    public void Hierarchy_TwoRoots_BothRootsRender()
+    {
+        // Two independent root nodes, each with one child
+        var root1 = new SmartArtNode { Text = "Root1", Level = 0 };
+        root1.Children.Add(new SmartArtNode { Text = "Child1", Level = 1 });
+
+        var root2 = new SmartArtNode { Text = "Root2", Level = 0 };
+        root2.Children.Add(new SmartArtNode { Text = "Child2", Level = 1 });
+
+        var data = new SmartArtData { Family = SmartArtFamily.Hierarchy };
+        data.Nodes.Add(root1);
+        data.Nodes.Add(root2);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+        shapes.Should().NotBeNull();
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        // 2 roots + 2 children = 4 boxes
+        boxes.Should().HaveCount(4, "BI4: both roots and their children must render");
+
+        var texts = boxes
+            .Select(b => b.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text ?? "")
+            .ToHashSet();
+        texts.Should().Contain("Root1", "BI4: first root must render");
+        texts.Should().Contain("Root2", "BI4: second root must render");
+        texts.Should().Contain("Child1");
+        texts.Should().Contain("Child2");
+    }
+
+    // ── BI2 compositor integration: empty parse → fallback ────────────────────────
+
+    [Fact]
+    public void Compositor_EmptyParsedNodes_UsesCachedDrawingFallback()
+    {
+        // SmartArt with a supported family but zero nodes, plus a fallback shape.
+        // Before BI2 fix: Layout returned Array.Empty → compositor emitted nothing → blank.
+        // After BI2 fix: Layout returns null → compositor uses FallbackShapes.
+        var data  = new SmartArtData { Family = SmartArtFamily.Process }; // no nodes
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 9,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 80,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        // 1 background + 1 fallback shape (NOT zero live shapes from the empty live result)
+        ops.Should().HaveCount(2,
+            "BI2: empty live layout must fall through to cached-drawing fallback (1 bg + 1 fallback)");
     }
 }

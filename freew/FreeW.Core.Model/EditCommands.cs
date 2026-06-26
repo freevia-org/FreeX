@@ -405,6 +405,21 @@ internal static class TableColumnHelpers
     /// </summary>
     internal static int RowGridWidth(TableRow row) =>
         row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+
+    /// <summary>
+    /// Maps a <see cref="TableRow.Cells"/> list index to the GRID-column index it occupies (i.e. the
+    /// sum of GridSpans of all preceding cells).  Returns -1 if <paramref name="cellIndex"/> is out of
+    /// range.
+    /// </summary>
+    internal static int CellIndexToGridColumn(TableRow row, int cellIndex)
+    {
+        if (cellIndex < 0 || cellIndex >= row.Cells.Count)
+            return -1;
+        var gridPos = 0;
+        for (var i = 0; i < cellIndex; i++)
+            gridPos += Math.Max(1, row.Cells[i].GridSpan);
+        return gridPos;
+    }
 }
 
 /// <summary>
@@ -760,15 +775,23 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
         // Vertical split: clear the restart head and the continue cells beneath it in the same column.
         if (cell.VerticalMerge == VerticalMergeState.Restart)
         {
+            // BH4 fix: derive the GRID column from the head row's cell-list index so that lower rows
+            // with a different cell-list layout (e.g. a preceding horizontal merge) are resolved
+            // correctly.  Mirrors the GridColumnToCellIndex mapping used by MergeCellsVerticalCommand.
+            var gridColumn = TableColumnHelpers.CellIndexToGridColumn(table.Rows[rowIndex], columnIndex);
             var snapshot = new List<(int, int, VerticalMergeState)> { (rowIndex, columnIndex, VerticalMergeState.Restart) };
             cell.VerticalMerge = VerticalMergeState.None;
             for (var r = rowIndex + 1; r < table.Rows.Count; r++)
             {
-                var below = table.Rows[r].Cells;
-                if (columnIndex >= below.Count || below[columnIndex].VerticalMerge != VerticalMergeState.Continue)
+                var belowRow = table.Rows[r];
+                var belowIdx = gridColumn >= 0
+                    ? TableColumnHelpers.GridColumnToCellIndex(belowRow, gridColumn)
+                    : columnIndex; // fallback: grid col unavailable, use raw index (head row has no preceding cells)
+                if (belowIdx < 0 || belowIdx >= belowRow.Cells.Count
+                    || belowRow.Cells[belowIdx].VerticalMerge != VerticalMergeState.Continue)
                     break;
-                snapshot.Add((r, columnIndex, VerticalMergeState.Continue));
-                below[columnIndex].VerticalMerge = VerticalMergeState.None;
+                snapshot.Add((r, belowIdx, VerticalMergeState.Continue));
+                belowRow.Cells[belowIdx].VerticalMerge = VerticalMergeState.None;
             }
             _verticalPrevious = [.. snapshot];
         }
