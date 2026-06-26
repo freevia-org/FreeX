@@ -40,13 +40,24 @@ internal static class FreePRibbonCommands
     ///   of applying the command to the whole-shape TextBody. May be null (e.g. in tests);
     ///   routing is silently skipped when the getter returns null or no editor is active.
     /// </param>
+    /// <param name="onCustomSlideSize">
+    ///   Callback that opens the custom slide-size dialog (Wave 10B).
+    ///   Wired to <c>MainWindow.OpenSlideSizeDialog()</c>.  When null the button is a no-op.
+    /// </param>
+    /// <param name="osClipboard">
+    ///   Optional OS-clipboard service (Wave 10B). When provided, ribbon Copy/Cut also
+    ///   place content on the OS clipboard; ribbon Paste checks the OS clipboard first.
+    ///   When null the ribbon uses the internal clipboard only (original Wave 5B behaviour).
+    /// </param>
     public static RibbonCommandRegistry Build(
         RibbonStateStore    stateStore,
         EditingSession      editor,
         Action?             onStartFromStart   = null,
         Action?             onStartFromCurrent = null,
         Action?             onEditChartData    = null,
-        Func<SlideCanvas?>? getSlideCanvas     = null)
+        Func<SlideCanvas?>? getSlideCanvas     = null,
+        Action?             onCustomSlideSize  = null,
+        OsClipboardService? osClipboard        = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -129,16 +140,32 @@ internal static class FreePRibbonCommands
             editor.ToggleUnderlineOnSelection();
         }));
 
-        // ── Clipboard — Wave 5B ───────────────────────────────────────────────────
+        // ── Clipboard — Wave 5B / 10B ─────────────────────────────────────────────
+        // When osClipboard is provided (MainWindow injects it), Copy and Cut also push
+        // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionCommand(() => editor.CopySelectedShapes()));
+            new ActionCommand(() =>
+            {
+                editor.CopySelectedShapes();
+                osClipboard?.PlaceSelectionOnOsClipboard(editor);
+            }));
 
         registry.Register("freep.cut",
-            new ActionCommand(() => editor.CutSelectedShapes()));
+            new ActionCommand(() =>
+            {
+                editor.CutSelectedShapes();
+                osClipboard?.PlaceSelectionOnOsClipboard(editor);
+            }));
 
         registry.Register("freep.paste",
-            new ActionCommand(() => editor.Paste()));
+            new ActionCommand(() =>
+            {
+                if (osClipboard is not null)
+                    osClipboard.Paste(editor, preferOsClipboard: true);
+                else
+                    editor.Paste();
+            }));
 
         // ── Format Painter — Wave 5B ─────────────────────────────────────────────
         // Single-click mode: copies formatting from the first selected shape, then immediately
@@ -363,6 +390,10 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.slide-size-4x3",
             new ActionCommand(() => editor.SetSlideSize4x3()));
+
+        // ── Wave 10B: Design tab — Custom Slide Size dialog ───────────────────────
+        registry.Register("freep.slide-size-custom",
+            new ActionCommand(() => onCustomSlideSize?.Invoke()));
 
         // ── Wave 9B: Chart data editing ───────────────────────────────────────────
         // Enabled only when a chart shape is selected; otherwise silently a no-op.
