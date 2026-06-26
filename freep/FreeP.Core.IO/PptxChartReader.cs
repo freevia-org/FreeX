@@ -235,6 +235,11 @@ internal static class PptxChartReader
                 // series). Read its c:ser elements without changing shape.ChartType.
                 // The secondary axis detection (valAxIds loop below) will then mark these series
                 // with OnSecondaryAxis = true via their c:idx values resolved through idxMap.
+                // CA4b: Also stamp OverrideChartType on each newly-added series so the renderer
+                // knows to draw them with the secondary group's chart type (e.g. Line) rather
+                // than the primary chart type (e.g. ColumnClustered).
+                // Snapshot which series indices already exist before reading the secondary group.
+                var keysBefore = new System.Collections.Generic.HashSet<int>(idxMap.Keys);
                 switch (el.Name.LocalName)
                 {
                     case "scatterChart":
@@ -245,6 +250,45 @@ internal static class PptxChartReader
                         // All other combo secondaries (lineChart, barChart, areaChart, etc.)
                         // use the standard cat/val series format.
                         ReadSeriesFromChart(el, shape, scheme, idxMap); break;
+                }
+                // Derive override chart type from the secondary group element name.
+                ChartType? overrideType;
+                if (el.Name.LocalName is "lineChart" or "line3DChart" or "stockChart")
+                {
+                    bool hasMarkers = el.Elements(C + "ser").Any(s =>
+                    {
+                        var sym = s.Element(C + "marker")?.Element(C + "symbol")?.Attribute("val")?.Value;
+                        return sym is null || sym != "none";
+                    });
+                    overrideType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
+                }
+                else if (el.Name.LocalName is "barChart" or "bar3DChart")
+                {
+                    var barDir   = el.Element(C + "barDir")?.Attribute("val")?.Value ?? "col";
+                    var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "clustered";
+                    overrideType = (barDir, grouping) switch
+                    {
+                        ("col", "stacked")        => ChartType.ColumnStacked,
+                        ("col", "percentStacked") => ChartType.ColumnStacked100,
+                        ("bar", _)                => ChartType.BarClustered,
+                        _                         => ChartType.ColumnClustered
+                    };
+                }
+                else if (el.Name.LocalName is "areaChart" or "area3DChart")
+                {
+                    var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "standard";
+                    overrideType = grouping == "stacked" ? ChartType.AreaStacked : ChartType.Area;
+                }
+                else
+                {
+                    overrideType = null;
+                }
+                // Stamp the override on series that were just added by this secondary group.
+                if (overrideType.HasValue)
+                {
+                    foreach (var kvp in idxMap)
+                        if (!keysBefore.Contains(kvp.Key))
+                            kvp.Value.OverrideChartType = overrideType;
                 }
             }
         }

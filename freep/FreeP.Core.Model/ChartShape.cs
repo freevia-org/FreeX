@@ -122,6 +122,14 @@ public sealed class ChartSeries
 
     /// <summary>True if this series plots against the secondary value axis (right axis).</summary>
     public bool OnSecondaryAxis { get; set; }
+
+    /// <summary>
+    /// Per-series chart-type override for combo charts. Null means use the parent
+    /// <see cref="ChartShape.ChartType"/>. Set by the IO reader when a secondary
+    /// chart-type group (e.g. a lineChart nested inside a bar+line combo) overrides
+    /// the render style for this series (e.g. Line vs ColumnClustered).
+    /// </summary>
+    public ChartType? OverrideChartType { get; set; }
 }
 
 /// <summary>Configuration for one chart axis (category or value).</summary>

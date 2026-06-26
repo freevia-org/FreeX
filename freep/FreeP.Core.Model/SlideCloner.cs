@@ -244,8 +244,11 @@ public static class SlideCloner
         {
             var sc = new ChartSeries
             {
-                Name      = s.Name,
-                FillColor = s.FillColor,
+                Name              = s.Name,
+                FillColor         = s.FillColor,
+                OnSecondaryAxis   = s.OnSecondaryAxis,
+                DataLabels        = s.DataLabels,
+                OverrideChartType = s.OverrideChartType,
             };
             foreach (var v in s.Values)
                 sc.Values.Add(v);
