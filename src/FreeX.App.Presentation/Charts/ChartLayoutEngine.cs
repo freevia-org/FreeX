@@ -11,11 +11,11 @@ namespace FreeX.App.Presentation.Charts;
 /// desktop hosts can draw identical charts from one engine.
 ///
 /// Covered chart families: column (incl. stacked / percent-stacked), bar (incl. stacked /
-/// percent-stacked), line, area, scatter, pie, doughnut, bubble, radar, and stock
-/// (high-low-close / open-high-low-close). Column/line/area/scatter charts additionally support a
-/// trendline overlay and a secondary value axis (combo charts). Remaining advanced families
-/// (surface, waterfall, histogram, pareto, box-and-whisker, treemap, sunburst, funnel) are not laid
-/// out here yet — see the project notes for follow-ups.
+/// percent-stacked), line, area, scatter, pie, doughnut, bubble, radar, stock
+/// (high-low-close / open-high-low-close), waterfall, histogram, pareto, box-and-whisker,
+/// treemap, sunburst, funnel, and surface (rendered as a 2D heatmap grid by the shell renderers).
+/// Column/line/area/scatter charts additionally support a trendline overlay and a secondary value
+/// axis (combo charts).
 /// </summary>
 public static class ChartLayoutEngine
 {
@@ -51,7 +51,9 @@ public static class ChartLayoutEngine
             or ChartType.Pareto
             or ChartType.BoxAndWhisker
             or ChartType.Treemap
-            or ChartType.Sunburst;
+            or ChartType.Sunburst
+            or ChartType.Surface
+            or ChartType.ThreeDSurface;
 
     /// <summary>
     /// Lays out <paramref name="request"/> into a <see cref="ChartLayout"/>. Throws
@@ -81,6 +83,7 @@ public static class ChartLayoutEngine
             ChartType.BoxAndWhisker => LayoutBoxAndWhisker(request),
             ChartType.Treemap => LayoutTreemap(request),
             ChartType.Sunburst => LayoutSunburst(request),
+            ChartType.Surface or ChartType.ThreeDSurface => LayoutSurface(request),
             _ => LayoutColumnLineArea(request),
         };
     }
@@ -1960,6 +1963,135 @@ public static class ChartLayoutEngine
     ];
 
     private static CellColor[] BuildTreemapPalette() => TreemapPaletteColors;
+
+    // ---- Surface / heatmap ---------------------------------------------------------------
+
+    // Surface: 2D heatmap grid. Rows = series, columns = categories. Each cell is a rect
+    // colored by its z-value mapped through a blue (min) → yellow (max) gradient, matching
+    // the shell renderer GetSurfaceCellColor logic (ChartRenderer.Surface.cs R:68→255 G:114→192 B:196→0).
+    private static ChartLayout LayoutSurface(ChartLayoutRequest request)
+    {
+        var chart = request.Chart;
+        var legend = LegendLayoutBuilder.Build(request, out var plot);
+
+        var seriesCount   = request.Series.Count;
+        var categoryCount = request.Categories.Count;
+        if (seriesCount == 0 || categoryCount == 0)
+        {
+            return new ChartLayout
+            {
+                Type = chart.Type,
+                PlotArea = plot.ToRect(),
+                Series = [],
+                Legend = legend,
+            };
+        }
+
+        // Collect all values to find min/max for the gradient.
+        var rawCells = new List<(int SeriesIdx, int CatIdx, double Value)>(seriesCount * categoryCount);
+        var minValue = 0.0;
+        var maxValue = 0.0;
+
+        for (var si = 0; si < seriesCount; si++)
+        {
+            var s = request.Series[si];
+            for (var ci = 0; ci < s.Values.Count; ci++)
+            {
+                if (s.Values[ci] is not { } v)
+                    continue;
+                if (rawCells.Count == 0)
+                {
+                    minValue = v;
+                    maxValue = v;
+                }
+                else
+                {
+                    if (v < minValue) minValue = v;
+                    if (v > maxValue) maxValue = v;
+                }
+                rawCells.Add((si, ci, v));
+            }
+        }
+
+        // Build pixel-space grid: columns = categories, rows = series.
+        var plotRect = plot.ToRect();
+        var cellW = plotRect.Width  / categoryCount;
+        var cellH = plotRect.Height / seriesCount;
+
+        var surfaceCells = new List<SurfaceCell>(rawCells.Count);
+        foreach (var (si, ci, value) in rawCells)
+        {
+            var left = plotRect.Left + ci * cellW;
+            var top  = plotRect.Top  + si * cellH;
+            var rect = new LayoutRect(left, top, cellW, cellH);
+            var fill = GetSurfaceCellColor(value, minValue, maxValue);
+            surfaceCells.Add(new SurfaceCell(si, ci, value, rect, fill));
+        }
+
+        // Axis ticks: category axis (X) and series/y axis.
+        var catTicks = new List<AxisTick>(categoryCount);
+        for (var ci = 0; ci < categoryCount; ci++)
+        {
+            var label = ci < request.Categories.Count ? request.Categories[ci] : $"{ci + 1}";
+            var x = plotRect.Left + (ci + 0.5) * cellW;
+            catTicks.Add(new AxisTick(ci, x, label));
+        }
+
+        var serTicks = new List<AxisTick>(seriesCount);
+        for (var si = 0; si < seriesCount; si++)
+        {
+            var label = request.Series[si].Name ?? $"S{si + 1}";
+            var y = plotRect.Top + (si + 0.5) * cellH;
+            serTicks.Add(new AxisTick(si, y, label));
+        }
+
+        var categoryAxis = new AxisLayout
+        {
+            Side = AxisSide.Bottom,
+            LinePosition = plotRect.Bottom,
+            Ticks = catTicks,
+            Scale = AxisScale.CreateIndexAxis(0, categoryCount, plot, AxisSide.Bottom),
+        };
+        var seriesAxis = new AxisLayout
+        {
+            Side = AxisSide.Left,
+            LinePosition = plotRect.Left,
+            Ticks = serTicks,
+            Scale = AxisScale.CreateIndexAxis(0, seriesCount, plot, AxisSide.Left),
+        };
+
+        var seriesLayout = new SeriesLayout
+        {
+            SeriesIndex = 0,
+            Kind = SeriesGeometryKind.SurfaceCells,
+            SurfaceCells = surfaceCells,
+        };
+
+        return new ChartLayout
+        {
+            Type = chart.Type,
+            PlotArea = plotRect,
+            CategoryAxis = categoryAxis,
+            ValueAxis = seriesAxis,
+            Series = [seriesLayout],
+            Legend = legend,
+        };
+    }
+
+    /// <summary>
+    /// Maps a z-value to a cell fill color using a blue→yellow gradient that mirrors the desktop
+    /// shell renderer's heatmap color scale (R: 68→255, G: 114→192, B: 196→0).
+    /// </summary>
+    public static CellColor GetSurfaceCellColor(double value, double minValue, double maxValue)
+    {
+        var t = maxValue <= minValue
+            ? 0.5
+            : Math.Clamp((value - minValue) / (maxValue - minValue), 0.0, 1.0);
+        var r = (byte)Math.Round(68  + (255 - 68)  * t);
+        var g = (byte)Math.Round(114 + (192 - 114) * t);
+        var b = (byte)Math.Round(196 + (0   - 196) * t);
+        return new CellColor(r, g, b);
+    }
 
     // ---- Sunburst ------------------------------------------------------------------------
 
