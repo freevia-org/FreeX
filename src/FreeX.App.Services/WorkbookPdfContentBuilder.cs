@@ -129,14 +129,18 @@ public static class WorkbookPdfContentBuilder
             var style = workbook.GetStyle(cell.StyleId);
             var fill  = style.ResolveFillColor(workbook.Theme);
 
-            if (fill is not null || cell.IsTitle)
+            // B&W mode: suppress colored cell fills (treat as white / transparent).
+            // The page background is already white so simply omitting the fill rect is correct.
+            var bw = sheet.PrintBlackAndWhite;
+            if (!bw && (fill is not null || cell.IsTitle))
                 ops.Add(new PdfFillRect(x, y, w, h, ToPdfColor(fill) ?? TitleFillColor));
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
             {
                 var fontSize  = Math.Clamp(style.FontSize, 7, 10);
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
-                var fontColor = ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black;
+                // B&W mode: force font colour to black regardless of style.
+                var fontColor = bw ? PdfColor.Black : (ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black);
                 // Text baseline: ~3 pt from bottom of row.
                 var baseline = y + 3.0;
                 ops.Add(new PdfText(

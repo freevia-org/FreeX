@@ -21,7 +21,8 @@ public static partial class PrintRenderer
         bool printGridlines,
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
-        double gridTop)
+        double gridTop,
+        bool blackAndWhite = false)
     {
         var rowHeight = measurement.RowHeight;
         var colWidth = measurement.ColumnWidth;
@@ -67,6 +68,9 @@ public static partial class PrintRenderer
                 if (!cellLookup.TryGetValue((row, col), out var cell) ||
                     string.IsNullOrEmpty(cell.DisplayText))
                 {
+                    // In B&W mode, draw white fill over any cell background that may have been
+                    // rendered by a parent layer (e.g. heading backgrounds). Nothing to do here
+                    // because the page background is already white.
                     continue;
                 }
 
@@ -74,13 +78,17 @@ public static partial class PrintRenderer
                 if (string.IsNullOrEmpty(displayText))
                     continue;
 
+                // B&W: force text to black regardless of the cell's font colour.
+                var textBrush = Brushes.Black;
+                var textColor = Colors.Black;
+
                 var ft = new FormattedText(
                     displayText,
                     CultureInfo.CurrentCulture,
                     FlowDirection.LeftToRight,
                     PrintedCellTypeface,
                     PrintFontSize,
-                    Brushes.Black,
+                    textBrush,
                     1.0)
                 {
                     MaxTextWidth = Math.Max(1, colWidth - 4),
@@ -99,7 +107,7 @@ public static partial class PrintRenderer
                     PrintedCellTypeface.FontFamily.Source,
                     Bold: false,
                     Italic: false,
-                    Colors.Black));
+                    textColor));
             }
         }
     }
