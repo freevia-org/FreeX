@@ -44,6 +44,10 @@ public sealed class CommandRegistryTests
             SetDraftView: () => { },
             OpenFontDialog: () => { },
             OpenParagraphDialog: () => { },
+            OpenPageSetupDialog: () => { },
+            ToggleOrientation:   () => { },
+            ApplyMarginPreset:   _ => { },
+            ApplyPaperSize:      _ => { },
             ApplyZoom: (_, _) => { });
 
     /// <summary>Creates a minimal editable document with one paragraph of text.</summary>

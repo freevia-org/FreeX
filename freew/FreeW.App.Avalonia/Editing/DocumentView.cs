@@ -5867,6 +5867,17 @@ public sealed class DocumentView : Control
 
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
+    /// <summary>
+    /// Apply <paramref name="settings"/> to the document's page geometry in a single undoable step
+    /// (AV-PAGE). The command snapshots the prior values and restores them on Undo. Triggers a
+    /// relayout so the page chrome (size, margins) updates immediately in Print Layout mode.
+    /// </summary>
+    public void SetPageSettings(PageSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _bus.Execute(new SetPageSettingsCommand(settings));
+    }
+
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
     {

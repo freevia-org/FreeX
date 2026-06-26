@@ -213,6 +213,19 @@ internal static class FreeWAvaloniaRibbonCommands
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
         RegisterCellAlignmentCommands(r, editor);
 
+        // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
+        // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
+        r.Register("freew.page-setup-dialog",   new RelayCommand(callbacks.OpenPageSetupDialog));
+        // Toggle orientation (portrait ↔ landscape).
+        r.Register("freew.page-orientation",    new RelayCommand(callbacks.ToggleOrientation));
+        // Margin presets.
+        r.Register("freew.page-margins-normal", new RelayCommand(() => callbacks.ApplyMarginPreset("normal")));
+        r.Register("freew.page-margins-narrow", new RelayCommand(() => callbacks.ApplyMarginPreset("narrow")));
+        r.Register("freew.page-margins-wide",   new RelayCommand(() => callbacks.ApplyMarginPreset("wide")));
+        // Quick paper-size selectors.
+        r.Register("freew.page-size-letter",    new RelayCommand(() => callbacks.ApplyPaperSize("letter")));
+        r.Register("freew.page-size-a4",        new RelayCommand(() => callbacks.ApplyPaperSize("a4")));
+
         // ── View ─────────────────────────────────────────────────────────────
         r.Register("freew.printlayout",       new RelayCommand(callbacks.SetPrintLayout));
         r.Register("freew.weblayout",         new RelayCommand(callbacks.SetWebLayout));
