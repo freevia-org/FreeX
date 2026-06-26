@@ -22,6 +22,33 @@ internal static class FreeWRibbon
     public static readonly string[] FontFamilies =
         ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
 
+    /// <summary>
+    /// Standard colour palette offered by the Font Color dropdown.
+    /// Each entry maps to a distinct command id of the form <c>freew.font-color.*</c>
+    /// registered in <see cref="FreeWAvaloniaRibbonCommands.Build"/>.
+    /// Clicking the button opens this flyout; no colour is set until the user picks one,
+    /// so the previous selection colour is never silently cleared.
+    /// </summary>
+    internal static readonly (string CommandId, string Label)[] FontColors =
+    [
+        ("freew.font-color.automatic", "Automatic"),
+        ("freew.font-color.black",     "Black"),
+        ("freew.font-color.dark-red",  "Dark Red"),
+        ("freew.font-color.red",       "Red"),
+        ("freew.font-color.orange",    "Orange"),
+        ("freew.font-color.yellow",    "Yellow"),
+        ("freew.font-color.green",     "Green"),
+        ("freew.font-color.blue",      "Blue"),
+        ("freew.font-color.dark-blue", "Dark Blue"),
+        ("freew.font-color.purple",    "Purple"),
+        ("freew.font-color.white",     "White"),
+    ];
+
+    private static RibbonMenu BuildFontColorMenu() =>
+        new(FontColors
+            .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
+            .ToArray());
+
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
             .Tab("file", "File", "F", tab =>
@@ -51,7 +78,7 @@ internal static class FreeWRibbon
                     g.Button("freew.grow-font",       "A↑");
                     g.Button("freew.shrink-font",     "A↓");
                     g.Button("freew.clear-formatting", "Clear");
-                    g.Button("freew.font-color",      "Font Color");
+                    g.Dropdown("freew.font-color", "Font Color", BuildFontColorMenu());
                     g.Button("freew.change-case",     "Aa");
                 });
                 tab.Group("paragraph", "Paragraph", null, 80, g =>

@@ -286,6 +286,76 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Font_color_ribbon_control_is_dropdown_not_plain_button()
+    {
+        // Regression: freew.font-color was wired as a plain Button + RelayValueCommand.
+        // Clicking a plain button dispatches Execute(RibbonCommandContext.Empty) so SelectedValue
+        // is null, which caused SetFontColor(null) to silently CLEAR the selection colour.
+        // The fix makes the ribbon control a Dropdown (flyout opener) with per-colour sub-commands.
+        // This test asserts:
+        //   (a) The ribbon definition exposes freew.font-color as a Dropdown, not a Button.
+        //   (b) Executing freew.font-color directly does NOT clear any existing colour.
+        var definition = FreeWRibbon.BuildDefinition();
+        var fontColorControl = definition.Tabs
+            .SelectMany(t => t.Groups)
+            .SelectMany(g => g.Controls)
+            .FirstOrDefault(c => c.CommandId.Value == "freew.font-color");
+
+        fontColorControl.Should().NotBeNull("freew.font-color must be declared in the ribbon");
+        fontColorControl.Should().BeOfType<RibbonDropdown>(
+            "freew.font-color must be a Dropdown so clicking the button opens the colour flyout " +
+            "instead of executing with a null value that clears the current colour");
+
+        // Also verify: executing the main freew.font-color command (the flyout-opener no-op)
+        // does NOT change the document colour — pre-existing colour must survive.
+        var doc = MakeDoc("Coloured");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+        view.SetFontColor("#FF0000");   // pre-apply a colour
+
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        registry.TryGet(new RibbonCommandId("freew.font-color"), out var cmd)
+            .Should().BeTrue("freew.font-color must be registered");
+        cmd!.Execute(RibbonCommandContext.Empty);   // simulate button click with no SelectedValue
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.All(r => r.Formatting.ColorHex == "#FF0000")
+            .Should().BeTrue("clicking the Font Color dropdown opener must NOT clear the existing colour");
+    }
+
+    [Fact]
+    public void Font_color_palette_subcommands_apply_expected_colors()
+    {
+        // Each freew.font-color.* sub-command must call SetFontColor with a non-clearing value.
+        var doc = MakeDoc("Test");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        // Verify the red sub-command applies red.
+        registry.TryGet(new RibbonCommandId("freew.font-color.red"), out var redCmd)
+            .Should().BeTrue("freew.font-color.red sub-command must be registered");
+        redCmd!.Execute(RibbonCommandContext.Empty);
+
+        var para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.All(r => r.Formatting.ColorHex == "#FF0000")
+            .Should().BeTrue("freew.font-color.red should apply #FF0000 to the selection");
+
+        // Verify the automatic sub-command sets null (restores default).
+        view.SelectAll();
+        registry.TryGet(new RibbonCommandId("freew.font-color.automatic"), out var autoCmd)
+            .Should().BeTrue("freew.font-color.automatic sub-command must be registered");
+        autoCmd!.Execute(RibbonCommandContext.Empty);
+
+        para = (Paragraph)view.Document.Blocks[0];
+        para.Runs.All(r => r.Formatting.ColorHex is null)
+            .Should().BeTrue("freew.font-color.automatic should restore null (automatic) colour");
+    }
+
+    [Fact]
     public void Undo_reverts_bold_toggle()
     {
         var doc = MakeDoc("Undo");
@@ -301,6 +371,33 @@ public sealed class CommandRegistryTests
 
         var afterUndo = ((Paragraph)view.Document.Blocks[0]).Runs.All(r => r.Formatting.Bold);
         afterUndo.Should().BeFalse("Undo should revert the bold toggle");
+    }
+
+    [Fact]
+    public void Change_case_applies_to_multi_block_selection()
+    {
+        // Regression for: ApplyRunFormattingToText silently no-ops when the selection spans
+        // more than one paragraph (the multi-block case was simply not handled before the fix).
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("hello"));
+        doc.Blocks.Add(new Paragraph("world"));
+
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+
+        // SelectAll creates a cross-block selection: anchor=(0,0), caret=(1, end).
+        view.SelectAll();
+        view.ChangeCase(); // was a no-op for multi-block; now should cycle case on both paragraphs
+
+        var p0 = (Paragraph)view.Document.Blocks[0];
+        var p1 = (Paragraph)view.Document.Blocks[1];
+
+        // CycleCase("hello") → all-lower → Title Case → "Hello"
+        p0.PlainText.Should().NotBe("hello",
+            "ChangeCase on a multi-block selection must transform the first paragraph");
+        p1.PlainText.Should().NotBe("world",
+            "ChangeCase on a multi-block selection must transform the last paragraph");
     }
 
     // ── Headless tests (need FormattedText backend) ───────────────────────────

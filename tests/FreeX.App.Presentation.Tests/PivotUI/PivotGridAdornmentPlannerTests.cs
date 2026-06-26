@@ -237,4 +237,44 @@ public sealed class PivotGridAdornmentPlannerTests
         adornments.Should().Contain(a => a.ReserveTextPadding,
             "child-level row labels should reserve text padding for the button area");
     }
+
+    // ---------------------------------------------------------------------------
+    // Regression: null-SourceFieldIndex ValueFilter must not badge unrelated fields
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void IsFieldActive_NullSourceFieldIndexValueFilter_DoesNotBadgeUnrelatedFields()
+    {
+        // Regression for: IsFieldActive previously returned true for ANY field when the pivot
+        // contained a ValueFilter whose SourceFieldIndex is null (i.e. the filter is malformed /
+        // not yet assigned to a specific field).  That caused every field header to light up the
+        // active-filter glyph even though the refresh engine ignores such filters.
+        var workbook = new Workbook("NullFieldValueFilterTest");
+        var sheet    = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name        = "PT1",
+            CacheId     = 1,
+            SourceRange = Range(sheet, 1, 1, 5, 3),
+            TargetRange = Range(sheet, 2, 5, 8, 9),
+        };
+        // Two row fields: Region (index 0) and Quarter (index 1).
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        // Add a ValueFilter whose SourceFieldIndex is null (default) — should NOT badge any field.
+        // DataFieldIndex=0 is the first data field; SourceFieldIndex is left at its default (null).
+        pivot.ValueFilters.Add(new PivotValueFilterModel(DataFieldIndex: 0, Kind: PivotValueFilterKind.GreaterThan, ComparisonValue: 100));
+
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var targets = PivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet);
+
+        targets.Should().NotBeEmpty("the pivot has two row fields so at least one dropdown target is expected");
+        targets.Should().OnlyContain(t => !t.IsActive,
+            "a null-SourceFieldIndex ValueFilter must not activate any field header badge");
+    }
 }
