@@ -23,9 +23,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\freep\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
+    <ProjectReference Include="..\..\freep\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
   </ItemGroup>
 
 </Project>

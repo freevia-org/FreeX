@@ -58,6 +58,8 @@
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Avalonia/FreeP.App.Rendering.Avalonia.csproj" />
+    <Project Path="freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj" />
     <Project Path="freep/FreeP.App.Host/FreeP.App.Host.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
   </Folder>

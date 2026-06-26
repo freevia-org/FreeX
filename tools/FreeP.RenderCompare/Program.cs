@@ -54,8 +54,10 @@ internal static class Program
             {
                 "--powerpoint-export" => RunPowerPointExport(args[1..]),
                 "--freep-render"      => RunFreePRender(args[1..]),
+                "--avalonia-render"   => RunAvaloniaRender(args[1..]),
                 "--diff"              => RunDiff(args[1..]),
                 "--compare"           => RunCompare(args[1..]),
+                "--avalonia-compare"  => RunAvaloniaCompare(args[1..]),
                 "--generate-corpus"   => RunGenerateCorpus(args[1..]),
                 _                     => PrintUsageAndError($"Unknown mode: {args[0]}")
             };
@@ -123,6 +125,137 @@ internal static class Program
         }
 
         return FreePRenderer.Render(pptxPath, outDir, width, height);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --avalonia-render
+    // -----------------------------------------------------------------------
+    private static int RunAvaloniaRender(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --avalonia-render <pptx> <outDir> [--width W] [--height H]");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outDir   = Path.GetFullPath(args[1]);
+
+        (int width, int height) = ParseWidthHeight(args[2..], 1280, 720);
+
+        if (!File.Exists(pptxPath))
+        {
+            Console.Error.WriteLine($"File not found: {pptxPath}");
+            return 1;
+        }
+
+        return FreePAvaloniaRenderer.Render(pptxPath, outDir, width, height);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mode: --avalonia-compare  (Avalonia render + WPF render + per-slide diff)
+    // -----------------------------------------------------------------------
+    private static int RunAvaloniaCompare(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("usage: --avalonia-compare <deck.pptx> <outDir> [--width W] [--height H]");
+            return 2;
+        }
+
+        var pptxPath = Path.GetFullPath(args[0]);
+        var outDir   = Path.GetFullPath(args[1]);
+
+        (int width, int height) = ParseWidthHeight(args[2..], 1280, 720);
+
+        if (!File.Exists(pptxPath))
+        {
+            Console.Error.WriteLine($"File not found: {pptxPath}");
+            return 1;
+        }
+
+        Directory.CreateDirectory(outDir);
+
+        var wpfDir      = Path.Combine(outDir, "wpf");
+        var avaloniaDir = Path.Combine(outDir, "avalonia");
+        var ppDir       = Path.Combine(outDir, "powerpoint");
+        Directory.CreateDirectory(wpfDir);
+        Directory.CreateDirectory(avaloniaDir);
+
+        Console.WriteLine("=== Step 1: FreeP WPF render ===");
+        int rc1 = FreePRenderer.Render(pptxPath, wpfDir, width, height);
+        if (rc1 == 1) { Console.Error.WriteLine("WPF render failed fatally."); return rc1; }
+
+        Console.WriteLine();
+        Console.WriteLine("=== Step 2: FreeP Avalonia render ===");
+        int rc2 = FreePAvaloniaRenderer.Render(pptxPath, avaloniaDir, width, height);
+        if (rc2 == 1) { Console.Error.WriteLine("Avalonia render failed fatally."); return rc2; }
+
+        Console.WriteLine();
+        Console.WriteLine("=== Step 3: PowerPoint export (ground truth) ===");
+        Directory.CreateDirectory(ppDir);
+        int rc3 = PowerPointInterop.ExportSlidesToPng(pptxPath, ppDir, width, height);
+
+        Console.WriteLine();
+        Console.WriteLine("=== Step 4: Per-slide diffs ===");
+
+        var wpfFiles = Directory.GetFiles(wpfDir, "slide-*.png")
+            .OrderBy(f => f).ToList();
+
+        Console.WriteLine();
+        Console.WriteLine($"{"Slide",-10} {"WPF%",10} {"Av%",10} {"Av-vs-PP%",12}");
+        Console.WriteLine(new string('-', 50));
+
+        var rows = new List<(string slide, double wpf, double av, double avpp)>();
+
+        foreach (var wpfFile in wpfFiles)
+        {
+            string name       = Path.GetFileName(wpfFile);
+            string slideId    = Path.GetFileNameWithoutExtension(name);
+            string avFile     = Path.Combine(avaloniaDir, name);
+            string ppFile     = Path.Combine(ppDir, name);
+
+            double wpfMean = -1, avMean = -1, avppMean = -1;
+
+            // WPF vs Avalonia
+            if (File.Exists(avFile))
+            {
+                string heatmap = Path.Combine(outDir, $"diff-wpf-av-{slideId[6..]}.png");
+                avMean = ImageDiff.Compare(wpfFile, avFile, heatmap).MeanChannelDiffPercent;
+            }
+
+            // Avalonia vs PowerPoint
+            if (File.Exists(ppFile) && File.Exists(avFile))
+            {
+                string heatmap = Path.Combine(outDir, $"diff-av-pp-{slideId[6..]}.png");
+                avppMean = ImageDiff.Compare(avFile, ppFile, heatmap).MeanChannelDiffPercent;
+            }
+
+            // WPF vs PowerPoint (reference)
+            if (File.Exists(ppFile))
+            {
+                string heatmap = Path.Combine(outDir, $"diff-wpf-pp-{slideId[6..]}.png");
+                wpfMean = ImageDiff.Compare(wpfFile, ppFile, heatmap).MeanChannelDiffPercent;
+            }
+
+            rows.Add((slideId, wpfMean, avMean, avppMean));
+            Console.WriteLine($"{slideId,-10} {(wpfMean >= 0 ? $"{wpfMean:F4}" : "n/a"),10} {(avMean >= 0 ? $"{avMean:F4}" : "n/a"),10} {(avppMean >= 0 ? $"{avppMean:F4}" : "n/a"),12}");
+        }
+
+        Console.WriteLine(new string('-', 50));
+        if (rows.Count > 0)
+        {
+            var validWpf  = rows.Where(r => r.wpf  >= 0).ToList();
+            var validAv   = rows.Where(r => r.av   >= 0).ToList();
+            var validAvpp = rows.Where(r => r.avpp >= 0).ToList();
+            Console.WriteLine($"{"AVG",-10} {(validWpf.Count  > 0 ? $"{validWpf.Average(r => r.wpf):F4}"   : "n/a"),10} " +
+                              $"{(validAv.Count   > 0 ? $"{validAv.Average(r => r.av):F4}"     : "n/a"),10} " +
+                              $"{(validAvpp.Count > 0 ? $"{validAvpp.Average(r => r.avpp):F4}" : "n/a"),12}");
+        }
+        Console.WriteLine();
+        Console.WriteLine($"Output directory: {outDir}");
+
+        return Math.Max(rc1, Math.Max(rc2, rc3 == 0 ? 0 : 0));
     }
 
     // -----------------------------------------------------------------------
@@ -303,11 +436,17 @@ internal static class Program
         Console.WriteLine("  --freep-render <pptx> <outDir> [--width W] [--height H]");
         Console.WriteLine("      Render via FreeP WPF renderer (SlideCanvas) off-screen.");
         Console.WriteLine();
+        Console.WriteLine("  --avalonia-render <pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("      Render via FreeP Avalonia renderer (SlideCanvas) headless.");
+        Console.WriteLine();
         Console.WriteLine("  --diff <a.png> <b.png> [--heatmap <out.png>]");
         Console.WriteLine("      Pixel-diff two PNGs; report mean/max channel diff.");
         Console.WriteLine();
         Console.WriteLine("  --compare <deck.pptx> <outDir> [--width W] [--height H]");
-        Console.WriteLine("      Run both exporters + diff all slides; print parity table.");
+        Console.WriteLine("      Run both exporters (WPF + PowerPoint) + diff all slides; print parity table.");
+        Console.WriteLine();
+        Console.WriteLine("  --avalonia-compare <deck.pptx> <outDir> [--width W] [--height H]");
+        Console.WriteLine("      WPF + Avalonia + PowerPoint renders + per-slide diff table.");
         Console.WriteLine();
         Console.WriteLine("  --generate-corpus <outDir>");
         Console.WriteLine("      Author test .pptx decks via PowerPoint COM.");
