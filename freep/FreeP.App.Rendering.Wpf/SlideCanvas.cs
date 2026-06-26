@@ -879,6 +879,35 @@ public sealed class SlideCanvas : FrameworkElement
                 break;
         }
 
+        // ── Data labels ────────────────────────────────────────────────────────
+        if (!isRadar && !isScatterLike)
+        {
+            if (isPie)
+            {
+                RenderPieDataLabels(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+            }
+            else
+            {
+                var (dlMin, dlMax, _) = ComputeNiceAxisRange(chart);
+                bool isLineOrArea = chart.ChartType is FreeP.Core.Model.ChartType.Line
+                                                    or FreeP.Core.Model.ChartType.LineMarkers
+                                                    or FreeP.Core.Model.ChartType.Area
+                                                    or FreeP.Core.Model.ChartType.AreaStacked;
+                for (int si = 0; si < chart.Series.Count; si++)
+                {
+                    if (isLineOrArea)
+                        RenderLineDataLabels(dc, chart, si, plotX, plotY, plotW, plotH, dlMin, dlMax);
+                    else
+                        RenderColumnDataLabels(dc, chart, si, plotX, plotY, plotW, plotH, dlMin, dlMax);
+                }
+            }
+        }
+
+        // ── Secondary value axis (right side) ──────────────────────────────────
+        if (chart.SecondaryValueAxis is not null && !isPie && !isRadar && !isScatterLike && !isBar)
+            RenderSecondaryValueAxis(dc, chart, plotX, plotY, plotW, plotH,
+                bounds.X + bounds.Width - legendAreaW - margin);
+
         // ── Axis labels ────────────────────────────────────────────────────────
         if (!isPie && !isRadar && !isScatterLike && chart.Categories.Count > 0)
         {
@@ -1811,6 +1840,255 @@ public sealed class SlideCanvas : FrameworkElement
             : v == Math.Floor(v)
                 ? ((long)v).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : v.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+
+    // ── Data label helpers ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the effective data-label config for a series: series override wins; falls back to chart-level.
+    /// Returns null if no labels are configured.
+    /// </summary>
+    private static FreeP.Core.Model.ChartDataLabels? EffectiveLabels(
+        FreeP.Core.Model.ChartShape chart, int seriesIndex)
+    {
+        var ser = seriesIndex < chart.Series.Count ? chart.Series[seriesIndex] : null;
+        var dl  = ser?.DataLabels ?? chart.DataLabels;
+        return (dl is not null && dl.HasAny) ? dl : null;
+    }
+
+    /// <summary>
+    /// Composes the label string for a single data point according to the DataLabels config.
+    /// </summary>
+    private static string FormatDataLabel(
+        FreeP.Core.Model.ChartDataLabels dl, double value, double total,
+        string? categoryName, string? seriesName)
+    {
+        string formattedVal = string.IsNullOrEmpty(dl.NumberFormat)
+            ? FormatAxisValue(value)
+            : FormatWithCode(value, dl.NumberFormat!);
+
+        string pctStr = total > 0
+            ? $"{value / total * 100:0}%"
+            : "0%";
+
+        var parts = new System.Text.StringBuilder();
+        if (dl.ShowSeriesName   && !string.IsNullOrEmpty(seriesName))  parts.Append(seriesName).Append(' ');
+        if (dl.ShowCategoryName && !string.IsNullOrEmpty(categoryName)) parts.Append(categoryName).Append(' ');
+        if (dl.ShowValue)   parts.Append(formattedVal).Append(' ');
+        if (dl.ShowPercent) parts.Append(pctStr).Append(' ');
+
+        return parts.ToString().Trim();
+    }
+
+    /// <summary>Basic numeric format-code application (subset: 0, 0.00, #,##0, 0%, 0.00%).</summary>
+    private static string FormatWithCode(double value, string code)
+    {
+        // Percentage codes: multiply by 100 for display
+        if (code.Contains('%'))
+        {
+            double pct = value * 100.0;
+            int decimals = 0;
+            int dotPos = code.IndexOf('.');
+            if (dotPos >= 0)
+                decimals = code.Length - dotPos - 1 - (code.Length - code.LastIndexOf('%')) + 1;
+            string fmtStr = decimals > 0 ? $"F{decimals}" : "F0";
+            return pct.ToString(fmtStr, System.Globalization.CultureInfo.InvariantCulture) + "%";
+        }
+        // Thousands separator
+        if (code.Contains(','))
+            return value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+        // Decimal places via 0.00 style
+        int dotIdx = code.IndexOf('.');
+        if (dotIdx >= 0)
+        {
+            int dec = code.Length - dotIdx - 1;
+            return value.ToString($"F{dec}", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return FormatAxisValue(value);
+    }
+
+    /// <summary>
+    /// Draws data labels for a column/bar/line/area series, after bars/lines have been rendered.
+    /// For column charts: label above bar (OutsideEnd) or at bar tip (InsideEnd/Center).
+    /// For line charts: label above the point marker.
+    /// </summary>
+    private static void RenderColumnDataLabels(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        int seriesIndex,
+        double plotX, double plotY, double plotW, double plotH,
+        double minVal, double maxVal)
+    {
+        var dl = EffectiveLabels(chart, seriesIndex);
+        if (dl is null) return;
+
+        var series = chart.Series[seriesIndex];
+        int catCount = Math.Max(1, chart.Categories.Count);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.ColumnStacked
+                                       or FreeP.Core.Model.ChartType.ColumnStacked100;
+        const double gapRatio = 1.5;
+        double catW     = plotW / catCount;
+        double clusterW = catW / (1.0 + gapRatio);
+        double halfGap  = (catW - clusterW) / 2.0;
+        int serCount    = Math.Max(1, chart.Series.Count);
+        double serW     = stacked ? clusterW : clusterW / serCount;
+
+        var position = dl.Position ?? FreeP.Core.Model.DataLabelPosition.OutsideEnd;
+
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+            if (rawVal is null) continue;
+            double val = rawVal.Value;
+
+            double barX = stacked
+                ? plotX + ci * catW + halfGap
+                : plotX + ci * catW + halfGap + seriesIndex * serW;
+            double barH = Math.Abs((val - minVal) / range * plotH);
+            double barY = plotY + plotH - (val - minVal) / range * plotH;
+
+            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
+            string txt = FormatDataLabel(dl, val, 0, cat, series.Name);
+            if (string.IsNullOrEmpty(txt)) continue;
+
+            const double lblH = 11.0;
+            double lblY = position switch
+            {
+                FreeP.Core.Model.DataLabelPosition.InsideEnd  => barY + 2,
+                FreeP.Core.Model.DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
+                FreeP.Core.Model.DataLabelPosition.InsideBase => barY + barH - lblH - 2,
+                _                                             => barY - lblH - 1  // OutsideEnd / default above bar
+            };
+
+            DrawChartLabel(dc, txt, new Rect(barX, lblY, serW, lblH),
+                isBold: false, fontSize: 6.5, align: TextAlignment.Center);
+        }
+    }
+
+    private static void RenderLineDataLabels(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        int seriesIndex,
+        double plotX, double plotY, double plotW, double plotH,
+        double minVal, double maxVal)
+    {
+        var dl = EffectiveLabels(chart, seriesIndex);
+        if (dl is null) return;
+
+        var series = chart.Series[seriesIndex];
+        int catCount = Math.Max(1, chart.Categories.Count);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+        double stepX = plotW / Math.Max(1, catCount - 1);
+
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+            if (rawVal is null) continue;
+            double px = plotX + ci * stepX;
+            double py = plotY + plotH - (rawVal.Value - minVal) / range * plotH;
+
+            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
+            string txt = FormatDataLabel(dl, rawVal.Value, 0, cat, series.Name);
+            if (string.IsNullOrEmpty(txt)) continue;
+
+            DrawChartLabel(dc, txt, new Rect(px - 20, py - 14, 40, 11),
+                isBold: false, fontSize: 6.5, align: TextAlignment.Center);
+        }
+    }
+
+    private static void RenderPieDataLabels(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        var dl = EffectiveLabels(chart, 0);
+        if (dl is null) return;
+        if (chart.Series.Count == 0) return;
+
+        var firstSeries = chart.Series[0];
+        var values = firstSeries.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
+        if (values.Count == 0) return;
+        double total = values.Sum();
+        if (total <= 0) return;
+
+        double cx = plotX + plotW / 2;
+        double cy = plotY + plotH / 2;
+        double r  = Math.Min(plotW, plotH) / 2 * 0.85;
+        double startAngle = -Math.PI / 2;
+
+        var position = dl.Position ?? FreeP.Core.Model.DataLabelPosition.BestFit;
+        double labelR = position == FreeP.Core.Model.DataLabelPosition.InsideEnd
+            ? r * 0.65
+            : r * 1.15;
+
+        for (int i = 0; i < values.Count; i++)
+        {
+            double sweepAngle = values[i] / total * 2 * Math.PI;
+            double midAngle   = startAngle + sweepAngle / 2;
+
+            string cat = i < chart.Categories.Count ? chart.Categories[i] : string.Empty;
+            string txt = FormatDataLabel(dl, values[i], total, cat, firstSeries.Name);
+            if (!string.IsNullOrEmpty(txt))
+            {
+                double lx = cx + labelR * Math.Cos(midAngle);
+                double ly = cy + labelR * Math.Sin(midAngle);
+                DrawChartLabel(dc, txt, new Rect(lx - 22, ly - 6, 44, 12),
+                    isBold: false, fontSize: 6.5, align: TextAlignment.Center);
+            }
+
+            startAngle += sweepAngle;
+        }
+    }
+
+    /// <summary>
+    /// Draws the secondary value axis (right side) tick labels.
+    /// </summary>
+    private static void RenderSecondaryValueAxis(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        double plotX, double plotY, double plotW, double plotH,
+        double boundsRight)
+    {
+        if (chart.SecondaryValueAxis is null) return;
+
+        // Compute range based on secondary-axis series only
+        double secMin = 0, secMax = 0;
+        foreach (var s in chart.Series)
+        {
+            if (!s.OnSecondaryAxis) continue;
+            foreach (var v in s.Values)
+                if (v.HasValue) { secMin = Math.Min(secMin, v.Value); secMax = Math.Max(secMax, v.Value); }
+        }
+
+        double axMin = chart.SecondaryValueAxis.Min ?? (secMin >= 0 ? 0 : secMin);
+        double axMax = chart.SecondaryValueAxis.Max ?? secMax;
+        if (axMax <= axMin) axMax = axMin + 1;
+
+        double range  = axMax - axMin;
+        double rawU   = range / 4.0;
+        double mag    = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawU, 1e-9))));
+        double norm   = rawU / mag;
+        double nmult  = norm < 1.5 ? 1.0 : norm < 2.25 ? 2.0 : norm < 3.75 ? 2.5 : norm < 7.5 ? 5.0 : 10.0;
+        double mu     = nmult * mag;
+        double niceMax = Math.Ceiling(axMax / mu) * mu;
+        double niceMin = axMin >= 0 ? 0 : Math.Floor(axMin / mu) * mu;
+        double steps   = (niceMax - niceMin) / mu;
+        if (steps <= 0) return;
+
+        const double axisLabelW = 40.0;
+        for (int ti = 0; ti <= (int)Math.Round(steps); ti++)
+        {
+            double val = niceMin + mu * ti;
+            double vy  = plotY + plotH - plotH * ti / steps;
+            DrawChartLabel(dc, FormatAxisValue(val),
+                new Rect(boundsRight + 2, vy - 6, axisLabelW, 12),
+                isBold: false, fontSize: 6.5, align: TextAlignment.Left);
+        }
+    }
 
     private static void DrawChartLabel(
         DrawingContext dc, string text, Rect rect,
