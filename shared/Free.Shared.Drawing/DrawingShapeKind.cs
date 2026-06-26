@@ -87,5 +87,29 @@ public enum SlideShapeKind
     /// An embedded OLE object (p:graphicFrame / p:oleObj). The embedded binary is in
     /// <c>SlideShape.OleObject</c>; the fallback preview image is in <c>SlideShape.Picture</c>.
     /// </summary>
-    Ole = 8
+    Ole = 8,
+
+    /// <summary>
+    /// A slide zoom / summary zoom (p:graphicFrame with zoom namespace URI).
+    /// The raw frame XML + preview image are preserved verbatim.
+    /// </summary>
+    Zoom = 9,
+
+    /// <summary>
+    /// An ink annotation (p:contentPart referencing an InkML part).
+    /// The raw contentPart XML + ink bytes + fallback image are preserved verbatim.
+    /// </summary>
+    Ink = 10,
+
+    /// <summary>
+    /// A 3D model (p:graphicFrame with am3d namespace URI).
+    /// The raw frame XML + .glb bytes + preview image are preserved verbatim.
+    /// </summary>
+    Model3d = 11,
+
+    /// <summary>
+    /// A graphicFrame or contentPart with an unknown/unrecognized URI.
+    /// The raw XML + any referenced part bytes are preserved verbatim so nothing is silently lost.
+    /// </summary>
+    PreservedObject = 12,
 }
