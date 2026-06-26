@@ -80,6 +80,9 @@ public sealed class DocumentView : Control
     private readonly Dictionary<string, IBrush> _brushCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PlacedChar> _placed = new();
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
+    // AV-TAB: leader spans emitted during body tab layout; drawn in Render before glyph text.
+    // Each entry: (X1=tab start, X2=segment start, Y=page-space top, LineHeight, Leader kind, RunFmt for color/size).
+    private readonly List<(double X1, double X2, double Y, double LineHeight, TabLeader Leader, RunFormatting Fmt)> _tabLeaderSpans = new();
     // AV-TBL4: extended to carry per-cell shading brush and per-edge CellBorders.
     // Fill: IBrush? combines table-style fills (header/band) with per-cell ShadingColorHex.
     // Border: bool = table-level outer border; CellBorder: per-edge override from CellBorders model.
@@ -799,6 +802,26 @@ public sealed class DocumentView : Control
                 .ToList();
 
     /// <summary>
+    /// AV-TAB: Returns placed glyphs for block 0 including tab characters for test introspection.
+    /// Each tuple: (Ch, X, W) — non-sentinels only.
+    /// </summary>
+    internal IReadOnlyList<(char Ch, double X, double W)> GetBodyTabPlaced(int blockIndex) =>
+        _placed
+            .Where(p => p.Block == blockIndex && !p.Sentinel)
+            .Select(p => (p.Ch, p.X, p.W))
+            .ToList();
+
+    /// <summary>AV-TAB: Leader spans emitted during layout. For tests.</summary>
+    internal IReadOnlyList<(double X1, double X2, double Y, double LineHeight, TabLeader Leader)> TabLeaderSpans
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _tabLeaderSpans.Select(s => (s.X1, s.X2, s.Y, s.LineHeight, s.Leader)).ToList();
+        }
+    }
+
+    /// <summary>
     /// Returns placed glyphs for a specific table cell and paragraph — including sentinels.
     /// Suitable for BE1/BE2 layout tests. Only available to the test assembly.
     /// Tuple: (Ch, X, Y, LineHeight, Sentinel, CellParaOffset).
@@ -1373,6 +1396,7 @@ public sealed class DocumentView : Control
         _inlineSmartArts.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
+        _tabLeaderSpans.Clear(); // AV-TAB
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
@@ -2303,11 +2327,24 @@ public sealed class DocumentView : Control
         var lastBreak = -1; // index of a space cell we can wrap after
         var measured = new double[cells.Count];
         var heights = new double[cells.Count];
+        // AV-TAB: default tab interval from page settings (points → DIP).
+        var defaultTabPx = Math.Max(1, _doc.Page.DefaultTabStopPt) * PxPerPoint;
+
         for (var c = 0; c < cells.Count; c++)
         {
-            var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
-            measured[c] = ft.WidthIncludingTrailingWhitespace;
-            heights[c] = ft.Height;
+            if (cells[c].Ch == '\t')
+            {
+                // AV-TAB: tab width is determined lazily in the wrapping loop (depends on pen pos).
+                // Use 0 here; the wrapping loop fills in the real value via ComputeTabMeasuredWidth.
+                measured[c] = 0;
+                heights[c] = DefaultFontSizePt * PxPerPoint * 1.3; // fallback height
+            }
+            else
+            {
+                var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
+                measured[c] = ft.WidthIncludingTrailingWhitespace;
+                heights[c] = ft.Height;
+            }
         }
 
         var lineIndex = 0;
@@ -2335,6 +2372,11 @@ public sealed class DocumentView : Control
 
         while (i < cells.Count)
         {
+            // AV-TAB: resolve tab advance lazily at the wrapping loop so measured[] reflects the
+            // actual pen position at the time each tab is encountered on its line.
+            if (cells[i].Ch == '\t')
+                measured[i] = ComputeTabMeasuredWidth(lineWidth, pf, defaultTabPx);
+
             if (cells[i].Ch == ' ')
                 lastBreak = i;
 
@@ -2369,8 +2411,14 @@ public sealed class DocumentView : Control
                 lineStart = breakAt;
                 lineWidth = 0;
                 lastBreak = -1;
+                // AV-TAB: recompute tab widths in the partial accumulation so they use the
+                // new line's pen position (tabs reset to a fresh pen at the new lineStart).
                 for (var k = lineStart; k < i; k++)
+                {
+                    if (cells[k].Ch == '\t')
+                        measured[k] = ComputeTabMeasuredWidth(lineWidth, pf, defaultTabPx);
                     lineWidth += measured[k];
+                }
             }
 
             lineWidth += measured[i];
@@ -2479,9 +2527,90 @@ public sealed class DocumentView : Control
         var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
         if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
 
-        var x = colLeft + effectiveLeftInset + AlignmentOffset(alignment, effectiveWidth, lineWidth, isLast);
+        // AV-TAB: detect whether this line contains any tab characters.
+        var lineHasTabs = false;
+        for (var c = from; c < to; c++)
+            if (cells[c].Ch == '\t') { lineHasTabs = true; break; }
+
+        // Content origin: absolute left edge where pen-position 0 begins (before alignment offset).
+        // Tab stops are measured from this origin, not from the alignment-shifted x.
+        var contentOriginX = colLeft + effectiveLeftInset;
+        var alignOffset    = AlignmentOffset(alignment, effectiveWidth, lineWidth, isLast);
+
+        // For lines without tabs, keep the existing simple path (no extra overhead).
+        // For lines with tabs, alignment applies only to the pre-tab prefix segment; subsequent
+        // segments are pinned absolutely to their stop positions.
+        var x = contentOriginX + (lineHasTabs ? 0.0 : alignOffset);
+
+        // AV-TAB: default tab interval for this line (from document page settings).
+        var lineDefaultTabPx = Math.Max(1.0, _doc.Page.DefaultTabStopPt) * PxPerPoint;
+
+        // AV-TAB: pre-tab alignment offset for lines with tabs — applied to the pre-tab prefix.
+        // We compute the pre-tab segment width and centre/right-align it, then the first tab snaps x.
+        if (lineHasTabs && alignment != TextAlignment.Left && alignment != TextAlignment.Justify)
+        {
+            // Find the first tab in [from, to).
+            var firstTabIdx = from;
+            while (firstTabIdx < to && cells[firstTabIdx].Ch != '\t') firstTabIdx++;
+            // Sum the pre-tab segment width.
+            var preTabWidth = 0.0;
+            for (var c = from; c < firstTabIdx; c++) preTabWidth += measured[c];
+            // Apply alignment to pre-tab segment only.
+            x += alignment switch
+            {
+                TextAlignment.Center => Math.Max(0, (effectiveWidth - preTabWidth) / 2),
+                TextAlignment.Right  => Math.Max(0, effectiveWidth - preTabWidth),
+                _                   => 0.0,
+            };
+        }
+
         for (var c = from; c < to; c++)
         {
+            if (cells[c].Ch == '\t')
+            {
+                // AV-TAB: resolve the tab stop at the CURRENT pen position (relative to content origin).
+                var penPosInLine = x - contentOriginX;
+                var (stopDip, stopAlign, leader) = ResolveBodyTabStop(penPosInLine, pf, lineDefaultTabPx);
+
+                // Compute the advance: for left tabs this is straightforward.
+                // For center/right tabs we need to know the following segment's width.
+                var segmentWidth = 0.0;
+                if (stopAlign is TabStopAlignment.Center or TabStopAlignment.Right or TabStopAlignment.Decimal)
+                {
+                    // Scan forward to find the end of the segment (next tab or end-of-line).
+                    for (var k = c + 1; k < to; k++)
+                    {
+                        if (cells[k].Ch == '\t') break;
+                        segmentWidth += measured[k];
+                    }
+                }
+
+                // Target X in page space where the segment should land.
+                var stopPageX = contentOriginX + stopDip;
+                double segmentStartX = stopAlign switch
+                {
+                    TabStopAlignment.Center  => stopPageX - segmentWidth / 2,
+                    TabStopAlignment.Right   => stopPageX - segmentWidth,
+                    TabStopAlignment.Decimal => stopPageX - segmentWidth, // approximate as right
+                    _                        => stopPageX,                // Left
+                };
+                // Clamp: never move backward past current pen (tab must advance forward).
+                segmentStartX = Math.Max(x + 1, segmentStartX);
+
+                // Tab glyph occupies the gap from current x to the segment start.
+                var tabAdvance = segmentStartX - x;
+                var tabX = x; // where the '\t' PlacedChar starts
+
+                // Emit leader span if the tab stop has one.
+                if (leader != TabLeader.None)
+                    _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
+
+                // Place the tab character with its computed advance width (for caret hit-testing).
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false));
+                x = segmentStartX;
+                continue;
+            }
+
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
@@ -2546,6 +2675,50 @@ public sealed class DocumentView : Control
         var slot     = (int)(contentY / _layoutTextAreaHeight);
         var colIndex = slot % _colCount;
         return _contentLeft + colIndex * (_colWidth + _colGap);
+    }
+
+    // ── AV-TAB: tab-stop resolution helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves the next tab stop for a body paragraph given the pen's current X position
+    /// <paramref name="penPosInLine"/> (measured from the <em>paragraph content origin</em>
+    /// — i.e. colLeft + effectiveLeftInset) in DIPs.
+    /// <list type="bullet">
+    ///   <item>Scans explicit <see cref="ParagraphFormatting.TabStops"/> (sorted by position) for
+    ///     the first stop whose position (in DIP) is strictly greater than <paramref name="penPosInLine"/>.</item>
+    ///   <item>If no explicit stop qualifies, falls back to the document's default tab-stop interval
+    ///     (<see cref="TextDocument.Page"/>/<see cref="PageSettings.DefaultTabStopPt"/>, default 36pt /
+    ///     0.5").</item>
+    /// </list>
+    /// Returns the resolved stop position <em>in DIPs from the paragraph content origin</em>,
+    /// the stop alignment, and the leader fill kind.
+    /// </summary>
+    private static (double StopPosDip, TabStopAlignment Alignment, TabLeader Leader)
+        ResolveBodyTabStop(double penPosInLine, ParagraphFormatting pf, double defaultTabIntervalPx)
+    {
+        // Scan explicit stops — already in points; convert each to DIP.
+        foreach (var stop in pf.TabStops.OrderBy(s => s.PositionPt))
+        {
+            var stopDip = stop.PositionPt * PxPerPoint;
+            if (stopDip > penPosInLine + 0.5) // 0.5 px tolerance so we never land on the same stop
+                return (stopDip, stop.Alignment, stop.Leader);
+        }
+
+        // Default interval: next multiple of defaultTabIntervalPx strictly beyond penPosInLine.
+        var interval = Math.Max(1, defaultTabIntervalPx);
+        var next = (Math.Floor(penPosInLine / interval) + 1) * interval;
+        return (next, TabStopAlignment.Left, TabLeader.None);
+    }
+
+    /// <summary>
+    /// Computes the measured width to assign to a <c>\t</c> cell in <see cref="LayoutParagraphPaged"/>'s
+    /// wrapping loop.  The advance is from the current pen (<paramref name="penPosInLine"/>) to the
+    /// resolved stop, clamped to at least 1 px so the caret is always selectable.
+    /// </summary>
+    private static double ComputeTabMeasuredWidth(double penPosInLine, ParagraphFormatting pf, double defaultTabIntervalPx)
+    {
+        var (stopDip, _, _) = ResolveBodyTabStop(penPosInLine, pf, defaultTabIntervalPx);
+        return Math.Max(1.0, stopDip - penPosInLine);
     }
 
     private void LayoutReadOnlyBlockPaged(int blockIndex, Block block, double textWidth)
@@ -3550,6 +3723,13 @@ public sealed class DocumentView : Control
             }
         }
 
+        // AV-TAB: draw tab leader spans (dots/dashes/underline) before the glyph text.
+        foreach (var (x1, x2, spanY, lineH, leader, spanFmt) in _tabLeaderSpans)
+        {
+            if (leader == TabLeader.None || x2 <= x1) continue;
+            DrawTabLeader(context, x1, x2, spanY, lineH, leader, spanFmt);
+        }
+
         var selection = NormalizedSelection();
         foreach (var pc in _placed)
         {
@@ -3581,6 +3761,17 @@ public sealed class DocumentView : Control
                 var sz = (drawFmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale;
                 drawFmt = drawFmt with { FontSizePt = sz };
                 drawY   = pc.Y + pc.LineHeight * SubYLowerFraction;
+            }
+
+            // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
+            if (pc.Ch == '\t')
+            {
+                // Still draw underline/strikethrough across the tab gap if the run has them.
+                if (pc.Fmt.Underline)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
+                if (pc.Fmt.Strikethrough)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+                continue;
             }
 
             var ft = Build(pc.Ch.ToString(), drawFmt);
@@ -3849,6 +4040,49 @@ public sealed class DocumentView : Control
     {
         var pen = new Pen(BrushFor(pc.Fmt.ColorHex), Math.Max(1, FontSizePx(pc.Fmt) / 14));
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
+    }
+
+    /// <summary>
+    /// AV-TAB: Draws a tab leader (dots / dashes / underline) filling the gap between
+    /// <paramref name="x1"/> (tab character start) and <paramref name="x2"/> (next segment start)
+    /// for the given <paramref name="leader"/> kind and run formatting.
+    /// </summary>
+    private void DrawTabLeader(DrawingContext context, double x1, double x2, double y, double lineH,
+        TabLeader leader, RunFormatting fmt)
+    {
+        if (x2 <= x1) return;
+        var brush = BrushFor(fmt.ColorHex);
+        var thickness = Math.Max(0.8, FontSizePx(fmt) / 18);
+
+        switch (leader)
+        {
+            case TabLeader.Underline:
+            {
+                // Solid underline across the full gap.
+                var pen = new Pen(brush, thickness);
+                var yLine = y + lineH * 0.82;
+                context.DrawLine(pen, new Point(x1, yLine), new Point(x2, yLine));
+                break;
+            }
+            case TabLeader.Dots:
+            {
+                // Dots spaced ~4px apart, drawn as small filled circles at the baseline.
+                var yLine = y + lineH * 0.82;
+                var dotR  = Math.Max(0.7, thickness * 0.6);
+                var step  = Math.Max(4, dotR * 5);
+                for (var dotX = x1 + step / 2; dotX < x2 - dotR; dotX += step)
+                    context.FillRectangle(brush, new Rect(dotX - dotR, yLine - dotR, dotR * 2, dotR * 2));
+                break;
+            }
+            case TabLeader.Dashes:
+            {
+                // Dashes via a dash-style pen.
+                var dashPen = new Pen(brush, thickness, new DashStyle([4, 3], 0));
+                var yLine   = y + lineH * 0.82;
+                context.DrawLine(dashPen, new Point(x1, yLine), new Point(x2, yLine));
+                break;
+            }
+        }
     }
 
     private bool TryGetCaretRect(out Rect rect)
