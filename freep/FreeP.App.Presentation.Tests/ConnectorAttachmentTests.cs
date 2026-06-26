@@ -1,0 +1,391 @@
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
+using FreeP.Core.IO;
+using FreeP.Core.Model;
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
+
+/// <summary>
+/// Wave 23 — connector attachment / routing tests.
+/// Covers:
+///  1. Connection-site geometry — ConnectionSiteHelper resolves standard sites.
+///  2. Round-trip — stCxn/endCxn survive write → read.
+///  3. Routing — moving an attached shape updates the connector's bounds (same undo step).
+///  4. SlideCloner copies attachments.
+/// </summary>
+public sealed class ConnectorAttachmentTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private static SlideShape MakeRect(uint id, long x, long y, long cx, long cy) => new()
+    {
+        Id           = id,
+        Name         = $"Shape{id}",
+        Kind         = SlideShapeKind.AutoShape,
+        AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+        OffsetXEmu   = x,
+        OffsetYEmu   = y,
+        ExtentCxEmu  = cx,
+        ExtentCyEmu  = cy,
+    };
+
+    private static SlideShape MakeConnector(uint id,
+        ConnectorAttachment? start = null,
+        ConnectorAttachment? end   = null) => new()
+    {
+        Id           = id,
+        Name         = $"Connector{id}",
+        Kind         = SlideShapeKind.Connector,
+        AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.ElbowConnector,
+        OffsetXEmu   = 0,
+        OffsetYEmu   = 0,
+        ExtentCxEmu  = 100,
+        ExtentCyEmu  = 100,
+        ConnectionStart = start,
+        ConnectionEnd   = end,
+    };
+
+    private static (Presentation p, PresentationCommandBus bus, Slide slide) MakePresentation()
+    {
+        var p   = new Presentation();
+        var sl  = new Slide { Id = "rId1" };
+        p.Slides.Add(sl);
+        var bus = new PresentationCommandBus(p);
+        return (p, bus, sl);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 1. Connection-site geometry
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void ConnectionSiteHelper_Site0_ReturnsLeftMid()
+    {
+        // Shape at (200, 400), 600×200 => left-mid = (200, 500)
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 0);
+        x.Should().Be(200);
+        y.Should().Be(500); // top(400) + cy/2(100)
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_Site1_ReturnsTopMid()
+    {
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 1);
+        x.Should().Be(500); // left(200) + cx/2(300)
+        y.Should().Be(400);
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_Site2_ReturnsRightMid()
+    {
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 2);
+        x.Should().Be(800); // left(200) + cx(600)
+        y.Should().Be(500);
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_Site3_ReturnsBottomMid()
+    {
+        var shape = MakeRect(1, 200, 400, 600, 200);
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 3);
+        x.Should().Be(500);
+        y.Should().Be(600); // top(400) + cy(200)
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_OutOfRange_ReturnsCentre()
+    {
+        var shape = MakeRect(1, 0, 0, 200, 100);
+        var (x, y) = ConnectionSiteHelper.Resolve(shape, 99);
+        x.Should().Be(100); // centre x
+        y.Should().Be(50);  // centre y
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_ResolveFromSlide_FindsAttachedShape()
+    {
+        var (_, _, slide) = MakePresentation();
+        var shapeA = MakeRect(5, 1000, 2000, 4000, 2000);
+        slide.Shapes.Add(shapeA);
+
+        var attachment = new ConnectorAttachment { ShapeId = 5, SiteIndex = 3 };
+        var (x, y) = ConnectionSiteHelper.Resolve(attachment, slide);
+        // bottom-mid: x = 1000+2000=3000, y = 2000+2000=4000
+        x.Should().Be(3000);
+        y.Should().Be(4000);
+    }
+
+    [Fact]
+    public void ConnectionSiteHelper_MissingShape_ReturnsZero()
+    {
+        var (_, _, slide) = MakePresentation();
+        var attachment = new ConnectorAttachment { ShapeId = 99, SiteIndex = 0 };
+        var (x, y) = ConnectionSiteHelper.Resolve(attachment, slide);
+        x.Should().Be(0);
+        y.Should().Be(0);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 2. Round-trip — stCxn / endCxn survive write → read
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void RoundTrip_ConnectorAttachment_Preserved()
+    {
+        // Build a minimal presentation with a shape + connector.
+        var pres = new Presentation
+        {
+            SlideSizeCxEmu = 9144000,
+            SlideSizeCyEmu = 6858000,
+        };
+        var slide = new Slide { Id = "rId1" };
+        pres.Slides.Add(slide);
+
+        // Shape at arbitrary position.
+        var shape = MakeRect(5, 914400, 914400, 914400, 914400);
+        slide.Shapes.Add(shape);
+
+        // Connector attached: start → shape(5) site 3, end → shape(7) site 1.
+        var connector = MakeConnector(9,
+            start: new ConnectorAttachment { ShapeId = 5, SiteIndex = 3 },
+            end:   new ConnectorAttachment { ShapeId = 7, SiteIndex = 1 });
+        connector.ExtentCxEmu = 914400;
+        connector.ExtentCyEmu = 914400;
+        slide.Shapes.Add(connector);
+
+        // Write to pptx bytes.
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        // Read back.
+        Presentation reloaded;
+        using (var ms = new MemoryStream(bytes))
+            reloaded = PptxPackageReader.Read(ms);
+
+        var reloadedSlide = reloaded.Slides.Should().HaveCountGreaterThan(0).And.Subject.First();
+        var reloadedConnector = reloadedSlide.Shapes
+            .FirstOrDefault(s => s.Kind == SlideShapeKind.Connector);
+
+        reloadedConnector.Should().NotBeNull("connector must survive round-trip");
+        reloadedConnector!.ConnectionStart.Should().NotBeNull();
+        reloadedConnector.ConnectionStart!.ShapeId.Should().Be(5u);
+        reloadedConnector.ConnectionStart.SiteIndex.Should().Be(3);
+        reloadedConnector.ConnectionEnd.Should().NotBeNull();
+        reloadedConnector.ConnectionEnd!.ShapeId.Should().Be(7u);
+        reloadedConnector.ConnectionEnd.SiteIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void RoundTrip_FreeConnector_NoAttachmentElements()
+    {
+        // A connector with no attachments should not emit stCxn/endCxn.
+        var pres = new Presentation { SlideSizeCxEmu = 9144000, SlideSizeCyEmu = 6858000 };
+        var slide = new Slide { Id = "rId1" };
+        pres.Slides.Add(slide);
+
+        var connector = MakeConnector(3); // no attachments
+        connector.ExtentCxEmu = 914400;
+        connector.ExtentCyEmu = 914400;
+        slide.Shapes.Add(connector);
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            PptxPackageWriter.Write(pres, ms);
+            bytes = ms.ToArray();
+        }
+
+        // Inspect the raw XML — should not contain stCxn or endCxn.
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var slideEntry = archive.Entries.FirstOrDefault(e => e.FullName.StartsWith("ppt/slides/slide")
+                                                          && e.FullName.EndsWith(".xml"));
+        slideEntry.Should().NotBeNull();
+        using var stream = slideEntry!.Open();
+        var doc = XDocument.Load(stream);
+        var xml = doc.ToString();
+        xml.Should().NotContain("stCxn", "free connector must not emit stCxn");
+        xml.Should().NotContain("endCxn", "free connector must not emit endCxn");
+
+        // Read back — no attachment.
+        Presentation reloaded;
+        using (var ms2 = new MemoryStream(bytes))
+            reloaded = PptxPackageReader.Read(ms2);
+
+        var reloadedConnector = reloaded.Slides.First().Shapes
+            .FirstOrDefault(s => s.Kind == SlideShapeKind.Connector);
+        reloadedConnector.Should().NotBeNull();
+        reloadedConnector!.ConnectionStart.Should().BeNull();
+        reloadedConnector.ConnectionEnd.Should().BeNull();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 3. Routing on move — MoveShapeCommand
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void MoveShape_ReroutesAttachedConnector()
+    {
+        var (p, bus, slide) = MakePresentation();
+
+        // Two shapes + connector between them.
+        // shapeA: (1000, 1000, 2000, 1000) → site 2 (right-mid) = (3000, 1500)
+        // shapeB: (6000, 1000, 2000, 1000) → site 0 (left-mid)  = (6000, 1500)
+        var shapeA = MakeRect(1, 1000, 1000, 2000, 1000);
+        var shapeB = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        // Move shapeA 500 EMU right and 200 EMU down.
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+
+        // shapeA is now at (1500, 1200, 2000, 1000).
+        // site 2 of shapeA = right-mid = (3500, 1700)
+        // site 0 of shapeB = left-mid  = (6000, 1500)
+        // Connector bounding box: x=min(3500,6000)=3500, y=min(1700,1500)=1500
+        //                         cx=abs(6000-3500)=2500, cy=abs(1500-1700)=200
+        var c = slide.Shapes.First(s => s.Id == 3);
+        c.OffsetXEmu.Should().Be(3500);
+        c.OffsetYEmu.Should().Be(1500);
+        c.ExtentCxEmu.Should().Be(2500);
+        c.ExtentCyEmu.Should().Be(200);
+    }
+
+    [Fact]
+    public void MoveShape_Undo_RestoresConnectorBounds()
+    {
+        var (p, bus, slide) = MakePresentation();
+
+        var shapeA = MakeRect(1, 1000, 1000, 2000, 1000);
+        var shapeB = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        // Manually set connector initial bounds to match initial site positions.
+        // site2(shapeA) = (3000, 1500), site0(shapeB) = (6000, 1500)
+        connector.OffsetXEmu  = 3000;
+        connector.OffsetYEmu  = 1500;
+        connector.ExtentCxEmu = 3000;
+        connector.ExtentCyEmu = 1;
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        long origX  = connector.OffsetXEmu;
+        long origY  = connector.OffsetYEmu;
+        long origCx = connector.ExtentCxEmu;
+        long origCy = connector.ExtentCyEmu;
+
+        bus.Execute(new MoveShapeCommand(0, 1, 500, 200));
+        bus.Undo();
+
+        var c = slide.Shapes.First(s => s.Id == 3);
+        c.OffsetXEmu.Should().Be(origX);
+        c.OffsetYEmu.Should().Be(origY);
+        c.ExtentCxEmu.Should().Be(origCx);
+        c.ExtentCyEmu.Should().Be(origCy);
+    }
+
+    [Fact]
+    public void MoveShape_NoAttachedConnectors_MovesCleanly()
+    {
+        var (p, bus, slide) = MakePresentation();
+        var shape = MakeRect(1, 1000, 1000, 500, 500);
+        // A free connector (no attachments) — should NOT be rerouted.
+        var freeConnector = MakeConnector(2);
+        freeConnector.OffsetXEmu  = 200;
+        freeConnector.OffsetYEmu  = 200;
+        freeConnector.ExtentCxEmu = 800;
+        freeConnector.ExtentCyEmu = 600;
+
+        slide.Shapes.Add(shape);
+        slide.Shapes.Add(freeConnector);
+
+        bus.Execute(new MoveShapeCommand(0, 1, 100, 100));
+
+        // Free connector stays put.
+        var fc = slide.Shapes.First(s => s.Id == 2);
+        fc.OffsetXEmu.Should().Be(200);
+        fc.OffsetYEmu.Should().Be(200);
+    }
+
+    [Fact]
+    public void ResizeShape_ReroutesAttachedConnector()
+    {
+        var (p, bus, slide) = MakePresentation();
+
+        // shapeA at (0, 0, 1000, 1000); connector start = site 2 (right-mid) = (1000, 500)
+        // shapeB at (3000, 0, 1000, 1000); connector end = site 0 (left-mid) = (3000, 500)
+        var shapeA = MakeRect(1, 0, 0, 1000, 1000);
+        var shapeB = MakeRect(2, 3000, 0, 1000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = 1, SiteIndex = 2 },
+            end:   new ConnectorAttachment { ShapeId = 2, SiteIndex = 0 });
+
+        slide.Shapes.Add(shapeA);
+        slide.Shapes.Add(shapeB);
+        slide.Shapes.Add(connector);
+
+        // Resize shapeA to (0, 0, 2000, 1000): right-mid → (2000, 500)
+        bus.Execute(new ResizeShapeCommand(0, 1, 0, 0, 2000, 1000));
+
+        var c = slide.Shapes.First(s => s.Id == 3);
+        // start = (2000, 500), end = (3000, 500) → bbox: x=2000, y=500, cx=1000, cy=1
+        c.OffsetXEmu.Should().Be(2000);
+        c.OffsetYEmu.Should().Be(500);
+        c.ExtentCxEmu.Should().Be(1000);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 4. SlideCloner clones attachments
+    // ════════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void SlideCloner_ClonesConnectorAttachments()
+    {
+        var slide = new Slide { Id = "rId1" };
+        var connector = MakeConnector(9,
+            start: new ConnectorAttachment { ShapeId = 5, SiteIndex = 3 },
+            end:   new ConnectorAttachment { ShapeId = 7, SiteIndex = 1 });
+        slide.Shapes.Add(connector);
+
+        var clonedSlide = SlideCloner.CloneSlide(slide);
+        var clonedConnector = clonedSlide.Shapes.First(s => s.Kind == SlideShapeKind.Connector);
+
+        clonedConnector.ConnectionStart.Should().NotBeNull();
+        clonedConnector.ConnectionStart!.ShapeId.Should().Be(5u);
+        clonedConnector.ConnectionStart.SiteIndex.Should().Be(3);
+
+        clonedConnector.ConnectionEnd.Should().NotBeNull();
+        clonedConnector.ConnectionEnd!.ShapeId.Should().Be(7u);
+        clonedConnector.ConnectionEnd.SiteIndex.Should().Be(1);
+
+        // Mutating the clone must not affect the original.
+        clonedConnector.ConnectionStart.ShapeId = 99;
+        connector.ConnectionStart!.ShapeId.Should().Be(5u, "original must be independent");
+    }
+
+    [Fact]
+    public void SlideCloner_NullAttachments_StaysNull()
+    {
+        var connector = MakeConnector(1); // no attachments
+        var copy = SlideCloner.CloneShape(connector);
+        copy.ConnectionStart.Should().BeNull();
+        copy.ConnectionEnd.Should().BeNull();
+    }
+}
