@@ -296,6 +296,9 @@ public static class PptxPackageWriter
             //          imgRels = (shapeId, imgRelId, imgPath)
             var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds);
 
+            // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
+            var (prvRels, prvRelIdPatch) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
+
             // Combined shapeId→relId map for shape element building (picture shapes + charts + OLE)
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
@@ -306,6 +309,9 @@ public static class PptxPackageWriter
             foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
             // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
             foreach (var (shapeId, imgRelId, _) in oleImgRels)     mediaById[shapeId | 0x40000000u] = imgRelId;
+            // Wave 25A: preserved object rel-id patch map (HashRelId(shapeId, oldRelId) → newRelId)
+            foreach (var (sid, oldRelId, newRelId, _, _) in prvRels)
+                mediaById[PrvHashRelId(sid, oldRelId)] = newRelId;
 
             // Fill-blip relId map (shapeId -> relId) for ShapeFill.Picture fills
             var fillBlipById = new Dictionary<uint, string>();
@@ -339,6 +345,9 @@ public static class PptxPackageWriter
                 slideRels.Add(embRelId, embRelType, $"../embeddings/{embPath.Split('/').Last()}");
             foreach (var (_, imgRelId, imgPath) in oleImgRels)
                 slideRels.Add(imgRelId, ImageRelType, $"../media/{imgPath.Split('/').Last()}");
+            // Wave 25A: preserved modern object rels (absolute paths in prvRelIdPatch, relative in rels entry)
+            foreach (var (_, _, newRelId, relType, targetPath) in prvRels)
+                slideRels.Add(newRelId, relType, MakeRelativePath(slidePath, targetPath));
             // Hyperlink rels (external with TargetMode=External; internal slide rels without)
             foreach (var (hlRelId, hlRelType, hlTarget, isExternal) in hlinkRelEntries)
                 slideRels.Add(hlRelId, hlRelType, hlTarget, isExternal);
@@ -554,6 +563,29 @@ public static class PptxPackageWriter
                             seenSmartArtParts.Add(part.PartPath))
                         {
                             overrides.Add(Override(CT, "/" + part.PartPath, part.ContentType));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Wave 25A: Preserved modern object part content types
+        var seenPrvParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.PreservedObject is { } info)
+                {
+                    foreach (var kv in info.PartContentTypes)
+                    {
+                        if (!string.IsNullOrEmpty(kv.Key) &&
+                            !string.IsNullOrEmpty(kv.Value) &&
+                            seenPrvParts.Add(kv.Key))
+                        {
+                            overrides.Add(Override(CT,
+                                kv.Key.StartsWith('/') ? kv.Key : "/" + kv.Key,
+                                kv.Value));
                         }
                     }
                 }
@@ -1519,6 +1551,10 @@ public static class PptxPackageWriter
             // Theme 21: OLE embedded objects — emit the verbatim graphicFrame wrapper
             SlideShapeKind.Ole when shape.OleObject is not null =>
                 BuildOleGraphicFrameEl(shape, mediaById),
+            // Wave 25A: preserved modern objects — emit verbatim XML with patched rel IDs
+            SlideShapeKind.Zoom or SlideShapeKind.Ink or SlideShapeKind.Model3d
+                or SlideShapeKind.PreservedObject when shape.PreservedObject is not null =>
+                    BuildPreservedObjectEl(shape, mediaById),
             _ => BuildSpEl(shape, scheme, hlinkRelIds, allSlides, fillBlipById)
         };
 
@@ -3049,6 +3085,202 @@ public static class PptxPackageWriter
 
         return smart.Parts.Keys
             .FirstOrDefault(p => p.Contains(nameKeyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ── Wave 25A: Preserved modern objects (zoom / ink / 3D / unknown) ─────────────
+
+    /// <summary>
+    /// Builds a relative OPC path from a slide's absolute path to an absolute target part path.
+    /// E.g. slide="ppt/slides/slide1.xml", target="ppt/media/foo.glb" → "../media/foo.glb"
+    /// </summary>
+    private static string MakeRelativePath(string slidePath, string targetPath)
+    {
+        // Normalize: ensure no leading slash
+        slidePath  = slidePath.TrimStart('/');
+        targetPath = targetPath.TrimStart('/');
+
+        var slideDir  = GetDirectory(slidePath);
+        var targetDir = GetDirectory(targetPath);
+        var fileName  = targetPath[(targetPath.LastIndexOf('/') + 1)..];
+
+        // Count how many levels up we need to go from slideDir
+        var slideParts  = slideDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var targetParts = targetDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        // Find common prefix length
+        int common = 0;
+        while (common < slideParts.Length && common < targetParts.Length &&
+               string.Equals(slideParts[common], targetParts[common], StringComparison.OrdinalIgnoreCase))
+            common++;
+
+        var ups   = string.Join("/", Enumerable.Repeat("..", slideParts.Length - common));
+        var down  = string.Join("/", targetParts[common..]);
+        var parts = new[] { ups, down, fileName }.Where(s => !string.IsNullOrEmpty(s));
+        return string.Join("/", parts);
+    }
+
+    /// <summary>
+    /// Compact hash that packs (shapeId, oldRelId) into a uint key for the mediaById dictionary.
+    /// Uses the 0x20000000 bit-range to avoid collisions with OLE (0x40000000) and media (0x80000000) keys.
+    /// </summary>
+    private static uint PrvHashRelId(uint shapeId, string oldRelId)
+    {
+        unchecked
+        {
+            uint h = 2166136261u;
+            foreach (char c in oldRelId) h = (h ^ c) * 16777619u;
+            return (shapeId & 0xFFu) | ((h & 0x1FFFFFu) << 8) | 0x20000000u;
+        }
+    }
+
+    /// <summary>
+    /// Writes all OPC parts for preserved modern objects on the slide.
+    /// Returns:
+    ///   prvRels: (shapeId, oldRelId, newRelId, relType, absoluteTargetPath)
+    ///   relIdPatch: unused (patch happens via PrvHashRelId + mediaById)
+    /// </summary>
+    private static (
+        List<(uint shapeId, string oldRelId, string newRelId, string relType, string targetPath)> prvRels,
+        bool unused
+    ) WriteSlidePreservedObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds)
+    {
+        var prvRels    = new List<(uint, string, string, string, string)>();
+        var relCounter = 1;
+        var partCounter = 1;
+
+        string NextRelId()
+        {
+            string id;
+            do { id = $"rIdPrv{relCounter++}"; } while (usedRelIds.Contains(id));
+            usedRelIds.Add(id);
+            return id;
+        }
+
+        // Track written part paths to avoid duplicate zip entries
+        var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.PreservedObject is not { } info) continue;
+
+            // Write each referenced OPC part that isn't already in the archive
+            var pathRemap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in info.Parts)
+            {
+                var origPath = kv.Key;
+                if (pathRemap.ContainsKey(origPath)) continue;
+
+                var ext       = origPath.Contains('.') ? origPath[(origPath.LastIndexOf('.') + 1)..] : "bin";
+                var freshPath = origPath;
+                // If the path is already written (e.g. by another slide/shape), reindex
+                if (writtenPaths.Contains(freshPath))
+                {
+                    freshPath = $"ppt/media/preserved_{slideIdx}_{partCounter++}.{ext}";
+                }
+
+                if (!writtenPaths.Contains(freshPath))
+                {
+                    var entry = archive.CreateEntry(freshPath, CompressionLevel.Optimal);
+                    using (var s = entry.Open())
+                        s.Write(kv.Value, 0, kv.Value.Length);
+                    writtenPaths.Add(freshPath);
+                }
+                pathRemap[origPath] = freshPath;
+            }
+
+            // Write part rels files (use writtenPaths to avoid duplicate zip entries in Create mode)
+            foreach (var kv in info.PartRels)
+            {
+                var origPath = kv.Key;
+                if (!pathRemap.TryGetValue(origPath, out var freshPath)) freshPath = origPath;
+                var relsPath = MakePartRelsPath(freshPath);
+                if (!writtenPaths.Contains(relsPath))
+                {
+                    var rEntry = archive.CreateEntry(relsPath, CompressionLevel.Optimal);
+                    using var s = rEntry.Open();
+                    s.Write(kv.Value, 0, kv.Value.Length);
+                    writtenPaths.Add(relsPath);
+                }
+            }
+
+            // Allocate fresh slide-rel entries for each SlideRels entry on this shape
+            foreach (var kv in info.SlideRels)
+            {
+                var origPath = kv.Value.TargetPath;
+                if (!pathRemap.TryGetValue(origPath, out var freshPath)) freshPath = origPath;
+                var newRelId = NextRelId();
+                prvRels.Add((shape.Id, kv.Key, newRelId, kv.Value.RelType, freshPath));
+            }
+
+            // Write the fallback image (shape.Picture) if present
+            if (shape.Picture is { Bytes.Length: > 0 } pic)
+            {
+                var imgExt    = ContentTypeToExtension(pic.ContentType ?? "image/png");
+                var imgPath   = $"ppt/media/preservedImg{slideIdx}_{shape.Id}.{imgExt}";
+                if (!writtenPaths.Contains(imgPath))
+                {
+                    var imgEntry = archive.CreateEntry(imgPath, CompressionLevel.Optimal);
+                    using var s  = imgEntry.Open();
+                    s.Write(pic.Bytes, 0, pic.Bytes.Length);
+                    writtenPaths.Add(imgPath);
+                }
+                var imgRelId = NextRelId();
+                prvRels.Add((shape.Id, $"__img__{shape.Id}", imgRelId, ImageRelType, imgPath));
+            }
+        }
+
+        return (prvRels, false);
+    }
+
+    private static string MakePartRelsPath(string partPath)
+    {
+        var dir  = GetDirectory(partPath);
+        var file = partPath[(partPath.LastIndexOf('/') + 1)..];
+        return string.IsNullOrEmpty(dir) ? $"_rels/{file}.rels" : $"{dir}/_rels/{file}.rels";
+    }
+
+    /// <summary>
+    /// Builds the slide element for a preserved modern object by re-emitting RawXml
+    /// with rel-id attributes patched to the freshly allocated rIds (via mediaById).
+    /// </summary>
+    private static XElement? BuildPreservedObjectEl(
+        SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        if (shape.PreservedObject is not { } info) return null;
+        if (string.IsNullOrWhiteSpace(info.RawXml)) return null;
+
+        XElement el;
+        try { el = XElement.Parse(info.RawXml); }
+        catch { return null; }
+
+        // Patch r-namespace id attributes to use the fresh relIds
+        var rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        foreach (var attr in el.DescendantsAndSelf()
+                                .SelectMany(e => e.Attributes())
+                                .Where(a => a.Name.NamespaceName == rNs)
+                                .ToList())
+        {
+            var oldId  = attr.Value;
+            var key    = PrvHashRelId(shape.Id, oldId);
+            if (mediaById.TryGetValue(key, out var newId))
+                attr.SetValue(newId);
+        }
+
+        // Re-wrap in mc:AlternateContent if the original was wrapped
+        if (info.WasAlternateContent)
+        {
+            var clone = new XElement(el);   // deep clone for the Fallback branch
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",
+                    "http://schemas.openxmlformats.org/markup-compatibility/2006"),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p14"),
+                    el),
+                new XElement(MC + "Fallback",
+                    clone));
+        }
+
+        return el;
     }
 
     // ── OLE embedded object writing (Theme 21) ────────────────────────────────────

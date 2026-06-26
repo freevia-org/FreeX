@@ -786,6 +786,8 @@ public static class PptxPackageReader
                 "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
                                       wasAlternateContent: child != effectiveEl),
+                // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
+                "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath),
                 _ => null
             };
 
@@ -937,6 +939,10 @@ public static class PptxPackageReader
     private const string DiagramColorsRelType  = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
     private const string DiagramDrawingRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
+    // ── Wave 25A: Zoom, 3D-model, and ink URIs / rel-types ───────────────────
+    // InkML relationship type
+    private const string InkRelType = "http://schemas.microsoft.com/office/2016/05/19/relationships/ink";
+
     private static SlideShape? ReadGraphicFrame(
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
@@ -1053,8 +1059,251 @@ public static class PptxPackageReader
             }
         }
 
-        // Unknown graphicFrame type — skip for now.
-        return null;
+        // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
+        return ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
+            archive, partPath, wasAlternateContent);
+    }
+
+    // ── Wave 25A: Preserved modern objects (zoom / 3D / unknown graphicFrame) ─────────
+
+    private static bool IsZoomUri(string? uri) =>
+        uri is not null && (
+            uri.Contains("zoom", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2010", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2011", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2012", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2013", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2014", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2015", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2016", StringComparison.OrdinalIgnoreCase) ||
+            uri.StartsWith("http://schemas.microsoft.com/office/powerpoint/2017", StringComparison.OrdinalIgnoreCase));
+
+    private static bool Is3dModelUri(string? uri) =>
+        uri is not null && uri.Contains("model3d", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Preserves an unknown or modern graphicFrame verbatim, capturing any referenced parts.
+    /// </summary>
+    private static SlideShape ReadPreservedGraphicFrame(
+        XElement gfEl, XElement graphicData, string? uri,
+        XElement? cNvPr, long offX, long offY, long extCx, long extCy,
+        ZipArchive archive, string partPath, bool wasAlternateContent)
+    {
+        var kind = IsZoomUri(uri) ? PreservedObjectKind.Zoom
+                 : Is3dModelUri(uri) ? PreservedObjectKind.Model3d
+                 : PreservedObjectKind.Unknown;
+
+        var slideShapeKind = kind switch
+        {
+            PreservedObjectKind.Zoom    => SlideShapeKind.Zoom,
+            PreservedObjectKind.Model3d => SlideShapeKind.Model3d,
+            _                           => SlideShapeKind.PreservedObject,
+        };
+
+        var info = new PreservedObjectInfo
+        {
+            ObjectKind          = kind,
+            RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
+            WasAlternateContent = wasAlternateContent,
+        };
+
+        // Capture all referenced parts via the slide's rels
+        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+        CaptureReferencedParts(gfEl, slideRels2, archive, partPath, info);
+
+        // Extract fallback preview image if present (a:blip or p:pic inside graphicData or nearby)
+        var fallbackImage = ExtractPreservedFallbackImage(gfEl, graphicData, slideRels2, archive, partPath);
+
+        return new SlideShape
+        {
+            Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
+            Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            Kind            = slideShapeKind,
+            OffsetXEmu      = offX,
+            OffsetYEmu      = offY,
+            ExtentCxEmu     = extCx,
+            ExtentCyEmu     = extCy,
+            Picture         = fallbackImage,
+            PreservedObject = info,
+        };
+    }
+
+    /// <summary>
+    /// Reads a p:contentPart element (ink annotation). May be wrapped in mc:AlternateContent.
+    /// The mc:Fallback branch often contains a picture fallback image.
+    /// </summary>
+    private static SlideShape? ReadContentPartInk(
+        XElement originalEl, XElement contentPartEl,
+        ZipArchive archive, string partPath)
+    {
+        // Extract cNvPr from nvContentPartPr if present
+        var cNvPr = contentPartEl
+            .Element(P + "nvContentPartPr")
+            ?.Element(P + "cNvPr");
+
+        // Get xfrm from p:xfrm with a:off/a:ext
+        var xfrmEl = contentPartEl.Element(P + "xfrm")
+                  ?? contentPartEl.Descendants(A + "xfrm").FirstOrDefault();
+        long offX  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("x")?.Value);
+        long offY  = ParseLong(xfrmEl?.Element(A + "off")?.Attribute("y")?.Value);
+        long extCx = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cx")?.Value);
+        long extCy = ParseLong(xfrmEl?.Element(A + "ext")?.Attribute("cy")?.Value);
+
+        var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
+
+        var info = new PreservedObjectInfo
+        {
+            ObjectKind          = PreservedObjectKind.Ink,
+            RawXml              = contentPartEl.ToString(SaveOptions.DisableFormatting),
+            WasAlternateContent = originalEl != contentPartEl,
+        };
+
+        // Follow r:id to the InkML part and capture its bytes
+        var rId = contentPartEl.Attribute(R + "id")?.Value;
+        if (!string.IsNullOrEmpty(rId))
+        {
+            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            if (rel != default)
+            {
+                var inkPath = ResolvePath(GetDirectory(partPath), rel.target);
+                info.SlideRels[rId] = (rel.type, inkPath);
+                CapturePartBytes(inkPath, archive, info);
+            }
+        }
+
+        // Try to extract fallback image from mc:Fallback
+        ImagePart? fallback = null;
+        if (originalEl != contentPartEl)
+        {
+            // originalEl is the mc:AlternateContent — look for a pic in mc:Fallback
+            var fallbackEl = originalEl.Element(MC + "Fallback");
+            if (fallbackEl is not null)
+            {
+                var blipEl = fallbackEl.Descendants(A + "blip").FirstOrDefault();
+                var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
+                if (!string.IsNullOrEmpty(imgRelId))
+                {
+                    var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+                    if (imgRel != default)
+                    {
+                        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+                        var imgBytes = ReadEntryBytes(archive, imgPath);
+                        if (imgBytes is not null)
+                        {
+                            fallback = new ImagePart
+                            {
+                                Bytes       = imgBytes,
+                                ContentType = GuessPreservedContentType(imgPath),
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        return new SlideShape
+        {
+            Id              = ParseUint(cNvPr?.Attribute("id")?.Value),
+            Name            = cNvPr?.Attribute("name")?.Value ?? string.Empty,
+            Kind            = SlideShapeKind.Ink,
+            OffsetXEmu      = offX,
+            OffsetYEmu      = offY,
+            ExtentCxEmu     = extCx,
+            ExtentCyEmu     = extCy,
+            Picture         = fallback,
+            PreservedObject = info,
+        };
+    }
+
+    /// <summary>
+    /// Walks all r:id / r:embed / r:link attributes in <paramref name="el"/> and captures
+    /// the referenced OPC parts into <paramref name="info"/>.
+    /// </summary>
+    private static void CaptureReferencedParts(
+        XElement el,
+        List<(string id, string type, string target)> slideRels2,
+        ZipArchive archive, string partPath,
+        PreservedObjectInfo info)
+    {
+        var rNs = R.NamespaceName;
+        foreach (var attr in el.Descendants()
+                                .SelectMany(e => e.Attributes())
+                                .Where(a => a.Name.NamespaceName == rNs)
+                                .ToList())
+        {
+            var rId = attr.Value;
+            var rel = slideRels2.FirstOrDefault(r => r.id == rId);
+            if (rel == default) continue;
+            var targetPath = ResolvePath(GetDirectory(partPath), rel.target);
+            if (info.SlideRels.ContainsKey(rId)) continue;
+            info.SlideRels[rId] = (rel.type, targetPath);
+            CapturePartBytes(targetPath, archive, info);
+        }
+    }
+
+    private static void CapturePartBytes(string partPath2, ZipArchive archive, PreservedObjectInfo info)
+    {
+        if (info.Parts.ContainsKey(partPath2)) return;
+        var bytes = ReadEntryBytes(archive, partPath2);
+        if (bytes is null) return;
+        info.Parts[partPath2]            = bytes;
+        info.PartContentTypes[partPath2] = GuessPreservedContentType(partPath2);
+
+        // Capture rels file for this part if it exists
+        var relsPath2 = GetRelsPath(partPath2);
+        if (!info.PartRels.ContainsKey(partPath2))
+        {
+            var relsBytes = ReadEntryBytes(archive, relsPath2);
+            if (relsBytes is not null)
+                info.PartRels[partPath2] = relsBytes;
+        }
+    }
+
+    private static ImagePart? ExtractPreservedFallbackImage(
+        XElement gfEl, XElement graphicData,
+        List<(string id, string type, string target)> slideRels2,
+        ZipArchive archive, string partPath)
+    {
+        // Look for an a:blip with r:embed inside the graphicData (common for 3D model preview)
+        var blipEl = graphicData.Descendants(A + "blip").FirstOrDefault();
+        var imgRelId = blipEl?.Attribute(R + "embed")?.Value;
+        if (string.IsNullOrEmpty(imgRelId))
+        {
+            // Also check the top-level graphicFrame (some zoom variants embed preview at frame level)
+            imgRelId = gfEl.Descendants(A + "blip").FirstOrDefault()
+                           ?.Attribute(R + "embed")?.Value;
+        }
+        if (string.IsNullOrEmpty(imgRelId)) return null;
+
+        var imgRel = slideRels2.FirstOrDefault(r => r.id == imgRelId);
+        if (imgRel == default) return null;
+
+        var imgPath = ResolvePath(GetDirectory(partPath), imgRel.target);
+        var imgBytes = ReadEntryBytes(archive, imgPath);
+        if (imgBytes is null) return null;
+
+        return new ImagePart
+        {
+            Bytes       = imgBytes,
+            ContentType = GuessPreservedContentType(imgPath),
+        };
+    }
+
+    private static string GuessPreservedContentType(string path)
+    {
+        var ext = path.Contains('.') ? path[(path.LastIndexOf('.') + 1)..].ToLowerInvariant() : "";
+        return ext switch
+        {
+            "png"  => "image/png",
+            "jpg" or "jpeg" => "image/jpeg",
+            "gif"  => "image/gif",
+            "svg"  => "image/svg+xml",
+            "wmf"  => "image/x-wmf",
+            "emf"  => "image/x-emf",
+            "glb" or "gltf" => "model/gltf-binary",
+            "xml"  => "application/xml",
+            _      => "application/octet-stream",
+        };
     }
 
     // ── SmartArt diagram parsing ──────────────────────────────────────────────────
