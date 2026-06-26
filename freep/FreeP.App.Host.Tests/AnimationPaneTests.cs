@@ -1,0 +1,349 @@
+using System.Windows;
+using System.Windows.Controls;
+using FreeP.App.Compositor;
+using FreeP.App.Host;
+using FreeP.Core.Model;
+
+namespace FreeP.App.Host.Tests;
+
+/// <summary>
+/// Wave 16B: Unit tests for AnimationPane and its MainWindow / ribbon wiring.
+///
+/// All UI tests use [StaFact] (STA thread required for WPF controls).
+/// Non-UI tests use [Fact].
+/// </summary>
+public sealed class AnimationPaneTests
+{
+    // ── Helpers ───────────────────────────────────────────────────────────────────
+
+    private static EditingSession MakeSessionWithAnimations(int slideCount = 1)
+    {
+        var pres = new Presentation();
+        for (int i = 0; i < slideCount; i++)
+        {
+            // Use a blank slide (no Title set) so the auto-placeholder code in Slide.Title
+            // does NOT inject a shape at id=1 that would shadow our test shapes.
+            var slide = new Slide();
+
+            // Add two named shapes with ids that won't conflict with any auto-injected placeholder.
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 10u, Name = "Title Box",
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            });
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 20u, Name = "Content Box",
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            });
+
+            // Two animations targeting the two shapes.
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId    = 10u,
+                Kind       = AnimationKind.Entrance,
+                Preset     = AnimationPreset.Appear,
+                Trigger    = AnimationTrigger.OnClick,
+                DurationMs = 500,
+            });
+            slide.Animations.Add(new ShapeAnimation
+            {
+                ShapeId    = 20u,
+                Kind       = AnimationKind.Entrance,
+                Preset     = AnimationPreset.Fade,
+                Trigger    = AnimationTrigger.WithPrevious,
+                DurationMs = 1000,
+            });
+
+            pres.Slides.Add(slide);
+        }
+
+        var bus = new PresentationCommandBus(pres);
+        return new EditingSession(pres, bus);
+    }
+
+    // ── Construction + row count ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// AnimationPane constructs over a session with 2 animations and shows 2 rows.
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_Constructs_And_Shows_CorrectRowCount()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        var pane = new AnimationPane(editor);
+
+        pane.Should().NotBeNull();
+        // The list is in a StackPanel inside a ScrollViewer inside a Grid inside a Border.
+        int rowCount = CountAnimationRows(pane);
+        rowCount.Should().Be(2, "there are 2 animations on the current slide");
+    }
+
+    // ── Shape name resolution ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Each row shows the correct shape name resolved from the current slide's Shapes list.
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_Rows_Show_CorrectShapeNames()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        var pane = new AnimationPane(editor);
+
+        var names = CollectRowShapeNames(pane);
+        names.Should().HaveCount(2);
+        names[0].Should().Be("Title Box",   "first animation targets shape id 1");
+        names[1].Should().Be("Content Box", "second animation targets shape id 2");
+    }
+
+    // ── Move up ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Clicking Move Up on row 1 reorders the animations (row 0 becomes the second).
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_MoveUp_Reorders_Animations()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        // Before: [ShapeId=10, ShapeId=20]
+        editor.CurrentSlideAnimations[0].ShapeId.Should().Be(10u);
+        editor.CurrentSlideAnimations[1].ShapeId.Should().Be(20u);
+
+        // Move row 1 (ShapeId=20) up → should become index 0.
+        editor.MoveAnimation(1, 0);
+
+        // After: [ShapeId=20, ShapeId=10]
+        editor.CurrentSlideAnimations[0].ShapeId.Should().Be(20u, "row 1 moved to index 0");
+        editor.CurrentSlideAnimations[1].ShapeId.Should().Be(10u);
+    }
+
+    // ── Remove ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Removing the first animation leaves one row and the correct animation.
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_Remove_DeletesOneAnimation()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        // Remove animation at index 0 (ShapeId=10).
+        editor.RemoveAnimation(0);
+
+        var anims = editor.CurrentSlideAnimations;
+        anims.Should().HaveCount(1, "one animation was removed");
+        anims[0].ShapeId.Should().Be(20u, "the remaining animation targets shape 20");
+
+        // The pane rebuilds on Changed; create a fresh pane to verify.
+        var pane = new AnimationPane(editor);
+        int rowCount = CountAnimationRows(pane);
+        rowCount.Should().Be(1);
+    }
+
+    // ── Trigger change ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Changing a trigger via Editor.SetAnimation updates the model correctly.
+    /// </summary>
+    [Fact]
+    public void SetAnimation_Trigger_UpdatesModel()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        var original = editor.CurrentSlideAnimations[0];
+        // Animation 0 is OnClick (set in the helper).
+        original.Trigger.Should().Be(AnimationTrigger.OnClick);
+
+        // Simulate what the pane's trigger ComboBox does.
+        var updated = new ShapeAnimation
+        {
+            ShapeId    = original.ShapeId,
+            Kind       = original.Kind,
+            Preset     = original.Preset,
+            Trigger    = AnimationTrigger.AfterPrevious,  // changed
+            DurationMs = original.DurationMs,
+        };
+        editor.SetAnimation(0, updated);
+
+        editor.CurrentSlideAnimations[0].Trigger
+            .Should().Be(AnimationTrigger.AfterPrevious, "SetAnimation should update the trigger");
+    }
+
+    /// <summary>
+    /// SetAnimation via editor is undoable (the bus records it).
+    /// </summary>
+    [Fact]
+    public void SetAnimation_Trigger_IsUndoable()
+    {
+        var editor = MakeSessionWithAnimations();
+
+        // Animation 0 starts OnClick.
+        var updated = new ShapeAnimation
+        {
+            ShapeId    = editor.CurrentSlideAnimations[0].ShapeId,
+            Kind       = editor.CurrentSlideAnimations[0].Kind,
+            Preset     = editor.CurrentSlideAnimations[0].Preset,
+            Trigger    = AnimationTrigger.WithPrevious,
+            DurationMs = editor.CurrentSlideAnimations[0].DurationMs,
+        };
+        editor.SetAnimation(0, updated);
+        editor.CurrentSlideAnimations[0].Trigger.Should().Be(AnimationTrigger.WithPrevious);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].Trigger
+            .Should().Be(AnimationTrigger.OnClick, "undo should revert the trigger change");
+    }
+
+    // ── Empty slide ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// AnimationPane over a slide with no animations shows the empty-state message.
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_EmptySlide_ShowsNoRows()
+    {
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide { Title = "Empty" });
+        var bus = new PresentationCommandBus(pres);
+        var editor = new EditingSession(pres, bus);
+
+        var pane = new AnimationPane(editor);
+
+        int rowCount = CountAnimationRows(pane);
+        rowCount.Should().Be(0, "an empty slide has no animation rows");
+    }
+
+    // ── Ribbon toggle shows/hides the pane ───────────────────────────────────────
+
+    /// <summary>
+    /// Calling ToggleAnimationPane twice: first call shows the pane, second hides it.
+    /// </summary>
+    [StaFact]
+    public void MainWindow_ToggleAnimationPane_ShowsAndHidesPaneHost()
+    {
+        var window = new MainWindow(new FreePOptions());
+        try
+        {
+            // Initially collapsed.
+            var host = window.AnimPaneHostForTest;
+            host.Should().NotBeNull();
+            host!.Visibility.Should().Be(Visibility.Collapsed, "pane is hidden by default");
+
+            // First toggle → visible.
+            window.ToggleAnimationPane();
+            host.Visibility.Should().Be(Visibility.Visible, "first toggle shows the pane");
+
+            // Second toggle → hidden again.
+            window.ToggleAnimationPane();
+            host.Visibility.Should().Be(Visibility.Collapsed, "second toggle hides the pane");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// After ToggleAnimationPane is called, the pane child is an AnimationPane instance.
+    /// </summary>
+    [StaFact]
+    public void MainWindow_ToggleAnimationPane_CreatesPaneChild()
+    {
+        var window = new MainWindow(new FreePOptions());
+        try
+        {
+            window.ToggleAnimationPane();
+
+            var host = window.AnimPaneHostForTest!;
+            host.Child.Should().BeOfType<AnimationPane>("the pane child should be an AnimationPane");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // ── Slide-changed event refreshes the pane ────────────────────────────────────
+
+    /// <summary>
+    /// When the current slide changes, AnimationPane.Rebuild is re-invoked so the rows
+    /// match the new slide's animation count.
+    /// </summary>
+    [StaFact]
+    public void AnimationPane_RefreshesOn_CurrentSlideChanged()
+    {
+        var pres = new Presentation();
+
+        // Slide 0: 2 animations.
+        var slide0 = new Slide();
+        slide0.Shapes.Add(new SlideShape { Id = 10u, Name = "A", Kind = SlideShapeKind.AutoShape,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200 });
+        slide0.Animations.Add(new ShapeAnimation { ShapeId = 10u, Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear, Trigger = AnimationTrigger.OnClick, DurationMs = 500 });
+        slide0.Animations.Add(new ShapeAnimation { ShapeId = 10u, Kind = AnimationKind.Exit,
+            Preset = AnimationPreset.Fade, Trigger = AnimationTrigger.AfterPrevious, DurationMs = 500 });
+        pres.Slides.Add(slide0);
+
+        // Slide 1: 0 animations.
+        pres.Slides.Add(new Slide { Title = "S1" });
+
+        var bus    = new PresentationCommandBus(pres);
+        var editor = new EditingSession(pres, bus);
+
+        var pane = new AnimationPane(editor);
+
+        // Initially on slide 0 → 2 rows.
+        CountAnimationRows(pane).Should().Be(2);
+
+        // Navigate to slide 1 → 0 rows.
+        editor.SelectSlide(1);
+        CountAnimationRows(pane).Should().Be(0, "pane should refresh when slide changes");
+    }
+
+    // ── Test-seam helpers ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Counts Border children of the inner StackPanel that have a Tag that is an int
+    /// (those are animation rows; the empty-state TextBlock is not tagged).
+    /// </summary>
+    private static int CountAnimationRows(AnimationPane pane)
+    {
+        var root  = pane.Child as Grid;
+        var scroll = root?.Children.OfType<ScrollViewer>().FirstOrDefault();
+        var stack = scroll?.Content as StackPanel;
+        if (stack is null) return 0;
+        return stack.Children.OfType<Border>().Count(b => b.Tag is int);
+    }
+
+    /// <summary>
+    /// Returns the shape-name TextBlock texts from each animation row.
+    /// The name TextBlock is at column 1 of the inner Grid.
+    /// </summary>
+    private static List<string> CollectRowShapeNames(AnimationPane pane)
+    {
+        var root   = pane.Child as Grid;
+        var scroll = root?.Children.OfType<ScrollViewer>().FirstOrDefault();
+        var stack  = scroll?.Content as StackPanel;
+        if (stack is null) return new List<string>();
+
+        var names = new List<string>();
+        foreach (var child in stack.Children.OfType<Border>().Where(b => b.Tag is int))
+        {
+            var innerGrid = child.Child as Grid;
+            if (innerGrid is null) continue;
+            // Column 1 of the inner Grid is the shape-name TextBlock.
+            var nameBlock = innerGrid.Children.OfType<TextBlock>()
+                .FirstOrDefault(tb => Grid.GetColumn(tb) == 1);
+            if (nameBlock is not null)
+                names.Add(nameBlock.Text ?? string.Empty);
+        }
+        return names;
+    }
+}

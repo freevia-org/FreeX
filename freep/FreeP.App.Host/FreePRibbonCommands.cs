@@ -53,6 +53,10 @@ internal static class FreePRibbonCommands
     ///   Wave 11A: callback that opens the Insert Hyperlink dialog.
     ///   Provided by MainWindow which builds and owns the dialog.
     /// </param>
+    /// <param name="onAnimPane">
+    ///   Wave 16B: callback that toggles the Animation Pane panel visibility.
+    ///   Provided by MainWindow.ToggleAnimationPane().  When null the stub is a no-op.
+    /// </param>
     public static RibbonCommandRegistry Build(
         RibbonStateStore    stateStore,
         EditingSession      editor,
@@ -65,7 +69,9 @@ internal static class FreePRibbonCommands
         Action?             onInsertLink       = null,
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
-        Action?             onFindReplace      = null)
+        Action?             onFindReplace      = null,
+        // Wave 16B: Animation pane toggle.
+        Action?             onAnimPane         = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -342,11 +348,11 @@ internal static class FreePRibbonCommands
                 editor.MoveAnimation(idx, idx + 1);
         }));
 
-        // Animation Pane toggle stub.
+        // Animation Pane toggle — Wave 16B: wired to MainWindow.ToggleAnimationPane().
         registry.Register("freep.anim.pane",
             new EditorToggleCommand(stateStore, "freep.anim.pane", () =>
             {
-                /* STUB: Wave 5 will open the animation pane panel */
+                onAnimPane?.Invoke();
             }));
 
         // ── Wave 5B: Insert — Tables ─────────────────────────────────────────────
