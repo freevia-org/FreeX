@@ -70,6 +70,7 @@ internal static class CorpusGenerator
                 ("07-customgeom",   GenerateCustomGeom),
                 ("08-effects",      GenerateEffects),
                 ("09-smartart",     GenerateSmartArt),
+                ("11-bevel3d",      GenerateBevel3d),
             };
 
             var errors = 0;
@@ -978,6 +979,117 @@ internal static class CorpusGenerator
                     sh.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
                 }
             }
+
+            SaveAndExport(pres, pptxPath, refDir);
+        }
+        finally
+        {
+            TryClosePresentation(ref pres);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Deck 11: Bevel / 3-D shape effects — a:sp3d / a:bevelT / a:scene3d
+    // -----------------------------------------------------------------------
+    private static void GenerateBevel3d(dynamic app, string pptxPath, string refDir)
+    {
+        dynamic? pres = null;
+        try
+        {
+            pres = app.Presentations.Add(MsoFalse);
+            dynamic slide = pres.Slides.Add(1, PpLayoutBlank);
+
+            // Title
+            dynamic tb = slide.Shapes.AddTextbox(1, 20f, 8f, 900f, 35f);
+            tb.TextFrame.TextRange.Text = "Bevel / 3-D Shape Effects";
+            tb.TextFrame.TextRange.Font.Size = 20;
+            tb.TextFrame.TextRange.Font.Bold = MsoTrue;
+
+            // Shape 1: Rectangle with Circle bevel (Angle preset)
+            dynamic sh1 = slide.Shapes.AddShape(MsoShapeRectangle, 60f, 60f, 200f, 140f);
+            sh1.Name = "BevelCircle";
+            sh1.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent1;
+            sh1.Fill.Solid();
+            sh1.TextFrame.TextRange.Text = "Circle Bevel";
+            sh1.TextFrame.TextRange.Font.Size = 14;
+            sh1.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh1.ThreeD.BevelTopType   = 1;     // msoBevelCircle = 1
+                sh1.ThreeD.BevelTopInset  = 8f;
+                sh1.ThreeD.BevelTopDepth  = 6f;
+                sh1.ThreeD.Depth          = 0f;
+            }
+            catch { /* ThreeD API may vary across PP versions */ }
+
+            // Shape 2: Rounded rectangle with Relaxed Inset bevel + depth
+            dynamic sh2 = slide.Shapes.AddShape(MsoShapeRoundedRectangle, 310f, 60f, 200f, 140f);
+            sh2.Name = "BevelRelaxed";
+            sh2.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent2;
+            sh2.Fill.Solid();
+            sh2.TextFrame.TextRange.Text = "Relaxed Inset";
+            sh2.TextFrame.TextRange.Font.Size = 14;
+            sh2.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh2.ThreeD.BevelTopType   = 2;     // msoBevelRelaxedInset = 2
+                sh2.ThreeD.BevelTopInset  = 10f;
+                sh2.ThreeD.BevelTopDepth  = 10f;
+                sh2.ThreeD.Depth          = 20f;
+            }
+            catch { }
+
+            // Shape 3: Ellipse with Angle bevel + extrusion + material
+            dynamic sh3 = slide.Shapes.AddShape(MsoShapeOval, 560f, 60f, 200f, 140f);
+            sh3.Name = "BevelAngle";
+            sh3.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent3;
+            sh3.Fill.Solid();
+            sh3.TextFrame.TextRange.Text = "Angle + Extrusion";
+            sh3.TextFrame.TextRange.Font.Size = 13;
+            sh3.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh3.ThreeD.BevelTopType   = 5;     // msoBevelAngle = 5
+                sh3.ThreeD.BevelTopInset  = 12f;
+                sh3.ThreeD.BevelTopDepth  = 8f;
+                sh3.ThreeD.Depth          = 40f;
+                sh3.ThreeD.ExtrusionColor.RGB = 0x7030A0;
+            }
+            catch { }
+
+            // Shape 4: Rectangle with Cross bevel + scene camera
+            dynamic sh4 = slide.Shapes.AddShape(MsoShapeRectangle, 60f, 240f, 200f, 140f);
+            sh4.Name = "BevelCross";
+            sh4.Fill.ForeColor.ObjectThemeColor = MsoThemeColorAccent4;
+            sh4.Fill.Solid();
+            sh4.TextFrame.TextRange.Text = "Cross + Scene3D";
+            sh4.TextFrame.TextRange.Font.Size = 14;
+            sh4.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh4.ThreeD.BevelTopType   = 7;     // msoBevelCross = 7
+                sh4.ThreeD.BevelTopInset  = 6f;
+                sh4.ThreeD.BevelTopDepth  = 6f;
+                // Scene 3D via PresetCamera
+                sh4.ThreeD.SetPresetCamera(20);    // msoCameraOrthographicFront ≈ 20
+            }
+            catch { }
+
+            // Shape 5: Rectangle with contour (no bevel)
+            dynamic sh5 = slide.Shapes.AddShape(MsoShapeRectangle, 310f, 240f, 200f, 140f);
+            sh5.Name = "ContourOnly";
+            sh5.Fill.ForeColor.ObjectThemeColor = 5; // MsoThemeColorAccent1
+            sh5.Fill.Solid();
+            sh5.TextFrame.TextRange.Text = "Contour + Depth";
+            sh5.TextFrame.TextRange.Font.Size = 14;
+            sh5.TextFrame.TextRange.Font.Color.RGB = 0xFFFFFF;
+            try
+            {
+                sh5.ThreeD.Depth          = 60f;
+                sh5.ThreeD.ContourWidth   = 4f;
+                sh5.ThreeD.ContourColor.RGB = 0xC55A11;
+            }
+            catch { }
 
             SaveAndExport(pres, pptxPath, refDir);
         }

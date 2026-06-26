@@ -115,6 +115,17 @@ public abstract class ResolvedOutline
 
 // ─── Resolved shape effects ───────────────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Resolved bevel descriptor with DIP values for the renderer.</summary>
+public sealed class ResolvedBevel
+{
+    /// <summary>Bevel width in DIP (converted from EMU).</summary>
+    public double WidthDip { get; init; }
+    /// <summary>Bevel height in DIP (converted from EMU).</summary>
+    public double HeightDip { get; init; }
+    /// <summary>Preset name, e.g. "circle", "relaxedInset", "cross". Empty = circle.</summary>
+    public string PresetName { get; init; } = string.Empty;
+}
+
 /// <summary>Resolved shape effects with concrete DIP values for the renderer.</summary>
 public sealed class ResolvedShapeEffects
 {
@@ -138,6 +149,24 @@ public sealed class ResolvedShapeEffects
     // Soft edge
     public bool HasSoftEdge { get; init; }
     public double SoftEdgeRadiusDip { get; init; }
+
+    // Bevel / 3-D
+    /// <summary>Top-face bevel, or null if none.</summary>
+    public ResolvedBevel? BevelTop { get; init; }
+    /// <summary>Bottom-face bevel, or null if none.</summary>
+    public ResolvedBevel? BevelBottom { get; init; }
+    /// <summary>Extrusion depth in DIP. 0 = none.</summary>
+    public double ExtrusionDepthDip { get; init; }
+    /// <summary>Contour width in DIP. 0 = none.</summary>
+    public double ContourWidthDip { get; init; }
+    /// <summary>Extrusion colour (for contour outline rendering). Null = no override.</summary>
+    public SrgbColor? ContourColor { get; init; }
+    /// <summary>
+    /// Light direction hint (derived from scene3d lightRig dir=). Used to shift
+    /// bevel highlight/shade sides. 0=top, 45=top-right, 90=right, 135=bottom-right etc.
+    /// -1 means no scene3d → use default top-left illumination.
+    /// </summary>
+    public double LightDirDeg { get; init; } = -1;
 }
 
 // ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────

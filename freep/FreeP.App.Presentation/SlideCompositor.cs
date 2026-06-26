@@ -199,7 +199,11 @@ public static class SlideCompositor
     private static ResolvedShapeEffects? ResolveEffects(ShapeEffects? fx)
     {
         if (fx is null) return null;
-        if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge) return null;
+
+        bool hasBevel = fx.BevelTop is not null || fx.BevelBottom is not null;
+        if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge
+            && !hasBevel && fx.ContourWidthEmu == 0 && fx.Scene3d is null)
+            return null;
 
         return new ResolvedShapeEffects
         {
@@ -216,7 +220,46 @@ public static class SlideCompositor
             GlowRadiusDip = fx.GlowRadiusEmu / EmuPerDip,
 
             HasSoftEdge       = fx.HasSoftEdge,
-            SoftEdgeRadiusDip = fx.SoftEdgeRadEmu / EmuPerDip
+            SoftEdgeRadiusDip = fx.SoftEdgeRadEmu / EmuPerDip,
+
+            // Bevel / 3-D
+            BevelTop = fx.BevelTop is not null ? new ResolvedBevel
+            {
+                WidthDip   = Math.Max(1.0, fx.BevelTop.WidthEmu  / EmuPerDip),
+                HeightDip  = Math.Max(1.0, fx.BevelTop.HeightEmu / EmuPerDip),
+                PresetName = fx.BevelTop.PresetName
+            } : null,
+            BevelBottom = fx.BevelBottom is not null ? new ResolvedBevel
+            {
+                WidthDip   = Math.Max(1.0, fx.BevelBottom.WidthEmu  / EmuPerDip),
+                HeightDip  = Math.Max(1.0, fx.BevelBottom.HeightEmu / EmuPerDip),
+                PresetName = fx.BevelBottom.PresetName
+            } : null,
+            ExtrusionDepthDip = fx.ExtrusionHeightEmu / EmuPerDip,
+            ContourWidthDip   = fx.ContourWidthEmu    / EmuPerDip,
+            ContourColor      = fx.ContourColor,
+            LightDirDeg       = ResolveLightDir(fx.Scene3d)
+        };
+    }
+
+    /// <summary>
+    /// Converts the OOXML lightRig dir= string to degrees clockwise from the top.
+    /// Returns -1 (→ default top-left = 315°) if no scene3d is present.
+    /// </summary>
+    private static double ResolveLightDir(Scene3dInfo? scene3d)
+    {
+        if (scene3d is null) return -1;
+        return scene3d.LightRigDir switch
+        {
+            "t"  => 270,   // top → light comes from above → highlight on top edge
+            "tl" => 315,
+            "l"  => 0,
+            "bl" => 45,
+            "b"  => 90,
+            "br" => 135,
+            "r"  => 180,
+            "tr" => 225,
+            _    => 315    // default: top-left
         };
     }
 

@@ -1122,10 +1122,104 @@ public static class PptxPackageReader
         if (custGeom is not null)
             ReadCustGeom(custGeom, shape);
 
-        // Shape effects
+        // Shape effects (effectLst, sp3d, scene3d all go into ShapeEffects)
         var effectLst = spPr.Element(A + "effectLst");
-        if (effectLst is not null)
-            shape.Effects = ReadEffectLst(effectLst, scheme);
+        var sp3d      = spPr.Element(A + "sp3d");
+        var scene3d   = spPr.Element(A + "scene3d");
+
+        if (effectLst is not null || sp3d is not null || scene3d is not null)
+        {
+            var fx = effectLst is not null
+                ? (ReadEffectLst(effectLst, scheme) ?? new ShapeEffects())
+                : new ShapeEffects();
+
+            if (sp3d is not null)
+                ReadSp3d(sp3d, fx, scheme);
+
+            if (scene3d is not null)
+                ReadScene3d(scene3d, fx);
+
+            // Only store if there's actually something
+            bool hasSomething = fx.HasOuterShadow || fx.HasInnerShadow || fx.HasGlow
+                || fx.HasSoftEdge || fx.BevelTop is not null || fx.BevelBottom is not null
+                || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
+                || fx.Scene3d is not null;
+            if (hasSomething)
+                shape.Effects = fx;
+        }
+    }
+
+    // ── a:sp3d ───────────────────────────────────────────────────────────────
+
+    private static void ReadSp3d(XElement sp3d, ShapeEffects fx, PresentationColorScheme scheme)
+    {
+        fx.ExtrusionHeightEmu = ParseLong(sp3d.Attribute("extrusionH")?.Value);
+        fx.ContourWidthEmu    = ParseLong(sp3d.Attribute("contourW")?.Value);
+        fx.PrstMaterial       = sp3d.Attribute("prstMaterial")?.Value ?? string.Empty;
+
+        // a:bevelT
+        var bevelT = sp3d.Element(A + "bevelT");
+        if (bevelT is not null)
+        {
+            fx.BevelTop = new BevelInfo
+            {
+                WidthEmu   = ParseLongOrDefault(bevelT.Attribute("w")?.Value,  76200),
+                HeightEmu  = ParseLongOrDefault(bevelT.Attribute("h")?.Value,  76200),
+                PresetName = bevelT.Attribute("prst")?.Value ?? string.Empty
+            };
+        }
+
+        // a:bevelB
+        var bevelB = sp3d.Element(A + "bevelB");
+        if (bevelB is not null)
+        {
+            fx.BevelBottom = new BevelInfo
+            {
+                WidthEmu   = ParseLongOrDefault(bevelB.Attribute("w")?.Value,  76200),
+                HeightEmu  = ParseLongOrDefault(bevelB.Attribute("h")?.Value,  76200),
+                PresetName = bevelB.Attribute("prst")?.Value ?? string.Empty
+            };
+        }
+
+        // a:extrusionClr
+        var extClr = sp3d.Element(A + "extrusionClr");
+        if (extClr is not null)
+        {
+            var tac = PptxColorReader.TryReadColor(extClr, scheme);
+            if (tac is not null) fx.ExtrusionColor = tac.Resolved;
+        }
+
+        // a:contourClr
+        var ctrClr = sp3d.Element(A + "contourClr");
+        if (ctrClr is not null)
+        {
+            var tac = PptxColorReader.TryReadColor(ctrClr, scheme);
+            if (tac is not null) fx.ContourColor = tac.Resolved;
+        }
+    }
+
+    // ── a:scene3d ────────────────────────────────────────────────────────────
+
+    private static void ReadScene3d(XElement scene3d, ShapeEffects fx)
+    {
+        var camera   = scene3d.Element(A + "camera");
+        var lightRig = scene3d.Element(A + "lightRig");
+
+        if (camera is null && lightRig is null) return;
+
+        fx.Scene3d = new Scene3dInfo
+        {
+            CameraPreset = camera?.Attribute("prst")?.Value   ?? string.Empty,
+            LightRig     = lightRig?.Attribute("rig")?.Value  ?? string.Empty,
+            LightRigDir  = lightRig?.Attribute("dir")?.Value  ?? string.Empty
+        };
+    }
+
+    private static long ParseLongOrDefault(string? value, long defaultValue)
+    {
+        if (value is null) return defaultValue;
+        return long.TryParse(value, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : defaultValue;
     }
 
     private static void ReadCustGeom(XElement custGeom, SlideShape shape)
@@ -1278,10 +1372,6 @@ public static class PptxPackageReader
             fx.HasSoftEdge = true; any = true;
             fx.SoftEdgeRadEmu = ParseLong(softEdge.Attribute("rad")?.Value);
         }
-
-        // a:sp3d (bevel — best-effort flag)
-        var sp3d = effectLst.Element(A + "sp3d");
-        if (sp3d is not null) { fx.HasBevel = true; any = true; }
 
         return any ? fx : null;
     }

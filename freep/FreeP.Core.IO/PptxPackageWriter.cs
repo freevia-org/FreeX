@@ -1174,7 +1174,9 @@ public static class PptxPackageWriter
             geomEl,
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
-            shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null);
+            shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
+            shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null,
+            shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null);
     }
 
     private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)
@@ -1279,6 +1281,79 @@ public static class PptxPackageWriter
             effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRadEmu)));
 
         return effectLst;
+    }
+
+    // ── a:sp3d element ────────────────────────────────────────────────────────
+
+    private static XElement? BuildSp3dEl(ShapeEffects fx)
+    {
+        bool hasSp3d = fx.BevelTop is not null || fx.BevelBottom is not null
+            || fx.ExtrusionHeightEmu != 0 || fx.ContourWidthEmu != 0
+            || !string.IsNullOrEmpty(fx.PrstMaterial)
+            || fx.ExtrusionColor.HasValue || fx.ContourColor.HasValue;
+
+        if (!hasSp3d) return null;
+
+        var sp3d = new XElement(A + "sp3d");
+
+        if (fx.ExtrusionHeightEmu != 0)
+            sp3d.Add(new XAttribute("extrusionH", fx.ExtrusionHeightEmu));
+        if (fx.ContourWidthEmu != 0)
+            sp3d.Add(new XAttribute("contourW", fx.ContourWidthEmu));
+        if (!string.IsNullOrEmpty(fx.PrstMaterial))
+            sp3d.Add(new XAttribute("prstMaterial", fx.PrstMaterial));
+
+        if (fx.BevelTop is not null)
+        {
+            var bevelT = new XElement(A + "bevelT");
+            if (fx.BevelTop.WidthEmu  != 76200) bevelT.Add(new XAttribute("w", fx.BevelTop.WidthEmu));
+            if (fx.BevelTop.HeightEmu != 76200) bevelT.Add(new XAttribute("h", fx.BevelTop.HeightEmu));
+            if (!string.IsNullOrEmpty(fx.BevelTop.PresetName))
+                bevelT.Add(new XAttribute("prst", fx.BevelTop.PresetName));
+            sp3d.Add(bevelT);
+        }
+
+        if (fx.BevelBottom is not null)
+        {
+            var bevelB = new XElement(A + "bevelB");
+            if (fx.BevelBottom.WidthEmu  != 76200) bevelB.Add(new XAttribute("w", fx.BevelBottom.WidthEmu));
+            if (fx.BevelBottom.HeightEmu != 76200) bevelB.Add(new XAttribute("h", fx.BevelBottom.HeightEmu));
+            if (!string.IsNullOrEmpty(fx.BevelBottom.PresetName))
+                bevelB.Add(new XAttribute("prst", fx.BevelBottom.PresetName));
+            sp3d.Add(bevelB);
+        }
+
+        if (fx.ExtrusionColor.HasValue)
+            sp3d.Add(new XElement(A + "extrusionClr",
+                new XElement(A + "srgbClr", new XAttribute("val", FmtColor(fx.ExtrusionColor.Value)))));
+
+        if (fx.ContourColor.HasValue)
+            sp3d.Add(new XElement(A + "contourClr",
+                new XElement(A + "srgbClr", new XAttribute("val", FmtColor(fx.ContourColor.Value)))));
+
+        return sp3d;
+    }
+
+    // ── a:scene3d element ─────────────────────────────────────────────────────
+
+    private static XElement? BuildScene3dEl(ShapeEffects fx)
+    {
+        if (fx.Scene3d is null) return null;
+
+        var scene3d = new XElement(A + "scene3d");
+
+        if (!string.IsNullOrEmpty(fx.Scene3d.CameraPreset))
+            scene3d.Add(new XElement(A + "camera",
+                new XAttribute("prst", fx.Scene3d.CameraPreset)));
+
+        var lightRig = new XElement(A + "lightRig");
+        if (!string.IsNullOrEmpty(fx.Scene3d.LightRig))
+            lightRig.Add(new XAttribute("rig", fx.Scene3d.LightRig));
+        if (!string.IsNullOrEmpty(fx.Scene3d.LightRigDir))
+            lightRig.Add(new XAttribute("dir", fx.Scene3d.LightRigDir));
+        scene3d.Add(lightRig);
+
+        return scene3d;
     }
 
     // ── Table / graphicFrame elements ─────────────────────────────────────────────
