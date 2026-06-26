@@ -88,7 +88,8 @@ public sealed partial class MainWindow
             groupsPanel.Children.Add(buttonRow);
         }
 
-        var closeButton = new Button { Content = UiText.Get("TableLoc_Close"), IsCancel = true, MinWidth = 84 };
+        var closeButton = new Button { Content = UiText.Get("TableLoc_Close"), IsCancel = true };
+        ApplyDialogButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "QuickAnalysisCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 

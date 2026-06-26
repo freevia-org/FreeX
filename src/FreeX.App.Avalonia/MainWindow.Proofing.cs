@@ -96,8 +96,10 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var replace = new Button { Content = UiText.Get("ShellLoc_ReplaceButton"), Width = 90, IsEnabled = synonyms.Count > 0 };
-        var close = new Button { Content = UiText.Get("Common_Close"), Width = 90 };
+        var replace = new Button { Content = UiText.Get("ShellLoc_ReplaceButton"), IsEnabled = synonyms.Count > 0, IsDefault = true };
+        var close = new Button { Content = UiText.Get("Common_Close"), IsCancel = true };
+        ApplyDialogButtonChrome(replace, 90, isDefault: true);
+        ApplyDialogButtonChrome(close, 90);
         replace.Click += (_, _) =>
         {
             var chosen = list.SelectedItem as string ?? (synonyms.Count > 0 ? synonyms[0] : null);
@@ -200,8 +202,10 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var insert = new Button { Content = UiText.Get("WfTranslate_InsertButton"), Width = 110 };
-        var close = new Button { Content = UiText.Get("WfTranslate_CloseButton"), Width = 90 };
+        var insert = new Button { Content = UiText.Get("WfTranslate_InsertButton"), IsDefault = true };
+        var close = new Button { Content = UiText.Get("WfTranslate_CloseButton"), IsCancel = true };
+        ApplyDialogButtonChrome(insert, 110, isDefault: true);
+        ApplyDialogButtonChrome(close, 90);
         AutomationProperties.SetAutomationId(insert, "WfTranslateInsertButton");
         AutomationProperties.SetAutomationId(close, "WfTranslateCloseButton");
         insert.Click += (_, _) =>
@@ -321,8 +325,10 @@ public sealed partial class MainWindow
             Spacing = 8,
             HorizontalAlignment = AvaloniaProofingHorizontalAlignment.Right,
         };
-        var ok = new Button { Content = UiText.Get("ShellLoc_InsertButton"), Width = 90 };
-        var cancel = new Button { Content = UiText.Get("Common_Cancel"), Width = 90 };
+        var ok = new Button { Content = UiText.Get("ShellLoc_InsertButton"), IsDefault = true };
+        var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyDialogButtonChrome(ok, 90, isDefault: true);
+        ApplyDialogButtonChrome(cancel, 90);
         // Captured below once the dialog exists. layout is the Window's Content, so the previous
         // layout.Parent.Parent walked one level too far (Parent is the Window, Parent.Parent null).
         Window? dialog = null;

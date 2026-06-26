@@ -254,6 +254,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(closeButton, UiText.Get("ShellLoc_AccessibilityCheckerCloseAutomationName"));
         AutomationProperties.SetAutomationId(closeButton, "AccessibilityCheckerCloseButton");
         AutomationProperties.SetHelpText(closeButton, UiText.Get("ShellLoc_AccessibilityCheckerCloseHelpText"));
+        ApplyDialogButtonChrome(goToButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(closeButton, 84);
 
         AccessibilityIssue? selectedIssue = null;
 
