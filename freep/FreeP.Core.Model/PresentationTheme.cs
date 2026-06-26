@@ -46,6 +46,21 @@ public enum ThemeColorSlot
 /// </summary>
 public sealed class SchemeColorRef
 {
+    /// <summary>
+    /// The raw OOXML role name as it appears in the XML val= attribute (e.g. "tx1", "bg1", "dk1",
+    /// "accent1"). Stored verbatim so the effective clrMap can be re-applied at render time.
+    /// Null/empty when the SchemeColorRef was constructed without an XML role name (e.g. in tests
+    /// or programmatic usage) — in that case <see cref="Slot"/> is used directly for resolution.
+    /// </summary>
+    public string? RoleName { get; init; }
+
+    /// <summary>
+    /// The theme slot resolved using the DEFAULT clrMap (tx1→Dk1, bg1→Lt1, …).
+    /// Used as a fast-path fallback when no master clrMap is available at render time.
+    /// When an effective clrMap IS provided to ThemeColorResolver.Resolve, RoleName is
+    /// re-applied through that map instead, so this field is bypassed for role names that
+    /// can be remapped (tx1/bg1/tx2/bg2 and the canonical dk1/lt1/dk2/lt2/accent*/hlink/folhlink).
+    /// </summary>
     public ThemeColorSlot Slot { get; init; }
 
     /// <summary>Luminance multiplier (0–100000 in OOXML; stored normalized 0.0–1.0 here; 1.0 = no change).</summary>

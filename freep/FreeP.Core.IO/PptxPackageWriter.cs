@@ -636,8 +636,28 @@ public static class PptxPackageWriter
                 // We intentionally do NOT emit p:hf here to avoid PowerPoint repair.
                 // HfVisibility is preserved on the model for read-back from real .pptx files
                 // that carry it on the master/layout (which the reader already handles).
+                BuildSlideClrMapOvrEl(slide.ColorMapOverride),
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
+    }
+
+    /// <summary>
+    /// Builds the <c>p:clrMapOvr</c> element for a slide.
+    /// When <paramref name="colorMapOverride"/> is non-null, emits
+    /// <c>&lt;p:clrMapOvr&gt;&lt;a:overrideClrMapping .../&gt;&lt;/p:clrMapOvr&gt;</c>
+    /// with the stored role→slot attributes.
+    /// When null, emits <c>&lt;p:clrMapOvr&gt;&lt;a:masterClrMapping/&gt;&lt;/p:clrMapOvr&gt;</c>.
+    /// </summary>
+    private static XElement BuildSlideClrMapOvrEl(Dictionary<string, string>? colorMapOverride)
+    {
+        if (colorMapOverride is { Count: > 0 })
+        {
+            var overrideEl = new XElement(A + "overrideClrMapping");
+            foreach (var (key, val) in colorMapOverride)
+                overrideEl.Add(new XAttribute(key, val));
+            return new XElement(P + "clrMapOvr", overrideEl);
+        }
+        return new XElement(P + "clrMapOvr", new XElement(A + "masterClrMapping"));
     }
 
     // ── notesSlide.xml ────────────────────────────────────────────────────────────

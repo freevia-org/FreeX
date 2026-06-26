@@ -636,6 +636,25 @@ public static class PptxPackageReader
             };
         }
 
+        // p:clrMapOvr — per-slide color map override
+        // <p:clrMapOvr><a:overrideClrMapping .../></p:clrMapOvr>  → override map
+        // <p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>        → use master (null)
+        var clrMapOvrEl = xml.Root.Element(P + "clrMapOvr");
+        if (clrMapOvrEl is not null)
+        {
+            var overrideEl = clrMapOvrEl.Element(A + "overrideClrMapping");
+            if (overrideEl is not null)
+            {
+                slide.ColorMapOverride = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var attr in overrideEl.Attributes())
+                {
+                    if (attr.IsNamespaceDeclaration) continue;
+                    slide.ColorMapOverride[attr.Name.LocalName] = attr.Value;
+                }
+            }
+            // <a:masterClrMapping/> → leave ColorMapOverride null (inherit master map).
+        }
+
         return slide;
     }
 
