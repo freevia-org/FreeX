@@ -12047,6 +12047,9 @@ public sealed partial class MainWindow : Window
         tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
         tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
         tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
+        // Classic dialog tabs use black text on both selected and unselected tabs (Windows), not the
+        // Fluent accent foreground the theme applies to the selected tab.
+        tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brush(0, 0, 0)));
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
         // No vertical margin keeps the tab row touching the pane (removes the gap);
         // the small right margin separates adjacent tabs.
