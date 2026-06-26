@@ -572,6 +572,7 @@ public sealed partial class NativeJsonAdapter
         public List<CommentDto> Comments { get; set; } = [];
         public List<ThreadedCommentDto> ThreadedComments { get; set; } = [];
         public List<HyperlinkDto> Hyperlinks { get; set; } = [];
+        public List<RichTextRunDto> RichTextRuns { get; set; } = [];
         public List<string> AllowEditRanges { get; set; } = [];
         public WorksheetBackgroundDto? BackgroundImage { get; set; }
         public List<PictureDto> Pictures { get; set; } = [];
