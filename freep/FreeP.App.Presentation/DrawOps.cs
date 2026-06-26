@@ -156,6 +156,18 @@ public sealed class ResolvedTextLayout
     /// Renderers multiply their natural line spacing by (1.0 - LnSpcReduction).
     /// </summary>
     public double LnSpcReduction { get; init; } = 0.0;
+
+    // ── Wave 22B: text columns ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of text columns. 1 = single column (default).
+    /// </summary>
+    public int ColumnCount { get; init; } = 1;
+
+    /// <summary>
+    /// Column spacing in DIP. 0 means use default (457200 EMU = ~48.5 DIP at 96 DPI).
+    /// </summary>
+    public double ColumnSpacingDip { get; init; } = 0.0;
 }
 
 // ─── Resolved fill/outline ────────────────────────────────────────────────────────────────────────────────────────
@@ -267,6 +279,24 @@ public abstract class ResolvedOutline
         public Visible(SrgbColor color, double widthDip, OutlineDash dash)
         {
             Color = color;
+            WidthDip = widthDip;
+            Dash = dash;
+        }
+    }
+
+    // ── Wave 22B: gradient outline ─────────────────────────────────────────────
+
+    /// <summary>Resolved gradient outline — stroke uses a linear/radial gradient brush.</summary>
+    public sealed class Gradient : ResolvedOutline
+    {
+        /// <summary>Stroke width in DIP.</summary>
+        public double WidthDip { get; }
+        public OutlineDash Dash { get; }
+        /// <summary>Resolved gradient fill used as the stroke brush.</summary>
+        public ResolvedFill.Gradient Fill { get; }
+        public Gradient(ResolvedFill.Gradient fill, double widthDip, OutlineDash dash)
+        {
+            Fill = fill ?? throw new ArgumentNullException(nameof(fill));
             WidthDip = widthDip;
             Dash = dash;
         }
