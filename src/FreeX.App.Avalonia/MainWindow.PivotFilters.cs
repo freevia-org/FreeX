@@ -223,7 +223,7 @@ public sealed partial class MainWindow
         // ── Label Filters / Value Filters tabs (route to dedicated dialogs) ─────
         var labelFilterBtn = new Button
         {
-            Content = UiText.Get("PivotFieldFilter_LabelFilter"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_LabelFilter")),
             MinWidth = 140,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
@@ -253,7 +253,7 @@ public sealed partial class MainWindow
 
         var valueFilterBtn = new Button
         {
-            Content = UiText.Get("PivotFieldFilter_ValueFilter"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotFieldFilter_ValueFilter")),
             MinWidth = 140,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = pivot.DataFields.Count > 0,

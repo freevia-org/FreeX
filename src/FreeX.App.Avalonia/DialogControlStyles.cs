@@ -297,5 +297,20 @@ internal static class DialogControlStyles
                 new Setter(TemplatedControl.ForegroundProperty, SelectionForegroundBrush),
             },
         };
+
+        // Readable text selection everywhere: Avalonia Fluent's default TextBox selection is the dark
+        // accent, which makes selected black text hard to read (e.g. the auto-selected range in
+        // CreateTable). Use a light blue so selected text stays legible, matching Windows. Single
+        // app-wide seam — applies to every dialog/formula TextBox.
+        yield return new Style(x => x.OfType<TextBox>())
+        {
+            Setters =
+            {
+                new Setter(TextBox.SelectionBrushProperty, TextSelectionBrush),
+            },
+        };
     }
+
+    /// <summary>Light-blue text-selection highlight that keeps black text readable (Windows-like).</summary>
+    private static readonly IBrush TextSelectionBrush = new SolidColorBrush(Color.FromRgb(173, 214, 255));
 }
