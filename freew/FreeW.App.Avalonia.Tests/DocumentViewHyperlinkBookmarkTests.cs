@@ -1,0 +1,335 @@
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using FluentAssertions;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+using Xunit;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// AV-LINK: hyperlink + bookmark render / follow / navigate / insert in the Avalonia
+/// <see cref="DocumentView"/>. Verifies <see cref="DocumentView.InsertHyperlink"/> wraps a selection (and
+/// inserts new text) as a model hyperlink run that round-trips through the cell layout, the run renders in
+/// the hyperlink style (blue + underline), Ctrl+Click / FollowHyperlinkAtCaret raises
+/// <see cref="DocumentView.HyperlinkActivated"/> for an external URL or jumps to a bookmark for an internal
+/// link, <see cref="DocumentView.InsertBookmark"/> marks a range, <see cref="DocumentView.GoToBookmark"/>
+/// moves the caret, undo reverts, and plain text is unaffected.
+/// </summary>
+public sealed class DocumentViewHyperlinkBookmarkTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static TextDocument DocWith(params string[] paragraphs)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        foreach (var text in paragraphs)
+        {
+            var p = new Paragraph();
+            p.Runs.Add(new Run(text, RunFormatting.Default));
+            doc.Blocks.Add(p);
+        }
+        return doc;
+    }
+
+    private static DocumentView Build(params string[] paragraphs)
+    {
+        var view = new DocumentView();
+        view.LoadDocument(DocWith(paragraphs));
+        view.Measure(new Size(800, 2000));
+        return view;
+    }
+
+    // ── Insert hyperlink (+ undo) ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task InsertHyperlink_over_selection_wraps_it_as_a_hyperlink_run()
+    {
+        var linkedText = "";
+        var url = "";
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            // Select "Acme" (offsets 6..10).
+            view.SetSelectionRangePublic(0, 6, 0, 10);
+            view.InsertHyperlink("Acme", "https://acme.example");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var link = p.Runs.FirstOrDefault(r => r.HyperlinkUrl is { Length: > 0 });
+            linkedText = link?.Text ?? "";
+            url = link?.HyperlinkUrl ?? "";
+        });
+
+        if (!ran) return;
+        linkedText.Should().Be("Acme", "the selected range becomes the hyperlink run, preserving its text");
+        url.Should().Be("https://acme.example");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_with_no_selection_inserts_new_hyperlinked_text()
+    {
+        var hasLink = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Start");
+            view.MoveCaretToBlock(0, 5); // end of "Start", no selection
+            view.InsertHyperlink("Home", "https://home.example");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            hasLink = p.Runs.Any(r => r.Text == "Home" && r.HyperlinkUrl == "https://home.example");
+        });
+
+        if (!ran) return;
+        hasLink.Should().BeTrue("with no selection the display text is inserted as a new hyperlinked run");
+    }
+
+    [Fact]
+    public async Task InsertHyperlink_is_undoable()
+    {
+        var beforeHadLink = false;
+        var afterUndoHasLink = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Visit Acme today");
+            view.SetSelectionRangePublic(0, 6, 0, 10);
+            view.InsertHyperlink("Acme", "https://acme.example");
+            var p1 = (Paragraph)view.Document.Blocks[0];
+            beforeHadLink = p1.Runs.Any(r => r.HyperlinkUrl is { Length: > 0 });
+
+            view.Undo();
+            var p2 = (Paragraph)view.Document.Blocks[0];
+            afterUndoHasLink = p2.Runs.Any(r => r.HyperlinkUrl is { Length: > 0 });
+        });
+
+        if (!ran) return;
+        beforeHadLink.Should().BeTrue();
+        afterUndoHasLink.Should().BeFalse("undo removes the inserted hyperlink, restoring plain text");
+    }
+
+    // ── Render styling ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Hyperlink_run_renders_blue_and_underlined()
+    {
+        (string? ColorHex, bool Underline, bool IsHyperlink)? linkStyle = null;
+        (string? ColorHex, bool Underline, bool IsHyperlink)? plainStyle = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Go Acme now");
+            view.SetSelectionRangePublic(0, 3, 0, 7); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example");
+            view.Measure(new Size(800, 2000));
+
+            linkStyle = view.GetGlyphRenderStyle(0, 3);  // 'A' of the hyperlink
+            plainStyle = view.GetGlyphRenderStyle(0, 0);  // 'G' of plain text
+        });
+
+        if (!ran) return;
+        linkStyle.Should().NotBeNull();
+        linkStyle!.Value.IsHyperlink.Should().BeTrue();
+        linkStyle.Value.Underline.Should().BeTrue("hyperlinked glyphs render underlined");
+        linkStyle.Value.ColorHex.Should().Be("#0563C1", "hyperlinked glyphs render in Word's hyperlink blue");
+
+        plainStyle.Should().NotBeNull();
+        plainStyle!.Value.IsHyperlink.Should().BeFalse("plain text is not styled as a hyperlink");
+        plainStyle.Value.Underline.Should().BeFalse();
+    }
+
+    // ── Follow / activate ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task FollowHyperlinkAtCaret_raises_HyperlinkActivated_for_external_url()
+    {
+        string? activatedUrl = null;
+        var followed = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Open Acme link");
+            view.HyperlinkActivated += u => activatedUrl = u;
+            view.SetSelectionRangePublic(0, 5, 0, 9); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example");
+
+            // Place the caret inside the link, then follow.
+            view.MoveCaretToBlock(0, 7);
+            followed = view.FollowHyperlinkAtCaret();
+        });
+
+        if (!ran) return;
+        followed.Should().BeTrue();
+        activatedUrl.Should().Be("https://acme.example",
+            "following an external hyperlink raises HyperlinkActivated with the URL (no hard-coded browser)");
+    }
+
+    [Fact]
+    public async Task FollowHyperlinkAtCaret_navigates_to_bookmark_for_internal_link()
+    {
+        var followed = false;
+        var caretBlock = -1;
+        string? activatedUrl = "set";
+        var ran = await OnUiThread(() =>
+        {
+            // Two paragraphs: a link source (para 0) and a bookmark target (para 1).
+            var view = Build("Jump to section", "Target section here");
+            view.HyperlinkActivated += u => activatedUrl = u;
+
+            // Mark para 1 as bookmark "sec1".
+            view.MoveCaretToBlock(1, 0);
+            view.InsertBookmark("sec1");
+
+            // Make para 0 an internal hyperlink to "#sec1".
+            view.SetSelectionRangePublic(0, 0, 0, 4); // "Jump"
+            view.InsertHyperlink("Jump", "#sec1");
+
+            view.MoveCaretToBlock(0, 2); // inside the link
+            followed = view.FollowHyperlinkAtCaret();
+            caretBlock = view.CaretPositionForTest.Block;
+        });
+
+        if (!ran) return;
+        followed.Should().BeTrue();
+        caretBlock.Should().Be(1, "following an internal link jumps the caret to the bookmark's paragraph");
+        activatedUrl.Should().Be("set", "an internal link does NOT raise HyperlinkActivated (it navigates in-place)");
+    }
+
+    // ── Bookmarks ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InsertBookmark_marks_the_caret_paragraph()
+    {
+        var hasBookmark = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("First", "Second");
+            view.MoveCaretToBlock(1, 0);
+            view.InsertBookmark("mark2");
+
+            var p = (Paragraph)view.Document.Blocks[1];
+            hasBookmark = p.BookmarkNames.Contains("mark2");
+        });
+
+        if (!ran) return;
+        hasBookmark.Should().BeTrue("InsertBookmark adds the name to the caret paragraph's BookmarkNames");
+    }
+
+    [Fact]
+    public async Task GoToBookmark_moves_caret_to_the_bookmark_paragraph()
+    {
+        var found = false;
+        var caretBlock = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("One", "Two", "Three");
+            view.MoveCaretToBlock(2, 0);
+            view.InsertBookmark("third");
+
+            view.MoveCaretToBlock(0, 0); // move away
+            found = view.GoToBookmark("third");
+            caretBlock = view.CaretPositionForTest.Block;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        caretBlock.Should().Be(2, "GoToBookmark moves the caret to the bookmarked paragraph");
+    }
+
+    [Fact]
+    public async Task GoToBookmark_returns_false_for_unknown_name()
+    {
+        var found = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Body text");
+            found = view.GoToBookmark("does-not-exist");
+        });
+
+        if (!ran) return;
+        found.Should().BeFalse("navigating to a missing bookmark is a no-op returning false");
+    }
+
+    // ── Round-trip + introspection ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task HyperlinksAtCaret_reports_the_link_under_the_caret()
+    {
+        string? url = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("See Acme site");
+            view.SetSelectionRangePublic(0, 4, 0, 8); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example");
+
+            view.MoveCaretToBlock(0, 6); // inside the link
+            var links = view.HyperlinksAtCaret();
+            url = links.Count > 0 ? links[0].Url : null;
+        });
+
+        if (!ran) return;
+        url.Should().Be("https://acme.example");
+    }
+
+    [Fact]
+    public async Task Editing_inside_a_hyperlink_keeps_it_one_link_run()
+    {
+        var linkText = "";
+        var linkRunCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Go Acme now");
+            view.SetSelectionRangePublic(0, 3, 0, 7); // "Acme"
+            view.InsertHyperlink("Acme", "https://acme.example");
+
+            // Type inside the link span (after "Ac").
+            view.MoveCaretToBlock(0, 5);
+            view.InsertText("X");
+
+            var p = (Paragraph)view.Document.Blocks[0];
+            var linkRuns = p.Runs.Where(r => r.HyperlinkUrl == "https://acme.example").ToList();
+            linkRunCount = linkRuns.Count;
+            linkText = string.Concat(linkRuns.Select(r => r.Text));
+        });
+
+        if (!ran) return;
+        linkRunCount.Should().Be(1, "the cell round-trip re-coalesces the hyperlink into one contiguous run");
+        linkText.Should().Be("AcXme", "typing inside the link extends the same hyperlink span");
+    }
+
+    // ── Regression: plain text unaffected ───────────────────────────────────────
+
+    [Fact]
+    public async Task Plain_text_has_no_hyperlink_styling_or_targets()
+    {
+        var hasAnyLink = false;
+        (string? ColorHex, bool Underline, bool IsHyperlink)? style = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Just plain text");
+            var p = (Paragraph)view.Document.Blocks[0];
+            hasAnyLink = p.Runs.Any(r => r.HyperlinkUrl is { Length: > 0 } || r.HyperlinkAnchor is { Length: > 0 });
+            style = view.GetGlyphRenderStyle(0, 0);
+        });
+
+        if (!ran) return;
+        hasAnyLink.Should().BeFalse();
+        style.Should().NotBeNull();
+        style!.Value.IsHyperlink.Should().BeFalse();
+    }
+}
