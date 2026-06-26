@@ -23,6 +23,13 @@ internal static class FreeWRibbon
         ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
 
     /// <summary>
+    /// AV-PICTAB: preset point sizes offered by the Picture / Drawing Format Size combos.
+    /// The user can also type an arbitrary value; the combo's free-text is parsed in the command.
+    /// </summary>
+    public static readonly string[] FloatSizes =
+        ["36", "54", "72", "90", "108", "144", "180", "216", "288", "360", "432"];
+
+    /// <summary>
     /// Standard colour palette offered by the Font Color dropdown.
     /// Each entry maps to a distinct command id of the form <c>freew.font-color.*</c>
     /// registered in <see cref="FreeWAvaloniaRibbonCommands.Build"/>.
@@ -48,6 +55,31 @@ internal static class FreeWRibbon
         new(FontColors
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
+
+    // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
+    // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
+    // (freew.image-wrap-* / freew.shape-wrap-*).
+    private static RibbonMenu BuildWrapMenu(string prefix) =>
+        new(new RibbonMenuItem[]
+        {
+            new("In Line with Text", new RibbonCommandId($"freew.{prefix}-wrap-inline")),
+            new("Square",            new RibbonCommandId($"freew.{prefix}-wrap-square")),
+            new("Tight",             new RibbonCommandId($"freew.{prefix}-wrap-tight")),
+            new("Top and Bottom",    new RibbonCommandId($"freew.{prefix}-wrap-top-bottom")),
+            new("Behind Text",       new RibbonCommandId($"freew.{prefix}-wrap-behind")),
+            new("In Front of Text",  new RibbonCommandId($"freew.{prefix}-wrap-front")),
+        });
+
+    // AV-PICTAB: rotate/flip menu shared by Picture / Drawing Format "Rotate" dropdown.
+    private static RibbonMenu BuildRotateMenu(string prefix) =>
+        new(new RibbonMenuItem[]
+        {
+            new("Rotate Right 90°", new RibbonCommandId($"freew.{prefix}-rotate-right90")),
+            new("Rotate Left 90°",  new RibbonCommandId($"freew.{prefix}-rotate-left90")),
+            RibbonMenuItem.Separator(),
+            new("Flip Vertical",    new RibbonCommandId($"freew.{prefix}-flip-vertical")),
+            new("Flip Horizontal",  new RibbonCommandId($"freew.{prefix}-flip-horizontal")),
+        });
 
     private static RibbonMenu BuildTableBordersMenu() =>
         new(new RibbonMenuItem[]
@@ -233,6 +265,53 @@ internal static class FreeWRibbon
                         g.Button("freew.cell-align-bottom-left",   "Bottom Left");
                         g.Button("freew.cell-align-bottom-center", "Bottom Center");
                         g.Button("freew.cell-align-bottom-right",  "Bottom Right");
+                    });
+                })
+            // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
+            .ContextualTab("picture-format", "Picture Format",
+                new RibbonTabContext(FloatingRibbonContextSource.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
+                tab =>
+                {
+                    tab.Group("picture-arrange", "Arrange", null, 100, g =>
+                    {
+                        g.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
+                        g.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
+                        g.Button("freew.image-bring-to-front", "Bring to Front");
+                        g.Button("freew.image-send-to-back",   "Send to Back");
+                        g.Button("freew.image-bring-forward",  "Bring Forward");
+                        g.Button("freew.image-send-backward",  "Send Backward");
+                    });
+                    tab.Group("picture-size", "Size", null, 90, g =>
+                    {
+                        g.ComboBox("freew.image-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.image-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                    });
+                })
+            // ── AV-PICTAB: Drawing Format contextual tab (shown when a non-image float is selected) ──
+            .ContextualTab("drawing-format", "Drawing Format",
+                new RibbonTabContext(FloatingRibbonContextSource.DrawingContextKey, "Drawing Tools", RibbonContextColor.Purple),
+                tab =>
+                {
+                    // Shape Styles — fill/outline editing has no DocumentView setter yet (deferred);
+                    // the opener buttons are wired as safe no-ops so the registry stays complete.
+                    tab.Group("drawing-styles", "Shape Styles", null, 100, g =>
+                    {
+                        g.Button("freew.shape-fill",    "Shape Fill");
+                        g.Button("freew.shape-outline", "Shape Outline");
+                    });
+                    tab.Group("drawing-arrange", "Arrange", null, 90, g =>
+                    {
+                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                        g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
+                        g.Button("freew.shape-bring-to-front", "Bring to Front");
+                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                        g.Button("freew.shape-bring-forward",  "Bring Forward");
+                        g.Button("freew.shape-send-backward",  "Send Backward");
+                    });
+                    tab.Group("drawing-size", "Size", null, 80, g =>
+                    {
+                        g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
                     });
                 })
             .Build();

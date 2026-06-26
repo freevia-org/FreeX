@@ -239,6 +239,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Review ───────────────────────────────────────────────────────────
         r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
 
+        // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
+        RegisterFloatingFormatCommands(r, editor);
+
         return r;
     }
 
@@ -308,5 +311,63 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Registers the Picture Format + Drawing Format contextual-tab commands, wiring each
+    /// to the floating-object edit surface on <see cref="DocumentView"/>. Both tabs share the same
+    /// underlying methods (the model dispatches by the selected float's kind), so the only difference
+    /// is the command-id prefix (<c>image-</c> vs <c>shape-</c>) used by the respective tab.
+    ///
+    /// <para>
+    /// Every command safely no-ops when no float is selected (the DocumentView methods guard on
+    /// <c>SelectedFloatingInfo</c>). Wrap, rotate/flip, z-order and size are wired through; shape
+    /// fill/outline editing is <b>deferred</b> (no DocumentView setter exists yet) and registered as
+    /// no-op openers so the registry-completeness guard continues to pass.
+    /// </para>
+    /// </summary>
+    private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // Wrap modes (shared menu items, distinct ids per tab prefix).
+        foreach (var prefix in new[] { "image", "shape" })
+        {
+            r.Register($"freew.{prefix}-wrap",   new RelayCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-wrap-inline",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Inline)));
+            r.Register($"freew.{prefix}-wrap-square",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Square)));
+            r.Register($"freew.{prefix}-wrap-tight",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Tight)));
+            r.Register($"freew.{prefix}-wrap-top-bottom", new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.TopAndBottom)));
+            r.Register($"freew.{prefix}-wrap-behind",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Behind)));
+            r.Register($"freew.{prefix}-wrap-front",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.InFront)));
+
+            // Rotate / flip.
+            r.Register($"freew.{prefix}-rotate", new RelayCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-rotate-right90", new RelayCommand(() => editor.RotateSelectedFloating(+90)));
+            r.Register($"freew.{prefix}-rotate-left90",  new RelayCommand(() => editor.RotateSelectedFloating(-90)));
+            r.Register($"freew.{prefix}-flip-vertical",   new RelayCommand(() => editor.FlipSelectedFloating(horizontal: false)));
+            r.Register($"freew.{prefix}-flip-horizontal", new RelayCommand(() => editor.FlipSelectedFloating(horizontal: true)));
+
+            // Z-order.
+            r.Register($"freew.{prefix}-bring-to-front", new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringToFront)));
+            r.Register($"freew.{prefix}-send-to-back",   new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendToBack)));
+            r.Register($"freew.{prefix}-bring-forward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringForward)));
+            r.Register($"freew.{prefix}-send-backward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendBackward)));
+
+            // Size — width/height combos (value = points as an invariant-culture decimal).
+            r.Register($"freew.{prefix}-width", new RelayValueCommand(value =>
+            {
+                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
+                    editor.SetFloatingWidth(pt);
+            }));
+            r.Register($"freew.{prefix}-height", new RelayValueCommand(value =>
+            {
+                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
+                    editor.SetFloatingHeight(pt);
+            }));
+        }
+
+        // Shape Styles fill/outline — DEFERRED: no DocumentView setter for shape fill/outline yet.
+        // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
+        r.Register("freew.shape-fill",    new RelayCommand(() => { /* deferred: shape fill edit */ }));
+        r.Register("freew.shape-outline", new RelayCommand(() => { /* deferred: shape outline edit */ }));
     }
 }
