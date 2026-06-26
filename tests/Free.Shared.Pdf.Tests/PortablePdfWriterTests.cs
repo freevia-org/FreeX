@@ -77,4 +77,36 @@ public sealed class PortablePdfWriterTests
         pdf.Should().Contain("MediaBox [0 0 612 792]");
         pdf.Should().Contain("MediaBox [0 0 842 595]");
     }
+
+    [Fact]
+    public void Write_EmitsPdfLineAsMoveThenLineStroke()
+    {
+        // PdfLine should emit a PDF path: m (moveto), l (lineto), S (stroke).
+        var page = new PdfContentPage(612, 792, new PdfDrawOp[]
+        {
+            new PdfLine(36, 700, 576, 700, new PdfColor(180, 185, 190), 0.4),
+        });
+
+        var bytes = PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page }));
+        var pdf   = Encoding.ASCII.GetString(bytes);
+
+        pdf.Should().Contain("36 700 m",   "PdfLine must emit PDF moveto at (x1, y1)");
+        pdf.Should().Contain("576 700 l S","PdfLine must emit lineto then stroke");
+        pdf.Should().Contain("0.4 w",      "PdfLine must emit the specified line width");
+    }
+
+    [Fact]
+    public void Write_PdfLineRoundTripsCorrectCoordinates()
+    {
+        var page = new PdfContentPage(612, 792, new PdfDrawOp[]
+        {
+            new PdfLine(10, 20, 100, 200, new PdfColor(0, 0, 0), 1.0),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        // Coordinates must appear verbatim in the content stream.
+        pdf.Should().Contain("10 20 m",    "moveto x1 y1");
+        pdf.Should().Contain("100 200 l S","lineto x2 y2 then stroke");
+    }
 }
