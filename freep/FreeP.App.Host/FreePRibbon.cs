@@ -41,6 +41,12 @@ internal static class FreePRibbon
                     g.IconToggle("freep.italic", "Italic", RibbonCommandIconKind.Italic, "2");
                     g.IconToggle("freep.underline", "Underline", RibbonCommandIconKind.Underline, "3");
                 });
+                // Wave 12B: Editing group — Find & Replace.
+                tab.Group("editing", "Editing", "E", 70, g =>
+                {
+                    g.Large("freep.find",    "Find",    RibbonCommandIconKind.Search,  "F");
+                    g.Medium("freep.replace", "Replace", RibbonCommandIconKind.Refresh, "H");
+                });
             })
             .Tab("insert", "Insert", "N", tab =>
             {

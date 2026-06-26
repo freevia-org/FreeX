@@ -4,6 +4,9 @@ using System.Linq;
 
 namespace FreeP.App.Compositor;
 
+// Wave 12B: TextSearchMatch, TextSearchOptions, PresentationTextSearch, ReplaceOneCommand,
+// ReplaceAllCommand are all in FreeP.Core.Model (no extra using needed — same namespace chain).
+
 // Paste offset: ~0.2 inches in EMU  (914400 EMU = 1 inch)
 file static class PasteOffset
 {
@@ -1278,6 +1281,66 @@ public sealed class EditingSession
         Bus.Execute(new ReplaceChartDataCommand(
             _currentSlideIndex, _selectedShapeIds[0],
             categories, seriesNames, values));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // FIND & REPLACE  (Wave 12B)
+    // ════════════════════════════════════════════════════════════════════════════════
+    //
+    // Keep this region isolated; 12A must not touch it.
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Returns all text matches for <paramref name="query"/> across the entire presentation
+    /// (shape TextBody, table cells, slide Notes; not comments).
+    /// Returns an empty list when query is null or empty.
+    /// </summary>
+    public List<TextSearchMatch> FindAll(string? query, TextSearchOptions? opts = null)
+        => PresentationTextSearch.FindAll(Presentation, query, opts);
+
+    /// <summary>
+    /// Navigates to the slide and selects the shape that contains <paramref name="match"/>.
+    /// Does nothing if the match refers to a virtual notes id or the slide/shape cannot be found.
+    /// </summary>
+    public void NavigateTo(TextSearchMatch match)
+    {
+        if (match.SlideIndex < 0 || match.SlideIndex >= Presentation.Slides.Count) return;
+
+        // Go to the slide first.
+        if (_currentSlideIndex != match.SlideIndex)
+            SelectSlide(match.SlideIndex);
+
+        // Select the shape (skip virtual notes shape ids).
+        const uint NotesBase = 0xFFFF0000u;
+        if (match.ShapeId < NotesBase)
+            Select(match.ShapeId);
+    }
+
+    /// <summary>
+    /// Replaces the text matched by <paramref name="match"/> with <paramref name="replacement"/>.
+    /// Navigates to the match's slide and selects the shape. Undoable.
+    /// </summary>
+    public void ReplaceOne(TextSearchMatch match, string replacement)
+    {
+        NavigateTo(match);
+        Bus.Execute(new ReplaceOneCommand(match, replacement));
+    }
+
+    /// <summary>
+    /// Replaces ALL occurrences of <paramref name="query"/> in the presentation with
+    /// <paramref name="replacement"/> in a single undoable step.
+    /// Returns the number of replacements made (0 when nothing matched).
+    /// </summary>
+    public int ReplaceAll(string? query, string replacement, TextSearchOptions? opts = null)
+    {
+        if (string.IsNullOrEmpty(query)) return 0;
+        opts ??= new TextSearchOptions();
+
+        var matches = PresentationTextSearch.FindAll(Presentation, query, opts);
+        if (matches.Count == 0) return 0;
+
+        Bus.Execute(new ReplaceAllCommand(query, replacement, opts));
+        return matches.Count;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────

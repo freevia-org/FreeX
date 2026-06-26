@@ -167,7 +167,10 @@ public sealed class MainWindow : Window
             // Wave 10B: OS-clipboard service for ribbon Copy/Cut/Paste buttons.
             osClipboard:        _osClipboard,
             // Wave 11A: Insert Hyperlink dialog.
-            onInsertLink:       () => OpenHyperlinkDialog());
+            onInsertLink:       () => OpenHyperlinkDialog(),
+            // Wave 12B: Find & Replace dialogs.
+            onFind:             () => OpenFindDialog(),
+            onFindReplace:      () => OpenFindReplaceDialog());
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -684,6 +687,15 @@ public sealed class MainWindow : Window
         CommandBindings.Add(new CommandBinding(pasteCommand, (_, _) =>
             _osClipboard.Paste(Editor, preferOsClipboard: true)));
         InputBindings.Add(new KeyBinding(pasteCommand, new KeyGesture(Key.V, ModifierKeys.Control)));
+
+        // Wave 12B: Ctrl+F — Find, Ctrl+H — Find & Replace.
+        var findCommand = new RoutedCommand("FindText", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(findCommand, (_, _) => OpenFindDialog()));
+        InputBindings.Add(new KeyBinding(findCommand, new KeyGesture(Key.F, ModifierKeys.Control)));
+
+        var replaceCommand = new RoutedCommand("ReplaceText", typeof(MainWindow));
+        CommandBindings.Add(new CommandBinding(replaceCommand, (_, _) => OpenFindReplaceDialog()));
+        InputBindings.Add(new KeyBinding(replaceCommand, new KeyGesture(Key.H, ModifierKeys.Control)));
     }
 
     // ── Slide show (Wave 4B) ──────────────────────────────────────────────────────
@@ -750,6 +762,49 @@ public sealed class MainWindow : Window
         if (IsVisible) dialog.Owner = this;
         if (dialog.ShowDialog() == true && dialog.Result is not null)
             Editor.SetShapeHyperlink(dialog.Result.Url, dialog.Result.TargetSlideId, dialog.Result.Tooltip);
+    }
+
+    // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────
+
+    /// <summary>The live Find/Replace dialog instance (modeless).  Null when closed.</summary>
+    private FindReplaceDialog? _findReplaceDialog;
+
+    /// <summary>
+    /// Opens (or focuses) the Find dialog in Find-only mode (Ctrl+F).
+    /// </summary>
+    internal void OpenFindDialog()
+    {
+        if (_findReplaceDialog is null || !_findReplaceDialog.IsVisible)
+        {
+            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: false);
+            if (IsVisible) _findReplaceDialog.Owner = this;
+            _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
+            _findReplaceDialog.Show();
+        }
+        else
+        {
+            _findReplaceDialog.ShowReplaceMode(false);
+            _findReplaceDialog.Activate();
+        }
+    }
+
+    /// <summary>
+    /// Opens (or focuses) the Find and Replace dialog in Replace mode (Ctrl+H).
+    /// </summary>
+    internal void OpenFindReplaceDialog()
+    {
+        if (_findReplaceDialog is null || !_findReplaceDialog.IsVisible)
+        {
+            _findReplaceDialog = new FindReplaceDialog(Editor, showReplace: true);
+            if (IsVisible) _findReplaceDialog.Owner = this;
+            _findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;
+            _findReplaceDialog.Show();
+        }
+        else
+        {
+            _findReplaceDialog.ShowReplaceMode(true);
+            _findReplaceDialog.Activate();
+        }
     }
 
     // ── Backstage ─────────────────────────────────────────────────────────────────

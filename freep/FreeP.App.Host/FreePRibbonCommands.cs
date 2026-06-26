@@ -62,7 +62,10 @@ internal static class FreePRibbonCommands
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
-        Action?             onInsertLink       = null)
+        Action?             onInsertLink       = null,
+        // Wave 12B: Find & Replace dialog launchers.
+        Action?             onFind             = null,
+        Action?             onFindReplace      = null)
     {
         var registry = new RibbonCommandRegistry();
 
@@ -420,6 +423,14 @@ internal static class FreePRibbonCommands
         // Remove hyperlink — clears the shape-level hyperlink on all selected shapes.
         registry.Register("freep.remove-link",
             new ActionCommand(() => editor.RemoveShapeHyperlink()));
+
+        // ── Wave 12B: Find & Replace ──────────────────────────────────────────────
+
+        registry.Register("freep.find",
+            new ActionCommand(() => onFind?.Invoke()));
+
+        registry.Register("freep.replace",
+            new ActionCommand(() => onFindReplace?.Invoke()));
 
         return registry;
     }
