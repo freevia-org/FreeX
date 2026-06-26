@@ -124,20 +124,18 @@ public class TableColumnCommandTests
     [Fact]
     public void InsertColumn_Undo_WithHorizontalMerge_RestoresExactTable()
     {
-        // Z5 regression: InsertTableColumnCommand.Revert previously re-ran GridColumnToCellIndex on
-        // the ALREADY-MODIFIED row, which resolved to the wrong cell when a spanning cell preceded the
-        // insert position, corrupting the merged cell. After the fix, Revert removes the exact cell
-        // instance that was inserted rather than recomputing the grid position.
+        // BF3 (updated from Z5): InsertTableColumnCommand now widens a spanning cell rather than
+        // inserting a standalone cell inside its span (Word behaviour).
         //
         // Layout (before insert):
         //   Row 0: [A (GridSpan=2, grid 0-1)]  [B (grid 2)]
         //   Row 1: [C (grid 0)]  [D (grid 1)]  [E (grid 2)]
         //
-        // Insert at grid column 1:
-        //   Row 0: [new (grid 1)]  [A (now grid 0 & 2)]  [B (grid 3)]  — cell-list index 0
-        //   Row 1: [C (grid 0)]    [new (grid 1)]         [D (grid 2)]  [E (grid 3)]
+        // Insert at grid column 1 (strictly INSIDE A's span):
+        //   Row 0: [A (GridSpan=3, grid 0-2)]  [B (grid 3)]   — A widened, no new cell
+        //   Row 1: [C (grid 0)]  [new (grid 1)]  [D (grid 2)]  [E (grid 3)]
         //
-        // Undo must restore the original layout exactly (A still GridSpan=2, B intact, row1=C,D,E).
+        // Undo must restore the original layout exactly (A back to GridSpan=2, row1=C,D,E).
         var table = new Table();
         var row0 = new TableRow();
         var cellA = new TableCell("A") { GridSpan = 2 };
@@ -157,18 +155,19 @@ public class TableColumnCommandTests
         var (_, bus) = MakeDocWithTable(table);
         bus.Execute(new InsertTableColumnCommand(blockIndex: 0, columnIndex: 1));
 
-        // Sanity: after insert, rows should have gained one cell each.
-        row0.Cells.Should().HaveCount(3, "row 0 gains one cell after insert");
-        row1.Cells.Should().HaveCount(4, "row 1 gains one cell after insert");
+        // Sanity: after insert, row 0 still has 2 cells (A widened), row 1 has 4 cells (new inserted).
+        row0.Cells.Should().HaveCount(2, "row 0: A was widened (BF3) so still 2 cells");
+        cellA.GridSpan.Should().Be(3, "A's GridSpan grows from 2 to 3 (BF3 — widen inside span)");
+        row1.Cells.Should().HaveCount(4, "row 1 gains one new cell");
 
         // Undo.
         bus.Undo();
 
-        // Row 0: A (GridSpan=2) and B must be restored exactly — no corruption of A's span.
+        // Row 0: A (GridSpan=2) and B must be restored exactly.
         row0.Cells.Should().HaveCount(2, "undo must restore row 0 to 2 cells");
-        row0.Cells[0].Should().BeSameAs(cellA, "original cell A must be back at index 0");
-        row0.Cells[0].GridSpan.Should().Be(2, "A's GridSpan=2 must be unchanged by undo");
-        row0.Cells[1].Should().BeSameAs(cellB, "original cell B must be back at index 1");
+        row0.Cells[0].Should().BeSameAs(cellA, "original cell A must be at index 0");
+        row0.Cells[0].GridSpan.Should().Be(2, "A's GridSpan=2 must be restored by undo");
+        row0.Cells[1].Should().BeSameAs(cellB, "original cell B must be at index 1");
 
         // Row 1: C, D, E must be restored exactly.
         row1.Cells.Should().HaveCount(3, "undo must restore row 1 to 3 cells");

@@ -561,9 +561,11 @@ public sealed class DocumentView : Control
                 return null;
             if (a.TableBlock != f.TableBlock)
                 return null;
-            return (a.TableBlock,
+            var raw = (a.TableBlock,
                 Math.Min(a.Row, f.Row), Math.Min(a.Col, f.Col),
                 Math.Max(a.Row, f.Row), Math.Max(a.Col, f.Col));
+            // BF5: expand the rectangle to fully cover any merged cells that straddle the boundary.
+            return ExpandForMergedCells(raw);
         }
     }
 
@@ -3309,13 +3311,19 @@ public sealed class DocumentView : Control
 
         // AV-TBL2: cross-cell block-selection highlight. Draw a semi-transparent overlay over each
         // cell-hit rect that falls inside the selected row×col rectangle.
+        // BF5: use span-overlap test so merged cells straddling the boundary are highlighted.
         if (SelectedCellRange is { } cellSel)
         {
             foreach (var (cellRect, cellBlock, cellRow, cellCol) in _cellHits)
             {
                 if (cellBlock != cellSel.TableBlock) continue;
                 if (cellRow < cellSel.MinRow || cellRow > cellSel.MaxRow) continue;
-                if (cellCol < cellSel.MinCol || cellCol > cellSel.MaxCol) continue;
+                // Overlap test: include cell if its column range [startCol, startCol+span-1] overlaps
+                // the selection [MinCol, MaxCol]. For cells with no merged span, GridSpan is 1.
+                var cellSpan = GetCellModel(cellBlock, cellRow, cellCol)?.GridSpan ?? 1;
+                cellSpan = Math.Max(1, cellSpan);
+                if (cellCol + cellSpan - 1 < cellSel.MinCol) continue; // cell ends before selection
+                if (cellCol > cellSel.MaxCol) continue;                 // cell starts after selection
                 context.FillRectangle(CellBlockSelectionBrush, cellRect);
             }
         }
@@ -3715,13 +3723,27 @@ public sealed class DocumentView : Control
 
         // AV-TBL2: when a drag starts inside a cell and moves to a DIFFERENT cell, switch to
         // rectangular cross-cell block selection instead of single-cell text selection.
-        if (_cellAnchor is { } anchor && _cellCaret is { } focus
+        if (_cellBlockAnchor is { } blockAnchor && _cellCaret is { } movingFocus
+            && blockAnchor.TableBlock == movingFocus.TableBlock)
+        {
+            // BF4: block selection is already active — just update focus to the current cell.
+            // _cellCaret/_cellAnchor are already null (cleared when block selection was first activated).
+            _cellBlockFocus = (movingFocus.TableBlock, movingFocus.Row, movingFocus.Col);
+            _cellCaret  = null;
+            _cellAnchor = null;
+            _selectionAnchor = _caret;
+        }
+        else if (_cellAnchor is { } anchor && _cellCaret is { } focus
             && anchor.TableBlock == focus.TableBlock
             && (anchor.Row != focus.Row || anchor.Col != focus.Col))
         {
             // Different cell than where the drag started → activate block selection.
             _cellBlockAnchor = (anchor.TableBlock, anchor.Row, anchor.Col);
             _cellBlockFocus  = (focus.TableBlock,  focus.Row,  focus.Col);
+            // BF4: clear single-cell caret/anchor so SelectedCellRange and CellCaretInfo are
+            // never both non-null (mirrors SetCellBlockSelection invariant).
+            _cellCaret  = null;
+            _cellAnchor = null;
             // Suppress the single-cell text selection anchor so IsWithin() doesn't highlight glyphs.
             _selectionAnchor = _caret;
         }
@@ -4920,6 +4942,48 @@ public sealed class DocumentView : Control
             colIdx += Math.Max(1, cell.GridSpan);
         }
         return null;
+    }
+
+    // BF5: Expand the raw (TableBlock, MinRow, MinCol, MaxRow, MaxCol) rectangle so that any
+    // horizontally-merged cell (GridSpan > 1) whose column span straddles the boundary is fully
+    // included. Mirrors Word semantics: a straddling merged cell is included and the effective
+    // selection grows to cover the whole merged cell. Iterates until stable (a single pass is
+    // usually sufficient; a second pass handles cascaded merges).
+    private (int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol)
+        ExpandForMergedCells((int TableBlock, int MinRow, int MinCol, int MaxRow, int MaxCol) raw)
+    {
+        if (raw.TableBlock < 0 || raw.TableBlock >= _doc.Blocks.Count)
+            return raw;
+        if (_doc.Blocks[raw.TableBlock] is not Table table)
+            return raw;
+
+        var (block, minRow, minCol, maxRow, maxCol) = raw;
+        bool changed;
+        do
+        {
+            changed = false;
+            for (var r = minRow; r <= maxRow; r++)
+            {
+                if (r < 0 || r >= table.Rows.Count) continue;
+                var col = 0;
+                foreach (var cell in table.Rows[r].Cells)
+                {
+                    var span = Math.Max(1, cell.GridSpan <= 0 ? 1 : cell.GridSpan);
+                    var cellEnd = col + span - 1; // inclusive last column of this cell
+
+                    // Overlap: cell's [col, cellEnd] overlaps selection [minCol, maxCol]?
+                    if (col <= maxCol && cellEnd >= minCol)
+                    {
+                        // Expand the selection to fully include this merged cell.
+                        if (col < minCol) { minCol = col; changed = true; }
+                        if (cellEnd > maxCol) { maxCol = cellEnd; changed = true; }
+                    }
+                    col += span;
+                }
+            }
+        } while (changed);
+
+        return (block, minRow, minCol, maxRow, maxCol);
     }
 
     // AV-TBL: retrieve the TableCell model for a given cell address.
