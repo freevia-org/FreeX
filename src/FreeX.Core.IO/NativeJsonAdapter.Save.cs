@@ -195,6 +195,8 @@ public sealed partial class NativeJsonAdapter
                 IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadataDto(s.IgnoredErrorsMetadata),
                 AdditionalViews = ToWorksheetAdditionalViewsDto(s.AdditionalViews),
                 PrimaryViewMetadata = FromWorksheetPrimaryViewMetadata(s.PrimaryViewMetadata),
+                // Persist as multi-area array (new) plus legacy single-area field for back-compat.
+                PrintAreas = s.PrintAreas.Count > 0 ? s.PrintAreas.Select(r => r.ToString()).ToArray() : null,
                 PrintArea = s.PrintArea?.ToString(),
                 PageOrientation = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PageOrientation, WorksheetPageOrientation.Portrait),
                 PaperSize = NativeJsonValueSanitizer.ValidEnumOrDefault(s.PaperSize, WorksheetPaperSize.A4),

@@ -7,26 +7,28 @@ internal static partial class RowColumnShiftHelpers
 {
     internal static void ShiftPrintAreaRowsUp(Sheet sheet, uint start, uint count)
     {
-        if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeRowsUp(printArea, start, count);
+        if (sheet.PrintAreas.Count == 0) return;
+        sheet.SetPrintAreas(sheet.PrintAreas.Select(r => ShiftRangeRowsUp(r, start, count)));
     }
 
     internal static void ShiftPrintAreaRowsDown(Sheet sheet, uint start, uint count)
     {
-        if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeRowsDown(printArea, start, count);
+        if (sheet.PrintAreas.Count == 0) return;
+        sheet.SetPrintAreas(sheet.PrintAreas.Select(r => ShiftRangeRowsDown(r, start, count))
+            .Where(r => r.HasValue).Select(r => r!.Value));
     }
 
     internal static void ShiftPrintAreaColumnsUp(Sheet sheet, uint start, uint count)
     {
-        if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeColumnsUp(printArea, start, count);
+        if (sheet.PrintAreas.Count == 0) return;
+        sheet.SetPrintAreas(sheet.PrintAreas.Select(r => ShiftRangeColumnsUp(r, start, count)));
     }
 
     internal static void ShiftPrintAreaColumnsDown(Sheet sheet, uint start, uint count)
     {
-        if (sheet.PrintArea is { } printArea)
-            sheet.PrintArea = ShiftRangeColumnsDown(printArea, start, count);
+        if (sheet.PrintAreas.Count == 0) return;
+        sheet.SetPrintAreas(sheet.PrintAreas.Select(r => ShiftRangeColumnsDown(r, start, count))
+            .Where(r => r.HasValue).Select(r => r!.Value));
     }
 
     internal static List<GridRange> CaptureChartDataRanges(Sheet sheet) =>

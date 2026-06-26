@@ -367,8 +367,7 @@ public static class WorkbookExportPrintPlanner
             if (sheet.IsHidden)
                 continue;
 
-            if (TryResolvePrintRange(sheet, ignorePrintAreas, out var printRange, out var rangeSource))
-                requests.Add(new SheetRangeRequest(sheet, printRange, rangeSource));
+            requests.AddRange(ResolveSheetPrintRanges(sheet, ignorePrintAreas));
         }
 
         return requests;
@@ -391,9 +390,8 @@ public static class WorkbookExportPrintPlanner
             return [];
         }
 
-        return TryResolvePrintRange(sheet, intent.IgnorePrintAreas, out var printRange, out var rangeSource)
-            ? [new SheetRangeRequest(sheet, printRange, rangeSource)]
-            : [];
+        var ranges = ResolveSheetPrintRanges(sheet, intent.IgnorePrintAreas);
+        return ranges.Count > 0 ? ranges : [];
     }
 
     private static Sheet? ResolveActiveSheet(Workbook workbook, int? requestedIndex)
@@ -431,11 +429,10 @@ public static class WorkbookExportPrintPlanner
         out GridRange printRange,
         out WorkbookExportPrintRangeSource rangeSource)
     {
-        if (!ignorePrintAreas &&
-            sheet.PrintArea is { } explicitPrintArea &&
-            explicitPrintArea.Start.Sheet == sheet.Id)
+        // For single-range callers: use the first area when multiple are configured.
+        if (!ignorePrintAreas && sheet.PrintAreas.Count > 0)
         {
-            printRange = explicitPrintArea;
+            printRange = sheet.PrintAreas[0];
             rangeSource = WorkbookExportPrintRangeSource.PrintArea;
             return true;
         }
@@ -450,6 +447,31 @@ public static class WorkbookExportPrintPlanner
         printRange = default;
         rangeSource = WorkbookExportPrintRangeSource.UsedRange;
         return false;
+    }
+
+    /// <summary>
+    /// Resolves print ranges for a sheet, returning one <see cref="SheetRangeRequest"/> per configured
+    /// print area (each area prints on its own page). Falls back to the used range when no print area
+    /// is configured.
+    /// </summary>
+    private static IReadOnlyList<SheetRangeRequest> ResolveSheetPrintRanges(
+        Sheet sheet,
+        bool ignorePrintAreas)
+    {
+        if (!ignorePrintAreas && sheet.PrintAreas.Count > 0)
+        {
+            var areas = sheet.PrintAreas
+                .Where(a => a.Start.Sheet == sheet.Id)
+                .Select(a => new SheetRangeRequest(sheet, a, WorkbookExportPrintRangeSource.PrintArea))
+                .ToList();
+            if (areas.Count > 0)
+                return areas;
+        }
+
+        if (sheet.GetUsedRange() is { } usedRange)
+            return [new SheetRangeRequest(sheet, usedRange, WorkbookExportPrintRangeSource.UsedRange)];
+
+        return [];
     }
 
     private static IReadOnlyList<WorkbookSheetExportPrintPlanSummary> BuildSheetPlans(

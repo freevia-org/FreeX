@@ -33,7 +33,6 @@ public sealed partial class Sheet
             ShowZeros                     = ShowZeros,
             FullCalculationOnLoad         = FullCalculationOnLoad,
             PhoneticProperties            = PhoneticProperties,
-            PrintArea                     = PrintArea.HasValue ? RemapRange(PrintArea.Value, newId) : null,
             AutoFilter                    = CloneAutoFilter(AutoFilter),
             SmartTags                     = SmartTags,
             DataConsolidation             = DataConsolidation,
@@ -107,6 +106,10 @@ public sealed partial class Sheet
             RowPageBreaksMetadata         = ClonePageBreaksMetadata(RowPageBreaksMetadata),
             ColumnPageBreaksMetadata      = ClonePageBreaksMetadata(ColumnPageBreaksMetadata),
         };
+
+        // Multi-area print areas: remap all areas to the new sheet id.
+        if (PrintAreas.Count > 0)
+            copy.SetPrintAreas(PrintAreas.Select(r => RemapRange(r, newId)));
 
         CopyLayoutCollectionsTo(copy);
         CopyCellContentTo(copy, newId);
