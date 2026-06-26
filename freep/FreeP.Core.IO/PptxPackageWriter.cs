@@ -1447,12 +1447,17 @@ public static class PptxPackageWriter
             ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
             : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
 
-        // Only emit blipFill when we have a real poster relationship (II4)
-        XElement? blipFillEl = posterRelId is not null
+        // KK1: a:blipFill is REQUIRED by CT_Picture (minOccurs=1). When no poster image
+        // is available emit a minimal VALID blipFill — just a:stretch/a:fillRect, no a:blip —
+        // so there is no dangling r:embed relationship and the element is schema-compliant.
+        // (CT_BlipFillProperties: a:blip is optional; a:stretch is valid without it.)
+        // When a real poster rel exists, emit the blip with r:embed as before (II4).
+        XElement blipFillEl = posterRelId is not null
             ? new XElement(P + "blipFill",
                 new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
                 new XElement(A + "stretch", new XElement(A + "fillRect")))
-            : null;
+            : new XElement(P + "blipFill",
+                new XElement(A + "stretch", new XElement(A + "fillRect")));
 
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",

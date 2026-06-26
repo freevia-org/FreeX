@@ -119,8 +119,7 @@ public static partial class PrintRenderer
             printGridlines,
             printErrorValue,
             gridLeft,
-            gridTop,
-            blackAndWhite);
+            gridTop);
 
         if (!draftQuality)
         {

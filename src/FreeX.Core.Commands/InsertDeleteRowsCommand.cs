@@ -23,7 +23,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
-    private GridRange? _printAreaSnapshot;
+    private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
@@ -83,7 +83,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
         _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
-        _printAreaSnapshot = sheet.PrintArea;
+        _printAreaSnapshot = sheet.PrintAreas.ToList();
         RowColumnShiftHelpers.ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
@@ -154,7 +154,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
         RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
         RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
-        sheet.PrintArea = _printAreaSnapshot;
+        sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);

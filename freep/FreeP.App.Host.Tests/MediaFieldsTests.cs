@@ -353,17 +353,14 @@ public sealed class MediaFieldsTests
         var P = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
         var A = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
         var R = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-        // blipFill with r:embed="rIdMedia1" must NOT appear when there is no poster
+        // KK1: CT_Picture requires a:blipFill (minOccurs=1); it must always be present.
         var blipFill = doc.Descendants(P + "blipFill").FirstOrDefault();
-        if (blipFill != null)
-        {
-            var embedVal = blipFill.Descendants(A + "blip")
-                .Select(b => b.Attribute(R + "embed")?.Value)
-                .FirstOrDefault();
-            // If a blipFill exists it must NOT reference a hard-coded "rIdMedia1"
-            Assert.NotEqual("rIdMedia1", embedVal);
-        }
-        // (no blipFill at all is also valid — that is the expected outcome when poster is null)
+        Assert.NotNull(blipFill); // schema-required — must always be emitted
+        // When there is no poster the blipFill must NOT carry a dangling r:embed relationship.
+        var embedVal = blipFill!.Descendants(A + "blip")
+            .Select(b => b.Attribute(R + "embed")?.Value)
+            .FirstOrDefault();
+        Assert.Null(embedVal); // no-poster path: either no a:blip or blip has no r:embed attribute
     }
 
     // HH2: out-of-order gradient stops are sorted on write (ascending pos)
