@@ -2030,6 +2030,12 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme);
         // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
 
+        // Wave 26: read picture frame geometry (prstGeom prst= from p:spPr) so the renderer
+        // can clip the image to a rounded-rect or ellipse.
+        var picPrst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+        if (!string.IsNullOrEmpty(picPrst) && picPrst != "rect")
+            shape.PictureFrameGeometry = picPrst;
+
         // blipFill → poster / image
         var blipFillEl = pic.Element(P + "blipFill");
         var blip = blipFillEl?.Element(A + "blip");

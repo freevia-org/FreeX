@@ -291,8 +291,8 @@ public sealed class MoveShapeCommand : IPresentationCommand
     private readonly long _dx;
     private readonly long _dy;
 
-    // Captured reroute data: (connectorId, oldX, oldY, oldCx, oldCy, newX, newY, newCx, newCy)
-    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+    // Captured reroute data: (connectorId, oldX, oldY, oldCx, oldCy, oldRoute, newX, newY, newCx, newCy)
+    private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
 
     public MoveShapeCommand(int slideIndex, uint shapeId, long dxEmu, long dyEmu)
@@ -327,32 +327,33 @@ public sealed class MoveShapeCommand : IPresentationCommand
         RevertReroute(p, _slideIndex, _rerouteCapture);
     }
 
-    internal static List<(uint, long, long, long, long, long, long, long, long)> ApplyReroute(
+    internal static List<(uint, long, long, long, long, List<(long X, long Y)>?, long, long, long, long)> ApplyReroute(
         Presentation p, int slideIndex, uint movedShapeId)
     {
-        var captures = new List<(uint, long, long, long, long, long, long, long, long)>();
+        var captures = new List<(uint, long, long, long, long, List<(long X, long Y)>?, long, long, long, long)>();
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return captures;
 
         var slide = p.Slides[slideIndex];
         foreach (var cmd in ConnectorRouter.BuildRerouteCommands(p, slideIndex, movedShapeId))
         {
-            // Find the connector and capture old bounds before applying.
+            // Find the connector and capture old bounds + old route before applying.
             var c = slide.Shapes.FirstOrDefault(sh => sh.Id == cmd.ConnectorId);
             if (c is null) continue;
             long ox = c.OffsetXEmu, oy = c.OffsetYEmu, ocx = c.ExtentCxEmu, ocy = c.ExtentCyEmu;
+            var oroute = c.ElbowRoute;
             cmd.Apply(p);
-            captures.Add((cmd.ConnectorId, ox, oy, ocx, ocy, cmd.NewX, cmd.NewY, cmd.NewCx, cmd.NewCy));
+            captures.Add((cmd.ConnectorId, ox, oy, ocx, ocy, oroute, cmd.NewX, cmd.NewY, cmd.NewCx, cmd.NewCy));
         }
         return captures;
     }
 
     internal static void RevertReroute(
         Presentation p, int slideIndex,
-        List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>? captures)
+        List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>? captures)
     {
         if (captures is null || slideIndex < 0 || slideIndex >= p.Slides.Count) return;
         var slide = p.Slides[slideIndex];
-        foreach (var (id, ox, oy, ocx, ocy, _, _, _, _) in captures)
+        foreach (var (id, ox, oy, ocx, ocy, oroute, _, _, _, _) in captures)
         {
             var c = slide.Shapes.FirstOrDefault(s => s.Id == id);
             if (c is null) continue;
@@ -360,6 +361,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
             c.OffsetYEmu  = oy;
             c.ExtentCxEmu = ocx;
             c.ExtentCyEmu = ocy;
+            c.ElbowRoute  = oroute;
         }
     }
 }
@@ -378,7 +380,7 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     private readonly long _newCy;
     private long _oldOffsetX, _oldOffsetY, _oldCx, _oldCy;
 
-    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+    private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
 
     public ResizeShapeCommand(int slideIndex, uint shapeId, long newOffsetX, long newOffsetY, long newCx, long newCy)
@@ -433,7 +435,7 @@ public sealed class RotateShapeCommand : IPresentationCommand
     private readonly double _newRotationDeg;
     private double          _oldRotationDeg;
 
-    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+    private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
         _rerouteCapture;
 
     public RotateShapeCommand(int slideIndex, uint shapeId, double newRotationDeg)
