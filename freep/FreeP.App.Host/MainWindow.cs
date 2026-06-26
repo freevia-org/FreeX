@@ -111,6 +111,11 @@ public sealed class MainWindow : Window
     private TextBox _notesBox = null!;
     private bool _notesRefreshing;   // guard against re-entrant TextChanged → SetCurrentSlideNotesText
 
+    // Comment indicator overlay + list pane (Wave 11B)
+    private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
+    private StackPanel _commentListPanel = null!; // shows comment text list below canvas
+    private Border  _commentListHost = null!; // collapsible container for _commentListPanel
+
     // ── Constructors ──────────────────────────────────────────────────────────────
 
     public MainWindow() : this(new FreePOptions()) { }
@@ -204,6 +209,7 @@ public sealed class MainWindow : Window
         UpdateTitle();
         RefreshCanvas();
         RefreshNotesPane();
+        RefreshCommentPane();
         UpdateSlideCount();
     }
 
@@ -215,7 +221,7 @@ public sealed class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
 
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); UpdateSlideCount(); UpdateTitle(); };
-        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); };
+        Editor.CurrentSlideChanged += (_, _) => { RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); };
         // SelectionChanged: 3C subscribes directly to Editor.SelectionChanged.
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
@@ -253,6 +259,7 @@ public sealed class MainWindow : Window
         RefreshCanvas();
         UpdateSlideCount();
         RefreshNotesPane();
+        RefreshCommentPane();
     }
 
     // ── Body layout ───────────────────────────────────────────────────────────────
@@ -285,10 +292,19 @@ public sealed class MainWindow : Window
             VerticalAlignment   = VerticalAlignment.Stretch
         };
 
-        // Wrap canvas + overlay in a Grid so the overlay occupies the same bounds.
+        // Wave 11B: comment indicator overlay (speech-bubble dots, non-interactive).
+        _commentOverlay = new Canvas
+        {
+            IsHitTestVisible    = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment   = VerticalAlignment.Stretch
+        };
+
+        // Wrap canvas + overlays in a Grid so the overlays occupy the same bounds.
         var stageGrid = new Grid();
         stageGrid.Children.Add(SlideCanvas);
         stageGrid.Children.Add(_textOverlay);
+        stageGrid.Children.Add(_commentOverlay);
 
         // AdornerDecorator ensures the adorner layer sits directly above SlideCanvas,
         // so SelectionAdorner handles are positioned correctly regardless of zoom.
@@ -326,13 +342,34 @@ public sealed class MainWindow : Window
             Editor.SetCurrentSlideNotesText(_notesBox.Text);
         };
 
-        // Right-side panel: canvas on top, notes strip below.
+        // Wave 11B: comment list pane — a collapsible strip above the notes pane.
+        // It is hidden when the current slide has no comments.
+        _commentListPanel = new StackPanel { Orientation = Orientation.Vertical };
+        _commentListHost = new Border
+        {
+            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xE8)),
+            MaxHeight       = 100,
+            Child           = new ScrollViewer
+            {
+                VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content                       = _commentListPanel,
+            },
+            Visibility      = Visibility.Collapsed,
+        };
+
+        // Right-side panel: canvas on top, comment strip, notes strip below.
         var rightPanel = new Grid();
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetRow(_canvasHost, 0);
-        Grid.SetRow(_notesBox,   1);
+        rightPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_canvasHost,       0);
+        Grid.SetRow(_commentListHost,  1);
+        Grid.SetRow(_notesBox,         2);
         rightPanel.Children.Add(_canvasHost);
+        rightPanel.Children.Add(_commentListHost);
         rightPanel.Children.Add(_notesBox);
 
         var splitter = new Grid();
@@ -383,6 +420,162 @@ public sealed class MainWindow : Window
         finally
         {
             _notesRefreshing = false;
+        }
+    }
+
+    // ── Comment pane + overlay refresh (Wave 11B) ────────────────────────────────
+
+    /// <summary>
+    /// Refreshes the comment indicator overlay dots (on the stage canvas) and the
+    /// comment list strip below the canvas for the current slide.
+    /// Guards null fields so it is safe to call before BuildBody completes.
+    /// </summary>
+    private void RefreshCommentPane()
+    {
+        if (_commentOverlay is null || _commentListHost is null || _commentListPanel is null) return;
+
+        var slide    = Editor.CurrentSlide;
+        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+
+        // ── Overlay: rebuild speech-bubble markers ──────────────────────────────
+        _commentOverlay.Children.Clear();
+        if (comments.Count > 0)
+        {
+            // The overlay is stretched over the same area as SlideCanvas.
+            // SlideCanvas.Margin = 40 on all sides; the slide itself is rendered inside that margin.
+            // We approximate the slide area as the canvas actual size minus the 40px margins.
+            // At runtime the canvas layout has been measured; we use actual dimensions.
+            // Since RefreshCommentPane is called after layout pass via events, ActualWidth is valid
+            // except on the very first call (before Loaded).  We add a safe fallback of 0.
+            var presW = _presentation.SlideSizeCxEmu;
+            var presH = _presentation.SlideSizeCyEmu;
+            if (presW <= 0) presW = 12192000;
+            if (presH <= 0) presH = 6858000;
+
+            // We'll draw the dots when the overlay has been laid out.  Register a one-shot handler.
+            _commentOverlay.Loaded -= OnCommentOverlayLoaded;
+            _commentOverlay.Loaded += OnCommentOverlayLoaded;
+
+            // If already loaded, draw immediately.
+            if (_commentOverlay.IsLoaded)
+                DrawCommentDots(comments);
+        }
+
+        // ── List pane ──────────────────────────────────────────────────────────
+        _commentListPanel.Children.Clear();
+        if (comments.Count > 0)
+        {
+            foreach (var cm in comments)
+            {
+                // Header: initials badge + author name + timestamp
+                var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 4, 6, 0) };
+                var badge = new Border
+                {
+                    Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                    CornerRadius    = new CornerRadius(3),
+                    Padding         = new Thickness(4, 1, 4, 1),
+                    Margin          = new Thickness(0, 0, 6, 0),
+                    Child           = new TextBlock
+                    {
+                        Text       = string.IsNullOrWhiteSpace(cm.Initials) ? "?" : cm.Initials,
+                        FontSize   = 10,
+                        Foreground = System.Windows.Media.Brushes.White,
+                    }
+                };
+                var authorText = new TextBlock
+                {
+                    Text       = string.IsNullOrWhiteSpace(cm.Author) ? "(unknown)" : cm.Author,
+                    FontSize   = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                headerPanel.Children.Add(badge);
+                headerPanel.Children.Add(authorText);
+
+                // Comment body text
+                var bodyText = new TextBlock
+                {
+                    Text         = cm.Text,
+                    FontSize     = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    Margin       = new Thickness(16, 2, 6, 6),
+                };
+
+                _commentListPanel.Children.Add(headerPanel);
+                _commentListPanel.Children.Add(bodyText);
+            }
+            _commentListHost.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _commentListHost.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnCommentOverlayLoaded(object sender, RoutedEventArgs e)
+    {
+        _commentOverlay.Loaded -= OnCommentOverlayLoaded;
+        var slide    = Editor.CurrentSlide;
+        var comments = slide?.Comments ?? new List<FreeP.Core.Model.SlideComment>();
+        DrawCommentDots(comments);
+    }
+
+    /// <summary>
+    /// Paints speech-bubble dot markers on <see cref="_commentOverlay"/> for each comment.
+    /// Positions are derived from the comment's EMU coordinates mapped into the overlay bounds,
+    /// accounting for SlideCanvas's 40 px margin on each side.
+    /// </summary>
+    private void DrawCommentDots(IReadOnlyList<FreeP.Core.Model.SlideComment> comments)
+    {
+        _commentOverlay.Children.Clear();
+        if (comments.Count == 0) return;
+
+        const double CanvasMargin = 40.0;
+        double w = _commentOverlay.ActualWidth;
+        double h = _commentOverlay.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        double slideW = w - 2 * CanvasMargin;
+        double slideH = h - 2 * CanvasMargin;
+        if (slideW <= 0 || slideH <= 0) return;
+
+        long presW = _presentation.SlideSizeCxEmu > 0 ? _presentation.SlideSizeCxEmu : 12192000;
+        long presH = _presentation.SlideSizeCyEmu > 0 ? _presentation.SlideSizeCyEmu : 6858000;
+
+        // Scale so the slide fits within the available area (same as SlideCanvas renderer).
+        double scaleX = slideW / presW;
+        double scaleY = slideH / presH;
+        double scale  = Math.Min(scaleX, scaleY);
+
+        double rendW = presW * scale;
+        double rendH = presH * scale;
+
+        // Centre the rendered slide within the available area.
+        double offX = CanvasMargin + (slideW - rendW) / 2.0;
+        double offY = CanvasMargin + (slideH - rendH) / 2.0;
+
+        foreach (var cm in comments)
+        {
+            double cx = offX + cm.Xemu * scale;
+            double cy = offY + cm.Yemu * scale;
+
+            // Speech-bubble: a small orange circle with a tooltip showing author+text.
+            var dot = new Border
+            {
+                Width           = 14,
+                Height          = 14,
+                CornerRadius    = new CornerRadius(7),
+                Background      = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                BorderBrush     = System.Windows.Media.Brushes.White,
+                BorderThickness = new Thickness(1.5),
+                ToolTip         = $"{cm.Author}: {cm.Text}",
+            };
+
+            Canvas.SetLeft(dot, cx - 7);
+            Canvas.SetTop(dot,  cy - 7);
+            _commentOverlay.Children.Add(dot);
         }
     }
 
