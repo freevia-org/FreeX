@@ -97,6 +97,15 @@ public sealed class SlideMaster
     public string? ThemeId { get; set; }
 
     /// <summary>
+    /// The theme owned by this slide master (color + font schemes).
+    /// Each master in a multi-master deck owns a distinct theme; resolving slide colors/fonts
+    /// must use this theme rather than the shared <see cref="Presentation.Theme"/> singleton.
+    /// Null only when the master has no theme part (degenerate packages); callers fall back to
+    /// <see cref="Presentation.Theme"/> in that case.
+    /// </summary>
+    public PresentationTheme? Theme { get; set; }
+
+    /// <summary>
     /// Placeholder shapes on this master, in z-order. These define default geometry and
     /// text properties for all placeholders on descendant layouts and slides.
     /// </summary>

@@ -117,21 +117,32 @@ public static class PptxPackageReader
 
         // Slide masters → layouts
         var masterRelEntries = presRels.Where(r => r.type == SlideMasterRelType).ToList();
+        bool firstMaster = true;
         foreach (var (masterId, _, masterTarget) in masterRelEntries)
         {
             var masterPath = ResolvePath(presDir, masterTarget);
             var (master, theme) = ReadSlideMaster(archive, masterPath, masterId);
-            presentation.Masters.Add(master);
+            // MM4: assign the theme to its OWNING master instead of clobbering presentation.Theme.
+            // presentation.Theme stays as the first master's theme for backward-compatibility with
+            // any consumer that uses it as a fallback (e.g. single-master decks, table styles).
             if (theme is not null)
-                presentation.Theme = theme;
+            {
+                master.Theme = theme;
+                if (firstMaster)
+                    presentation.Theme = theme;
+            }
+            firstMaster = false;
+            presentation.Masters.Add(master);
 
             var masterDir = GetDirectory(masterPath);
             var masterRels = LoadRels(archive, GetRelsPath(masterPath));
 
+            // Use this master's own theme (or fall back to presentation.Theme) for layout parsing.
+            var masterColorScheme = (master.Theme ?? presentation.Theme).ColorScheme;
             foreach (var (layoutId, _, layoutTarget) in masterRels.Where(r => r.type == SlideLayoutRelType))
             {
                 var layoutPath = ResolvePath(masterDir, layoutTarget);
-                var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, presentation.Theme.ColorScheme);
+                var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, masterColorScheme);
                 presentation.Layouts.Add(layout);
             }
         }
@@ -2045,8 +2056,10 @@ public static class PptxPackageReader
         var rPr = rEl.Element(A + "rPr");
         if (rPr is not null)
         {
-            run.Bold = rPr.Attribute("b")?.Value is "1" or "true";
-            run.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            var bAttr = rPr.Attribute("b");
+            if (bAttr is not null) { run.BoldSet = true;   run.Bold   = bAttr.Value is "1" or "true"; }
+            var iAttr = rPr.Attribute("i");
+            if (iAttr is not null) { run.ItalicSet = true; run.Italic = iAttr.Value is "1" or "true"; }
             run.Underline = rPr.Attribute("u")?.Value is not null and not "none";
             run.Strikethrough = rPr.Attribute("strike")?.Value is "sngStrike" or "dblStrike";
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)

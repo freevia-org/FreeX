@@ -80,8 +80,8 @@ public sealed class SlicerTimelineInteractionPlannerTests
         var bounds = new LayoutRect(0, 0, 240, 80);
         var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
 
-        // Click the far-left edge of the track → maps to the range start; a track click jumps the
-        // whole range to that single bucket.
+        // Click the far-left edge of the track → maps to January 2024.
+        // At Month granularity, the period-snapped range must be (Jan-1, Jan-31).
         var leftEdge = new LayoutPoint(layout.TrackRect.Left, layout.TrackRect.Center.Y);
         var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, leftEdge);
 
@@ -90,6 +90,232 @@ public sealed class SlicerTimelineInteractionPlannerTests
         var hit = TimelineLayoutBuilder.HitTest(layout, leftEdge);
         hit.Kind.Should().Be(TimelineHitKind.Track);
         hit.Date.Should().Be(new DateOnly(2024, 1, 1));
+
+        // QQ1: the command must span the whole month, not just a single day.
+        command!.SelectedStartDate.Should().Be("2024-01-01");
+        command!.SelectedEndDate.Should().Be("2024-01-31");
+    }
+
+    // ── QQ1: period-snapping for track/selection clicks ──────────────────────
+
+    [Fact]
+    public void BuildTimelineRangeCommand_MonthGranularity_TrackClick_SnapsToWholeMonth()
+    {
+        // Click somewhere in the middle of March 2024 → expects (Mar-1, Mar-31).
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        // Map a date in March 2024 back to a pixel X position on the track.
+        var marchDate = new DateOnly(2024, 3, 15);
+        var marchX = DateToX(layout, marchDate);
+        var point = new LayoutPoint(marchX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2024-03-01");
+        command!.SelectedEndDate.Should().Be("2024-03-31");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_MonthGranularity_FebruaryLeapYear_SnapsToFeb29()
+    {
+        // 2024 is a leap year → Feb ends on the 29th.
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        var febDate = new DateOnly(2024, 2, 10);
+        var febX = DateToX(layout, febDate);
+        var point = new LayoutPoint(febX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2024-02-01");
+        command!.SelectedEndDate.Should().Be("2024-02-29");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_MonthGranularity_FebruaryNonLeapYear_SnapsToFeb28()
+    {
+        // 2023 is NOT a leap year → Feb ends on the 28th.
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2023-01-01",
+            EndDate = "2023-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        var febDate = new DateOnly(2023, 2, 14);
+        var febX = DateToX(layout, febDate);
+        var point = new LayoutPoint(febX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2023-02-01");
+        command!.SelectedEndDate.Should().Be("2023-02-28");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_QuarterGranularity_ClickInQ3_SnapsToJul1_Sep30()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Quarter);
+
+        // Mid-August falls in Q3.
+        var augDate = new DateOnly(2024, 8, 15);
+        var augX = DateToX(layout, augDate);
+        var point = new LayoutPoint(augX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2024-07-01");
+        command!.SelectedEndDate.Should().Be("2024-09-30");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_YearGranularity_ClickInYear_SnapsToJan1_Dec31()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2022-01-01",
+            EndDate = "2025-12-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Year);
+
+        var midYear = new DateOnly(2023, 6, 15);
+        var midX = DateToX(layout, midYear);
+        var point = new LayoutPoint(midX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2023-01-01");
+        command!.SelectedEndDate.Should().Be("2023-12-31");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_DayGranularity_TrackClick_KeepsSingleDay()
+    {
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-03-01",
+            EndDate = "2024-03-31",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Day);
+
+        var dayDate = new DateOnly(2024, 3, 15);
+        var dayX = DateToX(layout, dayDate);
+        var point = new LayoutPoint(dayX, layout.TrackRect.Center.Y);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
+
+        command.Should().NotBeNull();
+        command!.SelectedStartDate.Should().Be("2024-03-15");
+        command!.SelectedEndDate.Should().Be("2024-03-15");
+    }
+
+    // ── QQ2: handle-drag snapping ─────────────────────────────────────────────
+
+    [Fact]
+    public void BuildTimelineRangeCommand_EndHandleDrag_MidSeptember_Month_SnapsToSep30()
+    {
+        // Existing selection: Mar–Jun. Drag end handle into mid-September.
+        // At Month granularity, end handle must snap to Sep-30.
+        var timeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            SelectedStartDate = "2024-03-01",
+            SelectedEndDate = "2024-06-30",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(timeline, bounds, TimelineGranularity.Month);
+
+        // Simulate end-handle drag: create a layout that puts the end handle somewhere in September.
+        // We test PeriodBounds directly via BuildTimelineRangeCommand: construct a layout where the
+        // end handle center maps to a September date, then call the planner.
+        // Strategy: build a layout with selection ending at Sep-14 → end handle is at Sep-14.
+        var dragTimeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            SelectedStartDate = "2024-03-01",
+            SelectedEndDate = "2024-09-14",   // end handle sits at Sep-14
+        };
+        var dragLayout = TimelineLayoutBuilder.Build(dragTimeline, bounds, TimelineGranularity.Month);
+
+        // Click the end handle center: kind=EndHandle, date=Sep-14 (or close).
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(
+            dragTimeline, dragLayout, dragLayout.EndHandle.Rect.Center);
+
+        command.Should().NotBeNull();
+        // End handle drag snaps the end boundary to the LAST day of Sep.
+        command!.SelectedEndDate.Should().Be("2024-09-30");
+        // Start boundary stays at what was already selected (Mar-1).
+        command!.SelectedStartDate.Should().Be("2024-03-01");
+    }
+
+    [Fact]
+    public void BuildTimelineRangeCommand_StartHandleDrag_MidMarch_Quarter_SnapsToJan1()
+    {
+        // At Quarter granularity, dragging start handle to mid-March (Q1) snaps start to Jan-1.
+        var dragTimeline = new TimelineModel
+        {
+            Name = "OrderDate",
+            SourceFieldName = "OrderDate",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            SelectedStartDate = "2024-03-15",  // start handle sits at Mar-15 (within Q1)
+            SelectedEndDate = "2024-09-30",
+        };
+        var bounds = new LayoutRect(0, 0, 480, 80);
+        var layout = TimelineLayoutBuilder.Build(dragTimeline, bounds, TimelineGranularity.Quarter);
+
+        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(
+            dragTimeline, layout, layout.StartHandle.Rect.Center);
+
+        command.Should().NotBeNull();
+        // Start handle drag snaps the start boundary to the FIRST day of the Q1 period.
+        command!.SelectedStartDate.Should().Be("2024-01-01");
+        // End boundary stays as-is.
+        command!.SelectedEndDate.Should().Be("2024-09-30");
     }
 
     [Fact]
@@ -115,6 +341,28 @@ public sealed class SlicerTimelineInteractionPlannerTests
         var hit = TimelineLayoutBuilder.HitTest(layout, layout.StartHandle.Rect.Center);
         hit.Kind.Should().Be(TimelineHitKind.StartHandle);
         hit.Date.Should().NotBeNull();
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Converts a date to the approximate X pixel position within the layout track,
+    /// using the same linear day-ratio math as <see cref="TimelineLayoutBuilder.DateAt"/> in reverse.
+    /// </summary>
+    private static double DateToX(TimelineLayoutModel layout, DateOnly date)
+    {
+        var start = layout.WindowStart ?? layout.RangeStart;
+        var end = layout.WindowEnd ?? layout.RangeEnd;
+        if (start is null || end is null)
+            return layout.TrackRect.Left;
+
+        var totalDays = end.Value.DayNumber - start.Value.DayNumber;
+        if (totalDays <= 0)
+            return layout.TrackRect.Left;
+
+        var ratio = Math.Clamp(
+            (date.DayNumber - start.Value.DayNumber) / (double)totalDays, 0, 1);
+        return layout.TrackRect.Left + ratio * layout.TrackRect.Width;
     }
 
     [Fact]

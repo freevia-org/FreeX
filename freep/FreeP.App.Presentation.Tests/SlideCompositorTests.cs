@@ -1932,6 +1932,258 @@ public sealed class SlideCompositorTests
             "+mn-lt must resolve to the theme minor latin font");
     }
 
+    // ─── PP1: explicit b="0" / i="0" must override inherited bold/italic ─────────────────────────
+
+    /// <summary>
+    /// Regression case: master bodyStyle lvl1 bold=true; a slide body run with explicit b="0"
+    /// (BoldSet=true, Bold=false) must render NON-bold.  Before the PP1 fix the OR logic forced
+    /// bold=true because Bold=false was indistinguishable from "unset".
+    /// </summary>
+    [Fact]
+    public void Compose_ExplicitBoldFalse_OverridesInheritedBold()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        // Master body style: lvl1 bold = true.
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Bold = true };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with explicit b="0": BoldSet=true, Bold=false — must WIN over inherited bold.
+        para.Runs.Add(new Run { Text = "Un-bolded", Bold = false, BoldSet = true });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Bold.Should().BeFalse(
+            "explicit b=\"0\" (BoldSet=true, Bold=false) must override inherited bold=true from master");
+    }
+
+    /// <summary>
+    /// A run with NO @b attribute (BoldSet=false) over an inherited-bold master style must
+    /// render BOLD — the inherited style wins when there is no explicit run value.
+    /// </summary>
+    [Fact]
+    public void Compose_NoExplicitBold_InheritsBoldFromMaster()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Bold = true };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with NO explicit bold (BoldSet=false) — must inherit true from master.
+        para.Runs.Add(new Run { Text = "Inherited bold" }); // Bold=false, BoldSet=false (defaults)
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Bold.Should().BeTrue(
+            "run with no explicit @b must inherit bold=true from master bodyStyle");
+    }
+
+    /// <summary>
+    /// An explicit b="1" run (BoldSet=true, Bold=true) over a non-bold inherited style renders bold.
+    /// </summary>
+    [Fact]
+    public void Compose_ExplicitBoldTrue_RendersAsBold()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Bold = false };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Explicit b="1": BoldSet=true, Bold=true.
+        para.Runs.Add(new Run { Text = "Explicitly bold", Bold = true, BoldSet = true });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Bold.Should().BeTrue(
+            "explicit b=\"1\" must render bold regardless of inherited style");
+    }
+
+    /// <summary>
+    /// PP1 italic variant: explicit i="0" run over an inherited-italic master style must render
+    /// NON-italic.
+    /// </summary>
+    [Fact]
+    public void Compose_ExplicitItalicFalse_OverridesInheritedItalic()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Italic = true };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Explicit i="0": ItalicSet=true, Italic=false — must WIN over inherited italic.
+        para.Runs.Add(new Run { Text = "Un-italicized", Italic = false, ItalicSet = true });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Italic.Should().BeFalse(
+            "explicit i=\"0\" (ItalicSet=true, Italic=false) must override inherited italic=true");
+    }
+
+    /// <summary>
+    /// PP1 italic: run with NO @i inherits italic=true from master.
+    /// </summary>
+    [Fact]
+    public void Compose_NoExplicitItalic_InheritsItalicFromMaster()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Italic = true };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        // Run with no explicit italic (ItalicSet=false) — must inherit true from master.
+        para.Runs.Add(new Run { Text = "Inherited italic" }); // Italic=false, ItalicSet=false
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Italic.Should().BeTrue(
+            "run with no explicit @i must inherit italic=true from master bodyStyle");
+    }
+
+    /// <summary>
+    /// PP1 italic: explicit i="1" renders italic even with non-italic inherited style.
+    /// </summary>
+    [Fact]
+    public void Compose_ExplicitItalicTrue_RendersAsItalic()
+    {
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        var master = new SlideMaster { Id = "m1" };
+        master.TextStyles = new MasterTextStyles();
+        master.TextStyles.BodyStyle[0] = new TextStyleLevel { Italic = false };
+        p.Masters.Add(master);
+
+        var layout = new SlideLayout { Id = "l1", MasterId = "m1" };
+        p.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "l1" };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = 457200, OffsetYEmu = 1371600,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 4525963
+        };
+        var body = new TextBody();
+        var para = new Paragraph { Level = 0 };
+        para.Runs.Add(new Run { Text = "Explicitly italic", Italic = true, ItalicSet = true });
+        body.Paragraphs.Add(para);
+        shape.TextBody = body;
+        slide.Shapes.Add(shape);
+        p.Slides.Add(slide);
+
+        var ops = SlideCompositor.Compose(p, slide);
+        var run = ops.OfType<DrawOp.Shape>().Single().Text!.Paragraphs[0].Runs[0];
+
+        run.Italic.Should().BeTrue(
+            "explicit i=\"1\" must render italic regardless of inherited style");
+    }
+
     /// <summary>
     /// Regression: a plain non-placeholder shape with no master TextStyles should still
     /// compose correctly — inheriting defaults by placeholder type (or hard-coded fallback).
@@ -1962,5 +2214,109 @@ public sealed class SlideCompositorTests
         run.FontSizePt.Should().Be(18.0, "non-placeholder shape without master styles falls back to 18pt");
         run.FontFamily.Should().Be(p.Theme.FontScheme.MinorLatinFont);
         run.Color.Should().Be(SrgbColor.Black);
+    }
+
+    // ── MM4: multi-master theme resolution ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A 2-master deck: master1 accent1=blue, master2 accent1=red.
+    /// A slide on master1 must resolve accent1 to BLUE; a slide on master2 to RED.
+    /// Before the MM4 fix, both resolved to the last-read master's theme (red), because
+    /// SlideCompositor used the single presentation.Theme instead of the owning master's theme.
+    /// </summary>
+    [Fact]
+    public void Compose_MultiMaster_EachSlideResolvesThemeFromOwnMaster()
+    {
+        var blue = SrgbColor.FromRgb(0x0000FF);
+        var red  = SrgbColor.FromRgb(0xFF0000);
+
+        var pres = new PresentationModel();
+
+        var master1 = new SlideMaster { Id = "rId1" };
+        master1.Theme = new PresentationTheme { Name = "Blue Theme" };
+        master1.Theme.ColorScheme[ThemeColorSlot.Accent1] = blue;
+
+        var master2 = new SlideMaster { Id = "rId2" };
+        master2.Theme = new PresentationTheme { Name = "Red Theme" };
+        master2.Theme.ColorScheme[ThemeColorSlot.Accent1] = red;
+
+        pres.Masters.Add(master1);
+        pres.Masters.Add(master2);
+        // presentation.Theme = first master's theme (single-master compat convention).
+        pres.Theme = master1.Theme;
+
+        var layout1 = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        var layout2 = new SlideLayout { Id = "rIdL2", MasterId = "rId2", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout1);
+        pres.Layouts.Add(layout2);
+
+        // Slide 1 on master1: solid fill using accent1 scheme color.
+        var slide1 = new Slide { LayoutId = "rIdL1" };
+        slide1.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 1000000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(
+                SrgbColor.Black, // placeholder resolved value — must be re-resolved by compositor
+                new SchemeColorRef { RoleName = "accent1", Slot = ThemeColorSlot.Accent1 }))
+        });
+        pres.Slides.Add(slide1);
+
+        // Slide 2 on master2: identical scheme color reference, must resolve differently.
+        var slide2 = new Slide { LayoutId = "rIdL2" };
+        slide2.Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 1000000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(
+                SrgbColor.Black,
+                new SchemeColorRef { RoleName = "accent1", Slot = ThemeColorSlot.Accent1 }))
+        });
+        pres.Slides.Add(slide2);
+
+        // Compose slide1 → accent1 must resolve to BLUE.
+        var ops1 = SlideCompositor.Compose(pres, slide1);
+        var shapeOp1 = ops1.OfType<DrawOp.Shape>().First();
+        shapeOp1.Fill.Should().BeOfType<ResolvedFill.Solid>("shape has solid fill");
+        ((ResolvedFill.Solid)shapeOp1.Fill).Color.Should().Be(blue,
+            "slide on master1 must resolve accent1 to BLUE (master1.Theme); before MM4 fix this was RED");
+
+        // Compose slide2 → accent1 must resolve to RED.
+        var ops2 = SlideCompositor.Compose(pres, slide2);
+        var shapeOp2 = ops2.OfType<DrawOp.Shape>().First();
+        shapeOp2.Fill.Should().BeOfType<ResolvedFill.Solid>("shape has solid fill");
+        ((ResolvedFill.Solid)shapeOp2.Fill).Color.Should().Be(red,
+            "slide on master2 must resolve accent1 to RED (master2.Theme)");
+    }
+
+    /// <summary>
+    /// Single-master deck: when master.Theme is null (degenerate package), the compositor
+    /// falls back to presentation.Theme — no regression.
+    /// </summary>
+    [Fact]
+    public void Compose_SingleMaster_NullMasterTheme_FallsBackToPresentationTheme()
+    {
+        var pres = PresentationModel.CreateEmpty();
+        // Explicitly null out master.Theme to simulate a degenerate package.
+        pres.Masters[0].Theme = null;
+        pres.Theme.ColorScheme[ThemeColorSlot.Accent1] = SrgbColor.FromRgb(0x00FF00); // green
+
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 1000000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(
+                SrgbColor.Black,
+                new SchemeColorRef { RoleName = "accent1", Slot = ThemeColorSlot.Accent1 }))
+        });
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var shapeOp = ops.OfType<DrawOp.Shape>().First();
+        ((ResolvedFill.Solid)shapeOp.Fill).Color.Should().Be(SrgbColor.FromRgb(0x00FF00),
+            "when master.Theme is null, falls back to presentation.Theme");
     }
 }

@@ -398,14 +398,19 @@ internal static class TextBodyFlowDocumentConverter
         // SemiBold/DemiBold must NOT be coerced to Bold.
         var localWeight = inline.ReadLocalValue(TextElement.FontWeightProperty);
         if (localWeight != DependencyProperty.UnsetValue && localWeight is FontWeight fw)
-            mr.Bold = fw == FontWeights.Bold;
-        // else leave mr.Bold = false (the model default; if this run was inheriting bold from
-        // placeholder the placeholder itself carries Bold=true — we don't bake it here)
+        {
+            mr.Bold    = fw == FontWeights.Bold;
+            mr.BoldSet = true; // explicit WPF local value → must win over inherited style (PP1)
+        }
+        // else leave mr.Bold = false, mr.BoldSet = false (inherit from style chain)
 
         // Italic — read LOCAL value only.
         var localStyle = inline.ReadLocalValue(TextElement.FontStyleProperty);
         if (localStyle != DependencyProperty.UnsetValue && localStyle is FontStyle fs)
-            mr.Italic = fs == FontStyles.Italic || fs == FontStyles.Oblique;
+        {
+            mr.Italic    = fs == FontStyles.Italic || fs == FontStyles.Oblique;
+            mr.ItalicSet = true; // explicit WPF local value → must win over inherited style (PP1)
+        }
 
         // Underline / Strikethrough from TextDecorations — read LOCAL value.
         var localDecorations = inline.ReadLocalValue(Inline.TextDecorationsProperty);

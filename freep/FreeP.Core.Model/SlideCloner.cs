@@ -132,7 +132,9 @@ public static class SlideCloner
         FontFamily    = run.FontFamily,
         FontSizePt    = run.FontSizePt,
         Bold          = run.Bold,
+        BoldSet       = run.BoldSet,
         Italic        = run.Italic,
+        ItalicSet     = run.ItalicSet,
         Underline     = run.Underline,
         Strikethrough = run.Strikethrough,
         Color         = run.Color,           // ThemeAwareColor is a struct — copied by value

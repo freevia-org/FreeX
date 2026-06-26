@@ -598,8 +598,8 @@ public sealed class ToggleRunBoldCommand : RunFormatCommandBase
         : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
 
     public override string Label => "Bold";
-    protected override void ApplyToRun(Run r)   => r.Bold = !r.Bold;
-    protected override void RevertFromRun(Run r) => r.Bold = !r.Bold;
+    protected override void ApplyToRun(Run r)   { r.Bold = !r.Bold; r.BoldSet = true; }
+    protected override void RevertFromRun(Run r) { r.Bold = !r.Bold; r.BoldSet = true; }
 }
 
 /// <summary>Toggles italic on a single run.</summary>
@@ -609,8 +609,8 @@ public sealed class ToggleRunItalicCommand : RunFormatCommandBase
         : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
 
     public override string Label => "Italic";
-    protected override void ApplyToRun(Run r)   => r.Italic = !r.Italic;
-    protected override void RevertFromRun(Run r) => r.Italic = !r.Italic;
+    protected override void ApplyToRun(Run r)   { r.Italic = !r.Italic; r.ItalicSet = true; }
+    protected override void RevertFromRun(Run r) { r.Italic = !r.Italic; r.ItalicSet = true; }
 }
 
 /// <summary>Toggles underline on a single run.</summary>

@@ -455,4 +455,118 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
         rt.Slides[0].ColorMapOverride.Should().BeNull(
             "slide without override must round-trip as null ColorMapOverride (a:masterClrMapping)");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // MM4: multi-master theme ownership tests
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A single-master deck must still produce exactly one theme1.xml and must NOT regress:
+    /// the master's Theme property must be set after read, and round-trip preserves the theme name.
+    /// </summary>
+    [Fact]
+    public void SingleMaster_ThemeOwnedByMaster_NoRegression()
+    {
+        var pres = new Presentation();
+        var master = new SlideMaster { Id = "rId1" };
+        master.Theme = new PresentationTheme { Name = "Single Theme" };
+        master.Theme.ColorScheme[ThemeColorSlot.Accent1] = SrgbColor.FromRgb(0x0000FF); // blue
+        pres.Masters.Add(master);
+        pres.Theme = master.Theme; // presentation.Theme mirrors master (single-master convention)
+
+        var layout = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout);
+
+        var slide = new Slide { LayoutId = "rIdL1" };
+        pres.Slides.Add(slide);
+
+        var path = Path.Combine(_tempDir, "single-master-theme.pptx");
+        PptxPackageWriter.Write(pres, path);
+
+        // Verify only theme1.xml exists in the archive.
+        using var zip = System.IO.Compression.ZipFile.OpenRead(path);
+        var themeEntries = zip.Entries.Where(e => e.FullName.StartsWith("ppt/theme/", StringComparison.OrdinalIgnoreCase)).ToList();
+        themeEntries.Should().HaveCount(1, "single-master deck must produce exactly one theme part");
+        themeEntries[0].FullName.Should().Be("ppt/theme/theme1.xml", "the single theme must be theme1.xml");
+
+        var rt = PptxPackageReader.Read(path);
+        rt.Masters.Should().HaveCount(1);
+        rt.Masters[0].Theme.Should().NotBeNull("master.Theme must be populated by the reader");
+        rt.Masters[0].Theme!.Name.Should().Be("Single Theme", "theme name must round-trip");
+        rt.Masters[0].Theme!.ColorScheme[ThemeColorSlot.Accent1].Should().Be(SrgbColor.FromRgb(0x0000FF),
+            "accent1 color must survive round-trip");
+    }
+
+    /// <summary>
+    /// A 2-master deck: master1 accent1=blue, master2 accent1=red.
+    /// After write→read each master still has its own distinct theme.
+    /// Color resolution for a slide on master1 → blue; slide on master2 → red.
+    /// </summary>
+    [Fact]
+    public void TwoMaster_EachMasterOwnsDistinctTheme_ColorsResolveCorrectly()
+    {
+        var blue = SrgbColor.FromRgb(0x0000FF);
+        var red  = SrgbColor.FromRgb(0xFF0000);
+
+        var pres = new Presentation();
+
+        // Master 1: accent1 = blue
+        var master1 = new SlideMaster { Id = "rId1" };
+        master1.Theme = new PresentationTheme { Name = "Blue Theme" };
+        master1.Theme.ColorScheme[ThemeColorSlot.Accent1] = blue;
+        pres.Masters.Add(master1);
+
+        // Master 2: accent1 = red
+        var master2 = new SlideMaster { Id = "rId2" };
+        master2.Theme = new PresentationTheme { Name = "Red Theme" };
+        master2.Theme.ColorScheme[ThemeColorSlot.Accent1] = red;
+        pres.Masters.Add(master2);
+
+        // presentation.Theme = first master's theme (backward-compat convention)
+        pres.Theme = master1.Theme;
+
+        var layout1 = new SlideLayout { Id = "rIdL1", MasterId = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        var layout2 = new SlideLayout { Id = "rIdL2", MasterId = "rId2", Name = "Blank", LayoutType = SlideLayoutType.Blank };
+        pres.Layouts.Add(layout1);
+        pres.Layouts.Add(layout2);
+
+        var slide1 = new Slide { LayoutId = "rIdL1" }; // on master1 (blue)
+        var slide2 = new Slide { LayoutId = "rIdL2" }; // on master2 (red)
+        pres.Slides.Add(slide1);
+        pres.Slides.Add(slide2);
+
+        var path = Path.Combine(_tempDir, "two-master-themes.pptx");
+        PptxPackageWriter.Write(pres, path);
+
+        // Verify theme1.xml AND theme2.xml both exist.
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(path))
+        {
+            var themeEntries = zip.Entries
+                .Where(e => e.FullName.StartsWith("ppt/theme/", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.FullName)
+                .ToList();
+            themeEntries.Should().HaveCount(2, "2-master deck must produce 2 theme parts");
+            themeEntries[0].FullName.Should().Be("ppt/theme/theme1.xml");
+            themeEntries[1].FullName.Should().Be("ppt/theme/theme2.xml");
+        }
+
+        // Round-trip: read back and verify per-master themes.
+        var rt = PptxPackageReader.Read(path);
+        rt.Masters.Should().HaveCount(2);
+
+        var rtMaster1 = rt.Masters[0];
+        var rtMaster2 = rt.Masters[1];
+
+        rtMaster1.Theme.Should().NotBeNull("master1.Theme must be populated");
+        rtMaster2.Theme.Should().NotBeNull("master2.Theme must be populated");
+
+        rtMaster1.Theme!.Name.Should().Be("Blue Theme");
+        rtMaster2.Theme!.Name.Should().Be("Red Theme");
+
+        rtMaster1.Theme.ColorScheme[ThemeColorSlot.Accent1].Should().Be(blue,
+            "master1 accent1 must be blue after round-trip");
+        rtMaster2.Theme.ColorScheme[ThemeColorSlot.Accent1].Should().Be(red,
+            "master2 accent1 must be red after round-trip");
+    }
+
 }
