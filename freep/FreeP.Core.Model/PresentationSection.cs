@@ -5,9 +5,9 @@ namespace FreeP.Core.Model;
 /// Sections are stored in ppt/presentation.xml inside a p14:sectionLst extension.
 ///
 /// Each section has a stable GUID <see cref="Id"/> (the p14:section id= attribute) and a
-/// display <see cref="Name"/>.  <see cref="SlideIds"/> holds the presentation-level sldId
-/// integer values (matching p:sldId id= in the slide-id list) in order — these are the
-/// canonical keys used to map sections back to loaded <see cref="Slide"/> instances.
+/// display <see cref="Name"/>.  <see cref="SlideIds"/> holds the presentation-level relationship
+/// id strings (e.g. "rId2") that equal <see cref="Slide.Id"/> for each member slide — these are
+/// the canonical keys used to map sections back to loaded <see cref="Slide"/> instances.
 /// </summary>
 public sealed class PresentationSection
 {
@@ -21,8 +21,11 @@ public sealed class PresentationSection
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Ordered list of sldId integer values (as strings) that belong to this section.
-    /// These map directly to p:sldId id= attributes in the presentation.xml slide list.
+    /// Ordered list of presentation-level relationship id strings (e.g. "rId2") for the slides
+    /// that belong to this section.  Each value equals the <see cref="Slide.Id"/> of the
+    /// corresponding member slide, enabling O(1) lookup via the writer's slide-id map.
+    /// When building a presentation programmatically, set these to the same strings used as
+    /// <see cref="Slide.Id"/> on the member slides.
     /// </summary>
     public List<string> SlideIds { get; } = new();
 }

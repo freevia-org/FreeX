@@ -154,11 +154,18 @@ public static class PptxPackageReader
         foreach (var (rId, _) in slideInfos)
             allSlides.Add(new Slide { Id = rId });
 
+        // Build a map from normalized slide part path → Slide.Id (= presentation-level rId).
+        // This is used by ResolveHlinkClick to resolve internal slide-jump hyperlinks by part
+        // path rather than by filename digit, so reordered decks resolve to the correct slide.
+        var slidePartPathToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (rId, slidePath) in slideInfos)
+            slidePartPathToId[slidePath] = rId;
+
         // Phase 2: read each slide, replacing the placeholder with the fully parsed slide.
         for (int si = 0; si < slideInfos.Count; si++)
         {
             var (rId, slidePath) = slideInfos[si];
-            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides);
+            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
             // Replace the placeholder so hyperlinks referencing this slide still get the same object.
             allSlides[si] = slide;
             presentation.Slides.Add(slide);
@@ -257,9 +264,13 @@ public static class PptxPackageReader
                     foreach (var sldIdEl in sldIdLstEl.Elements(P14 + "sldId"))
                     {
                         // The id= attribute is the numeric sldId integer (same as p:sldId id=).
+                        // Translate it to the rId (Slide.Id key space) via the map built from
+                        // p:sldIdLst so that section.SlideIds values match Slide.Id exactly.
+                        // Dangling references (numeric id not in any p:sldId) are dropped.
                         var numId = sldIdEl.Attribute("id")?.Value;
-                        if (!string.IsNullOrWhiteSpace(numId))
-                            section.SlideIds.Add(numId);
+                        if (!string.IsNullOrWhiteSpace(numId) &&
+                            sldIdToRId.TryGetValue(numId, out var rId))
+                            section.SlideIds.Add(rId);
                     }
                 }
 
@@ -313,7 +324,10 @@ public static class PptxPackageReader
             if (!int.TryParse(cmEl.Attribute("authorId")?.Value, out var authorId)) authorId = 0;
             if (!int.TryParse(cmEl.Attribute("idx")?.Value, out var idx)) idx = 0;
 
-            authorMap.TryGetValue(authorId, out var author);
+            // BB6: don't silently fabricate an empty author when authorId is not in the map.
+            // Preserve the numeric id as a placeholder so identity is not destroyed on round-trip.
+            if (!authorMap.TryGetValue(authorId, out var author))
+                author = ($"Author {authorId}", $"A{authorId}");
 
             DateTime? dt = null;
             var dtStr = cmEl.Attribute("dt")?.Value;
@@ -558,7 +572,8 @@ public static class PptxPackageReader
         ZipArchive archive, string slidePath, string slideId,
         PresentationColorScheme scheme, List<SlideLayout> layouts,
         Dictionary<string, TableStyleData>? tableStyles = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var slide = new Slide { Id = slideId };
 
@@ -578,10 +593,11 @@ public static class PptxPackageReader
         var bg = xml.Root.Element(P + "bg");
         if (bg is not null) slide.Background = ReadBackground(bg, scheme);
 
+        var slideDir = GetDirectory(slidePath);
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles, slideRels, allSlides))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
                 slide.Shapes.Add(shape);
         }
 
@@ -676,16 +692,18 @@ public static class PptxPackageReader
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles = null,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         foreach (var child in spTree.Elements())
         {
             SlideShape? shape = child.Name.LocalName switch
             {
-                "sp"           => ReadSp(child, scheme, slideRels, allSlides),
+                "sp"           => ReadSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId),
                 "pic"          => ReadPic(child, archive, partPath, scheme),
-                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides),
-                "grpSp"        => ReadGrpSp(child, archive, partPath, scheme, tableStyles, slideRels, allSlides),
+                "cxnSp"        => ReadCxnSp(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId),
+                "grpSp"        => ReadGrpSp(child, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
                 "graphicFrame" => ReadGraphicFrame(child, archive, partPath, scheme, tableStyles),
                 _ => null
             };
@@ -704,10 +722,22 @@ public static class PptxPackageReader
     /// Internal slide jumps use rel type .../slide (with an optional action attribute).
     /// Returns null when the rId is missing or the rels list is null.
     /// </summary>
+    /// <param name="slideDir">
+    /// Directory of the slide part (e.g. "ppt/slides") used to resolve relative rel targets
+    /// to absolute OPC part paths when <paramref name="slidePartPathToId"/> is provided.
+    /// </param>
+    /// <param name="slidePartPathToId">
+    /// Maps absolute normalized OPC part paths (e.g. "ppt/slides/slide3.xml") to their
+    /// Slide.Id (= presentation-level rId). When supplied, internal slide-jump targets are
+    /// resolved by part path rather than by filename digit, which is order-independent and
+    /// correct for reordered decks (where slideN.xml filename ≠ presentation order).
+    /// </param>
     private static Hyperlink? ResolveHlinkClick(
         XElement hlinkEl,
         List<(string id, string type, string target)>? slideRels,
-        List<Slide>? allSlides)
+        List<Slide>? allSlides,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         if (slideRels is null) return null;
 
@@ -732,16 +762,25 @@ public static class PptxPackageReader
 
             if (rel.type == SlideRelType || rel.type == SlideHlinkRelType || isSlideJumpAction)
             {
-                // Internal slide jump: target is a relative path like "../slides/slide2.xml"
-                // Map the target slide part path to a Slide.Id by matching the file name segment.
-                var targetSeg = rel.target.Split('/').Last(); // e.g. "slide2.xml"
+                // Internal slide jump: target is a relative path like "../slides/slide3.xml".
+                // Resolve by part path → Slide.Id rather than filename digit, so decks where the
+                // presentation order does not match slideN.xml filenames navigate correctly.
+                if (slidePartPathToId is not null && slideDir is not null)
+                {
+                    // Resolve the relative target against the slide's directory to get an absolute
+                    // OPC part path, then look it up in the part-path→rId map.
+                    var absTarget = ResolvePath(slideDir, rel.target);
+                    if (slidePartPathToId.TryGetValue(absTarget, out var slideId))
+                        return new Hyperlink { TargetSlideId = slideId, Tooltip = tooltip };
+                    // absTarget didn't match — fall through to filename-digit fallback below.
+                }
+
                 if (allSlides is not null)
                 {
-                    // Slides were loaded as slideId = the presentation-rels r:id; the parts are
-                    // "ppt/slides/slideN.xml". We match by the path segment stored as Slide.Id
-                    // which is actually the r:id from the presentation-level rels (rId2, rId3 etc.).
-                    // We don't have direct part-path-to-slide-id mapping here, so we use the slide
-                    // index derived from the numeric suffix of the file name: slide2.xml => index 1.
+                    // Fallback (no map available or path not found): derive slide index from the
+                    // numeric suffix of the filename. This is order-sensitive and wrong for reordered
+                    // decks, but preserves the pre-fix behaviour when the map is absent.
+                    var targetSeg = rel.target.Split('/').Last(); // e.g. "slide2.xml"
                     var numStr = System.Text.RegularExpressions.Regex
                         .Match(targetSeg, @"\d+").Value;
                     if (int.TryParse(numStr, out var num) && num >= 1 && num <= allSlides.Count)
@@ -750,7 +789,7 @@ public static class PptxPackageReader
                         return new Hyperlink { TargetSlideId = targetSlide.Id, Tooltip = tooltip };
                     }
                 }
-                // Fallback: store the target path as the id (round-trip acceptable).
+                // Last resort: store the target path as the id (round-trip acceptable).
                 return new Hyperlink { TargetSlideId = rel.target, Tooltip = tooltip };
             }
         }
@@ -1235,7 +1274,9 @@ public static class PptxPackageReader
 
     private static SlideShape ReadSp(XElement sp, PresentationColorScheme scheme,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var cNvPr = sp.Element(P + "nvSpPr")?.Element(P + "cNvPr");
         var nvPr = sp.Element(P + "nvSpPr")?.Element(P + "nvPr");
@@ -1250,7 +1291,7 @@ public static class PptxPackageReader
         // Shape-level hyperlink: a:hlinkClick inside cNvPr.
         var shapeHlink = cNvPr?.Element(A + "hlinkClick");
         if (shapeHlink is not null)
-            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides);
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
         var ph = nvPr?.Element(P + "ph");
         if (ph is not null) shape.Placeholder = ReadPlaceholder(ph);
@@ -1262,7 +1303,7 @@ public static class PptxPackageReader
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
 
         var txBody = sp.Element(P + "txBody");
-        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides);
+        if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId);
 
         return shape;
     }
@@ -1316,7 +1357,9 @@ public static class PptxPackageReader
 
     private static SlideShape ReadCxnSp(XElement cxnSp, PresentationColorScheme scheme,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var cNvPr = cxnSp.Element(P + "nvCxnSpPr")?.Element(P + "cNvPr");
 
@@ -1330,7 +1373,7 @@ public static class PptxPackageReader
         // Shape-level hyperlink on connector.
         var shapeHlink = cNvPr?.Element(A + "hlinkClick");
         if (shapeHlink is not null)
-            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides);
+            shape.Hyperlink = ResolveHlinkClick(shapeHlink, slideRels, allSlides, slideDir, slidePartPathToId);
 
         var spPr = cxnSp.Element(P + "spPr");
         ReadSpPr(spPr, shape, scheme);
@@ -1346,7 +1389,9 @@ public static class PptxPackageReader
     private static SlideShape ReadGrpSp(XElement grpSp, ZipArchive archive, string partPath,
         PresentationColorScheme scheme, Dictionary<string, TableStyleData>? tableStyles = null,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var cNvPr = grpSp.Element(P + "nvGrpSpPr")?.Element(P + "cNvPr");
 
@@ -1359,7 +1404,7 @@ public static class PptxPackageReader
 
         ReadSpPr(grpSp.Element(P + "grpSpPr"), shape, scheme);
 
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides))
+        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
             shape.Children.Add(child);
 
         return shape;
@@ -1668,7 +1713,9 @@ public static class PptxPackageReader
 
     private static TextBody ReadTxBody(XElement txBody, PresentationColorScheme scheme,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var body = new TextBody();
 
@@ -1723,14 +1770,16 @@ public static class PptxPackageReader
         }
 
         foreach (var pEl in txBody.Elements(A + "p"))
-            body.Paragraphs.Add(ReadParagraph(pEl, scheme, slideRels, allSlides));
+            body.Paragraphs.Add(ReadParagraph(pEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
 
         return body;
     }
 
     private static Paragraph ReadParagraph(XElement pEl, PresentationColorScheme scheme,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var para = new Paragraph();
         var pPr = pEl.Element(A + "pPr");
@@ -1769,7 +1818,7 @@ public static class PptxPackageReader
 
         foreach (var child in pEl.Elements())
         {
-            if (child.Name == A + "r") para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides));
+            if (child.Name == A + "r") para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
             else if (child.Name == A + "br") para.Runs.Add(new Run { Text = "\n" });
         }
 
@@ -1778,7 +1827,9 @@ public static class PptxPackageReader
 
     private static Run ReadRun(XElement rEl, PresentationColorScheme scheme,
         List<(string id, string type, string target)>? slideRels = null,
-        List<Slide>? allSlides = null)
+        List<Slide>? allSlides = null,
+        string? slideDir = null,
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
     {
         var run = new Run { Text = rEl.Element(A + "t")?.Value ?? string.Empty };
         var rPr = rEl.Element(A + "rPr");
@@ -1798,7 +1849,7 @@ public static class PptxPackageReader
             // Run-level hyperlink: a:hlinkClick inside a:rPr.
             var runHlink = rPr.Element(A + "hlinkClick");
             if (runHlink is not null)
-                run.Hyperlink = ResolveHlinkClick(runHlink, slideRels, allSlides);
+                run.Hyperlink = ResolveHlinkClick(runHlink, slideRels, allSlides, slideDir, slidePartPathToId);
         }
         return run;
     }
