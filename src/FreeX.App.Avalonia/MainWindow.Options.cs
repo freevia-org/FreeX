@@ -325,6 +325,9 @@ public sealed partial class MainWindow
             categoryList.Children.Add(row);
         }
         SelectCategory(0);
+        // Expose the category selector so the parity capture can switch left-list categories (which are
+        // Border rows in this StackPanel, not a TabControl) to render one PNG per category.
+        categoryList.Tag = (Action<int>)SelectCategory;
 
         void SelectCategory(int index)
         {
