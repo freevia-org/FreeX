@@ -594,10 +594,13 @@ public static class SlideCompositor
     // ─── SmartArt ────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Composes a SmartArt shape as a flat group of its fallback (dsp:drawing) shapes.
-    /// Each fallback shape is already positioned in slide-coordinate space so they are
-    /// composed identically to ordinary AutoShapes — no new rendering primitives needed.
-    /// If the dsp:drawing was missing (empty FallbackShapes), emits a placeholder grey rectangle.
+    /// Composes a SmartArt shape using the live layout engine (Theme 17) when the family is
+    /// supported, otherwise falls back to the cached dsp:drawing shapes.
+    ///
+    /// Priority:
+    ///   1. If <see cref="SmartArtData"/> is present and family is supported → live layout.
+    ///   2. If <see cref="SmartArtShape.FallbackShapes"/> is non-empty → cached drawing path.
+    ///   3. Fallback: grey placeholder rectangle.
     /// </summary>
     private static void ComposeSmartArt(
         SlideShape shape,
@@ -609,6 +612,24 @@ public static class SlideCompositor
     {
         var smart = shape.SmartArt!;
 
+        // ── Try live layout first ──────────────────────────────────────────────────
+        if (smart.Data is not null && smart.Data.Family != SmartArtFamily.Unknown)
+        {
+            var liveShapes = SmartArtLayoutEngine.Layout(
+                smart.Data,
+                shape.OffsetXEmu, shape.OffsetYEmu,
+                shape.ExtentCxEmu, shape.ExtentCyEmu,
+                theme, effectiveClrMap);
+
+            if (liveShapes is not null)
+            {
+                foreach (var liveShape in liveShapes)
+                    ComposeShape(liveShape, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
+                return;
+            }
+        }
+
+        // ── Cached drawing fallback ────────────────────────────────────────────────
         if (smart.FallbackShapes.Count > 0)
         {
             // Render each fallback shape as an ordinary AutoShape.

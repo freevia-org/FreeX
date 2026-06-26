@@ -1089,7 +1089,190 @@ public static class PptxPackageReader
             }
         }
 
+        // Theme 17: Parse SmartArtData (node tree + family) from data1.xml + layout1.xml
+        try
+        {
+            smart.Data = ReadSmartArtData(smart);
+        }
+        catch
+        {
+            // Graceful degradation: Data stays null, compositor will use cached fallback
+        }
+
         return smart;
+    }
+
+    /// <summary>
+    /// Theme 17: Parses the SmartArtData model (node tree + family) from the verbatim
+    /// part bytes already loaded into <paramref name="smart"/>.Parts.
+    /// Returns null when the data or layout part is absent or unreadable.
+    /// </summary>
+    private static SmartArtData? ReadSmartArtData(SmartArtShape smart)
+    {
+        // Find data part (ends with data*.xml)
+        var dataEntry = smart.Parts.Values
+            .FirstOrDefault(p => p.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase));
+        var layoutEntry = smart.Parts.Values
+            .FirstOrDefault(p => p.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase));
+
+        if (dataEntry is null) return null;
+
+        // ── Parse layout1.xml → family ─────────────────────────────────────────
+        var family = SmartArtFamily.Unknown;
+        string layoutUniqueId = string.Empty;
+
+        if (layoutEntry is not null)
+        {
+            XDocument layoutDoc;
+            using (var ms = new MemoryStream(layoutEntry.Bytes))
+                layoutDoc = XDocument.Load(ms);
+
+            layoutUniqueId = layoutDoc.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
+            family = ClassifySmartArtFamily(layoutUniqueId);
+        }
+
+        // ── Parse data1.xml → node tree ────────────────────────────────────────
+        XDocument dataDoc;
+        using (var ms2 = new MemoryStream(dataEntry.Bytes))
+            dataDoc = XDocument.Load(ms2);
+
+        var data = new SmartArtData
+        {
+            Family        = family,
+            LayoutUniqueId = layoutUniqueId
+        };
+
+        // dgm: namespace in data1.xml
+        var dgmNsData = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var aNsData   = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        var ptLst  = dataDoc.Root?.Element(dgmNsData + "ptLst");
+        var cxnLst = dataDoc.Root?.Element(dgmNsData + "cxnLst");
+
+        if (ptLst is null) return data; // empty but valid
+
+        // Build a dict: modelId → (type, text)
+        var points = new Dictionary<string, (string type, string text, bool isAsst)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pt in ptLst.Elements(dgmNsData + "pt"))
+        {
+            var modelId = pt.Attribute("modelId")?.Value ?? string.Empty;
+            var type    = pt.Attribute("type")?.Value ?? "node";
+
+            // Extract text from dgm:t/a:p/a:r/a:t  (multiple paragraphs → join with newline)
+            var tEl = pt.Element(dgmNsData + "t");
+            var sb  = new System.Text.StringBuilder();
+            if (tEl is not null)
+            {
+                foreach (var p in tEl.Elements())
+                {
+                    // Any namespace p element — extract inner a:r/a:t
+                    foreach (var r in p.Descendants())
+                    {
+                        if (r.Name.LocalName == "t")
+                        {
+                            var txt = r.Value;
+                            if (!string.IsNullOrEmpty(txt))
+                            {
+                                if (sb.Length > 0) sb.Append(' ');
+                                sb.Append(txt);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(modelId))
+                points[modelId] = (type, sb.ToString(), type == "asst");
+        }
+
+        // Build parent→children map from cxnLst parOf connections
+        var childrenOf = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var hasParent  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (cxnLst is not null)
+        {
+            foreach (var cxn in cxnLst.Elements(dgmNsData + "cxn"))
+            {
+                var cxnType = cxn.Attribute("type")?.Value ?? string.Empty;
+                if (!string.Equals(cxnType, "parOf", StringComparison.OrdinalIgnoreCase)) continue;
+
+                var srcId  = cxn.Attribute("srcId")?.Value  ?? string.Empty;
+                var destId = cxn.Attribute("destId")?.Value ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(srcId) || string.IsNullOrWhiteSpace(destId)) continue;
+
+                if (!childrenOf.TryGetValue(srcId, out var kids))
+                    childrenOf[srcId] = kids = new List<string>();
+                kids.Add(destId);
+                hasParent.Add(destId);
+            }
+        }
+
+        // Collect root node-type points (not a child of any other node, type == node or asst)
+        var roots = points
+            .Where(kv =>
+            {
+                var t = kv.Value.type;
+                return (t == "node" || t == "asst") && !hasParent.Contains(kv.Key);
+            })
+            .Select(kv => kv.Key)
+            .ToList();
+
+        // Recursively build tree
+        SmartArtNode BuildNode(string id, int level)
+        {
+            var (_, text, isAsst) = points.TryGetValue(id, out var info) ? info : ("node", id, false);
+            var node = new SmartArtNode
+            {
+                ModelId    = id,
+                Text       = text,
+                Level      = level,
+                IsAssistant = isAsst
+            };
+            if (childrenOf.TryGetValue(id, out var kids))
+            {
+                foreach (var kid in kids)
+                {
+                    if (points.ContainsKey(kid))
+                        node.Children.Add(BuildNode(kid, level + 1));
+                }
+            }
+            return node;
+        }
+
+        foreach (var rootId in roots)
+            data.Nodes.Add(BuildNode(rootId, 0));
+
+        return data;
+    }
+
+    /// <summary>
+    /// Classifies a layoutDef @uniqueId string into a <see cref="SmartArtFamily"/>.
+    /// The uniqueId is a URN like "urn:microsoft.com/office/officeart/2005/8/layout/process1".
+    /// </summary>
+    private static SmartArtFamily ClassifySmartArtFamily(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId)) return SmartArtFamily.Unknown;
+
+        // Normalise to lowercase for matching
+        var uid = uniqueId.ToLowerInvariant();
+
+        // Order matters: check more-specific patterns first
+        if (uid.Contains("hierarchy") || uid.Contains("orgchart") || uid.Contains("org-chart")
+            || uid.Contains("verticalbullet") || uid.Contains("vert") && uid.Contains("tree"))
+            return SmartArtFamily.Hierarchy;
+
+        if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
+            return SmartArtFamily.Cycle;
+
+        if (uid.Contains("process") || uid.Contains("arrow") || uid.Contains("chevron")
+            || uid.Contains("funnel") || uid.Contains("horiz"))
+            return SmartArtFamily.Process;
+
+        if (uid.Contains("list") || uid.Contains("lproc") || uid.Contains("bullet")
+            || uid.Contains("pyramid") || uid.Contains("stack"))
+            return SmartArtFamily.List;
+
+        return SmartArtFamily.Unknown;
     }
 
     /// <summary>
