@@ -1017,14 +1017,27 @@ public sealed class SlideCanvas : Control
             _                     => bounds.Y + insetTop
         };
 
-        double curY = startY;
+        double curY   = startY;
+        double textX  = bounds.X + insetLeft;
         int paraIdx = 0;
         foreach (var para in text.Paragraphs)
         {
             if (para.Runs.Count == 0) { paraIdx++; continue; }
             var (ft, spaceAfterDip) = formatted[paraIdx];
             curY += para.SpaceBeforePt * (96.0 / 72.0);
-            dc.DrawText(ft, new Point(bounds.X + insetLeft, curY));
+
+            // Wave 16A: use geometry-based rendering when any run has text effects or warp is active.
+            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
+            if (hasEffects)
+            {
+                dc.DrawText(ft, new Point(textX, curY)); // draw base
+                RenderParaWithEffects(dc, para, textX, curY, bounds, text.WarpPreset);
+            }
+            else
+            {
+                dc.DrawText(ft, new Point(textX, curY));
+            }
+
             curY += ft.Height + spaceAfterDip;
             paraIdx++;
         }
@@ -1083,6 +1096,165 @@ public sealed class SlideCanvas : Control
             pos += len;
         }
         return ft;
+    }
+
+    // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
+
+    private static bool ParaHasTextEffects(ResolvedParagraph para) =>
+        para.Runs.Any(r => r.TextFill is not null || r.TextOutline is not null || r.TextShadow is not null);
+
+    private static IBrush MakeFillBrushForText(ResolvedFill fill)
+    {
+        return fill switch
+        {
+            ResolvedFill.Solid s =>
+                new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B)),
+            ResolvedFill.Gradient g when g.Kind == GradientKind.Radial =>
+                new RadialGradientBrush
+                {
+                    Center         = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                    GradientOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                    GradientStops  = BuildGradientStops(g),
+                },
+            ResolvedFill.Gradient g =>
+                new LinearGradientBrush
+                {
+                    StartPoint    = new RelativePoint(
+                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
+                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
+                        RelativeUnit.Relative),
+                    EndPoint      = new RelativePoint(
+                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
+                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
+                        RelativeUnit.Relative),
+                    GradientStops = BuildGradientStops(g),
+                },
+            _ => Brushes.Black
+        };
+    }
+
+    private static FormattedText BuildSingleRunFormattedText(ResolvedRun run)
+    {
+        string txt = run.Text.Length == 0 ? " " : run.Text;
+        var typeface = new Typeface(
+            run.FontFamily,
+            run.Italic ? FontStyle.Italic : FontStyle.Normal,
+            run.Bold   ? FontWeight.Bold  : FontWeight.Normal,
+            FontStretch.Normal);
+        double emPx = run.FontSizePt * (96.0 / 72.0);
+        var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
+        var ft = new FormattedText(txt,
+            System.Globalization.CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface, emPx, brush);
+        if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
+        if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
+        return ft;
+    }
+
+    private static double ComputeRunOffsetX(ResolvedParagraph para, int targetPos)
+    {
+        double accX = 0;
+        int p = 0;
+        foreach (var run in para.Runs)
+        {
+            if (p == targetPos) break;
+            var prev = BuildSingleRunFormattedText(run);
+            accX += prev.Width;
+            p += run.Text.Length;
+        }
+        return accX;
+    }
+
+    private static Func<double, double, double>? BuildWarpYFunc(string? preset, LayoutRect shapeBounds)
+    {
+        if (string.IsNullOrWhiteSpace(preset)) return null;
+        double ampFrac = 0.35;
+        return preset.ToLowerInvariant() switch
+        {
+            "textarchup"   or "textcirclecurve"      => (t, sh) => -sh * ampFrac * 4 * t * (1 - t),
+            "textarchdown" or "textarchdownpour"      => (t, sh) =>  sh * ampFrac * 4 * t * (1 - t),
+            "textcircle"                              => (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
+            "textwaveup"   or "textwave1" or "textwaves" => (t, sh) => -sh * 0.15 * Math.Sin(t * 2 * Math.PI),
+            "textwave2"                               => (t, sh) => -sh * 0.10 * Math.Sin(t * 4 * Math.PI),
+            "texttriangle" or "texttrianglepour"      => (t, sh) =>  sh * ampFrac * (0.5 - t),
+            "textinversetriangle"                     => (t, sh) => -sh * ampFrac * (0.5 - t),
+            "textslantup"                             => (t, sh) => -sh * 0.3 * t,
+            "textslantdown"                           => (t, sh) =>  sh * 0.3 * t,
+            "textcantop"   or "textcan"               => (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
+            _                                         => null
+        };
+    }
+
+    private static void RenderParaWithEffects(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double x, double y,
+        LayoutRect shapeBounds,
+        string? warpPreset)
+    {
+        Func<double, double, double>? warpYOffset = BuildWarpYFunc(warpPreset, shapeBounds);
+
+        int pos = 0;
+        foreach (var run in para.Runs)
+        {
+            bool hasEffects = run.TextFill is not null || run.TextOutline is not null || run.TextShadow is not null;
+            if (!hasEffects && warpYOffset is null) { pos += run.Text.Length; continue; }
+
+            double runOffX = ComputeRunOffsetX(para, pos);
+            double drawX = x + runOffX;
+            double drawY = y;
+            if (warpYOffset is not null)
+                drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
+                                     shapeBounds.Height);
+
+            var runFt = BuildSingleRunFormattedText(run);
+            var geo   = runFt.BuildGeometry(new Point(drawX, drawY));
+            if (geo is null) { pos += run.Text.Length; continue; }
+
+            // 1. Shadow
+            if (run.TextShadow is { } ts)
+            {
+                double rad = ts.DirDeg * Math.PI / 180.0;
+                double dx  = Math.Cos(rad) * ts.DistDip;
+                double dy  = Math.Sin(rad) * ts.DistDip;
+                var shadowBrush = new SolidColorBrush(
+                    Color.FromArgb(ts.Alpha, ts.Color.R, ts.Color.G, ts.Color.B));
+                if (ts.BlurDip > 0.5)
+                {
+                    int passes = Math.Min(3, (int)Math.Ceiling(ts.BlurDip / 1.5));
+                    for (int pi = 1; pi <= passes; pi++)
+                    {
+                        double spread = ts.BlurDip * pi / passes;
+                        byte passAlpha = (byte)(ts.Alpha / (passes + 1));
+                        var passBrush = new SolidColorBrush(
+                            Color.FromArgb(passAlpha, ts.Color.R, ts.Color.G, ts.Color.B));
+                        for (int ox = -1; ox <= 1; ox++)
+                        for (int oy = -1; oy <= 1; oy++)
+                        {
+                            if (ox == 0 && oy == 0) continue;
+                            using var s2 = dc.PushTransform(
+                                Matrix.CreateTranslation(dx + ox * spread, dy + oy * spread));
+                            dc.DrawGeometry(passBrush, null, geo);
+                        }
+                    }
+                }
+                using var sScope = dc.PushTransform(Matrix.CreateTranslation(dx, dy));
+                dc.DrawGeometry(shadowBrush, null, geo);
+            }
+
+            // 2. Fill
+            IBrush fillBrush = run.TextFill is not null
+                ? MakeFillBrushForText(run.TextFill)
+                : new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
+
+            // 3. Outline
+            Pen? outlinePen = run.TextOutline is not null ? MakePen(run.TextOutline) : null;
+
+            dc.DrawGeometry(fillBrush, outlinePen, geo);
+
+            pos += run.Text.Length;
+        }
     }
 
     // ── Brush / Pen factories ─────────────────────────────────────────────────

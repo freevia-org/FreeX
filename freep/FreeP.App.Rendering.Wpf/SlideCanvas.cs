@@ -1355,6 +1355,7 @@ public sealed class SlideCanvas : FrameworkElement
         };
 
         double curY = startY;
+        double textX = bounds.X + insetLeft;
 
         int paraIdx = 0;
         foreach (var para in text.Paragraphs)
@@ -1365,10 +1366,19 @@ public sealed class SlideCanvas : FrameworkElement
             double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0);
             curY += spaceBefore;
 
-            // Horizontal alignment (FormattedText handles Left/Center/Right/Justify).
-            double textX = bounds.X + insetLeft;
-
-            dc.DrawText(ft, new Point(textX, curY));
+            // Wave 16A: use geometry-based rendering when any run has text effects, or warp is active.
+            bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
+            if (hasEffects)
+            {
+                // Draw the base text normally first for non-effect runs (effects path skips plain runs)
+                dc.DrawText(ft, new Point(textX, curY));
+                // Then overlay the effects-bearing runs via geometry
+                RenderParaWithEffects(dc, para, textX, curY, textAreaW, text.Wrap, text.WarpPreset, bounds);
+            }
+            else
+            {
+                dc.DrawText(ft, new Point(textX, curY));
+            }
 
             curY += ft.Height + spaceAfterDip;
             paraIdx++;
@@ -1463,6 +1473,279 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         return ft;
+    }
+
+    // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
+
+    /// <summary>
+    /// Returns true when any run in a paragraph has text fill/outline/shadow effects
+    /// that require geometry-based rendering.
+    /// </summary>
+    private static bool ParaHasTextEffects(ResolvedParagraph para) =>
+        para.Runs.Any(r => r.TextFill is not null || r.TextOutline is not null || r.TextShadow is not null);
+
+    /// <summary>
+    /// Builds a WPF geometry brush for a resolved fill bounded to <paramref name="bounds"/>.
+    /// Used to fill glyph geometry with gradient/other fills.
+    /// </summary>
+    private static Brush MakeFillBrushForText(ResolvedFill fill, Rect bounds)
+    {
+        switch (fill)
+        {
+            case ResolvedFill.Solid s:
+                var sb = new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B));
+                if (sb.CanFreeze) sb.Freeze();
+                return sb;
+            case ResolvedFill.Gradient g:
+                // Map gradient to the glyph bounding box using Absolute coordinates
+                if (g.Kind == GradientKind.Radial)
+                {
+                    var rb = new RadialGradientBrush(BuildGradientStops(g))
+                    {
+                        Center         = new Point(0.5, 0.5),
+                        GradientOrigin = new Point(0.5, 0.5),
+                        RadiusX        = 0.5,
+                        RadiusY        = 0.5,
+                        MappingMode    = BrushMappingMode.RelativeToBoundingBox,
+                    };
+                    if (rb.CanFreeze) rb.Freeze();
+                    return rb;
+                }
+                else
+                {
+                    double angleRad = g.AngleDegrees * Math.PI / 180.0;
+                    double cos = Math.Cos(angleRad), sin = Math.Sin(angleRad);
+                    var lb = new LinearGradientBrush(BuildGradientStops(g),
+                        new Point(cos >= 0 ? 0 : 1, sin >= 0 ? 0 : 1),
+                        new Point(cos >= 0 ? 1 : 0, sin >= 0 ? 1 : 0))
+                    {
+                        MappingMode = BrushMappingMode.RelativeToBoundingBox,
+                    };
+                    if (lb.CanFreeze) lb.Freeze();
+                    return lb;
+                }
+            default:
+                return Brushes.Black;
+        }
+    }
+
+    /// <summary>
+    /// Renders a single paragraph using glyph geometry so that per-run text fill/outline/shadow
+    /// effects can be applied.  Falls back to simple DrawText when no effects are active.
+    /// </summary>
+    private static void RenderParaWithEffects(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double x, double y,
+        double maxWidth,
+        bool wrap,
+        string? warpPreset,
+        LayoutRect shapeBounds)
+    {
+        // Build per-run FormattedText objects and accumulate geometry per run
+        // so each run can have independent fill/outline/shadow.
+        int pos = 0;
+        var sb = new System.Text.StringBuilder();
+        foreach (var r in para.Runs) sb.Append(r.Text);
+        string fullText = sb.Length == 0 ? " " : sb.ToString();
+
+        // Build a full paragraph FormattedText for layout/measurement (same as BuildFormattedText)
+        var ft = BuildFormattedText(para, maxWidth, wrap);
+        double paraW = ft.Width;
+        double paraH = ft.Height;
+
+        // Warp offset function: returns a Y offset at fractional horizontal position t ∈ [0,1]
+        // relative to the shape bounds.
+        Func<double, double, double>? warpYOffset = BuildWarpYFunc(warpPreset, shapeBounds);
+
+        pos = 0;
+        foreach (var run in para.Runs)
+        {
+            int len = run.Text.Length;
+            bool hasEffects = run.TextFill is not null || run.TextOutline is not null || run.TextShadow is not null;
+
+            if (!hasEffects && warpYOffset is null)
+            {
+                // Fast path: just advance position, plain runs drawn by the outer DrawText
+                pos += len;
+                continue;
+            }
+
+            // Build geometry for this run's span within the full FormattedText
+            // by building a per-run FormattedText at the run's character offset.
+            // Strategy: build a FormattedText with only this run's text, positioned
+            // to match where it would appear in the full paragraph.
+            var runFt = BuildSingleRunFormattedText(run, wrap ? maxWidth : 0);
+            // Compute run X by summing widths of previous runs
+            double runOffX = ComputeRunOffsetX(para, run, pos, maxWidth, wrap);
+
+            double drawX = x + runOffX;
+            double drawY = y;
+
+            if (warpYOffset is not null)
+                drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
+                                     shapeBounds.Height);
+
+            var geo = runFt.BuildGeometry(new Point(drawX, drawY));
+
+            // 1. Shadow (draw behind)
+            if (run.TextShadow is { } ts)
+            {
+                double rad = ts.DirDeg * Math.PI / 180.0;
+                double dx  = Math.Cos(rad) * ts.DistDip;
+                double dy  = Math.Sin(rad) * ts.DistDip;
+                var shadowBrush = new SolidColorBrush(Color.FromArgb(ts.Alpha, ts.Color.R, ts.Color.G, ts.Color.B));
+                if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+
+                if (ts.BlurDip > 0.5)
+                {
+                    int passes = Math.Min(3, (int)Math.Ceiling(ts.BlurDip / 1.5));
+                    for (int pi = 1; pi <= passes; pi++)
+                    {
+                        double spread = ts.BlurDip * pi / passes;
+                        byte passAlpha = (byte)(ts.Alpha / (passes + 1));
+                        var passBrush = new SolidColorBrush(Color.FromArgb(passAlpha, ts.Color.R, ts.Color.G, ts.Color.B));
+                        if (passBrush.CanFreeze) passBrush.Freeze();
+                        for (int ox = -1; ox <= 1; ox++)
+                        for (int oy = -1; oy <= 1; oy++)
+                        {
+                            if (ox == 0 && oy == 0) continue;
+                            dc.PushTransform(new TranslateTransform(dx + ox * spread, dy + oy * spread));
+                            dc.DrawGeometry(passBrush, null, geo);
+                            dc.Pop();
+                        }
+                    }
+                }
+                dc.PushTransform(new TranslateTransform(dx, dy));
+                dc.DrawGeometry(shadowBrush, null, geo);
+                dc.Pop();
+            }
+
+            // 2. Glyph fill
+            Brush fillBrush;
+            if (run.TextFill is not null)
+            {
+                var geoRect = geo.Bounds;
+                var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                fillBrush = MakeFillBrushForText(run.TextFill, r2);
+            }
+            else
+            {
+                fillBrush = FreezeBrush(new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)));
+            }
+
+            // 3. Outline pen
+            Pen? outlinePen = run.TextOutline is not null ? MakePen(run.TextOutline) : null;
+
+            dc.DrawGeometry(fillBrush, outlinePen, geo);
+
+            pos += len;
+        }
+    }
+
+    /// <summary>Compute the X offset of a run within a paragraph (sum of widths of preceding runs).</summary>
+    private static double ComputeRunOffsetX(ResolvedParagraph para, ResolvedRun targetRun, int targetPos, double maxWidth, bool wrap)
+    {
+        double accX = 0;
+        int p = 0;
+        foreach (var run in para.Runs)
+        {
+            if (p == targetPos) break;
+            // Measure run width by building single-run FormattedText
+            var prev = BuildSingleRunFormattedText(run, 0 /*no-wrap for width measurement*/);
+            accX += prev.Width;
+            p += run.Text.Length;
+        }
+        return accX;
+    }
+
+    /// <summary>Builds a FormattedText for a single run (used for glyph geometry extraction).</summary>
+    private static FormattedText BuildSingleRunFormattedText(ResolvedRun run, double maxWidth)
+    {
+        string txt = run.Text.Length == 0 ? " " : run.Text;
+        var typeface = new Typeface(
+            new FontFamily(run.FontFamily),
+            run.Italic ? FontStyles.Italic : FontStyles.Normal,
+            run.Bold   ? FontWeights.Bold  : FontWeights.Normal,
+            FontStretches.Normal);
+        double emPx = run.FontSizePt * (96.0 / 72.0);
+        var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
+        if (brush.CanFreeze) brush.Freeze();
+
+        var ft = new FormattedText(txt,
+            System.Globalization.CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight, typeface, emPx, brush,
+            numberSubstitution: null, textFormattingMode: TextFormattingMode.Display, pixelsPerDip: 1.0);
+        if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
+        if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
+        if (maxWidth > 0) ft.MaxTextWidth = maxWidth;
+        return ft;
+    }
+
+    // ── WordArt warp helpers (Wave 16A) ───────────────────────────────────────
+
+    /// <summary>
+    /// Returns a function(t_horizontal, shapeHeight) → Y-offset for warp presets.
+    /// t_horizontal is in [0,1] across the shape width.
+    /// Returns null for unrecognized or null presets (flat-text fallback).
+    ///
+    /// Approximated presets: textArchUp, textArchDown, textCircle, textWave1, textTriangle,
+    ///                        textInverseTriangle, textCan, textSlantUp, textSlantDown.
+    /// All others: flat fallback (null).
+    /// </summary>
+    private static Func<double, double, double>? BuildWarpYFunc(string? preset, LayoutRect shapeBounds)
+    {
+        if (string.IsNullOrWhiteSpace(preset)) return null;
+
+        // Amplitude is bounded to a fraction of shape height
+        double h = shapeBounds.Height;
+        double ampFrac = 0.35; // default arch amplitude = 35% of shape height
+
+        return preset.ToLowerInvariant() switch
+        {
+            // Arc up: glyphs rise in the middle like a "∩" arch
+            "textarchup" or "textcirclecurve" =>
+                (t, sh) => -sh * ampFrac * 4 * t * (1 - t),
+
+            // Arc down: glyphs dip in the middle like a "∪" valley
+            "textarchdown" or "textarchdownpour" =>
+                (t, sh) => sh * ampFrac * 4 * t * (1 - t),
+
+            // Circle: sine curve (full arc)
+            "textcircle" =>
+                (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
+
+            // Wave 1: single sine cycle
+            "textwaveup" or "textwave1" or "textwaves" =>
+                (t, sh) => -sh * 0.15 * Math.Sin(t * 2 * Math.PI),
+
+            // Wave 2: double sine cycle
+            "textwave2" =>
+                (t, sh) => -sh * 0.10 * Math.Sin(t * 4 * Math.PI),
+
+            // Triangle: glyphs scale up left-to-right (simulate ascent)
+            "texttriangle" or "texttrianglepour" =>
+                (t, sh) => sh * ampFrac * (0.5 - t),
+
+            // Inverse triangle: descend left-to-right
+            "textinversetriangle" =>
+                (t, sh) => -sh * ampFrac * (0.5 - t),
+
+            // Slant up: linear ascent
+            "textslantup" =>
+                (t, sh) => -sh * 0.3 * t,
+
+            // Slant down: linear descent
+            "textslantdown" =>
+                (t, sh) => sh * 0.3 * t,
+
+            // Can: top and bottom follow arcs (approximated as single arch)
+            "textcantop" or "textcan" =>
+                (t, sh) => -sh * ampFrac * Math.Sin(t * Math.PI),
+
+            // Unrecognized — flat fallback
+            _ => null
+        };
     }
 
     // ── WPF primitive helpers ──────────────────────────────────────────────────
