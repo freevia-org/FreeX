@@ -70,6 +70,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(ok, "TableStyleGalleryOkButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 80 };
         AutomationProperties.SetAutomationId(cancel, "TableStyleGalleryCancelButton");
+        ApplyDialogButtonChrome(ok, 80, isDefault: true);
+        ApplyDialogButtonChrome(cancel, 80);
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 

@@ -506,6 +506,8 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "PictureShapeInputCancelButton");
         cancelButton.Click += (_, _) => dialog.Close((string?)null);
+        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 80);
 
         dialog.Content = new StackPanel
         {
@@ -585,6 +587,8 @@ public sealed partial class MainWindow
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), Width = 80, IsCancel = true };
         AutomationProperties.SetAutomationId(cancelButton, "ObjectSizeCancelButton");
         cancelButton.Click += (_, _) => dialog.Close(((double, double)?)null);
+        ApplyDialogButtonChrome(okButton, 80, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 80);
 
         StackPanel Row(string label, TextBox box) => new()
         {

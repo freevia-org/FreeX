@@ -292,17 +292,17 @@ public sealed partial class MainWindow
         AddWorkbookFileDialogField(form, 0, plan.FileNameLabel, fileNameBox);
         AddWorkbookFileDialogField(form, 1, plan.FileTypeLabel, fileTypeBox);
 
+        var primaryButton = new Button { Content = plan.PrimaryCommandText, IsDefault = true };
+        var cancelFileButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
+        ApplyDialogButtonChrome(primaryButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelFileButton, 84);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 14, 0, 0),
             Spacing = 8,
-            Children =
-            {
-                new Button { Content = plan.PrimaryCommandText, MinWidth = 82, IsDefault = true },
-                new Button { Content = UiText.Get("InsertLoc_CancelButton"), MinWidth = 82, IsCancel = true },
-            },
+            Children = { primaryButton, cancelFileButton },
         };
 
         var right = new DockPanel();
@@ -432,8 +432,10 @@ public sealed partial class MainWindow
         stack.Children.Add(minimumSizeButton);
         stack.Children.Add(openAfterPublishBox);
 
-        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 80 };
-        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 80 };
+        var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true };
+        var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true };
+        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 84);
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
 
@@ -954,8 +956,10 @@ public sealed partial class MainWindow
             Padding = new Thickness(12, 10, 12, 12),
         };
 
-        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true };
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
+        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 84);
         okButton.Click += (_, _) => dialog.Close();
         cancelButton.Click += (_, _) => dialog.Close();
 

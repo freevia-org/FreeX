@@ -296,8 +296,10 @@ public sealed partial class MainWindow
             IsVisible = false,
         };
 
-        var okButton = new Button { Content = "OK", MinWidth = 84, Padding = new Thickness(10, 4) };
-        var cancelButton = new Button { Content = "Cancel", MinWidth = 84, Padding = new Thickness(10, 4) };
+        var okButton = new Button { Content = "OK", IsDefault = true };
+        var cancelButton = new Button { Content = "Cancel", IsCancel = true };
+        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(cancelButton, 84);
         AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "DimensionDialogCancelButton");
 
