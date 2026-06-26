@@ -142,7 +142,7 @@ public sealed class ChartLayoutRequestBuilderTests
     public void TryBuild_ReturnsNullForUnsupportedChartType()
     {
         var chart = ColumnChart();
-        chart.Type = ChartType.Treemap;
+        chart.Type = ChartType.Surface; // Surface is the one remaining unsupported type.
 
         var request = ChartLayoutRequestBuilder.TryBuild(chart, Plot, BuildAccessor(), new FakeTextMeasurer());
 
