@@ -360,14 +360,37 @@ public sealed partial class MainWindow
         ApplyCfTextBoxChrome(maxColorBox);
         AutomationProperties.SetAutomationId(maxColorBox, "ConditionalFormatMaxColorBox");
 
+        var customFormatLabel = StripDisplayMnemonic(UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat"));
         var highlightBox = new ComboBox
         {
-            ItemsSource = ConditionalFormatHighlightPreset.Presets.Select(p => p.Label).ToList(),
+            ItemsSource = ConditionalFormatHighlightPreset.Presets.Select(p => p.Label).Append(customFormatLabel).ToList(),
             SelectedIndex = 0,
             MinWidth = 220,
         };
         ApplyCfComboBoxChrome(highlightBox);
         AutomationProperties.SetAutomationId(highlightBox, "ConditionalFormatHighlightBox");
+
+        // "Format…" opens a fill-colour picker that overrides the named preset with an explicit
+        // custom style, mirroring Excel's New-Formatting-Rule Format button (and the WPF host).
+        // For an edited rule, seed from its existing FormatIfTrue so the format round-trips.
+        CellStyle? customFormatStyle = existingRule?.FormatIfTrue?.Clone();
+        var formatButton = new Button { Content = StripDisplayMnemonic(UiText.Get("ConditionalFormatDialog_FormatButton")) };
+        ApplyCfButtonChrome(formatButton, 96);
+        AutomationProperties.SetAutomationId(formatButton, "ConditionalFormatFormatButton");
+        formatButton.Click += async (_, _) =>
+        {
+            var presetFill = highlightBox.SelectedIndex >= 0 && highlightBox.SelectedIndex < ConditionalFormatHighlightPreset.Presets.Count
+                ? ConditionalFormatHighlightPreset.Presets[highlightBox.SelectedIndex].FillColor
+                : null;
+            var initial = customFormatStyle?.FillColor ?? presetFill ?? new CellColor(255, 199, 206);
+            var chosen = await ShowMoreColorsDialogAsync(
+                StripDisplayMnemonic(UiText.Get("ConditionalFormatDialog_FormatButton")), initial);
+            if (chosen is { } color)
+            {
+                customFormatStyle = new CellStyle { FillColor = color };
+                highlightBox.SelectedItem = customFormatLabel;
+            }
+        };
 
         var operatorField = CreateDataValidationField(UiText.Get("ConditionalFormat_OperatorLabel"), operatorBox);
         var value1Field = CreateDataValidationField(UiText.Get("ConditionalFormat_ValueLabel"), value1Box);
@@ -380,7 +403,12 @@ public sealed partial class MainWindow
         var minColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MinColorLabel"), minColorBox);
         var midColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MidColorLabel"), midColorBox);
         var maxColorField = CreateDataValidationField(UiText.Get("ConditionalFormat_MaxColorLabel"), maxColorBox);
-        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightBox);
+        var highlightRow = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(formatButton, Dock.Right);
+        formatButton.Margin = new Thickness(8, 0, 0, 0);
+        highlightRow.Children.Add(formatButton);
+        highlightRow.Children.Add(highlightBox);
+        var highlightField = CreateDataValidationField(UiText.Get("ConditionalFormat_FormatLabel"), highlightRow);
         var presetField = CreateDataValidationField(UiText.Get("ConditionalFormat_PresetLabel"), presetBox);
 
         var errorText = new TextBlock
@@ -472,6 +500,36 @@ public sealed partial class MainWindow
             formulaBox, textBox, rankBox, percentBox, topBottomBox, iconSetBox, threeColorBox,
             minColorBox, midColorBox, maxColorBox, highlightBox);
 
+        // Reflect an edited rule's explicit FormatIfTrue in the Format dropdown: pick the matching
+        // named preset when one exists, otherwise show the "Custom Format" sentinel (and keep the
+        // seeded customFormatStyle so OK round-trips the exact style).
+        if (existingRule?.FormatIfTrue is { } seededFormat)
+        {
+            var presets = ConditionalFormatHighlightPreset.Presets;
+            var matchIndex = -1;
+            for (var i = 0; i < presets.Count; i++)
+            {
+                var ps = presets[i].ToCellStyle();
+                if (ps.FillColor == seededFormat.FillColor
+                    && ps.FontColor == seededFormat.FontColor
+                    && ps.Bold == seededFormat.Bold)
+                {
+                    matchIndex = i;
+                    break;
+                }
+            }
+
+            if (matchIndex >= 0)
+            {
+                highlightBox.SelectedIndex = matchIndex;
+                customFormatStyle = null;
+            }
+            else
+            {
+                highlightBox.SelectedItem = customFormatLabel;
+            }
+        }
+
         // Pre-select a starting rule type for new rules (e.g. the ribbon's "New Formula Rule…").
         if (existingRule is null && startRuleType is { } seedType)
         {
@@ -538,9 +596,13 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) =>
         {
             var input = CollectInput();
-            var highlight = ConditionalFormatHighlightPreset.Presets[Math.Max(0, highlightBox.SelectedIndex)];
+            var isCustomFormat = highlightBox.SelectedItem as string == customFormatLabel;
+            // The "Custom Format" sentinel sits past the preset list; clamp so the preset index stays valid.
+            var presetIndex = Math.Max(0, Math.Min(highlightBox.SelectedIndex, ConditionalFormatHighlightPreset.Presets.Count - 1));
+            var highlight = ConditionalFormatHighlightPreset.Presets[presetIndex];
             var build = ConditionalFormatRuleBuilder.TryBuildApplyCommand(
-                input, _session.ActiveSheet.Id, range, highlight, existingRule?.Id);
+                input, _session.ActiveSheet.Id, range, highlight, existingRule?.Id,
+                isCustomFormat ? customFormatStyle : null);
             if (!build.IsValid)
             {
                 errorText.Text = string.Join("\n", build.Validation.Errors.Select(e => e.Message));
