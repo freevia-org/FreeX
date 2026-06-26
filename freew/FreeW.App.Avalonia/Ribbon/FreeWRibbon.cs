@@ -177,6 +177,56 @@ internal static class FreeWRibbon
             .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.smartart-colors-{s.Id}")))
             .ToArray());
 
+    /// <summary>AV-INSERT2: Insert &gt; Cover Page gallery — the three built-in cover-page presets.</summary>
+    private static RibbonMenu BuildCoverPageMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Default", new RibbonCommandId("freew.cover-page.default")),
+            new("Banded",  new RibbonCommandId("freew.cover-page.banded")),
+            new("Motion",  new RibbonCommandId("freew.cover-page.motion")),
+        });
+
+    /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu — Dropped / In Margin (approx) / None.</summary>
+    private static RibbonMenu BuildDropCapMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Dropped",   new RibbonCommandId("freew.drop-cap.dropped")),
+            new("In Margin", new RibbonCommandId("freew.drop-cap.in-margin")),
+            RibbonMenuItem.Separator(),
+            new("None",      new RibbonCommandId("freew.drop-cap.none")),
+        });
+
+    /// <summary>
+    /// AV-INSERT2: Insert &gt; Quick Parts menu — document-property fields (Title/Author/Subject), a Date
+    /// field, and a free-text snippet (opens a dialog). Command ids match the registry wiring.
+    /// </summary>
+    private static RibbonMenu BuildQuickPartsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Document Property — Title",   new RibbonCommandId("freew.quick-parts.title")),
+            new("Document Property — Author",  new RibbonCommandId("freew.quick-parts.author")),
+            new("Document Property — Subject", new RibbonCommandId("freew.quick-parts.subject")),
+            new("Field — Date",                new RibbonCommandId("freew.quick-parts.date")),
+            RibbonMenuItem.Separator(),
+            new("Insert Snippet…",             new RibbonCommandId("freew.quick-parts.snippet")),
+        });
+
+    /// <summary>
+    /// AV-INSERT2: Insert &gt; Equation menu — a default sample (E=mc²) plus a few common OMML structures.
+    /// Each preset maps to a <c>freew.equation.*</c> command that inserts the corresponding equation.
+    /// </summary>
+    private static RibbonMenu BuildEquationMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Insert New Equation", new RibbonCommandId("freew.equation.default")),
+            RibbonMenuItem.Separator(),
+            new("Fraction  a/b",       new RibbonCommandId("freew.equation.fraction")),
+            new("Script  xⁿ",          new RibbonCommandId("freew.equation.script")),
+            new("Radical  √x",         new RibbonCommandId("freew.equation.radical")),
+            new("Integral  ∫",         new RibbonCommandId("freew.equation.integral")),
+            new("Summation  ∑",        new RibbonCommandId("freew.equation.summation")),
+        });
+
     /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
     private static RibbonMenu BuildSymbolMenu() =>
         new(FreeWAvaloniaRibbonCommands.Symbols
@@ -263,6 +313,8 @@ internal static class FreeWRibbon
                 // AV-INSERT: Insert-tab depth.
                 tab.Group("pages", "Pages", null, 100, g =>
                 {
+                    // AV-INSERT2: Cover Page (gallery of presets) + Page Break.
+                    g.Dropdown("freew.cover-page", "Cover Page", BuildCoverPageMenu());
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", null, 98, g =>
@@ -276,14 +328,30 @@ internal static class FreeWRibbon
                     g.Button("freew.shape",    "Shape");
                     g.Button("freew.text-box", "Text Box");
                 });
+                // AV-INSERT2: Links group — Hyperlink + Bookmark.
+                tab.Group("links", "Links", null, 95, g =>
+                {
+                    g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.insert-bookmark",  "Bookmark");
+                });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
                 {
                     g.Button("freew.header", "Header");
                     g.Button("freew.footer", "Footer");
                 });
+                // AV-INSERT2: Text group — Quick Parts (document-property fields + snippet), Drop Cap,
+                // Text from File.
+                tab.Group("text", "Text", null, 93, g =>
+                {
+                    g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
+                    g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.text-from-file", "Text from File");
+                });
                 tab.Group("symbols", "Symbols", null, 92, g =>
                 {
                     g.Dropdown("freew.symbol", "Symbol", BuildSymbolMenu());
+                    // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
+                    g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                 });
             })
             .Tab("layout", "Layout", "L", tab =>
@@ -603,7 +671,28 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
     Action? NewWindow = null,
     /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
-    Action? ToggleSplit = null);
+    Action? ToggleSplit = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Hyperlink dialog (display text + address/anchor) and applies it via
+    /// <see cref="DocumentView.InsertHyperlink"/>. Optional (default null) so existing call sites still
+    /// compile; the registry no-ops when null.
+    /// </summary>
+    Action? OpenHyperlinkDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Bookmark dialog (add a named bookmark at the caret, or Go To an existing one).
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenBookmarkDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Quick Part dialog (a multi-line snippet) and inserts it at the caret.
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenQuickPartDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Insert Text from File — opens a file picker, loads a .docx/.txt, and inserts its text at
+    /// the caret. Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? InsertTextFromFile = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

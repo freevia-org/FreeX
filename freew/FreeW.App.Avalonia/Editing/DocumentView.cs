@@ -8385,6 +8385,155 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Insert Bibliography");
     }
 
+    // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
+
+    /// <summary>
+    /// AV-INSERT2: Prepend a cover page using the given <paramref name="preset"/> at the start of the
+    /// document — a Title-styled (and optionally Subtitle/date) block layout drawn from
+    /// <see cref="TextDocument.Properties"/> (see <see cref="DocumentOps.BuildCoverPage(TextDocument, CoverPagePreset)"/>).
+    /// Each block insert is grouped into a single undo so one Ctrl+Z removes the whole cover page. Mirrors
+    /// the WPF host's Insert &gt; Cover Page. FreeW models the cover page as a few styled paragraphs (there is
+    /// no dedicated cover-page block type); this is the documented approximation.
+    /// </summary>
+    public void InsertCoverPage(CoverPagePreset preset = CoverPagePreset.Default)
+    {
+        var blocks = DocumentOps.BuildCoverPage(_doc, preset);
+        if (blocks.Count == 0)
+            return;
+
+        _bus.BeginUndoGroup();
+        for (var i = 0; i < blocks.Count; i++)
+            _bus.Execute(new InsertBlockCommand(i, blocks[i]));
+        _bus.CommitUndoGroup("Insert Cover Page");
+
+        // Park the caret on the first body block after the cover page so typing continues in the body.
+        _cellCaret = null;
+        _hfCaret = null;
+        var bodyIndex = Math.Clamp(blocks.Count, 0, Math.Max(0, _doc.Blocks.Count - 1));
+        _caret = new DocPosition(bodyIndex, 0);
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Apply a drop cap to the caret's body paragraph — the leading letter is split into its own
+    /// enlarged, bold run (see <see cref="DropCap.ApplyDropCap"/>), the remainder keeping its formatting.
+    /// Routed through the undo/redo bus (reversible) and re-renders so the enlarged letter shows immediately.
+    /// No-op outside an editable body paragraph or on a paragraph with no leading text run. Mirrors the WPF
+    /// host's Insert &gt; Drop Cap. The enlarged leading run already renders via the normal run path (font
+    /// size is honoured); Word's true margin-float drop-cap geometry is an approximation here.
+    /// </summary>
+    public void ApplyDropCap(double sizePt = DropCap.DefaultSizePt)
+    {
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+            return;
+        _bus.Execute(new ReplaceParagraphRunsCommand(index, para => DropCap.ApplyDropCap(para, sizePt)));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Remove a drop cap from the caret's body paragraph: every run's formatting is reset to the
+    /// document default (see <see cref="DropCap.ClearFormatting"/>) while its text is preserved. The "None"
+    /// option of Word's Drop Cap menu. Undoable; re-renders. No-op outside an editable body paragraph.
+    /// </summary>
+    public void ClearDropCap()
+    {
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+            return;
+        _bus.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert a document-property / date field at the caret (Word's Insert &gt; Quick Parts &gt;
+    /// Document Property / Field). The field run carries <paramref name="kind"/> (e.g.
+    /// <see cref="RunFieldKind.Title"/>, <see cref="RunFieldKind.Author"/>, <see cref="RunFieldKind.Date"/>)
+    /// and a cached display value resolved from <see cref="TextDocument.Properties"/> so it renders
+    /// immediately and round-trips as a <c>w:fldSimple</c>. Appended as an object run to the caret's host
+    /// paragraph, undoable. Mirrors the WPF host's <c>DocumentView.InsertField</c>.
+    /// </summary>
+    public void InsertField(RunFieldKind kind)
+    {
+        if (kind == RunFieldKind.None)
+            return;
+        var run = new Run(ResolveDocumentField(kind), RunFormatting.Default) { FieldKind = kind };
+        InsertObjectRun(run);
+        Focus();
+    }
+
+    // Resolve a document-property / date field's cached display text (page-independent fields only).
+    // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
+    private string ResolveDocumentField(RunFieldKind kind) => kind switch
+    {
+        RunFieldKind.Date or RunFieldKind.Time =>
+            DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
+        RunFieldKind.Author      => _doc.Properties.Author ?? string.Empty,
+        RunFieldKind.Title       => _doc.Properties.Title ?? string.Empty,
+        RunFieldKind.Subject     => _doc.Properties.Subject ?? string.Empty,
+        RunFieldKind.Keywords    => _doc.Properties.Keywords ?? string.Empty,
+        RunFieldKind.DocComments => _doc.Properties.Comments ?? string.Empty,
+        RunFieldKind.PageNumber or RunFieldKind.NumPages => "1",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
+    /// carried on a textless object run (<see cref="Run.FromEquation"/>) whose <see cref="Run.Text"/> mirrors
+    /// the equation's linear form, so it serialises as an inline <c>m:oMath</c> and renders a readable
+    /// stand-in. Appended to the caret's host paragraph, undoable. When <paramref name="equation"/> is null a
+    /// default sample (E = mc²) is inserted, matching the WPF host's Equation button.
+    /// </summary>
+    public void InsertEquation(Equation? equation = null)
+    {
+        var eq = equation ?? DefaultSampleEquation();
+        InsertObjectRun(Run.FromEquation(eq));
+        Focus();
+    }
+
+    // A sample equation ("E = mc²") whose linear form renders the superscript — the Insert > Equation default.
+    private static Equation DefaultSampleEquation()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(MathRun.PlainText("E = m"));
+        equation.Runs.Add(MathRun.Superscript("c", "2"));
+        return equation;
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert a Quick Part / AutoText snippet's text at the caret as ordinary, editable text
+    /// (Word's Insert &gt; Quick Parts). A single-line snippet is inserted in place via the normal
+    /// text-edit/undo path (<see cref="InsertText"/>); a multi-line snippet inserts its first line at the
+    /// caret and the remaining lines as fresh paragraphs after the caret's block, grouped into one undo. A
+    /// null/empty snippet is a no-op. Mirrors the WPF host's Insert Quick Part.
+    /// </summary>
+    public void InsertQuickPartText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        if (lines.Length == 1)
+        {
+            InsertText(lines[0]);
+            Focus();
+            return;
+        }
+
+        // Multi-line: first line into the caret paragraph, the rest as new paragraphs after the caret block.
+        _bus.BeginUndoGroup();
+        InsertText(lines[0]);
+        var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        for (var i = 1; i < lines.Length; i++)
+            _bus.Execute(new InsertParagraphCommand(index++, new Paragraph(lines[i])));
+        _bus.CommitUndoGroup("Insert Quick Part");
+
+        var last = Math.Clamp(index - 1, 0, Math.Max(0, _doc.Blocks.Count - 1));
+        _caret = new DocPosition(last, BlockLength(last));
+        _selectionAnchor = _caret;
+        Focus();
+    }
+
     // Resolve the body paragraph that should host a reference marker (footnote/endnote/cross-ref). Prefer
     // the caret's block when it is an editable body paragraph; otherwise the first editable body paragraph;
     // otherwise append a fresh empty paragraph and host it there. Returns -1 only when no paragraph can be

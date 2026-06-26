@@ -434,7 +434,12 @@ public sealed class MainWindow : Window
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             NewWindow:       OpenNewWindow,
-            ToggleSplit:     ToggleSplit);
+            ToggleSplit:     ToggleSplit,
+            // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
+            OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
+            OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
+            OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
+            InsertTextFromFile:  () => _ = InsertTextFromFileAsync());
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
@@ -918,6 +923,113 @@ public sealed class MainWindow : Window
             return (200, 150); // undecodable (metafile) → default box; bytes still round-trip verbatim
         }
     }
+
+    // ── AV-INSERT2: Insert depth 2 dialog launchers ─────────────────────────────
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Hyperlink dialog. Pre-fills the display field with the current selection
+    /// text (Word's behaviour), and on OK inserts/converts the hyperlink via
+    /// <see cref="DocumentView.InsertHyperlink"/>. Wired to <c>freew.insert-hyperlink</c> (Insert → Links).
+    /// </summary>
+    private async Task OpenHyperlinkDialogAsync()
+    {
+        var dialog = new HyperlinkDialog(initialDisplay: _editor.SelectedText);
+        await dialog.ShowDialog(this);
+        if (dialog.Address is { } address)
+        {
+            _editor.InsertHyperlink(dialog.DisplayText ?? string.Empty, address);
+            _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Bookmark dialog (add at caret / Go To existing). Lists the document's current
+    /// bookmark names. Wired to <c>freew.insert-bookmark</c> (Insert → Links).
+    /// </summary>
+    private async Task OpenBookmarkDialogAsync()
+    {
+        var names = Bookmarks.List(_editor.Document)
+            .Select(b => b.Name)
+            .Distinct()
+            .ToList();
+        var dialog = new BookmarkDialog(names);
+        await dialog.ShowDialog(this);
+        if (dialog.BookmarkName is { } add)
+            _editor.InsertBookmark(add);
+        else if (dialog.GoToName is { } go)
+            _editor.GoToBookmark(go);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Quick Part dialog (a free-text snippet) and inserts the entered text at
+    /// the caret. Wired to <c>freew.quick-parts.snippet</c> (Insert → Text → Quick Parts).
+    /// </summary>
+    private async Task OpenQuickPartDialogAsync()
+    {
+        var dialog = new QuickPartDialog();
+        await dialog.ShowDialog(this);
+        if (dialog.SnippetText is { } text)
+        {
+            _editor.InsertQuickPartText(text);
+            _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert Text from File — opens a file picker for a .docx/.txt, loads it (reusing the open
+    /// adapters for .docx; a plain reader for .txt), and inserts the document's plain text at the caret as a
+    /// Quick-Part-style multi-paragraph insert. Wired to <c>freew.text-from-file</c> (Insert → Text).
+    /// </summary>
+    private async Task InsertTextFromFileAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Insert Text from File",
+            AllowMultiple = false,
+            FileTypeFilter = [TextFromFileType],
+        });
+        if (files.Count == 0)
+            return;
+        var path = files[0].TryGetLocalPath();
+        if (path is null)
+            return;
+
+        try
+        {
+            string text;
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                text = await File.ReadAllTextAsync(path);
+            }
+            else
+            {
+                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, ext, out _);
+                if (adapter is null)
+                {
+                    _status.Text = $"Insert text failed: unsupported file type \"{ext}\".";
+                    return;
+                }
+                using var stream = File.OpenRead(path);
+                var document = adapter.Load(stream);
+                text = document.PlainText;
+            }
+
+            _editor.InsertQuickPartText(text);
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Insert text failed: {ex.Message}";
+        }
+    }
+
+    private static readonly FilePickerFileType TextFromFileType = new("Documents")
+    {
+        Patterns = ["*.docx", "*.txt"],
+        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
+    };
 
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {

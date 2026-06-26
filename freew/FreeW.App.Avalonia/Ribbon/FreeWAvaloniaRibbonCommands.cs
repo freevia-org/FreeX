@@ -182,6 +182,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.header", new RelayCommand(editor.EnsureHeader));
         r.Register("freew.footer", new RelayCommand(editor.EnsureFooter));
 
+        // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
+        RegisterInsertDepth2Commands(r, editor, callbacks);
+
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
         r.Register("freew.table-header-row",  new RelayCommand(editor.ToggleTableHeaderRow));
@@ -394,6 +397,61 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         foreach (var (id, glyph, _) in Symbols)
             r.Register(id, new RelayCommand(() => editor.InsertSymbol(glyph)));
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Registers the second tier of Insert-tab commands — Hyperlink, Bookmark, Cover Page,
+    /// Drop Cap, Quick Parts (document-property fields + snippet), Equation, and Text from File. Each
+    /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method; the dialog-driven
+    /// commands (Hyperlink / Bookmark / Quick-Part snippet / Text-from-File) route through the optional
+    /// <see cref="RibbonHostCallbacks"/> launchers and safely no-op when the shell did not supply one (so
+    /// the registry stays complete and existing test call sites keep compiling).
+    /// </summary>
+    private static void RegisterInsertDepth2Commands(
+        RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        // ── Links ────────────────────────────────────────────────────────────
+        // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
+        r.Register("freew.insert-hyperlink", new RelayCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.insert-bookmark",  new RelayCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+
+        // ── Cover Page ───────────────────────────────────────────────────────
+        // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
+        r.Register("freew.cover-page",         new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.cover-page.default", new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
+        r.Register("freew.cover-page.banded",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Banded)));
+        r.Register("freew.cover-page.motion",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Motion)));
+
+        // ── Drop Cap ─────────────────────────────────────────────────────────
+        // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
+        // approximation — render-deferred); None clears the paragraph's run formatting.
+        r.Register("freew.drop-cap",           new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.drop-cap.dropped",   new RelayCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.in-margin", new RelayCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.none",      new RelayCommand(editor.ClearDropCap));
+
+        // ── Quick Parts ──────────────────────────────────────────────────────
+        // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
+        r.Register("freew.quick-parts",         new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.quick-parts.title",   new RelayCommand(() => editor.InsertField(RunFieldKind.Title)));
+        r.Register("freew.quick-parts.author",  new RelayCommand(() => editor.InsertField(RunFieldKind.Author)));
+        r.Register("freew.quick-parts.subject", new RelayCommand(() => editor.InsertField(RunFieldKind.Subject)));
+        r.Register("freew.quick-parts.date",    new RelayCommand(() => editor.InsertField(RunFieldKind.Date)));
+        r.Register("freew.quick-parts.snippet", new RelayCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
+
+        // ── Equation ─────────────────────────────────────────────────────────
+        // The opener no-op; each preset inserts an inline OMML equation (default = E=mc²).
+        r.Register("freew.equation",           new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.equation.default",   new RelayCommand(() => editor.InsertEquation()));
+        r.Register("freew.equation.fraction",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
+        r.Register("freew.equation.script",    new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
+        r.Register("freew.equation.radical",   new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
+        r.Register("freew.equation.integral",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
+        r.Register("freew.equation.summation", new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+
+        // ── Text from File ───────────────────────────────────────────────────
+        // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.
+        r.Register("freew.text-from-file", new RelayCommand(callbacks.InsertTextFromFile ?? (() => { })));
     }
 
     /// <summary>
