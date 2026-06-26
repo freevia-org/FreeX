@@ -268,6 +268,7 @@ public class ProtectionGuardCoverageTests
         ["SetSlicerSelectionCommand"] = "Slicer selection; requires slicer model.",
         ["AddSlicerCommand"] = "Slicer insertion; requires pivot + slicer models.",
         ["SetTimelineRangeCommand"] = "Timeline range; requires timeline model.",
+        ["SetTimelineGranularityCommand"] = "Timeline granularity; requires timeline model.",
         ["AddTimelineCommand"] = "Timeline insertion; requires timeline model.",
 
         // Drawing / shape / textbox / picture commands — require drawing model; EditObjects audit pending

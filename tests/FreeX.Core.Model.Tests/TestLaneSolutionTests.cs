@@ -31,7 +31,9 @@ public sealed class TestLaneSolutionTests
             "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
             "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
             "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj",
-            "freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj"
+            "freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj",
+            "freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj",
+            "freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj"
         });
 
         uiLaneProjects.Should().BeEquivalentTo(new[]
