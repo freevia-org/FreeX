@@ -685,6 +685,55 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Extended snapshot of pre-computed header/footer render items including the absolute page-space X
+    /// coordinate. Tab-stop-positioned items have Alignment=Left and X = the resolved stop position;
+    /// paragraph-aligned items have X = _contentLeft (the alignment offset is applied at draw time).
+    /// Used by AV-POLISH tab-stop tests.
+    /// </summary>
+    internal IReadOnlyList<(string Text, double X, double Y, TextAlignment Alignment, double AvailableWidth)> HeaderFooterItemsFull
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _headerFooterItems
+                .Select(i => (i.Text, i.X, i.Y, i.Alignment, i.AvailableWidth))
+                .ToList();
+        }
+    }
+
+    // ── AV-POLISH: chart annotation introspection for tests ──────────────────────────────────────────
+
+    /// <summary>
+    /// Snapshot of floating chart annotation fields (ShowLegend, ShowDataLabels, CategoryAxisTitle,
+    /// ValueAxisTitle) resolved by <see cref="BuildChartData"/>. Tests verify that the annotation
+    /// flags are correctly derived from QuickLayout / StyleId / individual properties.
+    /// </summary>
+    internal IReadOnlyList<(bool ShowLegend, bool ShowDataLabels, string? CategoryAxisTitle, string? ValueAxisTitle)>
+        FloatingChartAnnotations
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingCharts.Select(c =>
+                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Same as <see cref="FloatingChartAnnotations"/> but for inline charts.
+    /// </summary>
+    internal IReadOnlyList<(bool ShowLegend, bool ShowDataLabels, string? CategoryAxisTitle, string? ValueAxisTitle)>
+        InlineChartAnnotations
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineCharts.Select(c =>
+                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -1236,6 +1285,10 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Emits <see cref="HfRenderItem"/>s for each paragraph line of a header/footer slot.
     /// Field runs (PAGE, NUMPAGES, DATE, FILENAME) are resolved to display strings here.
+    /// Tab characters are interpreted as Word's default centre-tab (midpoint) and right-tab (right edge),
+    /// mirroring Word's "Title[TAB]Center[TAB]Page" HF pattern. Explicit paragraph TabStops override the
+    /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
+    /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
     private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount)
     {
@@ -1243,49 +1296,140 @@ public sealed class DocumentView : Control
         foreach (var para in hf.Paragraphs)
         {
             var pf = ResolveParagraphFmt(para);
-            var alignment = pf.Alignment;
 
-            // Build one display string from the paragraph's runs, resolving field values.
-            // Tab characters in the text are preserved; simple tab-stop rendering is at the
-            // caller's discretion (we emit them as a space here — tab-stop precision is a follow-up).
+            // Build segments split on TAB characters.
+            // Each entry carries (tabStopIndex, Text, Fmt):
+            //   tabStopIndex 0 → segment before the first tab (left-aligned at X=_contentLeft)
+            //   tabStopIndex 1 → segment after the first tab (centre stop)
+            //   tabStopIndex 2 → segment after the second tab (right stop)
+            // Multiple consecutive tabs advance the index so the ordinal is always correct even
+            // if some slots carry empty text (e.g. "Left\t\tRight" puts "Right" at stop 2).
+            var segments = new List<(int StopIndex, string Text, RunFormatting Fmt)>();
             var sb = new System.Text.StringBuilder();
-            RunFormatting runFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
+            RunFormatting segFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
+            var stopIndex = 0;
+
             foreach (var run in para.Runs)
             {
                 var fieldText = ResolveHfField(run, pageNumber, pageCount);
-                if (fieldText is not null)
-                {
-                    sb.Append(fieldText);
-                }
-                else
-                {
-                    // Replace tab with two spaces (tab-stop resolution is a follow-up).
-                    sb.Append(run.Text.Replace("\t", "  "));
-                }
+                var text = fieldText ?? run.Text;
                 if (run.Formatting.FontSizePt.HasValue)
-                    runFmt = run.Formatting;
+                    segFmt = run.Formatting;
+
+                // Split the resolved text on tab characters.
+                var parts = text.Split('\t');
+                for (var pi = 0; pi < parts.Length; pi++)
+                {
+                    sb.Append(parts[pi]);
+                    if (pi < parts.Length - 1)
+                    {
+                        // A TAB was consumed — flush the current buffer as a segment and advance the stop index.
+                        segments.Add((stopIndex, sb.ToString(), segFmt));
+                        sb.Clear();
+                        stopIndex++;
+                    }
+                }
             }
+            // Flush the final (or only) segment.
+            segments.Add((stopIndex, sb.ToString(), segFmt));
 
-            var text = sb.ToString();
-            if (string.IsNullOrEmpty(text))
+            // Whether the paragraph contains any tab characters at all.
+            var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
+
+            // Compute the line height from the first non-empty segment (or use DefaultFontSizePt).
+            var firstNonEmpty = segments.FirstOrDefault(s => s.Text.Length > 0);
+            RunFormatting lineRefFmt = firstNonEmpty.Text?.Length > 0 ? firstNonEmpty.Fmt : RunFormatting.Default;
+            var sampleText = firstNonEmpty.Text ?? string.Empty;
+            var lineH = string.IsNullOrEmpty(sampleText)
+                ? DefaultFontSizePt * PxPerPoint * 1.3
+                : Build(sampleText.Length > 1 ? sampleText[..1] : sampleText, lineRefFmt).Height * 1.15;
+
+            // Resolve explicit tab stops from the paragraph; sort by position.
+            var explicitStops = pf.TabStops
+                .OrderBy(t => t.PositionPt)
+                .Select(t => (PosPx: t.PositionPt * PxPerPoint, t.Alignment))
+                .ToList();
+
+            // Default Word H/F tab stops: centre at midpoint, right at full width.
+            var defaultCenterPx = availWidth / 2.0;
+            var defaultRightPx  = availWidth;
+
+            if (!hasAnyTab)
             {
-                // Empty paragraph — still advances Y by a line height.
-                var emptyH = DefaultFontSizePt * PxPerPoint * 1.3;
-                y += emptyH;
-                continue;
+                // No tabs — use paragraph alignment as before.
+                var seg = segments[0];
+                if (!string.IsNullOrEmpty(seg.Text))
+                {
+                    _headerFooterItems.Add(new HfRenderItem
+                    {
+                        Text           = seg.Text,
+                        Fmt            = seg.Fmt,
+                        X              = _contentLeft,
+                        Y              = y,
+                        AvailableWidth = availWidth,
+                        Alignment      = pf.Alignment,
+                    });
+                }
             }
-
-            var lineH = Build(text.Length > 1 ? text[..1] : text, runFmt).Height * 1.15;
-
-            _headerFooterItems.Add(new HfRenderItem
+            else
             {
-                Text           = text,
-                Fmt            = runFmt,
-                X              = _contentLeft,
-                Y              = y,
-                AvailableWidth = availWidth,
-                Alignment      = alignment,
-            });
+                // Tab-split: each segment is positioned by its tab-stop ordinal.
+                // StopIndex 0 → left (at _contentLeft, no stop lookup needed).
+                // StopIndex 1 → first tab stop  (default: centre).
+                // StopIndex 2 → second tab stop (default: right).
+                foreach (var (si, text, fmt) in segments)
+                {
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    double stopX;
+                    TabStopAlignment stopAlign;
+
+                    if (si == 0)
+                    {
+                        stopX     = 0; // relative to _contentLeft
+                        stopAlign = TabStopAlignment.Left;
+                    }
+                    else
+                    {
+                        // Tab stop ordinal within the explicit list is (si - 1).
+                        var stopIdx = si - 1;
+                        if (stopIdx < explicitStops.Count)
+                        {
+                            (stopX, stopAlign) = explicitStops[stopIdx];
+                        }
+                        else
+                        {
+                            // Fall back to Word defaults for ordinal within the default set.
+                            if (si == 1) { stopX = defaultCenterPx; stopAlign = TabStopAlignment.Center; }
+                            else         { stopX = defaultRightPx;  stopAlign = TabStopAlignment.Right;  }
+                        }
+                    }
+
+                    // Measure segment text to compute the draw X.
+                    var segFt = Build(text, fmt);
+                    var segW  = segFt.WidthIncludingTrailingWhitespace;
+
+                    var itemX = stopAlign switch
+                    {
+                        TabStopAlignment.Center  => _contentLeft + stopX - segW / 2,
+                        TabStopAlignment.Right   => _contentLeft + stopX - segW,
+                        TabStopAlignment.Decimal => _contentLeft + stopX - segW, // approximation: treat as right
+                        _                        => _contentLeft + stopX,
+                    };
+                    // Clamp to content area so text never overflows the page edge.
+                    itemX = Math.Max(_contentLeft, Math.Min(_contentLeft + availWidth - segW, itemX));
+
+                    _headerFooterItems.Add(new HfRenderItem
+                    {
+                        Text           = text,
+                        Fmt            = fmt,
+                        X              = itemX,
+                        Y              = y,
+                        AvailableWidth = 0,                  // absolute X — skip alignment offset at draw time
+                        Alignment      = TextAlignment.Left, // draw loop uses X as-is (offset=0 for Left)
+                    });
+                }
+            }
 
             y += lineH;
         }
@@ -2119,16 +2263,7 @@ public sealed class DocumentView : Control
 
                 // Build inline chart data (reuses the same struct as floating charts).
                 var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
-                _inlineCharts.Add(new FloatingChartData
-                {
-                    Rect       = rect,
-                    BehindText = false,
-                    ZOrder     = 0,
-                    Kind       = chart.Kind,
-                    Title      = chart.Title,
-                    Categories = new List<string>(chart.Categories),
-                    Series     = series,
-                });
+                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0, series));
 
                 // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
                 // can reach a tall inline chart from above (pressing Down) or via a click in the upper
@@ -4198,6 +4333,11 @@ public sealed class DocumentView : Control
         public string?      Title;
         public List<string> Categories = [];
         public List<(string? Name, List<double> Values)> Series = [];
+        // AV-POLISH: chart annotation fields
+        public bool    ShowLegend;
+        public bool    ShowDataLabels;
+        public string? CategoryAxisTitle;
+        public string? ValueAxisTitle;
     }
 
     private sealed class FloatingWordArtData
@@ -4294,16 +4434,7 @@ public sealed class DocumentView : Control
 
             var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
             var chartRect = new Rect(x, y, w, h);
-            _floatingCharts.Add(new FloatingChartData
-            {
-                Rect       = chartRect,
-                BehindText = pl.Wrapping == ImageWrapping.Behind,
-                ZOrder     = pl.ZOrderIndex,
-                Kind       = chart.Kind,
-                Title      = chart.Title,
-                Categories = new List<string>(chart.Categories),
-                Series     = series,
-            });
+            _floatingCharts.Add(BuildChartData(chart, chartRect, pl.Wrapping == ImageWrapping.Behind, pl.ZOrderIndex, series));
             // AV-WRAP: register exclusion zone.
             AddWrapExclusion(chartRect, pl.Wrapping);
         }
@@ -4457,16 +4588,8 @@ public sealed class DocumentView : Control
 
                     case Chart c:
                         cd.Kind = FloatingGroupChildData.ChildKind.Chart;
-                        cd.Chart = new FloatingChartData
-                        {
-                            Rect       = childRect,
-                            BehindText = behindText,
-                            ZOrder     = pl.ZOrderIndex,
-                            Kind       = c.Kind,
-                            Title      = c.Title,
-                            Categories = new List<string>(c.Categories),
-                            Series     = c.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList(),
-                        };
+                        cd.Chart = BuildChartData(c, childRect, behindText, pl.ZOrderIndex,
+                            c.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
                         break;
 
                     case WordArt wa:
@@ -4532,16 +4655,67 @@ public sealed class DocumentView : Control
         Color.FromRgb(0x70, 0xAD, 0x47), // lime green
     ];
 
-    private static readonly IBrush ChartFrameFill   = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
-    private static readonly Pen    ChartFramePen    = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
+    private static readonly IBrush ChartFrameFill    = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
+    private static readonly Pen    ChartFramePen     = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
     private static readonly IBrush ChartGridlineBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
+    private static readonly IBrush ChartLegendBg    = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
+
+    /// <summary>
+    /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
+    /// the inline chart layout, and the drawing-group child collector. Resolves QuickLayout / StyleId
+    /// to determine which annotation flags are active, then copies chart model data into the data struct.
+    /// </summary>
+    private static FloatingChartData BuildChartData(
+        Chart chart, Rect rect, bool behindText, int zOrder,
+        List<(string? Name, List<double> Values)> series)
+    {
+        // Resolve effective annotation flags: QuickLayout overrides individual properties.
+        bool showLegend, showDataLabels, showAxisTitles;
+        if (chart.QuickLayoutId > 0 && ChartQuickLayout.FindById(chart.QuickLayoutId) is { } ql)
+        {
+            showLegend     = ql.ShowLegend;
+            showDataLabels = ql.ShowDataLabels;
+            showAxisTitles = ql.ShowAxisTitles;
+        }
+        else if (chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId) is { } st)
+        {
+            showLegend     = chart.ShowLegend; // style does not override ShowLegend
+            showDataLabels = st.ShowDataLabels;
+            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
+                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
+        }
+        else
+        {
+            showLegend     = chart.ShowLegend;
+            showDataLabels = false;
+            showAxisTitles = !string.IsNullOrEmpty(chart.CategoryAxisTitle) ||
+                             !string.IsNullOrEmpty(chart.ValueAxisTitle);
+        }
+
+        var isPieFamily = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+
+        return new FloatingChartData
+        {
+            Rect              = rect,
+            BehindText        = behindText,
+            ZOrder            = zOrder,
+            Kind              = chart.Kind,
+            Title             = chart.Title,
+            Categories        = new List<string>(chart.Categories),
+            Series            = series,
+            ShowLegend        = showLegend,
+            ShowDataLabels    = showDataLabels,
+            CategoryAxisTitle = isPieFamily ? null : (showAxisTitles ? chart.CategoryAxisTitle : null),
+            ValueAxisTitle    = isPieFamily ? null : (showAxisTitles ? chart.ValueAxisTitle    : null),
+        };
+    }
 
     /// <summary>
     /// Renders a floating chart at its page-space rect.
     /// Column/Bar/Line/Pie/Doughnut/Area/Scatter: basic geometry rendered from series data.
-    /// Approximation quality: correct placement, correct z-order, recognisable chart geometry (bars/
-    /// lines/pie slices). Data labels, axes tick text, and legend are omitted (placeholder tile for
-    /// those elements). Full chart geometry is deferred to a later wave if data-label fidelity is needed.
+    /// AV-POLISH: axis titles (value axis rotated left, category axis bottom-centre), data-value labels
+    /// (above/on bars, at line points, on pie slices), and a series legend (right side or bottom) are
+    /// drawn when the chart model requests them. The plot area shrinks to accommodate the annotations.
     /// </summary>
     private void DrawFloatingChart(DrawingContext context, FloatingChartData cd)
     {
@@ -4550,7 +4724,7 @@ public sealed class DocumentView : Control
         context.FillRectangle(ChartFrameFill, rect);
         context.DrawRectangle(null, ChartFramePen, rect);
 
-        // Title bar (if present).
+        // ── Title bar ──
         const double titleH = 20;
         var titleY = rect.Y + 4;
         if (!string.IsNullOrEmpty(cd.Title))
@@ -4561,17 +4735,40 @@ public sealed class DocumentView : Control
             context.DrawText(ft, new Point(Math.Max(rect.X + 2, tx), titleY));
         }
 
+        var annotFmt = new RunFormatting { FontSizePt = 7 };
+
+        // ── Legend geometry (right side, each series gets a swatch + name row) ──
+        // Reserve right strip for legend when ShowLegend and at least one named series exists.
+        var legendW = 0.0;
+        var namedSeries = cd.Series.Where(s => !string.IsNullOrEmpty(s.Name)).ToList();
+        if (cd.ShowLegend && namedSeries.Count > 0)
+        {
+            var maxNameW = namedSeries.Max(s => Build(s.Name!, annotFmt).WidthIncludingTrailingWhitespace);
+            legendW = Math.Min(rect.Width * 0.30, maxNameW + 18); // swatch(10)+gap(4)+text+pad(4)
+        }
+
+        // ── Value-axis (Y) title — left strip ──
+        const double valAxisTitleW = 12; // width of rotated text strip
+        var hasValTitle = !string.IsNullOrEmpty(cd.ValueAxisTitle);
+        var valTitleW = hasValTitle ? valAxisTitleW : 0.0;
+
+        // ── Category-axis (X) title — bottom strip ──
+        const double catAxisTitleH = 12;
+        var hasCatTitle = !string.IsNullOrEmpty(cd.CategoryAxisTitle);
+        var catTitleH = hasCatTitle ? catAxisTitleH : 0.0;
+
+        // ── Plot area bounds after reserving annotation strips ──
         var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 8 : titleH + 4);
-        var plotBottom = rect.Bottom - 18; // leave room for a fake x-axis label row
-        var plotLeft   = rect.X + 32;     // leave room for y-axis
-        var plotRight  = rect.Right - 8;
+        var plotBottom = rect.Bottom - 18 - catTitleH; // x-axis labels + optional cat title
+        var plotLeft   = rect.X + 32 + valTitleW;      // y-axis labels + optional val title
+        var plotRight  = rect.Right - 8 - legendW;
         var plotW      = Math.Max(10, plotRight - plotLeft);
         var plotH      = Math.Max(10, plotBottom - plotTop);
 
         if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
             return;
 
-        // Draw light horizontal gridlines.
+        // ── Gridlines ──
         const int gridLines = 4;
         var gridPen = new Pen(ChartGridlineBrush, 0.5);
         for (var g = 0; g <= gridLines; g++)
@@ -4580,6 +4777,7 @@ public sealed class DocumentView : Control
             context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
         }
 
+        // ── Chart geometry ──
         switch (cd.Kind)
         {
             case ChartKind.Column:
@@ -4604,10 +4802,204 @@ public sealed class DocumentView : Control
                 break;
         }
 
+        // ── Data labels ──
+        if (cd.ShowDataLabels && cd.Series.Count > 0)
+        {
+            DrawChartDataLabels(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom, annotFmt);
+        }
+
+        // ── Value-axis title (rotated 90° counter-clockwise, centred on left of y-axis) ──
+        if (hasValTitle)
+        {
+            var valTitleFt = Build(cd.ValueAxisTitle!, annotFmt);
+            var titleCentreY = (plotTop + plotBottom) / 2;
+            var titleX = rect.X + 2; // far-left strip
+            // Draw rotated: push transform, draw, pop.
+            var rotState = context.PushTransform(
+                Matrix.CreateTranslation(titleX + valTitleFt.Height / 2, titleCentreY) *
+                Matrix.CreateRotation(-Math.PI / 2));
+            context.DrawText(valTitleFt, new Point(-valTitleFt.WidthIncludingTrailingWhitespace / 2, -valTitleFt.Height / 2));
+            rotState.Dispose();
+        }
+
+        // ── Category-axis title (below x-axis labels, horizontally centred) ──
+        if (hasCatTitle)
+        {
+            var catTitleFt = Build(cd.CategoryAxisTitle!, annotFmt);
+            var catTitleX = plotLeft + (plotW - catTitleFt.WidthIncludingTrailingWhitespace) / 2;
+            var catTitleY = rect.Bottom - catTitleFt.Height - 1;
+            context.DrawText(catTitleFt, new Point(Math.Max(rect.X + 2, catTitleX), catTitleY));
+        }
+
+        // ── Legend (right strip) ──
+        if (cd.ShowLegend && namedSeries.Count > 0)
+        {
+            const double swatchSz = 8;
+            const double rowH     = 11;
+            const double pad      = 4;
+            var legendX     = plotRight + pad;
+            var legendTotalH = namedSeries.Count * rowH;
+            var legendY     = (plotTop + plotBottom) / 2 - legendTotalH / 2;
+
+            // Semi-transparent background.
+            context.FillRectangle(ChartLegendBg,
+                new Rect(legendX - 2, legendY - 2, legendW, legendTotalH + 4));
+
+            for (var si = 0; si < namedSeries.Count; si++)
+            {
+                var (name, _) = namedSeries[si];
+                var originalIdx = cd.Series.IndexOf(namedSeries[si]);
+                var color = ChartSeriesColors[(originalIdx >= 0 ? originalIdx : si) % ChartSeriesColors.Length];
+                var brush = new SolidColorBrush(color);
+                var rowY = legendY + si * rowH;
+
+                // Swatch.
+                context.FillRectangle(brush, new Rect(legendX, rowY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
+
+                // Name.
+                var nameFt = Build(name!, annotFmt);
+                context.DrawText(nameFt, new Point(legendX + swatchSz + 2, rowY + (rowH - nameFt.Height) / 2));
+            }
+        }
+
         // Kind label (bottom-right corner, tiny).
         var kindFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#999999" };
         var kindFt  = Build(cd.Kind.ToString(), kindFmt);
         context.DrawText(kindFt, new Point(rect.Right - kindFt.WidthIncludingTrailingWhitespace - 2, rect.Bottom - kindFt.Height));
+    }
+
+    /// <summary>
+    /// Draws data-value labels for bar/column, line/scatter/area, and pie/doughnut charts.
+    /// For bars: value text above (column) or at end (bar) of each bar.
+    /// For lines: value text above each data point.
+    /// For pie/doughnut: percentage text at the slice midpoint angle.
+    /// Approximation: text is positioned geometrically; no collision avoidance.
+    /// </summary>
+    private void DrawChartDataLabels(DrawingContext context, FloatingChartData cd,
+        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom,
+        RunFormatting fmt)
+    {
+        var maxVal = 1.0;
+        foreach (var (_, vals) in cd.Series)
+            foreach (var v in vals)
+                if (v > maxVal) maxVal = v;
+
+        switch (cd.Kind)
+        {
+            case ChartKind.Column:
+            {
+                var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
+                var nSeries = cd.Series.Count;
+                var groupW  = plotW / Math.Max(1, cats);
+                var barPad  = Math.Max(1, groupW * 0.1);
+                var barGroupW = groupW - 2 * barPad;
+                var seriesW = barGroupW / Math.Max(1, nSeries);
+
+                for (var si = 0; si < nSeries; si++)
+                {
+                    var (_, vals) = cd.Series[si];
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var val   = ci < vals.Count ? vals[ci] : 0;
+                        var ratio = maxVal > 0 ? val / maxVal : 0;
+                        var bw    = Math.Max(1, seriesW - 1);
+                        var barH  = Math.Max(1, ratio * plotH);
+                        var bx    = plotLeft + barPad + ci * groupW + si * seriesW;
+                        var barTopY = plotBottom - barH;
+
+                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+                        var ft = Build(label, fmt);
+                        var lx = bx + (bw - ft.WidthIncludingTrailingWhitespace) / 2;
+                        var ly = barTopY - ft.Height - 1;
+                        if (ly < plotTop) ly = barTopY + 1; // flip inside bar if clipped
+                        context.DrawText(ft, new Point(Math.Max(plotLeft, lx), ly));
+                    }
+                }
+                break;
+            }
+
+            case ChartKind.Bar:
+            {
+                var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
+                var nSeries = cd.Series.Count;
+                var groupW  = plotH / Math.Max(1, cats);  // horizontal: groups along Y
+                var barPad  = Math.Max(1, groupW * 0.1);
+                var barGroupH = groupW - 2 * barPad;
+                var seriesH = barGroupH / Math.Max(1, nSeries);
+
+                for (var si = 0; si < nSeries; si++)
+                {
+                    var (_, vals) = cd.Series[si];
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var val   = ci < vals.Count ? vals[ci] : 0;
+                        var ratio = maxVal > 0 ? val / maxVal : 0;
+                        var barW  = Math.Max(1, ratio * plotW);
+                        var by    = plotTop + (ci * (barGroupH + 2 * barPad) + barPad + si * seriesH);
+
+                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+                        var ft = Build(label, fmt);
+                        var lx = plotLeft + barW + 1;
+                        var ly = by + (Math.Max(1, seriesH - 1) - ft.Height) / 2;
+                        context.DrawText(ft, new Point(Math.Min(lx, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
+                    }
+                }
+                break;
+            }
+
+            case ChartKind.Line:
+            case ChartKind.Scatter:
+            case ChartKind.Area:
+            {
+                var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
+                for (var si = 0; si < cd.Series.Count; si++)
+                {
+                    var (_, vals) = cd.Series[si];
+                    for (var ci = 0; ci < vals.Count; ci++)
+                    {
+                        var val = vals[ci];
+                        var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
+                        var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+
+                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+                        var ft = Build(label, fmt);
+                        var lx = px - ft.WidthIncludingTrailingWhitespace / 2;
+                        var ly = py - ft.Height - 2;
+                        if (ly < plotTop) ly = py + 2;
+                        context.DrawText(ft, new Point(Math.Clamp(lx, plotLeft, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
+                    }
+                }
+                break;
+            }
+
+            case ChartKind.Pie:
+            case ChartKind.Doughnut:
+            {
+                if (cd.Series.Count == 0) break;
+                var vals  = cd.Series[0].Values;
+                var total = vals.Sum();
+                if (total <= 0) break;
+
+                var cx = plotLeft + plotW / 2;
+                var cy = plotTop  + plotH / 2;
+                var r  = Math.Min(plotW, plotH) / 2 - 4;
+                var labelR = r * (cd.Kind == ChartKind.Doughnut ? 0.75 : 0.65); // place at midpoint radius
+
+                var startAngle = -Math.PI / 2;
+                for (var si = 0; si < vals.Count; si++)
+                {
+                    var sweep = vals[si] / total * 2 * Math.PI;
+                    var midAngle = startAngle + sweep / 2;
+                    var pct = (vals[si] / total * 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+                    var ft = Build(pct, fmt);
+                    var lx = cx + labelR * Math.Cos(midAngle) - ft.WidthIncludingTrailingWhitespace / 2;
+                    var ly = cy + labelR * Math.Sin(midAngle) - ft.Height / 2;
+                    context.DrawText(ft, new Point(lx, ly));
+                    startAngle += sweep;
+                }
+                break;
+            }
+        }
     }
 
     private void DrawChartBars(DrawingContext context, FloatingChartData cd,
