@@ -145,4 +145,76 @@ public partial class MainWindow
 
         UpdateViewport();
     }
+
+    // ── Native slicer / timeline click handlers (from GridView.TryHandleNativeSlicerTimelineClick) ──
+
+    private void OnNativeSlicerClearFilterRequested(string slicerName)
+    {
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, []), "Slicer"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void OnNativeSlicerTileToggleRequested(string slicerName, string caption)
+    {
+        SlicerModel? slicer = null;
+        foreach (var item in _workbook.Slicers)
+        {
+            if (string.Equals(item.Name, slicerName, StringComparison.OrdinalIgnoreCase))
+            {
+                slicer = item;
+                break;
+            }
+        }
+
+        if (slicer is null)
+            return;
+
+        var allItems = ReadSlicerSourceItems(slicer).ToList();
+        var selected = SlicerTimelinePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, caption);
+
+        if (!TryExecuteCommand(new SetSlicerSelectionCommand(slicerName, selected.ToList()), "Slicer"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void OnNativeTimelineClearFilterRequested(string timelineName)
+    {
+        if (!TryExecuteCommand(new SetTimelineRangeCommand(timelineName, null, null), "Timeline"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void OnNativeTimelineGranularityToggleRequested(string timelineName)
+    {
+        TimelineModel? timeline = null;
+        foreach (var item in _workbook.Timelines)
+        {
+            if (string.Equals(item.Name, timelineName, StringComparison.OrdinalIgnoreCase))
+            {
+                timeline = item;
+                break;
+            }
+        }
+
+        if (timeline is null)
+            return;
+
+        var nextLevel = SetTimelineGranularityCommand.CycleLevel(timeline.Level);
+        if (!TryExecuteCommand(new SetTimelineGranularityCommand(timelineName, nextLevel), "Timeline"))
+            return;
+
+        UpdateViewport();
+    }
+
+    private void OnNativeTimelineRangeRequested(string timelineName, string? startDate, string? endDate)
+    {
+        if (!TryExecuteCommand(new SetTimelineRangeCommand(timelineName, startDate, endDate), "Timeline"))
+            return;
+
+        UpdateViewport();
+    }
 }
