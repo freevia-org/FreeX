@@ -82,6 +82,9 @@ public sealed class DocumentView : Control
     private readonly List<(double X, double Y, string Text, RunFormatting Fmt)> _markers = new();
     private readonly List<(Rect Rect, IBrush? Fill, bool Border)> _rects = new();
     private readonly List<(Rect Rect, Bitmap? Image)> _images = new();
+    // Floating images collected during layout; rendered separately from inline images with z-order.
+    // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
+    private readonly List<(Rect Rect, Bitmap? Image, bool BehindText, int ZOrder)> _floatingImages = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
@@ -344,6 +347,32 @@ public sealed class DocumentView : Control
                               p.Fmt.VerticalAlign == VerticalAlign.Subscript))
                 .ToList();
 
+    /// <summary>
+    /// Number of floating images collected during the last layout pass.
+    /// Tests use this to verify that floating images are tracked separately from inline images.
+    /// </summary>
+    public int FloatingImageCount
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingImages.Count;
+        }
+    }
+
+    /// <summary>
+    /// Returns a snapshot of the floating-image rects (page-space, in draw order) collected during
+    /// the last layout pass.  Tests use this to verify position resolution from FloatingPlacement.
+    /// </summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder)> FloatingImageRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingImages.Select(fi => (fi.Rect, fi.BehindText, fi.ZOrder)).ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -497,6 +526,7 @@ public sealed class DocumentView : Control
         _markers.Clear();
         _rects.Clear();
         _images.Clear();
+        _floatingImages.Clear();
         _cellHits.Clear();
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -559,12 +589,26 @@ public sealed class DocumentView : Control
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
-                if (paragraph.Runs.Any(r => r.Image is not null))
+                // Route to the image-paragraph path only when the paragraph contains inline images.
+                // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
+                // paragraphs so that the anchor content-Y is tracked; their images are collected
+                // into _floatingImages by CollectFloatingImages() called from within each layout method.
+                var hasInlineImage = paragraph.Runs.Any(r => r.Image is { IsFloating: false });
+                var hasAnyImage    = paragraph.Runs.Any(r => r.Image is not null);
+                if (hasAnyImage)
                 {
-                    listNumber = 0;
-                    prevList = ListKind.None;
-                    LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
-                    continue;
+                    // Always collect floating images from this paragraph (done inside each layout path).
+                    if (hasInlineImage)
+                    {
+                        // Mixed paragraph: inline image(s) present — use the image layout path which
+                        // also calls CollectFloatingImages internally.
+                        listNumber = 0;
+                        prevList = ListKind.None;
+                        LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
+                        continue;
+                    }
+                    // Floating-only: fall through to normal paragraph layout below,
+                    // which calls CollectFloatingImages at the start of EmitLinePaged.
                 }
 
                 var kind = paragraph.Formatting.ListKind;
@@ -679,6 +723,10 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
+        // Collect floating images anchored to this paragraph at its current content Y.
+        // Must happen before SpaceBeforePt advances _layoutContentY so the anchor Y is accurate.
+        CollectFloatingImages(paragraph, _layoutContentY);
+
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
         var cells = paragraph.StyleId is null
@@ -998,10 +1046,14 @@ public sealed class DocumentView : Control
     {
         const double gap = 6;
         var alignment = paragraph.Formatting.Alignment;
+
+        // Collect floating images anchored to this paragraph before advancing _layoutContentY.
+        CollectFloatingImages(paragraph, _layoutContentY);
+
         foreach (var run in paragraph.Runs)
         {
-            if (run.Image is not { } image)
-                continue;
+            if (run.Image is not { IsFloating: false } image)
+                continue; // Skip floating images — they are handled by CollectFloatingImages.
 
             var width = image.WidthPt > 0 ? image.WidthPt * PxPerPoint : 120;
             var height = image.HeightPt > 0 ? image.HeightPt * PxPerPoint : 80;
@@ -1041,6 +1093,65 @@ public sealed class DocumentView : Control
 
         _bitmapCache[image] = bitmap;
         return bitmap;
+    }
+
+    /// <summary>
+    /// Scans <paramref name="paragraph"/> for floating images and appends each one to
+    /// <c>_floatingImages</c> with its page-space rect computed from <see cref="FloatingPlacement"/>.
+    /// <paramref name="anchorContentY"/> is the content-space Y at which the paragraph starts —
+    /// used as the vertical reference when <see cref="VerticalAnchor.Paragraph"/> is set.
+    /// </summary>
+    private void CollectFloatingImages(Paragraph paragraph, double anchorContentY)
+    {
+        // Page index for the anchor paragraph.
+        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
+            ? (int)(anchorContentY / _layoutTextAreaHeight)
+            : 0;
+
+        // Page top in page-space (DeskPadding + pageIndex*(pageHeight+gap)).
+        double PageTop(int pi) =>
+            _viewMode == DocumentViewMode.PrintLayout
+                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                : 0;
+
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Image is not { IsFloating: true } img)
+                continue;
+
+            var imgW = img.WidthPt  > 0 ? img.WidthPt  * PxPerPoint : 120;
+            var imgH = img.HeightPt > 0 ? img.HeightPt * PxPerPoint :  80;
+
+            // ── Horizontal position ──────────────────────────────────────────────────
+            double x = img.HorizontalAnchor switch
+            {
+                HorizontalAnchor.Page   => _pageLeft  + img.HorizontalOffsetPt * PxPerPoint,
+                HorizontalAnchor.Margin => _contentLeft + img.HorizontalOffsetPt * PxPerPoint,
+                _                       => _contentLeft + img.HorizontalOffsetPt * PxPerPoint, // Column (default)
+            };
+
+            // ── Vertical position ────────────────────────────────────────────────────
+            double y = img.VerticalAnchor switch
+            {
+                // Paragraph anchor: offset from the page-space Y of the anchor paragraph.
+                VerticalAnchor.Paragraph =>
+                    ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
+
+                // Margin anchor: offset from the top-margin edge on the anchor's page.
+                VerticalAnchor.Margin =>
+                    PageTop(anchorPageIndex) + _marginTopDip + img.VerticalOffsetPt * PxPerPoint,
+
+                // Page anchor: offset from the physical page top on the anchor's page.
+                VerticalAnchor.Page =>
+                    PageTop(anchorPageIndex) + img.VerticalOffsetPt * PxPerPoint,
+
+                _ => ContentYToPageSpaceY(anchorContentY) + img.VerticalOffsetPt * PxPerPoint,
+            };
+
+            var rect = new Rect(x, y, imgW, imgH);
+            var behindText = img.Wrapping == ImageWrapping.Behind;
+            _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex));
+        }
     }
 
     private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
@@ -1152,6 +1263,15 @@ public sealed class DocumentView : Control
                 context.DrawRectangle(null, TableBorderPen, rect);
         }
 
+        // Behind-text floating images: drawn before inline images and body text, sorted by z-order.
+        foreach (var (rect, bitmap, _, _) in _floatingImages
+            .Where(fi => fi.BehindText)
+            .OrderBy(fi => fi.ZOrder))
+        {
+            DrawFloatingImage(context, rect, bitmap);
+        }
+
+        // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
         {
             if (bitmap is not null)
@@ -1222,9 +1342,39 @@ public sealed class DocumentView : Control
             }
         }
 
+        // In-front floating images: drawn after body text so they appear on top, sorted by z-order.
+        foreach (var (rect, bitmap, _, _) in _floatingImages
+            .Where(fi => !fi.BehindText)
+            .OrderBy(fi => fi.ZOrder))
+        {
+            DrawFloatingImage(context, rect, bitmap);
+        }
+
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
     }
+
+    /// <summary>
+    /// Renders a single floating image (or a placeholder rect if the bitmap could not be decoded).
+    /// Shared by the behind-text and in-front passes in <see cref="Render"/>.
+    /// </summary>
+    private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap)
+    {
+        if (bitmap is not null)
+            context.DrawImage(bitmap, rect);
+        else
+        {
+            // Placeholder: light-blue fill + dashed border so the position is visible even without bitmap data.
+            context.FillRectangle(FloatPlaceholderFill, rect);
+            context.DrawRectangle(null, FloatPlaceholderPen, rect);
+        }
+    }
+
+    private static IBrush FloatPlaceholderFill { get; } =
+        new SolidColorBrush(Color.FromArgb(0x44, 0x33, 0x99, 0xFF));
+    private static Pen FloatPlaceholderPen { get; } =
+        new Pen(new SolidColorBrush(Color.FromArgb(0xBB, 0x33, 0x99, 0xFF)), 1.0,
+            new DashStyle([4, 3], 0));
 
     private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine)
     {
