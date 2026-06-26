@@ -2365,6 +2365,12 @@ public static class PptxPackageReader
                         body.WarpAdjusts.Add((gdName, gdFmla));
                 }
             }
+
+            // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
+            if (int.TryParse(bodyPr.Attribute("numCol")?.Value, out var numCol) && numCol > 1)
+                body.ColumnCount = numCol;
+            if (ParseLongNullable(bodyPr.Attribute("spcCol")?.Value) is { } spcColEmu)
+                body.ColumnSpacingEmu = spcColEmu;
         }
 
         // Parse a:lstStyle — full per-level paragraph/run defaults.

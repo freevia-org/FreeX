@@ -2199,6 +2199,19 @@ public static class PptxPackageWriter
             return children.ToArray();
         }
 
+        // Wave 22B: gradient outline border
+        if (outline is ShapeOutline.GradientVisible gv)
+        {
+            var children = new List<object>
+            {
+                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                BuildGradFillEl(gv.Gradient)
+            };
+            if (gv.Dash != OutlineDash.Solid)
+                children.Add(new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash))));
+            return children.ToArray();
+        }
+
         return Array.Empty<object>();
     }
 
@@ -2328,6 +2341,13 @@ public static class PptxPackageWriter
                 v.Dash != OutlineDash.Solid
                     ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(v.Dash)))
                     : null),
+            // Wave 22B: gradient outline
+            ShapeOutline.GradientVisible gv => new XElement(A + "ln",
+                new XAttribute("w", (long)Math.Round(gv.WidthPt * 12700)),
+                BuildGradFillEl(gv.Gradient),
+                gv.Dash != OutlineDash.Solid
+                    ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(gv.Dash)))
+                    : null),
             _ => new XElement(A + "ln")
         };
 
@@ -2415,6 +2435,14 @@ public static class PptxPackageWriter
             bodyPr.Add(new XElement(A + "prstTxWarp",
                 new XAttribute("prst", body.WarpPreset),
                 avLst));
+        }
+
+        // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
+        if (body.ColumnCount > 1)
+        {
+            bodyPr.Add(new XAttribute("numCol", body.ColumnCount));
+            if (body.ColumnSpacingEmu > 0)
+                bodyPr.Add(new XAttribute("spcCol", body.ColumnSpacingEmu));
         }
 
         // In PresentationML, the text body inside p:sp is p:txBody (not a:txBody).
