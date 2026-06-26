@@ -401,4 +401,237 @@ public sealed class XlsxRichTextRunRoundTripTests
         rs.RichTextRuns[A(rs, 1, 1)][1].Bold.Should().BeFalse();
         rs.RichTextRuns[A(rs, 2, 2)][1].VertAlign.Should().Be(CellTextRunVertAlign.Superscript);
     }
+
+    // ── Full-save (ClosedXML) round-trip ────────────────────────────────────
+    // These tests build a brand-new Workbook (no source package), so Save() must
+    // go through the ClosedXML full-save path.  Rich runs must survive.
+
+    [Fact]
+    public void RichRun_FullSave_SubscriptSurvivesRoundTrip()
+    {
+        // H₂O: three runs, "2" is subscript.
+        var workbook = new Workbook("FullSaveSubscript");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 1, 1);
+
+        sheet.SetCell(addr, new TextValue("H2O"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("H",  null, null, null, null, null, null, null),
+            new("2",  null, null, null, null, null, null, null, CellTextRunVertAlign.Subscript),
+            new("O",  null, null, null, null, null, null, null),
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 1, 1));
+        var runs = rs.RichTextRuns[A(rs, 1, 1)];
+        runs.Should().HaveCount(3);
+        runs[0].Text.Should().Be("H");
+        runs[1].Text.Should().Be("2");
+        runs[1].VertAlign.Should().Be(CellTextRunVertAlign.Subscript);
+        runs[2].Text.Should().Be("O");
+    }
+
+    [Fact]
+    public void RichRun_FullSave_BoldRedMixedSurvivesRoundTrip()
+    {
+        // "Hello World": "Hello" bold, " " plain, "World" red.
+        var workbook = new Workbook("FullSaveBoldRed");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 2, 3);
+
+        sheet.SetCell(addr, new TextValue("Hello World"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Hello", Bold: true,  Italic: null, Underline: null, Strikethrough: null,
+                         FontName: null, FontSize: null,
+                         FontColor: null),
+            new(" ",     Bold: null,  Italic: null, Underline: null, Strikethrough: null,
+                         FontName: null, FontSize: null,
+                         FontColor: null),
+            new("World", Bold: null,  Italic: null, Underline: null, Strikethrough: null,
+                         FontName: null, FontSize: null,
+                         FontColor: CellRunColor.FromRgb(new CellColor(255, 0, 0))),
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 2, 3));
+        var runs = rs.RichTextRuns[A(rs, 2, 3)];
+        runs.Should().HaveCount(3);
+
+        runs[0].Text.Should().Be("Hello");
+        runs[0].Bold.Should().BeTrue();
+
+        runs[2].Text.Should().Be("World");
+        // Color may come back as RGB CellRunColor.FromRgb(255, 0, 0)
+        runs[2].FontColor.Should().NotBeNull();
+        runs[2].FontColor!.Value.Kind.Should().Be(CellRunColorKind.Rgb);
+        runs[2].FontColor!.Value.Rgb.R.Should().Be(255);
+        runs[2].FontColor!.Value.Rgb.G.Should().Be(0);
+        runs[2].FontColor!.Value.Rgb.B.Should().Be(0);
+    }
+
+    [Fact]
+    public void RichRun_FullSave_AllFormattingPropertiesSurvive()
+    {
+        // Single run with every explicit property set.
+        var workbook = new Workbook("FullSaveAllProps");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 1, 1);
+
+        sheet.SetCell(addr, new TextValue("Test"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Te",
+                Bold:          true,
+                Italic:        true,
+                Underline:     true,
+                Strikethrough: false,
+                FontName:      "Arial",
+                FontSize:      14.0,
+                FontColor:     CellRunColor.FromRgb(new CellColor(0x12, 0x34, 0x56))),
+            new("st",
+                Bold:          null,
+                Italic:        null,
+                Underline:     null,
+                Strikethrough: null,
+                FontName:      null,
+                FontSize:      null,
+                FontColor:     null,
+                VertAlign:     CellTextRunVertAlign.Superscript),
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 1, 1));
+        var runs = rs.RichTextRuns[A(rs, 1, 1)];
+        runs.Should().HaveCount(2);
+
+        runs[0].Text.Should().Be("Te");
+        runs[0].Bold.Should().BeTrue();
+        runs[0].Italic.Should().BeTrue();
+        runs[0].Underline.Should().BeTrue();
+        // ClosedXML limitation: it does not emit <strike val="0"/> for an explicitly-false
+        // strikethrough, so Strikethrough=false round-trips as null (omit element = default).
+        // The value is therefore lost on the full-save path but preserved on patch-save.
+        runs[0].Strikethrough.Should().BeNull();
+        runs[0].FontName.Should().Be("Arial");
+        runs[0].FontSize.Should().BeApproximately(14.0, 0.01);
+        runs[0].FontColor!.Value.Kind.Should().Be(CellRunColorKind.Rgb);
+        runs[0].FontColor!.Value.Rgb.R.Should().Be(0x12);
+        runs[0].FontColor!.Value.Rgb.G.Should().Be(0x34);
+        runs[0].FontColor!.Value.Rgb.B.Should().Be(0x56);
+
+        runs[1].Text.Should().Be("st");
+        runs[1].VertAlign.Should().Be(CellTextRunVertAlign.Superscript);
+    }
+
+    [Fact]
+    public void RichRun_FullSave_ThemeColorSurvivesRoundTrip()
+    {
+        // Theme color (Accent1, index 4) must round-trip as theme reference, not RGB.
+        var workbook = new Workbook("FullSaveTheme");
+        var sheet    = workbook.AddSheet("Sheet1");
+        var addr     = A(sheet, 1, 1);
+
+        sheet.SetCell(addr, new TextValue("Color"));
+        sheet.RichTextRuns[addr] = new List<CellTextRun>
+        {
+            new("Color",
+                Bold: null, Italic: null, Underline: null, Strikethrough: null,
+                FontName: null, FontSize: null,
+                FontColor: CellRunColor.FromTheme(4)),   // Accent1
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 1, 1));
+        var runs = rs.RichTextRuns[A(rs, 1, 1)];
+        runs.Should().HaveCount(1);
+        runs[0].FontColor!.Value.Kind.Should().Be(CellRunColorKind.Theme);
+        runs[0].FontColor!.Value.ThemeIndex.Should().Be(4);
+    }
+
+    [Fact]
+    public void RichRun_FullSave_MultipleRichCellsSurvive()
+    {
+        // Two different cells with rich runs on the same sheet.
+        var workbook = new Workbook("FullSaveMultiCell");
+        var sheet    = workbook.AddSheet("Sheet1");
+
+        var addrA1 = A(sheet, 1, 1);
+        sheet.SetCell(addrA1, new TextValue("A1"));
+        sheet.RichTextRuns[addrA1] = new List<CellTextRun>
+        {
+            new("A", Bold: true,  Italic: null, Underline: null, Strikethrough: null, null, null, null),
+            new("1", Bold: false, Italic: null, Underline: null, Strikethrough: null, null, null, null),
+        };
+
+        var addrB2 = A(sheet, 2, 2);
+        sheet.SetCell(addrB2, new TextValue("X2"));
+        sheet.RichTextRuns[addrB2] = new List<CellTextRun>
+        {
+            new("X", null, null, null, null, null, null, null),
+            new("2", null, null, null, null, null, null, null, CellTextRunVertAlign.Superscript),
+        };
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 1, 1));
+        rs.RichTextRuns.Should().ContainKey(A(rs, 2, 2));
+        rs.RichTextRuns[A(rs, 1, 1)][0].Bold.Should().BeTrue();
+        // ClosedXML limitation: Bold=false is not emitted as <b val="0"/> — it round-trips as null.
+        rs.RichTextRuns[A(rs, 1, 1)][1].Bold.Should().BeNull();
+        rs.RichTextRuns[A(rs, 2, 2)][1].VertAlign.Should().Be(CellTextRunVertAlign.Superscript);
+    }
+
+    [Fact]
+    public void RichRun_LoadedFromXlsx_PatchSaveStillPreservesRuns()
+    {
+        // Regression: loaded-from-xlsx (patch path) must not be broken by the full-save change.
+        using var pkg = BuildMinimalXlsx("""
+            <row r="1">
+              <c r="A1" t="inlineStr">
+                <is>
+                  <r><rPr><b/></rPr><t>Bold</t></r>
+                  <r><t> plain</t></r>
+                </is>
+              </c>
+            </row>
+            <row r="2">
+              <c r="B2"><v>0</v></c>
+            </row>
+            """);
+
+        var workbook = LoadXlsx(pkg);
+        var sheet    = workbook.GetSheetAt(0);
+
+        // Verify runs are loaded.
+        sheet.RichTextRuns.Should().ContainKey(A(sheet, 1, 1));
+
+        // Dirty the workbook so patch-save is triggered.
+        sheet.SetCell(A(sheet, 3, 3), new NumberValue(99));
+
+        using var saved    = SaveXlsx(workbook);
+        var       reloaded = LoadXlsx(saved);
+        var       rs       = reloaded.GetSheetAt(0);
+
+        rs.RichTextRuns.Should().ContainKey(A(rs, 1, 1));
+        var runs = rs.RichTextRuns[A(rs, 1, 1)];
+        runs.Should().HaveCount(2);
+        runs[0].Bold.Should().BeTrue();
+        runs[0].Text.Should().Be("Bold");
+    }
 }
