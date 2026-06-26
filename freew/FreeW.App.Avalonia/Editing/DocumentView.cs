@@ -252,6 +252,14 @@ public sealed class DocumentView : Control
     public event Action? ViewModeChanged;
 
     /// <summary>
+    /// AV-LINK: Raised when the user follows an <em>external</em> hyperlink (a web/file URL) — by Ctrl+Click
+    /// on the link, or via <see cref="FollowHyperlinkAtCaret"/>. The shell/MainWindow handles this to open the
+    /// URL with the OS shell (the control deliberately does not hard-code a browser). Internal links (to a
+    /// document bookmark) are not raised here — they are navigated in-place via <see cref="GoToBookmark"/>.
+    /// </summary>
+    public event Action<string>? HyperlinkActivated;
+
+    /// <summary>
     /// Gets or sets the view mode. Switching modes triggers a full re-layout and visual invalidation.
     /// <list type="bullet">
     ///   <item><see cref="DocumentViewMode.PrintLayout"/> — paginated, grey desk (default).</item>
@@ -477,6 +485,33 @@ public sealed class DocumentView : Control
     public int ParagraphCount => _doc.Blocks.Count(b => b is Paragraph);
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
+
+    /// <summary>
+    /// AV-LINK: Introspect the <em>resolved</em> render styling of the first laid-out glyph in the body
+    /// paragraph at <paramref name="block"/> whose paragraph-offset is <paramref name="offset"/> — the colour
+    /// + underline the render loop actually draws, after the hyperlink style is layered on. Returns null when
+    /// there is no such glyph. Exposed for tests so hyperlink styling can be verified without pixel capture.
+    /// </summary>
+    internal (string? ColorHex, bool Underline, bool IsHyperlink)? GetGlyphRenderStyle(int block, int offset)
+    {
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || pc.Block != block || pc.Offset != offset || pc.IsCell)
+                continue;
+            var colorHex = pc.Fmt.ColorHex;
+            var underline = pc.Fmt.Underline;
+            if (pc.IsHyperlink)
+            {
+                colorHex = string.IsNullOrWhiteSpace(colorHex) ? HyperlinkColorHex : colorHex;
+                underline = true;
+            }
+            return (colorHex, underline, pc.IsHyperlink);
+        }
+        return null;
+    }
+
+    /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
+    internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
 
     // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
 
@@ -3932,12 +3967,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -5167,9 +5202,22 @@ public sealed class DocumentView : Control
                 context.FillRectangle(tint, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
             }
 
+            // AV-LINK: a hyperlinked glyph renders in the hyperlink style — Word's default blue + underline —
+            // unless the run already carries an explicit colour / its own underline (e.g. a "Hyperlink"
+            // character style was applied), in which case those win. Layered before super/sub + revision.
+            var linkFmt = pc.Fmt;
+            if (pc.IsHyperlink)
+            {
+                linkFmt = linkFmt with
+                {
+                    ColorHex = string.IsNullOrWhiteSpace(linkFmt.ColorHex) ? HyperlinkColorHex : linkFmt.ColorHex,
+                    Underline = true,
+                };
+            }
+
             // Superscript/subscript: draw at a smaller size + vertical offset.
             // Word approximation: ~58% of the font size, raised/lowered by ~33% of line height.
-            var drawFmt = pc.Fmt;
+            var drawFmt = linkFmt;
             var drawY   = pc.Y;
             if (pc.Fmt.VerticalAlign == VerticalAlign.Superscript)
             {
@@ -5193,10 +5241,10 @@ public sealed class DocumentView : Control
             if (pc.Ch == '\t')
             {
                 // Still draw underline/strikethrough across the tab gap if the run has them.
-                if (pc.Fmt.Underline)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
-                if (pc.Fmt.Strikethrough)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+                if (drawFmt.Underline)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
+                if (drawFmt.Strikethrough)
+                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
                 DrawRevisionDecoration(context, pc);
                 continue;
             }
@@ -5204,10 +5252,10 @@ public sealed class DocumentView : Control
             var ft = Build(pc.Ch.ToString(), drawFmt);
             context.DrawText(ft, new Point(pc.X, drawY));
 
-            if (pc.Fmt.Underline)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
-            if (pc.Fmt.Strikethrough)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+            if (drawFmt.Underline)
+                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
+            if (drawFmt.Strikethrough)
+                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
             DrawRevisionDecoration(context, pc);
         }
 
@@ -6147,9 +6195,14 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
-    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine)
+    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine) =>
+        DrawDecoration(context, pc, yLine, pc.Fmt);
+
+    // AV-LINK: overload that draws the decoration (under-/strike-line) in an explicit format's colour, so a
+    // hyperlink underline uses the resolved hyperlink colour rather than the run's raw (unstyled) colour.
+    private void DrawDecoration(DrawingContext context, PlacedChar pc, double yLine, RunFormatting fmt)
     {
-        var pen = new Pen(BrushFor(pc.Fmt.ColorHex), Math.Max(1, FontSizePx(pc.Fmt) / 14));
+        var pen = new Pen(BrushFor(fmt.ColorHex), Math.Max(1, FontSizePx(fmt) / 14));
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
     }
 
@@ -6270,6 +6323,17 @@ public sealed class DocumentView : Control
         Focus();
         var point = e.GetPosition(this);
         var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+        var ctrlOrMeta = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+
+        // AV-LINK: Ctrl+Click follows a hyperlink (Word's convention) — open an external URL via the
+        // HyperlinkActivated event, or jump the caret to an internal bookmark target. Checked before the
+        // body hit-test so the click is consumed instead of just moving the caret.
+        if (ctrlOrMeta && !shift && TryHitTestHyperlink(point, out var clickedLink))
+        {
+            FollowHyperlink(clickedLink);
+            e.Handled = true;
+            return;
+        }
 
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
@@ -6613,6 +6677,9 @@ public sealed class DocumentView : Control
         var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
         var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
         var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
+        // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
+        // link's edge or outside a link inserts plain (un-linked) text.
+        var insLink = ActiveLink(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
@@ -6621,7 +6688,7 @@ public sealed class DocumentView : Control
             // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
             var at = Math.Clamp(bodyOffset, 0, cells.Count);
             foreach (var ch in text)
-                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate));
+                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate, insLink));
             SetRuns(p, cells);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -8056,6 +8123,238 @@ public sealed class DocumentView : Control
         return name;
     }
 
+    // ── AV-LINK: hyperlinks + bookmarks (render handled in the glyph loop; follow/navigate here) ─────
+
+    /// <summary>
+    /// AV-LINK: Insert (or convert the selection into) a hyperlink. <paramref name="target"/> is either an
+    /// absolute web/file URL (an external link, wrapped as <c>w:hyperlink</c> with a relationship on save) or
+    /// — when it starts with <c>'#'</c> — the name of a document bookmark (an internal link, wrapped as
+    /// <c>w:hyperlink w:anchor</c>). When there is a (single-paragraph) selection it is re-marked as the
+    /// hyperlink span (its text is preserved); otherwise <paramref name="displayText"/> (falling back to the
+    /// target) is inserted as a new hyperlinked run at the caret. Undoable as one step; re-renders so the link
+    /// styling shows immediately. Mirrors the WPF host's Insert &gt; Hyperlink.
+    /// </summary>
+    public void InsertHyperlink(string displayText, string target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return;
+
+        // A leading '#' denotes an internal bookmark anchor; everything else is an external URL.
+        var isInternal = target.StartsWith('#');
+        var url = isInternal ? null : target.Trim();
+        var anchor = isInternal ? target[1..].Trim() : null;
+        if (isInternal && string.IsNullOrEmpty(anchor))
+            return;
+        var link = new LinkInfo(url, anchor, null);
+
+        var sel = NormalizedSelection();
+        // Only a same-paragraph selection can be wrapped in place; a cross-paragraph (or no) selection
+        // inserts fresh hyperlinked text at the caret instead.
+        if (sel is { } s && s.Start.Block == s.End.Block
+            && _doc.Blocks[s.Start.Block] is Paragraph selPara && IsEditable(selPara)
+            && s.End.Offset > s.Start.Offset)
+        {
+            var block = s.Start.Block;
+            var from = s.Start.Offset;
+            var to = s.End.Offset;
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                var cells = ParaCells(p);
+                var lo = Math.Clamp(from, 0, cells.Count);
+                var hi = Math.Clamp(to, 0, cells.Count);
+                for (var i = lo; i < hi; i++)
+                    cells[i] = cells[i] with { Link = link };
+                SetRuns(p, cells);
+            }));
+            _caret = new DocPosition(block, to);
+            _selectionAnchor = _caret;
+            Focus();
+            return;
+        }
+
+        // No usable selection → insert the display text (or the target itself) as a new hyperlinked run.
+        var text = string.IsNullOrEmpty(displayText) ? (isInternal ? anchor! : url!) : displayText;
+        if (_hfCaret is not null || _cellCaret is not null)
+        {
+            // Header/footer and table-cell carets do not carry the body-paragraph hyperlink round-trip;
+            // fall back to inserting plain display text there (still better than dropping the call).
+            InsertText(text);
+            return;
+        }
+        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+            return;
+
+        var atBlock = _caret.Block;
+        var atOffset = _caret.Offset;
+        var fmt = ActiveFormatting(paragraph, atOffset);
+        _bus.Execute(new ReplaceParagraphRunsCommand(atBlock, p =>
+        {
+            var cells = ParaCells(p);
+            var at = Math.Clamp(atOffset, 0, cells.Count);
+            foreach (var ch in text)
+                cells.Insert(at++, new Cell(ch, fmt, null, RevisionKind.None, null, null, link));
+            SetRuns(p, cells);
+        }));
+        _caret = new DocPosition(atBlock, atOffset + text.Length);
+        _selectionAnchor = _caret;
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-LINK: Mark the caret's body paragraph as a bookmark named <paramref name="name"/> (Word's
+    /// Insert &gt; Bookmark). Reuses the AV-REF <see cref="SetBookmarkNameCommand"/> so it is undoable and
+    /// round-trips. When a selection spans multiple paragraphs the bookmark is placed on the selection's
+    /// first paragraph (Word anchors the bookmark at the range start). A no-op for a blank name or when the
+    /// caret is not in an editable body paragraph.
+    /// </summary>
+    public void InsertBookmark(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        var block = NormalizedSelection() is { } sel ? sel.Start.Block : _caret.Block;
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph)
+            return;
+
+        _bus.Execute(new SetBookmarkNameCommand(block, name.Trim()));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-LINK: Move the caret to the bookmark named <paramref name="name"/> and scroll it into view,
+    /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
+    /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
+    /// Word's Go To / internal-link navigation.
+    /// </summary>
+    public bool GoToBookmark(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+        var target = name.TrimStart('#').Trim();
+
+        foreach (var location in Bookmarks.List(_doc))
+        {
+            if (!string.Equals(location.Name, target, StringComparison.Ordinal))
+                continue;
+            var block = location.BlockIndex;
+            if (block < 0 || block >= _doc.Blocks.Count)
+                return false;
+            _cellCaret = null;
+            _hfCaret = null;
+            _caret = new DocPosition(block, 0);
+            _selectionAnchor = _caret;
+            Focus();
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            ScrollToCaretRequested?.Invoke();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// AV-LINK: The hyperlink targets covering the caret (or the current selection), for ribbon-state /
+    /// tests. Each entry is <c>(Url, Anchor, Tooltip)</c> with exactly one of Url/Anchor set. Empty when the
+    /// caret is not on a hyperlink. Reads the live model so it reflects the latest edit.
+    /// </summary>
+    public IReadOnlyList<(string? Url, string? Anchor, string? Tooltip)> HyperlinksAtCaret()
+    {
+        if (CurrentParagraph() is not { } paragraph)
+            return [];
+
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return [];
+
+        var sel = NormalizedSelection();
+        int lo, hi;
+        if (sel is { } s && s.Start.Block == _caret.Block && s.End.Block == _caret.Block)
+        {
+            lo = Math.Clamp(s.Start.Offset, 0, cells.Count - 1);
+            hi = Math.Clamp(s.End.Offset - 1, 0, cells.Count - 1);
+        }
+        else
+        {
+            // Collapsed caret: read the character just left of the caret (Word's "on the link" rule).
+            lo = hi = Math.Clamp(_caret.Offset - 1, 0, cells.Count - 1);
+        }
+
+        var found = new List<(string?, string?, string?)>();
+        var seen = new HashSet<LinkInfo>();
+        for (var i = lo; i <= hi; i++)
+            if (cells[i].Link is { HasTarget: true } link && seen.Add(link))
+                found.Add((link.Url, link.Anchor, link.Tooltip));
+        return found;
+    }
+
+    /// <summary>
+    /// AV-LINK: Follow the hyperlink at the caret, if any — opening an external URL via
+    /// <see cref="HyperlinkActivated"/> or jumping to an internal bookmark via <see cref="GoToBookmark"/>.
+    /// Returns true when a link was followed. The keyboard counterpart of Ctrl+Click (used by the ribbon's
+    /// Open Hyperlink command / tests).
+    /// </summary>
+    public bool FollowHyperlinkAtCaret()
+    {
+        if (HyperlinksAtCaret() is { Count: > 0 } links)
+        {
+            var (url, anchor, tooltip) = links[0];
+            return FollowHyperlink(new LinkInfo(url, anchor, tooltip));
+        }
+        return false;
+    }
+
+    // Follow a resolved link: raise HyperlinkActivated for an external URL, else GoToBookmark for an
+    // internal anchor. Returns true when something was followed.
+    private bool FollowHyperlink(LinkInfo link)
+    {
+        if (link.IsExternal)
+        {
+            HyperlinkActivated?.Invoke(link.Url!);
+            return true;
+        }
+        if (link.IsInternal)
+            return GoToBookmark(link.Anchor!);
+        return false;
+    }
+
+    // Hit-test a point against the placed glyphs and, when the nearest glyph carries a hyperlink, return it.
+    // Used by Ctrl+Click follow. Returns false when the point is not over a hyperlinked glyph.
+    private bool TryHitTestHyperlink(Point point, out LinkInfo link)
+    {
+        link = default;
+        if (_placed.Count == 0)
+            return false;
+
+        PlacedChar? best = null;
+        var bestScore = double.MaxValue;
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || !pc.IsHyperlink)
+                continue;
+            // Only count glyphs the point actually falls within horizontally (a link is a tight target),
+            // and use the same vertical-band scoring as TryHitTest so the closest line wins.
+            if (point.X < pc.X || point.X > pc.X + pc.W)
+                continue;
+            var dy = point.Y < pc.Y ? pc.Y - point.Y
+                : point.Y > pc.Y + pc.LineHeight ? point.Y - (pc.Y + pc.LineHeight) : 0;
+            if (dy > 0)
+                continue; // require the point to be on the glyph's line
+            var dx = Math.Abs(point.X - (pc.X + pc.W / 2));
+            if (dx < bestScore)
+            {
+                bestScore = dx;
+                best = pc;
+            }
+        }
+
+        if (best is { Link: { HasTarget: true } found })
+        {
+            link = found;
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// AV-REF: Insert an in-text citation for <paramref name="source"/> at the caret, formatted in the
     /// document's active <see cref="TextDocument.BibliographyStyle"/> (e.g. APA "(Author, Year)"). Flows
@@ -9261,12 +9560,19 @@ public sealed class DocumentView : Control
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
+        {
+            // AV-LINK: capture the run's hyperlink target so the link span survives the cell round-trip and
+            // SetRuns can re-segment runs on a hyperlink boundary. null when the run carries no link.
+            var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
+                ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
+                : (LinkInfo?)null;
             foreach (var ch in run.Text)
                 // AV-COMMENT: carry the run's CommentId so commented ranges survive the cell round-trip
                 // (layout + edit). Textless comment-reference runs contribute no cells, as before.
                 // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
                 // round-trip (and SetRuns can re-segment runs on a revision boundary).
-                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml));
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml, link));
+        }
         return cells;
     }
 
@@ -9303,13 +9609,17 @@ public sealed class DocumentView : Control
             var revision = cells[i].Revision;
             var revisionAuthor = cells[i].RevisionAuthor;
             var revisionDateXml = cells[i].RevisionDateXml;
+            // AV-LINK: a run is also one contiguous span of equal hyperlink target, so an inserted/edited
+            // hyperlink survives the cell round-trip and re-emits as a w:hyperlink-wrapped run on save.
+            var link = cells[i].Link;
             var start = i;
             while (i < cells.Count
                    && cells[i].Fmt.Equals(fmt)
                    && cells[i].CommentId == commentId
                    && cells[i].Revision == revision
                    && cells[i].RevisionAuthor == revisionAuthor
-                   && cells[i].RevisionDateXml == revisionDateXml)
+                   && cells[i].RevisionDateXml == revisionDateXml
+                   && cells[i].Link == link)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
             paragraph.Runs.Add(new Run(text, fmt)
@@ -9318,6 +9628,9 @@ public sealed class DocumentView : Control
                 Revision = revision,
                 RevisionAuthor = revisionAuthor,
                 RevisionDateXml = revisionDateXml,
+                HyperlinkUrl = link?.Url,
+                HyperlinkAnchor = link?.Anchor,
+                HyperlinkTooltip = link?.Tooltip,
             });
             if (commentId is { } cid)
                 lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
@@ -9436,6 +9749,20 @@ public sealed class DocumentView : Control
         return cells[index].Fmt;
     }
 
+    // AV-LINK: the hyperlink a character typed at <paramref name="offset"/> should inherit — i.e. the link
+    // only when the insertion point is strictly INSIDE a contiguous link span (the chars on both sides share
+    // it). This extends a hyperlink when typing within it (matching Word) without extending it when typing at
+    // its trailing edge. Returns null at a paragraph edge or outside any link.
+    private static LinkInfo? ActiveLink(Paragraph paragraph, int offset)
+    {
+        var cells = ParaCells(paragraph);
+        if (offset <= 0 || offset >= cells.Count)
+            return null;
+        var left = cells[offset - 1].Link;
+        var right = cells[offset].Link;
+        return left is { HasTarget: true } && left == right ? left : null;
+    }
+
     // ---- Text shaping helpers -------------------------------------------------------------------
 
     private FormattedText Build(string text, RunFormatting fmt)
@@ -9502,6 +9829,11 @@ public sealed class DocumentView : Control
     private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
     private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
 
+    // ── AV-LINK: hyperlink render colour ──────────────────────────────────────────────────────────
+    // Word's default hyperlink character-style colour (a medium blue). A hyperlinked run with no explicit
+    // colour of its own renders in this colour + underlined.
+    private const string HyperlinkColorHex = "#0563C1";
+
     // AV-COMMENT: CommentId carries the anchoring review-comment id (null = not commented) so the
     // glyph layout can mark commented ranges. Defaulted so existing Cell(ch, fmt) construction is unchanged.
     // AV-TRACKEDIT: Revision/RevisionAuthor/RevisionDateXml carry a per-character tracked-change mark so
@@ -9513,7 +9845,23 @@ public sealed class DocumentView : Control
         int? CommentId = null,
         RevisionKind Revision = RevisionKind.None,
         string? RevisionAuthor = null,
-        string? RevisionDateXml = null);
+        string? RevisionDateXml = null,
+        // AV-LINK: the run's hyperlink target (external URL / internal bookmark anchor) + ScreenTip, carried
+        // per-character so a hyperlink span survives the cell round-trip (ParaCells → edit → SetRuns) and so
+        // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
+        LinkInfo? Link = null);
+
+    /// <summary>
+    /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)
+    /// or <see cref="Anchor"/> (internal bookmark) is meaningful; <see cref="Tooltip"/> is the optional
+    /// ScreenTip. Mirrors <see cref="Run.HyperlinkUrl"/>/<see cref="Run.HyperlinkAnchor"/>/<see cref="Run.HyperlinkTooltip"/>.
+    /// </summary>
+    internal readonly record struct LinkInfo(string? Url, string? Anchor, string? Tooltip)
+    {
+        public bool IsExternal => !string.IsNullOrEmpty(Url);
+        public bool IsInternal => !string.IsNullOrEmpty(Anchor);
+        public bool HasTarget => IsExternal || IsInternal;
+    }
 
     private readonly record struct DocPosition(int Block, int Offset);
 
@@ -9536,10 +9884,16 @@ public sealed class DocumentView : Control
         int? CommentId = null,
         // AV-TRACKEDIT: tracked-change mark on this glyph so the render can colour/underline insertions and
         // strike deletions. None for ordinary text.
-        RevisionKind Revision = RevisionKind.None)
+        RevisionKind Revision = RevisionKind.None,
+        // AV-LINK: the hyperlink target this glyph belongs to (null = not a hyperlink), so the render can
+        // style it (blue + underline) and the pointer hit-test can follow it on Ctrl+Click.
+        LinkInfo? Link = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
+
+        /// <summary>True when this glyph is part of a hyperlink span.</summary>
+        public bool IsHyperlink => Link is { HasTarget: true };
 
         /// <summary>True when this glyph is covered by a review comment's anchored range.</summary>
         public bool IsCommented => CommentId is not null;
