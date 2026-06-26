@@ -84,6 +84,8 @@ public sealed partial class ViewportService
             OutlineWidthPoints: shape.OutlineWidthPoints,
             OutlineDash: shape.OutlineDash,
             OutlineHasNoFill: shape.OutlineHasNoFill,
+            HeadArrowhead: shape.HeadArrowhead,
+            TailArrowhead: shape.TailArrowhead,
             ShapeText: shape.ShapeText,
             ShapeTextFontSizePoints: shape.ShapeTextFontSizePoints,
             ShapeTextBold: shape.ShapeTextBold,

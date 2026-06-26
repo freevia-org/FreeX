@@ -1192,8 +1192,8 @@ public static class PptxPackageWriter
             shape.Fill is not null ? BuildFillEl(shape.Fill, scheme) : null,
             shape.Outline is not null ? BuildOutlineEl(shape.Outline) : null,
             shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
-            shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null,
-            shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null);
+            shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
+            shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null);
     }
 
     private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)
@@ -1323,8 +1323,9 @@ public static class PptxPackageWriter
         if (fx.BevelTop is not null)
         {
             var bevelT = new XElement(A + "bevelT");
-            if (fx.BevelTop.WidthEmu  != 76200) bevelT.Add(new XAttribute("w", fx.BevelTop.WidthEmu));
-            if (fx.BevelTop.HeightEmu != 76200) bevelT.Add(new XAttribute("h", fx.BevelTop.HeightEmu));
+            // Always emit w/h so an explicit 0 round-trips correctly (omitting matches the 76200 default).
+            bevelT.Add(new XAttribute("w", fx.BevelTop.WidthEmu));
+            bevelT.Add(new XAttribute("h", fx.BevelTop.HeightEmu));
             if (!string.IsNullOrEmpty(fx.BevelTop.PresetName))
                 bevelT.Add(new XAttribute("prst", fx.BevelTop.PresetName));
             sp3d.Add(bevelT);
@@ -1333,8 +1334,9 @@ public static class PptxPackageWriter
         if (fx.BevelBottom is not null)
         {
             var bevelB = new XElement(A + "bevelB");
-            if (fx.BevelBottom.WidthEmu  != 76200) bevelB.Add(new XAttribute("w", fx.BevelBottom.WidthEmu));
-            if (fx.BevelBottom.HeightEmu != 76200) bevelB.Add(new XAttribute("h", fx.BevelBottom.HeightEmu));
+            // Always emit w/h so an explicit 0 round-trips correctly (omitting matches the 76200 default).
+            bevelB.Add(new XAttribute("w", fx.BevelBottom.WidthEmu));
+            bevelB.Add(new XAttribute("h", fx.BevelBottom.HeightEmu));
             if (!string.IsNullOrEmpty(fx.BevelBottom.PresetName))
                 bevelB.Add(new XAttribute("prst", fx.BevelBottom.PresetName));
             sp3d.Add(bevelB);
@@ -1359,16 +1361,23 @@ public static class PptxPackageWriter
 
         var scene3d = new XElement(A + "scene3d");
 
-        if (!string.IsNullOrEmpty(fx.Scene3d.CameraPreset))
-            scene3d.Add(new XElement(A + "camera",
-                new XAttribute("prst", fx.Scene3d.CameraPreset)));
+        // CT_Scene3D requires <a:camera> (minOccurs=1). Always emit one; use the
+        // schema-valid default preset when the model has no camera data (e.g. a
+        // lightRig-only scene read from an older file).
+        var cameraPreset = !string.IsNullOrEmpty(fx.Scene3d.CameraPreset)
+            ? fx.Scene3d.CameraPreset
+            : "orthographicFront";
+        scene3d.Add(new XElement(A + "camera",
+            new XAttribute("prst", cameraPreset)));
 
-        var lightRig = new XElement(A + "lightRig");
-        if (!string.IsNullOrEmpty(fx.Scene3d.LightRig))
-            lightRig.Add(new XAttribute("rig", fx.Scene3d.LightRig));
-        if (!string.IsNullOrEmpty(fx.Scene3d.LightRigDir))
-            lightRig.Add(new XAttribute("dir", fx.Scene3d.LightRigDir));
-        scene3d.Add(lightRig);
+        // CT_LightRig requires both rig= and dir=. Only emit <a:lightRig> when
+        // both attributes are present; a bare <a:lightRig/> is schema-invalid.
+        if (!string.IsNullOrEmpty(fx.Scene3d.LightRig) && !string.IsNullOrEmpty(fx.Scene3d.LightRigDir))
+        {
+            scene3d.Add(new XElement(A + "lightRig",
+                new XAttribute("rig", fx.Scene3d.LightRig),
+                new XAttribute("dir", fx.Scene3d.LightRigDir)));
+        }
 
         return scene3d;
     }

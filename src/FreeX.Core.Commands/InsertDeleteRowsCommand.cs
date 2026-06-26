@@ -29,6 +29,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
+    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
 
@@ -104,6 +106,9 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _namedFormulaSnapshot.Clear();
         _scopedNamedFormulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+        _cfFormulaSnapshot.Clear();
+        _dvFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), _cfFormulaSnapshot, _dvFormulaSnapshot);
 
         return new CommandOutcome(
             true,
@@ -119,6 +124,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _dvFormulaSnapshot);
 
         foreach (var snapshot in _movedSnapshot)
             sheet.ClearCell(snapshot.Row + _count, snapshot.Col);

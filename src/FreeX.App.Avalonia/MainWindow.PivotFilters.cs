@@ -293,6 +293,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotItemFilterTabs");
+        ApplyClassicTabChrome(tabs);
 
         // WPF layout: "Clear Filters from This Field" at bottom-left; [OK][Cancel] at bottom-right.
         var clearFiltersBtn = new Button

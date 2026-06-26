@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Shapes;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
@@ -404,6 +405,8 @@ public partial class GridView
         DrawShapeThemeEffect(dc, shape.Kind, rect, shapeThemeEffect, colors);
         DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape, colors);
         DrawShapeGeometry(dc, shape.Kind, rect, DrawingShapeKindSupport.IsLineLike(shape.Kind) ? null : fill, pen);
+        if (DrawingShapeKindSupport.IsLineLike(shape.Kind))
+            DrawShapeArrowheads(dc, shape, rect, flipHorizontal, flipVertical, colors.Outline);
         DrawShapeAuthoredBevelEffect(dc, shape.Kind, rect, shape);
         DrawShapeThemeBevelEffect(dc, shape.Kind, rect, shapeThemeEffect);
         DrawShapeAuthoredInnerShadow(dc, shape.Kind, rect, shape);
@@ -995,6 +998,77 @@ public partial class GridView
         Brush? brush,
         Pen? pen) =>
         dc.DrawGeometry(brush, pen, ShapeGeometryWpfAdapter.Create(kind, rect));
+
+    /// <summary>
+    /// Draws filled arrowheads at the start (headEnd) and/or end (tailEnd) of a line/connector.
+    /// Uses <see cref="ArrowheadGeometry"/> for the polygon math and fills with the line color.
+    /// </summary>
+    private void DrawShapeArrowheads(
+        DrawingContext dc,
+        DrawingShapeModel shape,
+        Rect rect,
+        bool flipHorizontal,
+        bool flipVertical,
+        CellColor lineColor)
+    {
+        var headArrow = shape.HeadArrowhead;
+        var tailArrow = shape.TailArrowhead;
+        if ((headArrow is null || !headArrow.IsPresent) &&
+            (tailArrow is null || !tailArrow.IsPresent))
+            return;
+
+        const double PtToDip = 96.0 / 72.0;
+        var strokeDip = shape.OutlineWidthPoints > 0
+            ? shape.OutlineWidthPoints * PtToDip
+            : 1.5;
+
+        var (startPt, endPt, dirStartToEnd) = ArrowheadGeometry.LineEndpoints(
+            rect.Left, rect.Top, rect.Width, rect.Height,
+            flipHorizontal, flipVertical, shape.Kind);
+
+        var arrowBrush = GetDrawingObjectBrush(255, lineColor);
+
+        // HeadEnd = arrowhead at the START of the line (points back toward start)
+        if (headArrow is not null && headArrow.IsPresent)
+            DrawArrowheadWpf(dc, headArrow, startPt, dirStartToEnd + Math.PI, strokeDip, arrowBrush);
+
+        // TailEnd = arrowhead at the END of the line (points in the forward direction)
+        if (tailArrow is not null && tailArrow.IsPresent)
+            DrawArrowheadWpf(dc, tailArrow, endPt, dirStartToEnd, strokeDip, arrowBrush);
+    }
+
+    private static Point ArrowWpfPointFromLayout(FreeX.App.Presentation.Charts.LayoutPoint p) =>
+        new(p.X, p.Y);
+
+    private void DrawArrowheadWpf(
+        DrawingContext dc,
+        DrawingArrowhead arrowhead,
+        FreeX.App.Presentation.Charts.LayoutPoint tip,
+        double directionRadians,
+        double strokeWidth,
+        Brush brush)
+    {
+        if (arrowhead.Type == DrawingArrowheadType.Oval)
+        {
+            var (center, radius) = ArrowheadGeometry.OvalCenter(arrowhead, tip, directionRadians, strokeWidth);
+            dc.DrawEllipse(brush, null, ArrowWpfPointFromLayout(center), radius, radius);
+            return;
+        }
+
+        var pts = ArrowheadGeometry.PolygonPoints(arrowhead, tip, directionRadians, strokeWidth);
+        if (pts.Length < 3)
+            return;
+
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(ArrowWpfPointFromLayout(pts[0]), isFilled: true, isClosed: true);
+            for (var i = 1; i < pts.Length; i++)
+                ctx.LineTo(ArrowWpfPointFromLayout(pts[i]), isStroked: false, isSmoothJoin: false);
+        }
+        geometry.Freeze();
+        dc.DrawGeometry(brush, null, geometry);
+    }
 
     private void DrawShapeAuthoredEffect(
         DrawingContext dc,

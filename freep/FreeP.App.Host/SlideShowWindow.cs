@@ -283,11 +283,15 @@ public sealed class SlideShowWindow : Window
         return null;
     }
 
-    /// <summary>Fires all animation steps registered for the given trigger shape.</summary>
+    /// <summary>
+    /// Advances the interactive sequence for <paramref name="triggerShapeId"/> by ONE step,
+    /// mirroring how the main sequence advances one click-step at a time.
+    /// Subsequent clicks on the same trigger shape advance further through its step list.
+    /// </summary>
     private void PlayTriggerGroup(uint triggerShapeId)
     {
-        var steps = _controller.FireTrigger(triggerShapeId);
-        foreach (var step in steps)
+        var step = _controller.AdvanceTrigger(triggerShapeId);
+        if (step is not null)
             PlayAnimationStep(step);
     }
 
@@ -520,8 +524,12 @@ public sealed class SlideShowWindow : Window
         _animElements.Clear();
         _revealedShapes.Clear();
 
+        // Only hide shapes whose ONLY animations are non-trigger (main-sequence) entrances/motions.
+        // A shape whose sole animation is an interactive trigger should be visible at slide entry;
+        // the trigger animation plays on the already-visible shape when the user clicks the trigger.
         _entranceShapeIds = slide.Animations
-            .Where(a => a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                        && a.TriggerShapeId == null)
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();

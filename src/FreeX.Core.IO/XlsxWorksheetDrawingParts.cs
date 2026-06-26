@@ -69,6 +69,11 @@ internal sealed record XlsxShapePackagePart(
     bool OutlineHasNoFill,
     /// <summary>Outline dash style from &lt;a:prstDash val="..."/&gt;.</summary>
     DrawingShapeOutlineDash OutlineDash,
+    // ── Arrowheads for line-like shapes (Line, ElbowConnector, CurvedConnector) ─
+    /// <summary>Arrowhead at the start of a line/connector, from &lt;a:headEnd&gt;; null = none.</summary>
+    DrawingArrowhead? HeadArrowhead,
+    /// <summary>Arrowhead at the end of a line/connector, from &lt;a:tailEnd&gt;; null = none.</summary>
+    DrawingArrowhead? TailArrowhead,
     // ── txBody text fields (null/empty = no text) ─────────────────────────
     /// <summary>Concatenated plain text from all &lt;a:t&gt; runs; null when there is no txBody.</summary>
     string? ShapeText,
@@ -414,6 +419,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             outlineWidthPoints,
             outlineHasNoFill,
             outlineDash,
+            ReadDrawingArrowhead(lnElement, drawingNs, "headEnd"),
+            ReadDrawingArrowhead(lnElement, drawingNs, "tailEnd"),
             shapeText,
             textFontSizePt,
             textBold,
@@ -556,6 +563,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             outlineWidthPoints,
             outlineHasNoFill,
             outlineDash,
+            ReadDrawingArrowhead(lnElement, drawingNs, "headEnd"),
+            ReadDrawingArrowhead(lnElement, drawingNs, "tailEnd"),
             // connectors carry no text
             ShapeText: null,
             ShapeTextFontSizePoints: 0,
@@ -862,6 +871,44 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return DrawingShapeEffectPreset.ThreeDRotation;
 
         return DrawingShapeEffectPreset.None;
+    }
+
+    /// <summary>
+    /// Reads one arrowhead descriptor from a <c>&lt;a:headEnd&gt;</c> or <c>&lt;a:tailEnd&gt;</c> element.
+    /// Returns <see langword="null"/> when the element is absent or has <c>type="none"</c> (or no type attribute).
+    /// </summary>
+    private static DrawingArrowhead? ReadDrawingArrowhead(XElement? lnElement, XNamespace drawingNs, string elementName)
+    {
+        var element = lnElement?.Element(drawingNs + elementName);
+        if (element is null)
+            return null;
+
+        var typeAttr = element.Attribute("type")?.Value;
+        var type = typeAttr switch
+        {
+            "triangle" => DrawingArrowheadType.Triangle,
+            "arrow" => DrawingArrowheadType.Arrow,
+            "stealth" => DrawingArrowheadType.Stealth,
+            "diamond" => DrawingArrowheadType.Diamond,
+            "oval" => DrawingArrowheadType.Oval,
+            _ => DrawingArrowheadType.None // "none" or absent
+        };
+        if (type == DrawingArrowheadType.None)
+            return null;
+
+        var w = element.Attribute("w")?.Value switch
+        {
+            "sm" => DrawingArrowheadSize.Small,
+            "lg" => DrawingArrowheadSize.Large,
+            _ => DrawingArrowheadSize.Medium
+        };
+        var len = element.Attribute("len")?.Value switch
+        {
+            "sm" => DrawingArrowheadSize.Small,
+            "lg" => DrawingArrowheadSize.Large,
+            _ => DrawingArrowheadSize.Medium
+        };
+        return new DrawingArrowhead(type, w, len);
     }
 
     private static DrawingShapeKind? ToDrawingShapeKind(string? preset) =>

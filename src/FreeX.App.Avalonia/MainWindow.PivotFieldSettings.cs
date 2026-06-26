@@ -217,6 +217,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotValueFieldSettingsTabs");
+        ApplyClassicTabChrome(tabs);
 
         var buttonRow = new StackPanel
         {

@@ -1,9 +1,92 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
 internal static partial class RowColumnShiftHelpers
 {
+    // ── CF/DV formula-text rewrites for structural insert/delete ─────────────
+
+    /// <summary>
+    /// After geometry has already been shifted, rewrites FormulaText on any
+    /// ConditionalFormat rule and Formula1/Formula2 on any DataValidation rule
+    /// through <see cref="FormulaRewriter"/> with the supplied structural op.
+    /// Changed values are recorded in <paramref name="cfSnapshot"/> /
+    /// <paramref name="dvSnapshot"/> for undo by <see cref="RestoreRuleFormulas"/>.
+    /// </summary>
+    internal static void RewriteRuleFormulas(
+        Sheet sheet,
+        RewriteOperation op,
+        Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
+    {
+        foreach (var rule in sheet.ConditionalFormats)
+        {
+            if (rule.FormulaText is { } ft)
+            {
+                var rewritten = FormulaRewriter.Rewrite(ft, op, sheet.Name);
+                if (rewritten is not null && rewritten != ft)
+                {
+                    cfSnapshot[rule.Id] = ft;
+                    rule.FormulaText = rewritten;
+                }
+            }
+        }
+
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (rule.Formula1 is { } f1)
+            {
+                var rewritten = FormulaRewriter.Rewrite(f1, op, sheet.Name);
+                if (rewritten is not null && rewritten != f1)
+                {
+                    dvSnapshot[(rule.Id, 1)] = f1;
+                    rule.Formula1 = rewritten;
+                }
+            }
+            if (rule.Formula2 is { } f2)
+            {
+                var rewritten = FormulaRewriter.Rewrite(f2, op, sheet.Name);
+                if (rewritten is not null && rewritten != f2)
+                {
+                    dvSnapshot[(rule.Id, 2)] = f2;
+                    rule.Formula2 = rewritten;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Restores CF/DV formula text from snapshots captured by <see cref="RewriteRuleFormulas"/>.
+    /// Looks up each rule by its <see cref="ConditionalFormat.Id"/> / <see cref="DataValidation.Id"/>.
+    /// </summary>
+    internal static void RestoreRuleFormulas(
+        Sheet sheet,
+        Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
+    {
+        if (cfSnapshot.Count > 0)
+        {
+            foreach (var rule in sheet.ConditionalFormats)
+            {
+                if (cfSnapshot.TryGetValue(rule.Id, out var original))
+                    rule.FormulaText = original;
+            }
+        }
+
+        if (dvSnapshot.Count > 0)
+        {
+            foreach (var rule in sheet.DataValidations)
+            {
+                if (dvSnapshot.TryGetValue((rule.Id, 1), out var f1))
+                    rule.Formula1 = f1;
+                if (dvSnapshot.TryGetValue((rule.Id, 2), out var f2))
+                    rule.Formula2 = f2;
+            }
+        }
+    }
+
+
     internal static (
         List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? DataValidations,
         List<(ConditionalFormat Rule, GridRange AppliesTo)>? ConditionalFormats)

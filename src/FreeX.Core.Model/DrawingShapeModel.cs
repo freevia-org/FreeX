@@ -69,6 +69,43 @@ public enum DrawingShapeGradientDirection
 }
 
 /// <summary>
+/// Arrowhead type for the start (<c>&lt;a:headEnd&gt;</c>) or end (<c>&lt;a:tailEnd&gt;</c>) of a line/connector.
+/// Matches OOXML <c>type</c> attribute values.
+/// </summary>
+public enum DrawingArrowheadType
+{
+    None = 0,
+    Triangle = 1,
+    Arrow = 2,
+    Stealth = 3,
+    Diamond = 4,
+    Oval = 5,
+}
+
+/// <summary>
+/// Size dimension (width or length) of a line/connector arrowhead.
+/// Matches OOXML <c>w</c>/<c>len</c> attribute values on <c>&lt;a:headEnd&gt;</c> / <c>&lt;a:tailEnd&gt;</c>.
+/// </summary>
+public enum DrawingArrowheadSize
+{
+    Small = 0,
+    Medium = 1,
+    Large = 2,
+}
+
+/// <summary>
+/// Arrowhead descriptor for one end of a line/connector shape.
+/// </summary>
+public sealed record DrawingArrowhead(
+    DrawingArrowheadType Type,
+    DrawingArrowheadSize Width = DrawingArrowheadSize.Medium,
+    DrawingArrowheadSize Length = DrawingArrowheadSize.Medium)
+{
+    public static readonly DrawingArrowhead None = new(DrawingArrowheadType.None);
+    public bool IsPresent => Type != DrawingArrowheadType.None;
+}
+
+/// <summary>
 /// Dash style for a shape outline, matching OOXML <c>&lt;a:prstDash val="..."/&gt;</c> presets.
 /// </summary>
 public enum DrawingShapeOutlineDash
@@ -164,6 +201,20 @@ public sealed class DrawingShapeModel
     /// Dash style for the outline stroke, sourced from <c>&lt;a:prstDash val="..."/&gt;</c>.
     /// </summary>
     public DrawingShapeOutlineDash OutlineDash { get; set; } = DrawingShapeOutlineDash.Solid;
+
+    /// <summary>
+    /// Arrowhead at the start (head) of a line/connector, from <c>&lt;a:headEnd type="..." w="..." len="..."/&gt;</c>.
+    /// <see langword="null"/> or <see cref="DrawingArrowhead.None"/> means no arrowhead at the start.
+    /// Only meaningful when <see cref="DrawingShapeKindSupport.IsLineLike"/> is <see langword="true"/>.
+    /// </summary>
+    public DrawingArrowhead? HeadArrowhead { get; set; }
+
+    /// <summary>
+    /// Arrowhead at the end (tail) of a line/connector, from <c>&lt;a:tailEnd type="..." w="..." len="..."/&gt;</c>.
+    /// <see langword="null"/> or <see cref="DrawingArrowhead.None"/> means no arrowhead at the end.
+    /// Only meaningful when <see cref="DrawingShapeKindSupport.IsLineLike"/> is <see langword="true"/>.
+    /// </summary>
+    public DrawingArrowhead? TailArrowhead { get; set; }
 
     // ── Shape text (txBody) properties ─────────────────────────────────────
 

@@ -192,6 +192,8 @@ public sealed partial class XlsxFileAdapter
                 OutlineWidthPoints = shapePart.OutlineWidthPoints,
                 OutlineHasNoFill = shapePart.OutlineHasNoFill,
                 OutlineDash = shapePart.OutlineDash,
+                HeadArrowhead = shapePart.HeadArrowhead,
+                TailArrowhead = shapePart.TailArrowhead,
                 ShapeText = shapePart.ShapeText,
                 ShapeTextFontSizePoints = shapePart.ShapeTextFontSizePoints,
                 ShapeTextBold = shapePart.ShapeTextBold,

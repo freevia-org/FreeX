@@ -198,9 +198,7 @@ public static class PivotHeaderDropdownPlanner
     private static bool IsFieldActive(PivotTableModel pivotTable, PivotFieldModel field) =>
         HasExplicitSelection(field) ||
         pivotTable.LabelFilters.Any(filter => filter.SourceFieldIndex == field.SourceFieldIndex) ||
-        pivotTable.ValueFilters.Any(filter =>
-            filter.SourceFieldIndex is null ||
-            filter.SourceFieldIndex == field.SourceFieldIndex) ||
+        pivotTable.ValueFilters.Any(filter => filter.SourceFieldIndex == field.SourceFieldIndex) ||
         pivotTable.Sorts.Any(sort => sort.FieldIndex == field.SourceFieldIndex);
 
     private static bool HasExplicitSelection(PivotFieldModel field)

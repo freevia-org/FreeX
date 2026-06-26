@@ -1523,12 +1523,14 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Applies a character-level text transform to the raw characters in the selection or paragraph.
     /// Used for Change Case operations that need to read each character before writing.
+    /// Handles single-block selections, multi-block selections, and the no-selection (whole paragraph) case.
     /// </summary>
     private void ApplyRunFormattingToText(Func<string, string> textTransform)
     {
         var sel = NormalizedSelection();
         if (sel is { } s && s.Start.Block == s.End.Block)
         {
+            // Single-block selection: transform only the selected character range.
             var block = s.Start.Block;
             if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
                 return;
@@ -1544,8 +1546,42 @@ public sealed class DocumentView : Control
                 SetRuns(p, live);
             }));
         }
+        else if (sel is { } ms && ms.Start.Block != ms.End.Block)
+        {
+            // Multi-block selection: transform the selected portion of each paragraph in range.
+            // First block: from Start.Offset to end of paragraph.
+            // Interior blocks: entire paragraph.
+            // Last block: from start of paragraph to End.Offset.
+            for (var bi = ms.Start.Block; bi <= ms.End.Block && bi < _doc.Blocks.Count; bi++)
+            {
+                if (_doc.Blocks[bi] is not Paragraph para || !IsEditable(para))
+                    continue;
+
+                var blockIndex = bi; // capture for lambda
+                var isFirst = bi == ms.Start.Block;
+                var isLast  = bi == ms.End.Block;
+                var from    = isFirst ? ms.Start.Offset : 0;
+                // 'to' will be resolved inside the lambda against the live cell list length.
+                var toOffset = isLast ? ms.End.Offset : -1; // -1 = end of paragraph
+
+                _bus.Execute(new ReplaceParagraphRunsCommand(blockIndex, p =>
+                {
+                    var live = ParaCells(p);
+                    var effectiveTo = toOffset < 0 ? live.Count : Math.Min(toOffset, live.Count);
+                    var effectiveFrom = Math.Min(from, live.Count);
+                    if (effectiveTo <= effectiveFrom)
+                        return;
+                    var segText = new string(live.Skip(effectiveFrom).Take(effectiveTo - effectiveFrom).Select(c => c.Ch).ToArray());
+                    var transformed = textTransform(segText);
+                    for (var i = 0; i < effectiveTo - effectiveFrom && i < transformed.Length; i++)
+                        live[effectiveFrom + i] = live[effectiveFrom + i] with { Ch = transformed[i] };
+                    SetRuns(p, live);
+                }));
+            }
+        }
         else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
         {
+            // No selection: transform the whole current paragraph.
             _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, p =>
             {
                 var live = ParaCells(p);

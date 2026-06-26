@@ -147,6 +147,9 @@ public sealed record DrawingObjectBounds(
     double OutlineWidthPoints = 0,
     DrawingShapeOutlineDash OutlineDash = DrawingShapeOutlineDash.Solid,
     bool OutlineHasNoFill = false,
+    // Arrowheads — populated only for line-like shapes (Line, ElbowConnector, CurvedConnector).
+    DrawingArrowhead? HeadArrowhead = null,
+    DrawingArrowhead? TailArrowhead = null,
     // Shape text — populated only for shapes that carry authored text.
     string? ShapeText = null,
     double ShapeTextFontSizePoints = 0,

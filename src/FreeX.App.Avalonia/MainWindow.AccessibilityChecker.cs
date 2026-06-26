@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using FreeX.Core.Commands;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -135,6 +136,27 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(0),
             FontSize = 12,
         };
+        // Compact node rows: Avalonia's default TreeViewItem header is taller than the Windows
+        // Accessibility Checker rows. Trim the per-item padding and min-height so the tree is dense
+        // like the Windows screenshot (~18px rows instead of ~30px).
+        resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>())
+        {
+            Setters =
+            {
+                new Setter(TreeViewItem.MinHeightProperty, 18.0),
+                new Setter(TreeViewItem.PaddingProperty, new Thickness(2, 0)),
+            },
+        });
+        resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>()
+            .Template().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>().Name("PART_HeaderPresenter"))
+        {
+            Setters =
+            {
+                new Setter(Layoutable.MinHeightProperty, 18.0),
+                new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.MarginProperty, new Thickness(0)),
+                new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.PaddingProperty, new Thickness(2, 0)),
+            },
+        });
         AutomationProperties.SetName(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListAutomationName"));
         AutomationProperties.SetAutomationId(resultsTree, "AccessibilityCheckerIssueList");
         AutomationProperties.SetHelpText(resultsTree, UiText.Get("ShellLoc_AccessibilityCheckerIssueListHelpText"));

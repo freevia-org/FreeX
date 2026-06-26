@@ -296,6 +296,18 @@ public sealed partial class MainWindow
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
+        // Wizard step header — the bold "Text Wizard - Step N of 3" banner the Windows dialog shows at the
+        // top of the body (the window title bar isn't captured, so the step indicator must live in-body).
+        var wizardStepHeader = new TextBlock
+        {
+            Text = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
+            FontWeight = FontWeight.Bold,
+            FontSize = 13,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+        AutomationProperties.SetAutomationId(wizardStepHeader, "TextToColumnsWizardStepHeader");
+
         // Wizard step tracking — declare forward refs for SyncWizardNavigation closure
         var currentStep = 1;
         const int totalSteps = 3;
@@ -346,7 +358,9 @@ public sealed partial class MainWindow
 
         void SyncWizardNavigation()
         {
-            dialog.Title = UiText.Format("TableLoc_TtcWizardTitle", currentStep, totalSteps);
+            var wizardTitle = UiText.Format("TableLoc_TtcWizardTitle", currentStep, totalSteps);
+            dialog.Title = wizardTitle;
+            wizardStepHeader.Text = wizardTitle;
             backButton.IsEnabled = currentStep > 1;
             nextButton.IsEnabled = currentStep < totalSteps;
             // Step visibility (step*Content assigned after this function definition)
@@ -509,6 +523,7 @@ public sealed partial class MainWindow
                         Spacing = 8,
                         Children =
                         {
+                            wizardStepHeader,
                             step1Content,
                             step2Content,
                             step3Content,
