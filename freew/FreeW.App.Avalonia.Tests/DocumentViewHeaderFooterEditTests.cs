@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Input;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
 
@@ -314,6 +315,106 @@ public sealed class DocumentViewHeaderFooterEditTests
         });
         if (!ran) return;
         body.Should().Be("Body!! text.", "body editing must be unaffected by the H/F edit feature");
+    }
+
+    // ── DD1: Tab in header does NOT demote the body list item ───────────────────────────────────────
+
+    /// <summary>
+    /// Regression guard for DD1 (AV-HFEDIT): pressing Tab while the H/F caret is active must insert a
+    /// literal tab into the header and must NOT mutate a body list paragraph.
+    /// Before the fix, Key.Tab fell through the _hfCaret switch to the body switch where
+    /// ListTabAtItemStart(false) would demote the body list item and the header got no tab.
+    /// </summary>
+    [Fact]
+    public async Task Tab_in_header_inserts_tab_not_demotes_body_list()
+    {
+        string? headerAfter = null;
+        int bodyLevelAfter = -1;
+        bool hfHandled = false;
+        bool bodyWouldFire = false;
+        var ran = await OnUiThread(() =>
+        {
+            // Build a doc with a body list item at offset 0 (so ListTabAtItemStart would fire for Tab)
+            // and a header containing "X".
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var listPara = new Paragraph("Item")
+            {
+                Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 }
+            };
+            doc.Blocks.Add(listPara);
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("X");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+
+            // Place body caret at offset 0 of the list item (so ListTabAtItemStart would fire).
+            view.MoveCaretToBlock(0, 0);
+            // Verify that WITHOUT the H/F guard ListTabAtItemStart would have consumed the key.
+            bodyWouldFire = view.ListTabAtItemStartPublic(shift: false);
+            // Restore the list level (ListTabAtItemStartPublic mutated it in the check above —
+            // use a fresh view to avoid carrying state into the actual assertion).
+            view.Undo(); // roll back the test-probe demote
+
+            // Now activate H/F caret and body caret at offset 0 of the list item.
+            view.MoveCaretToBlock(0, 0);
+            view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 1); // caret after "X"
+
+            // Simulate Tab through the H/F guard shim (mirrors the fixed OnKeyDown path).
+            hfHandled = view.SimulateHfKeyForTest(Key.Tab, shift: false);
+
+            headerAfter = doc.FinalSectionHeadersFooters.Header?.PlainText;
+            bodyLevelAfter = ((Paragraph)doc.Blocks[0]).Formatting.ListLevel;
+        });
+        if (!ran) return;
+        bodyWouldFire.Should().BeTrue("body ListTabAtItemStart fires at offset 0 — confirming the old fall-through would have demoted it");
+        hfHandled.Should().BeTrue("the H/F switch must consume Tab before it reaches the body");
+        headerAfter.Should().Be("X\t", "Tab must insert a literal tab character into the header");
+        bodyLevelAfter.Should().Be(0, "the body list item level must not change while H/F caret is active");
+    }
+
+    // ── DD2: Up/Down arrows do NOT move the body caret while H/F is active ──────────────────────────
+
+    /// <summary>
+    /// Regression guard for DD2 (AV-HFEDIT): pressing Up or Down while the H/F caret is active must be
+    /// a no-op for the body — the body caret must stay at its pre-entry position.
+    /// Before the fix, both keys fell through to MoveCaretVertical which moved the body _caret, leaving
+    /// the body caret displaced after ExitHeaderFooterCaret().
+    /// </summary>
+    [Fact]
+    public async Task UpDown_in_header_does_not_move_body_caret()
+    {
+        (int Block, int Offset) bodyBefore = (-1, -1);
+        (int Block, int Offset) bodyAfterUp = (-1, -1);
+        (int Block, int Offset) bodyAfterDown = (-1, -1);
+        bool upHandled = false;
+        bool downHandled = false;
+        bool hfActiveAfter = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, view) = MakeViewWithHeader("Header");
+            // Place body caret at a known position.
+            view.MoveCaretToBlock(0, 3);
+            bodyBefore = view.CaretPosition;
+
+            // Enter H/F editing.
+            view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 0);
+
+            // Simulate Up/Down via the H/F guard shim.
+            upHandled = view.SimulateHfKeyForTest(Key.Up);
+            bodyAfterUp = view.CaretPosition; // must still be (0, 3)
+
+            downHandled = view.SimulateHfKeyForTest(Key.Down);
+            bodyAfterDown = view.CaretPosition; // must still be (0, 3)
+
+            hfActiveAfter = view.IsHeaderFooterCaretActive;
+        });
+        if (!ran) return;
+        upHandled.Should().BeTrue("Key.Up must be consumed by the H/F guard");
+        downHandled.Should().BeTrue("Key.Down must be consumed by the H/F guard");
+        bodyAfterUp.Should().Be(bodyBefore, "Up must not move the body caret while H/F caret is active");
+        bodyAfterDown.Should().Be(bodyBefore, "Down must not move the body caret while H/F caret is active");
+        hfActiveAfter.Should().BeTrue("H/F caret must still be active after Up/Down");
     }
 
     // ── Undo restores header text ─────────────────────────────────────────────────────────────────

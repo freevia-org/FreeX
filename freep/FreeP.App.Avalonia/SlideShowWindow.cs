@@ -57,6 +57,12 @@ public sealed class SlideShowWindow : Window
     private readonly SlideShowController _controller;
     private readonly DispatcherTimer  _autoAdvanceTimer;
 
+    // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
+    // (AnimateOpacity, AnimateTranslate, AnimateRectClip, AnimateScale, AnimateRotate,
+    //  DelayedAction) register themselves here.  CancelActiveTimers() stops all of them
+    // immediately — called before starting a new transition (DA2) and in Teardown (DA3).
+    private readonly List<DispatcherTimer> _activeTimers = new();
+
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
     // Root: black panel filling the whole window.
@@ -193,6 +199,9 @@ public sealed class SlideShowWindow : Window
 
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
+
+    /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
+    internal SlideCanvas CanvasForTest => _slideCanvas;
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
@@ -458,6 +467,10 @@ public sealed class SlideShowWindow : Window
         _slideDipW = _presentation.SlideSizeCxEmu / 9525.0;
         _slideDipH = _presentation.SlideSizeCyEmu / 9525.0;
 
+        // DA2: cancel any in-flight transition/animation timers from the PREVIOUS slide so
+        // their stale onComplete callbacks don't clobber the new slide's visual state.
+        CancelActiveTimers();
+
         PrepareAnimationOverlay(slide);
 
         if (animated && slide.Transition is { Kind: not TransitionKind.None } t)
@@ -637,7 +650,7 @@ public sealed class SlideShowWindow : Window
         const int frameMs = 16; // ~60 fps
         int steps = Math.Max(1, durationMs / frameMs);
         int frame = 0;
-        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) };
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) });
         timer.Tick += (_, _) =>
         {
             frame++;
@@ -647,6 +660,7 @@ public sealed class SlideShowWindow : Window
             if (frame >= steps)
             {
                 timer.Stop();
+                _activeTimers.Remove(timer);
                 target.Opacity = to;
                 onComplete?.Invoke();
             }
@@ -668,7 +682,7 @@ public sealed class SlideShowWindow : Window
         const int frameMs = 16;
         int steps = Math.Max(1, durationMs / frameMs);
         int frame = 0;
-        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) };
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(frameMs) });
         timer.Tick += (_, _) =>
         {
             frame++;
@@ -679,6 +693,7 @@ public sealed class SlideShowWindow : Window
             if (frame >= steps)
             {
                 timer.Stop();
+                _activeTimers.Remove(timer);
                 translate.X = toX;
                 translate.Y = toY;
                 onComplete?.Invoke();
@@ -700,14 +715,21 @@ public sealed class SlideShowWindow : Window
     /// Sets up per-shape animated elements for a new slide:
     ///   1. Identifies shapes with Entrance animations → renders each to a bitmap
     ///      and places it as an Image in _animOverlay, hidden.
-    ///   2. The main canvas paints all shapes; the overlay images are placed on top
-    ///      so they can be animated independently.
+    ///   2. DA1: Each entrance shape is added to _slideCanvas.SuppressedShapeIds so the
+    ///      base canvas does NOT paint it — the overlay Image is the only visible copy,
+    ///      eliminating the "ghost duplicate" where the real shape sat fully visible under
+    ///      the animated overlay.
+    ///   3. When a build step reveals a shape, RevealShape() removes it from the suppressed
+    ///      set and calls Refresh() so the base canvas takes over painting it.
     /// </summary>
     private void PrepareAnimationOverlay(Slide slide)
     {
         _animOverlay.Children.Clear();
         _animElements.Clear();
         _revealedShapes.Clear();
+
+        // DA1: clear any suppression from the previous slide.
+        _slideCanvas.SuppressedShapeIds.Clear();
 
         _entranceShapeIds = slide.Animations
             .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
@@ -747,7 +769,24 @@ public sealed class SlideShowWindow : Window
 
             _animOverlay.Children.Add(img);
             _animElements[shapeId] = img;
+
+            // DA1: hide this shape in the base canvas — the overlay image is the sole copy.
+            _slideCanvas.SuppressedShapeIds.Add(shapeId);
         }
+
+        // DA1: trigger a repaint so the suppressed shapes are hidden from the base canvas.
+        _slideCanvas.Refresh();
+    }
+
+    /// <summary>
+    /// DA1: Called when a build step has finished animating a shape in.
+    /// Removes the shape from the suppressed set so the base canvas renders it permanently,
+    /// matching PowerPoint's behaviour where the shape is visible after its build completes.
+    /// </summary>
+    private void RevealShape(uint shapeId)
+    {
+        if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
+            _slideCanvas.Refresh();
     }
 
     /// <summary>
@@ -784,93 +823,129 @@ public sealed class SlideShowWindow : Window
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        foreach (var anim in step.Animations)
+        foreach (var entry in step.Entries)
         {
+            var anim = entry.Animation;
+            // DA4: use the accumulated start delay from the step entry rather than
+            // the animation's raw DelayMs.  For WithPrevious this equals DelayMs (simultaneous).
+            // For AfterPrevious this is DelayMs + all prior animations' durations in the chain,
+            // ensuring the animation begins only after the preceding animation completes.
+            int effectiveDelayMs = entry.StartDelayMs;
+
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                PlayFallbackAnimation(anim);
+                PlayFallbackAnimation(anim, effectiveDelayMs);
                 continue;
             }
 
-            PlayShapeAnimation(element, anim);
-            _revealedShapes.Add(anim.ShapeId);
+            var shapeId = anim.ShapeId;
+            PlayShapeAnimation(element, anim, effectiveDelayMs, onReveal: () =>
+            {
+                // DA1: once the entrance animation finishes (or fires), hand off painting to
+                // the base canvas.  The overlay element stays in the tree at full opacity but
+                // the base canvas version is now also visible — they are identical, so there
+                // is no visible seam.  An alternative is to collapse the overlay element here;
+                // either approach is correct.  We keep it simple: just reveal in base canvas.
+                RevealShape(shapeId);
+            });
+            _revealedShapes.Add(shapeId);
         }
     }
 
-    private void PlayShapeAnimation(Control element, ShapeAnimation anim)
+    /// <param name="effectiveDelayMs">
+    /// DA4: the computed start delay for this entry, which for AfterPrevious animations already
+    /// includes the accumulated duration of preceding animations in the chain.  Replaces the raw
+    /// <see cref="ShapeAnimation.DelayMs"/> so that AfterPrevious animations begin after their
+    /// predecessor completes rather than all firing simultaneously.
+    /// </param>
+    /// <param name="onReveal">
+    /// DA1: called once the animation finishes so the base canvas takes over painting the shape.
+    /// For non-entrance (Emphasis/Exit) effects this callback is invoked at animation start
+    /// because the shape is already visible in the base canvas.
+    /// </param>
+    private void PlayShapeAnimation(Control element, ShapeAnimation anim, int effectiveDelayMs, Action? onReveal = null)
     {
         int durationMs = Math.Max(50, anim.DurationMs);
-        int delayMs    = Math.Max(0,  anim.DelayMs);
+        int delayMs    = effectiveDelayMs;
 
         // Motion-path animation takes priority.
         if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
         {
-            MotionPathEffect(element, anim.Motion, durationMs, delayMs);
+            MotionPathEffect(element, anim.Motion, durationMs, delayMs, onReveal);
             return;
         }
 
         switch (anim.Preset)
         {
             case AnimationPreset.Appear:
-                AppearEffect(element, delayMs);
+                AppearEffect(element, delayMs, onReveal);
                 break;
 
             case AnimationPreset.Fade:
-                FadeEffect(element, anim.Kind, durationMs, delayMs);
+                FadeEffect(element, anim.Kind, durationMs, delayMs, onReveal);
                 break;
 
             case AnimationPreset.FlyIn:
-                FlyInEffect(element, anim, durationMs, delayMs);
+                FlyInEffect(element, anim, durationMs, delayMs, onReveal);
                 break;
 
             case AnimationPreset.Wipe:
-                WipeEffect(element, anim, durationMs, delayMs);
+                WipeEffect(element, anim, durationMs, delayMs, onReveal);
                 break;
 
             case AnimationPreset.Zoom:
-                ZoomEffect(element, anim.Kind, durationMs, delayMs);
+                ZoomEffect(element, anim.Kind, durationMs, delayMs, onReveal);
                 break;
 
             case AnimationPreset.Pulse:
             case AnimationPreset.Grow:
+                // Emphasis: shape already visible — reveal immediately.
+                onReveal?.Invoke();
                 PulseEffect(element, durationMs, delayMs);
                 break;
 
             case AnimationPreset.Spin:
+                onReveal?.Invoke();
                 SpinEffect(element, durationMs, delayMs);
                 break;
 
             default:
-                AppearEffect(element, delayMs);
+                AppearEffect(element, delayMs, onReveal);
                 break;
         }
     }
 
-    private static void AppearEffect(Control el, int delayMs)
+    private void AppearEffect(Control el, int delayMs, Action? onComplete = null)
     {
         if (delayMs <= 0)
         {
             el.Opacity = 1;
+            onComplete?.Invoke();
             return;
         }
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(delayMs)
-        };
-        timer.Tick += (_, _) => { timer.Stop(); el.Opacity = 1; };
+        });
+        timer.Tick += (_, _) => { timer.Stop(); _activeTimers.Remove(timer); el.Opacity = 1; onComplete?.Invoke(); };
         timer.Start();
     }
 
-    private void FadeEffect(Control el, AnimationKind kind, int durationMs, int delayMs)
+    private void FadeEffect(Control el, AnimationKind kind, int durationMs, int delayMs, Action? onReveal = null)
     {
         double from = kind == AnimationKind.Exit ? 1 : 0;
         double to   = kind == AnimationKind.Exit ? 0 : 1;
 
+        // For entrance fades the reveal happens when the fade reaches opacity=1.
+        // For exit fades the shape is already visible, so reveal immediately.
+        if (kind == AnimationKind.Exit) onReveal?.Invoke();
+
         DelayedAction(delayMs, () =>
-            AnimateOpacity(el, from, to, durationMs));
+            AnimateOpacity(el, from, to, durationMs,
+                onComplete: kind != AnimationKind.Exit ? onReveal : null));
     }
 
-    private void FlyInEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs)
+    private void FlyInEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs, Action? onReveal = null)
     {
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
         double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
@@ -898,11 +973,12 @@ public sealed class SlideShowWindow : Window
         DelayedAction(delayMs, () =>
         {
             AnimateTranslate(el, dx, dy, 0, 0, durationMs);
-            AnimateOpacity(el, 0, 1, durationMs);
+            // Reveal in base canvas when the fade-in completes.
+            AnimateOpacity(el, 0, 1, durationMs, onComplete: onReveal);
         });
     }
 
-    private void WipeEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs)
+    private void WipeEffect(Control el, ShapeAnimation anim, int durationMs, int delayMs, Action? onReveal = null)
     {
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
@@ -920,29 +996,31 @@ public sealed class SlideShowWindow : Window
             var clipRect = new RectangleGeometry(new Rect(0, 0, 0, h));
             el.Clip = clipRect;
             DelayedAction(delayMs, () =>
-                AnimateRectClip(el, clipRect, new Rect(0, 0, 0, h), new Rect(0, 0, w, h), durationMs));
+                AnimateRectClip(el, clipRect, new Rect(0, 0, 0, h), new Rect(0, 0, w, h), durationMs,
+                    onComplete: onReveal));
         }
         else
         {
             var clipRect = new RectangleGeometry(new Rect(0, 0, w, 0));
             el.Clip = clipRect;
             DelayedAction(delayMs, () =>
-                AnimateRectClip(el, clipRect, new Rect(0, 0, w, 0), new Rect(0, 0, w, h), durationMs));
+                AnimateRectClip(el, clipRect, new Rect(0, 0, w, 0), new Rect(0, 0, w, h), durationMs,
+                    onComplete: onReveal));
         }
     }
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,
-        Rect from, Rect to, int durationMs)
+        Rect from, Rect to, int durationMs, Action? onComplete = null)
     {
-        if (durationMs <= 0) { clipRect.Rect = to; return; }
+        if (durationMs <= 0) { clipRect.Rect = to; onComplete?.Invoke(); return; }
 
         const int frameMs = 16;
         int steps = Math.Max(1, durationMs / frameMs);
         int frame = 0;
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(frameMs)
-        };
+        });
         timer.Tick += (_, _) =>
         {
             frame++;
@@ -953,12 +1031,12 @@ public sealed class SlideShowWindow : Window
                 from.Y + (to.Y - from.Y) * e,
                 from.Width  + (to.Width  - from.Width)  * e,
                 from.Height + (to.Height - from.Height) * e);
-            if (frame >= steps) { timer.Stop(); clipRect.Rect = to; }
+            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); clipRect.Rect = to; onComplete?.Invoke(); }
         };
         timer.Start();
     }
 
-    private void ZoomEffect(Control el, AnimationKind kind, int durationMs, int delayMs)
+    private void ZoomEffect(Control el, AnimationKind kind, int durationMs, int delayMs, Action? onReveal = null)
     {
         double cx = (el.Width  > 0 ? el.Width  : _slideCanvas.Bounds.Width)  / 2;
         double cy = (el.Height > 0 ? el.Height : _slideCanvas.Bounds.Height) / 2;
@@ -967,6 +1045,9 @@ public sealed class SlideShowWindow : Window
         double toScale   = kind == AnimationKind.Exit ? 0.0 : 1.0;
         double fromOp    = kind == AnimationKind.Exit ? 1.0 : 0.0;
         double toOp      = kind == AnimationKind.Exit ? 0.0 : 1.0;
+
+        // Exit: shape is already visible in base canvas.
+        if (kind == AnimationKind.Exit) onReveal?.Invoke();
 
         el.Opacity = fromOp;
         var scale = new ScaleTransform(fromScale, fromScale);
@@ -977,7 +1058,9 @@ public sealed class SlideShowWindow : Window
 
         DelayedAction(delayMs, () =>
         {
-            AnimateOpacity(el, fromOp, toOp, durationMs);
+            // Reveal when opacity reaches 1 (entrance) or immediately (exit already revealed).
+            AnimateOpacity(el, fromOp, toOp, durationMs,
+                onComplete: kind == AnimationKind.Entrance ? onReveal : null);
             AnimateScale(el, scale, fromScale, toScale, durationMs);
         });
     }
@@ -990,10 +1073,10 @@ public sealed class SlideShowWindow : Window
         const int frameMs = 16;
         int steps = Math.Max(1, durationMs / frameMs);
         int frame = 0;
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(frameMs)
-        };
+        });
         timer.Tick += (_, _) =>
         {
             frame++;
@@ -1001,7 +1084,7 @@ public sealed class SlideShowWindow : Window
             double eased = EaseInOut(t);
             double v = from + (to - from) * eased;
             scale.ScaleX = scale.ScaleY = v;
-            if (frame >= steps) { timer.Stop(); scale.ScaleX = scale.ScaleY = to; }
+            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); scale.ScaleX = scale.ScaleY = to; }
         };
         timer.Start();
     }
@@ -1040,17 +1123,17 @@ public sealed class SlideShowWindow : Window
         const int frameMs = 16;
         int steps = Math.Max(1, durationMs / frameMs);
         int frame = 0;
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(frameMs)
-        };
+        });
         timer.Tick += (_, _) =>
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
             double eased = EaseInOut(t);
             rotate.Angle = from + (to - from) * eased;
-            if (frame >= steps) { timer.Stop(); rotate.Angle = to; }
+            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); rotate.Angle = to; }
         };
         timer.Start();
     }
@@ -1058,12 +1141,15 @@ public sealed class SlideShowWindow : Window
     /// <summary>
     /// Motion-path animation: translates the shape along the normalized path in DIP space.
     /// </summary>
-    private void MotionPathEffect(Control element, MotionPath path, int durationMs, int delayMs)
+    private void MotionPathEffect(Control element, MotionPath path, int durationMs, int delayMs,
+        Action? onReveal = null)
     {
         double slideW = _slideDipW > 0 ? _slideDipW : 960;
         double slideH = _slideDipH > 0 ? _slideDipH : 540;
 
+        // Motion paths reveal the shape immediately (it's already at its starting position).
         element.Opacity = 1;
+        onReveal?.Invoke();
 
         const int frames = 30;
         // Pre-sample the path.
@@ -1090,10 +1176,10 @@ public sealed class SlideShowWindow : Window
             const int frameMs = 16;
             int steps = Math.Max(1, durationMs / frameMs);
             int frame = 0;
-            var timer = new DispatcherTimer(DispatcherPriority.Render)
+            var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
             {
                 Interval = TimeSpan.FromMilliseconds(frameMs)
-            };
+            });
             timer.Tick += (_, _) =>
             {
                 frame++;
@@ -1108,6 +1194,7 @@ public sealed class SlideShowWindow : Window
                 if (frame >= steps)
                 {
                     timer.Stop();
+                    _activeTimers.Remove(timer);
                     translate.X = pts[frames].dx;
                     translate.Y = pts[frames].dy;
                 }
@@ -1117,12 +1204,12 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>Best-effort fallback for shapes without an overlay element.</summary>
-    private void PlayFallbackAnimation(ShapeAnimation anim)
+    private void PlayFallbackAnimation(ShapeAnimation anim, int effectiveDelayMs)
     {
         if (anim.Kind != AnimationKind.Emphasis) return;
 
         int ms = Math.Max(100, anim.DurationMs);
-        DelayedAction(anim.DelayMs, () =>
+        DelayedAction(effectiveDelayMs, () =>
         {
             AnimateOpacity(_slideCanvas, 1.0, 0.5, ms / 2, onComplete: () =>
                 AnimateOpacity(_slideCanvas, 0.5, 1.0, ms / 2));
@@ -1132,16 +1219,40 @@ public sealed class SlideShowWindow : Window
     // ── Utility ───────────────────────────────────────────────────────────────────
 
     /// <summary>Runs <paramref name="action"/> after <paramref name="delayMs"/> milliseconds.</summary>
-    private static void DelayedAction(int delayMs, Action action)
+    private void DelayedAction(int delayMs, Action action)
     {
         if (delayMs <= 0) { action(); return; }
 
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(delayMs)
-        };
-        timer.Tick += (_, _) => { timer.Stop(); action(); };
+        });
+        timer.Tick += (_, _) => { timer.Stop(); _activeTimers.Remove(timer); action(); };
         timer.Start();
+    }
+
+    // ── Active-timer management (DA2 + DA3) ──────────────────────────────────────
+
+    /// <summary>
+    /// Registers a timer so it can be batch-cancelled by <see cref="CancelActiveTimers"/>.
+    /// Returns the timer unchanged so callers can one-line register + start.
+    /// </summary>
+    private DispatcherTimer TrackTimer(DispatcherTimer timer)
+    {
+        _activeTimers.Add(timer);
+        return timer;
+    }
+
+    /// <summary>
+    /// DA2: Cancels every in-flight animation/transition timer so a new advance starts
+    /// from a clean state (no stale onComplete callbacks will fire against the new slide).
+    /// DA3: Same mechanism used by Teardown to prevent timers leaking past window close.
+    /// </summary>
+    private void CancelActiveTimers()
+    {
+        foreach (var t in _activeTimers)
+            t.Stop();
+        _activeTimers.Clear();
     }
 
     // ── Teardown ──────────────────────────────────────────────────────────────────
@@ -1149,7 +1260,12 @@ public sealed class SlideShowWindow : Window
     private void Teardown()
     {
         _autoAdvanceTimer.Stop();
-        // Active DispatcherTimers will stop naturally as they are not referenced; the
-        // dispatcher will clean them up. No explicit teardown needed.
+        // DA3: stop ALL per-frame animation/transition timers so they don't keep
+        // ticking against the closed window's canvas.  A running DispatcherTimer is
+        // rooted by the dispatcher and will NOT be collected automatically.
+        CancelActiveTimers();
     }
+
+    /// <summary>Expose active-timer count for test assertions (DA2/DA3).</summary>
+    internal int ActiveTimerCount => _activeTimers.Count;
 }

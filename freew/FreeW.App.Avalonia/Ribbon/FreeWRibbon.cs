@@ -177,11 +177,133 @@ internal static class FreeWRibbon
             .Select(s => new RibbonMenuItem(s.Name, new RibbonCommandId($"freew.smartart-colors-{s.Id}")))
             .ToArray());
 
+    /// <summary>AV-INSERT2: Insert &gt; Cover Page gallery — the three built-in cover-page presets.</summary>
+    private static RibbonMenu BuildCoverPageMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Default", new RibbonCommandId("freew.cover-page.default")),
+            new("Banded",  new RibbonCommandId("freew.cover-page.banded")),
+            new("Motion",  new RibbonCommandId("freew.cover-page.motion")),
+        });
+
+    /// <summary>AV-INSERT2: Insert &gt; Drop Cap menu — Dropped / In Margin (approx) / None.</summary>
+    private static RibbonMenu BuildDropCapMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Dropped",   new RibbonCommandId("freew.drop-cap.dropped")),
+            new("In Margin", new RibbonCommandId("freew.drop-cap.in-margin")),
+            RibbonMenuItem.Separator(),
+            new("None",      new RibbonCommandId("freew.drop-cap.none")),
+        });
+
+    /// <summary>
+    /// AV-INSERT2: Insert &gt; Quick Parts menu — document-property fields (Title/Author/Subject), a Date
+    /// field, and a free-text snippet (opens a dialog). Command ids match the registry wiring.
+    /// </summary>
+    private static RibbonMenu BuildQuickPartsMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Document Property — Title",   new RibbonCommandId("freew.quick-parts.title")),
+            new("Document Property — Author",  new RibbonCommandId("freew.quick-parts.author")),
+            new("Document Property — Subject", new RibbonCommandId("freew.quick-parts.subject")),
+            new("Field — Date",                new RibbonCommandId("freew.quick-parts.date")),
+            RibbonMenuItem.Separator(),
+            new("Insert Snippet…",             new RibbonCommandId("freew.quick-parts.snippet")),
+        });
+
+    /// <summary>
+    /// AV-INSERT2: Insert &gt; Equation menu — a default sample (E=mc²) plus a few common OMML structures.
+    /// Each preset maps to a <c>freew.equation.*</c> command that inserts the corresponding equation.
+    /// </summary>
+    private static RibbonMenu BuildEquationMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Insert New Equation", new RibbonCommandId("freew.equation.default")),
+            RibbonMenuItem.Separator(),
+            new("Fraction  a/b",       new RibbonCommandId("freew.equation.fraction")),
+            new("Script  xⁿ",          new RibbonCommandId("freew.equation.script")),
+            new("Radical  √x",         new RibbonCommandId("freew.equation.radical")),
+            new("Integral  ∫",         new RibbonCommandId("freew.equation.integral")),
+            new("Summation  ∑",        new RibbonCommandId("freew.equation.summation")),
+        });
+
     /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
     private static RibbonMenu BuildSymbolMenu() =>
         new(FreeWAvaloniaRibbonCommands.Symbols
             .Select(s => new RibbonMenuItem($"{s.Glyph}   {s.Label}", new RibbonCommandId(s.Id)))
             .ToArray());
+
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Themes dropdown — one item per built-in <see cref="DocumentTheme.Catalog"/>
+    /// entry. Command ids are <c>freew.theme.&lt;name&gt;</c> (lower-case), matching the registry wiring.
+    /// </summary>
+    private static RibbonMenu BuildThemeMenu() =>
+        new(DocumentTheme.Catalog
+            .Select(t => new RibbonMenuItem(t.Name,
+                new RibbonCommandId($"freew.theme.{t.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Colors dropdown — one item per theme palette.</summary>
+    private static RibbonMenu BuildThemeColorsMenu() =>
+        new(DocumentTheme.Catalog
+            .Select(t => new RibbonMenuItem(t.Name,
+                new RibbonCommandId($"freew.theme-colors.{t.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Fonts dropdown — one item per <see cref="DocumentFontSet.Catalog"/> entry.</summary>
+    private static RibbonMenu BuildThemeFontsMenu() =>
+        new(DocumentFontSet.Catalog
+            .Select(f => new RibbonMenuItem($"{f.Name}  ({f.HeadingFont} / {f.BodyFont})",
+                new RibbonCommandId($"freew.theme-fonts.{f.Name.ToLowerInvariant()}")))
+            .ToArray());
+
+    /// <summary>AV-DESIGN: Design &gt; Paragraph Spacing dropdown — one item per spacing preset.</summary>
+    private static RibbonMenu BuildParaSpacingMenu() =>
+        new(DocumentParagraphSpacingSet.Catalog
+            .Select(s => new RibbonMenuItem(s.Name,
+                new RibbonCommandId($"freew.para-spacing.{ParaSpacingId(s.Name)}")))
+            .ToArray());
+
+    /// <summary>Normalises a spacing-set display name to a stable command-id suffix (e.g. "No Paragraph Space" → "no-paragraph-space").</summary>
+    internal static string ParaSpacingId(string name) =>
+        name.ToLowerInvariant().Replace(' ', '-');
+
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Page Color swatch palette + No Color. Command ids are
+    /// <c>freew.page-color.&lt;name&gt;</c>; "No Color" clears the background.
+    /// </summary>
+    internal static readonly (string CommandId, string Label)[] PageColors =
+    [
+        ("freew.page-color.none",       "No Color"),
+        ("freew.page-color.white",      "White"),
+        ("freew.page-color.light-gray", "Light Gray"),
+        ("freew.page-color.tan",        "Tan"),
+        ("freew.page-color.light-blue", "Light Blue"),
+        ("freew.page-color.light-green","Light Green"),
+        ("freew.page-color.light-yellow","Light Yellow"),
+        ("freew.page-color.rose",       "Rose"),
+    ];
+
+    private static RibbonMenu BuildPageColorMenu() =>
+        new(PageColors
+            .Select(pc => new RibbonMenuItem(pc.Label, new RibbonCommandId(pc.CommandId)))
+            .ToArray());
+
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Watermark gallery — the built-in presets (CONFIDENTIAL / DRAFT / …), a custom
+    /// opener, and a Remove entry. Command ids are <c>freew.watermark.&lt;preset&gt;</c>.
+    /// </summary>
+    private static RibbonMenu BuildWatermarkMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("CONFIDENTIAL", new RibbonCommandId("freew.watermark.confidential")),
+            new("DO NOT COPY",  new RibbonCommandId("freew.watermark.do-not-copy")),
+            new("DRAFT",        new RibbonCommandId("freew.watermark.draft")),
+            new("URGENT",       new RibbonCommandId("freew.watermark.urgent")),
+            RibbonMenuItem.Separator(),
+            new("Custom Watermark…", new RibbonCommandId("freew.watermark.custom")),
+            new("Remove Watermark",  new RibbonCommandId("freew.watermark.none")),
+        });
 
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
@@ -263,6 +385,8 @@ internal static class FreeWRibbon
                 // AV-INSERT: Insert-tab depth.
                 tab.Group("pages", "Pages", null, 100, g =>
                 {
+                    // AV-INSERT2: Cover Page (gallery of presets) + Page Break.
+                    g.Dropdown("freew.cover-page", "Cover Page", BuildCoverPageMenu());
                     g.Button("freew.page-break", "Page Break");
                 });
                 tab.Group("tables", "Tables", null, 98, g =>
@@ -276,14 +400,30 @@ internal static class FreeWRibbon
                     g.Button("freew.shape",    "Shape");
                     g.Button("freew.text-box", "Text Box");
                 });
+                // AV-INSERT2: Links group — Hyperlink + Bookmark.
+                tab.Group("links", "Links", null, 95, g =>
+                {
+                    g.Button("freew.insert-hyperlink", "Hyperlink");
+                    g.Button("freew.insert-bookmark",  "Bookmark");
+                });
                 tab.Group("header-footer", "Header & Footer", null, 94, g =>
                 {
                     g.Button("freew.header", "Header");
                     g.Button("freew.footer", "Footer");
                 });
+                // AV-INSERT2: Text group — Quick Parts (document-property fields + snippet), Drop Cap,
+                // Text from File.
+                tab.Group("text", "Text", null, 93, g =>
+                {
+                    g.Dropdown("freew.quick-parts", "Quick Parts", BuildQuickPartsMenu());
+                    g.Dropdown("freew.drop-cap",    "Drop Cap",    BuildDropCapMenu());
+                    g.Button("freew.text-from-file", "Text from File");
+                });
                 tab.Group("symbols", "Symbols", null, 92, g =>
                 {
                     g.Dropdown("freew.symbol", "Symbol", BuildSymbolMenu());
+                    // AV-INSERT2: Equation — default (E=mc²) opener + a few common OMML presets.
+                    g.Dropdown("freew.equation", "Equation", BuildEquationMenu());
                 });
             })
             .Tab("layout", "Layout", "L", tab =>
@@ -298,6 +438,27 @@ internal static class FreeWRibbon
                     g.Button("freew.page-margins-wide",   "Wide Margins");
                     g.Button("freew.page-size-letter",    "Letter");
                     g.Button("freew.page-size-a4",        "A4");
+                });
+            })
+            .Tab("design", "Design", "G", tab =>
+            {
+                // AV-DESIGN: Document Formatting — Themes + Colors / Fonts / Paragraph Spacing galleries.
+                tab.Group("themes", "Themes", null, 110, g =>
+                {
+                    g.Dropdown("freew.theme", "Themes", BuildThemeMenu());
+                });
+                tab.Group("document-formatting", "Document Formatting", null, 100, g =>
+                {
+                    g.Dropdown("freew.theme-colors", "Colors", BuildThemeColorsMenu());
+                    g.Dropdown("freew.theme-fonts",  "Fonts",  BuildThemeFontsMenu());
+                    g.Dropdown("freew.para-spacing", "Paragraph Spacing", BuildParaSpacingMenu());
+                });
+                // AV-DESIGN: Page Background — Watermark, Page Color, Page Borders.
+                tab.Group("page-background", "Page Background", null, 90, g =>
+                {
+                    g.Dropdown("freew.watermark",  "Watermark",  BuildWatermarkMenu());
+                    g.Dropdown("freew.page-color", "Page Color", BuildPageColorMenu());
+                    g.Button("freew.page-borders", "Page Borders");
                 });
             })
             .Tab("view", "View", "V", tab =>
@@ -383,6 +544,31 @@ internal static class FreeWRibbon
                 {
                     g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
                     g.Button("freew.cross-reference",  "Cross-reference");
+                });
+            })
+            .Tab("mailings", "Mailings", "M", tab =>
+            {
+                // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
+                // Mail-SEND (e-mail merge) is OUT OF SCOPE and intentionally not surfaced.
+                tab.Group("start-merge", "Start Mail Merge", null, 100, g =>
+                {
+                    g.Button("freew.select-recipients", "Select Recipients");
+                });
+                tab.Group("write-insert", "Write & Insert Fields", null, 90, g =>
+                {
+                    g.Button("freew.address-block", "Address Block");
+                    g.Button("freew.greeting-line", "Greeting Line");
+                    g.Button("freew.merge-field",   "Insert Merge Field");
+                });
+                tab.Group("preview-results", "Preview Results", null, 80, g =>
+                {
+                    g.Button("freew.preview-results", "Preview Results");
+                    g.Button("freew.prev-record",     "◀ Previous");
+                    g.Button("freew.next-record",     "Next ▶");
+                });
+                tab.Group("finish", "Finish", null, 70, g =>
+                {
+                    g.Button("freew.finish-merge", "Finish & Merge");
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
@@ -555,6 +741,13 @@ internal static class FreeWRibbon
     /// </summary>
     public static RibbonCommandRegistry BuildRegistry(DocumentView editor, RibbonHostCallbacks callbacks) =>
         FreeWAvaloniaRibbonCommands.Build(editor, callbacks);
+
+    /// <summary>
+    /// AV-MAIL: build the registry and surface the Mailings <see cref="MailMergeEngine"/> so the shell can
+    /// drive its dialog-bound commands (Select Recipients / Insert Merge Field) over the same session.
+    /// </summary>
+    public static RibbonCommandRegistry BuildRegistry(DocumentView editor, RibbonHostCallbacks callbacks, out MailMergeEngine mailMerge) =>
+        FreeWAvaloniaRibbonCommands.Build(editor, callbacks, out mailMerge);
 }
 
 /// <summary>
@@ -603,7 +796,58 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>AV-VIEW: Opens a second window on the same document (or status note if unsupported).</summary>
     Action? NewWindow = null,
     /// <summary>AV-VIEW: Toggle the split view (or status note if unsupported / deferred).</summary>
-    Action? ToggleSplit = null);
+    Action? ToggleSplit = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Hyperlink dialog (display text + address/anchor) and applies it via
+    /// <see cref="DocumentView.InsertHyperlink"/>. Optional (default null) so existing call sites still
+    /// compile; the registry no-ops when null.
+    /// </summary>
+    Action? OpenHyperlinkDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Bookmark dialog (add a named bookmark at the caret, or Go To an existing one).
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenBookmarkDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Quick Part dialog (a multi-line snippet) and inserts it at the caret.
+    /// Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? OpenQuickPartDialog = null,
+    /// <summary>
+    /// AV-INSERT2: Insert Text from File — opens a file picker, loads a .docx/.txt, and inserts its text at
+    /// the caret. Optional (default null); the registry no-ops when null.
+    /// </summary>
+    Action? InsertTextFromFile = null,
+    /// <summary>
+    /// AV-MAIL: Mailings &gt; Select Recipients — prompt the user for a recipient list and return its CSV
+    /// text (first line = headers), or <c>null</c> if cancelled. <paramref name="seed"/> carries any
+    /// suggested header line built from the merge fields already in the document. Optional: when null the
+    /// Select Recipients command is a safe no-op (so test call sites and parallel waves keep compiling).
+    /// </summary>
+    Func<string, string?>? AskRecipientCsv = null,
+    /// <summary>
+    /// AV-MAIL: Mailings &gt; Insert Merge Field — prompt the user to choose / type a field name from the
+    /// supplied <paramref name="fieldNames"/>, returning the chosen name or <c>null</c> if cancelled.
+    /// Optional: when null the Insert Merge Field command is a safe no-op.
+    /// </summary>
+    Func<IReadOnlyList<string>, string?>? AskMergeFieldName = null,
+    /// <summary>
+    /// AV-MAIL: surface a short mail-merge status / info message to the user (e.g. "Merged 3 records").
+    /// Optional: when null the messages are simply dropped (the merge still happens).
+    /// </summary>
+    Action<string>? ShowMailMergeInfo = null,
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Page Borders — opens a dialog (style / colour / width) and applies the chosen
+    /// border via <see cref="DocumentView.SetPageBorder"/>. Optional (default null); the registry no-ops
+    /// when null (so test call sites and parallel waves keep compiling).
+    /// </summary>
+    Action? OpenPageBordersDialog = null,
+    /// <summary>
+    /// AV-DESIGN: Design &gt; Watermark &gt; Custom Watermark — opens a dialog (text / font / colour / layout)
+    /// and applies it via <see cref="DocumentView.SetWatermark"/>. Optional (default null); the registry
+    /// no-ops when null.
+    /// </summary>
+    Action? OpenWatermarkDialog = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {

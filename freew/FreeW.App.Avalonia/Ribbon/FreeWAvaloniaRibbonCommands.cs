@@ -50,12 +50,21 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <summary>
     /// Build and return the complete command registry for the Avalonia ribbon.
     /// </summary>
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks)
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks) =>
+        Build(editor, callbacks, out _);
+
+    /// <summary>
+    /// Build the registry and also surface the <see cref="MailMergeEngine"/> that backs the Mailings tab
+    /// (AV-MAIL), so the shell can drive its dialog-bound commands (Select Recipients / Insert Merge Field)
+    /// with the async file-picker / prompt and keep the same session the ribbon commands use.
+    /// </summary>
+    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks, out MailMergeEngine mailMerge)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(callbacks);
 
         var r = new RibbonCommandRegistry();
+        mailMerge = new MailMergeEngine(editor, callbacks);
 
         // ── File ─────────────────────────────────────────────────────────────
         r.Register("freew.backstage", new RelayCommand(callbacks.Backstage));
@@ -182,6 +191,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.header", new RelayCommand(editor.EnsureHeader));
         r.Register("freew.footer", new RelayCommand(editor.EnsureFooter));
 
+        // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
+        RegisterInsertDepth2Commands(r, editor, callbacks);
+
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
         r.Register("freew.table-header-row",  new RelayCommand(editor.ToggleTableHeaderRow));
@@ -300,6 +312,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── References (AV-REF) ──────────────────────────────────────────────
         RegisterReferencesCommands(r, editor);
 
+        // ── Mailings (AV-MAIL) ───────────────────────────────────────────────
+        RegisterMailingsCommands(r, mailMerge);
+
+        // ── Design (AV-DESIGN) ───────────────────────────────────────────────
+        RegisterDesignCommands(r, editor, callbacks);
+
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);
 
@@ -394,6 +412,61 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         foreach (var (id, glyph, _) in Symbols)
             r.Register(id, new RelayCommand(() => editor.InsertSymbol(glyph)));
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Registers the second tier of Insert-tab commands — Hyperlink, Bookmark, Cover Page,
+    /// Drop Cap, Quick Parts (document-property fields + snippet), Equation, and Text from File. Each
+    /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method; the dialog-driven
+    /// commands (Hyperlink / Bookmark / Quick-Part snippet / Text-from-File) route through the optional
+    /// <see cref="RibbonHostCallbacks"/> launchers and safely no-op when the shell did not supply one (so
+    /// the registry stays complete and existing test call sites keep compiling).
+    /// </summary>
+    private static void RegisterInsertDepth2Commands(
+        RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        // ── Links ────────────────────────────────────────────────────────────
+        // Hyperlink / Bookmark open small dialogs (shell callbacks) that call InsertHyperlink / InsertBookmark.
+        r.Register("freew.insert-hyperlink", new RelayCommand(callbacks.OpenHyperlinkDialog ?? (() => { })));
+        r.Register("freew.insert-bookmark",  new RelayCommand(callbacks.OpenBookmarkDialog ?? (() => { })));
+
+        // ── Cover Page ───────────────────────────────────────────────────────
+        // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
+        r.Register("freew.cover-page",         new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.cover-page.default", new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
+        r.Register("freew.cover-page.banded",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Banded)));
+        r.Register("freew.cover-page.motion",  new RelayCommand(() => editor.InsertCoverPage(CoverPagePreset.Motion)));
+
+        // ── Drop Cap ─────────────────────────────────────────────────────────
+        // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
+        // approximation — render-deferred); None clears the paragraph's run formatting.
+        r.Register("freew.drop-cap",           new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.drop-cap.dropped",   new RelayCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.in-margin", new RelayCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.none",      new RelayCommand(editor.ClearDropCap));
+
+        // ── Quick Parts ──────────────────────────────────────────────────────
+        // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).
+        r.Register("freew.quick-parts",         new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.quick-parts.title",   new RelayCommand(() => editor.InsertField(RunFieldKind.Title)));
+        r.Register("freew.quick-parts.author",  new RelayCommand(() => editor.InsertField(RunFieldKind.Author)));
+        r.Register("freew.quick-parts.subject", new RelayCommand(() => editor.InsertField(RunFieldKind.Subject)));
+        r.Register("freew.quick-parts.date",    new RelayCommand(() => editor.InsertField(RunFieldKind.Date)));
+        r.Register("freew.quick-parts.snippet", new RelayCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
+
+        // ── Equation ─────────────────────────────────────────────────────────
+        // The opener no-op; each preset inserts an inline OMML equation (default = E=mc²).
+        r.Register("freew.equation",           new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.equation.default",   new RelayCommand(() => editor.InsertEquation()));
+        r.Register("freew.equation.fraction",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
+        r.Register("freew.equation.script",    new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
+        r.Register("freew.equation.radical",   new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
+        r.Register("freew.equation.integral",  new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
+        r.Register("freew.equation.summation", new RelayCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
+
+        // ── Text from File ───────────────────────────────────────────────────
+        // Opens a file picker (shell callback) and inserts the loaded document's text at the caret.
+        r.Register("freew.text-from-file", new RelayCommand(callbacks.InsertTextFromFile ?? (() => { })));
     }
 
     /// <summary>
@@ -616,5 +689,121 @@ internal static class FreeWAvaloniaRibbonCommands
             var sc = scheme;
             r.Register($"freew.smartart-colors-{sc.Id}", new RelayCommand(() => editor.SetSmartArtColor(sc.Id)));
         }
+    }
+
+    /// <summary>
+    /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The
+    /// in-scope subset is: Select Recipients (load a CSV recipient list), Insert Merge Field (insert a
+    /// «Field» placeholder at the caret), Address Block / Greeting Line (insert the composite placeholders),
+    /// Preview Results (toggle a live preview of record 1) with Next / Previous record stepping, and
+    /// Finish &amp; Merge (merge to a new in-memory document). Mail-SEND (e-mail merge) is OUT OF SCOPE and
+    /// intentionally not wired.
+    ///
+    /// <para>
+    /// A single <see cref="MailMergeSession"/> is captured by every command (so they share the loaded data,
+    /// mapping and preview cursor). Commands that mutate the document (merge-field / address-block /
+    /// greeting-line insertion) go through the editor's undoable <see cref="DocumentView.InsertText"/>; the
+    /// preview / finish commands swap the whole document via <see cref="DocumentView.LoadDocument"/>.
+    /// </para>
+    ///
+    /// <para>
+    /// The two dialog-driven entry points (recipient CSV + field-name picker) are supplied as <b>optional</b>
+    /// host callbacks (<see cref="RibbonHostCallbacks.AskRecipientCsv"/> /
+    /// <see cref="RibbonHostCallbacks.AskMergeFieldName"/>); when the shell didn't supply them (tests,
+    /// parallel waves) those two commands degrade to safe no-ops while the rest of the tab stays usable
+    /// (a recipient list can also be loaded directly via <see cref="MailMergeEngine.LoadRecipientsCsv"/>).
+    /// </para>
+    /// </summary>
+    private static void RegisterMailingsCommands(RibbonCommandRegistry r, MailMergeEngine engine)
+    {
+        r.Register("freew.select-recipients", new RelayCommand(engine.SelectRecipients));
+        r.Register("freew.merge-field",       new RelayCommand(engine.InsertMergeField));
+        r.Register("freew.address-block",     new RelayCommand(engine.InsertAddressBlock));
+        r.Register("freew.greeting-line",     new RelayCommand(engine.InsertGreetingLine));
+        r.Register("freew.preview-results",   new RelayCommand(engine.TogglePreview));
+        r.Register("freew.next-record",       new RelayCommand(engine.NextRecord));
+        r.Register("freew.prev-record",       new RelayCommand(engine.PreviousRecord));
+        r.Register("freew.finish-merge",      new RelayCommand(() => engine.FinishMerge()));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Registers the Design-tab commands — Themes / Colors / Fonts / Paragraph-Spacing galleries
+    /// (document-wide style mutations), Page Color, Page Borders, and Watermark. Each gallery dropdown's
+    /// top-level id is a no-op opener; the per-item ids resolve to a model-backed, undoable
+    /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
+    /// <see cref="RibbonHostCallbacks"/> dialog launchers and safely no-op when the shell did not supply one
+    /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
+    /// </summary>
+    private static void RegisterDesignCommands(
+        RibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+    {
+        // ── Themes ───────────────────────────────────────────────────────────
+        r.Register("freew.theme", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var theme in DocumentTheme.Catalog)
+        {
+            var t = theme;
+            r.Register($"freew.theme.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyTheme(t)));
+        }
+
+        // ── Colors (palette only — preserves fonts) ──────────────────────────
+        r.Register("freew.theme-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var theme in DocumentTheme.Catalog)
+        {
+            var t = theme;
+            r.Register($"freew.theme-colors.{t.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyThemeColors(t)));
+        }
+
+        // ── Fonts (heading/body pairing — preserves colours) ─────────────────
+        r.Register("freew.theme-fonts", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var fontSet in DocumentFontSet.Catalog)
+        {
+            var f = fontSet;
+            r.Register($"freew.theme-fonts.{f.Name.ToLowerInvariant()}", new RelayCommand(() => editor.ApplyDocumentFontSet(f)));
+        }
+
+        // ── Paragraph Spacing presets ────────────────────────────────────────
+        r.Register("freew.para-spacing", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
+        {
+            var s = spacingSet;
+            r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
+                new RelayCommand(() => editor.ApplyParagraphSpacingSet(s)));
+        }
+
+        // ── Page Color swatches (+ No Color) ─────────────────────────────────
+        r.Register("freew.page-color", new RelayCommand(() => { /* dropdown opener */ }));
+        RegisterPageColorPalette(r, editor);
+
+        // ── Page Borders — dialog launcher (optional callback) ───────────────
+        r.Register("freew.page-borders", new RelayCommand(callbacks.OpenPageBordersDialog ?? (() => { })));
+
+        // ── Watermark — built-in presets + Custom (dialog) + Remove ──────────
+        r.Register("freew.watermark", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.watermark.confidential", new RelayCommand(() => editor.SetWatermarkText("CONFIDENTIAL")));
+        r.Register("freew.watermark.do-not-copy",  new RelayCommand(() => editor.SetWatermarkText("DO NOT COPY")));
+        r.Register("freew.watermark.draft",        new RelayCommand(() => editor.SetWatermarkText("DRAFT")));
+        r.Register("freew.watermark.urgent",       new RelayCommand(() => editor.SetWatermarkText("URGENT")));
+        r.Register("freew.watermark.custom",       new RelayCommand(callbacks.OpenWatermarkDialog ?? (() => { })));
+        r.Register("freew.watermark.none",         new RelayCommand(() => editor.SetWatermark(null)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Registers the per-swatch sub-commands for the Page Color palette. Each id matches an entry
+    /// in <see cref="FreeWRibbon.PageColors"/> and calls <see cref="DocumentView.SetPageColor"/> with the
+    /// swatch hex (or null for "No Color", which clears the background back to white).
+    /// </summary>
+    private static void RegisterPageColorPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        static void Add(RibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
+            reg.Register(id, new RelayCommand(() => ed.SetPageColor(hex)));
+
+        Add(r, editor, "freew.page-color.none",         null);
+        Add(r, editor, "freew.page-color.white",        "#FFFFFF");
+        Add(r, editor, "freew.page-color.light-gray",   "#D9D9D9");
+        Add(r, editor, "freew.page-color.tan",          "#EAD9C0");
+        Add(r, editor, "freew.page-color.light-blue",   "#DDEBF7");
+        Add(r, editor, "freew.page-color.light-green",  "#E2EFDA");
+        Add(r, editor, "freew.page-color.light-yellow", "#FFF2CC");
+        Add(r, editor, "freew.page-color.rose",         "#FCE4EC");
     }
 }

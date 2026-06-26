@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
@@ -38,6 +39,8 @@ public sealed class MainWindow : Window
     private readonly IReadOnlyList<IDocumentFileAdapter> _adapters = DocumentFileAdapterCatalog.CreateDefaultAdapters();
     private readonly DocumentView _editor = new();
     private readonly TextBlock _status = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
+    // AV-MAIL: the Mailings engine (recipients / merge fields / preview / finish-merge) shared with the ribbon.
+    private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _zoomLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0) };
@@ -132,6 +135,7 @@ public sealed class MainWindow : Window
         _editor.CaretMoved += UpdateStatus;
         _editor.ViewModeChanged += UpdateStatus;
         _editor.ViewModeChanged += UpdateViewModeButtons;
+        _editor.HyperlinkActivated += OpenExternalUri;
 
         // Wire view-mode buttons.
         _btnPrintLayout.Click += (_, _) => SetViewMode(DocumentViewMode.PrintLayout);
@@ -256,6 +260,36 @@ public sealed class MainWindow : Window
     /// </summary>
     private Task OpenPageSetupDialogAsync() =>
         PageSetupDialog.ShowAndApplyAsync(this, _editor);
+
+    /// <summary>
+    /// AV-DESIGN: Opens the Page Borders dialog (modal); on OK applies the chosen border via
+    /// <see cref="DocumentView.SetPageBorder"/> (undoable), or removes it on "None". Wired to
+    /// <c>freew.page-borders</c> (Design → Page Background group).
+    /// </summary>
+    private async Task OpenPageBordersDialogAsync()
+    {
+        var dialog = new PageBordersDialog(_editor.Document.Page.PageBorder);
+        await dialog.ShowDialog(this);
+        if (dialog.RemoveRequested)
+            _editor.SetPageBorder(null);
+        else if (dialog.Result is { } border)
+            _editor.SetPageBorder(border);
+    }
+
+    /// <summary>
+    /// AV-DESIGN: Opens the Custom Watermark dialog (modal); on OK applies the chosen text watermark via
+    /// <see cref="DocumentView.SetWatermark"/> (undoable), or removes it on "No Watermark". Wired to
+    /// <c>freew.watermark.custom</c> (Design → Page Background group).
+    /// </summary>
+    private async Task OpenWatermarkDialogAsync()
+    {
+        var dialog = new WatermarkDialog(_editor.Document.Page.EffectiveWatermark);
+        await dialog.ShowDialog(this);
+        if (dialog.RemoveRequested)
+            _editor.SetWatermark(null);
+        else if (dialog.Result is { } options)
+            _editor.SetWatermark(options);
+    }
 
     /// <summary>
     /// AV-REVIEW: Opens the Word Count dialog (modal), showing words/characters/paragraphs/lines computed
@@ -434,9 +468,28 @@ public sealed class MainWindow : Window
             },
             OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
             NewWindow:       OpenNewWindow,
-            ToggleSplit:     ToggleSplit);
+            ToggleSplit:     ToggleSplit,
+            // AV-INSERT2: Insert depth 2 dialog launchers (optional callbacks).
+            OpenHyperlinkDialog: () => _ = OpenHyperlinkDialogAsync(),
+            OpenBookmarkDialog:  () => _ = OpenBookmarkDialogAsync(),
+            OpenQuickPartDialog: () => _ = OpenQuickPartDialogAsync(),
+            InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
+            // AV-MAIL: surface mail-merge info messages in the status bar.
+            ShowMailMergeInfo: msg => _status.Text = msg,
+            // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
+            OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
+            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync());
 
-        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
+        // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
+        // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
+        // ribbon commands share. The remaining Mailings commands (address-block / greeting / preview /
+        // next / prev / finish) are wired directly by the registry and need no shell glue.
+        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
+        _mailMerge = mailMerge;
+        registry.Register(new RibbonCommandId("freew.select-recipients"),
+            new RelayCommand(() => _ = SelectRecipientsAsync()));
+        registry.Register(new RibbonCommandId("freew.merge-field"),
+            new RelayCommand(() => _ = InsertMergeFieldAsync()));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -455,6 +508,37 @@ public sealed class MainWindow : Window
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child = ribbon,
         };
+    }
+
+    // AV-MAIL: Mailings > Select Recipients. Prompt for a CSV recipient list (seeded with the document's
+    // existing merge-field names as the header hint), then load it into the shared merge session.
+    private async Task SelectRecipientsAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        var fields = FreeW.Core.Model.MailMerge.FieldNames(_editor.Document);
+        var seed = fields.Count > 0 ? string.Join(",", fields) : string.Empty;
+        var csv = await MailMergeDialogs.AskRecipientCsvAsync(this, seed);
+        if (string.IsNullOrWhiteSpace(csv))
+            return;
+        var data = _mailMerge.LoadRecipientsCsv(csv);
+        _status.Text = data.Count > 0
+            ? $"Loaded {data.Count} recipient(s): {string.Join(", ", data.Header)}"
+            : "Recipient list is empty.";
+        _editor.Focus();
+    }
+
+    // AV-MAIL: Mailings > Insert Merge Field. Pick / type a field name (seeded with the loaded recipient
+    // list's columns), then insert the «Field» placeholder at the caret through the undoable edit path.
+    private async Task InsertMergeFieldAsync()
+    {
+        if (_mailMerge is null)
+            return;
+        var name = await MailMergeDialogs.AskMergeFieldNameAsync(this, _mailMerge.AvailableFieldNames);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+        _mailMerge.InsertMergeFieldNamed(name);
+        _editor.Focus();
     }
 
     // OS clipboard via Avalonia's data-transfer API (same pattern as the FreeX shell):
@@ -919,6 +1003,113 @@ public sealed class MainWindow : Window
         }
     }
 
+    // ── AV-INSERT2: Insert depth 2 dialog launchers ─────────────────────────────
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Hyperlink dialog. Pre-fills the display field with the current selection
+    /// text (Word's behaviour), and on OK inserts/converts the hyperlink via
+    /// <see cref="DocumentView.InsertHyperlink"/>. Wired to <c>freew.insert-hyperlink</c> (Insert → Links).
+    /// </summary>
+    private async Task OpenHyperlinkDialogAsync()
+    {
+        var dialog = new HyperlinkDialog(initialDisplay: _editor.SelectedText);
+        await dialog.ShowDialog(this);
+        if (dialog.Address is { } address)
+        {
+            _editor.InsertHyperlink(dialog.DisplayText ?? string.Empty, address);
+            _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Bookmark dialog (add at caret / Go To existing). Lists the document's current
+    /// bookmark names. Wired to <c>freew.insert-bookmark</c> (Insert → Links).
+    /// </summary>
+    private async Task OpenBookmarkDialogAsync()
+    {
+        var names = Bookmarks.List(_editor.Document)
+            .Select(b => b.Name)
+            .Distinct()
+            .ToList();
+        var dialog = new BookmarkDialog(names);
+        await dialog.ShowDialog(this);
+        if (dialog.BookmarkName is { } add)
+            _editor.InsertBookmark(add);
+        else if (dialog.GoToName is { } go)
+            _editor.GoToBookmark(go);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Opens the Insert Quick Part dialog (a free-text snippet) and inserts the entered text at
+    /// the caret. Wired to <c>freew.quick-parts.snippet</c> (Insert → Text → Quick Parts).
+    /// </summary>
+    private async Task OpenQuickPartDialogAsync()
+    {
+        var dialog = new QuickPartDialog();
+        await dialog.ShowDialog(this);
+        if (dialog.SnippetText is { } text)
+        {
+            _editor.InsertQuickPartText(text);
+            _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert Text from File — opens a file picker for a .docx/.txt, loads it (reusing the open
+    /// adapters for .docx; a plain reader for .txt), and inserts the document's plain text at the caret as a
+    /// Quick-Part-style multi-paragraph insert. Wired to <c>freew.text-from-file</c> (Insert → Text).
+    /// </summary>
+    private async Task InsertTextFromFileAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Insert Text from File",
+            AllowMultiple = false,
+            FileTypeFilter = [TextFromFileType],
+        });
+        if (files.Count == 0)
+            return;
+        var path = files[0].TryGetLocalPath();
+        if (path is null)
+            return;
+
+        try
+        {
+            string text;
+            var ext = Path.GetExtension(path);
+            if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                text = await File.ReadAllTextAsync(path);
+            }
+            else
+            {
+                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_adapters, ext, out _);
+                if (adapter is null)
+                {
+                    _status.Text = $"Insert text failed: unsupported file type \"{ext}\".";
+                    return;
+                }
+                using var stream = File.OpenRead(path);
+                var document = adapter.Load(stream);
+                text = document.PlainText;
+            }
+
+            _editor.InsertQuickPartText(text);
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Insert text failed: {ex.Message}";
+        }
+    }
+
+    private static readonly FilePickerFileType TextFromFileType = new("Documents")
+    {
+        Patterns = ["*.docx", "*.txt"],
+        MimeTypes = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
+    };
+
     private void LoadDocumentAsSaved(TextDocument document, string? path)
     {
         LoadDocumentContent(document);
@@ -1063,4 +1254,13 @@ public sealed class MainWindow : Window
         if (path is not null)
             await SaveToPathAsync(path);
     }
+
+    // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
+    // Mirrors the WPF host's OnHyperlinkRequestNavigate: blocked schemes and launch failures are silently
+    // dropped so a bad URL never crashes the editor.
+    private static void OpenExternalUri(string url) =>
+        ExternalUriLauncher.Open(
+            url,
+            uri => System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
 }

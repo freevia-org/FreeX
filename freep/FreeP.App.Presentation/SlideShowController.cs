@@ -134,15 +134,26 @@ public sealed class SlideShowController
     /// ONLY includes animations that are in the main sequence (TriggerShapeId == null).
     /// Trigger animations are excluded from the advance chain — they are fired by
     /// <see cref="FireTrigger"/> when the user clicks the trigger shape.
-    /// Rule: an OnClick animation begins a new step; WithPrevious and AfterPrevious
-    /// animations join the current step and will play together with it.
+    ///
+    /// Rules:
+    ///   • OnClick begins a new step.
+    ///   • WithPrevious joins the current step and starts simultaneously with the prior animation
+    ///     (StartDelayMs = animation's own DelayMs, same as the preceding animation's timeline).
+    ///   • AfterPrevious joins the current step but starts only after the preceding animation
+    ///     has fully completed: StartDelayMs = accumulated prior durations + prior delays.
+    ///     Multiple AfterPrevious animations chain: each waits for the previous to finish.
     /// </summary>
     public static IReadOnlyList<AnimationStep> BuildSteps(Slide slide)
     {
         var steps = new List<AnimationStep>();
         if (slide.Animations.Count == 0) return steps;
 
-        List<ShapeAnimation>? current = null;
+        List<AnimationEntry>? current = null;
+        // Tracks accumulated end-time (StartDelayMs + DurationMs) of the last
+        // animation in the AfterPrevious chain within the current step.
+        // When the next animation is AfterPrevious, it must start at this accumulated time.
+        int accumulatedEndMs = 0;
+
         foreach (var anim in slide.Animations)
         {
             // Skip trigger animations — they are not part of the main advance chain.
@@ -150,13 +161,36 @@ public sealed class SlideShowController
 
             if (anim.Trigger == AnimationTrigger.OnClick || current is null)
             {
-                current = new List<ShapeAnimation> { anim };
+                // New click-step: the first animation starts at its own DelayMs.
+                int startDelay = Math.Max(0, anim.DelayMs);
+                current = new List<AnimationEntry> { new AnimationEntry(anim, startDelay) };
                 steps.Add(new AnimationStep(current));
+                // The AfterPrevious chain resets: any subsequent AfterPrevious waits for
+                // this animation to finish (startDelay + duration).
+                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+            }
+            else if (anim.Trigger == AnimationTrigger.WithPrevious)
+            {
+                // WithPrevious: starts simultaneously with the previous animation —
+                // same start-time reference (the current accumulated base is NOT advanced).
+                // Use the animation's own DelayMs as its start offset from click.
+                // Note: WithPrevious with DelayMs > 0 is a PowerPoint-legal offset FROM the
+                // simultaneous start, not from completion of prior. We honour DelayMs as-is.
+                int startDelay = Math.Max(0, anim.DelayMs);
+                current.Add(new AnimationEntry(anim, startDelay));
+                // WithPrevious does NOT extend the chain end time — the AfterPrevious
+                // reference tracks the OnClick/AfterPrevious spine, not concurrent sideloads.
+                // (PowerPoint: AfterPrevious after a WithPrevious waits for the spine anim,
+                // not the With anim. Keep accumulatedEndMs unchanged.)
             }
             else
             {
-                // WithPrevious / AfterPrevious: join the current step
-                current.Add(anim);
+                // AfterPrevious: must start after the accumulated chain completes.
+                // StartDelayMs = accumulated end time of the prior animation + own DelayMs.
+                int startDelay = accumulatedEndMs + Math.Max(0, anim.DelayMs);
+                current.Add(new AnimationEntry(anim, startDelay));
+                // Advance the chain end: this animation ends at startDelay + its duration.
+                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
             }
         }
         return steps;
@@ -200,23 +234,37 @@ public sealed class SlideShowController
 
     /// <summary>
     /// Groups a flat list of trigger animations into click-steps (same rules as BuildSteps).
+    /// AfterPrevious entries get accumulated start delays; WithPrevious entries are simultaneous.
     /// </summary>
     public static IReadOnlyList<AnimationStep> BuildTriggerSteps(IReadOnlyList<ShapeAnimation> anims)
     {
         var steps = new List<AnimationStep>();
         if (anims.Count == 0) return steps;
 
-        List<ShapeAnimation>? current = null;
+        List<AnimationEntry>? current = null;
+        int accumulatedEndMs = 0;
+
         foreach (var anim in anims)
         {
             if (anim.Trigger == AnimationTrigger.OnClick || current is null)
             {
-                current = new List<ShapeAnimation> { anim };
+                int startDelay = Math.Max(0, anim.DelayMs);
+                current = new List<AnimationEntry> { new AnimationEntry(anim, startDelay) };
                 steps.Add(new AnimationStep(current));
+                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
+            }
+            else if (anim.Trigger == AnimationTrigger.WithPrevious)
+            {
+                int startDelay = Math.Max(0, anim.DelayMs);
+                current.Add(new AnimationEntry(anim, startDelay));
+                // accumulatedEndMs unchanged (WithPrevious doesn't advance the AfterPrevious spine)
             }
             else
             {
-                current.Add(anim);
+                // AfterPrevious
+                int startDelay = accumulatedEndMs + Math.Max(0, anim.DelayMs);
+                current.Add(new AnimationEntry(anim, startDelay));
+                accumulatedEndMs = startDelay + Math.Max(0, anim.DurationMs);
             }
         }
         return steps;
@@ -237,17 +285,36 @@ public sealed class SlideShowController
 // ── Value types returned by the controller ────────────────────────────────────
 
 /// <summary>
-/// A group of shape animations that play together on a single click advance.
+/// A single animation within a click-step, together with its computed start delay.
+/// </summary>
+/// <param name="Animation">The shape animation to play.</param>
+/// <param name="StartDelayMs">
+/// Computed start delay in milliseconds relative to when the click-step begins.
+/// For OnClick and WithPrevious entries this equals the animation's own <see cref="ShapeAnimation.DelayMs"/>.
+/// For AfterPrevious entries it is the sum of all preceding animations' durations (plus their
+/// own delays) in the AfterPrevious chain, so the entry begins only after the previous
+/// animation completes — matching PowerPoint semantics.
+/// </param>
+public sealed record AnimationEntry(ShapeAnimation Animation, int StartDelayMs);
+
+/// <summary>
+/// A group of shape animations that play on a single click advance.
 /// Composed of one OnClick animation plus any immediately following
 /// WithPrevious / AfterPrevious animations.
+/// WithPrevious entries share their start time with the preceding animation (same step, simultaneous).
+/// AfterPrevious entries are scheduled to begin after the preceding animation's duration completes,
+/// with their StartDelayMs already accounting for the accumulated prior durations.
 /// </summary>
 public sealed class AnimationStep
 {
-    public IReadOnlyList<ShapeAnimation> Animations { get; }
+    public IReadOnlyList<AnimationEntry> Entries { get; }
 
-    public AnimationStep(IReadOnlyList<ShapeAnimation> animations)
+    /// <summary>Back-compat accessor: the raw animations in this step (without start-delay data).</summary>
+    public IReadOnlyList<ShapeAnimation> Animations => Entries.Select(e => e.Animation).ToList();
+
+    public AnimationStep(IReadOnlyList<AnimationEntry> entries)
     {
-        Animations = animations ?? throw new ArgumentNullException(nameof(animations));
+        Entries = entries ?? throw new ArgumentNullException(nameof(entries));
     }
 }
 

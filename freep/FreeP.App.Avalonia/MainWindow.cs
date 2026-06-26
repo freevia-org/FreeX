@@ -678,6 +678,15 @@ public sealed class MainWindow : Window
 
         int startIdx = fromStart ? 0 : Math.Max(0, Editor.CurrentSlideIndex);
         var slideShow = new SlideShowWindow(_presentation, startIdx);
+
+        // DA5: restore the editor's selected slide to wherever the slideshow ended.
+        slideShow.Closed += (_, _) =>
+        {
+            int exitIdx = slideShow.Controller.CurrentSlideIndex;
+            if (exitIdx >= 0 && exitIdx < _presentation.Slides.Count)
+                Editor.SelectSlide(exitIdx);
+        };
+
         slideShow.Show();
     }
 }

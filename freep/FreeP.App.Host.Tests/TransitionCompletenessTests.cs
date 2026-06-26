@@ -325,6 +325,245 @@ public class TransitionCompletenessTests
         Assert.Equal(1, clone.Transition.Sound.AudioBytes![0]);
     }
 
+    // ── EB1: extended kinds emitted in p14: namespace, not p: ───────────────────
+
+    [Theory]
+    [InlineData(TransitionKind.Cube)]
+    [InlineData(TransitionKind.Gallery)]
+    [InlineData(TransitionKind.Glitter)]
+    [InlineData(TransitionKind.Vortex)]
+    [InlineData(TransitionKind.Ripple)]
+    [InlineData(TransitionKind.Prism)]
+    [InlineData(TransitionKind.Doors)]
+    [InlineData(TransitionKind.Window)]
+    [InlineData(TransitionKind.Ferris)]
+    [InlineData(TransitionKind.Conveyor)]
+    [InlineData(TransitionKind.Switch)]
+    [InlineData(TransitionKind.Flip)]
+    [InlineData(TransitionKind.Rotate)]
+    [InlineData(TransitionKind.Orbit)]
+    [InlineData(TransitionKind.Pan)]
+    [InlineData(TransitionKind.Comb)]
+    [InlineData(TransitionKind.Honeycomb)]
+    [InlineData(TransitionKind.PageCurlDouble)]
+    [InlineData(TransitionKind.PageCurlSingle)]
+    public void EB1_ExtendedKind_EmittedInP14Namespace(TransitionKind kind)
+    {
+        // Bug EB1: extended transition kinds were emitted as p:-namespace children of p:transition,
+        // which is invalid per CT_SlideTransition (ECMA-376) → PowerPoint repair.
+        // Fix: they should be emitted as p14:-namespace children inside mc:Choice.
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition { Kind = kind, DurationMs = 700 };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(entry);
+
+        XDocument doc;
+        using (var s = entry!.Open()) doc = XDocument.Load(s);
+
+        var p14Ns = XNamespace.Get("http://schemas.microsoft.com/office/powerpoint/2010/main");
+        var mcNs  = XNamespace.Get("http://schemas.openxmlformats.org/markup-compatibility/2006");
+        var pNs   = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+        var effectName = PptxAnimationMap_Accessor.TransitionKindToElementName(kind);
+        Assert.NotNull(effectName);
+
+        // mc:Choice > p:transition should contain a p14:-namespace effect element, NOT a p:-namespace one
+        var transEl = doc.Root?
+            .Element(mcNs + "AlternateContent")?
+            .Element(mcNs + "Choice")?
+            .Element(pNs + "transition");
+        Assert.NotNull(transEl);
+
+        // The effect child MUST be in p14: namespace
+        var p14El = transEl!.Elements().FirstOrDefault(e => e.Name.Namespace == p14Ns);
+        Assert.NotNull(p14El); // EB1 fix: must exist in p14: namespace
+
+        // The effect child must NOT be in the base p: namespace (that caused repair)
+        var pEl = transEl.Elements().FirstOrDefault(e =>
+            e.Name.Namespace == pNs &&
+            e.Name.LocalName != "sndAc" &&
+            e.Name.LocalName != "extLst");
+        Assert.Null(pEl); // EB1 fix: must NOT be in p: namespace
+    }
+
+    // ── EB3: morph emitted in p159: namespace ────────────────────────────────────
+
+    [Fact]
+    public void EB3_Morph_EmittedInP159Namespace()
+    {
+        // Bug EB3: morph was emitted as p:morph inside p:transition. Morph is a p159: extension.
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind        = TransitionKind.Morph,
+            MorphOption = "byWord",
+            DurationMs  = 700,
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(entry);
+
+        XDocument doc;
+        using (var s = entry!.Open()) doc = XDocument.Load(s);
+
+        var p159Ns = XNamespace.Get("http://schemas.microsoft.com/office/powerpoint/2015/09/main");
+        var mcNs   = XNamespace.Get("http://schemas.openxmlformats.org/markup-compatibility/2006");
+        var pNs    = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
+
+        // mc:Choice Requires must be "p159" for morph
+        var choice = doc.Root?
+            .Element(mcNs + "AlternateContent")?
+            .Element(mcNs + "Choice");
+        Assert.NotNull(choice);
+        Assert.Equal("p159", choice!.Attribute("Requires")?.Value); // EB3 fix
+
+        // p:transition inside Choice must have p159:morph child
+        var transEl = choice.Element(pNs + "transition");
+        Assert.NotNull(transEl);
+        var morphEl = transEl!.Elements().FirstOrDefault(e => e.Name.Namespace == p159Ns);
+        Assert.NotNull(morphEl); // EB3 fix: p159:morph must be present
+        Assert.Equal("morph", morphEl!.Name.LocalName);
+        Assert.Equal("byWord", morphEl.Attribute("option")?.Value); // option preserved
+
+        // Must NOT have p:morph (that caused repair)
+        var pMorphEl = transEl.Elements()
+            .FirstOrDefault(e => e.Name.Namespace == pNs && e.Name.LocalName == "morph");
+        Assert.Null(pMorphEl); // EB3 fix: no p:morph
+    }
+
+    // ── EB3: morph round-trips via p159 namespace ─────────────────────────────
+
+    [Fact]
+    public void EB3_Morph_RoundTrips_P159Namespace()
+    {
+        // Build a PPTX with a real-PowerPoint-shaped p159:morph inside mc:Choice Requires="p159"
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\"" +
+            " xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\"" +
+            " xmlns:p159=\"http://schemas.microsoft.com/office/powerpoint/2015/09/main\">" +
+            "<mc:Choice Requires=\"p159\">" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\" p14:dur=\"700\">" +
+            "<p159:morph option=\"byWord\"/>" +
+            "</p:transition>" +
+            "</mc:Choice>" +
+            "<mc:Fallback>" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:fade/>" +
+            "</p:transition>" +
+            "</mc:Fallback>" +
+            "</mc:AlternateContent>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Morph, t!.Kind); // EB2 fix: p159:morph must be recognized
+        Assert.Equal("byWord", t.MorphOption);        // option must survive
+    }
+
+    // ── EB2: reader recognizes p14: extended transitions ────────────────────────
+
+    [Theory]
+    [InlineData("cube",      TransitionKind.Cube)]
+    [InlineData("gallery",   TransitionKind.Gallery)]
+    [InlineData("glitter",   TransitionKind.Glitter)]
+    [InlineData("vortex",    TransitionKind.Vortex)]
+    [InlineData("honeycomb", TransitionKind.Honeycomb)]
+    public void EB2_Reader_RecognizesP14ExtendedTransition(string elementName, TransitionKind expected)
+    {
+        // Bug EB2: the reader's effect-child scan was P-namespace-only, so real-PowerPoint
+        // extended transitions (p14:cube etc.) were silently dropped (Kind=None).
+        var pptxBytes = BuildPptxWithTransitionEl(
+            "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\"" +
+            " xmlns:p14=\"http://schemas.microsoft.com/office/powerpoint/2010/main\">" +
+            "<mc:Choice Requires=\"p14\">" +
+            $"<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\" p14:dur=\"700\">" +
+            $"<p14:{elementName}/>" +
+            "</p:transition>" +
+            "</mc:Choice>" +
+            "<mc:Fallback>" +
+            "<p:transition xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" spd=\"fast\">" +
+            "<p:fade/>" +
+            "</p:transition>" +
+            "</mc:Fallback>" +
+            "</mc:AlternateContent>");
+
+        using var ms = new MemoryStream(pptxBytes);
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(expected, t!.Kind); // EB2 fix: p14: effect must be recognized
+    }
+
+    // ── EB2+EB1 round-trip: write extended kind → read back in p14 namespace ────
+
+    [Theory]
+    [InlineData(TransitionKind.Cube)]
+    [InlineData(TransitionKind.Glitter)]
+    [InlineData(TransitionKind.Vortex)]
+    [InlineData(TransitionKind.PageCurlDouble)]
+    [InlineData(TransitionKind.Honeycomb)]
+    public void EB1_EB2_ExtendedKind_WrittenInP14_ReadBackCorrectly(TransitionKind kind)
+    {
+        // Full round-trip: write with p14: namespace (EB1 fix), read back (EB2 fix).
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition { Kind = kind, DurationMs = 700 };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(kind, t!.Kind);   // must not be None or Other
+        Assert.Equal(700, t.DurationMs);
+    }
+
+    // ── EB4: ogg/aac transition sound gets content-type Default ─────────────────
+
+    [Theory]
+    [InlineData("audio/ogg", "ogg")]
+    [InlineData("audio/aac", "aac")]
+    public void EB4_OggAacTransitionSound_GetsContentTypeDefault(string contentType, string ext)
+    {
+        var fakeAudio = new byte[] { 0x01, 0x02, 0x03 };
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind  = TransitionKind.Fade,
+            Sound = new TransitionSound { AudioBytes = fakeAudio, ContentType = contentType },
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var ctEntry = zip.GetEntry("[Content_Types].xml");
+        Assert.NotNull(ctEntry);
+        string ctXml;
+        using (var s = new StreamReader(ctEntry!.Open())) ctXml = s.ReadToEnd();
+
+        // EB4 fix: the Default entry for ogg/aac must be present
+        Assert.Contains($"Extension=\"{ext}\"", ctXml);
+        Assert.Contains(contentType, ctXml);
+    }
+
     // ── Slideshow effect-fallback mapping (resolved correctly, no crash) ─────────
 
     [Theory]
@@ -508,8 +747,11 @@ internal static class PptxAnimationMap_Accessor
         XDocument doc;
         using (var s = entry.Open()) doc = XDocument.Load(s);
 
-        XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
-        XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        XNamespace P    = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace P14  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+        XNamespace P15  = "http://schemas.microsoft.com/office/powerpoint/2012/main";
+        XNamespace P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+        XNamespace MC   = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
         // Navigate through mc:AlternateContent or bare p:transition.
         var transEl = doc.Root?.Element(MC + "AlternateContent")
@@ -517,8 +759,12 @@ internal static class PptxAnimationMap_Accessor
                           ?.Element(P + "transition")
                       ?? doc.Root?.Element(P + "transition");
 
+        // EB1/EB2/EB3: effect child may be in P, P14, P15, or P159 namespace (depending on kind).
         var effectEl = transEl?.Elements()
-            .FirstOrDefault(e => e.Name.Namespace == P
+            .FirstOrDefault(e => (e.Name.Namespace == P  ||
+                                  e.Name.Namespace == P14 ||
+                                  e.Name.Namespace == P15 ||
+                                  e.Name.Namespace == P159)
                                  && e.Name.LocalName != "sndAc"
                                  && e.Name.LocalName != "extLst");
         return effectEl?.Name.LocalName;

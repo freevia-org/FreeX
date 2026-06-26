@@ -33,6 +33,27 @@ public enum DocumentViewMode
 }
 
 /// <summary>
+/// AV-HANDLES: identifies which manipulation handle a pointer is over (or that a drag is operating on)
+/// for a selected floating object. <see cref="None"/> = not on the object at all; <see cref="Body"/> =
+/// inside the object but not on a resize handle (a press there starts a drag-move). The eight remaining
+/// values are the resize handles: four corners (resize both dimensions) and four edge midpoints
+/// (resize one dimension, anchoring the opposite edge).
+/// </summary>
+public enum FloatHandle
+{
+    None,
+    Body,
+    TopLeft,
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+}
+
+/// <summary>
 /// FreeW's editing surface. The WPF host used a RichTextBox/FlowDocument; Avalonia has no
 /// FlowDocument, so this is a custom <see cref="Control"/> that lays out the
 /// <see cref="TextDocument"/> per character, renders runs with their formatting, and routes every
@@ -122,6 +143,10 @@ public sealed class DocumentView : Control
     private readonly List<(double X1, double X2, double Y)> _noteSeparators = new();
     // AV-NOTERENDER: extra page-space height reserved below the last body page for the endnotes section.
     private double _endnoteExtentDip;
+    // DB1/DB2: per-page true footnote band height (0-based page index → band height in DIP).
+    // Populated by BuildFootnoteItems after a first-pass body layout; ReserveContentY uses it to shrink
+    // the effective text area on that page so body text reflows above the footnote band.
+    private readonly Dictionary<int, double> _footnoteBandHeightByPage = new();
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -156,10 +181,11 @@ public sealed class DocumentView : Control
     // Selected floating object (null = no selection). Kind = "Image"|"Shape"|"Chart"|"WordArt"|"SmartArt"|"Group".
     // Rect is the page-space bounding rect as laid out in the last layout pass.
     private (int BlockIndex, int RunIndex, string Kind, Rect Rect)? _selectedFloating;
-    // Drag-move state: non-null while the user is dragging a selected float.
-    // PointerDown: stores the pointer's page-space position when the drag started and the float's
-    // Rect at that moment so we can compute delta offsets for the move.
-    private (Point PointerDown, Rect FloatRect)? _floatDragState;
+    // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
+    // PointerDown : pointer page-space position when the drag started.
+    // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
+    // Handle      : which manipulation is active (Body = move; any edge/corner = resize from that handle).
+    private (Point PointerDown, Rect FloatRect, FloatHandle Handle)? _floatDragState;
 
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
@@ -513,6 +539,10 @@ public sealed class DocumentView : Control
     /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
     internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
 
+    /// <summary>Fires <see cref="HyperlinkActivated"/> with <paramref name="url"/> so tests can
+    /// verify that hosts have subscribed without hitting real hyperlinks or Process.Start.</summary>
+    internal void SimulateHyperlinkActivatedForTest(string url) => HyperlinkActivated?.Invoke(url);
+
     // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -586,6 +616,28 @@ public sealed class DocumentView : Control
 
     /// <summary>Test shim: invoke a paragraph break / Enter (routes into the H/F region when the H/F caret is active).</summary>
     internal void InsertParagraphBreakForTest() => InsertParagraphBreak();
+
+    /// <summary>
+    /// Test shim for DD1/DD2: dispatches a key through the header/footer caret switch and returns whether
+    /// the key was handled by the H/F guard (i.e. did NOT fall through to the body switch).
+    /// Only Tab, Up, and Down are meaningful here. Mirrors the guard logic in OnKeyDown.
+    /// </summary>
+    internal bool SimulateHfKeyForTest(Key key, bool shift = false)
+    {
+        if (_hfCaret is null)
+            return false;
+        switch (key)
+        {
+            case Key.Tab:
+                if (!shift) HfInsertText("\t");
+                return true; // consumed — body list path never reached
+            case Key.Up:
+            case Key.Down:
+                return true; // consumed as no-op — body MoveCaretVertical never called
+            default:
+                return false;
+        }
+    }
 
     /// <summary>Test shim: place the body caret at (block, offset), exiting any H/F caret (mirrors MoveCaretToBlock + H/F exit).</summary>
     internal void MoveCaretToBlockForTest(int blockIdx, int offset)
@@ -2413,6 +2465,7 @@ public sealed class DocumentView : Control
         _noteItems.Clear();           // AV-NOTERENDER
         _noteSeparators.Clear();      // AV-NOTERENDER
         _endnoteExtentDip = 0;        // AV-NOTERENDER
+        _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _tabLeaderSpans.Clear(); // AV-TAB
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -2504,6 +2557,83 @@ public sealed class DocumentView : Control
         _layoutContentY = 0;
         _layoutTextAreaHeight = textAreaHeight;
 
+        // DB1: first body-layout pass — lays out body text with _footnoteBandHeightByPage EMPTY
+        // (no per-page reservation yet). After this pass we know which footnotes land on which page
+        // and can measure true band heights. A second pass then re-flows the body with per-page
+        // reservations so body text breaks before encroaching on the footnote band.
+        RunBodyLayoutBlocks(textWidth);
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
+            // Number of pages = ceil(slots / colCount).
+            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var totalSlots = lastSlot + 1;
+            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+
+            // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
+            if (_doc.Footnotes.Count > 0)
+            {
+                ComputeFootnoteBandHeights();
+
+                // DB1 second pass: re-flow the body with per-page footnote reservations active.
+                // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
+                // effective text area so body text breaks before the footnote band.
+                _placed.Clear();
+                _markers.Clear();
+                _rects.Clear();
+                _floatingImages.Clear();
+                _floatingShapes.Clear();
+                _floatingCharts.Clear();
+                _floatingWordArts.Clear();
+                _floatingSmartArts.Clear();
+                _floatingGroups.Clear();
+                _wrapExclusions.Clear();
+                _inlineCharts.Clear();
+                _inlineWordArts.Clear();
+                _inlineSmartArts.Clear();
+                _cellHits.Clear();
+                _tabLeaderSpans.Clear();
+                _layoutContentY = 0;
+                RunBodyLayoutBlocks(textWidth);
+
+                // Recompute page count from the second pass.
+                lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+                totalSlots = lastSlot + 1;
+                _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+            }
+        }
+        else
+        {
+            // Web/Draft: single continuous column — total height is just the content plus margins.
+            _pageCount = 1;
+            _contentHeight = _layoutContentY + _marginBottomDip;
+        }
+
+        _laidOutWidth = width;
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            BuildHeaderFooterItems();
+            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
+            // reference; endnotes render in a synthetic section after the last body page. Endnotes
+            // extend the scrollable content height, so add their measured extent afterwards.
+            BuildFootnoteItems();
+            BuildEndnoteItems();
+            _contentHeight += _endnoteExtentDip;
+        }
+    }
+
+    /// <summary>
+    /// Iterates all body blocks and routes each to its layout path (paragraph/table/read-only).
+    /// Extracted so <see cref="Relayout"/> can call it twice: a first pass to determine footnote-page
+    /// assignment, and a second pass (DB1) with per-page band reservations active in
+    /// <see cref="ReserveContentY"/> so body text reflows above the footnote band.
+    /// </summary>
+    private void RunBodyLayoutBlocks(double textWidth)
+    {
         // BS1/BS2/BS3 fix: per-level counter array mirrors WPF MultiLevelMarkerSequence.
         // levelCounters[k] tracks the current count at list depth k (0-based, max 9 levels).
         // A Number/MultiLevel paragraph increments its level's counter and resets all deeper
@@ -2607,36 +2737,6 @@ public sealed class DocumentView : Control
             {
                 LayoutReadOnlyBlockPaged(blockIndex, block, textWidth);
             }
-        }
-
-        if (_viewMode == DocumentViewMode.PrintLayout)
-        {
-            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
-            // Number of pages = ceil(slots / colCount).
-            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-            var totalSlots = lastSlot + 1;
-            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-            // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
-            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
-        }
-        else
-        {
-            // Web/Draft: single continuous column — total height is just the content plus margins.
-            _pageCount = 1;
-            _contentHeight = _layoutContentY + _marginBottomDip;
-        }
-
-        _laidOutWidth = width;
-
-        if (_viewMode == DocumentViewMode.PrintLayout)
-        {
-            BuildHeaderFooterItems();
-            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
-            // reference; endnotes render in a synthetic section after the last body page. Endnotes
-            // extend the scrollable content height, so add their measured extent afterwards.
-            BuildFootnoteItems();
-            BuildEndnoteItems();
-            _contentHeight += _endnoteExtentDip;
         }
     }
 
@@ -3135,6 +3235,110 @@ public sealed class DocumentView : Control
     private const double NoteFontSizePt = 9.0;
 
     /// <summary>
+    /// DB2: Measures the true wrapped height of a single note's content (number prefix + paragraph text)
+    /// without emitting any render items. Mirrors the word-wrap logic of <see cref="LayoutNoteContent"/>
+    /// but just returns the final Y extent (height from the starting Y).
+    /// Used by <see cref="BuildFootnoteItems"/> to compute the accurate band height for reservation and
+    /// clamping, instead of the previous 1-line-per-note estimate.
+    /// </summary>
+    private double MeasureNoteContentHeight(string number, IReadOnlyList<Paragraph> content, double x, double availWidth)
+    {
+        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
+        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
+        var lineH   = Math.Max(1, Build("Ag", noteFmt).Height);
+
+        var numText  = number + " ";
+        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        var textLeft = x + numWidth;
+        var penX     = textLeft;
+        var lineY    = 0.0; // relative to the note's start Y
+
+        var first = true;
+        foreach (var para in content)
+        {
+            if (!first)
+            {
+                lineY += lineH;
+                penX = textLeft;
+            }
+            first = false;
+
+            var words = para.PlainText.Split(' ');
+            for (var wi = 0; wi < words.Length; wi++)
+            {
+                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
+                if (word.Length == 0) continue;
+                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
+                if (penX + w > x + availWidth && penX > textLeft)
+                {
+                    lineY += lineH;
+                    penX = textLeft;
+                }
+                penX += w;
+            }
+        }
+        return lineY + lineH; // total height from the note's top to the last line's bottom
+    }
+
+    /// <summary>
+    /// DB3: Computes the display number string for a note (footnote or endnote) given its
+    /// 1-based sequence index and the <see cref="NoteNumberingOptions"/> that govern its format.
+    /// <para>
+    /// Examples: decimal 3 → "3"; lowerRoman 4 → "iv"; lowerLetter 2 → "b";
+    /// Chicago 1 → "*", 2 → "†", 3 → "‡", 4 → "§", then repeats.
+    /// </para>
+    /// </summary>
+    private static string ComputeNoteDisplayNumber(int sequenceIndex, NoteNumberingOptions opts)
+    {
+        // sequenceIndex is 1-based display position (after applying StartAt offset).
+        var n = sequenceIndex;
+        return opts.NumberFormat switch
+        {
+            NoteNumberFormat.LowerRoman => ToRoman(n, lower: true),
+            NoteNumberFormat.UpperRoman => ToRoman(n, lower: false),
+            NoteNumberFormat.LowerLetter => ToLetter(n, lower: true),
+            NoteNumberFormat.UpperLetter => ToLetter(n, lower: false),
+            NoteNumberFormat.Chicago     => ToChicago(n),
+            _                            => n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
+    private static string ToRoman(int n, bool lower)
+    {
+        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new System.Text.StringBuilder();
+        int[] vals = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+        string[] syms = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+        for (var i = 0; i < vals.Length; i++)
+            while (n >= vals[i]) { sb.Append(syms[i]); n -= vals[i]; }
+        var result = sb.ToString();
+        return lower ? result.ToLowerInvariant() : result;
+    }
+
+    private static string ToLetter(int n, bool lower)
+    {
+        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // 1→a, 26→z, 27→aa, 52→az, 53→ba … (Word uses this scheme for footnotes)
+        var sb = new System.Text.StringBuilder();
+        while (n > 0)
+        {
+            n--;
+            sb.Insert(0, (char)((lower ? 'a' : 'A') + n % 26));
+            n /= 26;
+        }
+        return sb.ToString();
+    }
+
+    private static string ToChicago(int n)
+    {
+        // Chicago style: *, †, ‡, §, **, ††, … (repeating symbol groups for overflow).
+        string[] symbols = { "*", "†", "‡", "§", "¶", "#" };
+        var group  = (n - 1) / symbols.Length;
+        var sym    = symbols[(n - 1) % symbols.Length];
+        return group == 0 ? sym : new string(sym[0], group + 1); // * ** *** …
+    }
+
+    /// <summary>
     /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
     /// Locates the body run carrying <paramref name="footnote"/>'s matching <see cref="Run.FootnoteId"/>
     /// (or <see cref="Run.EndnoteId"/>), computes its first character's cell offset within the host
@@ -3234,9 +3438,69 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// DB1 first-pass helper: populates <see cref="_footnoteBandHeightByPage"/> with the TRUE height
+    /// of each page's footnote band (separator + all notes' true wrapped heights), without emitting any
+    /// render items. Called before the second body-layout pass so <see cref="ReserveContentY"/> can use
+    /// per-page reservations to shrink the effective body text area on each page that has footnotes.
+    /// </summary>
+    private void ComputeFootnoteBandHeights()
+    {
+        _footnoteBandHeightByPage.Clear();
+        if (_doc.Footnotes.Count == 0) return;
+
+        const double SepHeight = 6.0; // separator rule + gap
+
+        // Group footnote ids by the page hosting their reference (using first-pass placed positions).
+        var byPage = new Dictionary<int, List<int>>();
+        foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
+        {
+            var pg = ResolveNoteReferencePage(id, footnote: true);
+            if (!byPage.TryGetValue(pg, out var list))
+                byPage[pg] = list = new List<int>();
+            list.Add(id);
+        }
+
+        // Compute display sequence numbers respecting StartAt and sort order.
+        var opts = _doc.FootnoteNumbering;
+        var seqBase = Math.Max(1, opts.StartAt);
+
+        foreach (var (pg, ids) in byPage)
+        {
+            var totalHeight = SepHeight + 4; // separator rule + top-pad
+            var seq = seqBase;
+            foreach (var id in ids)
+            {
+                var note = _doc.Footnotes[id];
+                var displayNum = ComputeNoteDisplayNumber(seq, opts);
+                seq++;
+                var content = note.Content.Count > 0
+                    ? note.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+                totalHeight += MeasureNoteContentHeight(displayNum, content, _contentLeft, _contentWidth);
+                totalHeight += 2; // inter-note gap
+            }
+            _footnoteBandHeightByPage[pg] = totalHeight;
+        }
+    }
+
+    /// <summary>
     /// AV-NOTERENDER (footnotes): for each page in PrintLayout, renders a short separator rule then the
     /// footnotes whose body reference lands on that page, stacked as "<c>n note text</c>" at
     /// <see cref="NoteFontSizePt"/>. The band occupies the bottom margin area, above the footer.
+    /// <para>
+    /// DB1: the band height was pre-computed by <see cref="ComputeFootnoteBandHeights"/> and stored in
+    /// <see cref="_footnoteBandHeightByPage"/>; <see cref="ReserveContentY"/> already shrank the body
+    /// text area so body text does not overlap the band.
+    /// </para>
+    /// <para>
+    /// DB2: each note's TRUE wrapped height (from <see cref="MeasureNoteContentHeight"/>) determines
+    /// the band top, replacing the old 1-line-per-note estimate. Content is clamped so it does not
+    /// overflow past the footer. Overflow (band taller than available gap) is clipped with a note below.
+    /// </para>
+    /// <para>
+    /// DB3: note numbers use <see cref="ComputeNoteDisplayNumber"/> with the document's
+    /// <see cref="TextDocument.FootnoteNumbering"/> options (format + StartAt).
+    /// </para>
     /// Page assignment uses <see cref="ResolveNoteReferencePage"/>; footnotes with no locatable reference
     /// glyph fall back to the last body page (documented approximation).
     /// </summary>
@@ -3259,23 +3523,42 @@ public sealed class DocumentView : Control
         var footerDistPt = _doc.Page.FooterDistancePt > 0 ? _doc.Page.FooterDistancePt : DefaultHfDistancePt;
         var footerDistDip = footerDistPt * PxPerPoint;
 
-        var noteLineH = Math.Max(1, Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height);
+        // DB3: footnote numbering options — format (Decimal/LowerRoman/…) + StartAt offset.
+        var opts     = _doc.FootnoteNumbering;
+        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
-            var pageTop = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageTop    = DeskPadding + pg * (_pageHeightPx + PageGap);
             var pageBottom = pageTop + _pageHeightPx;
-            // Body text area bottom (page-space).
-            var bodyBottom = pageTop + _marginTopDip + _layoutTextAreaHeight;
+            // Body text area bottom on this page (page-space), using the reserved effective height.
+            var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
+            var bodyBottom = pageTop + _marginTopDip + (_layoutTextAreaHeight - bandReservation);
             // Footer top (where the footer line begins).
             var footerTop = pageBottom - footerDistDip;
 
-            // Estimate the total height needed (separator + one line per note minimum) and anchor the band
-            // so it sits just above the footer, but never above the body text area bottom.
-            var estHeight = 6 + ids.Count * noteLineH;
-            var bandTop = Math.Max(bodyBottom + 2, Math.Min(footerTop - estHeight - 2, pageBottom - _marginBottomDip * 0.5));
-            // Guarantee the band stays on-page even for short pages.
-            bandTop = Math.Min(bandTop, footerTop - noteLineH);
+            // DB2: true total band height = separator + true wrapped heights of all notes on this page.
+            var trueHeight = 4.0 + 6.0; // top-pad + separator
+            var localSeq = seqIndex;
+            foreach (var id in ids)
+            {
+                var note2 = _doc.Footnotes[id];
+                var dn = ComputeNoteDisplayNumber(localSeq++, opts);
+                var content2 = note2.Content.Count > 0
+                    ? note2.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+                trueHeight += MeasureNoteContentHeight(dn, content2, _contentLeft, _contentWidth);
+                trueHeight += 2; // inter-note gap
+            }
+
+            // DB2: anchor the band so its bottom aligns with the footer top.
+            // The band top is (footerTop - trueHeight), but must stay at/below the body bottom.
+            var bandTop = Math.Max(bodyBottom + 2, footerTop - trueHeight);
+            // Also clamp: band must not start above the mid-margin (guard for very tall bands on short pages).
+            bandTop = Math.Min(bandTop, footerTop - 6);
+            // DB2: available height within the band = from bandTop to footerTop. If overflow, content is
+            // clipped at footerTop (split-to-next-page is a follow-up; for now we clip).
+            var availBandHeight = Math.Max(6, footerTop - bandTop);
 
             // Separator rule: a short line (~1.5") at the left of the content column.
             var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);
@@ -3285,9 +3568,21 @@ public sealed class DocumentView : Control
             foreach (var id in ids)
             {
                 var note = _doc.Footnotes[id];
-                y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
-                    _contentLeft, y, _contentWidth);
+                // DB3: compute display number from NoteNumberingOptions.
+                var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
+                seqIndex++;
+
+                var content = note.Content.Count > 0
+                    ? note.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+
+                // DB2: only emit if still within the available band (clip overflow at footerTop).
+                if (y < bandTop + availBandHeight)
+                {
+                    y = LayoutNoteContent(displayNum, content, _contentLeft, y, _contentWidth);
+                    // DB2: clamp y to band bottom so subsequent notes don't escape past the footer.
+                    y = Math.Min(y, bandTop + availBandHeight);
+                }
             }
         }
     }
@@ -3296,6 +3591,10 @@ public sealed class DocumentView : Control
     /// AV-NOTERENDER (endnotes): renders an "Endnotes" heading + separator, then the numbered endnote
     /// texts, in a synthetic section after the last body page. The section's vertical extent is recorded
     /// in <see cref="_endnoteExtentDip"/> so the scrollable content height reserves room for it.
+    /// <para>
+    /// DB3: endnote numbers use <see cref="ComputeNoteDisplayNumber"/> with the document's
+    /// <see cref="TextDocument.EndnoteNumbering"/> options (Word defaults to LowerRoman for endnotes).
+    /// </para>
     /// </summary>
     private void BuildEndnoteItems()
     {
@@ -3316,10 +3615,17 @@ public sealed class DocumentView : Control
         _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, y));
         y += 6;
 
+        // DB3: endnote numbering options — Word defaults to LowerRoman; users may override.
+        var opts     = _doc.EndnoteNumbering;
+        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
+
         foreach (var id in _doc.Endnotes.Keys.OrderBy(k => k))
         {
             var note = _doc.Endnotes[id];
-            y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            // DB3: compute display number from EndnoteNumbering options.
+            var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
+            seqIndex++;
+            y = LayoutNoteContent(displayNum,
                 note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
                 _contentLeft, y, _contentWidth);
             y += 2; // small gap between endnotes
@@ -3378,11 +3684,25 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Advances _layoutContentY to the next page boundary if the line of <paramref name="lineHeight"/>
     /// would overflow the current page's text area. Returns the content Y at which the line should start.
+    /// <para>
+    /// DB1: the effective text-area height on a page is reduced by the footnote band height for that page
+    /// (stored in <see cref="_footnoteBandHeightByPage"/>), so body text reflows to the NEXT page before
+    /// it would encroach on the footnote band. Computed per-page so pages without footnotes are unaffected.
+    /// </para>
     /// </summary>
     private double ReserveContentY(double lineHeight)
     {
+        if (_layoutTextAreaHeight <= 0) return _layoutContentY;
+
+        // DB1: compute the 0-based page (slot) index and its per-page footnote reservation.
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        // effectiveHeight = page text area minus footnote band on that page.
+        var effectiveHeight = Math.Max(lineHeight + 1, _layoutTextAreaHeight - bandReservation);
+
         var posInPage = _layoutContentY % _layoutTextAreaHeight;
-        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+        if (posInPage > 0 && posInPage + lineHeight > effectiveHeight)
         {
             // Push to the top of the next page.
             _layoutContentY += (_layoutTextAreaHeight - posInPage);
@@ -3400,8 +3720,15 @@ public sealed class DocumentView : Control
     {
         if (_layoutTextAreaHeight <= 0)
             return _layoutContentY;
+
+        // DB1: mirror the per-page reservation used by ReserveContentY.
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        var effectiveHeight = Math.Max(lineHeight + 1, _layoutTextAreaHeight - bandReservation);
+
         var posInPage = _layoutContentY % _layoutTextAreaHeight;
-        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+        if (posInPage > 0 && posInPage + lineHeight > effectiveHeight)
             return _layoutContentY + (_layoutTextAreaHeight - posInPage);
         return _layoutContentY;
     }
@@ -4998,6 +5325,68 @@ public sealed class DocumentView : Control
             context.DrawLine(RulerTickPen, new Point(vRect.X + RulerThicknessDip - 4, y), new Point(vRect.X + RulerThicknessDip, y));
     }
 
+    // AV-DESIGN: the model's page border (w:pgBorders) drawn inset just inside the page sheet. Word draws
+    // page borders a fixed offset from the page edge (its "Measure from: Edge of page" default is 24pt); we
+    // mirror that with a small inset so the border sits between the chrome edge and the body text.
+    private const double PageBorderInsetDip = 24.0;
+
+    private void DrawPageBorder(DrawingContext context, Rect pageRect)
+    {
+        if (_doc.Page.PageBorder is not { } pb)
+            return;
+
+        var color = TryParseAvaloniaColor(pb.ColorHex, out var c) ? c : Colors.Black;
+        var widthDip = Math.Max(0.5, pb.WidthPt * PxPerPoint);
+        var pen = new Pen(new SolidColorBrush(color), widthDip)
+        {
+            DashStyle = pb.LineStyle switch
+            {
+                BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
+                BorderLineStyle.Dashed => new DashStyle([3, 2], 0),
+                _ => null,
+            },
+        };
+
+        var inset = Math.Min(PageBorderInsetDip, Math.Min(pageRect.Width, pageRect.Height) / 4);
+        var rect = pageRect.Deflate(new Thickness(inset));
+        context.DrawRectangle(null, pen, rect);
+        // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
+        if (pb.LineStyle == BorderLineStyle.Double)
+            context.DrawRectangle(null, pen, rect.Deflate(new Thickness(widthDip + 1.5)));
+    }
+
+    // AV-DESIGN: faint watermark text drawn behind the body on each page. Mirrors Word's Design >
+    // Watermark: a large, low-opacity, optionally 45°-diagonal label centred on the page. Picture
+    // watermarks are deferred (text only) — a picture watermark renders nothing here.
+    private void DrawWatermark(DrawingContext context, Rect pageRect)
+    {
+        if (_doc.Page.EffectiveWatermark is not { } wm || wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text))
+            return;
+
+        var color = TryParseAvaloniaColor(wm.FontColorHex, out var c) ? c : Color.FromRgb(0x80, 0x80, 0x80);
+        var opacity = Math.Clamp(wm.Opacity, 0.0, 1.0);
+        var brush = new SolidColorBrush(color, opacity);
+
+        // Size the text to span most of the page width (Word auto-scales). Cap the point size sensibly.
+        var typeface = new Typeface(
+            wm.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            FontStyle.Normal, FontWeight.Bold);
+        var fontSize = Math.Min(pageRect.Width, 480) / Math.Max(4, wm.Text.Length) * 1.6;
+        fontSize = Math.Clamp(fontSize, 24, 130);
+
+        var ft = new FormattedText(
+            wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+        var center = pageRect.Center;
+        using var _ = context.PushTransform(
+            Matrix.CreateTranslation(-ft.Width / 2, -ft.Height / 2)
+            * (wm.Layout == WatermarkLayout.Diagonal
+                ? Matrix.CreateRotation(-Math.PI / 4)
+                : Matrix.Identity)
+            * Matrix.CreateTranslation(center.X, center.Y));
+        context.DrawText(ft, new Point(0, 0));
+    }
+
     private static IBrush HeaderFill { get; } = new SolidColorBrush(Color.FromRgb(0xDE, 0xE9, 0xF7));
     private static IBrush BandFill { get; } = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
     private static Pen TableBorderPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 0.75);
@@ -5024,26 +5413,34 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0 || Math.Abs(_laidOutWidth - Bounds.Width) > 0.5)
             Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
+        // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
+        // else white. The page border (w:pgBorders) and watermark draw on top of the sheet fill.
+        var pageFill = ParseSolidBrush(_doc.Page.BackgroundColorHex) ?? Brushes.White;
+
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
             // Grey desk fills the full control area.
             context.FillRectangle(PageDeskBrush, new Rect(Bounds.Size));
 
-            // Draw each discrete page rectangle: white page with drop-shadow + border.
+            // Draw each discrete page rectangle: page-coloured sheet with drop-shadow + chrome border.
             for (var pi = 0; pi < _pageCount; pi++)
             {
                 var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
                 var pageRect   = new Rect(_pageLeft, pageTop, _pageWidth, _pageHeightPx);
                 var shadowRect = new Rect(_pageLeft + 3, pageTop + 3, _pageWidth, _pageHeightPx);
                 context.FillRectangle(PageShadowBrush, shadowRect);
-                context.FillRectangle(Brushes.White, pageRect);
+                context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
+                // AV-DESIGN: the model's page border (inset just inside the chrome border).
+                DrawPageBorder(context, pageRect);
+                // AV-DESIGN: the watermark draws faintly behind the body text on each page.
+                DrawWatermark(context, pageRect);
             }
         }
         else
         {
-            // Web Layout / Draft: plain white background — no desk, no page chrome.
-            context.FillRectangle(Brushes.White, new Rect(Bounds.Size));
+            // Web Layout / Draft: plain page-coloured background — no desk, no page chrome.
+            context.FillRectangle(pageFill, new Rect(Bounds.Size));
         }
 
         // AV-VIEW: faint layout-gridlines behind the body text (Print Layout only). Drawn after the
@@ -5657,20 +6054,285 @@ public sealed class DocumentView : Control
     {
         context.DrawRectangle(null, FloatSelectionPen, rect);
 
-        // 8 handle positions: corners + edge midpoints.
+        foreach (var (_, hRect) in HandleRects(rect))
+        {
+            context.FillRectangle(FloatHandleFill, hRect);
+            context.DrawRectangle(null, FloatHandlePen, hRect);
+        }
+    }
+
+    // ── AV-HANDLES: handle geometry, hit-test, cursors, resize-drag commit ──────────────────────────
+
+    // Minimum floating-object size in points (Word clamps tiny drags so the object never collapses).
+    private const double MinFloatSizePt = 9; // ~0.125in
+
+    /// <summary>
+    /// Returns the eight resize-handle squares (corners + edge midpoints) for a selection
+    /// <paramref name="rect"/>, each tagged with the <see cref="FloatHandle"/> it represents.
+    /// Shared by the renderer and the pointer hit-test so the drawn squares and the clickable
+    /// targets never drift apart.
+    /// </summary>
+    private static IEnumerable<(FloatHandle Handle, Rect Rect)> HandleRects(Rect rect)
+    {
         var hx = new[] { rect.X, rect.X + rect.Width / 2, rect.Right };
         var hy = new[] { rect.Y, rect.Y + rect.Height / 2, rect.Bottom };
         var half = FloatHandleSize / 2;
-        for (var row = 0; row < 3; row++)
+        // Row/col → handle map (centre is skipped).
+        var map = new[,]
         {
-            for (var col = 0; col < 3; col++)
-            {
-                if (row == 1 && col == 1) continue; // skip centre
-                var hRect = new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize);
-                context.FillRectangle(FloatHandleFill, hRect);
-                context.DrawRectangle(null, FloatHandlePen, hRect);
-            }
+            { FloatHandle.TopLeft,    FloatHandle.Top,    FloatHandle.TopRight    },
+            { FloatHandle.Left,       FloatHandle.None,   FloatHandle.Right       },
+            { FloatHandle.BottomLeft, FloatHandle.Bottom, FloatHandle.BottomRight },
+        };
+        for (var row = 0; row < 3; row++)
+        for (var col = 0; col < 3; col++)
+        {
+            if (row == 1 && col == 1) continue; // centre is not a handle
+            yield return (map[row, col],
+                new Rect(hx[col] - half, hy[row] - half, FloatHandleSize, FloatHandleSize));
         }
+    }
+
+    /// <summary>
+    /// AV-HANDLES test seam: the eight resize-handle rects for the CURRENT floating selection,
+    /// keyed by <see cref="FloatHandle"/>. Empty when nothing is selected. Lets tests assert that
+    /// selecting a float exposes exactly eight handles in the expected geometry.
+    /// </summary>
+    public IReadOnlyDictionary<FloatHandle, Rect> HandleRectsForSelection()
+    {
+        var dict = new Dictionary<FloatHandle, Rect>();
+        if (_selectedFloating is { } sel)
+            foreach (var (h, r) in HandleRects(sel.Rect))
+                dict[h] = r;
+        return dict;
+    }
+
+    /// <summary>
+    /// Hit-tests <paramref name="point"/> against the current selection's handles + body. A handle
+    /// hit (within the handle square, padded slightly for easier grabbing) wins; otherwise a point
+    /// inside the selection rect is <see cref="FloatHandle.Body"/>; anything else is
+    /// <see cref="FloatHandle.None"/>. No selection → <see cref="FloatHandle.None"/>.
+    /// </summary>
+    private FloatHandle HitTestHandle(Point point)
+    {
+        if (_selectedFloating is not { } sel) return FloatHandle.None;
+        const double pad = 2; // grab tolerance around each handle square
+        foreach (var (h, r) in HandleRects(sel.Rect))
+            if (r.Inflate(pad).Contains(point)) return h;
+        return sel.Rect.Contains(point) ? FloatHandle.Body : FloatHandle.None;
+    }
+
+    /// <summary>The mouse cursor appropriate for hovering a given handle (or moving the body).</summary>
+    private static Cursor CursorForHandle(FloatHandle handle) => handle switch
+    {
+        FloatHandle.TopLeft or FloatHandle.BottomRight => new Cursor(StandardCursorType.TopLeftCorner),
+        FloatHandle.TopRight or FloatHandle.BottomLeft => new Cursor(StandardCursorType.TopRightCorner),
+        FloatHandle.Left or FloatHandle.Right          => new Cursor(StandardCursorType.SizeWestEast),
+        FloatHandle.Top or FloatHandle.Bottom          => new Cursor(StandardCursorType.SizeNorthSouth),
+        FloatHandle.Body                               => new Cursor(StandardCursorType.SizeAll),
+        _                                              => Cursor.Default,
+    };
+
+    /// <summary>
+    /// Computes the new page-space rect while dragging a resize <paramref name="handle"/> from the
+    /// drag-start <paramref name="baseRect"/> to the current pointer position. The opposite edge(s)
+    /// stay anchored; corners move both dimensions, edges only one. <paramref name="aspect"/> (Shift on
+    /// a corner) preserves the base aspect ratio. The result is clamped so width/height never fall below
+    /// <see cref="MinFloatSizePt"/> (converted to px).
+    /// </summary>
+    private static Rect ResizeRect(Rect baseRect, FloatHandle handle, Point pointer, bool aspect)
+    {
+        var minPx = MinFloatSizePt * PxPerPoint;
+        double left = baseRect.Left, top = baseRect.Top, right = baseRect.Right, bottom = baseRect.Bottom;
+
+        bool movesLeft   = handle is FloatHandle.TopLeft or FloatHandle.Left or FloatHandle.BottomLeft;
+        bool movesRight  = handle is FloatHandle.TopRight or FloatHandle.Right or FloatHandle.BottomRight;
+        bool movesTop    = handle is FloatHandle.TopLeft or FloatHandle.Top or FloatHandle.TopRight;
+        bool movesBottom = handle is FloatHandle.BottomLeft or FloatHandle.Bottom or FloatHandle.BottomRight;
+
+        if (movesLeft)   left   = Math.Min(pointer.X, right  - minPx);
+        if (movesRight)  right  = Math.Max(pointer.X, left   + minPx);
+        if (movesTop)    top    = Math.Min(pointer.Y, bottom - minPx);
+        if (movesBottom) bottom = Math.Max(pointer.Y, top    + minPx);
+
+        var newW = right - left;
+        var newH = bottom - top;
+
+        // Aspect lock (corners only — an edge handle changes a single dimension by definition).
+        bool isCorner = handle is FloatHandle.TopLeft or FloatHandle.TopRight
+                                or FloatHandle.BottomLeft or FloatHandle.BottomRight;
+        if (aspect && isCorner && baseRect.Width > 0 && baseRect.Height > 0)
+        {
+            var ratio = baseRect.Width / baseRect.Height;
+            // Drive the larger relative change so the box tracks the pointer along its dominant axis.
+            if (newW / baseRect.Width >= newH / baseRect.Height)
+                newH = newW / ratio;
+            else
+                newW = newH * ratio;
+            newW = Math.Max(minPx, newW);
+            newH = Math.Max(minPx, newH);
+            // Re-anchor the moved corner so the OPPOSITE corner stays fixed.
+            if (movesLeft) left = right - newW; else right = left + newW;
+            if (movesTop)  top  = bottom - newH; else bottom = top + newH;
+        }
+
+        return new Rect(left, top, Math.Max(minPx, right - left), Math.Max(minPx, bottom - top));
+    }
+
+    /// <summary>
+    /// Commits a handle-resize: converts the dragged page-space <paramref name="newRect"/> to model
+    /// width/height (and a position delta when the anchored edge actually moved) and issues the
+    /// undoable command(s). When only the size changed, a single <see cref="SetFloatingSizeCommand"/>
+    /// (or image-size command) is pushed; when the top/left edge moved too, the size + position commands
+    /// are wrapped in one <see cref="CompositeDocumentCommand"/> so a single undo reverts the whole drag.
+    /// </summary>
+    private void CommitFloatResize(int blockIndex, int runIndex, string kind, Rect baseRect, Rect newRect)
+    {
+        if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count) return;
+        if (_doc.Blocks[blockIndex] is not Paragraph para) return;
+        if (runIndex < 0 || runIndex >= para.Runs.Count) return;
+        var run = para.Runs[runIndex];
+
+        var newWidthPt  = newRect.Width  / PxPerPoint;
+        var newHeightPt = newRect.Height / PxPerPoint;
+        // Offset delta in points: how far the top-left corner moved (non-zero only for top/left handles).
+        var dxPt = (newRect.Left - baseRect.Left) / PxPerPoint;
+        var dyPt = (newRect.Top  - baseRect.Top)  / PxPerPoint;
+        bool anchorMoved = Math.Abs(dxPt) > 0.01 || Math.Abs(dyPt) > 0.01;
+
+        var sizeCmd = new SetFloatingSizeCommand(blockIndex, runIndex, newWidthPt, newHeightPt);
+
+        if (!anchorMoved)
+        {
+            _bus.Execute(sizeCmd);
+        }
+        else if (kind == "Image" && run.Image is { IsFloating: true } img)
+        {
+            var posCmd = new NudgeImagePositionCommand(blockIndex, runIndex,
+                img.HorizontalOffsetPt + dxPt, img.VerticalOffsetPt + dyPt);
+            _bus.Execute(new CompositeDocumentCommand("Resize",
+                new IDocumentCommand[] { sizeCmd, posCmd }));
+        }
+        else if (SetFloatingPositionCommand.GetFloatingPlacement(run) is { } pl)
+        {
+            var posCmd = new SetFloatingPositionCommand(blockIndex, runIndex,
+                pl.HorizontalOffsetPt + dxPt, pl.VerticalOffsetPt + dyPt,
+                pl.HorizontalAnchor, pl.VerticalAnchor);
+            _bus.Execute(new CompositeDocumentCommand("Resize",
+                new IDocumentCommand[] { sizeCmd, posCmd }));
+        }
+        else
+        {
+            _bus.Execute(sizeCmd);
+        }
+
+        InvalidateLayoutAndVisual();
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        RefreshSelectedFloatingRect(blockIndex, runIndex, kind);
+    }
+
+    // ── AV-HANDLES: pointer-driven drag test seams ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Test seam: begin a drag on the current floating selection at page-space <paramref name="start"/>.
+    /// The handle under that point decides whether the drag moves or resizes the object. Returns the
+    /// resolved handle (<see cref="FloatHandle.None"/> if the point is off the selection, in which case
+    /// no drag starts). Mirrors what <see cref="OnPointerPressed"/> does for a real press.
+    /// </summary>
+    public FloatHandle BeginFloatDrag(Point start)
+    {
+        if (_selectedFloating is not { } sel) return FloatHandle.None;
+        var handle = HitTestHandle(start);
+        if (handle == FloatHandle.None) return FloatHandle.None;
+        _floatDragState = (start, sel.Rect, handle);
+        return handle;
+    }
+
+    /// <summary>
+    /// Test seam: drive an in-flight drag (started via <see cref="BeginFloatDrag"/>) to page-space
+    /// <paramref name="to"/>, optionally holding <paramref name="shift"/> for aspect-locked corner
+    /// resizing. Updates the transient selection rect exactly as live pointer movement would. No-op
+    /// when no drag is active.
+    /// </summary>
+    public void SimulateDragTo(Point to, bool shift = false)
+    {
+        UpdateFloatDrag(to, shift);
+    }
+
+    /// <summary>
+    /// Test seam: release an in-flight drag at page-space <paramref name="to"/>, committing the move or
+    /// resize through the undoable command bus (a single undo reverts it). No-op when no drag is active.
+    /// </summary>
+    public void EndFloatDrag(Point to, bool shift = false)
+    {
+        CommitFloatDrag(to, shift);
+    }
+
+    /// <summary>
+    /// Test seam: cancel an in-flight drag, reverting the transient rect to the drag-start geometry
+    /// without touching the model — exactly what pressing Esc mid-drag does.
+    /// </summary>
+    public bool CancelFloatDrag()
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+            return false;
+        _selectedFloating = sel with { Rect = drag.FloatRect };
+        _floatDragState = null;
+        InvalidateVisual();
+        return true;
+    }
+
+    /// <summary>
+    /// Updates the transient selection rect for an in-flight drag (move or resize). Shared by the live
+    /// pointer handler and the <see cref="SimulateDragTo"/> test seam.
+    /// </summary>
+    private void UpdateFloatDrag(Point point, bool shift)
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel) return;
+        Rect newRect;
+        if (drag.Handle == FloatHandle.Body)
+        {
+            var dx = point.X - drag.PointerDown.X;
+            var dy = point.Y - drag.PointerDown.Y;
+            newRect = new Rect(drag.FloatRect.X + dx, drag.FloatRect.Y + dy,
+                               drag.FloatRect.Width, drag.FloatRect.Height);
+        }
+        else
+        {
+            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift);
+        }
+        _selectedFloating = sel with { Rect = newRect };
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Commits an in-flight drag at the release point: a move routes to
+    /// <see cref="CommitFloatDragMove"/>; a resize routes to <see cref="CommitFloatResize"/>. Below a
+    /// 1px threshold the drag is treated as a plain click (no model change). Clears the drag state.
+    /// </summary>
+    private void CommitFloatDrag(Point releasePoint, bool shift)
+    {
+        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+        {
+            _floatDragState = null;
+            return;
+        }
+
+        if (drag.Handle == FloatHandle.Body)
+        {
+            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
+            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
+            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
+                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
+        }
+        else
+        {
+            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift);
+            if (Math.Abs(newRect.Width - drag.FloatRect.Width) >= 1 ||
+                Math.Abs(newRect.Height - drag.FloatRect.Height) >= 1)
+                CommitFloatResize(sel.BlockIndex, sel.RunIndex, sel.Kind, drag.FloatRect, newRect);
+        }
+        _floatDragState = null;
     }
 
     /// <summary>
@@ -6335,24 +6997,39 @@ public sealed class DocumentView : Control
             return;
         }
 
+        // AV-HANDLES: when a float is already selected, a press on one of its 8 resize handles starts a
+        // resize drag (checked BEFORE the float hit-test so the handle squares, which sit on/outside the
+        // object's edge, win over whatever object lies under them).
+        if (!shift && _selectedFloating is { } curSel)
+        {
+            var handle = HitTestHandle(point);
+            if (handle is not FloatHandle.None and not FloatHandle.Body)
+            {
+                _floatDragState = (point, curSel.Rect, handle);
+                Cursor = CursorForHandle(handle);
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+        }
+
         // AV-FLSEL: check whether the click landed on a floating object BEFORE body text hit-test.
         // The topmost object (highest z-order, in-front preferred over behind) wins.
         if (!shift && TryHitTestFloat(point, out var floatHit))
         {
-            if (_selectedFloating.HasValue &&
-                _selectedFloating.Value.BlockIndex == floatHit.BlockIndex &&
-                _selectedFloating.Value.RunIndex   == floatHit.RunIndex)
-            {
-                // Second click on the same float: start drag-move.
-                _floatDragState = (point, floatHit.Rect);
-            }
-            else
+            if (!_selectedFloating.HasValue ||
+                _selectedFloating.Value.BlockIndex != floatHit.BlockIndex ||
+                _selectedFloating.Value.RunIndex   != floatHit.RunIndex)
             {
                 // New selection.
                 _selectedFloating = floatHit;
-                _floatDragState   = (point, floatHit.Rect);
                 RaiseFloatingSelectionChangedIfIdentityChanged();
             }
+            // AV-HANDLES: a press inside the (now-)selected float's body starts a drag-move. Whether it
+            // becomes a real move or stays a plain selecting click is decided on release by the 1px
+            // threshold in CommitFloatDrag.
+            _floatDragState = (point, _selectedFloating!.Value.Rect, FloatHandle.Body);
+            Cursor = CursorForHandle(FloatHandle.Body);
             InvalidateVisual();
             e.Handled = true;
             return;
@@ -6363,6 +7040,7 @@ public sealed class DocumentView : Control
         {
             _selectedFloating = null;
             _floatDragState   = null;
+            Cursor = Cursor.Default;
             RaiseFloatingSelectionChangedIfIdentityChanged();
             InvalidateVisual();
         }
@@ -6411,25 +7089,25 @@ public sealed class DocumentView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            return;
-
         var point = e.GetPosition(this);
 
-        // AV-FLSEL: drag-move the selected floating object.
-        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            var dx = (point.X - drag.PointerDown.X) / PxPerPoint;
-            var dy = (point.Y - drag.PointerDown.Y) / PxPerPoint;
-            if (Math.Abs(dx) >= 1 || Math.Abs(dy) >= 1)
+            // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
+            // advertise their resize direction (and the body shows a move cursor).
+            if (_selectedFloating is not null && _floatDragState is null)
             {
-                // Apply the visual displacement without committing — update the stored Rect so handles track.
-                var newRect = new Rect(drag.FloatRect.X + dx * PxPerPoint,
-                                       drag.FloatRect.Y + dy * PxPerPoint,
-                                       drag.FloatRect.Width, drag.FloatRect.Height);
-                _selectedFloating = sel with { Rect = newRect };
+                var hover = HitTestHandle(point);
+                Cursor = hover == FloatHandle.None ? Cursor.Default : CursorForHandle(hover);
             }
-            InvalidateVisual();
+            return;
+        }
+
+        // AV-HANDLES: live drag (move or resize) of the selected floating object.
+        if (_floatDragState is { })
+        {
+            var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            UpdateFloatDrag(point, shift);
             e.Handled = true;
             return;
         }
@@ -6478,19 +7156,16 @@ public sealed class DocumentView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        // AV-FLSEL: commit drag-move when the left button is released.
-        if (_floatDragState is { } drag && _selectedFloating is { } sel)
+        // AV-HANDLES: commit the in-flight drag (move or resize) when the left button is released.
+        // _selectedFloating is refreshed via the commit path's relayout; the cursor is reset to the
+        // hover cursor for wherever the pointer ended up.
+        if (_floatDragState is not null)
         {
-            var releasePoint = e.GetPosition(this);
-            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
-            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
-            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
-            {
-                // Commit the move: update the model offsets through the command bus.
-                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
-            }
-            _floatDragState = null;
-            // Note: _selectedFloating is refreshed via InvalidateLayoutAndVisual in the commit path.
+            var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            CommitFloatDrag(e.GetPosition(this), shift);
+            Cursor = _selectedFloating is null
+                ? Cursor.Default
+                : CursorForHandle(HitTestHandle(e.GetPosition(this)));
         }
     }
 
@@ -6516,8 +7191,17 @@ public sealed class DocumentView : Control
             switch (e.Key)
             {
                 case Key.Escape:
+                    // AV-HANDLES: Esc mid-drag cancels the drag (reverts the transient rect) and KEEPS
+                    // the selection; a second Esc (no drag in flight) then deselects.
+                    if (CancelFloatDrag())
+                    {
+                        Cursor = Cursor.Default;
+                        e.Handled = true;
+                        return;
+                    }
                     _selectedFloating = null;
                     _floatDragState   = null;
+                    Cursor = Cursor.Default;
                     RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
                     e.Handled = true;
@@ -6574,8 +7258,23 @@ public sealed class DocumentView : Control
                 case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
                 case Key.Z when ctrl: Undo(); e.Handled = true; return;
                 case Key.Y when ctrl: Redo(); e.Handled = true; return;
+                // DD1 (AV-HFEDIT): Tab/Shift+Tab while H/F caret is active — insert a literal tab into the
+                // header/footer and mark handled. This prevents fall-through to the body Tab path which would
+                // fire ListTabAtItemStart and mutate body list items (or navigate table cells) instead.
+                // Shift+Tab is a no-op (no reverse-tab concept in H/F single-line context) but still consumed
+                // so the body list is never touched while the H/F caret is active.
+                case Key.Tab:
+                    if (!shift) HfInsertText("\t");
+                    e.Handled = true; return;
+                // DD2 (AV-HFEDIT): Up/Down are consumed as no-ops inside a header/footer.
+                // Previously the comment said "no-op for H/F" but both keys fell through to MoveCaretVertical
+                // which moved the BODY caret while _hfCaret stayed non-null, leaving the body caret displaced
+                // after ExitHeaderFooterCaret(). Intercept here so the body caret never moves during H/F editing.
+                case Key.Up:
+                case Key.Down:
+                    e.Handled = true; return;
             }
-            // Up/Down or other keys: fall through to default handling below (no-op for H/F).
+            // All other keys fall through to default handling below.
         }
 
         switch (e.Key)
@@ -8385,6 +9084,155 @@ public sealed class DocumentView : Control
         _bus.CommitUndoGroup("Insert Bibliography");
     }
 
+    // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
+
+    /// <summary>
+    /// AV-INSERT2: Prepend a cover page using the given <paramref name="preset"/> at the start of the
+    /// document — a Title-styled (and optionally Subtitle/date) block layout drawn from
+    /// <see cref="TextDocument.Properties"/> (see <see cref="DocumentOps.BuildCoverPage(TextDocument, CoverPagePreset)"/>).
+    /// Each block insert is grouped into a single undo so one Ctrl+Z removes the whole cover page. Mirrors
+    /// the WPF host's Insert &gt; Cover Page. FreeW models the cover page as a few styled paragraphs (there is
+    /// no dedicated cover-page block type); this is the documented approximation.
+    /// </summary>
+    public void InsertCoverPage(CoverPagePreset preset = CoverPagePreset.Default)
+    {
+        var blocks = DocumentOps.BuildCoverPage(_doc, preset);
+        if (blocks.Count == 0)
+            return;
+
+        _bus.BeginUndoGroup();
+        for (var i = 0; i < blocks.Count; i++)
+            _bus.Execute(new InsertBlockCommand(i, blocks[i]));
+        _bus.CommitUndoGroup("Insert Cover Page");
+
+        // Park the caret on the first body block after the cover page so typing continues in the body.
+        _cellCaret = null;
+        _hfCaret = null;
+        var bodyIndex = Math.Clamp(blocks.Count, 0, Math.Max(0, _doc.Blocks.Count - 1));
+        _caret = new DocPosition(bodyIndex, 0);
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Apply a drop cap to the caret's body paragraph — the leading letter is split into its own
+    /// enlarged, bold run (see <see cref="DropCap.ApplyDropCap"/>), the remainder keeping its formatting.
+    /// Routed through the undo/redo bus (reversible) and re-renders so the enlarged letter shows immediately.
+    /// No-op outside an editable body paragraph or on a paragraph with no leading text run. Mirrors the WPF
+    /// host's Insert &gt; Drop Cap. The enlarged leading run already renders via the normal run path (font
+    /// size is honoured); Word's true margin-float drop-cap geometry is an approximation here.
+    /// </summary>
+    public void ApplyDropCap(double sizePt = DropCap.DefaultSizePt)
+    {
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+            return;
+        _bus.Execute(new ReplaceParagraphRunsCommand(index, para => DropCap.ApplyDropCap(para, sizePt)));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Remove a drop cap from the caret's body paragraph: every run's formatting is reset to the
+    /// document default (see <see cref="DropCap.ClearFormatting"/>) while its text is preserved. The "None"
+    /// option of Word's Drop Cap menu. Undoable; re-renders. No-op outside an editable body paragraph.
+    /// </summary>
+    public void ClearDropCap()
+    {
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+            return;
+        _bus.Execute(new ReplaceParagraphRunsCommand(index, DropCap.ClearFormatting));
+        Focus();
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert a document-property / date field at the caret (Word's Insert &gt; Quick Parts &gt;
+    /// Document Property / Field). The field run carries <paramref name="kind"/> (e.g.
+    /// <see cref="RunFieldKind.Title"/>, <see cref="RunFieldKind.Author"/>, <see cref="RunFieldKind.Date"/>)
+    /// and a cached display value resolved from <see cref="TextDocument.Properties"/> so it renders
+    /// immediately and round-trips as a <c>w:fldSimple</c>. Appended as an object run to the caret's host
+    /// paragraph, undoable. Mirrors the WPF host's <c>DocumentView.InsertField</c>.
+    /// </summary>
+    public void InsertField(RunFieldKind kind)
+    {
+        if (kind == RunFieldKind.None)
+            return;
+        var run = new Run(ResolveDocumentField(kind), RunFormatting.Default) { FieldKind = kind };
+        InsertObjectRun(run);
+        Focus();
+    }
+
+    // Resolve a document-property / date field's cached display text (page-independent fields only).
+    // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
+    private string ResolveDocumentField(RunFieldKind kind) => kind switch
+    {
+        RunFieldKind.Date or RunFieldKind.Time =>
+            DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture),
+        RunFieldKind.Author      => _doc.Properties.Author ?? string.Empty,
+        RunFieldKind.Title       => _doc.Properties.Title ?? string.Empty,
+        RunFieldKind.Subject     => _doc.Properties.Subject ?? string.Empty,
+        RunFieldKind.Keywords    => _doc.Properties.Keywords ?? string.Empty,
+        RunFieldKind.DocComments => _doc.Properties.Comments ?? string.Empty,
+        RunFieldKind.PageNumber or RunFieldKind.NumPages => "1",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
+    /// carried on a textless object run (<see cref="Run.FromEquation"/>) whose <see cref="Run.Text"/> mirrors
+    /// the equation's linear form, so it serialises as an inline <c>m:oMath</c> and renders a readable
+    /// stand-in. Appended to the caret's host paragraph, undoable. When <paramref name="equation"/> is null a
+    /// default sample (E = mc²) is inserted, matching the WPF host's Equation button.
+    /// </summary>
+    public void InsertEquation(Equation? equation = null)
+    {
+        var eq = equation ?? DefaultSampleEquation();
+        InsertObjectRun(Run.FromEquation(eq));
+        Focus();
+    }
+
+    // A sample equation ("E = mc²") whose linear form renders the superscript — the Insert > Equation default.
+    private static Equation DefaultSampleEquation()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(MathRun.PlainText("E = m"));
+        equation.Runs.Add(MathRun.Superscript("c", "2"));
+        return equation;
+    }
+
+    /// <summary>
+    /// AV-INSERT2: Insert a Quick Part / AutoText snippet's text at the caret as ordinary, editable text
+    /// (Word's Insert &gt; Quick Parts). A single-line snippet is inserted in place via the normal
+    /// text-edit/undo path (<see cref="InsertText"/>); a multi-line snippet inserts its first line at the
+    /// caret and the remaining lines as fresh paragraphs after the caret's block, grouped into one undo. A
+    /// null/empty snippet is a no-op. Mirrors the WPF host's Insert Quick Part.
+    /// </summary>
+    public void InsertQuickPartText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        if (lines.Length == 1)
+        {
+            InsertText(lines[0]);
+            Focus();
+            return;
+        }
+
+        // Multi-line: first line into the caret paragraph, the rest as new paragraphs after the caret block.
+        _bus.BeginUndoGroup();
+        InsertText(lines[0]);
+        var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        for (var i = 1; i < lines.Length; i++)
+            _bus.Execute(new InsertParagraphCommand(index++, new Paragraph(lines[i])));
+        _bus.CommitUndoGroup("Insert Quick Part");
+
+        var last = Math.Clamp(index - 1, 0, Math.Max(0, _doc.Blocks.Count - 1));
+        _caret = new DocPosition(last, BlockLength(last));
+        _selectionAnchor = _caret;
+        Focus();
+    }
+
     // Resolve the body paragraph that should host a reference marker (footnote/endnote/cross-ref). Prefer
     // the caret's block when it is an editable body paragraph; otherwise the first editable body paragraph;
     // otherwise append a fresh empty paragraph and host it there. Returns -1 only when no paragraph can be
@@ -8590,7 +9438,51 @@ public sealed class DocumentView : Control
         if (style.Type == StyleType.Character)
         {
             // Character style → overlay the style's run formatting onto the selection's runs.
-            ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            // For a CROSS-PARAGRAPH selection (Start.Block != End.Block) ApplyRunFormatting
+            // falls into the collapsed-caret branch and only stages a pending format — selected
+            // text across blocks is never touched.  Fix: iterate the spanned paragraphs
+            // (matching SelectedParagraphIndices) and apply the run transform to each block's
+            // SELECTED sub-range, wrapped in one undo group so a single Undo reverts all blocks.
+            var sel = NormalizedSelection();
+            if (sel is { } s && s.Start.Block != s.End.Block)
+            {
+                // Multi-paragraph character-style apply.
+                var styleRun = style.Run;
+                Func<RunFormatting, RunFormatting> transform = f => OverlayCharacterStyle(f, styleRun);
+
+                _bus.BeginUndoGroup();
+                for (var blockIdx = s.Start.Block; blockIdx <= s.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
+                {
+                    if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
+                        continue;
+
+                    // First block: from Start.Offset to the paragraph end.
+                    // Middle blocks: entire paragraph (0 to cell count).
+                    // Last block: from paragraph start (0) to End.Offset.
+                    var a = blockIdx == s.Start.Block ? s.Start.Offset : 0;
+                    var b = blockIdx == s.End.Block   ? s.End.Offset   : int.MaxValue;
+                    var capturedBlock = blockIdx;
+                    var capturedA = a;
+                    var capturedB = b;
+
+                    _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
+                    {
+                        var live = ParaCells(p);
+                        var lo = Math.Clamp(capturedA, 0, live.Count);
+                        var hi = Math.Clamp(capturedB, 0, live.Count);
+                        for (var i = lo; i < hi; i++)
+                            live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
+                        SetRuns(p, live);
+                    }));
+                }
+                _bus.CommitUndoGroup("Apply Character Style");
+            }
+            else
+            {
+                // Single-block selection or collapsed caret: delegate to ApplyRunFormatting which
+                // handles both the single-block run-range case and the pending-format caret case.
+                ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            }
             return styleId;
         }
 
@@ -8612,6 +9504,95 @@ public sealed class DocumentView : Control
         }
         return styleId;
     }
+
+    // ---- AV-DESIGN: Design-tab document mutations -----------------------------------------------
+
+    /// <summary>
+    /// AV-DESIGN: apply a built-in document theme (colour + font scheme) to the style catalog and document
+    /// defaults via <see cref="DocumentTheme.Apply"/>, undoable and re-rendered. Mirrors the WPF host's
+    /// Design &gt; Themes dropdown.
+    /// </summary>
+    public void ApplyTheme(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        _bus.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply only a theme's colour palette (Design &gt; Colors), preserving the current
+    /// heading/body fonts. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyThemeColors(DocumentTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        _bus.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply a Design &gt; Fonts heading/body font pairing to the theme + style catalog,
+    /// preserving colours. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyDocumentFontSet(DocumentFontSet fontSet)
+    {
+        ArgumentNullException.ThrowIfNull(fontSet);
+        _bus.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: apply a Design &gt; Paragraph Spacing preset (Compact / Relaxed / Double / …) to the
+    /// document default + built-in paragraph styles. Undoable and re-rendered.
+    /// </summary>
+    public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
+    {
+        ArgumentNullException.ThrowIfNull(spacingSet);
+        _bus.Execute(new DesignCatalogCommand("Paragraph Spacing",
+            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
+    }
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
+    /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
+    /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
+    /// </summary>
+    public void SetPageColor(string? colorHex) =>
+        _bus.Execute(new SetPageColorCommand(NormalizePageColor(colorHex)));
+
+    private static string? NormalizePageColor(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return null;
+        var trimmed = colorHex.Trim();
+        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+    }
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
+    /// Undoable; the border draws around the page immediately and round-trips through <c>w:pgBorders</c>.
+    /// </summary>
+    public void SetPageBorder(PageBorder? border) =>
+        _bus.Execute(new SetPageBorderCommand(border));
+
+    /// <summary>
+    /// AV-DESIGN: toggle the page border on/off with the given colour/width (Design &gt; Page Borders quick
+    /// action). When no border is set one is added; otherwise it is cleared. Undoable.
+    /// </summary>
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
+        SetPageBorder(_doc.Page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+
+    /// <summary>
+    /// AV-DESIGN: set (or clear) the page watermark with full options (text, font, colour, layout,
+    /// opacity). Pass null to remove it. Undoable; the faint diagonal text draws behind the body and
+    /// round-trips on save.
+    /// </summary>
+    public void SetWatermark(WatermarkOptions? options) =>
+        _bus.Execute(new SetWatermarkCommand(options));
+
+    /// <summary>
+    /// AV-DESIGN: convenience to set a plain-text watermark with sensible defaults (Word's preset
+    /// watermarks like CONFIDENTIAL / DRAFT). A null/empty value removes the watermark.
+    /// </summary>
+    public void SetWatermarkText(string? text) =>
+        SetWatermark(string.IsNullOrWhiteSpace(text) ? null : new WatermarkOptions(text.Trim()));
 
     /// <summary>
     /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document

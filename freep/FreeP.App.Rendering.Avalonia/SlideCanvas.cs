@@ -86,6 +86,18 @@ public sealed class SlideCanvas : Control
     private double _slideWidthDip;
     private double _slideHeightDip;
 
+    // ── Slideshow entrance-animation suppression ──────────────────────────────
+
+    /// <summary>
+    /// Shape IDs that the slideshow window has marked as "not yet revealed".
+    /// Any <see cref="DrawOp"/> whose <c>ShapeId</c> is in this set is silently
+    /// skipped during <see cref="Render"/> so the entrance animation overlay is
+    /// the only visible copy of that shape until the build step plays.
+    ///
+    /// Call <see cref="Refresh"/> after mutating this set.
+    /// </summary>
+    public HashSet<uint> SuppressedShapeIds { get; } = new();
+
     /// <summary>Forces a recomposition and repaint.</summary>
     public void Refresh()
     {
@@ -142,11 +154,26 @@ public sealed class SlideCanvas : Control
     {
         switch (op)
         {
-            case DrawOp.Background bg:  RenderBackground(dc, bg);  break;
-            case DrawOp.Shape shape:    RenderShape(dc, shape);    break;
-            case DrawOp.Picture pic:    RenderPicture(dc, pic);    break;
-            case DrawOp.Table table:    RenderTable(dc, table);    break;
-            case DrawOp.Chart chartOp:  RenderChart(dc, chartOp);  break;
+            case DrawOp.Background bg:
+                RenderBackground(dc, bg);
+                break;
+            case DrawOp.Shape shape:
+                // DA1: skip shapes that the slideshow has not yet revealed (entrance animation).
+                if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
+                RenderShape(dc, shape);
+                break;
+            case DrawOp.Picture pic:
+                if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
+                RenderPicture(dc, pic);
+                break;
+            case DrawOp.Table table:
+                if (table.ShapeId != 0 && SuppressedShapeIds.Contains(table.ShapeId)) break;
+                RenderTable(dc, table);
+                break;
+            case DrawOp.Chart chartOp:
+                if (chartOp.ShapeId != 0 && SuppressedShapeIds.Contains(chartOp.ShapeId)) break;
+                RenderChart(dc, chartOp);
+                break;
         }
     }
 
