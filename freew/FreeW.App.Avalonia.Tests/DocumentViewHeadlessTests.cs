@@ -12,6 +12,12 @@ using FreeW.Core.Model;
 
 [assembly: AvaloniaTestApplication(typeof(FreeW.App.Avalonia.Tests.FreeWHeadlessApp))]
 
+// These tests drive the Avalonia headless single UI thread (DocumentView + dispatcher via OnUi
+// helpers). xUnit parallelizes test classes by default, so multiple UI-dispatcher tests can run
+// concurrently and deadlock against the one headless UI thread (observed as a test-host hang, e.g.
+// PictureDrawingContextualTabTests.WrapCommand_changes_shape_wrapping). Serialize the whole assembly.
+[assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
+
 namespace FreeW.App.Avalonia.Tests;
 
 /// <summary>Minimal headless Avalonia app (Fluent theme + headless drawing) so DocumentView can lay out.</summary>
