@@ -46,7 +46,7 @@ public static class SlideCompositor
     /// <returns>
     /// Ordered list of <see cref="DrawOp"/> in painter's order (background first, then shapes back to front).
     /// </returns>
-    public static IReadOnlyList<DrawOp> Compose(PresentationModel presentation, Slide slide)
+    public static IReadOnlyList<DrawOp> Compose(PresentationModel presentation, Slide slide, int slideIndex = 0)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(slide);
@@ -65,7 +65,7 @@ public static class SlideCompositor
 
         // 2. Shapes in z-order (back to front)
         foreach (var shape in slide.Shapes)
-            ComposeShape(shape, slide, presentation, theme, ops);
+            ComposeShape(shape, slide, presentation, theme, ops, slideIndex);
 
         return ops;
     }
@@ -100,7 +100,8 @@ public static class SlideCompositor
         Slide slide,
         PresentationModel presentation,
         PresentationTheme theme,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        int slideIndex = 0)
     {
         switch (shape.Kind)
         {
@@ -108,10 +109,14 @@ public static class SlideCompositor
                 ComposePicture(shape, slide, presentation, theme, ops);
                 break;
 
+            case SlideShapeKind.Media:
+                ComposeMedia(shape, slide, presentation, theme, ops);
+                break;
+
             case SlideShapeKind.Group:
                 // Flatten group children (simplified — no group-level transform for now).
                 foreach (var child in shape.Children)
-                    ComposeShape(child, slide, presentation, theme, ops);
+                    ComposeShape(child, slide, presentation, theme, ops, slideIndex);
                 break;
 
             case SlideShapeKind.Table:
@@ -130,7 +135,7 @@ public static class SlideCompositor
                 break;
 
             default:
-                ComposeAutoShape(shape, slide, presentation, theme, ops);
+                ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex);
                 break;
         }
     }
@@ -142,7 +147,8 @@ public static class SlideCompositor
         Slide slide,
         PresentationModel presentation,
         PresentationTheme theme,
-        List<DrawOp> ops)
+        List<DrawOp> ops,
+        int slideIndex = 0)
     {
         // Resolve anchor (placeholder inheritance).
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
@@ -179,7 +185,7 @@ public static class SlideCompositor
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
 
-            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme);
+            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme, slideIndex);
         }
 
         ops.Add(new DrawOp.Shape
@@ -332,6 +338,48 @@ public static class SlideCompositor
             RotationDeg = anchor.RotationDeg,
             Outline = outline
         });
+    }
+
+    // ─── Media (audio/video) ────────────────────────────────────────────────────────────────
+
+    private static void ComposeMedia(
+        SlideShape shape,
+        Slide slide,
+        PresentationModel presentation,
+        PresentationTheme theme,
+        List<DrawOp> ops)
+    {
+        var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
+        var boundsDip = AnchorToBounds(anchor);
+
+        var outline = shape.Outline is not null
+            ? ResolveOutline(shape.Outline, theme)
+            : ResolvedOutline.None.Instance;
+
+        if (shape.Picture is { Bytes.Length: > 0 })
+        {
+            ops.Add(new DrawOp.Picture
+            {
+                Bytes       = shape.Picture.Bytes,
+                ContentType = shape.Picture.ContentType,
+                DestDip     = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+                Outline     = outline,
+                IsMedia     = true,
+            });
+        }
+        else
+        {
+            // No poster — draw a dark rectangle placeholder
+            ops.Add(new DrawOp.Shape
+            {
+                Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
+                Fill        = new ResolvedFill.Solid(new SrgbColor(0x22, 0x22, 0x22)),
+                Outline     = outline,
+                BoundsDip   = boundsDip,
+                RotationDeg = anchor.RotationDeg,
+            });
+        }
     }
 
     // ─── Table ───────────────────────────────────────────────────────────────────────────────
@@ -668,12 +716,27 @@ public static class SlideCompositor
 
     // ─── Text layout resolution ──────────────────────────────────────────────────────────────
 
+    private static string ResolveFieldText(FieldRun field, int slideIndex)
+    {
+        var t = field.FieldType.ToLowerInvariant();
+
+        if (t.Contains("slidenum") || t == "\\slidenum" || t == "ppslidenum")
+            return (slideIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // DateTime: use cached text as the deterministic value — DO NOT call DateTime.Now here.
+        // Footer: fall through to cached text as well.
+        return string.IsNullOrEmpty(field.CachedText)
+            ? field.FieldType   // last-resort: show type string
+            : field.CachedText;
+    }
+
     private static ResolvedTextLayout ResolveTextLayout(
         TextBody body,
         VerticalAnchor effectiveAnchor,
         TextAlign? effectiveDefaultAlign,
         Placeholder? placeholder,
-        PresentationTheme theme)
+        PresentationTheme theme,
+        int slideIndex = 0)
     {
         // Determine the default font size based on placeholder type.
         double defaultFontSizePt = placeholder?.Type switch
@@ -708,17 +771,26 @@ public static class SlideCompositor
 
             foreach (var run in para.Runs)
             {
-                var color = run.Color is not null
-                    ? ThemeColorResolver.Resolve(run.Color, theme)
-                    : SrgbColor.Black;
+                // Resolve field text for a:fld runs (slide number, date, etc.)
+                string resolvedText = run.Field is not null
+                    ? ResolveFieldText(run.Field, slideIndex)
+                    : run.Text;
+
+                SrgbColor color;
+                if (run.Field?.Color is SrgbColor fieldColor)
+                    color = fieldColor;
+                else if (run.Color is not null)
+                    color = ThemeColorResolver.Resolve(run.Color, theme);
+                else
+                    color = SrgbColor.Black;
 
                 resolvedRuns.Add(new ResolvedRun
                 {
-                    Text = run.Text,
-                    FontFamily = run.FontFamily ?? defaultFont,
-                    FontSizePt = run.FontSizePt ?? defaultFontSizePt,
-                    Bold = run.Bold,
-                    Italic = run.Italic,
+                    Text = resolvedText,
+                    FontFamily = run.FontFamily ?? run.Field?.FontFamily ?? defaultFont,
+                    FontSizePt = run.FontSizePt ?? run.Field?.FontSizePt ?? defaultFontSizePt,
+                    Bold = run.Bold || (run.Field?.Bold ?? false),
+                    Italic = run.Italic || (run.Field?.Italic ?? false),
                     Underline = run.Underline,
                     Strikethrough = run.Strikethrough,
                     Color = color

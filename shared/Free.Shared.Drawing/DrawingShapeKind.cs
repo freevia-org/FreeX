@@ -77,5 +77,8 @@ public enum SlideShapeKind
     Chart = 5,
 
     /// <summary>A SmartArt graphic (p:graphicFrame with dgm: graphicData). Rendered via cached dsp:drawing fallback shapes.</summary>
-    SmartArt = 6
+    SmartArt = 6,
+
+    /// <summary>An audio or video media object. The poster image is in <c>Picture</c>; the media bytes are in <c>Media</c>.</summary>
+    Media = 7
 }

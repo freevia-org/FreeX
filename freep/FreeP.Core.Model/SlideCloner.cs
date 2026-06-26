@@ -26,7 +26,14 @@ public static class SlideCloner
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
             LayoutId   = slide.LayoutId,
             Background = slide.Background,           // ShapeFill is immutable — share reference
-            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes)
+            Notes      = slide.Notes is null ? null : CloneTextBody(slide.Notes),
+            HfVisibility = slide.HfVisibility is null ? null : new HfFlags
+            {
+                ShowFooter   = slide.HfVisibility.ShowFooter,
+                ShowDate     = slide.HfVisibility.ShowDate,
+                ShowSlideNum = slide.HfVisibility.ShowSlideNum,
+                ShowHeader   = slide.HfVisibility.ShowHeader,
+            },
         };
 
         foreach (var shape in slide.Shapes)
@@ -62,6 +69,7 @@ public static class SlideCloner
             Outline        = shape.Outline,   // immutable — share
             Placeholder    = shape.Placeholder is null ? null : ClonePlaceholder(shape.Placeholder),
             Picture        = shape.Picture,   // byte[] treated as immutable
+            Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
             TextBody       = shape.TextBody is null ? null : CloneTextBody(shape.TextBody),
             Table          = shape.Table  is null ? null : CloneTable(shape.Table),
@@ -129,6 +137,16 @@ public static class SlideCloner
         Strikethrough = run.Strikethrough,
         Color         = run.Color,           // ThemeAwareColor is a struct — copied by value
         Hyperlink     = CloneHyperlink(run.Hyperlink),
+        Field = run.Field is null ? null : new FieldRun
+        {
+            FieldType  = run.Field.FieldType,
+            CachedText = run.Field.CachedText,
+            FontFamily = run.Field.FontFamily,
+            FontSizePt = run.Field.FontSizePt,
+            Bold       = run.Field.Bold,
+            Italic     = run.Field.Italic,
+            Color      = run.Field.Color,
+        },
     };
 
     private static Hyperlink? CloneHyperlink(Hyperlink? h) =>

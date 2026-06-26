@@ -41,6 +41,30 @@ public enum BulletKind
 }
 
 /// <summary>
+/// A field run inside a paragraph — corresponds to <c>a:fld</c> in OOXML.
+/// Examples: type="slidenum", type="datetime1", type="footer".
+/// The <see cref="CachedText"/> is the value baked in by PowerPoint on save (used as
+/// the deterministic default for rendering without a live date/slide-number source).
+/// </summary>
+public sealed class FieldRun
+{
+    /// <summary>Field type string from a:fld type= attribute, e.g. "slidenum", "datetime1", "datetime14".</summary>
+    public string FieldType { get; set; } = string.Empty;
+
+    /// <summary>Cached text baked by PowerPoint (the value rendered if no live resolver is available).</summary>
+    public string CachedText { get; set; } = string.Empty;
+
+    /// <summary>Font/formatting properties (same as Run). May be null → inherit.</summary>
+    public string? FontFamily { get; set; }
+    public double? FontSizePt { get; set; }
+    public bool Bold { get; set; }
+    public bool Italic { get; set; }
+
+    /// <summary>Explicit color or null to inherit.</summary>
+    public SrgbColor? Color { get; set; }
+}
+
+/// <summary>
 /// A single text run: a span of text with uniform character properties.
 /// </summary>
 public sealed class Run
@@ -63,6 +87,12 @@ public sealed class Run
 
     /// <summary>Hyperlink on this run, or null.  Corresponds to <c>a:hlinkClick</c> inside <c>a:rPr</c>.</summary>
     public Hyperlink? Hyperlink { get; set; }
+
+    /// <summary>
+    /// When non-null this run is an <c>a:fld</c> field run. The <see cref="Text"/>
+    /// field holds the cached text for rendering; the field type is here.
+    /// </summary>
+    public FieldRun? Field { get; set; }
 }
 
 /// <summary>

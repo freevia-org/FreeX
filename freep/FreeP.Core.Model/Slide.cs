@@ -133,6 +133,47 @@ public sealed class ShapeEffects
 }
 
 /// <summary>
+/// Payload for an audio or video media object embedded in a slide.
+/// The poster image bytes (shown while not playing) are stored in the parent
+/// shape's <see cref="SlideShape.Picture"/> field. The media asset itself
+/// (audio/video bytes) is stored here together with its content-type for
+/// round-trip preservation.
+/// </summary>
+public sealed class MediaInfo
+{
+    /// <summary>True = video, false = audio.</summary>
+    public bool IsVideo { get; set; }
+
+    /// <summary>Raw media bytes. Empty when the media is link-only (no embed).</summary>
+    public byte[] Bytes { get; set; } = Array.Empty<byte>();
+
+    /// <summary>MIME content type, e.g. "video/mp4", "audio/mpeg".</summary>
+    public string ContentType { get; set; } = "video/mp4";
+
+    /// <summary>
+    /// For link-only media: the external URI from r:link on the videoFile/audioFile element.
+    /// Empty when the media is embedded.
+    /// </summary>
+    public string LinkUrl { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Visibility flags for footer/date/slide-number placeholders.
+/// Corresponds to <c>p:hf</c> in slide/layout/master XML.
+/// </summary>
+public sealed class HfFlags
+{
+    /// <summary>Show footer placeholder.</summary>
+    public bool ShowFooter { get; set; } = true;
+    /// <summary>Show date/time placeholder.</summary>
+    public bool ShowDate { get; set; } = true;
+    /// <summary>Show slide number placeholder.</summary>
+    public bool ShowSlideNum { get; set; } = true;
+    /// <summary>Show header placeholder.</summary>
+    public bool ShowHeader { get; set; } = false;
+}
+
+/// <summary>
 /// An image part referenced by a <see cref="SlideShape"/> with <see cref="SlideShapeKind.Picture"/>.
 /// Stores the raw bytes and MIME content type so the IO layer can embed it into a .pptx package.
 /// </summary>
@@ -230,6 +271,14 @@ public sealed class SlideShape
 
     /// <summary>Image data when Kind == Picture.</summary>
     public ImagePart? Picture { get; set; }
+
+    // ── Media (audio/video) ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Media payload when Kind == Media. The poster image (shown when not playing)
+    /// is stored in <see cref="Picture"/>. Audio/video bytes live here.
+    /// </summary>
+    public MediaInfo? Media { get; set; }
 
     // ── Table ─────────────────────────────────────────────────────────────────────
 
@@ -347,6 +396,14 @@ public sealed class Slide
     /// Corresponds to the body placeholder (p:ph type="body") in the ppt/notesSlides/notesSlideN.xml part.
     /// </summary>
     public TextBody? Notes { get; set; }
+
+    // ── Header/footer visibility ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Slide-level header/footer visibility flags (from <c>p:hf</c>).
+    /// Null = not present on this slide (inherit from layout/master).
+    /// </summary>
+    public HfFlags? HfVisibility { get; set; }
 
     // ── Comments ──────────────────────────────────────────────────────────────────
 

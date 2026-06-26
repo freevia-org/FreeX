@@ -37,6 +37,10 @@ public static class PptxPackageReader
     private const string SlideHlinkRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
     private const string CommentsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string VideoRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    private const string AudioRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    // Microsoft proprietary media rel type used by newer PowerPoint
+    private const string MediaRelType         = "http://schemas.microsoft.com/office/2007/relationships/media";
 
     // p14 section extension namespace
     private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
@@ -617,6 +621,19 @@ public static class PptxPackageReader
         {
             var notesPath = ResolvePath(GetDirectory(slidePath), notesTarget);
             slide.Notes = ReadNotesSlide(archive, notesPath, scheme);
+        }
+
+        // p:hf — header/footer visibility flags
+        var hfEl = xml.Root.Element(P + "hf");
+        if (hfEl is not null)
+        {
+            slide.HfVisibility = new HfFlags
+            {
+                ShowFooter   = hfEl.Attribute("ftr")?.Value    is not "0",
+                ShowDate     = hfEl.Attribute("dt")?.Value     is not "0",
+                ShowSlideNum = hfEl.Attribute("sldNum")?.Value is not "0",
+                ShowHeader   = hfEl.Attribute("hdr")?.Value    is "1" or "true",
+            };
         }
 
         return slide;
@@ -1313,6 +1330,7 @@ public static class PptxPackageReader
     private static SlideShape ReadPic(XElement pic, ZipArchive archive, string partPath, PresentationColorScheme scheme)
     {
         var cNvPr = pic.Element(P + "nvPicPr")?.Element(P + "cNvPr");
+        var nvPr  = pic.Element(P + "nvPicPr")?.Element(P + "nvPr");
 
         var shape = new SlideShape
         {
@@ -1325,7 +1343,7 @@ public static class PptxPackageReader
         ReadSpPr(spPr, shape, scheme);
         // P3: also carry the picture's outline (a:ln inside p:spPr) — already handled by ReadSpPr.
 
-        // blipFill → image
+        // blipFill → poster / image
         var blip = pic.Element(P + "blipFill")?.Element(A + "blip");
         var embedId = blip?.Attribute(R + "embed")?.Value;
         if (!string.IsNullOrWhiteSpace(embedId))
@@ -1350,7 +1368,100 @@ public static class PptxPackageReader
             }
         }
 
+        // Detect media (audio/video) — a:videoFile or a:audioFile inside p:nvPr
+        if (nvPr is not null)
+        {
+            var videoFileEl = nvPr.Element(A + "videoFile");
+            var audioFileEl = nvPr.Element(A + "audioFile");
+            var mediaEl     = videoFileEl ?? audioFileEl;
+            if (mediaEl is not null)
+            {
+                bool isVideo  = videoFileEl is not null;
+                var  mediaRelId = mediaEl.Attribute(R + "link")?.Value
+                               ?? mediaEl.Attribute(R + "embed")?.Value;
+
+                var mediaInfo = new MediaInfo { IsVideo = isVideo };
+
+                if (!string.IsNullOrWhiteSpace(mediaRelId))
+                {
+                    var partRels = LoadRels(archive, GetRelsPath(partPath));
+                    var mediaRel = partRels.FirstOrDefault(r => r.id == mediaRelId);
+                    if (!string.IsNullOrEmpty(mediaRel.target))
+                    {
+                        if (mediaRel.type == HyperlinkRelType ||
+                            mediaRel.target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // External / link-only
+                            mediaInfo.LinkUrl = mediaRel.target;
+                        }
+                        else
+                        {
+                            // Embedded
+                            var mediaPath  = ResolvePath(GetDirectory(partPath), mediaRel.target);
+                            var mediaBytes = ReadEntryBytes(archive, mediaPath);
+                            if (mediaBytes is not null)
+                            {
+                                mediaInfo.Bytes       = mediaBytes;
+                                mediaInfo.ContentType = GuessMediaContentType(mediaPath);
+                            }
+                        }
+                    }
+                }
+
+                // Also try p:extLst media references (newer PowerPoint embeds via p:media)
+                if (mediaInfo.Bytes.Length == 0 && string.IsNullOrEmpty(mediaInfo.LinkUrl))
+                {
+                    var extLst = nvPr.Element(P + "extLst");
+                    if (extLst is not null)
+                    {
+                        var partRels = LoadRels(archive, GetRelsPath(partPath));
+                        foreach (var ext in extLst.Elements(P + "ext"))
+                        {
+                            var mediaRef = ext.Descendants()
+                                .FirstOrDefault(e => e.Attribute(R + "embed") is not null
+                                                 || e.Attribute(R + "link") is not null);
+                            if (mediaRef is null) continue;
+                            var mRelId = mediaRef.Attribute(R + "embed")?.Value
+                                      ?? mediaRef.Attribute(R + "link")?.Value;
+                            if (string.IsNullOrEmpty(mRelId)) continue;
+                            var mRel = partRels.FirstOrDefault(r => r.id == mRelId);
+                            if (string.IsNullOrEmpty(mRel.target)) continue;
+                            var mPath  = ResolvePath(GetDirectory(partPath), mRel.target);
+                            var mBytes = ReadEntryBytes(archive, mPath);
+                            if (mBytes is not null)
+                            {
+                                mediaInfo.Bytes       = mBytes;
+                                mediaInfo.ContentType = GuessMediaContentType(mPath);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                shape.Media = mediaInfo;
+                shape.Kind  = SlideShapeKind.Media;
+            }
+        }
+
         return shape;
+    }
+
+    private static string GuessMediaContentType(string path)
+    {
+        var ext = path.Split('.').Last().ToLowerInvariant();
+        return ext switch
+        {
+            "mp4"  => "video/mp4",
+            "m4v"  => "video/mp4",
+            "mov"  => "video/quicktime",
+            "avi"  => "video/x-msvideo",
+            "wmv"  => "video/x-ms-wmv",
+            "mp3"  => "audio/mpeg",
+            "m4a"  => "audio/mp4",
+            "wav"  => "audio/wav",
+            "wma"  => "audio/x-ms-wma",
+            _      => "video/mp4"
+        };
     }
 
     // ── p:cxnSp ──────────────────────────────────────────────────────────────────
@@ -1818,11 +1929,49 @@ public static class PptxPackageReader
 
         foreach (var child in pEl.Elements())
         {
-            if (child.Name == A + "r") para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
-            else if (child.Name == A + "br") para.Runs.Add(new Run { Text = "\n" });
+            if (child.Name == A + "r")
+                para.Runs.Add(ReadRun(child, scheme, slideRels, allSlides, slideDir, slidePartPathToId));
+            else if (child.Name == A + "br")
+                para.Runs.Add(new Run { Text = "\n" });
+            else if (child.Name == A + "fld")
+                para.Runs.Add(ReadFieldRun(child, scheme));
         }
 
         return para;
+    }
+
+    private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)
+    {
+        var fieldType  = fldEl.Attribute("type")?.Value ?? string.Empty;
+        var cachedText = fldEl.Element(A + "t")?.Value ?? string.Empty;
+
+        var fld = new FieldRun
+        {
+            FieldType  = fieldType,
+            CachedText = cachedText,
+        };
+
+        var rPr = fldEl.Element(A + "rPr");
+        if (rPr is not null)
+        {
+            if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
+                fld.FontSizePt = sz / 100.0;
+            fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
+            fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            var solidFill = rPr.Element(A + "solidFill");
+            if (solidFill is not null)
+            {
+                var tac = PptxColorReader.TryReadColor(solidFill, scheme);
+                if (tac is not null) fld.Color = tac.Resolved;
+            }
+        }
+
+        return new Run
+        {
+            Text  = cachedText,
+            Field = fld,
+        };
     }
 
     private static Run ReadRun(XElement rEl, PresentationColorScheme scheme,

@@ -496,7 +496,36 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawRectangle(null, pen, dest);
         }
 
+        // Draw play button overlay for media shapes (already in scaled coords since a transform is pushed).
+        if (pic.IsMedia)
+            DrawPlayButtonOverlay(dc, dest);
+
         if (hasRotation) dc.Pop();
+    }
+
+    private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)
+    {
+        double cx = dest.Left + dest.Width  / 2;
+        double cy = dest.Top  + dest.Height / 2;
+        double r  = Math.Min(dest.Width, dest.Height) / 6;
+        if (r < 4) r = 4;
+
+        var circleBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0x00, 0x00, 0x00));
+        circleBrush.Freeze();
+        dc.DrawEllipse(circleBrush, null, new Point(cx, cy), r, r);
+
+        // Triangle pointing right
+        double tx = cx - r * 0.3;
+        double ty = cy - r * 0.45;
+        var triGeo = new StreamGeometry();
+        using (var ctx = triGeo.Open())
+        {
+            ctx.BeginFigure(new Point(tx,              ty),              isFilled: true, isClosed: true);
+            ctx.LineTo(     new Point(tx + r * 0.8,    cy),              true, false);
+            ctx.LineTo(     new Point(tx,               cy + r * 0.45),  true, false);
+        }
+        triGeo.Freeze();
+        dc.DrawGeometry(Brushes.White, null, triGeo);
     }
 
     // ── Table ──────────────────────────────────────────────────────────────────

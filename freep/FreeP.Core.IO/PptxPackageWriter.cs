@@ -40,6 +40,8 @@ public static class PptxPackageWriter
     private const string HyperlinkRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
     private const string CommentsRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
     private const string CommentAuthorsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors";
+    private const string VideoRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    private const string AudioRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
 
     // SmartArt diagram relationship types (slide rels point to the named sub-parts)
     private const string DiagramDataRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData";
@@ -101,13 +103,14 @@ public static class PptxPackageWriter
                 new SlideLayout { Id = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank, MasterId = masters[0].Id }
             };
 
-        // Collect media extensions used across all slides (for Q2 content-type Defaults).
+        // Collect media extensions used across all slides (for [Content_Types].xml Defaults).
         var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in presentation.Slides)
         {
             foreach (var shape in AllShapes(slide.Shapes))
             {
-                if (shape.Kind == SlideShapeKind.Picture && shape.Picture?.Bytes is { Length: > 0 })
+                if ((shape.Kind == SlideShapeKind.Picture || shape.Kind == SlideShapeKind.Media)
+                    && shape.Picture?.Bytes is { Length: > 0 })
                 {
                     var ct = shape.Picture.ContentType ?? "image/png";
                     mediaExtensions.Add(ContentTypeToExtension(ct));
@@ -227,6 +230,9 @@ public static class PptxPackageWriter
             // Write media (images) into the archive, get back rel-id map
             var mediaRelIds = WriteSlideMedia(archive, slide, si + 1);
 
+            // Write media audio/video files for Media shapes
+            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1);
+
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex);
 
@@ -236,8 +242,9 @@ public static class PptxPackageWriter
             {
                 "rId1", // always reserved for slide layout
             };
-            foreach (var (_, mediaRelId, _) in mediaRelIds)  usedRelIds.Add(mediaRelId);
-            foreach (var (_, chartRelId, _) in chartRelIds)  usedRelIds.Add(chartRelId);
+            foreach (var (_, mediaRelId, _) in mediaRelIds)      usedRelIds.Add(mediaRelId);
+            foreach (var (_, mediaFileRelId, _, _) in mediaFileRelIds) usedRelIds.Add(mediaFileRelId);
+            foreach (var (_, chartRelId, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
             var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
 
@@ -245,6 +252,8 @@ public static class PptxPackageWriter
             var mediaById = new Dictionary<uint, string>();
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
             foreach (var (id, relId, _) in chartRelIds)  mediaById[id] = relId;
+            // Media file rel IDs use synthetic key: shape.Id | 0x80000000
+            foreach (var (id, relId, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
 
             // Collect hyperlinks from this slide and assign rel IDs.
             // hlinkRelIds maps hyperlink key (url or "slide:"+slideId) to the rels r:id.
@@ -260,6 +269,8 @@ public static class PptxPackageWriter
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
+            foreach (var (_, mediaFileRelId, mediaFilePath, isVideo) in mediaFileRelIds)
+                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, $"../media/{mediaFilePath.Split('/').Last()}");
             foreach (var (_, chartRelId, chartPath) in chartRelIds)
                 slideRels.Add(chartRelId, ChartRelType, $"../charts/{chartPath.Split('/').Last()}");
             // SmartArt diagram part rels (dm/lo/qs/cs each get their own rel entry in slide rels)
@@ -589,6 +600,12 @@ public static class PptxPackageWriter
                         slide.Shapes
                             .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides))
                             .OfType<XElement>())),
+                slide.HfVisibility is not null
+                    ? new XElement(P + "hf",
+                        new XAttribute("ftr",    slide.HfVisibility.ShowFooter   ? "1" : "0"),
+                        new XAttribute("dt",     slide.HfVisibility.ShowDate     ? "1" : "0"),
+                        new XAttribute("sldNum", slide.HfVisibility.ShowSlideNum ? "1" : "0"))
+                    : null,
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
     }
@@ -1323,6 +1340,7 @@ public static class PptxPackageWriter
         shape.Kind switch
         {
             SlideShapeKind.Picture => BuildPicEl(shape, mediaById),
+            SlideShapeKind.Media   => BuildMediaPicEl(shape, mediaById),
             SlideShapeKind.Group => BuildGrpSpEl(shape, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides),
             SlideShapeKind.Connector => BuildCxnSpEl(shape, scheme, hlinkRelIds),
             SlideShapeKind.Table when shape.Table is not null => BuildGraphicFrameEl(shape, scheme),
@@ -1367,6 +1385,33 @@ public static class PptxPackageWriter
                 new XElement(P + "nvPr")),
             new XElement(P + "blipFill",
                 new XElement(A + "blip", new XAttribute(R + "embed", embedRelId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+            BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
+    }
+
+    private static XElement BuildMediaPicEl(SlideShape shape, Dictionary<uint, string> mediaById)
+    {
+        // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
+        mediaById.TryGetValue(shape.Id, out var posterRelId);
+        posterRelId ??= "rIdMedia1";
+
+        // Media file rel id (written by WriteSlideMediaFiles using shape.Id | 0x80000000 key)
+        mediaById.TryGetValue(shape.Id | 0x80000000u, out var mediaFileRelId);
+        mediaFileRelId ??= "rIdVid1";
+
+        bool isVideo = shape.Media?.IsVideo ?? true;
+        var mediaFileEl = isVideo
+            ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
+            : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
+
+        return new XElement(P + "pic",
+            new XElement(P + "nvPicPr",
+                CnvPr(shape.Id, shape.Name),
+                new XElement(P + "cNvPicPr"),
+                new XElement(P + "nvPr",
+                    mediaFileEl)),
+            new XElement(P + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
                 new XElement(A + "stretch", new XElement(A + "fillRect"))),
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
     }
@@ -2046,6 +2091,19 @@ public static class PptxPackageWriter
     {
         if (run.Text == "\n") return new XElement(A + "br");
 
+        // Field run: emit a:fld instead of a:r
+        if (run.Field is not null)
+        {
+            var fld = run.Field;
+            var fldId = Guid.NewGuid().ToString("B").ToUpperInvariant();
+            var fldRPrAttrs = BuildFieldRPrAttrs(fld);
+            return new XElement(A + "fld",
+                new XAttribute("id", fldId),
+                new XAttribute("type", fld.FieldType),
+                fldRPrAttrs is not null ? new XElement(A + "rPr", fldRPrAttrs) : null,
+                new XElement(A + "t", run.Text));
+        }
+
         var rPr = new XElement(A + "rPr",
             new XAttribute("lang", "en-US"),
             new XAttribute("dirty", "0"));
@@ -2069,6 +2127,16 @@ public static class PptxPackageWriter
         }
 
         return new XElement(A + "r", rPr, new XElement(A + "t", run.Text));
+    }
+
+    private static IEnumerable<XAttribute>? BuildFieldRPrAttrs(FieldRun fld)
+    {
+        var attrs = new List<XAttribute>();
+        if (fld.FontSizePt.HasValue)
+            attrs.Add(new XAttribute("sz", (int)Math.Round(fld.FontSizePt.Value * 100)));
+        if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
+        if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
+        return attrs.Count > 0 ? attrs : null;
     }
 
     private static XElement BuildPhEl(Placeholder ph)
@@ -2169,7 +2237,9 @@ public static class PptxPackageWriter
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
-            if (shape.Kind != SlideShapeKind.Picture || shape.Picture?.Bytes is not { Length: > 0 } bytes)
+            // Write poster image for both Picture and Media shapes.
+            if ((shape.Kind != SlideShapeKind.Picture && shape.Kind != SlideShapeKind.Media)
+                || shape.Picture?.Bytes is not { Length: > 0 } bytes)
                 continue;
 
             var ct = shape.Picture.ContentType ?? "image/png";
@@ -2186,6 +2256,52 @@ public static class PptxPackageWriter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Writes audio/video bytes for Media shapes. Returns (shapeId, relId, mediaPath, isVideo) tuples.
+    /// The relId uses prefix "rIdVid" to avoid collision with the "rIdMedia" image prefix.
+    /// </summary>
+    private static List<(uint shapeId, string relId, string mediaPath, bool isVideo)> WriteSlideMediaFiles(
+        ZipArchive archive, Slide slide, int slideIndex)
+    {
+        var result = new List<(uint, string, string, bool)>();
+        int n = 1;
+
+        foreach (var shape in AllShapes(slide.Shapes))
+        {
+            if (shape.Kind != SlideShapeKind.Media) continue;
+            var media = shape.Media;
+            if (media is null || media.Bytes.Length == 0) continue; // link-only: no file to write
+
+            var ext = media.ContentType switch
+            {
+                "video/mp4"       => "mp4",
+                "video/quicktime" => "mov",
+                "video/x-msvideo" => "avi",
+                "video/x-ms-wmv"  => "wmv",
+                "audio/mpeg"      => "mp3",
+                "audio/mp4"       => "m4a",
+                "audio/wav"       => "wav",
+                "audio/x-ms-wma"  => "wma",
+                _                 => "mp4"
+            };
+            var mediaPath = $"ppt/media/slide{slideIndex}_video{n}.{ext}";
+            var relId     = $"rIdVid{n}";
+
+            WriteRawEntry(archive, mediaPath, media.Bytes);
+            result.Add((shape.Id, relId, mediaPath, media.IsVideo));
+            n++;
+        }
+
+        return result;
+    }
+
+    private static void WriteRawEntry(ZipArchive archive, string path, byte[] bytes)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.NoCompression);
+        using var stream = entry.Open();
+        stream.Write(bytes, 0, bytes.Length);
     }
 
     // ── Chart writing ─────────────────────────────────────────────────────────────

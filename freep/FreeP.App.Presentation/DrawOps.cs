@@ -242,6 +242,12 @@ public abstract class DrawOp
 
         /// <summary>Optional outline drawn around the picture frame (None if no outline).</summary>
         public ResolvedOutline Outline { get; init; } = ResolvedOutline.None.Instance;
+
+        /// <summary>
+        /// When true, this picture is a media placeholder (video/audio poster).
+        /// The renderer draws a play-button triangle overlay on top.
+        /// </summary>
+        public bool IsMedia { get; init; }
     }
 
     // ── Background draw op ────────────────────────────────────────────────────────────────────────────────────────
