@@ -928,6 +928,18 @@ public static class SlideCompositor
             _ => TextAlign.Left
         };
 
+        // Wave 19A: compute normAutofit scale — divide by 100000 (OOXML unit).
+        double fontScale    = body.FontScalePPT.HasValue && body.FontScalePPT.Value > 0
+            ? body.FontScalePPT.Value / 100000.0 : 1.0;
+        double lnSpcReduc   = body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0
+            ? body.LnSpcReductionPPT.Value / 100000.0 : 0.0;
+
+        // Wave 19A: auto-number counters per level (0-based).
+        // Counters are incremented when we encounter an Auto bullet paragraph at that level,
+        // and reset when the level changes to a lower number (outer level).
+        var autoNumCounters = new int[9]; // 1-based, 0 = not yet started
+        int lastAutoNumLevel = -1;
+
         var resolvedParas = new List<ResolvedParagraph>(body.Paragraphs.Count);
 
         foreach (var para in body.Paragraphs)
@@ -978,10 +990,11 @@ public static class SlideCompositor
                     ?? fallbackFont;
 
                 // Font size: explicit run > field > inherited style > hard-coded fallback.
-                double fontSizePt = run.FontSizePt
+                // Wave 19A: apply normAutofit fontScale if set.
+                double fontSizePt = (run.FontSizePt
                     ?? run.Field?.FontSizePt
                     ?? inheritedStyle?.FontSizePt
-                    ?? fallbackFontSizePt;
+                    ?? fallbackFontSizePt) * fontScale;
 
                 // Bold: PP1 fix — explicit b="0" (BoldSet=true, Bold=false) must beat inherited bold.
                 // When BoldSet=true the run has a real a:rPr @b attribute (or was set by an editing
@@ -1047,17 +1060,95 @@ public static class SlideCompositor
                     }).ToList()
                 : Array.Empty<ResolvedTabStop>();
 
+            // Wave 19A: bullet computation ─────────────────────────────────────────
+            // Determine effective bullet kind (paragraph > inherited style).
+            var effectiveBulletKind = para.BulletKind;
+            string? effectiveBulletChar = para.BulletChar;
+            AutoNumType effectiveAutoNumType = para.AutoNumType;
+            ThemeAwareColor? effectiveBulletColor = para.BulletColor ?? inheritedStyle?.BulletColor;
+            int? effectiveBulletSizePct = para.BulletSizePct ?? inheritedStyle?.BulletSizePct;
+            string? effectiveBulletFont = para.BulletFontFamily ?? inheritedStyle?.BulletFontFamily;
+
+            // When paragraph has no explicit bullet set, check inherited style.
+            if (effectiveBulletKind == BulletKind.None && inheritedStyle?.BulletKind.HasValue == true)
+            {
+                effectiveBulletKind = inheritedStyle.BulletKind!.Value;
+                if (effectiveBulletKind == BulletKind.Char && effectiveBulletChar is null)
+                    effectiveBulletChar = inheritedStyle.BulletChar;
+                if (effectiveBulletKind == BulletKind.Auto)
+                    effectiveAutoNumType = inheritedStyle.AutoNumType;
+            }
+
+            // Build bullet text and per-paragraph indent info.
+            string bulletText = string.Empty;
+            SrgbColor bulletColor = resolvedRuns.Count > 0 ? resolvedRuns[0].Color : SrgbColor.Black;
+            string bulletFontFamily = resolvedRuns.Count > 0 ? resolvedRuns[0].FontFamily : fallbackFont;
+            double bulletFontSizePt = resolvedRuns.Count > 0 ? resolvedRuns[0].FontSizePt : (fallbackFontSizePt * fontScale);
+            double indentDip = 0.0;
+            double hangingDip = 0.0;
+
+            // Resolve marL/indent for indentation.
+            long marLEmu = para.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu ?? 0;
+            long indentEmu = para.IndentEmu ?? inheritedStyle?.IndentEmu ?? 0;
+            if (marLEmu > 0)
+                indentDip = marLEmu / EmuPerDip;
+            if (indentEmu < 0)
+                hangingDip = -indentEmu / EmuPerDip; // hanging: bullet at indentDip-hangingDip
+
+            // Override bullet color when explicitly set.
+            if (effectiveBulletColor is not null)
+                bulletColor = ThemeColorResolver.Resolve(effectiveBulletColor, theme, effectiveClrMap);
+
+            // Override bullet font when set.
+            if (!string.IsNullOrEmpty(effectiveBulletFont))
+                bulletFontFamily = ResolveLatinFont(effectiveBulletFont, theme);
+
+            // Scale bullet font size by buSzPct (1000ths-of-a-percent; 100000 = 100%).
+            if (effectiveBulletSizePct.HasValue && effectiveBulletSizePct.Value > 0)
+                bulletFontSizePt = bulletFontSizePt * effectiveBulletSizePct.Value / 100000.0;
+
+            switch (effectiveBulletKind)
+            {
+                case BulletKind.Char:
+                    bulletText = effectiveBulletChar ?? "•";
+                    break;
+
+                case BulletKind.Auto:
+                {
+                    int level = para.Level;
+                    // Reset inner levels when we move to an outer level.
+                    if (level < lastAutoNumLevel)
+                        for (int li = level + 1; li < 9; li++) autoNumCounters[li] = 0;
+                    // Also reset this level when we haven't seen it yet (counter == 0).
+                    // Use para.AutoNumStartAt if it's the first paragraph at this level.
+                    if (autoNumCounters[level] == 0)
+                        autoNumCounters[level] = para.AutoNumStartAt;
+                    else
+                        autoNumCounters[level]++;
+                    lastAutoNumLevel = level;
+                    bulletText = FormatAutoNum(effectiveAutoNumType, autoNumCounters[level]);
+                    break;
+                }
+            }
+
             resolvedParas.Add(new ResolvedParagraph
             {
                 Runs = resolvedRuns,
                 // P0: use the inherited default alignment when the paragraph has no explicit align.
                 Align = para.Align ?? fallbackAlign,
                 Level = para.Level,
-                BulletKind = para.BulletKind,
-                BulletChar = para.BulletChar,
+                BulletKind = effectiveBulletKind,
+                BulletChar = effectiveBulletChar,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
                 TabStops = resolvedTabStops,  // Wave 18B
+                // Wave 19A:
+                BulletText       = bulletText,
+                BulletColor      = bulletColor,
+                BulletFontFamily = bulletFontFamily,
+                BulletFontSizePt = bulletFontSizePt,
+                IndentDip        = indentDip,
+                HangingDip       = hangingDip,
             });
         }
 
@@ -1073,7 +1164,63 @@ public static class SlideCompositor
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
             VerticalType = body.VerticalType,  // Wave 18B
+            FontScale = fontScale,            // Wave 19A
+            LnSpcReduction = lnSpcReduc,      // Wave 19A
         };
+    }
+
+    // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Formats an auto-numbered bullet counter value according to the given type.
+    /// <paramref name="n"/> is 1-based.
+    /// </summary>
+    public static string FormatAutoNum(AutoNumType type, int n)
+    {
+        if (n < 1) n = 1;
+        return type switch
+        {
+            AutoNumType.ArabicPeriod     => $"{n}.",
+            AutoNumType.ArabicParenR     => $"{n})",
+            AutoNumType.ArabicParenBoth  => $"({n})",
+            AutoNumType.RomanUcPeriod    => $"{ToRoman(n, upper: true)}.",
+            AutoNumType.RomanLcPeriod    => $"{ToRoman(n, upper: false)}.",
+            AutoNumType.RomanUcParenR    => $"{ToRoman(n, upper: true)})",
+            AutoNumType.RomanLcParenR    => $"{ToRoman(n, upper: false)})",
+            AutoNumType.AlphaUcPeriod    => $"{ToAlpha(n, upper: true)}.",
+            AutoNumType.AlphaLcPeriod    => $"{ToAlpha(n, upper: false)}.",
+            AutoNumType.AlphaUcParenR    => $"{ToAlpha(n, upper: true)})",
+            AutoNumType.AlphaLcParenR    => $"{ToAlpha(n, upper: false)})",
+            AutoNumType.AlphaUcParenBoth => $"({ToAlpha(n, upper: true)})",
+            AutoNumType.AlphaLcParenBoth => $"({ToAlpha(n, upper: false)})",
+            _                            => $"{n}."
+        };
+    }
+
+    private static string ToRoman(int n, bool upper)
+    {
+        if (n < 1 || n > 3999) return n.ToString();
+        var values = new[] { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+        var syms   = upper
+            ? new[] { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" }
+            : new[] { "m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i" };
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < values.Length; i++)
+            while (n >= values[i]) { sb.Append(syms[i]); n -= values[i]; }
+        return sb.ToString();
+    }
+
+    private static string ToAlpha(int n, bool upper)
+    {
+        // 1→A, 26→Z, 27→AA, etc.
+        var sb = new System.Text.StringBuilder();
+        while (n > 0)
+        {
+            n--; // convert to 0-based
+            sb.Insert(0, (char)((upper ? 'A' : 'a') + (n % 26)));
+            n /= 26;
+        }
+        return sb.ToString();
     }
 
     // ─── Unit helpers ────────────────────────────────────────────────────────────────────────

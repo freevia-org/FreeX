@@ -1495,14 +1495,27 @@ public sealed class SlideCanvas : FrameworkElement
         double curY = startY;
         double textX = bounds.X + insetLeft;
 
+        // Wave 19A: line-spacing scale from normAutofit lnSpcReduction
+        double lnSpcScale = 1.0 - text.LnSpcReduction;
+
         int paraIdx = 0;
         foreach (var para in text.Paragraphs)
         {
             if (para.Runs.Count == 0) { paraIdx++; continue; }
 
             var (ft, spaceAfterDip) = formatted[paraIdx];
-            double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0);
+            double spaceBefore = para.SpaceBeforePt * (96.0 / 72.0) * lnSpcScale;
             curY += spaceBefore;
+
+            // Wave 19A: draw bullet (char or number) to the left of the paragraph text.
+            // The bullet sits at textX + indentDip - hangingDip; text starts at textX + indentDip.
+            double paraTextX = textX + para.IndentDip;
+            if (!string.IsNullOrEmpty(para.BulletText))
+            {
+                double bulletX = paraTextX - para.HangingDip;
+                DrawBulletWpf(dc, para.BulletText, para.BulletFontFamily, para.BulletFontSizePt,
+                    para.BulletColor, bulletX, curY);
+            }
 
             // Wave 16A: use geometry-based rendering when any run has text effects, or warp is active.
             // BA2 fix: when effects/warp are active, skip the flat DrawText base pass entirely and
@@ -1517,20 +1530,52 @@ public sealed class SlideCanvas : FrameworkElement
 
             if (hasEffects)
             {
-                RenderParaWithEffects(dc, para, textX, curY, textAreaW, text.Wrap, text.WarpPreset, bounds);
+                RenderParaWithEffects(dc, para, paraTextX, curY, textAreaW - para.IndentDip, text.Wrap, text.WarpPreset, bounds);
             }
             else if (hasTabs)
             {
-                RenderParaWithTabs(dc, para, textX, curY, para.TabStops);
+                RenderParaWithTabs(dc, para, paraTextX, curY, para.TabStops);
             }
             else
             {
-                dc.DrawText(ft, new Point(textX, curY));
+                // Adjust MaxTextWidth to account for indent
+                if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
+                    ft.MaxTextWidth = Math.Max(1, textAreaW - para.IndentDip);
+                dc.DrawText(ft, new Point(paraTextX, curY));
             }
 
-            curY += ft.Height + spaceAfterDip;
+            curY += ft.Height * lnSpcScale + spaceAfterDip * lnSpcScale;
             paraIdx++;
         }
+    }
+
+    /// <summary>
+    /// Wave 19A: draws a bullet glyph or number string at the given position.
+    /// </summary>
+    private static void DrawBulletWpf(
+        DrawingContext dc,
+        string bulletText,
+        string fontFamily,
+        double fontSizePt,
+        SrgbColor color,
+        double x,
+        double y)
+    {
+        if (string.IsNullOrEmpty(bulletText)) return;
+        var typeface = new Typeface(new FontFamily(fontFamily),
+            FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        double emPx = fontSizePt * (96.0 / 72.0);
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        if (brush.CanFreeze) brush.Freeze();
+        var ft = new FormattedText(
+            bulletText,
+            System.Globalization.CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface, emPx, brush,
+            numberSubstitution: null,
+            textFormattingMode: TextFormattingMode.Display,
+            pixelsPerDip: 1.0);
+        dc.DrawText(ft, new Point(x, y));
     }
 
     /// <summary>

@@ -76,6 +76,36 @@ public sealed class ResolvedParagraph
     /// Empty means use the default tab spacing (1 inch = 96 DIP at default DPI).
     /// </summary>
     public IReadOnlyList<ResolvedTabStop> TabStops { get; init; } = Array.Empty<ResolvedTabStop>();
+
+    // ── Wave 19A: bullet rendering fields ────────────────────────────────────
+
+    /// <summary>
+    /// The resolved bullet glyph/number text to draw to the left of the paragraph.
+    /// Empty string = no bullet (BulletKind.None or empty body paragraph).
+    /// </summary>
+    public string BulletText { get; init; } = string.Empty;
+
+    /// <summary>Resolved bullet color (may differ from the run color for Char bullets).</summary>
+    public SrgbColor BulletColor { get; init; } = SrgbColor.Black;
+
+    /// <summary>Resolved bullet font family (may differ from the paragraph font for Char bullets).</summary>
+    public string BulletFontFamily { get; init; } = "Calibri";
+
+    /// <summary>Resolved bullet font size in points (= run size * BulletSizePct / 100).</summary>
+    public double BulletFontSizePt { get; init; } = 18.0;
+
+    /// <summary>
+    /// Left indent in DIP from the text area edge to the TEXT start position (= marL / EmuPerDip).
+    /// Bullets are drawn at IndentDip - HangingDip (the bullet slot).
+    /// Zero = no explicit indent.
+    /// </summary>
+    public double IndentDip { get; init; }
+
+    /// <summary>
+    /// Hanging distance in DIP: how far the bullet hangs to the left of IndentDip.
+    /// = -indent / EmuPerDip when indent &lt; 0 (hanging), else 0.
+    /// </summary>
+    public double HangingDip { get; init; }
 }
 
 /// <summary>
@@ -111,6 +141,21 @@ public sealed class ResolvedTextLayout
     /// <see cref="TextVerticalType.Horizontal"/> = no extra rotation (default).
     /// </summary>
     public TextVerticalType VerticalType { get; init; } = TextVerticalType.Horizontal;
+
+    // ── Wave 19A: autofit applied ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Font scale factor from normAutofit (1.0 = no scaling; 0.625 = 62.5%).
+    /// Already applied to all ResolvedRun.FontSizePt values in the Paragraphs list.
+    /// Carried here only so renderers can skip double-application.
+    /// </summary>
+    public double FontScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// Line-spacing reduction fraction from normAutofit (0.0 = no reduction; 0.2 = 20% reduction).
+    /// Renderers multiply their natural line spacing by (1.0 - LnSpcReduction).
+    /// </summary>
+    public double LnSpcReduction { get; init; } = 0.0;
 }
 
 // ─── Resolved fill/outline ────────────────────────────────────────────────────────────────────────────────────────
