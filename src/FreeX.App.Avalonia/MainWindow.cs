@@ -12065,17 +12065,29 @@ public sealed partial class MainWindow : Window
         selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
         tabStrip.Styles.Add(selectedTabStyle);
 
-        // Hide the Avalonia Fluent accent "pipe" (the selected-tab underline) so the dialog tabs use
-        // the classic Win32 look — a raised bordered tab that merges into the pane, with NO coloured
-        // underline (Windows dialog tabs have no accent bar). The pipe is a template Border named
-        // "PART_SelectedPipe" in the Fluent TabItem theme.
-        var hidePipeStyle = new Style(s => s
-            .OfType<TabItem>()
-            .Template()
-            .OfType<Border>()
-            .Name("PART_SelectedPipe"));
-        hidePipeStyle.Setters.Add(new Setter(Visual.IsVisibleProperty, false));
-        tabStrip.Styles.Add(hidePipeStyle);
+        // Replace the Fluent TabItem template (which draws an accent "pipe"/underline on the selected
+        // tab) with a plain bordered content host. This gives the classic Win32 dialog-tab look — a
+        // raised bordered tab that merges into the pane, with NO coloured underline — and the
+        // border/background come from the styles above (selected = white, unselected = light gray).
+        var classicTabTemplate = new FuncControlTemplate<TabItem>((tab, _) =>
+        {
+            var presenter = new ContentPresenter
+            {
+                Name = "PART_ContentPresenter",
+                HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tab });
+            presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = tab });
+            presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tab });
+            var root = new Border { Name = "PART_LayoutRoot" };
+            root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
+            root.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tab });
+            root.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tab });
+            root.Child = presenter;
+            return root;
+        });
+        tabStyle.Setters.Add(new Setter(TemplatedControl.TemplateProperty, classicTabTemplate));
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
