@@ -29,7 +29,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
@@ -513,7 +513,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dvRuleSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _cfRuleSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _cfRuleSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
     private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];

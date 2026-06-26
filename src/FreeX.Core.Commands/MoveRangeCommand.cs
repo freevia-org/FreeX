@@ -18,7 +18,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo)>? _conditionalFormatSnapshot;
+    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
     private Dictionary<Guid, string?>? _cfFormulaSnapshot;
     private Dictionary<(Guid Id, int Slot), string?>? _dvFormulaSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
