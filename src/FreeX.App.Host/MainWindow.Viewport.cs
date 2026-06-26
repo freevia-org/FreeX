@@ -565,6 +565,7 @@ public partial class MainWindow
             sheet?.DataValidations.Count > 0)
         {
             RefreshValidationDropdown();
+            RefreshDvInputMessage();
         }
     }
 

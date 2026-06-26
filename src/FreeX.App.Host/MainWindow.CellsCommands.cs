@@ -738,6 +738,7 @@ public partial class MainWindow
         SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(selectionRange));
         RefreshToolbarAfterSelectionChange();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         UpdateCommentPreview(selectionRange.Start);
     }
 
@@ -782,6 +783,7 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         UpdateCommentPreview(targetRange.Start);
         FocusSheetGridIfNeeded();
     }

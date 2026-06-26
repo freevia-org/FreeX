@@ -250,6 +250,7 @@ public partial class MainWindow
             RefreshToolbar();
             RefreshStatusBar();
             RefreshValidationDropdown();
+            RefreshDvInputMessage();
             return;
         }
 

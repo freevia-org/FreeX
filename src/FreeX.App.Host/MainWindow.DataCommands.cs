@@ -670,6 +670,7 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
         RefreshValidationDropdown();
+        RefreshDvInputMessage();
         UpdateCommentPreview(range.Start);
     }
 
