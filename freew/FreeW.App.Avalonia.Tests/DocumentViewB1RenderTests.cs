@@ -66,7 +66,8 @@ public sealed class DocumentViewB1RenderTests
         var callbacks = new RibbonHostCallbacks(
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, () => { }, () => { },
-            () => { }, () => { }, () => { }, () => { }, (_, _) => { });
+            () => { }, () => { }, () => { }, () => { }, () => { },
+            () => { }, (_, _) => { });
         var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
 
         var expected = new[]
