@@ -56,7 +56,7 @@ public sealed partial class MainWindow
         var sheetId = sheet.Id;
         var workbook = _session.Workbook;
 
-        EditCellsCommand? command = control.Kind switch
+        IWorkbookCommand? command = control.Kind switch
         {
             FormControlKind.CheckBox =>
                 FormControlInteractionService.CreateToggleCheckBoxCommand(control, sheetId, workbook),
@@ -113,7 +113,7 @@ public sealed partial class MainWindow
             RefreshShell(string.Empty);
     }
 
-    private EditCellsCommand? AdvanceAvaloniaDropDownSelection(FormControlModel control, Sheet sheet)
+    private IWorkbookCommand? AdvanceAvaloniaDropDownSelection(FormControlModel control, Sheet sheet)
     {
         // No popup yet — cycle SelectedIndex through available items on each click.
         var itemCount = EstimateAvaloniaListItemCount(control, sheet);

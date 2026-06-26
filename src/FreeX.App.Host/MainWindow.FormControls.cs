@@ -29,7 +29,7 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        EditCellsCommand? command = e.Control.Kind switch
+        IWorkbookCommand? command = e.Control.Kind switch
         {
             FormControlKind.CheckBox =>
                 FormControlInteractionService.CreateToggleCheckBoxCommand(
@@ -82,7 +82,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, "Form Control"))
             return;
 
-        var affected = command.AffectedCells;
+        var affected = (command as IAffectedCellsCommand)?.AffectedCells;
         if (affected is { Count: > 0 })
             RecalculateIfAutomatic(affected);
 
@@ -94,7 +94,7 @@ public partial class MainWindow
     /// A proper popup picker is deferred; this keeps the linked cell cycling through list items
     /// so the interaction is visible.
     /// </summary>
-    private EditCellsCommand? AdvanceDropDownSelection(FormControlModel control)
+    private IWorkbookCommand? AdvanceDropDownSelection(FormControlModel control)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var itemCount = EstimateListItemCount(control, sheet);

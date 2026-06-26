@@ -199,7 +199,14 @@ public static class SlideCompositor
             var effectiveAnchor = ResolveVerticalAnchor(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody, shape.Placeholder);
             var effectiveDefaultAlign = ResolveDefaultParaAlign(shape.TextBody, layoutPh?.TextBody, masterPh?.TextBody);
 
-            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder, theme, slideIndex, effectiveClrMap);
+            // MM3: resolve the master TextStyles for this slide's master (for text-style inheritance).
+            var resolvedLayout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
+            var resolvedMaster = resolvedLayout is not null
+                ? presentation.Masters.Find(m => m.Id == resolvedLayout.MasterId)
+                : presentation.Masters.FirstOrDefault();
+
+            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder,
+                theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, resolvedMaster?.TextStyles);
         }
 
         ops.Add(new DrawOp.Shape
@@ -765,6 +772,78 @@ public static class SlideCompositor
         return string.Empty;
     }
 
+    // ─── MM3: Master/layout text-style inheritance ────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the placeholder category ("title", "body", or "other") for a given placeholder type.
+    /// Used to look up the correct p:txStyles sub-element on the master.
+    /// </summary>
+    private static TextStyleCategory GetTextStyleCategory(PlaceholderType? type) => type switch
+    {
+        PlaceholderType.Title or PlaceholderType.CenteredTitle => TextStyleCategory.Title,
+        PlaceholderType.Body or PlaceholderType.Object or PlaceholderType.SubTitle
+            or PlaceholderType.Chart or PlaceholderType.Table or PlaceholderType.ClipArt
+            or PlaceholderType.Diagram or PlaceholderType.Media or PlaceholderType.Picture
+            => TextStyleCategory.Body,
+        _ => TextStyleCategory.Other
+    };
+
+    private enum TextStyleCategory { Title, Body, Other }
+
+    /// <summary>
+    /// Resolves the effective <see cref="TextStyleLevel"/> for a paragraph at a given indent
+    /// level by walking: layout placeholder's lstStyle → master txStyles (by category) → null.
+    /// The caller applies the hard-coded fallback when this returns null.
+    /// </summary>
+    private static TextStyleLevel? ResolveTextStyleInheritance(
+        int paraLevel,
+        TextStyleCategory category,
+        TextBody? layoutBody,
+        MasterTextStyles? masterTextStyles)
+    {
+        // 1. Layout placeholder's a:lstStyle for this paragraph level.
+        if (layoutBody?.LstStyle is { } layoutLst)
+        {
+            var lvl = layoutLst[paraLevel];
+            if (lvl is not null) return lvl;
+            // Walk upward toward level 0 only if the layout has any entry defined.
+            for (int l = paraLevel - 1; l >= 0; l--)
+            {
+                lvl = layoutLst[l];
+                if (lvl is not null) return lvl;
+            }
+        }
+
+        // 2. Master p:txStyles category at this paragraph level.
+        if (masterTextStyles is not null)
+        {
+            var masterStyle = category switch
+            {
+                TextStyleCategory.Title => masterTextStyles.TitleStyle,
+                TextStyleCategory.Body  => masterTextStyles.BodyStyle,
+                _                       => masterTextStyles.OtherStyle
+            };
+            return masterStyle.Resolve(paraLevel);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves a latin font token (e.g. "+mj-lt" or "+mn-lt") to the actual theme font name.
+    /// Other values are returned as-is.
+    /// </summary>
+    private static string ResolveLatinFont(string? font, PresentationTheme theme)
+    {
+        if (font is null) return string.Empty;
+        return font switch
+        {
+            "+mj-lt" => theme.FontScheme.MajorLatinFont,
+            "+mn-lt" => theme.FontScheme.MinorLatinFont,
+            _        => font
+        };
+    }
+
     private static ResolvedTextLayout ResolveTextLayout(
         TextBody body,
         VerticalAnchor effectiveAnchor,
@@ -772,23 +851,26 @@ public static class SlideCompositor
         Placeholder? placeholder,
         PresentationTheme theme,
         int slideIndex = 0,
-        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null,
+        TextBody? layoutBody = null,
+        MasterTextStyles? masterTextStyles = null)
     {
-        // Determine the default font size based on placeholder type.
-        double defaultFontSizePt = placeholder?.Type switch
+        // Determine hard-coded fallback font size and font (last resort only).
+        double fallbackFontSizePt = placeholder?.Type switch
         {
             PlaceholderType.Title or PlaceholderType.CenteredTitle => DefaultTitleFontSizePt,
             _ => DefaultBodyFontSizePt
         };
 
-        // Determine default font from theme.
-        string defaultMajorFont = theme.FontScheme.MajorLatinFont;
-        string defaultMinorFont = theme.FontScheme.MinorLatinFont;
-        string defaultFont = placeholder?.Type switch
+        // Determine fallback font from theme (last resort).
+        string fallbackFont = placeholder?.Type switch
         {
-            PlaceholderType.Title or PlaceholderType.CenteredTitle => defaultMajorFont,
-            _ => defaultMinorFont
+            PlaceholderType.Title or PlaceholderType.CenteredTitle => theme.FontScheme.MajorLatinFont,
+            _ => theme.FontScheme.MinorLatinFont
         };
+
+        // Determine placeholder category for master txStyles lookup (MM3).
+        var category = GetTextStyleCategory(placeholder?.Type);
 
         // The inherited default paragraph alignment (from lstStyle chain or placeholder type).
         // When not set anywhere, centered-title defaults to center, others to left.
@@ -805,6 +887,21 @@ public static class SlideCompositor
         {
             var resolvedRuns = new List<ResolvedRun>(para.Runs.Count);
 
+            // MM3: Resolve the inherited text-style level for this paragraph's indent level.
+            // This is done once per paragraph since all runs in a paragraph share the same level.
+            var inheritedStyle = ResolveTextStyleInheritance(
+                para.Level, category, layoutBody, masterTextStyles);
+
+            // Resolve inherited color from the style chain (if any).
+            SrgbColor? inheritedColor = null;
+            if (inheritedStyle?.Color is { } styleColor)
+                inheritedColor = ThemeColorResolver.Resolve(styleColor, theme, effectiveClrMap);
+
+            // Resolve inherited font from the style chain, expanding +mj-lt / +mn-lt tokens.
+            string? inheritedFont = inheritedStyle?.LatinFont is { Length: > 0 } lf
+                ? ResolveLatinFont(lf, theme)
+                : null;
+
             foreach (var run in para.Runs)
             {
                 // Resolve field text for a:fld runs (slide number, date, etc.)
@@ -812,21 +909,51 @@ public static class SlideCompositor
                     ? ResolveFieldText(run.Field, slideIndex)
                     : run.Text;
 
+                // Color: explicit run > field color > inherited style > Black.
                 SrgbColor color;
                 if (run.Field?.Color is SrgbColor fieldColor)
                     color = fieldColor;
                 else if (run.Color is not null)
                     color = ThemeColorResolver.Resolve(run.Color, theme, effectiveClrMap);
+                else if (inheritedColor.HasValue)
+                    color = inheritedColor.Value;
                 else
                     color = SrgbColor.Black;
+
+                // Font family: explicit run > field font > inherited style > hard-coded fallback.
+                // Expand +mj-lt / +mn-lt theme font tokens at each layer.
+                string? fieldFont = run.Field?.FontFamily is { Length: > 0 } ff
+                    ? ResolveLatinFont(ff, theme)
+                    : null;
+                string fontFamily = (run.FontFamily is { Length: > 0 } rf ? ResolveLatinFont(rf, theme) : null)
+                    ?? fieldFont
+                    ?? inheritedFont
+                    ?? fallbackFont;
+
+                // Font size: explicit run > field > inherited style > hard-coded fallback.
+                double fontSizePt = run.FontSizePt
+                    ?? run.Field?.FontSizePt
+                    ?? inheritedStyle?.FontSizePt
+                    ?? fallbackFontSizePt;
+
+                // Bold: explicit run overrides; inherited style fills in when run.Bold == false and no explicit.
+                // (run.Bold is a bool, false means "not set" in our model — treat inherited as additive)
+                bool bold = run.Bold
+                    || (run.Field?.Bold ?? false)
+                    || (inheritedStyle?.Bold ?? false);
+
+                // Italic: same pattern.
+                bool italic = run.Italic
+                    || (run.Field?.Italic ?? false)
+                    || (inheritedStyle?.Italic ?? false);
 
                 resolvedRuns.Add(new ResolvedRun
                 {
                     Text = resolvedText,
-                    FontFamily = run.FontFamily ?? run.Field?.FontFamily ?? defaultFont,
-                    FontSizePt = run.FontSizePt ?? run.Field?.FontSizePt ?? defaultFontSizePt,
-                    Bold = run.Bold || (run.Field?.Bold ?? false),
-                    Italic = run.Italic || (run.Field?.Italic ?? false),
+                    FontFamily = fontFamily,
+                    FontSizePt = fontSizePt,
+                    Bold = bold,
+                    Italic = italic,
                     Underline = run.Underline,
                     Strikethrough = run.Strikethrough,
                     Color = color

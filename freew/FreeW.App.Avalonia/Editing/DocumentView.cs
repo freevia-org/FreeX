@@ -58,8 +58,10 @@ public sealed class DocumentView : Control
     private const double SuperSubScale = 0.583;
     // SuperYRaiseFraction: superscript baseline sits at ~33% from the top of the line box.
     private const double SuperYRaiseFraction = 0.15;
-    // SubYLowerFraction: subscript baseline sits at ~60% from the top of the line box.
-    private const double SubYLowerFraction = 0.55;
+    // SubYLowerFraction: subscript top sits at ~33% from the top of the line box so the shrunk
+    // glyph (~58% of line height) finishes near the baseline (≈0.33 + 0.58*lineH ≈ 0.91*lineH)
+    // instead of overflowing into the next line.  Matches Word's subscript baseline offset.
+    private const double SubYLowerFraction = 0.33;
 
     // Web/Draft layout constants.
     // Web: content column capped at this width (responsive up to this limit).
@@ -326,6 +328,21 @@ public sealed class DocumentView : Control
     public int ParagraphCount => _doc.Blocks.Count(b => b is Paragraph);
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
+
+    // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
+
+    /// <summary>
+    /// Returns a lightweight snapshot of placed glyphs for the given block suitable for layout
+    /// tests.  Each tuple is (Ch, X, W, Y, LineHeight, IsSubscript) for non-sentinel chars.
+    /// Only available to the test assembly via InternalsVisibleTo.
+    /// </summary>
+    internal IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>
+        GetPlacedForBlock(int blockIndex) =>
+            _placed
+                .Where(p => p.Block == blockIndex && !p.Sentinel)
+                .Select(p => (p.Ch, p.X, p.W, p.Y, p.LineHeight,
+                              p.Fmt.VerticalAlign == VerticalAlign.Subscript))
+                .ToList();
 
     // ---- PDF export ------------------------------------------------------------------------------
 
@@ -712,17 +729,26 @@ public sealed class DocumentView : Control
             if (cells[i].Ch == ' ')
                 lastBreak = i;
 
-            // First-line indent: the first line has extra width consumed by the indent.
-            var firstLineExtra = (lineIndex == 0 && indentFirst > 0) ? indentFirst : 0.0;
-            var lineAvail = availableWidth - firstLineExtra;
+            // OO2/OO3 fix: for each line compute how much of availableWidth is consumed by
+            // the per-line left indent BEYOND paraLeftInset.  The wrapping budget (lineAvail)
+            // is already reduced for the first-line positive indent; hanging-indent continuation
+            // lines also need the same reduction so they do not overshoot the right margin.
+            // lineExtraInset is the extra indent relative to paraLeftInset for this line:
+            //   • line 0 + positive first-line indent  → indentFirst  (normal first-line indent)
+            //   • line > 0 + hanging indent (negative) → -indentFirst (continuation shifted right)
+            //   • everything else                      → 0
+            var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                 (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+            // Effective alignment / wrap width for this line so the right edge always lands at
+            // the right margin regardless of indent variant.
+            var lineAlignWidth = availableWidth - lineExtraInset;
+            var lineAvail = lineAlignWidth; // same value: width available for text on this line
 
             if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
-                var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
-                                     (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
-                    availableWidth, paraLeftInset + lineExtraInset, pf);
+                    lineAlignWidth, paraLeftInset + lineExtraInset, pf);
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
@@ -736,10 +762,12 @@ public sealed class DocumentView : Control
         }
 
         {
+            // Last (or only) line of the paragraph.
             var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+            var lineAlignWidth = availableWidth - lineExtraInset;
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
-                availableWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
+                lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
         }
         _layoutContentY += spaceAfter;
     }
@@ -775,15 +803,40 @@ public sealed class DocumentView : Control
         var pageSpaceY = ContentYToPageSpaceY(contentY);
 
         // Word-spacing expansion for justify (last line stays left).
+        // OO1 fix: exclude the trailing space from BOTH the visible-width sum and the gap-add loop.
+        // breakAt = lastBreak+1, so [from, to) includes the trailing space at index lastBreak.
+        // That space is invisible at the right edge: it must not receive a wordGap, and its natural
+        // width must not count against the slack we distribute.  We find the last non-space cell,
+        // compute visible width = sum of measured[from..lastNonSpaceIdx] inclusive, and distribute
+        // (availableWidth - visibleWidth) only among inter-word spaces strictly before lastNonSpaceIdx.
         double wordGap = 0;
+        int lastNonSpaceIdx = from - 1; // sentinel: no non-space found
         if (alignment == TextAlignment.Justify && !isLast)
         {
-            var spaceCount = 0;
-            for (var c = from; c < to; c++)
-                if (cells[c].Ch == ' ')
-                    spaceCount++;
-            if (spaceCount > 0)
-                wordGap = Math.Max(0, availableWidth - lineWidth) / spaceCount;
+            // Find the index of the last non-space cell in [from, to).
+            for (var c = to - 1; c >= from; c--)
+            {
+                if (cells[c].Ch != ' ')
+                {
+                    lastNonSpaceIdx = c;
+                    break;
+                }
+            }
+            if (lastNonSpaceIdx >= from)
+            {
+                // Visible line width: chars from `from` up to and including `lastNonSpaceIdx`
+                // (excludes trailing spaces that follow the last word).
+                var visibleWidth = 0.0;
+                for (var c = from; c <= lastNonSpaceIdx; c++)
+                    visibleWidth += measured[c];
+                // Count inter-word spaces strictly between the first and last non-space cell.
+                var spaceCount = 0;
+                for (var c = from; c < lastNonSpaceIdx; c++)
+                    if (cells[c].Ch == ' ')
+                        spaceCount++;
+                if (spaceCount > 0)
+                    wordGap = Math.Max(0, availableWidth - visibleWidth) / spaceCount;
+            }
         }
 
         var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
@@ -791,8 +844,8 @@ public sealed class DocumentView : Control
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
             x += measured[c];
-            // Extra inter-word gap for justify alignment.
-            if (wordGap > 0 && cells[c].Ch == ' ')
+            // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
+            if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
                 x += wordGap;
         }
 

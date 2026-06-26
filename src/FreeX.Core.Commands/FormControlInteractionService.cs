@@ -21,11 +21,14 @@ public static class FormControlInteractionService
     /// undoable command.  Returns <see langword="null"/> when there is nothing to do (no linked
     /// cell, or the control has no sheet context).
     /// </summary>
-    public static EditCellsCommand? CreateToggleCheckBoxCommand(
+    public static IWorkbookCommand? CreateToggleCheckBoxCommand(
         FormControlModel control,
         SheetId sheetId,
         Workbook workbook)
     {
+        // Snapshot prior state before any mutation so undo can restore it.
+        var priorIsChecked = control.IsChecked;
+
         // Flip the in-model state immediately so re-renders during the current frame look correct.
         control.IsChecked = !control.IsChecked;
 
@@ -33,7 +36,10 @@ public static class FormControlInteractionService
             return null;
 
         var value = control.IsChecked ? new BoolValue(true) : new BoolValue(false);
-        return EditCellsCommand.ForValue(address.Sheet, address, value);
+        var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, value);
+        return FormControlInteractionCommand.Wrap(
+            control, cellEdit, "Toggle CheckBox",
+            priorIsChecked, control.Value, control.SelectedIndex);
     }
 
     // ── OptionButton ──────────────────────────────────────────────────────────
@@ -49,7 +55,7 @@ public static class FormControlInteractionService
     /// Excel groups radio buttons — they all point to the same cell and the selected one writes
     /// its 1-based position (1, 2, 3 …) into that cell.</para>
     /// </summary>
-    public static EditCellsCommand? CreateSelectOptionButtonCommand(
+    public static IWorkbookCommand? CreateSelectOptionButtonCommand(
         FormControlModel clicked,
         IReadOnlyList<FormControlModel> allSheetControls,
         SheetId sheetId,
@@ -83,11 +89,17 @@ public static class FormControlInteractionService
             index = 1;
         }
 
+        // Snapshot prior state of the clicked button before mutating.
+        var priorIsChecked = clicked.IsChecked;
+
         // Update model state for all group members
         foreach (var btn in group)
             btn.IsChecked = ReferenceEquals(btn, clicked);
 
-        return EditCellsCommand.ForValue(linkedAddress.Sheet, linkedAddress, new NumberValue(index));
+        var cellEdit = EditCellsCommand.ForValue(linkedAddress.Sheet, linkedAddress, new NumberValue(index));
+        return FormControlInteractionCommand.Wrap(
+            clicked, cellEdit, "Select Option Button",
+            priorIsChecked, clicked.Value, clicked.SelectedIndex);
     }
 
     // ── Spinner / ScrollBar ───────────────────────────────────────────────────
@@ -100,24 +112,39 @@ public static class FormControlInteractionService
     /// <para>For example, a spinner with Min=1, Max=10, Increment=1, Value=5 stepped by +1 writes 6
     /// to the linked cell; stepped past 10 it stays at 10 (clamped).</para>
     /// </summary>
-    public static EditCellsCommand? CreateStepCommand(
+    public static IWorkbookCommand? CreateStepCommand(
         FormControlModel control,
         int delta,
         SheetId sheetId,
         Workbook workbook)
     {
-        var current = control.Value ?? 0;
         var increment = Math.Max(1, control.Increment ?? 1);
         var min = control.Min ?? 0;
         var max = control.Max ?? 30000;
 
+        // NN4: prefer the linked cell's current numeric value as the step base so that
+        // externally-set cell values (via formula or direct edit) are honoured, matching Excel.
+        // Fall back to control.Value only when the linked cell is absent or non-numeric.
+        var current = control.Value ?? 0;
+        if (TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address))
+        {
+            var sheet = workbook.GetSheet(address.Sheet);
+            var cell = sheet?.GetCell(address);
+            if (cell?.Value is NumberValue nv)
+                current = (int)Math.Round(nv.Value);
+        }
+
+        var priorValue = control.Value;
         var newValue = Math.Clamp(current + delta * increment, min, max);
         control.Value = newValue;
 
-        if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address))
+        if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out address))
             return null;
 
-        return EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(newValue));
+        var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(newValue));
+        return FormControlInteractionCommand.Wrap(
+            control, cellEdit, "Step Spinner",
+            control.IsChecked, priorValue, control.SelectedIndex);
     }
 
     // ── DropDown / ListBox ────────────────────────────────────────────────────
@@ -127,18 +154,73 @@ public static class FormControlInteractionService
     /// updates <see cref="FormControlModel.SelectedIndex"/>, and writes the index into the linked
     /// cell (matching Excel's behavior: it stores the 1-based selection index, not the item text).
     /// </summary>
-    public static EditCellsCommand? CreateSelectListItemCommand(
+    public static IWorkbookCommand? CreateSelectListItemCommand(
         FormControlModel control,
         int oneBasedIndex,
         SheetId sheetId,
         Workbook workbook)
     {
+        // NN3: clamp the index to [1, itemCount] so clicking below the last visible item
+        // never writes an out-of-range value to the linked cell (mirrors Excel behaviour).
+        var itemCount = EstimateListItemCount(control, sheetId, workbook);
+        if (itemCount > 0 && oneBasedIndex > itemCount)
+            return null; // click is in the empty area below the last item — no-op
+
+        if (oneBasedIndex < 1)
+            return null;
+
+        var priorSelectedIndex = control.SelectedIndex;
         control.SelectedIndex = oneBasedIndex;
 
         if (!TryResolveLinkedCell(control.LinkedCell, sheetId, workbook, out var address))
             return null;
 
-        return EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(oneBasedIndex));
+        var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, new NumberValue(oneBasedIndex));
+        return FormControlInteractionCommand.Wrap(
+            control, cellEdit, "Select List Item",
+            control.IsChecked, control.Value, priorSelectedIndex);
+    }
+
+    /// <summary>
+    /// Estimates how many items are in the control's <see cref="FormControlModel.ListFillRange"/>.
+    /// Returns 0 when the range cannot be resolved.
+    /// </summary>
+    public static int EstimateListItemCount(FormControlModel control, SheetId sheetId, Workbook workbook)
+    {
+        if (string.IsNullOrWhiteSpace(control.ListFillRange))
+            return 0;
+
+        var raw = control.ListFillRange.Trim().TrimStart('=').Trim();
+        var bangIdx = raw.IndexOf('!');
+        string cellPart;
+        Sheet? sheet;
+
+        if (bangIdx >= 0)
+        {
+            var sheetPart = raw[..bangIdx].Trim().Trim('\'');
+            cellPart = raw[(bangIdx + 1)..].Trim().Replace("$", string.Empty, StringComparison.Ordinal);
+            sheet = workbook.GetSheet(sheetPart) ?? workbook.GetSheet(sheetId);
+        }
+        else
+        {
+            cellPart = raw.Replace("$", string.Empty, StringComparison.Ordinal);
+            sheet = workbook.GetSheet(sheetId);
+        }
+
+        if (sheet is null)
+            return 0;
+
+        var colon = cellPart.IndexOf(':');
+        if (colon < 0)
+            return 1; // single cell → 1 item
+
+        if (!CellAddress.TryParse(cellPart[..colon], sheet.Id, out var start) ||
+            !CellAddress.TryParse(cellPart[(colon + 1)..], sheet.Id, out var end))
+            return 0;
+
+        var rows = (int)(Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1);
+        var cols = (int)(Math.Max(end.Col, start.Col) - Math.Min(end.Col, start.Col) + 1);
+        return rows * cols;
     }
 
     // ── Linked-cell resolution ────────────────────────────────────────────────

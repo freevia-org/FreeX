@@ -31,7 +31,8 @@ internal static partial class RowColumnShiftHelpers
             CapturePivotTables(sheet),
             CaptureList(sheet.StructuredTables),
             CapturePivotCaches(workbook),
-            CaptureList(workbook.Scenarios));
+            CaptureList(workbook.Scenarios),
+            CaptureFormControls(sheet));
 
     private static IReadOnlyList<StyleOnlyEntry> CaptureStyleOnlyEntries(Sheet sheet)
     {
@@ -104,6 +105,18 @@ internal static partial class RowColumnShiftHelpers
         var snapshots = new List<SparklineAddressSnapshot>(sheet.Sparklines.Count);
         foreach (var sparkline in sheet.Sparklines)
             snapshots.Add(new SparklineAddressSnapshot(sparkline, sparkline.DataRange, sparkline.Location));
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<FormControlAddressSnapshot> CaptureFormControls(Sheet sheet)
+    {
+        if (sheet.FormControls.Count == 0)
+            return [];
+
+        var snapshots = new List<FormControlAddressSnapshot>(sheet.FormControls.Count);
+        foreach (var control in sheet.FormControls)
+            snapshots.Add(new FormControlAddressSnapshot(control, control.Anchor, control.LinkedCell, control.ListFillRange));
 
         return snapshots;
     }
@@ -214,6 +227,15 @@ internal static partial class RowColumnShiftHelpers
 
         workbook.Scenarios.Clear();
         workbook.Scenarios.AddRange(snapshot.Scenarios);
+
+        sheet.FormControls.Clear();
+        foreach (var entry in snapshot.FormControls)
+        {
+            entry.Control.Anchor        = entry.Anchor;
+            entry.Control.LinkedCell    = entry.LinkedCell;
+            entry.Control.ListFillRange = entry.ListFillRange;
+            sheet.FormControls.Add(entry.Control);
+        }
     }
 
     internal static void ShiftAddressBearingRowsUp(
@@ -277,6 +299,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftStructuredTables(sheet, snapshot, shift);
         ShiftPivotCaches(snapshot, shift);
         ShiftScenarios(workbook, snapshot, shift);
+        ShiftFormControls(sheet, snapshot, shift);
     }
 
     private static void ApplyShiftedStyleOnlyEntries(
@@ -671,6 +694,64 @@ internal static partial class RowColumnShiftHelpers
             entry.Picture.IsLinkedToSourceRange = entry.IsLinkedToSourceRange && entry.Picture.LinkedSourceRange is not null;
             sheet.Pictures.Add(entry.Picture);
         }
+    }
+
+    private static void ShiftFormControls(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        sheet.FormControls.Clear();
+        foreach (var entry in snapshot.FormControls)
+        {
+            // Shift the anchor GridRange.  When a control has an anchor and the entire anchor
+            // falls within the deleted zone, ShiftRange returns null — drop the control (mirrors
+            // how TextBoxes / DrawingShapes are handled).
+            GridRange? newAnchor;
+            if (entry.Anchor is { } anchor)
+            {
+                newAnchor = shift.ShiftRange(anchor);
+                if (newAnchor is null)
+                {
+                    // Anchor was entirely deleted — remove this control.
+                    // Still restore control state so callers don't see stale refs.
+                    entry.Control.Anchor        = null;
+                    entry.Control.LinkedCell    = null;
+                    entry.Control.ListFillRange = null;
+                    continue;
+                }
+            }
+            else
+            {
+                newAnchor = null;
+            }
+
+            // Rewrite the LinkedCell and ListFillRange string references via the same
+            // ShiftReference path used for pivot-cache source references (handles $A$5, Sheet1!$A$1, etc.).
+            var newLinkedCell    = ShiftFormControlRef(entry.LinkedCell, shift);
+            var newListFillRange = ShiftFormControlRef(entry.ListFillRange, shift);
+
+            entry.Control.Anchor        = newAnchor;
+            entry.Control.LinkedCell    = newLinkedCell;
+            entry.Control.ListFillRange = newListFillRange;
+            sheet.FormControls.Add(entry.Control);
+        }
+    }
+
+    private static string? ShiftFormControlRef(string? reference, AddressShift shift)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return reference;
+
+        // Strip leading '=' if present.
+        var raw = reference.TrimStart();
+        var hasEquals = raw.StartsWith('=');
+        if (hasEquals)
+            raw = raw[1..].Trim();
+
+        // Reuse the existing ShiftReference path (handles "A1", "$A$5", "Sheet1!$A$1:$A$3", etc.).
+        var shifted = ShiftReference(raw, shift);
+        if (shifted is null)
+            return null; // ref was entirely deleted
+
+        return hasEquals ? "=" + shifted : shifted;
     }
 
     private static void ShiftSparklines(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
@@ -1308,7 +1389,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<PivotTableAddressSnapshot> PivotTables,
     IReadOnlyList<StructuredTableModel> StructuredTables,
     IReadOnlyList<PivotCacheSourceSnapshot> PivotCaches,
-    IReadOnlyList<WorkbookScenario> Scenarios);
+    IReadOnlyList<WorkbookScenario> Scenarios,
+    IReadOnlyList<FormControlAddressSnapshot> FormControls);
 
 internal readonly record struct StyleOnlyEntry(uint Row, uint Col, StyleId StyleId);
 
@@ -1337,3 +1419,9 @@ internal readonly record struct PivotCacheSourceSnapshot(
     PivotCacheModel Cache,
     string? SourceSheetName,
     string? SourceReference);
+
+internal readonly record struct FormControlAddressSnapshot(
+    FormControlModel Control,
+    GridRange? Anchor,
+    string? LinkedCell,
+    string? ListFillRange);
