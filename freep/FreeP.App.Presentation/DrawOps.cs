@@ -379,6 +379,13 @@ public abstract class DrawOp
     public sealed class Shape : DrawOp
     {
         /// <summary>
+        /// The source <see cref="SlideShape.Id"/> of the shape that produced this op.
+        /// 0 means unknown / not mapped to a model shape (e.g. synthesised from a placeholder).
+        /// Used by the slideshow to suppress entrance-animation shapes until they are revealed.
+        /// </summary>
+        public uint ShapeId { get; init; }
+
+        /// <summary>
         /// The computed geometry for this shape, in DIP coordinates (origin = slide top-left).
         /// Built by <see cref="ShapeGeometryBuilder"/> from the resolved bounds.
         /// </summary>
@@ -418,6 +425,11 @@ public abstract class DrawOp
     /// </summary>
     public sealed class Picture : DrawOp
     {
+        /// <summary>
+        /// The source <see cref="SlideShape.Id"/> of the shape that produced this op (0 = unknown).
+        /// </summary>
+        public uint ShapeId { get; init; }
+
         /// <summary>Raw image bytes (JPEG, PNG, GIF, ...).</summary>
         public byte[] Bytes { get; init; } = Array.Empty<byte>();
 
@@ -497,6 +509,11 @@ public abstract class DrawOp
     /// </summary>
     public sealed class Table : DrawOp
     {
+        /// <summary>
+        /// The source <see cref="SlideShape.Id"/> of the shape that produced this op (0 = unknown).
+        /// </summary>
+        public uint ShapeId { get; init; }
+
         /// <summary>Bounding box of the entire table frame in DIP.</summary>
         public LayoutRect BoundsDip { get; init; }
 
@@ -513,6 +530,11 @@ public abstract class DrawOp
     /// </summary>
     public sealed class Chart : DrawOp
     {
+        /// <summary>
+        /// The source <see cref="SlideShape.Id"/> of the shape that produced this op (0 = unknown).
+        /// </summary>
+        public uint ShapeId { get; init; }
+
         /// <summary>Bounding box of the chart frame in DIP.</summary>
         public LayoutRect BoundsDip { get; init; }
 

@@ -231,6 +231,7 @@ public static class SlideCompositor
 
         ops.Add(new DrawOp.Shape
         {
+            ShapeId = shape.Id,
             Geometry = geometry,
             Fill = fill,
             Outline = outline,
@@ -376,6 +377,7 @@ public static class SlideCompositor
         var pf = shape.PictureFormat;
         ops.Add(new DrawOp.Picture
         {
+            ShapeId      = shape.Id,
             Bytes        = shape.Picture.Bytes,
             ContentType  = shape.Picture.ContentType,
             DestDip      = boundsDip,
@@ -416,6 +418,7 @@ public static class SlideCompositor
             // Use the same DrawOp.Picture path as regular pictures.
             ops.Add(new DrawOp.Picture
             {
+                ShapeId     = shape.Id,
                 Bytes       = pic.Bytes,
                 ContentType = pic.ContentType,
                 DestDip     = boundsDip,
@@ -428,6 +431,7 @@ public static class SlideCompositor
             // No fallback image — emit a grey rectangle placeholder.
             ops.Add(new DrawOp.Shape
             {
+                ShapeId     = shape.Id,
                 Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
                 Fill        = new ResolvedFill.Solid(new SrgbColor(0xC0, 0xC0, 0xC0)),
                 Outline     = ResolvedOutline.None.Instance,
@@ -502,6 +506,7 @@ public static class SlideCompositor
             var mpf = shape.PictureFormat;
             ops.Add(new DrawOp.Picture
             {
+                ShapeId      = shape.Id,
                 Bytes        = shape.Picture.Bytes,
                 ContentType  = shape.Picture.ContentType,
                 DestDip      = boundsDip,
@@ -524,6 +529,7 @@ public static class SlideCompositor
             // No poster — draw a dark rectangle placeholder
             ops.Add(new DrawOp.Shape
             {
+                ShapeId     = shape.Id,
                 Geometry    = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
                 Fill        = new ResolvedFill.Solid(new SrgbColor(0x22, 0x22, 0x22)),
                 Outline     = outline,
@@ -658,6 +664,7 @@ public static class SlideCompositor
 
         ops.Add(new DrawOp.Table
         {
+            ShapeId   = shape.Id,
             BoundsDip = frameBounds,
             Cells     = cellOps
         });
@@ -709,6 +716,7 @@ public static class SlideCompositor
 
         ops.Add(new DrawOp.Chart
         {
+            ShapeId      = shape.Id,
             BoundsDip    = frameBounds,
             ChartShape   = chart,
             SeriesColors = seriesColors

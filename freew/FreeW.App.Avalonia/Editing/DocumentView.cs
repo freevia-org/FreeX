@@ -122,6 +122,10 @@ public sealed class DocumentView : Control
     private readonly List<(double X1, double X2, double Y)> _noteSeparators = new();
     // AV-NOTERENDER: extra page-space height reserved below the last body page for the endnotes section.
     private double _endnoteExtentDip;
+    // DB1/DB2: per-page true footnote band height (0-based page index → band height in DIP).
+    // Populated by BuildFootnoteItems after a first-pass body layout; ReserveContentY uses it to shrink
+    // the effective text area on that page so body text reflows above the footnote band.
+    private readonly Dictionary<int, double> _footnoteBandHeightByPage = new();
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -586,6 +590,28 @@ public sealed class DocumentView : Control
 
     /// <summary>Test shim: invoke a paragraph break / Enter (routes into the H/F region when the H/F caret is active).</summary>
     internal void InsertParagraphBreakForTest() => InsertParagraphBreak();
+
+    /// <summary>
+    /// Test shim for DD1/DD2: dispatches a key through the header/footer caret switch and returns whether
+    /// the key was handled by the H/F guard (i.e. did NOT fall through to the body switch).
+    /// Only Tab, Up, and Down are meaningful here. Mirrors the guard logic in OnKeyDown.
+    /// </summary>
+    internal bool SimulateHfKeyForTest(Key key, bool shift = false)
+    {
+        if (_hfCaret is null)
+            return false;
+        switch (key)
+        {
+            case Key.Tab:
+                if (!shift) HfInsertText("\t");
+                return true; // consumed — body list path never reached
+            case Key.Up:
+            case Key.Down:
+                return true; // consumed as no-op — body MoveCaretVertical never called
+            default:
+                return false;
+        }
+    }
 
     /// <summary>Test shim: place the body caret at (block, offset), exiting any H/F caret (mirrors MoveCaretToBlock + H/F exit).</summary>
     internal void MoveCaretToBlockForTest(int blockIdx, int offset)
@@ -2413,6 +2439,7 @@ public sealed class DocumentView : Control
         _noteItems.Clear();           // AV-NOTERENDER
         _noteSeparators.Clear();      // AV-NOTERENDER
         _endnoteExtentDip = 0;        // AV-NOTERENDER
+        _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _tabLeaderSpans.Clear(); // AV-TAB
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -2504,6 +2531,83 @@ public sealed class DocumentView : Control
         _layoutContentY = 0;
         _layoutTextAreaHeight = textAreaHeight;
 
+        // DB1: first body-layout pass — lays out body text with _footnoteBandHeightByPage EMPTY
+        // (no per-page reservation yet). After this pass we know which footnotes land on which page
+        // and can measure true band heights. A second pass then re-flows the body with per-page
+        // reservations so body text breaks before encroaching on the footnote band.
+        RunBodyLayoutBlocks(textWidth);
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
+            // Number of pages = ceil(slots / colCount).
+            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var totalSlots = lastSlot + 1;
+            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+
+            // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
+            if (_doc.Footnotes.Count > 0)
+            {
+                ComputeFootnoteBandHeights();
+
+                // DB1 second pass: re-flow the body with per-page footnote reservations active.
+                // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
+                // effective text area so body text breaks before the footnote band.
+                _placed.Clear();
+                _markers.Clear();
+                _rects.Clear();
+                _floatingImages.Clear();
+                _floatingShapes.Clear();
+                _floatingCharts.Clear();
+                _floatingWordArts.Clear();
+                _floatingSmartArts.Clear();
+                _floatingGroups.Clear();
+                _wrapExclusions.Clear();
+                _inlineCharts.Clear();
+                _inlineWordArts.Clear();
+                _inlineSmartArts.Clear();
+                _cellHits.Clear();
+                _tabLeaderSpans.Clear();
+                _layoutContentY = 0;
+                RunBodyLayoutBlocks(textWidth);
+
+                // Recompute page count from the second pass.
+                lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+                totalSlots = lastSlot + 1;
+                _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
+            }
+        }
+        else
+        {
+            // Web/Draft: single continuous column — total height is just the content plus margins.
+            _pageCount = 1;
+            _contentHeight = _layoutContentY + _marginBottomDip;
+        }
+
+        _laidOutWidth = width;
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            BuildHeaderFooterItems();
+            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
+            // reference; endnotes render in a synthetic section after the last body page. Endnotes
+            // extend the scrollable content height, so add their measured extent afterwards.
+            BuildFootnoteItems();
+            BuildEndnoteItems();
+            _contentHeight += _endnoteExtentDip;
+        }
+    }
+
+    /// <summary>
+    /// Iterates all body blocks and routes each to its layout path (paragraph/table/read-only).
+    /// Extracted so <see cref="Relayout"/> can call it twice: a first pass to determine footnote-page
+    /// assignment, and a second pass (DB1) with per-page band reservations active in
+    /// <see cref="ReserveContentY"/> so body text reflows above the footnote band.
+    /// </summary>
+    private void RunBodyLayoutBlocks(double textWidth)
+    {
         // BS1/BS2/BS3 fix: per-level counter array mirrors WPF MultiLevelMarkerSequence.
         // levelCounters[k] tracks the current count at list depth k (0-based, max 9 levels).
         // A Number/MultiLevel paragraph increments its level's counter and resets all deeper
@@ -2607,36 +2711,6 @@ public sealed class DocumentView : Control
             {
                 LayoutReadOnlyBlockPaged(blockIndex, block, textWidth);
             }
-        }
-
-        if (_viewMode == DocumentViewMode.PrintLayout)
-        {
-            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
-            // Number of pages = ceil(slots / colCount).
-            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-            var totalSlots = lastSlot + 1;
-            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
-            // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
-            _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
-        }
-        else
-        {
-            // Web/Draft: single continuous column — total height is just the content plus margins.
-            _pageCount = 1;
-            _contentHeight = _layoutContentY + _marginBottomDip;
-        }
-
-        _laidOutWidth = width;
-
-        if (_viewMode == DocumentViewMode.PrintLayout)
-        {
-            BuildHeaderFooterItems();
-            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
-            // reference; endnotes render in a synthetic section after the last body page. Endnotes
-            // extend the scrollable content height, so add their measured extent afterwards.
-            BuildFootnoteItems();
-            BuildEndnoteItems();
-            _contentHeight += _endnoteExtentDip;
         }
     }
 
@@ -3135,6 +3209,110 @@ public sealed class DocumentView : Control
     private const double NoteFontSizePt = 9.0;
 
     /// <summary>
+    /// DB2: Measures the true wrapped height of a single note's content (number prefix + paragraph text)
+    /// without emitting any render items. Mirrors the word-wrap logic of <see cref="LayoutNoteContent"/>
+    /// but just returns the final Y extent (height from the starting Y).
+    /// Used by <see cref="BuildFootnoteItems"/> to compute the accurate band height for reservation and
+    /// clamping, instead of the previous 1-line-per-note estimate.
+    /// </summary>
+    private double MeasureNoteContentHeight(string number, IReadOnlyList<Paragraph> content, double x, double availWidth)
+    {
+        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
+        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
+        var lineH   = Math.Max(1, Build("Ag", noteFmt).Height);
+
+        var numText  = number + " ";
+        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        var textLeft = x + numWidth;
+        var penX     = textLeft;
+        var lineY    = 0.0; // relative to the note's start Y
+
+        var first = true;
+        foreach (var para in content)
+        {
+            if (!first)
+            {
+                lineY += lineH;
+                penX = textLeft;
+            }
+            first = false;
+
+            var words = para.PlainText.Split(' ');
+            for (var wi = 0; wi < words.Length; wi++)
+            {
+                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
+                if (word.Length == 0) continue;
+                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
+                if (penX + w > x + availWidth && penX > textLeft)
+                {
+                    lineY += lineH;
+                    penX = textLeft;
+                }
+                penX += w;
+            }
+        }
+        return lineY + lineH; // total height from the note's top to the last line's bottom
+    }
+
+    /// <summary>
+    /// DB3: Computes the display number string for a note (footnote or endnote) given its
+    /// 1-based sequence index and the <see cref="NoteNumberingOptions"/> that govern its format.
+    /// <para>
+    /// Examples: decimal 3 → "3"; lowerRoman 4 → "iv"; lowerLetter 2 → "b";
+    /// Chicago 1 → "*", 2 → "†", 3 → "‡", 4 → "§", then repeats.
+    /// </para>
+    /// </summary>
+    private static string ComputeNoteDisplayNumber(int sequenceIndex, NoteNumberingOptions opts)
+    {
+        // sequenceIndex is 1-based display position (after applying StartAt offset).
+        var n = sequenceIndex;
+        return opts.NumberFormat switch
+        {
+            NoteNumberFormat.LowerRoman => ToRoman(n, lower: true),
+            NoteNumberFormat.UpperRoman => ToRoman(n, lower: false),
+            NoteNumberFormat.LowerLetter => ToLetter(n, lower: true),
+            NoteNumberFormat.UpperLetter => ToLetter(n, lower: false),
+            NoteNumberFormat.Chicago     => ToChicago(n),
+            _                            => n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
+    private static string ToRoman(int n, bool lower)
+    {
+        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var sb = new System.Text.StringBuilder();
+        int[] vals = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
+        string[] syms = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
+        for (var i = 0; i < vals.Length; i++)
+            while (n >= vals[i]) { sb.Append(syms[i]); n -= vals[i]; }
+        var result = sb.ToString();
+        return lower ? result.ToLowerInvariant() : result;
+    }
+
+    private static string ToLetter(int n, bool lower)
+    {
+        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // 1→a, 26→z, 27→aa, 52→az, 53→ba … (Word uses this scheme for footnotes)
+        var sb = new System.Text.StringBuilder();
+        while (n > 0)
+        {
+            n--;
+            sb.Insert(0, (char)((lower ? 'a' : 'A') + n % 26));
+            n /= 26;
+        }
+        return sb.ToString();
+    }
+
+    private static string ToChicago(int n)
+    {
+        // Chicago style: *, †, ‡, §, **, ††, … (repeating symbol groups for overflow).
+        string[] symbols = { "*", "†", "‡", "§", "¶", "#" };
+        var group  = (n - 1) / symbols.Length;
+        var sym    = symbols[(n - 1) % symbols.Length];
+        return group == 0 ? sym : new string(sym[0], group + 1); // * ** *** …
+    }
+
+    /// <summary>
     /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
     /// Locates the body run carrying <paramref name="footnote"/>'s matching <see cref="Run.FootnoteId"/>
     /// (or <see cref="Run.EndnoteId"/>), computes its first character's cell offset within the host
@@ -3234,9 +3412,69 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// DB1 first-pass helper: populates <see cref="_footnoteBandHeightByPage"/> with the TRUE height
+    /// of each page's footnote band (separator + all notes' true wrapped heights), without emitting any
+    /// render items. Called before the second body-layout pass so <see cref="ReserveContentY"/> can use
+    /// per-page reservations to shrink the effective body text area on each page that has footnotes.
+    /// </summary>
+    private void ComputeFootnoteBandHeights()
+    {
+        _footnoteBandHeightByPage.Clear();
+        if (_doc.Footnotes.Count == 0) return;
+
+        const double SepHeight = 6.0; // separator rule + gap
+
+        // Group footnote ids by the page hosting their reference (using first-pass placed positions).
+        var byPage = new Dictionary<int, List<int>>();
+        foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
+        {
+            var pg = ResolveNoteReferencePage(id, footnote: true);
+            if (!byPage.TryGetValue(pg, out var list))
+                byPage[pg] = list = new List<int>();
+            list.Add(id);
+        }
+
+        // Compute display sequence numbers respecting StartAt and sort order.
+        var opts = _doc.FootnoteNumbering;
+        var seqBase = Math.Max(1, opts.StartAt);
+
+        foreach (var (pg, ids) in byPage)
+        {
+            var totalHeight = SepHeight + 4; // separator rule + top-pad
+            var seq = seqBase;
+            foreach (var id in ids)
+            {
+                var note = _doc.Footnotes[id];
+                var displayNum = ComputeNoteDisplayNumber(seq, opts);
+                seq++;
+                var content = note.Content.Count > 0
+                    ? note.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+                totalHeight += MeasureNoteContentHeight(displayNum, content, _contentLeft, _contentWidth);
+                totalHeight += 2; // inter-note gap
+            }
+            _footnoteBandHeightByPage[pg] = totalHeight;
+        }
+    }
+
+    /// <summary>
     /// AV-NOTERENDER (footnotes): for each page in PrintLayout, renders a short separator rule then the
     /// footnotes whose body reference lands on that page, stacked as "<c>n note text</c>" at
     /// <see cref="NoteFontSizePt"/>. The band occupies the bottom margin area, above the footer.
+    /// <para>
+    /// DB1: the band height was pre-computed by <see cref="ComputeFootnoteBandHeights"/> and stored in
+    /// <see cref="_footnoteBandHeightByPage"/>; <see cref="ReserveContentY"/> already shrank the body
+    /// text area so body text does not overlap the band.
+    /// </para>
+    /// <para>
+    /// DB2: each note's TRUE wrapped height (from <see cref="MeasureNoteContentHeight"/>) determines
+    /// the band top, replacing the old 1-line-per-note estimate. Content is clamped so it does not
+    /// overflow past the footer. Overflow (band taller than available gap) is clipped with a note below.
+    /// </para>
+    /// <para>
+    /// DB3: note numbers use <see cref="ComputeNoteDisplayNumber"/> with the document's
+    /// <see cref="TextDocument.FootnoteNumbering"/> options (format + StartAt).
+    /// </para>
     /// Page assignment uses <see cref="ResolveNoteReferencePage"/>; footnotes with no locatable reference
     /// glyph fall back to the last body page (documented approximation).
     /// </summary>
@@ -3259,23 +3497,42 @@ public sealed class DocumentView : Control
         var footerDistPt = _doc.Page.FooterDistancePt > 0 ? _doc.Page.FooterDistancePt : DefaultHfDistancePt;
         var footerDistDip = footerDistPt * PxPerPoint;
 
-        var noteLineH = Math.Max(1, Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height);
+        // DB3: footnote numbering options — format (Decimal/LowerRoman/…) + StartAt offset.
+        var opts     = _doc.FootnoteNumbering;
+        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
 
         foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
         {
-            var pageTop = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageTop    = DeskPadding + pg * (_pageHeightPx + PageGap);
             var pageBottom = pageTop + _pageHeightPx;
-            // Body text area bottom (page-space).
-            var bodyBottom = pageTop + _marginTopDip + _layoutTextAreaHeight;
+            // Body text area bottom on this page (page-space), using the reserved effective height.
+            var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
+            var bodyBottom = pageTop + _marginTopDip + (_layoutTextAreaHeight - bandReservation);
             // Footer top (where the footer line begins).
             var footerTop = pageBottom - footerDistDip;
 
-            // Estimate the total height needed (separator + one line per note minimum) and anchor the band
-            // so it sits just above the footer, but never above the body text area bottom.
-            var estHeight = 6 + ids.Count * noteLineH;
-            var bandTop = Math.Max(bodyBottom + 2, Math.Min(footerTop - estHeight - 2, pageBottom - _marginBottomDip * 0.5));
-            // Guarantee the band stays on-page even for short pages.
-            bandTop = Math.Min(bandTop, footerTop - noteLineH);
+            // DB2: true total band height = separator + true wrapped heights of all notes on this page.
+            var trueHeight = 4.0 + 6.0; // top-pad + separator
+            var localSeq = seqIndex;
+            foreach (var id in ids)
+            {
+                var note2 = _doc.Footnotes[id];
+                var dn = ComputeNoteDisplayNumber(localSeq++, opts);
+                var content2 = note2.Content.Count > 0
+                    ? note2.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+                trueHeight += MeasureNoteContentHeight(dn, content2, _contentLeft, _contentWidth);
+                trueHeight += 2; // inter-note gap
+            }
+
+            // DB2: anchor the band so its bottom aligns with the footer top.
+            // The band top is (footerTop - trueHeight), but must stay at/below the body bottom.
+            var bandTop = Math.Max(bodyBottom + 2, footerTop - trueHeight);
+            // Also clamp: band must not start above the mid-margin (guard for very tall bands on short pages).
+            bandTop = Math.Min(bandTop, footerTop - 6);
+            // DB2: available height within the band = from bandTop to footerTop. If overflow, content is
+            // clipped at footerTop (split-to-next-page is a follow-up; for now we clip).
+            var availBandHeight = Math.Max(6, footerTop - bandTop);
 
             // Separator rule: a short line (~1.5") at the left of the content column.
             var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);
@@ -3285,9 +3542,21 @@ public sealed class DocumentView : Control
             foreach (var id in ids)
             {
                 var note = _doc.Footnotes[id];
-                y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
-                    _contentLeft, y, _contentWidth);
+                // DB3: compute display number from NoteNumberingOptions.
+                var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
+                seqIndex++;
+
+                var content = note.Content.Count > 0
+                    ? note.Content
+                    : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+
+                // DB2: only emit if still within the available band (clip overflow at footerTop).
+                if (y < bandTop + availBandHeight)
+                {
+                    y = LayoutNoteContent(displayNum, content, _contentLeft, y, _contentWidth);
+                    // DB2: clamp y to band bottom so subsequent notes don't escape past the footer.
+                    y = Math.Min(y, bandTop + availBandHeight);
+                }
             }
         }
     }
@@ -3296,6 +3565,10 @@ public sealed class DocumentView : Control
     /// AV-NOTERENDER (endnotes): renders an "Endnotes" heading + separator, then the numbered endnote
     /// texts, in a synthetic section after the last body page. The section's vertical extent is recorded
     /// in <see cref="_endnoteExtentDip"/> so the scrollable content height reserves room for it.
+    /// <para>
+    /// DB3: endnote numbers use <see cref="ComputeNoteDisplayNumber"/> with the document's
+    /// <see cref="TextDocument.EndnoteNumbering"/> options (Word defaults to LowerRoman for endnotes).
+    /// </para>
     /// </summary>
     private void BuildEndnoteItems()
     {
@@ -3316,10 +3589,17 @@ public sealed class DocumentView : Control
         _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, y));
         y += 6;
 
+        // DB3: endnote numbering options — Word defaults to LowerRoman; users may override.
+        var opts     = _doc.EndnoteNumbering;
+        var seqIndex = Math.Max(1, opts.StartAt); // 1-based display sequence counter
+
         foreach (var id in _doc.Endnotes.Keys.OrderBy(k => k))
         {
             var note = _doc.Endnotes[id];
-            y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            // DB3: compute display number from EndnoteNumbering options.
+            var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
+            seqIndex++;
+            y = LayoutNoteContent(displayNum,
                 note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
                 _contentLeft, y, _contentWidth);
             y += 2; // small gap between endnotes
@@ -3378,11 +3658,25 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Advances _layoutContentY to the next page boundary if the line of <paramref name="lineHeight"/>
     /// would overflow the current page's text area. Returns the content Y at which the line should start.
+    /// <para>
+    /// DB1: the effective text-area height on a page is reduced by the footnote band height for that page
+    /// (stored in <see cref="_footnoteBandHeightByPage"/>), so body text reflows to the NEXT page before
+    /// it would encroach on the footnote band. Computed per-page so pages without footnotes are unaffected.
+    /// </para>
     /// </summary>
     private double ReserveContentY(double lineHeight)
     {
+        if (_layoutTextAreaHeight <= 0) return _layoutContentY;
+
+        // DB1: compute the 0-based page (slot) index and its per-page footnote reservation.
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        // effectiveHeight = page text area minus footnote band on that page.
+        var effectiveHeight = Math.Max(lineHeight + 1, _layoutTextAreaHeight - bandReservation);
+
         var posInPage = _layoutContentY % _layoutTextAreaHeight;
-        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+        if (posInPage > 0 && posInPage + lineHeight > effectiveHeight)
         {
             // Push to the top of the next page.
             _layoutContentY += (_layoutTextAreaHeight - posInPage);
@@ -3400,8 +3694,15 @@ public sealed class DocumentView : Control
     {
         if (_layoutTextAreaHeight <= 0)
             return _layoutContentY;
+
+        // DB1: mirror the per-page reservation used by ReserveContentY.
+        var slot = (int)(_layoutContentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var bandReservation = _footnoteBandHeightByPage.TryGetValue(pageIndex, out var bh) ? bh : 0.0;
+        var effectiveHeight = Math.Max(lineHeight + 1, _layoutTextAreaHeight - bandReservation);
+
         var posInPage = _layoutContentY % _layoutTextAreaHeight;
-        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+        if (posInPage > 0 && posInPage + lineHeight > effectiveHeight)
             return _layoutContentY + (_layoutTextAreaHeight - posInPage);
         return _layoutContentY;
     }
@@ -6574,8 +6875,23 @@ public sealed class DocumentView : Control
                 case Key.Enter: InsertParagraphBreak(); e.Handled = true; return;
                 case Key.Z when ctrl: Undo(); e.Handled = true; return;
                 case Key.Y when ctrl: Redo(); e.Handled = true; return;
+                // DD1 (AV-HFEDIT): Tab/Shift+Tab while H/F caret is active — insert a literal tab into the
+                // header/footer and mark handled. This prevents fall-through to the body Tab path which would
+                // fire ListTabAtItemStart and mutate body list items (or navigate table cells) instead.
+                // Shift+Tab is a no-op (no reverse-tab concept in H/F single-line context) but still consumed
+                // so the body list is never touched while the H/F caret is active.
+                case Key.Tab:
+                    if (!shift) HfInsertText("\t");
+                    e.Handled = true; return;
+                // DD2 (AV-HFEDIT): Up/Down are consumed as no-ops inside a header/footer.
+                // Previously the comment said "no-op for H/F" but both keys fell through to MoveCaretVertical
+                // which moved the BODY caret while _hfCaret stayed non-null, leaving the body caret displaced
+                // after ExitHeaderFooterCaret(). Intercept here so the body caret never moves during H/F editing.
+                case Key.Up:
+                case Key.Down:
+                    e.Handled = true; return;
             }
-            // Up/Down or other keys: fall through to default handling below (no-op for H/F).
+            // All other keys fall through to default handling below.
         }
 
         switch (e.Key)
