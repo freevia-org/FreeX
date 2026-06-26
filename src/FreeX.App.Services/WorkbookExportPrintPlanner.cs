@@ -125,6 +125,86 @@ public sealed record WorkbookExportPrintPlan(
 
 public static class WorkbookExportPrintPlanner
 {
+    /// <summary>
+    /// Creates an export print plan where the row/column page capacity is derived from each sheet's
+    /// own page setup (paper size, orientation, margins, scale-to-fit, and actual row/column sizes)
+    /// via <see cref="SheetPdfPageSetupResolver.ResolveCapacity"/>. This is the page-setup-aware
+    /// path — prefer it over the fixed-capacity overload for PDF export.
+    /// </summary>
+    public static WorkbookExportPrintPlan CreatePlanFromPageSetup(
+        Workbook workbook,
+        WorkbookExportPrintIntent intent,
+        WorkbookExportPrintSurface? surface = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(intent);
+
+        surface ??= WorkbookExportPrintSurface.PortablePdf;
+        var supportedOutputKinds = surface.SupportedOutputKinds;
+        var readiness = WorkbookExportReadinessPlanner.Create(
+            workbook,
+            hasSelection: intent.SelectedRange.HasValue);
+
+        if (!readiness.IsReady)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.ExportUnavailable,
+                readiness.StatusText,
+                supportedOutputKinds,
+                []);
+        }
+
+        if (!surface.Supports(intent.OutputKind))
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.OutputKindUnavailable,
+                FormatUnsupportedOutputStatus(surface, intent.OutputKind, supportedOutputKinds),
+                supportedOutputKinds,
+                []);
+        }
+
+        var requestedRanges = ResolveRequestedRanges(workbook, intent, out var invalidStatus, out var invalidStatusText);
+        if (invalidStatus is not null)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                invalidStatus.Value,
+                invalidStatusText,
+                supportedOutputKinds,
+                []);
+        }
+
+        var sheetPlans = BuildSheetPlansFromPageSetup(requestedRanges);
+        if (sheetPlans.Count == 0)
+        {
+            return CreatePlan(
+                intent,
+                surface,
+                readiness,
+                WorkbookExportPrintValidationStatus.NoPrintableRanges,
+                "No printable sheet ranges were found for the requested export scope.",
+                supportedOutputKinds,
+                sheetPlans);
+        }
+
+        return CreatePlan(
+            intent,
+            surface,
+            readiness,
+            WorkbookExportPrintValidationStatus.Ready,
+            FormatReadyStatus(surface, intent, sheetPlans.Count, sheetPlans.Sum(sheet => sheet.PageCount)),
+            supportedOutputKinds,
+            sheetPlans);
+    }
+
     public static WorkbookExportPrintPlan CreatePlan(
         Workbook workbook,
         WorkbookExportPrintIntent intent,
@@ -379,6 +459,45 @@ public static class WorkbookExportPrintPlanner
         var sheetPlans = new List<WorkbookSheetExportPrintPlanSummary>(requestedRanges.Count);
         foreach (var request in requestedRanges)
         {
+            var rowPlans = PrintLayoutPlanner.BuildRowPlans(
+                request.PrintRange,
+                request.Sheet.PrintTitleRows,
+                pageCapacity.RowsPerPage,
+                request.Sheet.RowPageBreaks);
+            var columnPlans = PrintLayoutPlanner.BuildColumnPlans(
+                request.PrintRange,
+                request.Sheet.PrintTitleColumns,
+                pageCapacity.ColumnsPerPage,
+                request.Sheet.ColumnPageBreaks);
+
+            sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
+                request.Sheet.Name,
+                request.PrintRange,
+                request.RangeSource,
+                rowPlans.Count,
+                columnPlans.Count,
+                rowPlans.Count * columnPlans.Count,
+                rowPlans,
+                columnPlans,
+                request.Sheet.PageOrder));
+        }
+
+        return sheetPlans;
+    }
+
+    /// <summary>
+    /// Builds per-sheet plans where each sheet's row/column page capacity is derived from its own
+    /// page setup (paper, orientation, margins, scale, actual row/column sizes) via
+    /// <see cref="SheetPdfPageSetupResolver.ResolveCapacity"/>.
+    /// </summary>
+    private static IReadOnlyList<WorkbookSheetExportPrintPlanSummary> BuildSheetPlansFromPageSetup(
+        IReadOnlyList<SheetRangeRequest> requestedRanges)
+    {
+        var sheetPlans = new List<WorkbookSheetExportPrintPlanSummary>(requestedRanges.Count);
+        foreach (var request in requestedRanges)
+        {
+            var pageCapacity = SheetPdfPageSetupResolver.ResolveCapacity(request.Sheet, request.PrintRange);
+
             var rowPlans = PrintLayoutPlanner.BuildRowPlans(
                 request.PrintRange,
                 request.Sheet.PrintTitleRows,
