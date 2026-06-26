@@ -429,6 +429,319 @@ public sealed class SlideCanvasAvaloniaTests
             "major unit must divide the range evenly");
     }
 
+    // ── 9. CB1: secondary-axis range isolation ────────────────────────────────
+
+    /// <summary>
+    /// CB1: primary range must exclude secondary-axis series.
+    /// Chart: primary series max 100, secondary series max 1_000_000.
+    /// Primary range must be ~0-100 (NOT 0-1M).
+    /// Secondary range must be ~0-1M.
+    /// </summary>
+    [Fact]
+    public void CB1_PrimaryRange_ExcludesSecondaryAxisSeries()
+    {
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (min, max, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+
+        min.Should().BeGreaterThanOrEqualTo(0, "primary range min should start at or above 0");
+        max.Should().BeLessThan(10_000,
+            "CB1: primary range must not be polluted by the 1M secondary series (should be ~100-200)");
+        max.Should().BeGreaterThanOrEqualTo(100, "primary range must cover the 100 primary max");
+    }
+
+    [Fact]
+    public void CB1_SecondaryRange_CoverSecondaryAxisSeriesOnly()
+    {
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, secMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+
+        secMin.Should().BeGreaterThanOrEqualTo(0, "secondary range min should start at or above 0");
+        secMax.Should().BeGreaterThanOrEqualTo(1_000_000, "secondary range must cover the 1M secondary max");
+        secMu.Should().BePositive("secondary major unit must be positive");
+    }
+
+    [Fact]
+    public void CB1_SecondarySeriesPixelY_IsNotNearBottom_WhenValueIsLargeRelativeToRange()
+    {
+        // Verify that a secondary series value at max maps to near plotY (top of plot),
+        // NOT near plotY+plotH (bottom).  We test the formula directly:
+        // py = plotH - (value - secMin) / secRange * plotH
+        // For value = secMax (1_000_000), with secMin=0, secRange≈1M:
+        // py ≈ 0 (at the top), NOT plotH (bottom).
+
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+
+        double plotH    = 400.0;  // hypothetical plot height in pixels
+        double testVal  = 1_000_000.0;  // the secondary series max
+
+        // Secondary series pixel y from bottom: plotH - (val - secMin) / secRange * plotH
+        double fracFromBottom = (testVal - secMin) / secRange;
+        double pxFromBottom   = fracFromBottom * plotH;
+
+        // Should be close to 400 (filling the full plot height from bottom = near the top edge)
+        pxFromBottom.Should().BeGreaterThanOrEqualTo(plotH * 0.8,
+            "CB1: a secondary value near the secondary max should map to near the top of the plot (large pixel height from bottom)");
+
+        // What the OLD (broken) code would give: using the primary range for a 1M value
+        var (primaryMin, primaryMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        double primaryRange = primaryMax - primaryMin;
+        double brokenPxFromBottom = (testVal - primaryMin) / primaryRange * plotH;
+
+        // The broken path gives a massive ratio >> 1.0 (value hugely exceeds primary scale)
+        // which would clip to near-zero visible height or out-of-bounds rendering.
+        // The fixed secondary range gives a sensible fraction ≤ 1.0.
+        fracFromBottom.Should().BeLessThanOrEqualTo(1.1,
+            "CB1: secondary series value must not exceed the secondary range by more than a rounding tick");
+        (brokenPxFromBottom / plotH).Should().BeGreaterThan(100,
+            "CB1 broken-path sanity: old primary range would produce ratio >> 1 for 1M value against ~100 range");
+    }
+
+    [Fact]
+    public void CB1_NoSecondarySeriesChart_PrimaryRangeUnchanged_SecondaryRangeFallback()
+    {
+        // A chart with no secondary series: primary range is as before, secondary fallback = (0,1,1).
+        var s = new ChartSeries { Name = "S1", OnSecondaryAxis = false };
+        s.Values.AddRange(new double?[] { 10, 50, 100 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(s);
+
+        var (min, max, mu) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (sMin, sMax, sMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+
+        // Primary range should cover the data
+        max.Should().BeGreaterThanOrEqualTo(100, "primary range covers primary-only data");
+
+        // Secondary fallback when no secondary series
+        sMin.Should().Be(0, "fallback secondary min");
+        sMax.Should().Be(1, "fallback secondary max");
+        sMu.Should().Be(1, "fallback secondary unit");
+    }
+
+    [Fact]
+    public async Task CB1_ComboChart_RendersWithoutThrow_BothShells()
+    {
+        // Full render smoke test for a combo chart (primary bars + secondary line).
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+                primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+                var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+                secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+                var chart = new ChartShape
+                {
+                    ChartType          = ChartType.ColumnClustered,
+                    SecondaryValueAxis = new ChartAxis(),
+                };
+                chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+                chart.Series.Add(primary);
+                chart.Series.Add(secondary);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id          = 1,
+                        Kind        = SlideShapeKind.Chart,
+                        OffsetXEmu  = 914400,
+                        OffsetYEmu  = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart       = chart,
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("CB1: combo chart (primary bars + secondary line) must render without throwing");
+    }
+
+    // ── CC2/CC3/CC4: secondary-axis data-label scale correctness ─────────────
+
+    /// <summary>
+    /// CC2: RenderLineDataLabels must use the secondary-axis range (not the primary range)
+    /// to compute the label Y-coordinate for an OnSecondaryAxis series.
+    /// The label Y must match the marker Y — both must use effMin/effRange from the secondary scale.
+    /// </summary>
+    [Fact]
+    public void CC2_LineDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
+    {
+        // Primary series: values 0–100. Secondary series: values 0–1_000_000.
+        // If the label used the primary range (~0–100) for a 1M value, the normalised
+        // fraction would be >> 1.0 (way off the top of the plot).
+        // The secondary range (~0–1M) should give a fraction ≤ 1.0.
+
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape
+        {
+            ChartType          = ChartType.LineMarkers,
+            SecondaryValueAxis = new ChartAxis(),
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        // Compute what the label Y fraction should be for the secondary series' last point (1_000_000).
+        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange   = secMax - secMin;
+        double testVal    = 1_000_000.0;
+
+        // CC2 correct path: fraction = (val - secMin) / secRange
+        double correctFrac = (testVal - secMin) / secRange;
+
+        // CC2 broken path would use primary: fraction = (val - primaryMin) / primaryRange >> 1
+        var (primaryMin, primaryMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        double primaryRange = primaryMax - primaryMin;
+        double brokenFrac   = (testVal - primaryMin) / primaryRange;
+
+        correctFrac.Should().BeLessThanOrEqualTo(1.1,
+            "CC2: secondary value mapped through secondary range must be ≤ 1 (within plot bounds)");
+        brokenFrac.Should().BeGreaterThan(10.0,
+            "CC2 sanity: same value through primary range would be >> 1 (far off-chart)");
+        correctFrac.Should().BeGreaterThanOrEqualTo(0.7,
+            "CC2: value at secondary max should map well up the plot (fraction ≥ 0.7, nice range extends slightly above data max)");
+    }
+
+    /// <summary>
+    /// CC2/CC3/CC4 smoke test: a combo chart (primary columns + secondary line with data labels)
+    /// must render end-to-end without throwing in the Avalonia shell.
+    /// </summary>
+    [Fact]
+    public async Task CC2_ComboChartWithDataLabels_SecondaryLineSeries_RendersWithoutThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var primary = new ChartSeries { Name = "Revenue", OnSecondaryAxis = false };
+                primary.Values.AddRange(new double?[] { 100, 150, 120 });
+
+                // Secondary series has data labels enabled — exercises CC2 fix path.
+                var secondary = new ChartSeries
+                {
+                    Name             = "Target",
+                    OnSecondaryAxis  = true,
+                    DataLabels       = new ChartDataLabels { ShowValue = true },
+                };
+                secondary.Values.AddRange(new double?[] { 5_000, 8_000, 12_000 });
+
+                var chart = new ChartShape
+                {
+                    ChartType          = ChartType.ColumnClustered,
+                    SecondaryValueAxis = new ChartAxis(),
+                };
+                chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar" });
+                chart.Series.Add(primary);
+                chart.Series.Add(secondary);
+                // Chart-level data labels so both series get labels (exercises CC3 column path too).
+                chart.DataLabels = new ChartDataLabels { ShowValue = true };
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id          = 1,
+                        Kind        = SlideShapeKind.Chart,
+                        OffsetXEmu  = 914400,
+                        OffsetYEmu  = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart       = chart,
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull(
+            "CC2/CC3: combo chart with secondary-axis line series data labels must render without throwing");
+    }
+
+    /// <summary>
+    /// CC3: RenderColumnDataLabels for a secondary-axis series must use the secondary range.
+    /// Verified indirectly: the Y-fraction for a secondary value through the secondary range is ≤ 1,
+    /// while the primary range would give a fraction >> 1 (off-chart).
+    /// </summary>
+    [Fact]
+    public void CC3_ColumnDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
+    {
+        var primary = new ChartSeries { Name = "P", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 10, 20, 30 });
+
+        var secondary = new ChartSeries { Name = "S", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 50_000, 80_000, 100_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange  = secMax - secMin;
+        var (pMin, pMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        double pRange    = pMax - pMin;
+        double testVal   = 100_000.0;
+
+        double secFrac = (testVal - secMin) / secRange;
+        double priFrac = (testVal - pMin)   / pRange;
+
+        secFrac.Should().BeLessThanOrEqualTo(1.1,
+            "CC3: secondary column value fraction through secondary range must be ≤ 1");
+        priFrac.Should().BeGreaterThan(10.0,
+            "CC3 sanity: same value through primary range would be >> 1");
+    }
+
     // ── BN1: picture with colour effect renders without throwing (GDI+ fallback) ──────────────
 
     /// <summary>

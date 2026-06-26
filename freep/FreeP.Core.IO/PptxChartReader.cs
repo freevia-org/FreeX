@@ -57,7 +57,7 @@ internal static class PptxChartReader
         var plotArea = chartEl.Element(C + "plotArea");
         if (plotArea is null) return shape;
 
-        DetectChartTypeAndSeries(plotArea, shape, scheme);
+        var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
 
         // Axes (catAx / dateAx = category axis; valAx = value axis)
         bool primaryValAxRead = false;
@@ -110,12 +110,18 @@ internal static class PptxChartReader
                 var axIds = plotEl.Elements(C + "axId").Select(a => ParseInt(a.Attribute("val")?.Value)).ToList();
                 if (axIds.Count >= 2 && axIds.Any(id => id == secondaryAxId))
                 {
-                    // All series in this plot group are on the secondary axis
-                    // Map them by their c:ser/c:idx to the correct ChartSeries
+                    // All series in this plot group are on the secondary axis.
+                    // Resolve each c:ser's c:idx through the idx→ChartSeries map built during reading.
+                    // This is correct for combo charts where c:idx values are interleaved across
+                    // chart-type groups (e.g. primary group has idx 0,2 and secondary group has idx 1)
+                    // — positional indexing into shape.Series would flag the wrong series in that case.
                     foreach (var serEl in plotEl.Elements(C + "ser"))
                     {
                         int serIdx = ParseInt(serEl.Element(C + "idx")?.Attribute("val")?.Value);
-                        if (serIdx < shape.Series.Count)
+                        if (serIdxMap.TryGetValue(serIdx, out var mappedSeries))
+                            mappedSeries.OnSecondaryAxis = true;
+                        else if (serIdx < shape.Series.Count)
+                            // Fall back to positional index for series with no recorded c:idx
                             shape.Series[serIdx].OnSecondaryAxis = true;
                     }
                 }
@@ -171,45 +177,86 @@ internal static class PptxChartReader
 
     // ── Chart type dispatch ───────────────────────────────────────────────────
 
-    private static void DetectChartTypeAndSeries(
+    private static Dictionary<int, ChartSeries> DetectChartTypeAndSeries(
         XElement plotArea, ChartShape shape, PresentationColorScheme scheme)
     {
+        // idx→ChartSeries map: populated as series are read so secondary-axis detection
+        // can resolve a c:idx value to the right ChartSeries regardless of append order.
+        var idxMap = new Dictionary<int, ChartSeries>();
+        bool primaryFound = false;
+
         foreach (var el in plotArea.Elements())
         {
-            switch (el.Name.LocalName)
+            bool isChartType = el.Name.LocalName is
+                "barChart" or "bar3DChart" or "lineChart" or "line3DChart" or
+                "pieChart" or "pie3DChart" or "ofPieChart" or "doughnutChart" or
+                "areaChart" or "area3DChart" or "scatterChart" or "bubbleChart" or
+                "stockChart" or "radarChart" or "surfaceChart" or "surface3DChart";
+
+            if (!isChartType) continue;
+
+            if (!primaryFound)
             {
-                case "barChart":
-                case "bar3DChart":          // 3-D column/bar charts — treat same as 2D
-                    ReadBarChart(el, shape, scheme); return;
-                case "lineChart":
-                case "line3DChart":
-                    ReadLineChart(el, shape, scheme); return;
-                case "pieChart":
-                case "pie3DChart":
-                case "ofPieChart":          // pie-of-pie / bar-of-pie — best effort as Pie
-                    ReadPieChart(el, shape, scheme); return;
-                case "doughnutChart":
-                    ReadDoughnutChart(el, shape, scheme); return;
-                case "areaChart":
-                case "area3DChart":
-                    ReadAreaChart(el, shape, scheme); return;
-                case "scatterChart":
-                    ReadScatterChartDistinct(el, shape, scheme); return;
-                case "bubbleChart":
-                    ReadBubbleChart(el, shape, scheme); return;
-                case "stockChart":
-                    ReadLineChart(el, shape, scheme); return;     // stock ~= line
-                case "radarChart":
-                    ReadRadarChart(el, shape, scheme); return;
-                case "surfaceChart":
-                case "surface3DChart":
-                    ReadBarChart(el, shape, scheme); return;      // surface ~= column best-effort
+                // First chart-type group: sets shape.ChartType and reads primary series.
+                primaryFound = true;
+                switch (el.Name.LocalName)
+                {
+                    case "barChart":
+                    case "bar3DChart":
+                        ReadBarChart(el, shape, scheme, idxMap); break;
+                    case "lineChart":
+                    case "line3DChart":
+                        ReadLineChart(el, shape, scheme, idxMap); break;
+                    case "pieChart":
+                    case "pie3DChart":
+                    case "ofPieChart":
+                        ReadPieChart(el, shape, scheme, idxMap); break;
+                    case "doughnutChart":
+                        ReadDoughnutChart(el, shape, scheme, idxMap); break;
+                    case "areaChart":
+                    case "area3DChart":
+                        ReadAreaChart(el, shape, scheme, idxMap); break;
+                    case "scatterChart":
+                        ReadScatterChartDistinct(el, shape, scheme, idxMap); break;
+                    case "bubbleChart":
+                        ReadBubbleChart(el, shape, scheme, idxMap); break;
+                    case "stockChart":
+                        ReadLineChart(el, shape, scheme, idxMap); break;    // stock ~= line
+                    case "radarChart":
+                        ReadRadarChart(el, shape, scheme, idxMap); break;
+                    case "surfaceChart":
+                    case "surface3DChart":
+                        ReadBarChart(el, shape, scheme, idxMap); break;     // surface ~= column best-effort
+                }
+            }
+            else
+            {
+                // CA4: Secondary chart-type group in a combo chart (e.g. lineChart holding secondary
+                // series). Read its c:ser elements without changing shape.ChartType.
+                // The secondary axis detection (valAxIds loop below) will then mark these series
+                // with OnSecondaryAxis = true via their c:idx values resolved through idxMap.
+                switch (el.Name.LocalName)
+                {
+                    case "scatterChart":
+                        ReadScatterSeriesFromChart(el, shape, scheme, idxMap); break;
+                    case "bubbleChart":
+                        ReadBubbleSeriesFromChart(el, shape, scheme, idxMap); break;
+                    default:
+                        // All other combo secondaries (lineChart, barChart, areaChart, etc.)
+                        // use the standard cat/val series format.
+                        ReadSeriesFromChart(el, shape, scheme, idxMap); break;
+                }
             }
         }
-        shape.ChartType = ChartType.Unknown;
+
+        if (!primaryFound)
+            shape.ChartType = ChartType.Unknown;
+
+        return idxMap;
     }
 
-    private static void ReadBarChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadBarChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         var barDir   = el.Element(C + "barDir")?.Attribute("val")?.Value   ?? "col";
         var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "clustered";
@@ -225,10 +272,11 @@ internal static class PptxChartReader
             _                         => ChartType.ColumnClustered
         };
 
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadLineChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadLineChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         // A line chart "has markers" when any series has an explicit marker that is not "none",
         // or has no marker element at all (OOXML default for lineChart is to show markers).
@@ -239,29 +287,33 @@ internal static class PptxChartReader
         });
 
         shape.ChartType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadPieChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadPieChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Pie;
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadAreaChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadAreaChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "standard";
         shape.ChartType = grouping == "stacked" ? ChartType.AreaStacked : ChartType.Area;
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadScatterChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadScatterChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Scatter;
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Doughnut;
 
@@ -272,10 +324,11 @@ internal static class PptxChartReader
             System.Globalization.CultureInfo.InvariantCulture, out var hs))
             shape.DoughnutHolePercent = Math.Clamp(hs, 0, 90);
 
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadScatterChartDistinct(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadScatterChartDistinct(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Scatter;
 
@@ -291,10 +344,11 @@ internal static class PptxChartReader
             _              => ScatterStyle.LineMarker
         };
 
-        ReadScatterSeriesFromChart(el, shape, scheme);
+        ReadScatterSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadRadarChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadRadarChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Radar;
 
@@ -306,10 +360,11 @@ internal static class PptxChartReader
             _        => RadarStyle.Standard
         };
 
-        ReadSeriesFromChart(el, shape, scheme);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadBubbleChart(XElement el, ChartShape shape, PresentationColorScheme scheme)
+    private static void ReadBubbleChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         shape.ChartType = ChartType.Bubble;
 
@@ -317,13 +372,14 @@ internal static class PptxChartReader
         // Treat as SmoothMarker by default; exact style rarely stored explicitly.
         shape.ScatterStyle = ScatterStyle.Marker;
 
-        ReadBubbleSeriesFromChart(el, shape, scheme);
+        ReadBubbleSeriesFromChart(el, shape, scheme, idxMap);
     }
 
     // ── Scatter series (x:xVal / c:yVal, no categories axis) ─────────────────
 
     private static void ReadScatterSeriesFromChart(
-        XElement chartEl, ChartShape shape, PresentationColorScheme scheme)
+        XElement chartEl, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
         foreach (var serEl in chartEl.Elements(C + "ser"))
@@ -354,6 +410,13 @@ internal static class PptxChartReader
             series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
 
             shape.Series.Add(series);
+
+            // Record idx→series mapping for secondary-axis detection.
+            // c:idx is the OOXML series index; fall back to append position if absent.
+            var idxStr = serEl.Element(C + "idx")?.Attribute("val")?.Value;
+            int serIdx = idxStr is not null ? ParseInt(idxStr) : seriesIndex;
+            idxMap.TryAdd(serIdx, series);
+
             seriesIndex++;
         }
     }
@@ -361,7 +424,8 @@ internal static class PptxChartReader
     // ── Bubble series (c:xVal / c:yVal / c:bubbleSize) ───────────────────────
 
     private static void ReadBubbleSeriesFromChart(
-        XElement chartEl, ChartShape shape, PresentationColorScheme scheme)
+        XElement chartEl, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
         foreach (var serEl in chartEl.Elements(C + "ser"))
@@ -388,6 +452,12 @@ internal static class PptxChartReader
             series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
 
             shape.Series.Add(series);
+
+            // Record idx→series mapping for secondary-axis detection.
+            var idxStr = serEl.Element(C + "idx")?.Attribute("val")?.Value;
+            int serIdx = idxStr is not null ? ParseInt(idxStr) : seriesIndex;
+            idxMap.TryAdd(serIdx, series);
+
             seriesIndex++;
         }
     }
@@ -439,7 +509,8 @@ internal static class PptxChartReader
     // ── Series parsing ────────────────────────────────────────────────────────
 
     private static void ReadSeriesFromChart(
-        XElement chartEl, ChartShape shape, PresentationColorScheme scheme)
+        XElement chartEl, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
         foreach (var serEl in chartEl.Elements(C + "ser"))
@@ -513,6 +584,13 @@ internal static class PptxChartReader
             series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
 
             shape.Series.Add(series);
+
+            // Record idx→series mapping for secondary-axis detection.
+            // c:idx is the OOXML series index; fall back to append position if absent.
+            var idxStr = serEl.Element(C + "idx")?.Attribute("val")?.Value;
+            int serIdx = idxStr is not null ? ParseInt(idxStr) : seriesIndex;
+            idxMap.TryAdd(serIdx, series);
+
             seriesIndex++;
         }
     }

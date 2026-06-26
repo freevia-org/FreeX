@@ -11191,9 +11191,11 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("FormatCells_Title"),
-            Width = 560,
+            // Wider (matches Windows ~690px) so the Border tab's three side-by-side groups
+            // (Presets / Line style list / Border diagram) fit without clipping.
+            Width = 690,
             Height = 560,
-            MinWidth = 480,
+            MinWidth = 620,
             MinHeight = 500,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -11424,6 +11426,49 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
         ApplyDialogTextBoxChrome(fontSizeBox);
 
+        // Windows shows the font name + size as selectable LISTS. We keep the existing text
+        // boxes as the value sink that feeds the result (FontName/FontSize), and add list
+        // pickers as the primary selectors that write the chosen value into those boxes.
+        var fontNameChoices = new[]
+        {
+            "Calibri", "Arial", "Times New Roman", "Verdana", "Tahoma", "Segoe UI",
+            "Courier New", "Georgia", "Cambria", "Consolas", "Comic Sans MS", "Trebuchet MS",
+        };
+        var fontNameList = new ListBox
+        {
+            ItemsSource = fontNameChoices,
+            SelectedItem = Array.Find(fontNameChoices, n => string.Equals(n, currentFontName, StringComparison.OrdinalIgnoreCase)),
+            Height = 120,
+            MinWidth = 180,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetName(fontNameList, "Font");
+        AutomationProperties.SetAutomationId(fontNameList, "FormatCellsFontNameList");
+        fontNameList.SelectionChanged += (_, _) =>
+        {
+            if (fontNameList.SelectedItem is string name)
+                fontNameBox.Text = name;
+        };
+
+        var fontSizeChoices = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" };
+        var fontSizeList = new ListBox
+        {
+            ItemsSource = fontSizeChoices,
+            SelectedItem = Array.Find(fontSizeChoices, s => s == currentFontSize.ToString("0.##", CultureInfo.InvariantCulture)),
+            Height = 120,
+            MinWidth = 70,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetName(fontSizeList, "Size");
+        AutomationProperties.SetAutomationId(fontSizeList, "FormatCellsFontSizeList");
+        fontSizeList.SelectionChanged += (_, _) =>
+        {
+            if (fontSizeList.SelectedItem is string size)
+                fontSizeBox.Text = size;
+        };
+
         var fontColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreFontColors"));
         AutomationProperties.SetName(fontColorBox, "Font color");
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
@@ -11577,9 +11622,11 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(borderPresetBox, "Border preset");
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
         ApplyDialogComboBoxChrome(borderPresetBox);
-        var borderStyleBox = CreateFormatCellsComboBox(
+        // Windows renders the line style as a scrollable LIST of line samples, not a combo.
+        // Keep the FormatCellsBorderStyleBox automation id + the FormatCellsNullableChoice
+        // SelectedItem contract so Accept()/SelectedBorderLineStyle() are unchanged.
+        var borderStyleBox = CreateFormatCellsBorderStyleListBox(
             "FormatCellsBorderStyleBox",
-            CreateFormatCellsBorderStyleChoices(),
             BorderStyle.Thin);
         var borderColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
         AutomationProperties.SetName(borderColorBox, "Border color");
@@ -11934,6 +11981,29 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField(UiText.Get("FormatCells_TextRotation"), textRotationBox),
                 },
             });
+        // Font tab: Windows shows Font NAME + Size as selectable lists side by side. The
+        // lists drive the existing name/size text boxes (kept below for free entry + as the
+        // value sink the result reads), preserving the FontName/FontSize wiring.
+        var fontNameColumn = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Font")) },
+                fontNameList,
+                fontNameBox,
+            },
+        };
+        var fontSizeColumn = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Size")) },
+                fontSizeList,
+                fontSizeBox,
+            },
+        };
         var fontTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabFont"),
             "FormatCellsFontTab",
@@ -11942,6 +12012,12 @@ public sealed partial class MainWindow : Window
                 Spacing = 10,
                 Children =
                 {
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 16,
+                        Children = { fontNameColumn, fontSizeColumn },
+                    },
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -11965,8 +12041,6 @@ public sealed partial class MainWindow : Window
                             subscriptBox,
                         },
                     },
-                    CreateFormatCellsField(UiText.Get("FormatCells_Font"), fontNameBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_Size"), fontSizeBox),
                     CreateFormatCellsField(UiText.Get("FormatCells_Color"), fontColorBox),
                     normalFontBox,
                     CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fontPreview),
@@ -11986,45 +12060,141 @@ public sealed partial class MainWindow : Window
                     CreateFormatCellsField(UiText.Get("FormatCells_Preview"), fillPreview),
                 },
             });
-        var borderTab = CreateFormatCellsTab(
-            UiText.Get("FormatCells_TabBorder"),
-            "FormatCellsBorderTab",
+        // --- Border tab rebuilt to mirror the Windows/Excel layout: three side-by-side
+        // groups (Presets | Line | Border) above an "Individual border details" row. The
+        // existing controls (preset buttons, style list, color picker, per-side toggles,
+        // preview) are repositioned only; their wiring and automation ids are unchanged.
+
+        // LEFT: Presets group — None/Outline/Inside stacked vertically.
+        foreach (var presetButton in new[] { borderNoneButton, borderOutlineButton, borderInsideButton })
+        {
+            presetButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            presetButton.MinWidth = 96;
+        }
+        var borderPresetsGroup = CreateFormatCellsBorderGroup(
+            UiText.Get("FormatCells_Presets"),
+            new StackPanel
+            {
+                Spacing = 8,
+                Width = 100,
+                Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
+            });
+
+        // MIDDLE: Line group — scrollable line-sample list + color picker.
+        var borderLineGroup = CreateFormatCellsBorderGroup(
+            UiText.Get("FormatCells_Line"),
+            new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Style")) },
+                    borderStyleBox,
+                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Color")) },
+                    borderColorBox,
+                },
+            });
+
+        // RIGHT: Border group — interactive diagram. Edge toggles surround a central
+        // white "Text" preview box (Top above, Bottom below, Left/Right at the sides),
+        // with the inside toggles as small buttons beneath.
+        var textPreviewLabel = new TextBlock
+        {
+            Text = "Text",
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        var borderDiagramGrid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            ColumnSpacing = 8,
+            RowSpacing = 8,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+        };
+        // Top toggle: row 0, center column.
+        borderDiagramGrid.Children.Add(borderTopToggle);
+        AvaloniaGrid.SetRow(borderTopToggle, 0);
+        AvaloniaGrid.SetColumn(borderTopToggle, 1);
+        // Left toggle: row 1, column 0.
+        borderDiagramGrid.Children.Add(borderLeftToggle);
+        AvaloniaGrid.SetRow(borderLeftToggle, 1);
+        AvaloniaGrid.SetColumn(borderLeftToggle, 0);
+        // Center "Text" preview box.
+        var borderPreviewHost = new AvaloniaGrid { Width = 110, Height = 72 };
+        borderPreviewHost.Children.Add(borderPreview);
+        borderPreviewHost.Children.Add(textPreviewLabel);
+        borderPreview.Width = 110;
+        borderPreview.Height = 72;
+        borderDiagramGrid.Children.Add(borderPreviewHost);
+        AvaloniaGrid.SetRow(borderPreviewHost, 1);
+        AvaloniaGrid.SetColumn(borderPreviewHost, 1);
+        // Right toggle: row 1, column 2.
+        borderDiagramGrid.Children.Add(borderRightToggle);
+        AvaloniaGrid.SetRow(borderRightToggle, 1);
+        AvaloniaGrid.SetColumn(borderRightToggle, 2);
+        // Bottom toggle: row 2, center column.
+        borderDiagramGrid.Children.Add(borderBottomToggle);
+        AvaloniaGrid.SetRow(borderBottomToggle, 2);
+        AvaloniaGrid.SetColumn(borderBottomToggle, 1);
+
+        var borderGroup = CreateFormatCellsBorderGroup(
+            UiText.Get("FormatCells_Border"),
             new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
-                    CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_LineStyle"), borderStyleBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_LineColor"), borderColorBox),
+                    borderDiagramGrid,
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
                         Spacing = 6,
-                        Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
+                        HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                        Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle },
                     },
-                    CreateFormatCellsField(
-                        UiText.Get("FormatCells_Borders"),
-                        new StackPanel
-                        {
-                            Spacing = 6,
-                            Children =
-                            {
-                                new StackPanel
-                                {
-                                    Orientation = Orientation.Horizontal,
-                                    Spacing = 6,
-                                    Children = { borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle },
-                                },
-                                new StackPanel
-                                {
-                                    Orientation = Orientation.Horizontal,
-                                    Spacing = 6,
-                                    Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle },
-                                },
-                            },
-                        }),
-                    CreateFormatCellsField(UiText.Get("FormatCells_Preview"), borderPreview),
+                },
+            });
+
+        var borderGroupsRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Children = { borderPresetsGroup, borderLineGroup, borderGroup },
+        };
+
+        // "Individual border details" row keeps the preset combo + live preview swatch so
+        // the borderPresetBox wiring (read in Accept as borderChoice) is preserved.
+        var borderDetailsRow = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(0, 4, 0, 0),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
+                    FontWeight = FontWeight.SemiBold,
+                },
+                CreateFormatCellsField(UiText.Get("FormatCells_Preset"), borderPresetBox),
+            },
+        };
+
+        var borderTab = CreateFormatCellsTab(
+            UiText.Get("FormatCells_TabBorder"),
+            "FormatCellsBorderTab",
+            new StackPanel
+            {
+                Spacing = 12,
+                Width = 640,
+                // Small left inset so the bare "Individual border details" label aligns with the
+                // group-box content above it and does not clip against the dialog edge.
+                Margin = new Thickness(14, 0, 0, 0),
+                Children =
+                {
+                    borderGroupsRow,
+                    borderDetailsRow,
                 },
             });
         var protectionTab = CreateFormatCellsTab(
@@ -12337,6 +12507,118 @@ public sealed partial class MainWindow : Window
         new("Dotted", BorderStyle.Dotted),
         new("Double", BorderStyle.Double),
     ];
+
+    // The Windows Format Cells "Line" group renders the available border styles as a
+    // scrollable LIST where each row is drawn as a horizontal LINE SAMPLE (None, Thin,
+    // Medium, Thick, Dashed, Dotted, Double) rather than a text combo. This builds that
+    // ListBox; the SelectedItem stays a FormatCellsNullableChoice<BorderStyle> so the
+    // existing Accept()/SelectedBorderLineStyle() reads are unchanged.
+    private static IReadOnlyList<FormatCellsNullableChoice<BorderStyle>> CreateFormatCellsBorderStyleListChoices() =>
+    [
+        new("None", null),
+        new("Thin", BorderStyle.Thin),
+        new("Medium", BorderStyle.Medium),
+        new("Thick", BorderStyle.Thick),
+        new("Dashed", BorderStyle.Dashed),
+        new("Dotted", BorderStyle.Dotted),
+        new("Double", BorderStyle.Double),
+    ];
+
+    private static ListBox CreateFormatCellsBorderStyleListBox(string automationId, BorderStyle currentValue)
+    {
+        var choices = CreateFormatCellsBorderStyleListChoices();
+        FormatCellsNullableChoice<BorderStyle>? selected = null;
+        foreach (var choice in choices)
+        {
+            if (choice.Value == currentValue)
+            {
+                selected = choice;
+                break;
+            }
+        }
+
+        var listBox = new ListBox
+        {
+            ItemsSource = choices,
+            SelectedItem = selected ?? choices[1],
+            Width = 180,
+            Height = 140,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        listBox.ItemTemplate = new FuncDataTemplate<FormatCellsNullableChoice<BorderStyle>>((choice, _) =>
+            CreateFormatCellsBorderStyleSample(choice), supportsRecycling: true);
+        AutomationProperties.SetName(listBox, "Border line style");
+        AutomationProperties.SetAutomationId(listBox, automationId);
+        return listBox;
+    }
+
+    private static Control CreateFormatCellsBorderStyleSample(FormatCellsNullableChoice<BorderStyle> choice)
+    {
+        if (choice.Value is not { } style)
+        {
+            return new TextBlock
+            {
+                Text = choice.Label,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Height = 18,
+            };
+        }
+
+        var thickness = FormatCellsBorderPreviewThickness(style);
+        var line = new Border
+        {
+            Height = thickness <= 0 ? 1 : thickness,
+            Width = 150,
+            Background = Brushes.Black,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        // Approximate dashed/dotted/double with a layered visual so the row reads as a
+        // distinct style (the actual applied style still comes from choice.Value).
+        if (style is BorderStyle.Dashed or BorderStyle.Dotted)
+        {
+            var dashLine = new global::Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new Point(0, 9),
+                EndPoint = new Point(150, 9),
+                Stroke = Brushes.Black,
+                StrokeThickness = 1,
+                StrokeDashArray = new AvaloniaList<double>(
+                    style == BorderStyle.Dotted ? new double[] { 1, 2 } : new double[] { 4, 3 }),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            };
+            return new Panel { Height = 18, Children = { dashLine } };
+        }
+        if (style == BorderStyle.Double)
+        {
+            return new StackPanel
+            {
+                Height = 18,
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Spacing = 2,
+                Children =
+                {
+                    new Border { Height = 1, Width = 150, Background = Brushes.Black, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                    new Border { Height = 1, Width = 150, Background = Brushes.Black, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                },
+            };
+        }
+
+        return new Panel { Height = 18, Children = { line } };
+    }
+
+    // A classic Win32 dialog "group box": a header label sitting above a 1px-bordered
+    // panel. Mirrors the Presets / Line / Border groups in the Windows screenshot.
+    private static Control CreateFormatCellsBorderGroup(string header, Control content) =>
+        new GroupBox
+        {
+            Header = StripDisplayMnemonic(header),
+            Padding = new Thickness(10, 8),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Content = content,
+        };
 
     private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)
     {
@@ -18910,26 +19192,26 @@ public sealed partial class MainWindow : Window
                 HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
                 HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
                 HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
-                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", "Allow blank") &&
-                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", "In-cell dropdown") &&
+                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", UiText.Get("DataValidation_IgnoreBlank")) &&
+                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", UiText.Get("DataValidation_InCellDropdown")) &&
                 !probe.ShowDropdownBox.IsVisible &&
                 string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
                 string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
                 string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
             hasDataValidationDialogMessageControls =
-                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", "Show input message") &&
+                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", UiText.Get("DataValidation_ShowInputMessageWhenCellIsSelected")) &&
                 HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
                 HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
-                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", "Show error alert") &&
+                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", UiText.Get("DataValidation_ShowErrorAlertAfterInvalidDataIsEntered")) &&
                 HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
                 HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
                 HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
                 string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
             hasDataValidationDialogActionButtons =
-                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", "Apply") &&
-                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", "Clear Validation") &&
-                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", "Cancel");
-            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 540, height: 560, minWidth: 460, minHeight: 440);
+                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", UiText.Get("Common_Ok")) &&
+                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", UiText.Get("DataValidation_ClearAll")) &&
+                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", UiText.Get("Common_Cancel"));
+            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 520, height: 560, minWidth: 480, minHeight: 460);
         });
 
         var hasConditionalFormatRuleDialog = false;
@@ -18964,7 +19246,7 @@ public sealed partial class MainWindow : Window
                 hasConditionalFormatRuleActionButtons =
                     HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
                     HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
-                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 460, height: 470, minWidth: 420, minHeight: 400);
+                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 640, height: 380, minWidth: 600, minHeight: 340);
             });
 
         var hasManageConditionalFormatsDialog = false;

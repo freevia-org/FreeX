@@ -796,6 +796,8 @@ public sealed class SlideCanvas : Control
                 {
                     if (isLineOrArea)
                         RenderLineDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
+                    else if (isBar)
+                        RenderBarDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
                     else
                         RenderColumnDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
                 }
@@ -937,6 +939,9 @@ public sealed class SlideCanvas : Control
         var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
+        // CB1: compute a separate range for secondary-axis series
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
         bool stacked    = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         const double gapRatio = 1.5;
         double catW    = plotW / catCount;
@@ -951,23 +956,28 @@ public sealed class SlideCanvas : Control
             double stackedY = plotY + plotH;
             for (int si = 0; si < chart.Series.Count; si++)
             {
-                double? rawVal = ci < chart.Series[si].Values.Count ? chart.Series[si].Values[ci] : null;
+                var series = chart.Series[si];
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) continue;
                 double val  = rawVal.Value;
+                // CB1: pick the axis range by whether this series is on the secondary axis
+                double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+                double effRange = series.OnSecondaryAxis ? secRange : range;
+                if (effRange <= 0) continue;
                 var color   = GetSeriesColor(chart, si, ci, seriesColors);
                 var brush   = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
                 double drawW = Math.Max(1, stacked ? serW : serW - 1);
                 double barX  = stacked ? catLeft : catLeft + si * serW;
                 if (stacked)
                 {
-                    double h = Math.Max(0.5, Math.Abs(val / range) * plotH);
+                    double h = Math.Max(0.5, Math.Abs(val / effRange) * plotH);
                     dc.FillRectangle(brush, new Rect(barX, stackedY - h, drawW, h));
                     stackedY -= h;
                 }
                 else
                 {
-                    double barH = Math.Max(0.5, Math.Abs((val - minVal) / range * plotH));
-                    double barY = plotY + plotH - (val - minVal) / range * plotH;
+                    double barH = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotH));
+                    double barY = plotY + plotH - (val - effMin) / effRange * plotH;
                     dc.FillRectangle(brush, new Rect(barX, barY, drawW, barH));
                 }
             }
@@ -983,6 +993,9 @@ public sealed class SlideCanvas : Control
         var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
+        // CB1: compute a separate range for secondary-axis series
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
         bool stacked    = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
         const double gapRatio = 1.5;
         double catH    = plotH / catCount;
@@ -998,10 +1011,15 @@ public sealed class SlideCanvas : Control
             double stackedX  = plotX;
             for (int si = 0; si < chart.Series.Count; si++)
             {
-                double? rawVal = ci < chart.Series[si].Values.Count ? chart.Series[si].Values[ci] : null;
+                var series = chart.Series[si];
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) continue;
                 double val     = rawVal.Value;
-                double barW    = Math.Max(0.5, Math.Abs((val - minVal) / range * plotW));
+                // CB1: pick the axis range by whether this series is on the secondary axis
+                double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+                double effRange = series.OnSecondaryAxis ? secRange : range;
+                if (effRange <= 0) continue;
+                double barW    = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotW));
                 int    renderSer = stacked ? si : (serCount - 1 - si);
                 double barY    = stacked ? catTop : catTop + renderSer * serH;
                 double barX    = stacked ? stackedX : plotX;
@@ -1023,11 +1041,18 @@ public sealed class SlideCanvas : Control
         var (minVal, maxVal, _) = ComputeNiceAxisRange(chart);
         double range = maxVal - minVal;
         if (range <= 0) return;
+        // CB1: compute a separate range for secondary-axis series
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
         double stepX = plotW / Math.Max(1, catCount - 1);
 
         for (int si = 0; si < chart.Series.Count; si++)
         {
             var series = chart.Series[si];
+            // CB1: pick the axis range by whether this series is on the secondary axis
+            double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+            double effRange = series.OnSecondaryAxis ? secRange : range;
+            if (effRange <= 0) continue;
             var color  = GetSeriesColor(chart, si, 0, seriesColors);
             var pen    = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5);
             Point? prev = null;
@@ -1036,7 +1061,7 @@ public sealed class SlideCanvas : Control
                 double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) { prev = null; continue; }
                 double px = plotX + ci * stepX;
-                double py = plotY + plotH - (rawVal.Value - minVal) / range * plotH;
+                double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
                 var pt = new Point(px, py);
                 if (prev.HasValue) dc.DrawLine(pen, prev.Value, pt);
                 if (withMarkers)
@@ -1426,8 +1451,11 @@ public sealed class SlideCanvas : Control
     {
         double dataMin = 0, dataMax = 0;
         foreach (var series in chart.Series)
+        {
+            if (series.OnSecondaryAxis) continue;  // CB1: exclude secondary-axis series from primary range
             foreach (var v in series.Values)
                 if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); }
+        }
 
         double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.ValueAxis.Max ?? dataMax;
@@ -1435,6 +1463,40 @@ public sealed class SlideCanvas : Control
 
         double range   = max - min;
         double rawUnit = range / 4.0;
+        double mag     = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
+        double norm    = rawUnit / mag;
+        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
+        double mu      = niceMult * mag;
+        double niceMax = Math.Ceiling(max / mu) * mu;
+        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
+        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
+        return (niceMin, niceMax, mu);
+    }
+
+    /// <summary>
+    /// Computes the nice axis range for the SECONDARY value axis using ONLY series that have
+    /// OnSecondaryAxis == true.  Returns (0,1,1) when there are no secondary-axis series
+    /// (avoids divide-by-zero).  CB1 fix.
+    /// </summary>
+    internal static (double min, double max, double majorUnit) ComputeNiceSecondaryAxisRange(ChartShape chart)
+    {
+        double dataMin = 0, dataMax = 0;
+        bool any = false;
+        foreach (var series in chart.Series)
+        {
+            if (!series.OnSecondaryAxis) continue;
+            foreach (var v in series.Values)
+                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); any = true; }
+        }
+        if (!any) return (0, 1, 1);  // no secondary series → sensible fallback
+
+        double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
+        double max = chart.SecondaryValueAxis?.Max ?? dataMax;
+        if (max <= min) max = min + 1;  // zero-range guard
+
+        double range   = max - min;
+        double rawUnit = range / 4.0;
+        if (rawUnit <= 0) rawUnit = 1;
         double mag     = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
         double norm    = rawUnit / mag;
         double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
@@ -1514,7 +1576,8 @@ public sealed class SlideCanvas : Control
         {
             double pct = value * 100.0;
             int dotPos = code.IndexOf('.');
-            int decimals = dotPos >= 0 ? code.Length - dotPos - 1 - (code.Length - code.LastIndexOf('%')) + 1 : 0;
+            // CB5: count digit chars between '.' and '%' (LastIndexOf('%') - dotPos - 1)
+            int decimals = dotPos >= 0 ? code.LastIndexOf('%') - dotPos - 1 : 0;
             return pct.ToString(decimals > 0 ? $"F{decimals}" : "F0", System.Globalization.CultureInfo.InvariantCulture) + "%";
         }
         if (code.Contains(','))
@@ -1528,6 +1591,11 @@ public sealed class SlideCanvas : Control
         return FormatAxisValue(value);
     }
 
+    /// <summary>
+    /// CB2: passes correct category-sum total for ShowPercent.
+    /// CB3: tracks stacked accumulator so stacked-column labels sit on actual segment.
+    /// CB6: flips OutsideEnd offset below the bar for negative values.
+    /// </summary>
     private static void RenderColumnDataLabels(
         DrawingContext dc, ChartShape chart, int seriesIndex,
         double plotX, double plotY, double plotW, double plotH,
@@ -1540,6 +1608,15 @@ public sealed class SlideCanvas : Control
         int catCount = Math.Max(1, chart.Categories.Count);
         double range = maxVal - minVal;
         if (range <= 0) return;
+
+        // CC3: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderColumnChart's CB1 effMin/effRange selection so bar geometry
+        // (barH, barY, stacked accumulator) uses the correct scale.
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
 
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         const double gapRatio = 1.5;
@@ -1558,21 +1635,73 @@ public sealed class SlideCanvas : Control
             double barX = stacked
                 ? plotX + ci * catW + halfGap
                 : plotX + ci * catW + halfGap + seriesIndex * serW;
-            double barH = Math.Abs((val - minVal) / range * plotH);
-            double barY = plotY + plotH - (val - minVal) / range * plotH;
+
+            double barH, barY;
+            if (stacked)
+            {
+                // CB3: compute stacked Y by mirroring RenderColumnChart's stackedY accumulator
+                double stackedY = plotY + plotH;
+                for (int prevSi = 0; prevSi < seriesIndex; prevSi++)
+                {
+                    double? prevRaw = ci < chart.Series[prevSi].Values.Count
+                        ? chart.Series[prevSi].Values[ci] : null;
+                    if (prevRaw is null) continue;
+                    double h = Math.Max(0.5, Math.Abs(prevRaw.Value / effRange) * plotH);
+                    stackedY -= h;
+                }
+                barH = Math.Max(0.5, Math.Abs(val / effRange) * plotH);
+                barY = stackedY - barH;
+            }
+            else
+            {
+                barH = Math.Abs((val - effMin) / effRange * plotH);
+                barY = plotY + plotH - (val - effMin) / effRange * plotH;
+            }
+
+            // CB2: compute the correct percent denominator
+            double total = 0;
+            if (dl.ShowPercent)
+            {
+                if (stacked)
+                {
+                    foreach (var s in chart.Series)
+                        if (ci < s.Values.Count && s.Values[ci].HasValue)
+                            total += Math.Abs(s.Values[ci]!.Value);
+                }
+                else
+                {
+                    foreach (var v in series.Values)
+                        if (v.HasValue) total += Math.Abs(v.Value);
+                }
+            }
 
             string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
-            string txt = FormatDataLabel(dl, val, 0, cat, series.Name);
+            string txt = FormatDataLabel(dl, val, total, cat, series.Name);
             if (string.IsNullOrEmpty(txt)) continue;
 
             const double lblH = 11.0;
-            double lblY = position switch
+            double lblY;
+            if (val < 0)
             {
-                DataLabelPosition.InsideEnd  => barY + 2,
-                DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
-                DataLabelPosition.InsideBase => barY + barH - lblH - 2,
-                _                            => barY - lblH - 1
-            };
+                // CB6: negative bar — flip positions relative to bar extent
+                lblY = position switch
+                {
+                    DataLabelPosition.InsideEnd  => barY + barH - lblH - 2,
+                    DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
+                    DataLabelPosition.InsideBase => barY + 2,
+                    _                            => barY + barH + 1  // OutsideEnd below bar
+                };
+            }
+            else
+            {
+                lblY = position switch
+                {
+                    DataLabelPosition.InsideEnd  => barY + 2,
+                    DataLabelPosition.Center     => barY + barH / 2 - lblH / 2,
+                    DataLabelPosition.InsideBase => barY + barH - lblH - 2,
+                    _                            => barY - lblH - 1
+                };
+            }
             DrawChartLabel(dc, txt, new Rect(barX, lblY, serW, lblH),
                 false, 6.5, TextAlignment.Center);
         }
@@ -1590,20 +1719,145 @@ public sealed class SlideCanvas : Control
         int catCount = Math.Max(1, chart.Categories.Count);
         double range = maxVal - minVal;
         if (range <= 0) return;
+
+        // CC2: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderLineChart's CB1 effMin/effRange selection so the label Y
+        // matches the marker Y (both use the same scale).
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
+
         double stepX = plotW / Math.Max(1, catCount - 1);
+
+        // CB2: compute series total for ShowPercent denominator
+        double seriesTotal = 0;
+        if (dl.ShowPercent)
+            foreach (var v in series.Values)
+                if (v.HasValue) seriesTotal += Math.Abs(v.Value);
 
         for (int ci = 0; ci < catCount; ci++)
         {
             double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
             if (rawVal is null) continue;
             double px = plotX + ci * stepX;
-            double py = plotY + plotH - (rawVal.Value - minVal) / range * plotH;
+            double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
 
             string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
-            string txt = FormatDataLabel(dl, rawVal.Value, 0, cat, series.Name);
+            string txt = FormatDataLabel(dl, rawVal.Value, seriesTotal, cat, series.Name);
             if (string.IsNullOrEmpty(txt)) continue;
 
             DrawChartLabel(dc, txt, new Rect(px - 20, py - 14, 40, 11),
+                false, 6.5, TextAlignment.Center);
+        }
+    }
+
+    /// <summary>
+    /// CB4: Data labels for horizontal bar charts. Mirrors RenderBarChart geometry:
+    /// bars run left→right, categories top→bottom (reversed: index 0 at bottom).
+    /// OutsideEnd = just right of bar tip; Center = horizontally centered in bar.
+    /// CB2: correct percent denominator (category total for stacked, series total otherwise).
+    /// </summary>
+    private static void RenderBarDataLabels(
+        DrawingContext dc, ChartShape chart, int seriesIndex,
+        double plotX, double plotY, double plotW, double plotH,
+        double minVal, double maxVal)
+    {
+        var dl = EffectiveLabels(chart, seriesIndex);
+        if (dl is null) return;
+
+        var series = chart.Series[seriesIndex];
+        int catCount = Math.Max(1, chart.Categories.Count);
+        double range = maxVal - minVal;
+        if (range <= 0) return;
+
+        // CC4: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderBarChart's CB1 effMin/effRange selection so bar geometry
+        // (barW, stackedX accumulator) uses the correct scale.
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
+
+        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
+        const double gapRatio = 1.5;
+        double catH     = plotH / catCount;
+        double clusterH = catH / (1.0 + gapRatio);
+        double halfGap  = (catH - clusterH) / 2.0;
+        int serCount    = Math.Max(1, chart.Series.Count);
+        double serH     = stacked ? clusterH : clusterH / serCount;
+
+        var position = dl.Position ?? DataLabelPosition.OutsideEnd;
+
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+            if (rawVal is null) continue;
+            double val = rawVal.Value;
+
+            // Mirror RenderBarChart: category index 0 is at the BOTTOM (reversed row)
+            int    renderRow = catCount - 1 - ci;
+            double catTop    = plotY + renderRow * catH + halfGap;
+
+            double barW, barX, barY;
+            if (stacked)
+            {
+                // Accumulate stackedX from previous series (mirrors RenderBarChart stackedX logic)
+                double stackedX = plotX;
+                for (int prevSi = 0; prevSi < seriesIndex; prevSi++)
+                {
+                    double? prevRaw = ci < chart.Series[prevSi].Values.Count
+                        ? chart.Series[prevSi].Values[ci] : null;
+                    if (prevRaw is null) continue;
+                    stackedX += Math.Max(0.5, Math.Abs((prevRaw.Value - effMin) / effRange * plotW));
+                }
+                barW = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotW));
+                barX = stackedX;
+                barY = catTop;
+            }
+            else
+            {
+                int renderSer = serCount - 1 - seriesIndex;
+                barW = Math.Abs((val - effMin) / effRange * plotW);
+                barX = plotX;
+                barY = catTop + renderSer * serH;
+            }
+
+            // CB2: compute percent denominator
+            double total = 0;
+            if (dl.ShowPercent)
+            {
+                if (stacked)
+                {
+                    foreach (var s in chart.Series)
+                        if (ci < s.Values.Count && s.Values[ci].HasValue)
+                            total += Math.Abs(s.Values[ci]!.Value);
+                }
+                else
+                {
+                    foreach (var v in series.Values)
+                        if (v.HasValue) total += Math.Abs(v.Value);
+                }
+            }
+
+            string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
+            string txt = FormatDataLabel(dl, val, total, cat, series.Name);
+            if (string.IsNullOrEmpty(txt)) continue;
+
+            const double lblH = 11.0;
+            // Horizontal bar label X placement
+            double lblX = position switch
+            {
+                DataLabelPosition.InsideEnd  => barX + barW - 22 - 2,
+                DataLabelPosition.Center     => barX + barW / 2 - 22,
+                DataLabelPosition.InsideBase => barX + 2,
+                _                            => barX + barW + 2  // OutsideEnd: right of bar tip
+            };
+            double lblY = barY + serH / 2 - lblH / 2;
+
+            DrawChartLabel(dc, txt, new Rect(lblX, lblY, 44, lblH),
                 false, 6.5, TextAlignment.Center);
         }
     }

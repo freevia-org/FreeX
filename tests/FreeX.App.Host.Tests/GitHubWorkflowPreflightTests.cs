@@ -121,17 +121,25 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreePWorkflow_RunsOnCentralPropsPushes()
+    public void FreePWorkflow_IsManualOnlyOrWatchesCentralProps()
     {
         foreach (var workflowName in new[] { "freep-ci.yml" })
         {
             var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", workflowName);
-            var pushBlock = ExtractRequiredYamlBlock(workflow, "push:");
+            var onBlock = ExtractRequiredYamlBlock(workflow, "on:");
 
-            pushBlock.Should().Contain("branches:");
-            pushBlock.Should().Contain("- main");
-            pushBlock.Should().Contain("Directory.Build.props");
-            pushBlock.Should().Contain("Directory.Packages.props");
+            // FreeP CI is intentionally manual-only (workflow_dispatch). If a push trigger
+            // is ever reintroduced it must watch the central props files (also enforced by
+            // tools/Test-GitHubWorkflows.ps1).
+            onBlock.Should().Contain("workflow_dispatch:");
+            if (onBlock.Contains("push:", StringComparison.Ordinal))
+            {
+                var pushBlock = ExtractRequiredYamlBlock(workflow, "push:");
+                pushBlock.Should().Contain("branches:");
+                pushBlock.Should().Contain("- main");
+                pushBlock.Should().Contain("Directory.Build.props");
+                pushBlock.Should().Contain("Directory.Packages.props");
+            }
         }
     }
 

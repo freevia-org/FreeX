@@ -4255,6 +4255,19 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
+        // Border tab rebuilt to match Windows: the line style is a scrollable list of line
+        // samples (keeps the FormatCellsBorderStyleBox automation id), the preset buttons,
+        // toggles and preview are arranged into Presets / Line / Border groups, plus an
+        // "Individual border details" section. Verify the rebuilt structure is present.
+        source.Should().Contain("CreateFormatCellsBorderStyleListBox(");
+        source.Should().Contain("CreateFormatCellsBorderGroup(");
+        source.Should().Contain("UiText.Get(\"FormatCells_Presets\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_Line\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_Border\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_IndividualBorderDetails\")");
+        // Font tab: Font name + size are now selectable lists driving the existing boxes.
+        source.Should().Contain("\"FormatCellsFontNameList\"");
+        source.Should().Contain("\"FormatCellsFontSizeList\"");
         source.Should().Contain("BorderTop: borderTopSide");
         source.Should().Contain("BorderRight: borderRightSide");
         source.Should().Contain("BorderBottom: borderBottomSide");

@@ -94,82 +94,149 @@ internal static class PptxChartWriter
                             new XElement(A + "t", title))))),
             new XElement(C + "overlay", new XAttribute("val", "0")));
 
+    // Axis ID constants for the primary and secondary axis pairs.
+    // Primary: catAx id=1, valAx id=2. Secondary: catAx id=4 (hidden), valAx id=3.
+    private const int PrimaryCatAxId   = 1;
+    private const int PrimaryValAxId   = 2;
+    private const int SecondaryValAxId = 3;
+    private const int SecondaryCatAxId = 4;  // hidden phantom cat axis for the secondary plot group
+
     private static XElement BuildPlotArea(ChartShape chart)
     {
-        var seriesEls = chart.Series.Select((s, i) => BuildSeriesEl(chart, s, i)).ToList();
-
-        // For scatter/bubble, series elements need xVal/yVal/bubbleSize; build them separately.
         bool isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
-        var scatterSeriesEls = isScatterLike
-            ? chart.Series.Select((s, i) => BuildScatterSeriesEl(chart, s, i)).ToList()
+        bool noCatAx       = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Unknown;
+
+        // CA1: split series by OnSecondaryAxis only when there IS a SecondaryValueAxis and at
+        // least one secondary series. All other charts use a single group (no regression).
+        bool hasSecondary = chart.SecondaryValueAxis is not null
+                            && !noCatAx
+                            && !isScatterLike
+                            && chart.Series.Any(s => s.OnSecondaryAxis);
+
+        var primarySeries   = chart.Series.Where(s => !s.OnSecondaryAxis).ToList();
+        var secondarySeries = hasSecondary
+            ? chart.Series.Where(s => s.OnSecondaryAxis).ToList()
+            : new List<ChartSeries>();
+
+        // Build series elements; re-index by their global position so idx/order stay consistent.
+        int serOffset = 0;
+        List<XElement> primarySeriesEls;
+        if (isScatterLike)
+            primarySeriesEls = primarySeries.Select((s, i) => BuildScatterSeriesEl(chart, s, serOffset + i)).ToList();
+        else
+            primarySeriesEls = primarySeries.Select((s, i) => BuildSeriesEl(chart, s, serOffset + i)).ToList();
+        serOffset += primarySeries.Count;
+
+        var secondarySeriesEls = secondarySeries
+            .Select((s, i) => BuildSeriesEl(chart, s, serOffset + i)).ToList();
+
+        // Build the primary chart-type element (references the primary axis pair).
+        XElement? primaryChartTypeEl = BuildChartTypeEl(
+            chart, primarySeriesEls, isScatterLike,
+            catAxId: PrimaryCatAxId, valAxId: PrimaryValAxId);
+
+        // CA1: inject chart-level data labels into the PRIMARY plot-type element only.
+        if (primaryChartTypeEl is not null)
+        {
+            var chartDlblsEl = BuildDataLabelsEl(chart.DataLabels, chart.ChartType);
+            if (chartDlblsEl is not null)
+            {
+                // Insert dLbls before the first c:axId child (or at end if none).
+                var firstAxId = primaryChartTypeEl.Elements(C + "axId").FirstOrDefault();
+                if (firstAxId is not null)
+                    firstAxId.AddBeforeSelf(chartDlblsEl);
+                else
+                    primaryChartTypeEl.Add(chartDlblsEl);
+            }
+        }
+
+        // CA1: secondary plot group — always a lineChart referencing the secondary axis pair.
+        // PowerPoint requires every valAx to be referenced by at least one plot group.
+        XElement? secondaryChartTypeEl = null;
+        if (hasSecondary)
+        {
+            secondaryChartTypeEl = new XElement(C + "lineChart",
+                new XElement(C + "grouping",   new XAttribute("val", "standard")),
+                new XElement(C + "varyColors", new XAttribute("val", "0")),
+                secondarySeriesEls,
+                new XElement(C + "axId", new XAttribute("val", SecondaryCatAxId)),
+                new XElement(C + "axId", new XAttribute("val", SecondaryValAxId)));
+        }
+
+        // ── Primary axis elements ─────────────────────────────────────────────
+        var catAxEl  = !noCatAx && !isScatterLike
+            ? BuildCatAxEl(chart.CategoryAxis, PrimaryCatAxId, PrimaryValAxId)
+            : null;
+        var valAxEl  = !noCatAx
+            ? BuildValAxEl(chart.ValueAxis, PrimaryValAxId, PrimaryCatAxId)
+            : null;
+        // Scatter/bubble X value axis lives at bottom (axPos="b").
+        var xValAxEl = isScatterLike
+            ? BuildValAxEl(chart.CategoryAxis, PrimaryCatAxId, PrimaryValAxId, axPos: "b")
             : null;
 
-        XElement? chartTypeEl = chart.ChartType switch
+        // ── Secondary axis elements (only when a real secondary group was emitted) ─
+        // Secondary catAx: hidden phantom axis (delete=1) so PowerPoint knows what axis the
+        // secondary valAx crosses; it must appear before the secondary valAx in the plotArea.
+        XElement? secCatAxEl = null;
+        XElement? secValAxEl = null;
+        if (hasSecondary)
+        {
+            secCatAxEl = new XElement(C + "catAx",
+                new XElement(C + "axId",  new XAttribute("val", SecondaryCatAxId)),
+                new XElement(C + "scaling",
+                    new XElement(C + "orientation", new XAttribute("val", "minMax"))),
+                new XElement(C + "delete",  new XAttribute("val", "1")),  // hidden
+                new XElement(C + "axPos",   new XAttribute("val", "b")),
+                new XElement(C + "crossAx", new XAttribute("val", SecondaryValAxId)));
+
+            secValAxEl = BuildValAxEl(
+                chart.SecondaryValueAxis!, SecondaryValAxId, SecondaryCatAxId,
+                axPos: "r", crosses: "max");
+        }
+
+        return new XElement(C + "plotArea",
+            primaryChartTypeEl,
+            secondaryChartTypeEl,
+            xValAxEl,
+            catAxEl,
+            valAxEl,
+            secCatAxEl,
+            secValAxEl);
+    }
+
+    /// <summary>Dispatches to the correct chart-type builder using the given axId pair.</summary>
+    private static XElement? BuildChartTypeEl(
+        ChartShape chart, List<XElement> seriesEls, bool isScatterLike,
+        int catAxId, int valAxId)
+    {
+        return chart.ChartType switch
         {
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 =>
-                BuildBarChartEl(chart, seriesEls, isBar: true),
+                BuildBarChartEl(chart, seriesEls, isBar: true,  catAxId, valAxId),
             ChartType.ColumnClustered or ChartType.ColumnStacked or ChartType.ColumnStacked100 =>
-                BuildBarChartEl(chart, seriesEls, isBar: false),
+                BuildBarChartEl(chart, seriesEls, isBar: false, catAxId, valAxId),
             ChartType.Line or ChartType.LineMarkers =>
-                BuildLineChartEl(chart, seriesEls),
+                BuildLineChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Pie =>
                 BuildPieChartEl(chart, seriesEls),
             ChartType.Doughnut =>
                 BuildDoughnutChartEl(chart, seriesEls),
             ChartType.Area or ChartType.AreaStacked =>
-                BuildAreaChartEl(chart, seriesEls),
+                BuildAreaChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Scatter =>
-                BuildScatterChartEl(chart, scatterSeriesEls!),
+                BuildScatterChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Bubble =>
-                BuildBubbleChartEl(chart, scatterSeriesEls!),
+                BuildBubbleChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Radar =>
-                BuildRadarChartEl(chart, seriesEls),
+                BuildRadarChartEl(chart, seriesEls, catAxId, valAxId),
             _ =>
-                BuildBarChartEl(chart, seriesEls, isBar: false) // default fallback
+                BuildBarChartEl(chart, seriesEls, isBar: false, catAxId, valAxId)
         };
-
-        // Inject chart-level data labels into the plot-type element
-        if (chartTypeEl is not null)
-        {
-            var chartDlblsEl = BuildDataLabelsEl(chart.DataLabels);
-            if (chartDlblsEl is not null)
-            {
-                // Insert dLbls before the first c:axId child (or at end if none)
-                var firstAxId = chartTypeEl.Elements(C + "axId").FirstOrDefault();
-                if (firstAxId is not null)
-                    firstAxId.AddBeforeSelf(chartDlblsEl);
-                else
-                    chartTypeEl.Add(chartDlblsEl);
-            }
-        }
-
-        bool noCatAx = chart.ChartType is ChartType.Pie or ChartType.Doughnut
-                                       or ChartType.Unknown;
-        var catAxEl = !noCatAx && !isScatterLike
-            ? BuildCatAxEl(chart.CategoryAxis, 1, 2)
-            : null;
-        // Scatter/bubble use two valAx elements (one for X, one for Y)
-        var valAxEl = !noCatAx
-            ? BuildValAxEl(chart.ValueAxis, 2, 1)
-            : null;
-        var xValAxEl = isScatterLike
-            ? BuildValAxEl(chart.CategoryAxis, 1, 2, axPos: "b")   // BV2: scatter/bubble X axis at bottom
-            : null;
-
-        // Secondary value axis (right side)
-        var secValAxEl = (chart.SecondaryValueAxis is not null && !noCatAx && !isScatterLike)
-            ? BuildValAxEl(chart.SecondaryValueAxis, 3, 1, axPos: "r")
-            : null;
-
-        return new XElement(C + "plotArea",
-            chartTypeEl,
-            xValAxEl,
-            catAxEl,
-            valAxEl,
-            secValAxEl);
     }
 
-    private static XElement BuildBarChartEl(ChartShape chart, List<XElement> seriesEls, bool isBar)
+    private static XElement BuildBarChartEl(ChartShape chart, List<XElement> seriesEls, bool isBar,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId)
     {
         var grouping = chart.ChartType switch
         {
@@ -182,30 +249,33 @@ internal static class PptxChartWriter
             new XElement(C + "barDir", new XAttribute("val", isBar ? "bar" : "col")),
             new XElement(C + "grouping", new XAttribute("val", grouping)),
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
     }
 
-    private static XElement BuildLineChartEl(ChartShape chart, List<XElement> seriesEls) =>
+    private static XElement BuildLineChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "lineChart",
             new XElement(C + "grouping", new XAttribute("val", "standard")),
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
 
     private static XElement BuildPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "pieChart",
             seriesEls);
 
-    private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls) =>
+    private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "areaChart",
             new XElement(C + "grouping",
                 new XAttribute("val", chart.ChartType == ChartType.AreaStacked ? "stacked" : "standard")),
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
 
-    private static XElement BuildScatterChartEl(ChartShape chart, List<XElement> seriesEls) =>
+    private static XElement BuildScatterChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "scatterChart",
             new XElement(C + "scatterStyle",
                 new XAttribute("val", chart.ScatterStyle switch
@@ -217,8 +287,8 @@ internal static class PptxChartWriter
                     _                         => "lineMarker"
                 })),
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
 
     private static XElement BuildDoughnutChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "doughnutChart",
@@ -226,7 +296,8 @@ internal static class PptxChartWriter
                 new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))),
             seriesEls);
 
-    private static XElement BuildRadarChartEl(ChartShape chart, List<XElement> seriesEls) =>
+    private static XElement BuildRadarChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "radarChart",
             new XElement(C + "radarStyle",
                 new XAttribute("val", chart.RadarStyle switch
@@ -236,38 +307,37 @@ internal static class PptxChartWriter
                     _                 => "standard"
                 })),
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
 
-    private static XElement BuildBubbleChartEl(ChartShape chart, List<XElement> seriesEls) =>
+    private static XElement BuildBubbleChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
         new XElement(C + "bubbleChart",
             seriesEls,
-            new XElement(C + "axId", new XAttribute("val", "1")),
-            new XElement(C + "axId", new XAttribute("val", "2")));
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
 
-    private static XElement? BuildDataLabelsEl(ChartDataLabels? labels)
+    // CA2+CA3: Build dLbls in CT_DLbls schema order and gate dLblPos by chart type.
+    // CT_DLbls order: numFmt, spPr, txPr, dLblPos, showLegendKey, showVal,
+    //                 showCatName, showSerName, showPercent, showBubbleSize, separator.
+    private static XElement? BuildDataLabelsEl(ChartDataLabels? labels,
+        ChartType chartType = ChartType.ColumnClustered)
     {
         if (labels is null || !labels.HasAny) return null;
 
         var el = new XElement(C + "dLbls");
 
-        if (labels.ShowLegendKey)
-            el.Add(new XElement(C + "showLegendKey", new XAttribute("val", "1")));
-        if (labels.ShowValue)
-            el.Add(new XElement(C + "showVal", new XAttribute("val", "1")));
-        if (labels.ShowCategoryName)
-            el.Add(new XElement(C + "showCatName", new XAttribute("val", "1")));
-        if (labels.ShowSeriesName)
-            el.Add(new XElement(C + "showSerName", new XAttribute("val", "1")));
-        if (labels.ShowPercent)
-            el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
+        // CA2: numFmt FIRST (before dLblPos and show* flags).
         if (!string.IsNullOrEmpty(labels.NumberFormat))
             el.Add(new XElement(C + "numFmt",
                 new XAttribute("formatCode", labels.NumberFormat),
                 new XAttribute("sourceLinked", "0")));
+
+        // CA2: dLblPos SECOND (before show* flags).
+        // CA3: Gate by chart type / grouping — only emit positions valid for the target type.
         if (labels.Position.HasValue)
         {
-            string posVal = labels.Position.Value switch
+            string? posVal = labels.Position.Value switch
             {
                 DataLabelPosition.Center     => "ctr",
                 DataLabelPosition.InsideEnd  => "inEnd",
@@ -278,12 +348,57 @@ internal static class PptxChartWriter
                 DataLabelPosition.Below      => "b",
                 DataLabelPosition.Left       => "l",
                 DataLabelPosition.Right      => "r",
-                _                            => "bestFit"
+                _                            => null
             };
-            el.Add(new XElement(C + "dLblPos", new XAttribute("val", posVal)));
+
+            // CA3: restrict dLblPos per chart-type validity rules.
+            posVal = GateDLblPos(posVal, chartType);
+            if (posVal is not null)
+                el.Add(new XElement(C + "dLblPos", new XAttribute("val", posVal)));
         }
 
+        // CA2: show* flags LAST (in schema order).
+        if (labels.ShowLegendKey)
+            el.Add(new XElement(C + "showLegendKey", new XAttribute("val", "1")));
+        if (labels.ShowValue)
+            el.Add(new XElement(C + "showVal", new XAttribute("val", "1")));
+        if (labels.ShowCategoryName)
+            el.Add(new XElement(C + "showCatName", new XAttribute("val", "1")));
+        if (labels.ShowSeriesName)
+            el.Add(new XElement(C + "showSerName", new XAttribute("val", "1")));
+        if (labels.ShowPercent)
+            el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
+
         return el;
+    }
+
+    /// <summary>
+    /// CA3: Returns a valid dLblPos value for the given chart type, or null to suppress the element.
+    /// Rules:
+    ///   Stacked bar/column  → only "ctr" is valid (OOXML §21.2.2.44); coerce any other to null (suppress).
+    ///   Pie / Doughnut      → only ctr / inEnd / outEnd / bestFit; suppress inBase/directional.
+    ///   All other types     → pass through as-is.
+    /// </summary>
+    private static string? GateDLblPos(string? posVal, ChartType chartType)
+    {
+        if (posVal is null) return null;
+
+        bool isStackedBar = chartType is ChartType.BarStacked or ChartType.BarStacked100
+                                      or ChartType.ColumnStacked or ChartType.ColumnStacked100;
+        if (isStackedBar)
+        {
+            // Only "ctr" is valid for stacked; outEnd/inEnd/inBase → suppress.
+            return posVal == "ctr" ? "ctr" : null;
+        }
+
+        bool isPieLike = chartType is ChartType.Pie or ChartType.Doughnut;
+        if (isPieLike)
+        {
+            // Pie allows: ctr, inEnd, outEnd, bestFit.  Suppress directional (t/b/l/r) and inBase.
+            return posVal is "ctr" or "inEnd" or "outEnd" or "bestFit" ? posVal : null;
+        }
+
+        return posVal;
     }
 
     // ── Scatter/bubble series element (uses xVal/yVal/bubbleSize instead of cat/val) ────
@@ -309,7 +424,7 @@ internal static class PptxChartWriter
                 new XElement(A + "solidFill", BuildColorEl(series.FillColor))));
 
         // Per-series data labels
-        var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels);
+        var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
         if (serDlblsEl2 is not null) el.Add(serDlblsEl2);
 
         // X values (c:xVal)
@@ -399,7 +514,7 @@ internal static class PptxChartWriter
         }
 
         // Per-series data labels
-        var serDlblsEl = BuildDataLabelsEl(series.DataLabels);
+        var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType);
         if (serDlblsEl is not null) el.Add(serDlblsEl);
 
         // Categories
@@ -454,8 +569,9 @@ internal static class PptxChartWriter
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
     // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
-    // Category-axis charts pass the default "l" from their single valAx call site.
-    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId, string axPos = "l")
+    // CA1: crosses parameter — secondary valAx crosses at "max" (right-side position).
+    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId,
+        string axPos = "l", string? crosses = null)
     {
         var scalingEl = new XElement(C + "scaling",
             new XElement(C + "orientation", new XAttribute("val", "minMax")));
@@ -476,6 +592,9 @@ internal static class PptxChartWriter
                 ? new XElement(C + "majorGridlines")
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
+            crosses is not null
+                ? new XElement(C + "crosses", new XAttribute("val", crosses))
+                : null,
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
     }
 

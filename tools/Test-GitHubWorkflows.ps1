@@ -281,10 +281,13 @@ foreach ($workflow in $workflows) {
         $pushBlock = Get-IndentedYamlBlock `
             -Lines $lines `
             -Pattern "^(?<indent>\s*)push\s*:\s*(?:#.*)?$"
-        foreach ($requiredPushPath in @("Directory.Build.props", "Directory.Packages.props")) {
-            if ([string]::IsNullOrWhiteSpace($pushBlock) -or
-                -not $pushBlock.Contains($requiredPushPath)) {
-                $errors.Add("$($workflow.Name): push path filters must include $requiredPushPath.")
+        # FreeP CI is intentionally manual-only (workflow_dispatch). Only enforce the
+        # central-props push path filters when a push trigger is actually declared.
+        if (-not [string]::IsNullOrWhiteSpace($pushBlock)) {
+            foreach ($requiredPushPath in @("Directory.Build.props", "Directory.Packages.props")) {
+                if (-not $pushBlock.Contains($requiredPushPath)) {
+                    $errors.Add("$($workflow.Name): push path filters must include $requiredPushPath.")
+                }
             }
         }
     }
