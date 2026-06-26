@@ -106,6 +106,14 @@ public sealed class DocumentView : Control
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
+    // ── AV-TBL: in-place table cell caret ─────────────────────────────────────────────────────────
+    // Non-null when the caret is inside a table cell. Stores the fully-qualified cell address and the
+    // character offset within that cell's paragraph. When _cellCaret is set, _caret.Block = the table
+    // block index and _caret.Offset = the PlacedChar.Offset emitted for that glyph (for hit-test lookup).
+    private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellCaret;
+    // Non-null when there is a selection anchor inside a cell (same encoding as _cellCaret).
+    private (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? _cellAnchor;
+
     private TextDocument _doc = TextDocument.CreateEmpty();
     private DocumentCommandBus _bus;
     private DocPosition _caret;
@@ -150,8 +158,15 @@ public sealed class DocumentView : Control
     /// <summary>Raised when the caret moves (key navigation, click, find) so the shell can update the page indicator.</summary>
     public event Action? CaretMoved;
 
-    /// <summary>Raised when a table cell is double-clicked, so the shell can open a cell editor.</summary>
+    /// <summary>
+    /// Raised when a table cell double-click is received and no in-place caret placement is possible
+    /// (e.g., the cell has no placed glyphs yet). Kept for shell compatibility; normal editing now
+    /// routes the caret directly into the cell via <see cref="PlaceCaretInCell"/>.
+    /// AV-TBL: this event is now only fired as a fallback; in-place editing supersedes it.
+    /// </summary>
+#pragma warning disable CS0067 // event may remain un-raised when in-place path is always taken
     public event Action<CellEditRequest>? CellEditRequested;
+#pragma warning restore CS0067
 
     /// <summary>Raised when <see cref="ViewMode"/> changes so the shell can update the status bar / ribbon state.</summary>
     public event Action? ViewModeChanged;
@@ -205,6 +220,8 @@ public sealed class DocumentView : Control
         _bus.Changed += OnModelChanged;
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = null;
+        _cellCaret = null; // AV-TBL: clear cell state on document load
+        _cellAnchor = null;
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }
@@ -359,6 +376,38 @@ public sealed class DocumentView : Control
     public int ParagraphCount => _doc.Blocks.Count(b => b is Paragraph);
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
     public string PlainText => _doc.PlainText;
+
+    // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the current cell caret address (TableBlock, Row, Col, ParaIdx, Offset), or null
+    /// when the caret is in body text. Used by tests and the ribbon to check whether the caret
+    /// is inside a table cell.
+    /// </summary>
+    public (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellCaretInfo => _cellCaret;
+
+    /// <summary>
+    /// Programmatically place the caret at (row, col, paraIdx, offset) in the table at
+    /// <paramref name="tableBlockIndex"/>. Triggers a layout pass if needed, then sets
+    /// <c>_cellCaret</c> and updates <c>_caret</c> for caret rendering.
+    /// Used by tests and the host to drive cell editing without pointer events.
+    /// </summary>
+    public void PlaceCaretInCell(int tableBlockIndex, int row, int col, int paraIdx, int offset)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        var para = GetCellParagraph(tableBlockIndex, row, col, paraIdx);
+        if (para == null)
+            return;
+        var maxOffset = ParaCells(para).Count;
+        offset = Math.Clamp(offset, 0, maxOffset);
+        _cellCaret = (tableBlockIndex, row, col, paraIdx, offset);
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(tableBlockIndex, FindCellGlyphOffset(tableBlockIndex, row, col, paraIdx, offset));
+        _selectionAnchor = _caret;
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
 
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
 
@@ -2098,6 +2147,8 @@ public sealed class DocumentView : Control
         const double pad = 5;
         var borders = table.Formatting.Borders;
         var headerOffset = table.Formatting.HeaderRow ? 1 : 0;
+        // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
+        // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
 
         for (var r = 0; r < table.Rows.Count; r++)
@@ -2106,7 +2157,9 @@ public sealed class DocumentView : Control
             var isHeader = table.Formatting.HeaderRow && r == 0;
             var isBand = table.Formatting.BandedRows && !isHeader && (r - headerOffset) % 2 == 1;
 
-            var measured = new List<(int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
+            // AV-TBL: carry the TableCell model reference and actual column index so we can emit
+            // per-paragraph, per-character cell-aware PlacedChars for caret routing.
+            var measured = new List<(TableCell Cell, int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             foreach (var cell in row.Cells)
@@ -2129,7 +2182,7 @@ public sealed class DocumentView : Control
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((col, span, lines, fmt));
+                measured.Add((cell, col, span, lines, fmt));
                 col += span;
             }
 
@@ -2140,7 +2193,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (startCol, span, lines, fmt) in measured)
+            foreach (var (cellModel, startCol, span, lines, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
@@ -2152,17 +2205,71 @@ public sealed class DocumentView : Control
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
                 var ty = rowPageSpaceY + pad;
+                // AV-TBL: walk paragraphs so each PlacedChar carries its paragraph index and
+                // character offset within that paragraph. WrapCellLines flattens all paragraphs
+                // via cell.PlainText which joins them with '\n'. We skip '\n' separator chars
+                // (they belong to neither paragraph) and advance the paragraph index after each.
+                var paraIdx = 0;
+                var paraCharOffset = 0; // char position within current paragraph
+                var parasLengths = cellModel.Paragraphs.Count > 0
+                    ? cellModel.Paragraphs.Select(p => p.PlainText.Length).ToList()
+                    : new List<int> { 0 };
+
                 foreach (var (lineHeight, chars) in lines)
                 {
                     var tx = cellX + pad;
                     foreach (var (ch, w) in chars)
                     {
-                        _placed.Add(new PlacedChar(blockIndex, glyphOffset++, tx, ty, w, lineHeight, fmt, ch, Sentinel: false));
+                        // Skip '\n' separator: it joins paragraphs in cell.PlainText but is not
+                        // part of any paragraph's own text content.
+                        if (ch == '\n')
+                        {
+                            if (paraIdx < parasLengths.Count - 1)
+                            {
+                                paraIdx++;
+                                paraCharOffset = 0;
+                            }
+                            // Do not emit a PlacedChar for the separator; skip it visually too.
+                            continue;
+                        }
+
+                        // Advance paragraph index if we've consumed this paragraph's text (safety).
+                        while (paraIdx < parasLengths.Count - 1 && paraCharOffset >= parasLengths[paraIdx])
+                        {
+                            paraIdx++;
+                            paraCharOffset = 0;
+                        }
+                        _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
+                            Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: paraIdx, CellParaOffset: paraCharOffset));
+                        glyphOffset++;
+                        paraCharOffset++;
                         tx += w;
                     }
 
                     ty += lineHeight;
                 }
+
+                // Emit a sentinel glyph for each paragraph in the cell (at the end of last para, or after all text).
+                // This allows the caret to sit after the last character in the cell.
+                // We emit exactly one sentinel per cell paragraph so caret can land "after" each para.
+                var sentinelParaIdx = parasLengths.Count - 1;
+                var sentinelParaOffset = parasLengths.Count > 0 ? parasLengths[sentinelParaIdx] : 0;
+                // Position the sentinel at the right edge of the last text line, or at pad if no text.
+                var sentinelX = ty > rowPageSpaceY + pad
+                    ? columnLeft[startCol] + pad  // start of next line
+                    : columnLeft[startCol] + pad;
+                var sentinelY = lines.Count > 0 ? rowPageSpaceY + pad + lines.Sum(l => l.Height) - lines[^1].Height : rowPageSpaceY + pad;
+                var sentinelH = lines.Count > 0 ? lines[^1].Height : Build("A", fmt).Height;
+                // Advance sentinel X past last character on last line
+                if (lines.Count > 0)
+                {
+                    var lastLineChars = lines[^1].Chars;
+                    var lastX = columnLeft[startCol] + pad + lastLineChars.Sum(c => c.W);
+                    sentinelX = lastX;
+                }
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
+                    Sentinel: true, CellRow: r, CellCol: startCol, CellParaIdx: sentinelParaIdx, CellParaOffset: sentinelParaOffset));
+                glyphOffset++;
             }
 
             _layoutContentY = rowContentY + rowHeight;
@@ -3269,6 +3376,35 @@ public sealed class DocumentView : Control
 
     private bool TryGetCaretRect(out Rect rect)
     {
+        // AV-TBL: when the caret is inside a cell, search by cell address + para-offset instead of
+        // block+glyph-offset. This is robust after model edits (which invalidate glyph offsets).
+        if (_cellCaret is { } cc)
+        {
+            foreach (var pc in _placed)
+            {
+                if (pc.Block == cc.TableBlock && pc.CellRow == cc.Row && pc.CellCol == cc.Col
+                    && pc.CellParaIdx == cc.ParaIdx && pc.CellParaOffset == cc.Offset)
+                {
+                    rect = new Rect(pc.X, pc.Y, 1.5, pc.LineHeight);
+                    return true;
+                }
+            }
+            // If no exact glyph found (e.g., caret is at end of text = sentinel position),
+            // look for the sentinel at that cell + para.
+            foreach (var pc in _placed)
+            {
+                if (pc.Block == cc.TableBlock && pc.CellRow == cc.Row && pc.CellCol == cc.Col
+                    && pc.CellParaIdx == cc.ParaIdx && pc.Sentinel)
+                {
+                    rect = new Rect(pc.X, pc.Y, 1.5, pc.LineHeight);
+                    return true;
+                }
+            }
+            rect = default;
+            return false;
+        }
+
+        // Body paragraph: search by block + glyph offset (original logic).
         foreach (var pc in _placed)
         {
             if (pc.Block == _caret.Block && pc.Offset == _caret.Offset)
@@ -3288,28 +3424,26 @@ public sealed class DocumentView : Control
     {
         base.OnPointerPressed(e);
 
-        // Double-click a table cell opens the modal cell editor; in-cell caret editing is not modelled yet.
-        if (e.ClickCount == 2)
-        {
-            var hit = e.GetPosition(this);
-            foreach (var cell in _cellHits)
-            {
-                if (cell.Rect.Contains(hit))
-                {
-                    CellEditRequested?.Invoke(new CellEditRequest(cell.Block, cell.Row, cell.Col, GetCellText(cell.Block, cell.Row, cell.Col)));
-                    return;
-                }
-            }
-        }
-
         Focus();
         var point = e.GetPosition(this);
+        var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+
         if (TryHitTest(point, out var pos))
         {
-            _selectionAnchor = (e.KeyModifiers & KeyModifiers.Shift) != 0 ? (_selectionAnchor ?? _caret) : null;
-            _caret = pos;
-            if ((e.KeyModifiers & KeyModifiers.Shift) == 0)
+            // AV-TBL: When entering a cell, _cellCaret was set by TryHitTest.
+            // When leaving a cell (hitting body text), _cellCaret is cleared.
+            if (!shift)
+            {
                 _selectionAnchor = pos;
+                _cellAnchor = _cellCaret;
+            }
+            else
+            {
+                // Shift-click extends selection; keep existing anchor.
+                _selectionAnchor ??= _caret;
+                _cellAnchor ??= _cellCaret;
+            }
+            _caret = pos;
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
@@ -3363,27 +3497,77 @@ public sealed class DocumentView : Control
 
     public void InsertText(string text)
     {
+        // AV-TBL: route into table cell when the caret is inside a cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var offset = cc.Offset;
+            var fmt = ActiveFormatting(para, offset);
+            _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+            {
+                var chars = ParaCells(p);
+                foreach (var ch in text)
+                    chars.Insert(Math.Clamp(offset, 0, chars.Count), new Cell(ch, fmt));
+                SetRuns(p, chars);
+            }));
+            _cellCaret = cc with { Offset = offset + text.Length };
+            _cellAnchor = _cellCaret;
+            // Update _caret.Offset to match so TryGetCaretRect can find the sentinel.
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, cc.Offset + text.Length));
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null)
             DeleteSelection();
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
 
         var block = _caret.Block;
-        var offset = _caret.Offset;
-        var fmt = ActiveFormatting(paragraph, offset);
+        var bodyOffset = _caret.Offset;
+        var bodyFmt = ActiveFormatting(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
             foreach (var ch in text)
-                cells.Insert(Math.Clamp(offset, 0, cells.Count), new Cell(ch, fmt));
+                cells.Insert(Math.Clamp(bodyOffset, 0, cells.Count), new Cell(ch, bodyFmt));
             SetRuns(p, cells);
         }));
-        _caret = new DocPosition(block, offset + text.Length);
+        _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;
     }
 
     private void Backspace()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            if (cc.Offset > 0)
+            {
+                var offset = cc.Offset;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                {
+                    var chars = ParaCells(p);
+                    if (offset - 1 < chars.Count)
+                        chars.RemoveAt(offset - 1);
+                    SetRuns(p, chars);
+                }));
+                _cellCaret = cc with { Offset = offset - 1 };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, cc.Offset - 1));
+                _selectionAnchor = _caret;
+            }
+            else if (cc.ParaIdx > 0)
+            {
+                // At start of a non-first paragraph in a cell → merge with previous paragraph.
+                CellMergeWithPreviousParagraph(cc);
+            }
+            // else: at start of first paragraph in cell → do nothing (can't go back past cell boundary)
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
         if (_caret.Offset > 0)
         {
@@ -3407,11 +3591,49 @@ public sealed class DocumentView : Control
 
     private void DeleteForward()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var len = ParaCells(para).Count;
+            if (cc.Offset < len)
+            {
+                var offset = cc.Offset;
+                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                {
+                    var chars = ParaCells(p);
+                    if (offset < chars.Count)
+                        chars.RemoveAt(offset);
+                    SetRuns(p, chars);
+                }));
+                // Caret stays at same offset (now pointing at the next char).
+            }
+            // else at end of paragraph → delete paragraph break (join with next paragraph in cell)
+            else
+            {
+                var cellModel = GetCellModel(cc.TableBlock, cc.Row, cc.Col);
+                if (cellModel != null && cc.ParaIdx < cellModel.Paragraphs.Count - 1)
+                {
+                    // Merge current para + next para in cell.
+                    var curPara = cellModel.Paragraphs[cc.ParaIdx];
+                    var nextPara = cellModel.Paragraphs[cc.ParaIdx + 1];
+                    var merged = new Paragraph { Formatting = curPara.Formatting, StyleId = curPara.StyleId };
+                    var mergedCells = ParaCells(curPara);
+                    mergedCells.AddRange(ParaCells(nextPara));
+                    SetRuns(merged, mergedCells);
+                    _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 2, [merged]));
+                }
+            }
+            return;
+        }
+
         if (NormalizedSelection() is not null) { DeleteSelection(); return; }
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        var len = ParaCells(paragraph).Count;
-        if (_caret.Offset < len)
+        var bodyLen = ParaCells(paragraph).Count;
+        if (_caret.Offset < bodyLen)
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
@@ -3427,20 +3649,61 @@ public sealed class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        // AV-TBL: route into table cell.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            if (para == null || !IsEditable(para))
+                return;
+            var offset = cc.Offset;
+            var chars = ParaCells(para);
+            var first = new Paragraph { Formatting = para.Formatting, StyleId = para.StyleId };
+            SetRuns(first, chars.Take(offset).ToList());
+            var second = new Paragraph { Formatting = para.Formatting };
+            SetRuns(second, chars.Skip(offset).ToList());
+            _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, 1, [first, second]));
+            // Move caret to start of the new second paragraph.
+            _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+            _cellAnchor = _cellCaret;
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx + 1, 0));
+            _selectionAnchor = _caret;
+            return;
+        }
+
         if (NormalizedSelection() is not null)
             DeleteSelection();
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
 
         var block = _caret.Block;
-        var offset = _caret.Offset;
-        var cells = ParaCells(paragraph);
-        var first = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
-        SetRuns(first, cells.Take(offset).ToList());
-        var second = new Paragraph { Formatting = paragraph.Formatting };
-        SetRuns(second, cells.Skip(offset).ToList());
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { first, second }));
+        var bodyOffset = _caret.Offset;
+        var bodyCells = ParaCells(paragraph);
+        var firstPara = new Paragraph { Formatting = paragraph.Formatting, StyleId = paragraph.StyleId };
+        SetRuns(firstPara, bodyCells.Take(bodyOffset).ToList());
+        var secondPara = new Paragraph { Formatting = paragraph.Formatting };
+        SetRuns(secondPara, bodyCells.Skip(bodyOffset).ToList());
+        _bus.Execute(new ReplaceBlocksCommand(block, 1, new Block[] { firstPara, secondPara }));
         _caret = new DocPosition(block + 1, 0);
+        _selectionAnchor = _caret;
+    }
+
+    // AV-TBL: merge the current cell paragraph with the previous one (Backspace at start of para).
+    private void CellMergeWithPreviousParagraph((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
+    {
+        var prevParaIdx = cc.ParaIdx - 1;
+        var prevPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, prevParaIdx);
+        var curPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+        if (prevPara == null || curPara == null)
+            return;
+        var prevLen = ParaCells(prevPara).Count;
+        var merged = new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId };
+        var mergedCells = ParaCells(prevPara);
+        mergedCells.AddRange(ParaCells(curPara));
+        SetRuns(merged, mergedCells);
+        _bus.Execute(new SpliceCellParagraphsCommand(cc.TableBlock, cc.Row, cc.Col, prevParaIdx, 2, [merged]));
+        _cellCaret = cc with { ParaIdx = prevParaIdx, Offset = prevLen };
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, prevParaIdx, prevLen));
         _selectionAnchor = _caret;
     }
 
@@ -3967,21 +4230,71 @@ public sealed class DocumentView : Control
 
     private void MoveCaret(int delta, bool extend)
     {
-        var len = CurrentLength();
-        var newOffset = _caret.Offset + delta;
-        if (newOffset < 0)
+        // AV-TBL: when caret is in a cell, navigate within the cell's paragraph, then cross to
+        // adjacent cell paragraphs, then adjacent cells. Cross-row (up/down) navigation is handled
+        // by MoveCaretVertical.
+        if (_cellCaret is { } cc)
+        {
+            var newOffset = cc.Offset + delta;
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            var len = para != null ? ParaCells(para).Count : 0;
+
+            if (newOffset >= 0 && newOffset <= len)
+            {
+                // Still within the current paragraph.
+                _cellCaret = cc with { Offset = newOffset };
+            }
+            else if (newOffset < 0 && cc.ParaIdx > 0)
+            {
+                // Move to end of previous paragraph in same cell.
+                var prevParaIdx = cc.ParaIdx - 1;
+                var prevPara = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, prevParaIdx);
+                var prevLen = prevPara != null ? ParaCells(prevPara).Count : 0;
+                _cellCaret = cc with { ParaIdx = prevParaIdx, Offset = prevLen };
+            }
+            else if (newOffset > len && cc.ParaIdx < (GetCellModel(cc.TableBlock, cc.Row, cc.Col)?.Paragraphs.Count ?? 1) - 1)
+            {
+                // Move to start of next paragraph in same cell.
+                _cellCaret = cc with { ParaIdx = cc.ParaIdx + 1, Offset = 0 };
+            }
+            else if (newOffset < 0)
+            {
+                // At start of first paragraph in cell — move to previous cell.
+                MoveCaretToAdjacentCell(cc, -1, extend);
+                return;
+            }
+            else
+            {
+                // At end of last paragraph in cell — move to next cell.
+                MoveCaretToAdjacentCell(cc, +1, extend);
+                return;
+            }
+
+            // Update _caret.Offset to point at the corresponding glyph for TryGetCaretRect.
+            var nc = _cellCaret.Value;
+            _caret = new DocPosition(nc.TableBlock, FindCellGlyphOffset(nc.TableBlock, nc.Row, nc.Col, nc.ParaIdx, nc.Offset));
+            if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        // Body paragraph navigation.
+        var bodyLen = CurrentLength();
+        var bodyNewOffset = _caret.Offset + delta;
+        if (bodyNewOffset < 0)
         {
             var prev = PreviousEditableBlock(_caret.Block);
             _caret = prev < 0 ? _caret with { Offset = 0 } : new DocPosition(prev, BlockLength(prev));
         }
-        else if (newOffset > len)
+        else if (bodyNewOffset > bodyLen)
         {
             var next = NextEditableBlock(_caret.Block);
-            _caret = next < 0 ? _caret with { Offset = len } : new DocPosition(next, 0);
+            _caret = next < 0 ? _caret with { Offset = bodyLen } : new DocPosition(next, 0);
         }
         else
         {
-            _caret = _caret with { Offset = newOffset };
+            _caret = _caret with { Offset = bodyNewOffset };
         }
 
         if (!extend)
@@ -3990,8 +4303,92 @@ public sealed class DocumentView : Control
         CaretMoved?.Invoke();
     }
 
+    // AV-TBL: move caret to the previous (-1) or next (+1) cell in the same row, or across rows.
+    private void MoveCaretToAdjacentCell((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc, int direction, bool extend)
+    {
+        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        // Build a flat list of (row, startCol) pairs in reading order.
+        var cellOrder = new List<(int Row, int Col)>();
+        for (var ri = 0; ri < table.Rows.Count; ri++)
+        {
+            var col = 0;
+            foreach (var cell in table.Rows[ri].Cells)
+            {
+                cellOrder.Add((ri, col));
+                col += Math.Max(1, cell.GridSpan);
+            }
+        }
+
+        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
+        if (currentIdx < 0)
+            return;
+
+        var targetIdx = currentIdx + direction;
+        if (targetIdx < 0 || targetIdx >= cellOrder.Count)
+        {
+            // Past first/last cell in table — move to adjacent paragraph block.
+            if (direction < 0)
+            {
+                var prevBlock = PreviousEditableBlock(cc.TableBlock);
+                _cellCaret = null;
+                _caret = prevBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(prevBlock, BlockLength(prevBlock));
+            }
+            else
+            {
+                var nextBlock = NextEditableBlock(cc.TableBlock);
+                _cellCaret = null;
+                _caret = nextBlock < 0 ? new DocPosition(cc.TableBlock, 0) : new DocPosition(nextBlock, 0);
+            }
+            if (!extend) { _selectionAnchor = _caret; _cellAnchor = null; }
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
+        var (targetRow, targetCol) = cellOrder[targetIdx];
+        var targetCell = GetCellModel(cc.TableBlock, targetRow, targetCol);
+        if (targetCell == null)
+            return;
+
+        int targetParaIdx, targetOffset;
+        if (direction > 0)
+        {
+            targetParaIdx = 0;
+            targetOffset = 0;
+        }
+        else
+        {
+            targetParaIdx = Math.Max(0, targetCell.Paragraphs.Count - 1);
+            var lastPara = targetCell.Paragraphs.Count > 0 ? targetCell.Paragraphs[targetParaIdx] : null;
+            targetOffset = lastPara != null ? ParaCells(lastPara).Count : 0;
+        }
+
+        _cellCaret = (cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset);
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, targetRow, targetCol, targetParaIdx, targetOffset));
+        if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
+        InvalidateVisual();
+        CaretMoved?.Invoke();
+    }
+
     private void MoveToLineEdge(bool toStart, bool extend)
     {
+        // AV-TBL: Home/End within a cell moves to start/end of the current cell paragraph.
+        if (_cellCaret is { } cc)
+        {
+            var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
+            var len = para != null ? ParaCells(para).Count : 0;
+            var newOffset = toStart ? 0 : len;
+            _cellCaret = cc with { Offset = newOffset };
+            _cellAnchor = _cellCaret;
+            _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
+            _selectionAnchor = _caret;
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            return;
+        }
+
         _caret = _caret with { Offset = toStart ? 0 : CurrentLength() };
         if (!extend)
             _selectionAnchor = _caret;
@@ -4008,7 +4405,10 @@ public sealed class DocumentView : Control
         {
             _caret = pos;
             if (!extend)
+            {
                 _selectionAnchor = _caret;
+                _cellAnchor = _cellCaret;
+            }
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
@@ -4036,15 +4436,101 @@ public sealed class DocumentView : Control
             }
         }
 
-        if (best is not { } b || _doc.Blocks[b.Block] is not Paragraph paragraph || !IsEditable(paragraph))
+        if (best is not { } b)
             return false;
 
+        // AV-TBL: if the best hit is inside a table cell, route into cell editing.
+        if (b.IsCell)
+        {
+            // Snap to the nearer edge of the hit glyph within the cell paragraph.
+            var cellOffset = b.CellParaOffset;
+            if (!b.Sentinel && point.X > b.X + b.W / 2)
+                cellOffset = b.CellParaOffset + 1;
+
+            // Clamp offset to paragraph length.
+            var cellPara = GetCellParagraph(b.Block, b.CellRow, b.CellCol, b.CellParaIdx);
+            var maxOffset = cellPara != null ? ParaCells(cellPara).Count : 0;
+            cellOffset = Math.Clamp(cellOffset, 0, maxOffset);
+
+            // Find the PlacedChar that matches the target cell address+offset so we can use its
+            // PlacedChar.Offset as _caret.Offset (needed for TryGetCaretRect lookup).
+            var matchingGlyphOffset = FindCellGlyphOffset(b.Block, b.CellRow, b.CellCol, b.CellParaIdx, cellOffset);
+            _cellCaret = (b.Block, b.CellRow, b.CellCol, b.CellParaIdx, cellOffset);
+            pos = new DocPosition(b.Block, matchingGlyphOffset);
+            return true;
+        }
+
+        // Body paragraph hit-test (original logic).
+        if (_doc.Blocks[b.Block] is not Paragraph paragraph || !IsEditable(paragraph))
+        {
+            _cellCaret = null;
+            return false;
+        }
+
+        _cellCaret = null;
         // Snap to the nearer edge of the hit glyph.
-        var offset = b.Offset;
+        var bodyOffset = b.Offset;
         if (!b.Sentinel && point.X > b.X + b.W / 2)
-            offset = b.Offset + 1;
-        pos = new DocPosition(b.Block, Math.Clamp(offset, 0, BlockLength(b.Block)));
+            bodyOffset = b.Offset + 1;
+        pos = new DocPosition(b.Block, Math.Clamp(bodyOffset, 0, BlockLength(b.Block)));
         return true;
+    }
+
+    // AV-TBL: find the PlacedChar.Offset value (unique within the table block) for a given cell
+    // address + paragraph offset, so _caret.Offset can be set correctly for TryGetCaretRect.
+    private int FindCellGlyphOffset(int tableBlock, int row, int col, int paraIdx, int paraOffset)
+    {
+        // Find the glyph (character or sentinel) at exactly that cell+para+offset.
+        // Prefer non-sentinel glyphs; fall back to sentinel if offset == para length.
+        PlacedChar? found = null;
+        foreach (var pc in _placed)
+        {
+            if (pc.Block == tableBlock && pc.CellRow == row && pc.CellCol == col && pc.CellParaIdx == paraIdx)
+            {
+                if (!pc.Sentinel && pc.CellParaOffset == paraOffset)
+                {
+                    found = pc;
+                    break;
+                }
+                if (pc.Sentinel && pc.CellParaOffset == paraOffset)
+                    found = pc; // sentinel match — keep searching for a non-sentinel match
+            }
+        }
+        return found?.Offset ?? (_caret.Block == tableBlock ? _caret.Offset : 0);
+    }
+
+    // AV-TBL: retrieve the Paragraph model for a given cell address + paragraph index.
+    private Paragraph? GetCellParagraph(int tableBlock, int row, int col, int paraIdx)
+    {
+        if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
+        if (_doc.Blocks[tableBlock] is not Table table) return null;
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var cells = table.Rows[row].Cells;
+        // Find the cell whose StartCol matches col (handles merged cells).
+        var colIdx = 0;
+        foreach (var cell in cells)
+        {
+            if (colIdx == col)
+                return (paraIdx >= 0 && paraIdx < cell.Paragraphs.Count) ? cell.Paragraphs[paraIdx] : null;
+            colIdx += Math.Max(1, cell.GridSpan);
+        }
+        return null;
+    }
+
+    // AV-TBL: retrieve the TableCell model for a given cell address.
+    private TableCell? GetCellModel(int tableBlock, int row, int col)
+    {
+        if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
+        if (_doc.Blocks[tableBlock] is not Table table) return null;
+        if (row < 0 || row >= table.Rows.Count) return null;
+        var colIdx = 0;
+        foreach (var cell in table.Rows[row].Cells)
+        {
+            if (colIdx == col)
+                return cell;
+            colIdx += Math.Max(1, cell.GridSpan);
+        }
+        return null;
     }
 
     private (DocPosition Start, DocPosition End)? NormalizedSelection()
@@ -4093,6 +4579,9 @@ public sealed class DocumentView : Control
 
     private void ClampCaret()
     {
+        // AV-TBL: clear cell caret on undo/redo to avoid stale cell addresses.
+        _cellCaret = null;
+        _cellAnchor = null;
         if (_caret.Block >= _doc.Blocks.Count)
             _caret = new DocPosition(Math.Max(0, _doc.Blocks.Count - 1), 0);
         _caret = _caret with { Offset = Math.Clamp(_caret.Offset, 0, CurrentLength()) };
@@ -4327,7 +4816,16 @@ public sealed class DocumentView : Control
         double LineHeight,
         RunFormatting Fmt,
         char Ch,
-        bool Sentinel);
+        bool Sentinel,
+        // AV-TBL: cell address (-1 = not in a table cell)
+        int CellRow = -1,
+        int CellCol = -1,
+        int CellParaIdx = -1,
+        int CellParaOffset = -1)
+    {
+        /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
+        public bool IsCell => CellRow >= 0;
+    }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
