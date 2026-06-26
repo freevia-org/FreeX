@@ -890,6 +890,151 @@ public sealed class SetTableCellContentCommand(
     }
 }
 
+// ── AV-TBL4: per-cell shading + border commands ───────────────────────────────────────────────
+
+/// <summary>
+/// Set (or clear) the background shading of a single table cell.
+/// <para><paramref name="colorHex"/> is an RRGGBB hex string (e.g. <c>"#FFFF00"</c>) or null/empty
+/// to clear the fill.  The previous value is snapshot-ed so <see cref="Revert"/> restores it.</para>
+/// Coordinates are: <paramref name="blockIndex"/> = the table's block index in the document,
+/// <paramref name="rowIndex"/> / <paramref name="colIndex"/> = the cell-list indices within that row.
+/// Out-of-range addresses are silently ignored (no-op).
+/// </summary>
+public sealed class SetCellShadingCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    string? colorHex) : IDocumentCommand
+{
+    private string? _previous;
+    private bool _applied;
+
+    public string Label => "Set Cell Shading";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.ShadingColorHex;
+        cell.ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.ShadingColorHex = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table table) return false;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count) return false;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count) return false;
+        cell = cells[colIndex];
+        return true;
+    }
+}
+
+/// <summary>
+/// Set the per-edge borders of a single table cell, merging with any existing per-edge settings.
+/// <para>Only the edges specified in <paramref name="edges"/> are touched; the others are preserved
+/// from the cell's current <see cref="CellBorders"/> (or left null when no borders existed).</para>
+/// An edge is set to a new <see cref="CellBorderEdge"/> built from <paramref name="style"/>,
+/// <paramref name="colorHex"/> and <paramref name="widthPt"/>; passing
+/// <paramref name="clearEdges"/> = true removes the specified edges instead of setting them.
+/// The previous <see cref="CellBorders"/> is snapshot-ed so <see cref="Revert"/> restores it exactly.
+/// Coordinates: same as <see cref="SetCellShadingCommand"/>.
+/// </summary>
+public sealed class SetCellBordersCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    CellBorderEdges edges,
+    BorderLineStyle style,
+    string colorHex,
+    double widthPt,
+    bool clearEdges = false) : IDocumentCommand
+{
+    private CellBorders? _previous;
+    private bool _applied;
+
+    public string Label => clearEdges ? "Clear Cell Border" : "Set Cell Border";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.Borders;
+        cell.Borders = ApplyEdges(cell.Borders, edges, style, colorHex, widthPt, clearEdges);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.Borders = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table table) return false;
+        if (rowIndex < 0 || rowIndex >= table.Rows.Count) return false;
+        var cells = table.Rows[rowIndex].Cells;
+        if (colIndex < 0 || colIndex >= cells.Count) return false;
+        cell = cells[colIndex];
+        return true;
+    }
+
+    internal static CellBorders? ApplyEdges(
+        CellBorders? existing,
+        CellBorderEdges edges,
+        BorderLineStyle style,
+        string colorHex,
+        double widthPt,
+        bool clear)
+    {
+        var edge = clear ? null : new CellBorderEdge(style, colorHex, widthPt);
+        var top    = (edges & CellBorderEdges.Top)    != 0 ? edge : existing?.Top;
+        var bottom = (edges & CellBorderEdges.Bottom) != 0 ? edge : existing?.Bottom;
+        var left   = (edges & CellBorderEdges.Left)   != 0 ? edge : existing?.Left;
+        var right  = (edges & CellBorderEdges.Right)  != 0 ? edge : existing?.Right;
+        if (top is null && bottom is null && left is null && right is null)
+            return null;
+        return new CellBorders { Top = top, Bottom = bottom, Left = left, Right = right };
+    }
+}
+
+/// <summary>
+/// Edge selector for <see cref="SetCellBordersCommand"/>. Can be combined as flags.
+/// Composite values (<see cref="All"/>, <see cref="Outside"/>, <see cref="Inside"/>) are
+/// expanded by the DocumentView before issuing per-cell commands, so each command only sees
+/// the four primitive edge bits.
+/// </summary>
+[Flags]
+public enum CellBorderEdges
+{
+    None   = 0,
+    Top    = 1,
+    Bottom = 2,
+    Left   = 4,
+    Right  = 8,
+    All      = Top | Bottom | Left | Right,
+    /// <summary>All four primitive edges — alias for <see cref="All"/>.</summary>
+    Outside  = All,
+    /// <summary>Inside edges of a selection (handled at the DocumentView layer).</summary>
+    Inside   = 16,
+}
+
 /// <summary>
 /// Set the size (points) of the inline image carried by run <paramref name="runIndex"/> of the
 /// paragraph at <paramref name="paragraphIndex"/>, snapshotting the prior size for undo.
