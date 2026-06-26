@@ -163,6 +163,127 @@ public sealed class ChartDataLabelsTests : IDisposable
         rt.Series[1].OnSecondaryAxis.Should().BeTrue("secondary series flag round-trips");
     }
 
+    /// <summary>
+    /// CC1 regression: secondary-axis detection MUST use idx→series MAP, not positional indexing.
+    ///
+    /// A combo chart where the secondary lineChart group has c:idx=1 but that series is the THIRD
+    /// appended to shape.Series (append positions 0,1,2 = idx 0,2,1 respectively) — the old code
+    /// did shape.Series[1].OnSecondaryAxis = true which flags the WRONG series (the one at append
+    /// position 1, i.e. idx=2).  The fixed code resolves via the idx→ChartSeries map so the series
+    /// with c:idx=1 is correctly flagged regardless of its append order.
+    ///
+    /// Structure:
+    ///   barChart (primary):  ser idx=0 "PrimaryA",  ser idx=2 "PrimaryB"
+    ///   lineChart (secondary, valAx2): ser idx=1 "SecondaryLine"
+    ///
+    /// After reading:
+    ///   shape.Series append order = [PrimaryA(idx0), PrimaryB(idx2), SecondaryLine(idx1)]
+    ///   Only SecondaryLine.OnSecondaryAxis should be true.
+    /// </summary>
+    [Fact]
+    public void Read_InterleavedIdx_SecondaryAxisFlagsCorrectSeries()
+    {
+        // Build a minimal chart XML with interleaved c:idx values:
+        //   barChart (primary)  has ser idx=0 and idx=2
+        //   lineChart (secondary) has ser idx=1, referencing the second c:valAx (axId=200)
+        const string chartXml = """
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+              <c:chart>
+                <c:plotArea>
+                  <!-- Primary group: bar, references axId 100 (cat) + 200 (primary val) -->
+                  <c:barChart>
+                    <c:barDir val="col"/>
+                    <c:grouping val="clustered"/>
+                    <c:ser>
+                      <c:idx val="0"/>
+                      <c:order val="0"/>
+                      <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>PrimaryA</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                      <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:strCache></c:strRef></c:cat>
+                      <c:val><c:numRef><c:numCache><c:ptCount val="2"/><c:pt idx="0"><c:v>10</c:v></c:pt><c:pt idx="1"><c:v>20</c:v></c:pt></c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:ser>
+                      <c:idx val="2"/>
+                      <c:order val="2"/>
+                      <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>PrimaryB</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                      <c:val><c:numRef><c:numCache><c:ptCount val="2"/><c:pt idx="0"><c:v>30</c:v></c:pt><c:pt idx="1"><c:v>40</c:v></c:pt></c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="100"/>
+                    <c:axId val="200"/>
+                  </c:barChart>
+                  <!-- Secondary group: line, references axId 100 (cat) + 300 (secondary val) -->
+                  <c:lineChart>
+                    <c:grouping val="standard"/>
+                    <c:ser>
+                      <c:idx val="1"/>
+                      <c:order val="1"/>
+                      <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>SecondaryLine</c:v></c:pt></c:strCache></c:strRef></c:tx>
+                      <c:val><c:numRef><c:numCache><c:ptCount val="2"/><c:pt idx="0"><c:v>1000</c:v></c:pt><c:pt idx="1"><c:v>2000</c:v></c:pt></c:numCache></c:numRef></c:val>
+                    </c:ser>
+                    <c:axId val="100"/>
+                    <c:axId val="300"/>
+                  </c:lineChart>
+                  <!-- Primary category axis -->
+                  <c:catAx>
+                    <c:axId val="100"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:crossAx val="200"/>
+                  </c:catAx>
+                  <!-- Primary value axis (axId=200) -->
+                  <c:valAx>
+                    <c:axId val="200"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:crossAx val="100"/>
+                  </c:valAx>
+                  <!-- Secondary value axis (axId=300) — second c:valAx is the secondary -->
+                  <c:valAx>
+                    <c:axId val="300"/>
+                    <c:scaling><c:orientation val="minMax"/></c:scaling>
+                    <c:crossAx val="100"/>
+                  </c:valAx>
+                </c:plotArea>
+              </c:chart>
+            </c:chartSpace>
+            """;
+
+        // Build a minimal in-memory ZIP with only the chart entry, then call ReadChartPart directly.
+        var ms = new System.IO.MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(ms,
+            System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("ppt/charts/chart1.xml");
+            using var w = new System.IO.StreamWriter(entry.Open(), System.Text.Encoding.UTF8);
+            w.Write(chartXml);
+        }
+        ms.Position = 0;
+
+        ChartShape? shape;
+        using (var zip2 = new System.IO.Compression.ZipArchive(ms,
+            System.IO.Compression.ZipArchiveMode.Read, leaveOpen: false))
+        {
+            shape = PptxChartReader.ReadChartPart(
+                zip2, "ppt/charts/chart1.xml",
+                PresentationColorScheme.CreateDefault());
+        }
+
+        // Verify 3 series were read in append order: PrimaryA(idx0), PrimaryB(idx2), SecondaryLine(idx1)
+        shape.Should().NotBeNull();
+        shape!.Series.Should().HaveCount(3, "3 series total across both chart groups");
+        shape.Series[0].Name.Should().Be("PrimaryA",    "first appended = idx 0");
+        shape.Series[1].Name.Should().Be("PrimaryB",    "second appended = idx 2");
+        shape.Series[2].Name.Should().Be("SecondaryLine", "third appended = idx 1 (secondary)");
+
+        // CC1 fix: OnSecondaryAxis must be resolved via idx map, NOT positional index.
+        // Old (buggy): shape.Series[1] (PrimaryB, idx=2) would be flagged — WRONG.
+        // Fixed:       shape.Series[2] (SecondaryLine, idx=1) is flagged — CORRECT.
+        shape.Series[0].OnSecondaryAxis.Should().BeFalse("PrimaryA (idx=0) is on primary axis");
+        shape.Series[1].OnSecondaryAxis.Should().BeFalse("PrimaryB (idx=2) is on primary axis");
+        shape.Series[2].OnSecondaryAxis.Should().BeTrue(
+            "SecondaryLine (c:idx=1) must be flagged via idx map, not positional index");
+    }
+
     [Fact]
     public void RoundTrip_NoSecondaryAxis_NoRegression()
     {
@@ -387,6 +508,111 @@ public sealed class ChartDataLabelsTests : IDisposable
         });
         pres.Slides.Add(slide);
         return pres;
+    }
+
+    // ── CC2/CC3/CC4: secondary-axis data-label scale correctness ─────────────
+
+    /// <summary>
+    /// CC2: RenderLineDataLabels must compute the label Y using the secondary-axis range
+    /// (not the primary range) for OnSecondaryAxis series. Verified analytically:
+    /// the secondary-range fraction is ≤ 1 (in-chart), the primary-range fraction >> 1 (off-chart).
+    /// </summary>
+    [Fact]
+    public void CC2_LineDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
+    {
+        var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 20, 50, 100 });
+
+        var secondary = new ChartSeries { Name = "Line", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 200_000, 600_000, 1_000_000 });
+
+        var chart = new ChartShape
+        {
+            ChartType          = ChartType.LineMarkers,
+            SecondaryValueAxis = new ChartAxis { HasMajorGridlines = false },
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        // The secondary range from ComputeNiceSecondaryAxisRange must cover the 1M value.
+        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange   = secMax - secMin;
+        double testVal    = 1_000_000.0;
+        double correctFrac = (testVal - secMin) / secRange;
+
+        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        double pRange   = pMax - pMin;
+        double brokenFrac = (testVal - pMin) / pRange;
+
+        correctFrac.Should().BeLessThanOrEqualTo(1.1,
+            "CC2: secondary value through secondary range must be ≤ 1 (within plot)");
+        correctFrac.Should().BeGreaterThanOrEqualTo(0.7,
+            "CC2: value at secondary max should map well up the plot (nice range extends slightly above data max)");
+        brokenFrac.Should().BeGreaterThan(10.0,
+            "CC2 sanity: same value through primary range would be >> 1 (off-chart)");
+    }
+
+    /// <summary>
+    /// CC3: RenderColumnDataLabels must use the secondary-axis range for OnSecondaryAxis series.
+    /// </summary>
+    [Fact]
+    public void CC3_ColumnDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
+    {
+        var primary = new ChartSeries { Name = "P", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 10, 20, 30 });
+
+        var secondary = new ChartSeries { Name = "S", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 50_000, 80_000, 100_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange  = secMax - secMin;
+        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        double pRange    = pMax - pMin;
+        double testVal   = 100_000.0;
+
+        double secFrac = (testVal - secMin) / secRange;
+        double priFrac = (testVal - pMin)   / pRange;
+
+        secFrac.Should().BeLessThanOrEqualTo(1.1,
+            "CC3: secondary column value through secondary range must be ≤ 1");
+        priFrac.Should().BeGreaterThan(10.0,
+            "CC3 sanity: same value through primary range would be >> 1");
+    }
+
+    /// <summary>
+    /// CC4: RenderBarDataLabels must use the secondary-axis range for OnSecondaryAxis series.
+    /// </summary>
+    [Fact]
+    public void CC4_BarDataLabel_SecondaryAxisSeries_UsesSecondaryRange()
+    {
+        var primary = new ChartSeries { Name = "P", OnSecondaryAxis = false };
+        primary.Values.AddRange(new double?[] { 5, 15, 25 });
+
+        var secondary = new ChartSeries { Name = "S", OnSecondaryAxis = true };
+        secondary.Values.AddRange(new double?[] { 10_000, 30_000, 50_000 });
+
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.Series.Add(primary);
+        chart.Series.Add(secondary);
+
+        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        double secRange  = secMax - secMin;
+        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        double pRange    = pMax - pMin;
+        double testVal   = 50_000.0;
+
+        double secFrac = (testVal - secMin) / secRange;
+        double priFrac = (testVal - pMin)   / pRange;
+
+        secFrac.Should().BeLessThanOrEqualTo(1.1,
+            "CC4: secondary bar value through secondary range must be ≤ 1");
+        priFrac.Should().BeGreaterThan(10.0,
+            "CC4 sanity: same value through primary range would be >> 1");
     }
 
     // ── CA2: dLbls child order ────────────────────────────────────────────────

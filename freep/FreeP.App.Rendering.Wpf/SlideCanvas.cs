@@ -2023,6 +2023,15 @@ public sealed class SlideCanvas : FrameworkElement
         double range = maxVal - minVal;
         if (range <= 0) return;
 
+        // CC3: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderColumnChart's CB1 effMin/effRange selection so bar geometry
+        // (barH, barY, stacked accumulator) uses the correct scale.
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
+
         bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.ColumnStacked
                                        or FreeP.Core.Model.ChartType.ColumnStacked100;
         const double gapRatio = 1.5;
@@ -2055,16 +2064,16 @@ public sealed class SlideCanvas : FrameworkElement
                     double? prevRaw = ci < chart.Series[prevSi].Values.Count
                         ? chart.Series[prevSi].Values[ci] : null;
                     if (prevRaw is null) continue;
-                    double h = Math.Max(0.5, Math.Abs(prevRaw.Value / range) * plotH);
+                    double h = Math.Max(0.5, Math.Abs(prevRaw.Value / effRange) * plotH);
                     stackedY -= h;
                 }
-                barH = Math.Max(0.5, Math.Abs(val / range) * plotH);
+                barH = Math.Max(0.5, Math.Abs(val / effRange) * plotH);
                 barY = stackedY - barH;
             }
             else
             {
-                barH = Math.Abs((val - minVal) / range * plotH);
-                barY = plotY + plotH - (val - minVal) / range * plotH;
+                barH = Math.Abs((val - effMin) / effRange * plotH);
+                barY = plotY + plotH - (val - effMin) / effRange * plotH;
             }
 
             // CB2: compute the correct percent denominator for ShowPercent.
@@ -2134,6 +2143,16 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         double range = maxVal - minVal;
         if (range <= 0) return;
+
+        // CC2: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderLineChart's CB1 effMin/effRange selection so the label Y
+        // matches the marker Y (both use the same scale).
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
+
         double stepX = plotW / Math.Max(1, catCount - 1);
 
         // CB2: compute series total for ShowPercent denominator
@@ -2147,7 +2166,7 @@ public sealed class SlideCanvas : FrameworkElement
             double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
             if (rawVal is null) continue;
             double px = plotX + ci * stepX;
-            double py = plotY + plotH - (rawVal.Value - minVal) / range * plotH;
+            double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
 
             string cat = ci < chart.Categories.Count ? chart.Categories[ci] : string.Empty;
             string txt = FormatDataLabel(dl, rawVal.Value, seriesTotal, cat, series.Name);
@@ -2178,6 +2197,15 @@ public sealed class SlideCanvas : FrameworkElement
         int catCount = Math.Max(1, chart.Categories.Count);
         double range = maxVal - minVal;
         if (range <= 0) return;
+
+        // CC4: pick the axis range by whether this series is on the secondary axis,
+        // mirroring RenderBarChart's CB1 effMin/effRange selection so bar geometry
+        // (barW, stackedX accumulator) uses the correct scale.
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        double effMin   = series.OnSecondaryAxis ? secMin   : minVal;
+        double effRange = series.OnSecondaryAxis ? secRange : range;
+        if (effRange <= 0) return;
 
         bool stacked = chart.ChartType is FreeP.Core.Model.ChartType.BarStacked
                                        or FreeP.Core.Model.ChartType.BarStacked100;
@@ -2210,16 +2238,16 @@ public sealed class SlideCanvas : FrameworkElement
                     double? prevRaw = ci < chart.Series[prevSi].Values.Count
                         ? chart.Series[prevSi].Values[ci] : null;
                     if (prevRaw is null) continue;
-                    stackedX += Math.Max(0.5, Math.Abs((prevRaw.Value - minVal) / range * plotW));
+                    stackedX += Math.Max(0.5, Math.Abs((prevRaw.Value - effMin) / effRange * plotW));
                 }
-                barW = Math.Max(0.5, Math.Abs((val - minVal) / range * plotW));
+                barW = Math.Max(0.5, Math.Abs((val - effMin) / effRange * plotW));
                 barX = stackedX;
                 barY = catTop;
             }
             else
             {
                 int renderSer = serCount - 1 - seriesIndex;
-                barW = Math.Abs((val - minVal) / range * plotW);
+                barW = Math.Abs((val - effMin) / effRange * plotW);
                 barX = plotX;
                 barY = catTop + renderSer * serH;
             }
