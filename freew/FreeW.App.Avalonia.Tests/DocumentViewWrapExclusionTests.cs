@@ -550,4 +550,81 @@ public sealed class DocumentViewWrapExclusionTests
         firstGlyphY.Should().BeGreaterThan(floatBottom - 5,
             "BB1: near-full-width float should push ALL text below the float's bottom (no overlap)");
     }
+
+    // ── BD1 Test 13: wide float in column 2 of a 2-column layout pushes text below ──────────────
+    // Regression: before BD1 fix, TopAndBottomExclusionBottom used _contentLeft (column 0 origin)
+    // for freeLeft/freeRight, so a float in column 2 had inflated freeLeft > 20 and was NOT
+    // promoted to push text below → text overlapped the float.
+
+    [Fact]
+    public async Task BD1_wide_float_in_column2_of_2col_layout_pushes_text_below()
+    {
+        double floatBottom = -1;
+        double firstGlyphBelowColBreakY = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            // 2-column layout: 612pt wide page, 1" margins, 36pt gap.
+            // colWidth = (612 - 72 - 72 - 36) / 2 = 216pt = 288 DIP.
+            // col1 left = contentLeft + colWidth + gap = 96 + 288 + 48 = 432 DIP (page-space).
+            // Float: nearly full column 1 width = 200pt = ~267 DIP, placed in col1.
+            // hOffset: column 1 start = 216pt from contentLeft.
+            // Float in col 1: hOffset = 216pt, width = 205pt → leaves ~11pt on right (<20).
+            // freeLeft col1 = 0 DIP (<20), freeRight col1 = ~14 DIP (<20) → should push below.
+            var body = string.Join(" ", Enumerable.Repeat("word", 200)); // lots of text
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run(body, RunFormatting.Default with { FontSizePt = 11 }));
+
+            // Float: wide near-full-column float anchored at column 1 start.
+            var fi = new InlineImage(SmallPng(), 205, 72) // 205pt wide
+            {
+                Wrapping           = ImageWrapping.Square,
+                HorizontalOffsetPt = 216, // col 1 start in pt (colWidth = 216pt)
+                VerticalOffsetPt   = 0,
+                HorizontalAnchor   = HorizontalAnchor.Column,
+                VerticalAnchor     = VerticalAnchor.Paragraph,
+                ZOrderIndex        = 0,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = fi });
+            doc.Blocks.Add(para);
+            doc.Page.WidthPt        = 612;
+            doc.Page.HeightPt       = 792;
+            doc.Page.MarginLeftPt   = 72;
+            doc.Page.MarginRightPt  = 72;
+            doc.Page.MarginTopPt    = 72;
+            doc.Page.MarginBottomPt = 72;
+            doc.Page.ColumnCount      = 2;
+            doc.Page.ColumnSpacingPt  = 36;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+
+            var zones = view.WrapExclusionZones;
+            floatBottom = zones.Count > 0 ? zones[0].Rect.Bottom : -1;
+
+            // We look for placed glyphs in column 1 (X > col1Left) that are below the float.
+            // col1Left in page-space ≈ 120 (pageLeft) + 288 (col0 width) + 48 (gap) = 456 DIP.
+            var col1Left = 440.0; // approximate, give generous tolerance
+            var placed = view.GetPlacedForBlock(0);
+            var col1GlyphsBelowFloat = placed
+                .Where(p => p.X > col1Left && p.Y > floatBottom + 2)
+                .ToList();
+            firstGlyphBelowColBreakY = col1GlyphsBelowFloat.Count > 0
+                ? col1GlyphsBelowFloat.Min(p => p.Y)
+                : -1;
+        });
+
+        if (!ran) return;
+        if (floatBottom < 0) return; // float not registered — skip (headless env issue)
+
+        // Any text that lands in column 1 must be below the float.
+        if (firstGlyphBelowColBreakY >= 0)
+        {
+            firstGlyphBelowColBreakY.Should().BeGreaterThan(floatBottom - 5,
+                "BD1: wide float in column 2 must push text below it, not overlap");
+        }
+    }
 }

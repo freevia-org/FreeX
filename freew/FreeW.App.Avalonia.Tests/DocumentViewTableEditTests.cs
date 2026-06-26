@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -263,6 +265,143 @@ public sealed class DocumentViewTableEditTests
 
         if (!ran) return;
         info.Should().BeNull("CellCaretInfo must be null when caret is in a body paragraph");
+    }
+
+    // ── BE2+BE1: multi-paragraph cell layout and per-paragraph sentinels ─────────────────────────
+
+    /// <summary>
+    /// BE2: a cell with 2 paragraphs ("ab" then "cd") must render on 2 distinct visual Y bands.
+    /// BE1: each paragraph must have its own sentinel so the caret is findable at the end of each.
+    /// </summary>
+    [Fact]
+    public async Task MultiParagraphCell_renders_paragraphs_on_separate_lines_with_per_para_sentinels()
+    {
+        IReadOnlyList<(char Ch, double X, double Y, double LineHeight, bool Sentinel, int ParaOffset)>? para0 = null;
+        IReadOnlyList<(char Ch, double X, double Y, double LineHeight, bool Sentinel, int ParaOffset)>? para1 = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 1);
+            // Cell with 2 paragraphs.
+            var cell = new TableCell();
+            cell.Paragraphs.Clear();
+            cell.Paragraphs.Add(new Paragraph("ab"));
+            cell.Paragraphs.Add(new Paragraph("cd"));
+            tbl.Rows[0].Cells[0] = cell;
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+            var tblIdx = doc.Blocks.IndexOf(tbl);
+            para0 = view.GetCellPlaced(tblIdx, row: 0, col: 0, paraIdx: 0);
+            para1 = view.GetCellPlaced(tblIdx, row: 0, col: 0, paraIdx: 1);
+        });
+
+        if (!ran) return;
+
+        // BE2: paragraph 0 and paragraph 1 must be on different Y positions.
+        var para0Y = para0!.Where(p => !p.Sentinel).Select(p => p.Y).Distinct().ToList();
+        var para1Y = para1!.Where(p => !p.Sentinel).Select(p => p.Y).Distinct().ToList();
+        para0Y.Should().NotBeEmpty("paragraph 0 must have placed chars");
+        para1Y.Should().NotBeEmpty("paragraph 1 must have placed chars");
+        para0Y[0].Should().BeLessThan(para1Y[0],
+            "BE2: paragraph 0 must render ABOVE paragraph 1 (separate visual lines)");
+
+        // BE1: each paragraph must have exactly one sentinel.
+        para0!.Count(p => p.Sentinel).Should().Be(1, "BE1: paragraph 0 must have exactly one sentinel");
+        para1!.Count(p => p.Sentinel).Should().Be(1, "BE1: paragraph 1 must have exactly one sentinel");
+
+        // BE1: sentinel for para0 must be at para0's Y (end of 'ab' line).
+        var sent0 = para0!.First(p => p.Sentinel);
+        var sent1 = para1!.First(p => p.Sentinel);
+        sent0.Y.Should().BeApproximately(para0Y[0], 2, "BE1: para0 sentinel must sit on para0's line");
+        sent1.Y.Should().BeApproximately(para1Y[0], 2, "BE1: para1 sentinel must sit on para1's line");
+    }
+
+    // ── BE4: multi-char cell insertion is in-order ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task MultiChar_InsertText_into_cell_inserts_in_order()
+    {
+        string? result = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, tbl) = MakeTableView();
+            // Place caret at offset 0 in cell A1 (text = "A1") and type "xyz".
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+            view.InsertText("xyz");
+            result = tbl.Rows[0].Cells[0].Paragraphs[0].PlainText;
+        });
+
+        if (!ran) return;
+        result.Should().Be("xyzA1", "BE4: 'xyz' typed at offset 0 should insert in-order, not reversed");
+    }
+
+    // ── BE3: typing over a cell selection replaces it ────────────────────────────────────────────
+
+    [Fact]
+    public async Task InsertText_over_cell_selection_replaces_selected_range()
+    {
+        string? result = null;
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? caretAfter = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, tbl) = MakeTableView();
+            // Cell A1 = "A1". Place caret at offset 2, anchor at offset 0 → selects "A1".
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 2);
+            view.SetCellSelectionAnchorForTest(idx, row: 0, col: 0, paraIdx: 0, anchorOffset: 0);
+            view.InsertText("Z");
+            result = tbl.Rows[0].Cells[0].Paragraphs[0].PlainText;
+            caretAfter = view.CellCaretInfo;
+        });
+
+        if (!ran) return;
+        result.Should().Be("Z", "BE3: typing 'Z' over 'A1' selection should replace it with 'Z'");
+        caretAfter!.Value.Offset.Should().Be(1, "BE3: caret should be after the inserted char");
+    }
+
+    [Fact]
+    public async Task Backspace_over_cell_selection_deletes_selected_range()
+    {
+        string? result = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, tbl) = MakeTableView();
+            // Cell B1 = "B1". Select both chars: caret at 2, anchor at 0.
+            view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 2);
+            view.SetCellSelectionAnchorForTest(idx, row: 0, col: 1, paraIdx: 0, anchorOffset: 0);
+            view.SimulateBackspace();
+            result = tbl.Rows[0].Cells[1].Paragraphs[0].PlainText;
+        });
+
+        if (!ran) return;
+        result.Should().Be("", "BE3: Backspace over 'B1' selection should delete the whole selection");
+    }
+
+    // ── BE5: DeleteSelection on a table block does NOT crash ─────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteSelection_on_table_block_does_not_throw()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            // Build: empty para (block 0) + table (block 1).
+            var doc = TextDocument.CreateEmpty();
+            var tbl = Table.Create(1, 1);
+            tbl.Rows[0].Cells[0] = new TableCell("hello");
+            doc.Blocks.Add(tbl);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            // Simulate a selection where _caret lands on the table block (block 1) and
+            // _selectionAnchor is also on block 1 but at a different offset.
+            // Invoking TryDeleteSelection should no-op safely without throwing.
+            view.TryDeleteSelection();
+        });
+
+        // The test passes if OnUiThread did not throw.
+        ran.Should().BeTrue("BE5: TryDeleteSelection must not throw when the block is a Table");
     }
 }
 
