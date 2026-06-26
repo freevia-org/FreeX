@@ -73,9 +73,10 @@ public sealed class AvaloniaCanvasGestureHandler
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _adorner = adorner ?? throw new ArgumentNullException(nameof(adorner));
 
-        _canvas.PointerPressed  += OnPointerPressed;
-        _canvas.PointerReleased += OnPointerReleased;
-        _canvas.PointerMoved    += OnPointerMoved;
+        _canvas.PointerPressed      += OnPointerPressed;
+        _canvas.PointerReleased     += OnPointerReleased;
+        _canvas.PointerMoved        += OnPointerMoved;
+        _canvas.PointerCaptureLost  += OnPointerCaptureLost;
 
         // Keyboard events are raised on the top-level window; caller must subscribe
         // the canvas's parent (the window) and delegate to HandleKeyDown.
@@ -112,6 +113,23 @@ public sealed class AvaloniaCanvasGestureHandler
         return false;
     }
 
+    // ── Pointer capture lost ───────────────────────────────────────────────────
+
+    private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        // Guard against re-entrancy: releasing capture (in cancel/commit path) can fire
+        // CaptureLost which would re-enter here. Check + clear _gesture atomically first.
+        if (_gesture == GestureKind.None) return;
+        _gesture     = GestureKind.None;
+        _dragStarted = false;
+        _adorner.UpdatePreview(null);
+        _adorner.UpdateMarquee(null);
+        _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
+        // Do NOT call e.Pointer.Capture(null) here — we are already in the capture-lost
+        // callback, so the capture was already released by the framework (or by our caller
+        // before we got here).
+    }
+
     // ── Pointer down ───────────────────────────────────────────────────────────
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -138,20 +156,20 @@ public sealed class AvaloniaCanvasGestureHandler
                 var hitHandle = _adorner.HitTestHandle(selRect.Value, pt);
                 if (hitHandle == SelectionAdornerLayer.HandleKind.Rotate)
                 {
-                    StartRotate(selId, slide, xf, pt);
+                    StartRotate(selId, slide, xf, pt, e.Pointer);
                     e.Handled = true;
                     return;
                 }
                 if (hitHandle != SelectionAdornerLayer.HandleKind.None &&
                     hitHandle != SelectionAdornerLayer.HandleKind.Body)
                 {
-                    StartResize(selId, slide, hitHandle, pt);
+                    StartResize(selId, slide, hitHandle, pt, e.Pointer);
                     e.Handled = true;
                     return;
                 }
                 if (hitHandle == SelectionAdornerLayer.HandleKind.Body)
                 {
-                    StartMove(slide, xf, pt);
+                    StartMove(slide, xf, pt, e.Pointer);
                     e.Handled = true;
                     return;
                 }
@@ -173,7 +191,7 @@ public sealed class AvaloniaCanvasGestureHandler
             }
             if (hitAny)
             {
-                StartMove(slide, xf, pt);
+                StartMove(slide, xf, pt, e.Pointer);
                 e.Handled = true;
                 return;
             }
@@ -188,12 +206,12 @@ public sealed class AvaloniaCanvasGestureHandler
             bool addToSelection = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Shift | KeyModifiers.Meta)) != 0;
             _editor.Select(hitId.Value, addToSelection);
             if (!addToSelection || _editor.SelectedShapeIds.Count <= 1)
-                StartMove(slide, xf, pt);
+                StartMove(slide, xf, pt, e.Pointer);
         }
         else
         {
             _editor.ClearSelection();
-            StartMarquee(xf, pt);
+            StartMarquee(xf, pt, e.Pointer);
         }
 
         e.Handled = true;
@@ -211,16 +229,17 @@ public sealed class AvaloniaCanvasGestureHandler
             return;
         }
 
-        var xf    = _canvas.CurrentTransform;
-        var slide = _editor.CurrentSlide;
+        var xf        = _canvas.CurrentTransform;
+        var slide     = _editor.CurrentSlide;
+        var modifiers = e.KeyModifiers;
         if (slide is null) return;
 
         switch (_gesture)
         {
-            case GestureKind.Move:    PreviewMove(pt, xf, slide);    break;
-            case GestureKind.Resize:  PreviewResize(pt, xf);         break;
-            case GestureKind.Rotate:  PreviewRotate(pt, xf);         break;
-            case GestureKind.Marquee: PreviewMarquee(pt, xf);        break;
+            case GestureKind.Move:    PreviewMove(pt, xf, slide, modifiers);    break;
+            case GestureKind.Resize:  PreviewResize(pt, xf, modifiers);         break;
+            case GestureKind.Rotate:  PreviewRotate(pt, xf);                    break;
+            case GestureKind.Marquee: PreviewMarquee(pt, xf);                   break;
         }
     }
 
@@ -230,28 +249,31 @@ public sealed class AvaloniaCanvasGestureHandler
     {
         if (e.InitialPressMouseButton != MouseButton.Left) return;
 
-        var pt = e.GetPosition(_canvas);
-        var xf = _canvas.CurrentTransform;
+        var pt        = e.GetPosition(_canvas);
+        var xf        = _canvas.CurrentTransform;
+        var modifiers = e.KeyModifiers;
 
         switch (_gesture)
         {
-            case GestureKind.Move:    CommitMove(pt, xf);    break;
-            case GestureKind.Resize:  CommitResize(pt, xf);  break;
-            case GestureKind.Rotate:  CommitRotate(pt, xf);  break;
-            case GestureKind.Marquee: CommitMarquee(pt, xf); break;
+            case GestureKind.Move:    CommitMove(pt, xf, modifiers);    break;
+            case GestureKind.Resize:  CommitResize(pt, xf, modifiers);  break;
+            case GestureKind.Rotate:  CommitRotate(pt, xf);             break;
+            case GestureKind.Marquee: CommitMarquee(pt, xf);            break;
         }
 
+        // Reset gesture state BEFORE releasing capture to prevent CaptureLost re-entry.
         _gesture     = GestureKind.None;
         _dragStarted = false;
         _adorner.UpdatePreview(null);
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
+        // Release pointer capture (capture-lost handler is guarded by _gesture == None check above).
         e.Pointer.Capture(null);
     }
 
     // ── Move gesture ───────────────────────────────────────────────────────────
 
-    private void StartMove(Slide slide, SlideTransformCore xf, Point screenPt)
+    private void StartMove(Slide slide, SlideTransformCore xf, Point screenPt, IPointer pointer)
     {
         _gesture          = GestureKind.Move;
         _dragStartScreen  = screenPt;
@@ -263,10 +285,10 @@ public sealed class AvaloniaCanvasGestureHandler
             if (s is not null)
                 _moveStartPositions[id] = (s.OffsetXEmu, s.OffsetYEmu);
         }
-        e_CapturePointer();
+        pointer.Capture(_canvas);
     }
 
-    private void PreviewMove(Point screenPt, SlideTransformCore xf, Slide slide)
+    private void PreviewMove(Point screenPt, SlideTransformCore xf, Slide slide, KeyModifiers modifiers)
     {
         double ddxPx = screenPt.X - _dragStartScreen.X;
         double ddyPx = screenPt.Y - _dragStartScreen.Y;
@@ -276,8 +298,12 @@ public sealed class AvaloniaCanvasGestureHandler
         double ddxDip = xf.ScaleScreenToDip(ddxPx);
         double ddyDip = xf.ScaleScreenToDip(ddyPx);
 
+        // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
+        bool altHeld    = (modifiers & KeyModifiers.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+
         SnapResult snap = SnapResult.None;
-        if ((SnapToGrid || SnapToShapes) && _moveStartPositions is not null && _editor.SelectedShapeIds.Count > 0)
+        if (snapEnabled && _moveStartPositions is not null && _editor.SelectedShapeIds.Count > 0)
         {
             var firstId = _editor.SelectedShapeIds[0];
             if (_moveStartPositions.TryGetValue(firstId, out var firstOrig))
@@ -331,16 +357,20 @@ public sealed class AvaloniaCanvasGestureHandler
         _adorner.UpdateSnapGuides(snap.Guides.Count > 0 ? snap.Guides : null, xf);
     }
 
-    private void CommitMove(Point screenPt, SlideTransformCore xf)
+    private void CommitMove(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
         if (_moveStartPositions is null || !_dragStarted) return;
         double ddxPx = screenPt.X - _dragStartScreen.X;
         double ddyPx = screenPt.Y - _dragStartScreen.Y;
         if (Math.Abs(ddxPx) < 1 && Math.Abs(ddyPx) < 1) return;
 
+        // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
+        bool altHeld     = (modifiers & KeyModifiers.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+
         double snapDxPx = 0, snapDyPx = 0;
         var slide = _editor.CurrentSlide;
-        if ((SnapToGrid || SnapToShapes) && slide is not null && _editor.SelectedShapeIds.Count > 0)
+        if (snapEnabled && slide is not null && _editor.SelectedShapeIds.Count > 0)
         {
             double ddxDip = xf.ScaleScreenToDip(ddxPx);
             double ddyDip = xf.ScaleScreenToDip(ddyPx);
@@ -375,7 +405,7 @@ public sealed class AvaloniaCanvasGestureHandler
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
 
-    private void StartResize(uint shapeId, Slide slide, SelectionAdornerLayer.HandleKind handle, Point screenPt)
+    private void StartResize(uint shapeId, Slide slide, SelectionAdornerLayer.HandleKind handle, Point screenPt, IPointer pointer)
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
@@ -388,10 +418,10 @@ public sealed class AvaloniaCanvasGestureHandler
         _resizeOrigCx    = s.ExtentCxEmu;
         _resizeOrigCy    = s.ExtentCyEmu;
         _resizeHandle    = handle;
-        e_CapturePointer();
+        pointer.Capture(_canvas);
     }
 
-    private void PreviewResize(Point screenPt, SlideTransformCore xf)
+    private void PreviewResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
         if (!_dragStarted)
         {
@@ -400,21 +430,26 @@ public sealed class AvaloniaCanvasGestureHandler
             if (Math.Abs(ddxPx) < 3 && Math.Abs(ddyPx) < 3) return;
             _dragStarted = true;
         }
-        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
+        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         var r = BoundsToScreenRect(nx, ny, ncx, ncy, xf);
         _adorner.UpdatePreview(r);
     }
 
-    private void CommitResize(Point screenPt, SlideTransformCore xf)
+    private void CommitResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
         if (!_dragStarted) return;
-        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
+        var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
     }
 
     /// <summary>Computes new shape bounds in EMU given the current drag point.</summary>
+    /// <param name="modifiers">
+    /// Key modifiers at the time of the drag event.
+    /// When <see cref="KeyModifiers.Alt"/> is set, snapping is bypassed
+    /// (PowerPoint convention for precise off-grid placement).
+    /// </param>
     public (long newX, long newY, long newCx, long newCy) ComputeResizeBounds(
-        Point screenPt, SlideTransformCore xf)
+        Point screenPt, SlideTransformCore xf, KeyModifiers modifiers = KeyModifiers.None)
     {
         double dxPx = screenPt.X - _dragStartScreen.X;
         double dyPx = screenPt.Y - _dragStartScreen.Y;
@@ -426,7 +461,11 @@ public sealed class AvaloniaCanvasGestureHandler
         double dxDip     = xf.ScaleScreenToDip(dxPx);
         double dyDip     = xf.ScaleScreenToDip(dyPx);
 
-        if ((SnapToGrid || SnapToShapes) && _editor.CurrentSlide is not null)
+        // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
+        bool altHeld     = (modifiers & KeyModifiers.Alt) != 0;
+        bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
+
+        if (snapEnabled && _editor.CurrentSlide is not null)
         {
             var slide      = _editor.CurrentSlide;
             var candidates = SnapToShapes
@@ -533,7 +572,7 @@ public sealed class AvaloniaCanvasGestureHandler
 
     // ── Rotate gesture ─────────────────────────────────────────────────────────
 
-    private void StartRotate(uint shapeId, Slide slide, SlideTransformCore xf, Point screenPt)
+    private void StartRotate(uint shapeId, Slide slide, SlideTransformCore xf, Point screenPt, IPointer pointer)
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
@@ -545,7 +584,7 @@ public sealed class AvaloniaCanvasGestureHandler
         double cx = SlideTransformCore.EmuToDip(s.OffsetXEmu + s.ExtentCxEmu / 2);
         double cy = SlideTransformCore.EmuToDip(s.OffsetYEmu + s.ExtentCyEmu / 2);
         _rotateCenterSlide = new Point(cx, cy);
-        e_CapturePointer();
+        pointer.Capture(_canvas);
     }
 
     private void PreviewRotate(Point screenPt, SlideTransformCore xf)
@@ -585,14 +624,14 @@ public sealed class AvaloniaCanvasGestureHandler
 
     // ── Marquee gesture ────────────────────────────────────────────────────────
 
-    private void StartMarquee(SlideTransformCore xf, Point screenPt)
+    private void StartMarquee(SlideTransformCore xf, Point screenPt, IPointer pointer)
     {
         _gesture           = GestureKind.Marquee;
         _dragStartScreen   = screenPt;
         _dragStarted       = false;
         _marqueeStartSlide = new Point(xf.ScreenToSlide(screenPt.X, screenPt.Y).X,
                                        xf.ScreenToSlide(screenPt.X, screenPt.Y).Y);
-        e_CapturePointer();
+        pointer.Capture(_canvas);
     }
 
     private void PreviewMarquee(Point screenPt, SlideTransformCore xf)
@@ -707,6 +746,26 @@ public sealed class AvaloniaCanvasGestureHandler
         _adorner.UpdateSelection(rects);
     }
 
+    // ── Test seeding (InternalsVisibleTo test project) ─────────────────────────
+
+    /// <summary>
+    /// Seeds the internal resize state so that
+    /// <see cref="ComputeResizeBounds"/> can be exercised in unit tests
+    /// without requiring live pointer events.
+    /// </summary>
+    internal void SeedResizeState(Point startScreen, SlideShape shape, SelectionAdornerLayer.HandleKind handle)
+    {
+        _dragStartScreen = startScreen;
+        _dragStarted     = true;
+        _resizeShapeId   = shape.Id;
+        _resizeOrigX     = shape.OffsetXEmu;
+        _resizeOrigY     = shape.OffsetYEmu;
+        _resizeOrigCx    = shape.ExtentCxEmu;
+        _resizeOrigCy    = shape.ExtentCyEmu;
+        _resizeHandle    = handle;
+        _gesture         = GestureKind.Resize;
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
@@ -728,10 +787,4 @@ public sealed class AvaloniaCanvasGestureHandler
         return new Rect(x, y, Math.Max(0, w), Math.Max(0, h));
     }
 
-    // Pointer capture helper (best effort — no crash if canvas is not in visual tree)
-    private void e_CapturePointer()
-    {
-        // Avalonia pointer capture: not needed explicitly as PointerMoved fires globally
-        // when pointer is pressed. However, to be precise, we track gesture state.
-    }
 }

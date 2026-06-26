@@ -67,8 +67,9 @@ public static class PptxPackageWriter
     private const string CommentsCT      = "application/vnd.openxmlformats-officedocument.presentationml.comments+xml";
     private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
 
-    // p14 section extension
+    // p14 section extension + mc:AlternateContent
     private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ────────────────────────────────────────────────────────────────
@@ -869,36 +870,55 @@ public static class PptxPackageWriter
         if (transition is null || transition.Kind == TransitionKind.None)
             return null;
 
-        var attrs = new List<object>();
+        var spd = PptxAnimationMap.DurationToSpd(transition.DurationMs);
 
-        // spd attribute
-        attrs.Add(new XAttribute("spd", PptxAnimationMap.DurationToSpd(transition.DurationMs)));
-
-        // advClick: omit (default is true); only write if false
-        if (!transition.AdvanceOnClick)
-            attrs.Add(new XAttribute("advClick", "0"));
-
-        // advTm
-        if (transition.AdvanceAfterMs.HasValue)
-            attrs.Add(new XAttribute("advTm", transition.AdvanceAfterMs.Value));
-
-        // Effect child element
+        // Effect child element (shared between Choice and Fallback)
         var effectName = PptxAnimationMap.TransitionKindToElementName(transition.Kind);
-        XElement? effectEl = null;
-        if (effectName is not null)
+        var dirAttr = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
+
+        XElement BuildEffectEl() =>
+            effectName is not null
+                ? new XElement(P + effectName,
+                    dirAttr is not null ? new XAttribute("dir", dirAttr) : null!)
+                : null!;
+
+        // Build a p:transition element with the given attrs + effect child.
+        XElement BuildTransEl(IEnumerable<object?> extraAttrs)
         {
-            var effectAttrs = new List<object>();
-            var dirAttr = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
-            if (dirAttr is not null)
-                effectAttrs.Add(new XAttribute("dir", dirAttr));
-            effectEl = new XElement(P + effectName, effectAttrs);
+            var ch = new List<object?>();
+            ch.AddRange(extraAttrs);
+            var eff = BuildEffectEl();
+            if (eff is not null) ch.Add(eff);
+            return new XElement(P + "transition",
+                ch.Where(x => x is not null).Cast<object>().ToArray());
         }
 
-        var children = new List<object>();
-        children.AddRange(attrs);
-        if (effectEl is not null) children.Add(effectEl);
+        // Common non-duration attributes
+        var commonAttrs = new List<object?>();
+        commonAttrs.Add(new XAttribute("spd", spd));
+        if (!transition.AdvanceOnClick)
+            commonAttrs.Add(new XAttribute("advClick", "0"));
+        if (transition.AdvanceAfterMs.HasValue)
+            commonAttrs.Add(new XAttribute("advTm", transition.AdvanceAfterMs.Value));
 
-        return new XElement(P + "transition", children);
+        // AC1: Emit precise duration as p14:dur inside mc:AlternateContent/mc:Choice Requires="p14".
+        // The mc:Fallback carries the legacy spd-only p:transition so old readers degrade gracefully.
+        // This mirrors the pattern PowerPoint itself writes; bare "dur" on p:transition is invalid per
+        // CT_SlideTransition (ECMA-376) and is flagged by OpenXmlValidator.
+        var choiceAttrs = new List<object?>(commonAttrs)
+        {
+            new XAttribute(P14 + "dur", transition.DurationMs),
+        };
+        // In the Choice the spd is already present; p14:dur wins for modern readers.
+
+        return new XElement(MC + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc", MC.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+            new XElement(MC + "Choice",
+                new XAttribute("Requires", "p14"),
+                BuildTransEl(choiceAttrs)),
+            new XElement(MC + "Fallback",
+                BuildTransEl(commonAttrs)));
     }
 
     // ── p:timing ─────────────────────────────────────────────────────────────────

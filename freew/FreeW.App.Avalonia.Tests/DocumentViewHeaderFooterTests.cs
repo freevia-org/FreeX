@@ -314,4 +314,160 @@ public sealed class DocumentViewHeaderFooterTests
         items.Should().NotBeNull();
         items!.Should().BeEmpty("WebLayout mode must not produce any header/footer items");
     }
+
+    // ── Test 8 (AE1): 2-section doc uses correct per-section header on each page ──────────────────────
+    // Regression for AE1: the even-distribution heuristic wrongly showed section-1's header
+    // on pages 1–5 of a 10-page doc where section 1 = 1 page.  After the fix, page 1 shows "SECTION A"
+    // and all subsequent pages show "SECTION B".
+
+    [Fact]
+    public async Task MultiSection_header_uses_owning_section_not_even_distribution()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Section 1: a single paragraph that carries a NextPage SectionBreak.
+            // Its HeadersFooters = "SECTION A".
+            var sec1Page = new PageSettings();
+            var sec1 = new Section(sec1Page, SectionBreakKind.NextPage)
+            {
+                HeadersFooters = { Header = new HeaderFooter("SECTION A") }
+            };
+            var sec1Marker = new Paragraph("Section 1 content.");
+            sec1Marker.SectionBreak = sec1;
+            doc.Blocks.Add(sec1Marker);
+
+            // Section 2 (final): many paragraphs to force multiple pages.
+            // Document-level (final section) header = "SECTION B".
+            for (var i = 0; i < 80; i++)
+                doc.Blocks.Add(new Paragraph($"Section 2 line {i + 1}."));
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("SECTION B");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            // Wide enough for 8.5", tall enough to layout at least 3 pages.
+            view.Measure(new Size(816, 10000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+        items!.Should().NotBeEmpty("both sections should emit header items");
+
+        // Page 1 (pi=0) must show "SECTION A".
+        var sectionAItems = items!.Where(i => i.Text == "SECTION A").ToList();
+        var sectionBItems = items!.Where(i => i.Text == "SECTION B").ToList();
+
+        sectionAItems.Should().NotBeEmpty("section 1's header must appear on page 1");
+        sectionBItems.Should().NotBeEmpty("section 2's header must appear on pages 2+");
+
+        // There must be exactly one SECTION A item (section 1 = exactly 1 page).
+        sectionAItems.Should().HaveCount(1,
+            "section 1 spans only 1 page so 'SECTION A' must appear exactly once");
+
+        // Every SECTION A item must have a smaller Y than every SECTION B item.
+        // (i.e. section A appears before section B in document order.)
+        var maxAY = sectionAItems.Max(i => i.Y);
+        var minBY = sectionBItems.Min(i => i.Y);
+        maxAY.Should().BeLessThan(minBY,
+            "section 1's header (SECTION A) must come before section 2's headers (SECTION B) in page order");
+    }
+
+    // ── Test 9 (AE2): DifferentFirstPage on a mid-document section uses section-relative page 1 ────────
+    // Regression for AE2: the old code gated diffFirst on pi==0 (document page 0), so a
+    // section starting mid-document never got its first-page header.
+
+    [Fact]
+    public async Task MidDocument_section_DifferentFirstPage_uses_its_own_first_page_header()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Section 1: fills a page, no DifferentFirstPage, plain header.
+            var sec1Page = new PageSettings { DifferentFirstPage = false };
+            var sec1Hf = new SectionHeadersFooters { Header = new HeaderFooter("SEC1 DEFAULT") };
+            var sec1 = new Section(sec1Page, SectionBreakKind.NextPage) { HeadersFooters = sec1Hf };
+            var sec1Marker = new Paragraph("Section 1 body.");
+            sec1Marker.SectionBreak = sec1;
+            doc.Blocks.Add(sec1Marker);
+            // Pad section 1 to fill a page.
+            for (var i = 0; i < 40; i++)
+                doc.Blocks.Add(new Paragraph($"S1 line {i}."));
+
+            // Marker for second NextPage break after section 1 padding → actually belongs to sec1.
+            // Section 2 starts here, with DifferentFirstPage enabled.
+            var sec2Page = new PageSettings { DifferentFirstPage = true };
+            var sec2Hf = new SectionHeadersFooters
+            {
+                FirstHeader = new HeaderFooter("SEC2 FIRST PAGE"),
+                Header      = new HeaderFooter("SEC2 DEFAULT"),
+            };
+            var sec2 = new Section(sec2Page, SectionBreakKind.NextPage) { HeadersFooters = sec2Hf };
+            var sec2Marker = new Paragraph("Section 2 starts here.");
+            sec2Marker.SectionBreak = sec2;
+            doc.Blocks.Add(sec2Marker);
+
+            // Section 3 (final): more content.
+            for (var i = 0; i < 5; i++)
+                doc.Blocks.Add(new Paragraph($"S2 body line {i}."));
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("SEC3 DEFAULT");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 10000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+
+        // "SEC2 FIRST PAGE" must appear somewhere in the items — it is the first page of section 2,
+        // which starts mid-document (not document page 0).
+        var firstPageItems = items!.Where(i => i.Text == "SEC2 FIRST PAGE").ToList();
+        firstPageItems.Should().NotBeEmpty(
+            "DifferentFirstPage=true on section 2 must produce a first-page header on section 2's first page, " +
+            "even though that page is not document page 0 (AE2 fix)");
+    }
+
+    // ── Test 10 (AE3): section with no own header falls back to document-level header ─────────────────
+
+    [Fact]
+    public async Task Section_with_empty_HeadersFooters_inherits_document_level_header()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Section 1: exists but has an EMPTY SectionHeadersFooters (no own header/footer).
+            var sec1Page = new PageSettings();
+            var sec1 = new Section(sec1Page, SectionBreakKind.NextPage);
+            // sec1.HeadersFooters is left as a new SectionHeadersFooters() — all nulls → IsEmpty == true
+            var sec1Marker = new Paragraph("Section 1 body.");
+            sec1Marker.SectionBreak = sec1;
+            doc.Blocks.Add(sec1Marker);
+
+            // Document-level (final section) header — should be inherited by section 1.
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("DOC HEADER");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+
+        // The document header must appear even on a page whose section has no own header (AE3 fix).
+        items!.Should().Contain(i => i.Text == "DOC HEADER",
+            "a section with empty HeadersFooters must inherit the document-level header (AE3 fallback)");
+    }
 }

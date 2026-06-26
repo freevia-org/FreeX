@@ -120,6 +120,16 @@ public sealed class DocumentView : Control
     // Number of discrete pages after the last layout pass.
     private int _pageCount = 1;
 
+    // ── AV-COL: multi-column body text layout fields ────────────────────────────────────────────────
+    // Number of body-text columns for the current layout (1 = single-column, the default).
+    private int    _colCount     = 1;
+    // Width of each equal column in DIP (0 when single-column).
+    private double _colWidth     = 0;
+    // Gap between adjacent columns in DIP (0 when single-column).
+    private double _colGap       = 0;
+    // Whether to draw a vertical rule line in each inter-column gap.
+    private bool   _colLineBetween = false;
+
     public DocumentView()
     {
         Focusable = true;
@@ -360,6 +370,67 @@ public sealed class DocumentView : Control
                 .Select(p => (p.Ch, p.X, p.W, p.Y, p.LineHeight,
                               p.Fmt.VerticalAlign == VerticalAlign.Subscript))
                 .ToList();
+
+    // ── AV-COL: column layout introspection for tests ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of body-text columns used in the current layout.
+    /// 1 when single-column or in Web/Draft modes; matches PageSettings.ColumnCount for multi-column.
+    /// </summary>
+    internal int LayoutColumnCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colCount; }
+    }
+
+    /// <summary>
+    /// Width of each equal column in the current layout, in DIP.
+    /// Equal to _contentWidth when single-column.
+    /// </summary>
+    internal double LayoutColumnWidth
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colWidth; }
+    }
+
+    /// <summary>
+    /// Gap between adjacent columns in the current layout, in DIP.
+    /// Zero when single-column.
+    /// </summary>
+    internal double LayoutColumnGap
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colGap; }
+    }
+
+    /// <summary>
+    /// Returns the X-band [left, left+width) for the given 0-based column index in the current layout.
+    /// Used by tests to verify that each glyph's X coordinate falls within the correct column band.
+    /// </summary>
+    internal (double Left, double Width) LayoutColumnBand(int colIndex)
+    {
+        if (_laidOutWidth < 0) Relayout(FallbackWidth);
+        var left = _contentLeft + colIndex * (_colWidth + _colGap);
+        return (left, _colWidth);
+    }
+
+    /// <summary>
+    /// Returns the current caret position as (Block, Offset).
+    /// Exposed internally for navigation regression tests (ZZ1 and similar).
+    /// </summary>
+    internal (int Block, int Offset) CaretPosition => (_caret.Block, _caret.Offset);
+
+    /// <summary>
+    /// Simulates pressing Down (+1) or Up (-1) arrow from the current caret position.
+    /// Exposed internally so regression tests can assert that vertical navigation reaches
+    /// a tall inline object (ZZ1).
+    /// </summary>
+    internal void TestMoveCaretVertical(int direction) => MoveCaretVertical(direction, extend: false);
+
+    /// <summary>
+    /// Simulates a pointer click at <paramref name="point"/> and returns the resolved
+    /// (Block, Offset) if TryHitTest finds a match, or null if not.
+    /// Exposed internally for hit-test regression tests (ZZ1).
+    /// </summary>
+    internal (int Block, int Offset)? TestHitTest(Point point) =>
+        TryHitTest(point, out var pos) ? (pos.Block, pos.Offset) : null;
 
     /// <summary>
     /// Number of floating images collected during the last layout pass.
@@ -794,7 +865,43 @@ public sealed class DocumentView : Control
             _contentWidth = Math.Max(120, width - DraftInset * 2);
         }
 
-        var textWidth = _contentWidth;
+        // AV-COL: compute multi-column geometry from PageSettings.
+        // Only active in PrintLayout mode — Web/Draft always use a single column.
+        {
+            var pageColCount = _viewMode == DocumentViewMode.PrintLayout
+                ? Math.Max(1, _doc.Page.ColumnCount)
+                : 1;
+            if (pageColCount > 1)
+            {
+                var gapDip = Math.Max(0, _doc.Page.ColumnSpacingPt * PxPerPoint);
+                double colWidthDip;
+                if (_doc.Page.ColumnWidthsPt is { Count: > 1 } explicitWidths
+                    && explicitWidths.Count == pageColCount)
+                {
+                    // Unequal layout: use the narrowest column to guarantee all N columns fit.
+                    colWidthDip = explicitWidths.Min() * PxPerPoint;
+                }
+                else
+                {
+                    colWidthDip = (_contentWidth - (pageColCount - 1) * gapDip) / pageColCount;
+                }
+                colWidthDip = Math.Max(1, colWidthDip);
+                _colCount       = pageColCount;
+                _colWidth       = colWidthDip;
+                _colGap         = gapDip;
+                _colLineBetween = _doc.Page.ColumnsLineBetween;
+            }
+            else
+            {
+                _colCount       = 1;
+                _colWidth       = _contentWidth;
+                _colGap         = 0;
+                _colLineBetween = false;
+            }
+        }
+
+        // Body text layout uses _colWidth as the per-column wrap width.
+        var textWidth = _colWidth;
         // Available text-area height per page (between top and bottom margin).
         // For Web/Draft this is effectively infinite so ReserveContentY never paginates.
         var textAreaHeight = _viewMode == DocumentViewMode.PrintLayout
@@ -886,9 +993,11 @@ public sealed class DocumentView : Control
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            // The number of pages = pageIndex of the last content Y + 1.
-            var lastPageIndex = (int)(_layoutContentY / _layoutTextAreaHeight);
-            _pageCount = Math.Max(1, lastPageIndex + 1);
+            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
+            // Number of pages = ceil(slots / colCount).
+            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var totalSlots = lastSlot + 1;
+            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
             // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
             _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
         }
@@ -908,6 +1017,125 @@ public sealed class DocumentView : Control
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Builds a mapping from 0-based page index to (SectionHeadersFooters, section-relative
+    /// 1-based page number, PageSettings) for <paramref name="pageCount"/> pages.
+    ///
+    /// Mirrors WPF's PaginatedEditorPanel.ComputePageSectionMap: walks <see cref="_doc"/>.Blocks
+    /// to assign each block a section index (incrementing at each SectionBreak paragraph), then
+    /// uses <see cref="_placed"/> character positions to determine which page each block's content
+    /// first appears on, giving a true block→page→section mapping.
+    ///
+    /// Fallback: when a section's HeadersFooters is entirely empty, substitutes
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/> (AE3 fix).
+    /// </summary>
+    private (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[]
+        ComputePageSectionMap(IReadOnlyList<Section> sections, int pageCount)
+    {
+        var result = new (SectionHeadersFooters Hf, int SectionRelPageNumber, PageSettings Page)[pageCount];
+
+        // Map each model-block index to a section index (0-based).
+        // A block belongs to section[k] if it comes before the k-th SectionBreak paragraph.
+        var blocks = _doc.Blocks;
+        int[] blockSection = new int[blocks.Count];
+        {
+            int secIdx = 0;
+            for (int b = 0; b < blocks.Count; b++)
+            {
+                blockSection[b] = secIdx;
+                // A paragraph carrying a SectionBreak ends secIdx and starts secIdx+1.
+                if (blocks[b] is Paragraph { SectionBreak: { } } && secIdx < sections.Count - 1)
+                    secIdx++;
+            }
+        }
+
+        // Determine the owning section index for each page.
+        // We use _placed: for each block, find the first PlacedChar on it and read its page.
+        // The first block placed on a page sets that page's section.
+        int[] pageSectionIdx = new int[pageCount];
+        // Track whether a page already has an assignment so first-placed-block wins.
+        bool[] pageAssigned = new bool[pageCount];
+
+        // Walk _placed in order (they are added in layout order, so earlier blocks come first).
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel) continue;
+            var b = pc.Block;
+            if (b < 0 || b >= blocks.Count) continue;
+            var pg = PageIndexFromPageSpaceY(pc.Y);
+            pg = Math.Clamp(pg, 0, pageCount - 1);
+            if (!pageAssigned[pg])
+            {
+                pageSectionIdx[pg] = blockSection[b];
+                pageAssigned[pg] = true;
+            }
+        }
+
+        // Fill any pages that got no placed content (e.g. blank trailing pages) by
+        // propagating the previous page's section forward.
+        for (int pg = 1; pg < pageCount; pg++)
+        {
+            if (!pageAssigned[pg])
+            {
+                pageSectionIdx[pg] = pageSectionIdx[pg - 1];
+                pageAssigned[pg] = true;
+            }
+        }
+
+        // Compute sectionFirstPage[k] = first 0-based page belonging to section k.
+        var sectionFirstPage = new int[Math.Max(1, sections.Count)];
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
+            if (pg == 0 || pageSectionIdx[pg - 1] != sec)
+                sectionFirstPage[sec] = pg;
+        }
+
+        // Build the result.
+        for (int pg = 0; pg < pageCount; pg++)
+        {
+            int sec = Math.Clamp(pageSectionIdx[pg], 0, sections.Count - 1);
+            var sectionHf = sections[sec].HeadersFooters;
+
+            // AE3 fix: fall back to document-level headers when the section has no own slots.
+            if (sectionHf.IsEmpty)
+                sectionHf = _doc.FinalSectionHeadersFooters;
+
+            var sectionPage = sections[sec].Page;
+            int sectionRelPage = pg - sectionFirstPage[sec] + 1;
+            result[pg] = (sectionHf, sectionRelPage, sectionPage);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Selects the correct header/footer slot pair for the given page within a section.
+    /// Mirrors WPF's PaginatedEditorPanel.ResolveHfSlots: gates first-page variant on
+    /// <paramref name="sectionRelativePageNumber"/> == 1 (AE2 fix), not document-page 0.
+    /// </summary>
+    private static (HeaderFooter? Header, HeaderFooter? Footer) ResolveHfSlotsAvalonia(
+        SectionHeadersFooters sectionHf,
+        int sectionRelativePageNumber,
+        PageSettings pageSettings,
+        bool diffOddEvenDoc)
+    {
+        var diffFirst = pageSettings.DifferentFirstPage;
+
+        if (diffFirst && sectionRelativePageNumber == 1)
+        {
+            return (sectionHf.FirstHeader, sectionHf.FirstFooter);
+        }
+
+        if (diffOddEvenDoc && sectionRelativePageNumber % 2 == 0)
+        {
+            return (sectionHf.EvenHeader ?? sectionHf.Header,
+                    sectionHf.EvenFooter ?? sectionHf.Footer);
+        }
+
+        return (sectionHf.Header, sectionHf.Footer);
+    }
+
+    /// <summary>
     /// Pre-computes the header/footer render items for each page in PrintLayout mode.
     /// Called once per Relayout pass after _pageCount is known. Each item carries a
     /// field-resolved text string, run formatting, page-space position, and alignment so
@@ -924,47 +1152,26 @@ public sealed class DocumentView : Control
         // Document-level odd/even flag lives on _doc.Page.
         var diffOddEven = _doc.Page.DifferentOddEvenPages;
 
+        // AE1 fix: build a true page→section map via section-break markers on model blocks,
+        // mirroring WPF's PaginatedEditorPanel.ComputePageSectionMap.
+        var pageToSection = ComputePageSectionMap(sections, _pageCount);
+
         for (var pi = 0; pi < _pageCount; pi++)
         {
             // Page-space top of this page.
             var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
 
-            // Derive which section owns this page (rough heuristic: map page index to section
-            // by distributing pages evenly across sections — matches WPF's PaginatedEditorPanel
-            // approach when a precise section-break paginator is not available).
-            var sectionIndex = sections.Count > 1
-                ? Math.Min((int)((double)pi / _pageCount * sections.Count), sections.Count - 1)
-                : 0;
-            var section = sections.Count > 0 ? sections[sectionIndex] : null;
-            var sectionPage = section?.Page ?? _doc.Page;
-            var sectionHf = section?.HeadersFooters ?? _doc.FinalSectionHeadersFooters;
+            // AE1: use the true owning section for this page (not an even distribution).
+            var (sectionHf, sectionRelPage, sectionPage) = pageToSection[pi];
 
             // 1-based page number for this page (pi is 0-based).
             var pageNumber = pi + 1;
 
-            // Resolve which header/footer variant applies.
-            var diffFirst = sectionPage.DifferentFirstPage;
-            var isFirstPage = pi == 0; // first page of section (approximation: pi==0 for first section)
-
+            // AE2 fix: resolve HF slots using section-relative page number, mirroring
+            // WPF's PaginatedEditorPanel.ResolveHfSlots.
             HeaderFooter? header;
             HeaderFooter? footer;
-
-            if (diffFirst && isFirstPage)
-            {
-                header = sectionHf.FirstHeader;
-                footer = sectionHf.FirstFooter;
-            }
-            else if (diffOddEven && pageNumber % 2 == 0)
-            {
-                // Even page (page numbers are 1-based; even = page 2, 4, 6, …).
-                header = sectionHf.EvenHeader ?? sectionHf.Header;
-                footer = sectionHf.EvenFooter ?? sectionHf.Footer;
-            }
-            else
-            {
-                header = sectionHf.Header;
-                footer = sectionHf.Footer;
-            }
+            (header, footer) = ResolveHfSlotsAvalonia(sectionHf, sectionRelPage, sectionPage, diffOddEven);
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0
@@ -1131,8 +1338,13 @@ public sealed class DocumentView : Control
         if (_viewMode != DocumentViewMode.PrintLayout)
             return _marginTopDip + contentY;
 
-        var pageIndex = (int)(contentY / _layoutTextAreaHeight);
-        var offsetWithinPage = contentY - pageIndex * _layoutTextAreaHeight;
+        // AV-COL: with multi-column layout each "slot" is one column's worth of content.
+        // slot = the index of the column being filled (0 = page0/col0, 1 = page0/col1, ...).
+        // pageIndex = slot / _colCount  (multiple columns fill the same page).
+        // offsetWithinPage = contentY mod textAreaHeight  (within the column's vertical span).
+        var slot      = (int)(contentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var offsetWithinPage = contentY - slot * _layoutTextAreaHeight;
         return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
     }
 
@@ -1249,7 +1461,11 @@ public sealed class DocumentView : Control
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
             // Place the marker at the current content-space Y converted to page-space.
             var markerY = ContentYToPageSpaceY(_layoutContentY);
-            _markers.Add((_contentLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
+            // AV-COL: resolve column X for the list marker (same column as the paragraph's first line).
+            var markerSlot     = _layoutTextAreaHeight > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var markerColIndex = markerSlot % _colCount;
+            var markerColLeft  = _contentLeft + markerColIndex * (_colWidth + _colGap);
+            _markers.Add((markerColLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.
@@ -1382,7 +1598,13 @@ public sealed class DocumentView : Control
             }
         }
 
-        var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
+        // AV-COL: compute the left edge of the column this line lands in.
+        // slot = which column-slot (0-based across all pages); colIndex = slot % _colCount.
+        var lineSlot     = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
+        var lineColIndex = lineSlot % _colCount;
+        var colLeft      = _contentLeft + lineColIndex * (_colWidth + _colGap);
+
+        var x = colLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -1661,13 +1883,6 @@ public sealed class DocumentView : Control
             ? _placed.Max(p => p.Block == blockIndex ? p.Offset : -1) + 1
             : 0;
 
-        // YY3: caret line height for baseline-aligned sentinels.
-        // WPF uses BaselineAlignment.Bottom for inline charts/SmartArt/images (and .Center for WordArt).
-        // We mirror this by placing the PlacedChar sentinel at (pageSpaceY + height - caretLineH) so
-        // the caret cursor sits at the bottom (baseline) of the inline object rather than its top.
-        // The visual Rect for the object is unchanged; only the caret probe position moves to baseline.
-        var caretLineH = DefaultFontSizePt * PxPerPoint * 1.3;
-
         foreach (var run in paragraph.Runs)
         {
             // ── Inline chart ─────────────────────────────────────────────────────────
@@ -1695,12 +1910,12 @@ public sealed class DocumentView : Control
                     Series     = series,
                 });
 
-                // YY3: emit sentinel at the baseline (bottom of the object box) so the caret cursor
-                // appears at the object's bottom, matching WPF's BaselineAlignment.Bottom behaviour.
-                // Named objSentH/objSentY to avoid CS0136 conflict with the method-level sentinelY below.
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
+                // can reach a tall inline chart from above (pressing Down) or via a click in the upper
+                // portion.  PlacedChar has no separate caret-draw Y field, so navigation correctness
+                // takes priority; the YY3 baseline-cosmetic is dropped (it was LOW value, caused a MED
+                // regression).  Y = pageSpaceY and LineHeight = height → band is [top, bottom].
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1731,11 +1946,8 @@ public sealed class DocumentView : Control
                     Warp       = wa.Warp,
                 });
 
-                // YY3: WordArt uses Center alignment in WPF; approximate here with bottom-align too
-                // (simpler, low-risk — exact centre would need half-height offset into the object).
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1771,10 +1983,8 @@ public sealed class DocumentView : Control
                     NodeTexts  = texts,
                 });
 
-                // YY3: baseline-aligned sentinel (bottom of object box).
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -2216,6 +2426,8 @@ public sealed class DocumentView : Control
     private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
     private static IBrush PageShadowBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
     private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
+    // AV-COL: thin gray rule drawn in each inter-column gap when ColumnsLineBetween is set.
+    private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -2253,6 +2465,24 @@ public sealed class DocumentView : Control
                 context.FillRectangle(fill, rect);
             if (border)
                 context.DrawRectangle(null, TableBorderPen, rect);
+        }
+
+        // AV-COL: draw column rules (vertical divider lines in each inter-column gap) when enabled.
+        // One rule per gap, centred horizontally, running the full text-area height on each page.
+        if (_viewMode == DocumentViewMode.PrintLayout && _colCount > 1 && _colLineBetween)
+        {
+            for (var pi = 0; pi < _pageCount; pi++)
+            {
+                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var ruleTop    = pageTop + _marginTopDip;
+                var ruleBottom = pageTop + _pageHeightPx - _marginBottomDip;
+                for (var ci = 0; ci < _colCount - 1; ci++)
+                {
+                    // Gap centre X = left edge of next column minus half gap.
+                    var gapCentreX = _contentLeft + (ci + 1) * (_colWidth + _colGap) - _colGap / 2;
+                    context.DrawLine(ColumnRulePen, new Point(gapCentreX, ruleTop), new Point(gapCentreX, ruleBottom));
+                }
+            }
         }
 
         // Behind-text pass: merge ALL six floating types into ONE list sorted by ZOrderIndex.
