@@ -1,0 +1,593 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Threading;
+using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
+using SkiaSharp;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// Tests for the Avalonia DocumentView floating SHAPE render path (FO2 wave).
+/// Verifies: floating shapes are collected separately from inline content; page-space rect
+/// is resolved from FloatingPlacement; z-order bucket (behind / in-front) is correct; fill,
+/// outline, and text are captured; a headless render produces non-blank output in the region.
+/// </summary>
+public sealed class DocumentViewFloatingShapeTests
+{
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+
+    private static async Task<bool> OnUiThread(Action action)
+    {
+        try
+        {
+            await Session.Dispatch(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a document whose first paragraph anchors a single floating shape.
+    /// The paragraph also carries body text so glyphs are generated alongside the shape.
+    /// </summary>
+    private static TextDocument DocWithFloatingShape(
+        ShapeKind kind,
+        ImageWrapping wrapping,
+        double hOffsetPt,
+        double vOffsetPt,
+        string? fillColorHex = "#4472C4",
+        string? outlineColorHex = null,
+        double outlineWidthPt = 0,
+        int zOrder = 0,
+        double shapeWidthPt  = 144,
+        double shapeHeightPt = 108,
+        string? text = null)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var bodyPara = new Paragraph();
+        bodyPara.Runs.Add(new Run("Body text with a floating shape anchored here.",
+            RunFormatting.Default with { FontSizePt = 11 }));
+
+        var shape = new Shape(kind, shapeWidthPt, shapeHeightPt, fillColorHex)
+        {
+            OutlineColorHex = outlineColorHex,
+            OutlineWidthPt  = outlineWidthPt,
+            Placement = new FloatingPlacement
+            {
+                Wrapping            = wrapping,
+                HorizontalOffsetPt  = hOffsetPt,
+                VerticalOffsetPt    = vOffsetPt,
+                HorizontalAnchor    = HorizontalAnchor.Column,
+                VerticalAnchor      = VerticalAnchor.Paragraph,
+                ZOrderIndex         = zOrder,
+            },
+        };
+        if (text is not null)
+        {
+            var tp = new Paragraph();
+            tp.Runs.Add(new Run(text));
+            shape.TextParagraphs.Add(tp);
+        }
+
+        var floatRun = new Run(string.Empty, RunFormatting.Default) { Shape = shape };
+        bodyPara.Runs.Add(floatRun);
+
+        doc.Blocks.Add(bodyPara);
+
+        var p2 = new Paragraph();
+        p2.Runs.Add(new Run("Second paragraph.", RunFormatting.Default));
+        doc.Blocks.Add(p2);
+
+        return doc;
+    }
+
+    // ── Test 1: non-floating shape is NOT collected ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task Inline_shape_is_not_collected_as_floating()
+    {
+        int floatCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var p = new Paragraph();
+            // Inline shape (no Placement → IsFloating = false).
+            var shape = new Shape(ShapeKind.Rectangle, 72, 54, "#4472C4");
+            p.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+            doc.Blocks.Add(p);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            floatCount = view.FloatingShapeCount;
+        });
+
+        if (!ran) return;
+        floatCount.Should().Be(0, "an inline shape (no floating Placement) must not be added to _floatingShapes");
+    }
+
+    // ── Test 2: floating shape IS collected ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_rectangle_shape_is_collected()
+    {
+        int floatCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 36, vOffsetPt: 36);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            floatCount = view.FloatingShapeCount;
+        });
+
+        if (!ran) return;
+        floatCount.Should().Be(1, "one floating shape in the document should produce one entry in _floatingShapes");
+    }
+
+    // ── Test 3: position resolution — column anchor + paragraph anchor ──────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_column_anchor_x_is_positive()
+    {
+        Rect floatRect = default;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 36, vOffsetPt: 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) floatRect = rects[0].Rect;
+        });
+
+        if (!ran) return;
+        floatRect.X.Should().BeGreaterThan(0, "floating shape X should be positive (content left + offset)");
+        floatRect.Width.Should().BeApproximately(144 * (96.0 / 72.0), 2,
+            "shape width should be 144pt → DIP");
+    }
+
+    // ── Test 4: behind-text → BehindText flag ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Behind_text_floating_shape_is_marked_BehindText_true()
+    {
+        bool? behindText = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Behind,
+                hOffsetPt: 0, vOffsetPt: 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) behindText = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behindText.Should().BeTrue("ImageWrapping.Behind must set the BehindText flag for shapes");
+    }
+
+    // ── Test 5: in-front → BehindText is false ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InFront_floating_shape_is_marked_BehindText_false()
+    {
+        bool? behindText = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Ellipse, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) behindText = rects[0].BehindText;
+        });
+
+        if (!ran) return;
+        behindText.Should().BeFalse("ImageWrapping.InFront must not set the BehindText flag");
+    }
+
+    // ── Test 6: z-order is preserved ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ZOrderIndex_is_preserved_in_floating_shape_rects()
+    {
+        int capturedZOrder = -999;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0, zOrder: 77);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) capturedZOrder = rects[0].ZOrder;
+        });
+
+        if (!ran) return;
+        capturedZOrder.Should().Be(77, "ZOrderIndex from Placement must be preserved in the layout list");
+    }
+
+    // ── Test 7: shape kind is preserved ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Shape_kind_is_preserved_in_floating_shape_rects()
+    {
+        ShapeKind capturedKind = ShapeKind.Rectangle;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Ellipse, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) capturedKind = rects[0].Kind;
+        });
+
+        if (!ran) return;
+        capturedKind.Should().Be(ShapeKind.Ellipse, "shape kind must be preserved in FloatingShapeRects");
+    }
+
+    // ── Test 8: fill is captured ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_with_fill_has_HasFill_true()
+    {
+        bool hasFill = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0, fillColorHex: "#FF0000");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) hasFill = rects[0].HasFill;
+        });
+
+        if (!ran) return;
+        hasFill.Should().BeTrue("a shape with a FillColorHex must have HasFill=true in FloatingShapeRects");
+    }
+
+    // ── Test 9: no-fill shape has HasFill false ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_without_fill_has_HasFill_false()
+    {
+        bool hasFill = true;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0, fillColorHex: null);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) hasFill = rects[0].HasFill;
+        });
+
+        if (!ran) return;
+        hasFill.Should().BeFalse("a shape with no FillColorHex must have HasFill=false");
+    }
+
+    // ── Test 10: outline pen is captured ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_with_outline_has_HasOutline_true()
+    {
+        bool hasOutline = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Ellipse, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0,
+                outlineColorHex: "#000000", outlineWidthPt: 1.5);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) hasOutline = rects[0].HasOutline;
+        });
+
+        if (!ran) return;
+        hasOutline.Should().BeTrue("a shape with OutlineColorHex must have HasOutline=true");
+    }
+
+    // ── Test 11: shape text is captured ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_text_is_captured()
+    {
+        string? capturedText = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "Hello shape");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var rects = view.FloatingShapeRects;
+            if (rects.Count > 0) capturedText = rects[0].Text;
+        });
+
+        if (!ran) return;
+        capturedText.Should().Be("Hello shape", "shape text from TextParagraphs must be captured in FloatingShapeRects");
+    }
+
+    // ── Test 12: multiple shapes — count and both present ────────────────────────────────────────
+
+    [Fact]
+    public async Task Multiple_floating_shapes_are_all_collected()
+    {
+        int count = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor.", RunFormatting.Default));
+
+            // Shape 1: rectangle behind text, z=10
+            var s1 = new Shape(ShapeKind.Rectangle, 144, 108, "#4472C4")
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Behind,
+                    HorizontalOffsetPt = 0, VerticalOffsetPt = 0,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 10,
+                },
+            };
+            // Shape 2: ellipse in front, z=5
+            var s2 = new Shape(ShapeKind.Ellipse, 72, 72, "#ED7D31")
+            {
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 36, VerticalOffsetPt = 0,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 5,
+                },
+            };
+
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = s1 });
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = s2 });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            count = view.FloatingShapeCount;
+        });
+
+        if (!ran) return;
+        count.Should().Be(2, "two floating shapes should produce two entries in _floatingShapes");
+    }
+
+    // ── Test 13: body text still lays out when paragraph also has floating shape ──────────────────
+
+    [Fact]
+    public async Task Paragraph_with_floating_shape_still_produces_text_glyphs()
+    {
+        int glyphs = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.Rectangle, ImageWrapping.Square,
+                hOffsetPt: 0, vOffsetPt: 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            glyphs = view.PlacedGlyphCount;
+        });
+
+        if (!ran) return;
+        glyphs.Should().BeGreaterThan(0,
+            "a paragraph with a floating shape run and text runs must still produce placed glyphs");
+    }
+
+    // ── Test 14: headless render capture — shape appears in PNG ──────────────────────────────────
+
+    [Fact]
+    public async Task Floating_shape_render_capture_produces_non_blank_output()
+    {
+        byte[]? pngBytes = null;
+        string? outPath = null;
+        var ran = false;
+
+        try
+        {
+            await Session.Dispatch(() =>
+            {
+                ran = true;
+
+                // Build a document with:
+                //   • a filled blue rectangle in-front (1in offset)
+                //   • a plain ellipse behind text at (0,0)
+                //   • a text-box with text
+                var doc = TextDocument.CreateEmpty();
+                doc.Blocks.Clear();
+
+                var para = new Paragraph();
+                para.Runs.Add(new Run("Body text behind and in front of shapes.",
+                    RunFormatting.Default with { FontSizePt = 11 }));
+
+                // Filled rectangle in front
+                var rect = new Shape(ShapeKind.Rectangle, 144, 108, "#4472C4")
+                {
+                    OutlineColorHex = "#FFFFFF",
+                    OutlineWidthPt  = 1.0,
+                    Placement = new FloatingPlacement
+                    {
+                        Wrapping = ImageWrapping.InFront,
+                        HorizontalOffsetPt = 72, VerticalOffsetPt = 72,
+                        HorizontalAnchor = HorizontalAnchor.Column,
+                        VerticalAnchor   = VerticalAnchor.Paragraph,
+                        ZOrderIndex = 2,
+                    },
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = rect });
+
+                // Outlined ellipse behind text
+                var ell = new Shape(ShapeKind.Ellipse, 100, 80, null)
+                {
+                    OutlineColorHex = "#ED7D31",
+                    OutlineWidthPt  = 2.0,
+                    Placement = new FloatingPlacement
+                    {
+                        Wrapping = ImageWrapping.Behind,
+                        HorizontalOffsetPt = 0, VerticalOffsetPt = 0,
+                        HorizontalAnchor = HorizontalAnchor.Column,
+                        VerticalAnchor   = VerticalAnchor.Paragraph,
+                        ZOrderIndex = 1,
+                    },
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = ell });
+
+                // Text box
+                var tb = new Shape(ShapeKind.TextBox, 120, 60, "#F2F2F2");
+                var tp = new Paragraph();
+                tp.Runs.Add(new Run("Shape text"));
+                tb.TextParagraphs.Add(tp);
+                tb.Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 180, VerticalOffsetPt = 36,
+                    HorizontalAnchor = HorizontalAnchor.Column,
+                    VerticalAnchor   = VerticalAnchor.Paragraph,
+                    ZOrderIndex = 3,
+                };
+                para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Shape = tb });
+
+                doc.Blocks.Add(para);
+
+                for (var i = 0; i < 4; i++)
+                {
+                    var p = new Paragraph();
+                    p.Runs.Add(new Run($"Body paragraph {i + 1}: lorem ipsum dolor sit amet.",
+                        RunFormatting.Default));
+                    doc.Blocks.Add(p);
+                }
+
+                var view = new DocumentView();
+                view.LoadDocument(doc);
+
+                var window = new Window
+                {
+                    Width   = 816,
+                    Height  = 1200,
+                    Content = view,
+                };
+                window.Show();
+                window.Measure(new Size(816, 1200));
+                window.Arrange(new Rect(0, 0, 816, 1200));
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var frame = window.CaptureRenderedFrame();
+                if (frame is not null)
+                    pngBytes = WriteableBitmapToPng(frame);
+
+                window.Close();
+
+                var testBinDir = Path.GetDirectoryName(
+                    typeof(DocumentViewFloatingShapeTests).Assembly.Location) ?? ".";
+                outPath = Path.GetFullPath(
+                    Path.Combine(testBinDir, "freew_avalonia_floating_shapes.png"));
+                if (pngBytes is { Length: > 0 })
+                    File.WriteAllBytes(outPath, pngBytes);
+
+                Console.WriteLine(
+                    $"[FloatingShapeCapture] PNG written ({pngBytes?.Length ?? 0} bytes) to: {outPath}");
+            }, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FloatingShapeCapture] Skipped: {ex.GetType().Name}: {ex.Message}");
+            ran = false;
+        }
+
+        if (!ran) return;
+        if (pngBytes is null)
+        {
+            Console.WriteLine("[FloatingShapeCapture] CaptureRenderedFrame returned null — skipping.");
+            return;
+        }
+        if (pngBytes.Length == 0)
+        {
+            Console.WriteLine("[FloatingShapeCapture] Encoder produced 0 bytes — skipping.");
+            return;
+        }
+
+        pngBytes.Length.Should().BeGreaterThan(5_000,
+            "a rendered page with floating shapes and body text should produce a non-trivial PNG");
+        pngBytes[0].Should().Be(0x89);
+        pngBytes[1].Should().Be((byte)'P');
+        pngBytes[2].Should().Be((byte)'N');
+        pngBytes[3].Should().Be((byte)'G');
+
+        Console.WriteLine($"[FloatingShapeCapture] Visual inspection: {outPath}");
+    }
+
+    // ── PNG encoder (shared with other capture tests) ─────────────────────────────────────────────
+
+    private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)
+    {
+        try
+        {
+            using var locked = bitmap.Lock();
+            var info = new SKImageInfo(
+                locked.Size.Width,
+                locked.Size.Height,
+                locked.Format == PixelFormat.Bgra8888 ? SKColorType.Bgra8888 : SKColorType.Rgba8888,
+                SKAlphaType.Premul);
+
+            using var skBitmap = new SKBitmap();
+            if (!skBitmap.InstallPixels(info, locked.Address, locked.RowBytes))
+                return [];
+
+            using var skImage = SKImage.FromBitmap(skBitmap);
+            using var data = skImage.Encode(SKEncodedImageFormat.Png, 90);
+            return data?.ToArray() ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+}

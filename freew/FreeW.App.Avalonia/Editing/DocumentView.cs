@@ -85,6 +85,9 @@ public sealed class DocumentView : Control
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     private readonly List<(Rect Rect, Bitmap? Image, bool BehindText, int ZOrder)> _floatingImages = new();
+    // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
+    // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
+    private readonly List<FloatingShapeData> _floatingShapes = new();
     private readonly Dictionary<InlineImage, Bitmap?> _bitmapCache = new();
     private readonly List<(Rect Rect, int Block, int Row, int Col)> _cellHits = new();
 
@@ -373,6 +376,38 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Number of floating shapes collected during the last layout pass.
+    /// Tests use this to verify that floating shapes are tracked separately from inline content.
+    /// </summary>
+    public int FloatingShapeCount
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingShapes.Count;
+        }
+    }
+
+    /// <summary>
+    /// Returns a snapshot of the floating-shape rects (page-space, in draw order) collected during
+    /// the last layout pass. Tests use this to verify position resolution, z-order, fill and outline.
+    /// </summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, ShapeKind Kind, bool HasFill, bool HasOutline, string? Text)>
+        FloatingShapeRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingShapes
+                .Select(sd => (sd.Rect, sd.BehindText, sd.ZOrder, sd.Kind,
+                               sd.FillBrush is not null,
+                               sd.OutlinePen is not null,
+                               sd.Text))
+                .ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -527,6 +562,7 @@ public sealed class DocumentView : Control
         _rects.Clear();
         _images.Clear();
         _floatingImages.Clear();
+        _floatingShapes.Clear();
         _cellHits.Clear();
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -723,9 +759,10 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        // Collect floating images anchored to this paragraph at its current content Y.
+        // Collect floating images and shapes anchored to this paragraph at its current content Y.
         // Must happen before SpaceBeforePt advances _layoutContentY so the anchor Y is accurate.
         CollectFloatingImages(paragraph, _layoutContentY);
+        CollectFloatingShapes(paragraph, _layoutContentY);
 
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
@@ -1047,8 +1084,9 @@ public sealed class DocumentView : Control
         const double gap = 6;
         var alignment = paragraph.Formatting.Alignment;
 
-        // Collect floating images anchored to this paragraph before advancing _layoutContentY.
+        // Collect floating images and shapes anchored to this paragraph before advancing _layoutContentY.
         CollectFloatingImages(paragraph, _layoutContentY);
+        CollectFloatingShapes(paragraph, _layoutContentY);
 
         foreach (var run in paragraph.Runs)
         {
@@ -1152,6 +1190,250 @@ public sealed class DocumentView : Control
             var behindText = img.Wrapping == ImageWrapping.Behind;
             _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex));
         }
+    }
+
+    /// <summary>
+    /// Scans <paramref name="paragraph"/> for floating shapes and appends each to <c>_floatingShapes</c>
+    /// with its page-space rect and pre-built brushes/pens. Mirrors <see cref="CollectFloatingImages"/>.
+    /// <paramref name="anchorContentY"/> is the content-space Y of the paragraph start.
+    /// </summary>
+    private void CollectFloatingShapes(Paragraph paragraph, double anchorContentY)
+    {
+        var anchorPageIndex = _viewMode == DocumentViewMode.PrintLayout
+            ? (int)(anchorContentY / _layoutTextAreaHeight)
+            : 0;
+
+        double PageTop(int pi) =>
+            _viewMode == DocumentViewMode.PrintLayout
+                ? DeskPadding + pi * (_pageHeightPx + PageGap)
+                : 0;
+
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Shape is not { IsFloating: true } shape)
+                continue;
+
+            var pl = shape.Placement!; // guaranteed non-null when IsFloating
+
+            var shapeW = shape.WidthPt  > 0 ? shape.WidthPt  * PxPerPoint : 120;
+            var shapeH = shape.HeightPt > 0 ? shape.HeightPt * PxPerPoint :  80;
+
+            // ── Horizontal position ──────────────────────────────────────────────────
+            double x = pl.HorizontalAnchor switch
+            {
+                HorizontalAnchor.Page   => _pageLeft    + pl.HorizontalOffsetPt * PxPerPoint,
+                HorizontalAnchor.Margin => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint,
+                _                       => _contentLeft + pl.HorizontalOffsetPt * PxPerPoint, // Column
+            };
+
+            // ── Vertical position ────────────────────────────────────────────────────
+            double y = pl.VerticalAnchor switch
+            {
+                VerticalAnchor.Paragraph =>
+                    ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
+
+                VerticalAnchor.Margin =>
+                    PageTop(anchorPageIndex) + _marginTopDip + pl.VerticalOffsetPt * PxPerPoint,
+
+                VerticalAnchor.Page =>
+                    PageTop(anchorPageIndex) + pl.VerticalOffsetPt * PxPerPoint,
+
+                _ => ContentYToPageSpaceY(anchorContentY) + pl.VerticalOffsetPt * PxPerPoint,
+            };
+
+            var rect = new Rect(x, y, shapeW, shapeH);
+            var behindText = pl.Wrapping == ImageWrapping.Behind;
+
+            // ── Fill brush ───────────────────────────────────────────────────────────
+            IBrush? fillBrush = null;
+            if (shape.ExtendedFill is { } extFill)
+            {
+                fillBrush = extFill.Kind switch
+                {
+                    ShapeFillKind.NoFill   => null,
+                    ShapeFillKind.Gradient => BuildAvaloniaGradientBrush(extFill, rect),
+                    ShapeFillKind.Pattern  => BuildAvaloniaPatternBrush(extFill),
+                    _                      => ParseSolidBrush(shape.FillColorHex),
+                };
+            }
+            else if (!string.IsNullOrEmpty(shape.FillColorHex))
+            {
+                fillBrush = ParseSolidBrush(shape.FillColorHex);
+            }
+
+            // ── Outline pen ──────────────────────────────────────────────────────────
+            Pen? outlinePen = null;
+            if (!string.IsNullOrEmpty(shape.OutlineColorHex))
+            {
+                var strokeBrush = ParseSolidBrush(shape.OutlineColorHex);
+                var strokeW = shape.OutlineWidthPt > 0 ? shape.OutlineWidthPt * PxPerPoint : 1.0;
+                DashStyle? dashStyle = shape.OutlineDash?.ToLowerInvariant() switch
+                {
+                    "dash"        => new DashStyle([4, 3], 0),
+                    "sysdot"      => new DashStyle([1, 2], 0),
+                    "dashDot"
+                    or "dashdot"  => new DashStyle([4, 2, 1, 2], 0),
+                    _             => null,
+                };
+                outlinePen = dashStyle is not null
+                    ? new Pen(strokeBrush, strokeW, dashStyle)
+                    : new Pen(strokeBrush, strokeW);
+            }
+
+            // ── Text ─────────────────────────────────────────────────────────────────
+            var text = shape.HasText ? shape.PlainText : null;
+
+            _floatingShapes.Add(new FloatingShapeData
+            {
+                Rect          = rect,
+                BehindText    = behindText,
+                ZOrder        = pl.ZOrderIndex,
+                Kind          = shape.Kind,
+                CustomGeo     = shape.HasCustomGeometry ? shape.CustomGeometry : null,
+                FillBrush     = fillBrush,
+                OutlinePen    = outlinePen,
+                Text          = text,
+                RotationAngle = shape.RotationAngle,
+                FlipH         = shape.FlipH,
+                FlipV         = shape.FlipV,
+            });
+        }
+    }
+
+    /// <summary>Builds an Avalonia <see cref="LinearGradientBrush"/> from a <see cref="ShapeFill"/> gradient.</summary>
+    private static LinearGradientBrush BuildAvaloniaGradientBrush(ShapeFill fill, Rect rect)
+    {
+        // GradientAngle in 60k-degree units; 0=left→right, 5400000=top→bottom.
+        var angleDeg = fill.GradientAngle / 60000.0;
+        var angleRad = angleDeg * Math.PI / 180.0;
+        // Convert angle to relative start/end points on the unit bounding box.
+        var cos = Math.Cos(angleRad);
+        var sin = Math.Sin(angleRad);
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0.5 - cos * 0.5, 0.5 - sin * 0.5, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(0.5 + cos * 0.5, 0.5 + sin * 0.5, RelativeUnit.Relative),
+        };
+        foreach (var stop in fill.GradientStops)
+        {
+            if (TryParseAvaloniaColor(stop.ColorHex, out var c))
+                brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(c, stop.Position / 100000.0));
+        }
+        return brush;
+    }
+
+    /// <summary>
+    /// Builds an Avalonia tiled <see cref="DrawingBrush"/> approximating a DrawingML preset pattern fill.
+    /// Uses foreground/background colours from <paramref name="fill"/>; approximates each pattern family
+    /// with a distinct tile so different presets are visually distinguishable.
+    /// </summary>
+    private static TileBrush BuildAvaloniaPatternBrush(ShapeFill fill)
+    {
+        TryParseAvaloniaColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
+        TryParseAvaloniaColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
+
+        var preset = fill.PatternPreset ?? string.Empty;
+
+        // Build a small DrawingBrush tile matching the WPF reference.
+        // Avalonia DrawingBrush with TileMode=Tile mirrors WPF's DrawingBrush.
+        var fgBrush = new SolidColorBrush(fg);
+        var pen     = new Pen(fgBrush, 1.0);
+
+        // Each family gets a distinct 8×8 tile.
+        Drawing tile;
+
+        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
+        {
+            // Horizontal line across the middle
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
+            tile = dg;
+        }
+        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
+        {
+            // Vertical line
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
+            tile = dg;
+        }
+        else if (preset is "diagStripe" or "ltDnDiag" or "ltUpDiag" or "dkDiag" or "dnDiag" or "upDiag")
+        {
+            // Diagonal line (NW→SE)
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
+            tile = dg;
+        }
+        else if (preset is "diagCross" or "smConfetti" or "lgConfetti")
+        {
+            // Cross (both diagonals)
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(8, 0), new Point(0, 8)) });
+            tile = dg;
+        }
+        else if (preset is "cross" or "plus" or "smGrid" or "lgGrid")
+        {
+            // Horizontal + vertical cross
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
+            tile = dg;
+        }
+        else if (preset is "smDot" or "dotGrid" or "dotDmnd" or "pct40" or "pct50" or "pct60" or "pct70")
+        {
+            // Small dot at centre
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Brush = fgBrush, Geometry = new EllipseGeometry(new Rect(2.5, 2.5, 3, 3)) });
+            tile = dg;
+        }
+        else
+        {
+            // Fallback: diagonal cross
+            var dg = new global::Avalonia.Media.DrawingGroup();
+            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
+            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(8, 0), new Point(0, 8)) });
+            tile = dg;
+        }
+
+        return new DrawingBrush(tile)
+        {
+            TileMode       = TileMode.Tile,
+            DestinationRect = new RelativeRect(0, 0, 8, 8, RelativeUnit.Absolute),
+        };
+    }
+
+    /// <summary>
+    /// Parses an RRGGBB (or #RRGGBB) hex string to an Avalonia <see cref="Color"/>. Returns false on failure.
+    /// </summary>
+    private static bool TryParseAvaloniaColor(string? hex, out Color color)
+    {
+        color = Colors.Black;
+        if (string.IsNullOrWhiteSpace(hex)) return false;
+        var s = hex.TrimStart('#');
+        if (s.Length == 6 &&
+            byte.TryParse(s.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out var r) &&
+            byte.TryParse(s.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out var g) &&
+            byte.TryParse(s.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            color = Color.FromRgb(r, g, b);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Parses a hex colour string to a <see cref="SolidColorBrush"/>. Returns null on failure.</summary>
+    private static IBrush? ParseSolidBrush(string? hex)
+    {
+        if (TryParseAvaloniaColor(hex, out var c))
+            return new SolidColorBrush(c);
+        return null;
     }
 
     private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
@@ -1271,6 +1553,14 @@ public sealed class DocumentView : Control
             DrawFloatingImage(context, rect, bitmap);
         }
 
+        // Behind-text floating shapes: same z-ordered pass, interleaved with images by ZOrder.
+        foreach (var sd in _floatingShapes
+            .Where(sd => sd.BehindText)
+            .OrderBy(sd => sd.ZOrder))
+        {
+            DrawFloatingShape(context, sd);
+        }
+
         // Inline images (non-floating).
         foreach (var (rect, bitmap) in _images)
         {
@@ -1350,6 +1640,14 @@ public sealed class DocumentView : Control
             DrawFloatingImage(context, rect, bitmap);
         }
 
+        // In-front floating shapes: same z-ordered pass.
+        foreach (var sd in _floatingShapes
+            .Where(sd => !sd.BehindText)
+            .OrderBy(sd => sd.ZOrder))
+        {
+            DrawFloatingShape(context, sd);
+        }
+
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
     }
@@ -1368,6 +1666,158 @@ public sealed class DocumentView : Control
             context.FillRectangle(FloatPlaceholderFill, rect);
             context.DrawRectangle(null, FloatPlaceholderPen, rect);
         }
+    }
+
+    /// <summary>
+    /// Renders a single floating shape from its pre-computed <see cref="FloatingShapeData"/>.
+    /// Applies rotation/flip transforms around the shape centre when present, then draws
+    /// the geometry (fill + outline) followed by any centred shape text.
+    /// </summary>
+    private void DrawFloatingShape(DrawingContext context, FloatingShapeData sd)
+    {
+        var rect = sd.Rect;
+        var cx = rect.X + rect.Width  / 2;
+        var cy = rect.Y + rect.Height / 2;
+
+        // Push a transform when rotation or flip is needed.
+        bool needTransform = sd.RotationAngle != 0 || sd.FlipH || sd.FlipV;
+        IDisposable? xformState = null;
+
+        if (needTransform)
+        {
+            // Avalonia ScaleTransform has no center-point overload.
+            // Build a composite matrix: translate to origin, scale/rotate, translate back.
+            var mat = Matrix.Identity;
+            // Translate to shape centre.
+            mat = mat * Matrix.CreateTranslation(-cx, -cy);
+            // Apply flip(s).
+            if (sd.FlipH) mat = mat * new Matrix(-1, 0, 0, 1, 0, 0);
+            if (sd.FlipV) mat = mat * new Matrix(1, 0, 0, -1, 0, 0);
+            // Apply rotation (Avalonia RotateTransform takes degrees; convert to radians for matrix).
+            if (sd.RotationAngle != 0)
+            {
+                var rad = sd.RotationAngle * Math.PI / 180.0;
+                mat = mat * Matrix.CreateRotation(rad);
+            }
+            // Translate back.
+            mat = mat * Matrix.CreateTranslation(cx, cy);
+            xformState = context.PushTransform(mat);
+        }
+
+        try
+        {
+            // ── Draw geometry ──────────────────────────────────────────────────────
+            if (sd.CustomGeo is { } cg && cg.Segments.Count > 0)
+            {
+                // Freeform custom geometry: build a StreamGeometry from the 21600×21600 grid segments.
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    bool inFigure   = false;
+                    bool closeFig   = false;
+                    Point startPt   = default;
+                    var linePts     = new System.Collections.Generic.List<Point>();
+
+                    void FlushFigure()
+                    {
+                        if (!inFigure) return;
+                        ctx.BeginFigure(startPt, isFilled: sd.FillBrush is not null);
+                        foreach (var lp in linePts) ctx.LineTo(lp);
+                        if (closeFig) ctx.EndFigure(true);
+                        linePts.Clear();
+                        inFigure  = false;
+                        closeFig  = false;
+                    }
+
+                    foreach (var seg in cg.Segments)
+                    {
+                        if (seg.Kind == CustomSegmentKind.MoveTo && seg.Point is not null)
+                        {
+                            FlushFigure();
+                            startPt   = new Point(
+                                rect.X + seg.Point.X / (double)cg.Width  * rect.Width,
+                                rect.Y + seg.Point.Y / (double)cg.Height * rect.Height);
+                            inFigure  = true;
+                        }
+                        else if (seg.Kind == CustomSegmentKind.LineTo && seg.Point is not null && inFigure)
+                        {
+                            linePts.Add(new Point(
+                                rect.X + seg.Point.X / (double)cg.Width  * rect.Width,
+                                rect.Y + seg.Point.Y / (double)cg.Height * rect.Height));
+                        }
+                        else if (seg.Kind == CustomSegmentKind.Close && inFigure)
+                        {
+                            closeFig = true;
+                        }
+                    }
+                    FlushFigure();
+                }
+                context.DrawGeometry(sd.FillBrush, sd.OutlinePen, geo);
+            }
+            else
+            {
+                switch (sd.Kind)
+                {
+                    case ShapeKind.Ellipse:
+                        context.DrawEllipse(sd.FillBrush, sd.OutlinePen,
+                            new Point(cx, cy), rect.Width / 2, rect.Height / 2);
+                        break;
+
+                    case ShapeKind.RoundedRectangle:
+                    {
+                        // Build a rounded rectangle with a 6pt corner radius (matches WPF reference CornerRadius=6).
+                        var cornerR = Math.Min(6 * PxPerPoint, Math.Min(rect.Width, rect.Height) / 4);
+                        var geo = BuildRoundedRectGeometry(rect, cornerR);
+                        context.DrawGeometry(sd.FillBrush, sd.OutlinePen, geo);
+                        break;
+                    }
+
+                    default: // Rectangle, TextBox — plain rect
+                        context.DrawRectangle(sd.FillBrush, sd.OutlinePen, rect);
+                        break;
+                }
+            }
+
+            // ── Draw centred text ──────────────────────────────────────────────────
+            if (!string.IsNullOrEmpty(sd.Text))
+            {
+                var textFmt = new RunFormatting { FontSizePt = 9 };
+                var ft = Build(sd.Text, textFmt);
+                // Clip text to shape bounds and centre it.
+                var tx = rect.X + Math.Max(0, (rect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
+                var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
+                using var _ = context.PushClip(rect);
+                context.DrawText(ft, new Point(tx, ty));
+            }
+        }
+        finally
+        {
+            xformState?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Builds a rounded-rectangle <see cref="StreamGeometry"/> with a uniform corner radius.
+    /// </summary>
+    private static StreamGeometry BuildRoundedRectGeometry(Rect rect, double r)
+    {
+        var geo = new StreamGeometry();
+        using var ctx = geo.Open();
+        ctx.BeginFigure(new Point(rect.X + r, rect.Y), isFilled: true);
+        ctx.LineTo(new Point(rect.Right - r, rect.Y));
+        ctx.ArcTo(new Point(rect.Right, rect.Y + r),
+            new Size(r, r), 0, false, SweepDirection.Clockwise);
+        ctx.LineTo(new Point(rect.Right, rect.Bottom - r));
+        ctx.ArcTo(new Point(rect.Right - r, rect.Bottom),
+            new Size(r, r), 0, false, SweepDirection.Clockwise);
+        ctx.LineTo(new Point(rect.X + r, rect.Bottom));
+        ctx.ArcTo(new Point(rect.X, rect.Bottom - r),
+            new Size(r, r), 0, false, SweepDirection.Clockwise);
+        ctx.LineTo(new Point(rect.X, rect.Y + r));
+        ctx.ArcTo(new Point(rect.X + r, rect.Y),
+            new Size(r, r), 0, false, SweepDirection.Clockwise);
+        ctx.EndFigure(true);
+        return geo;
     }
 
     private static IBrush FloatPlaceholderFill { get; } =
@@ -2447,5 +2897,33 @@ public sealed class DocumentView : Control
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._doc;
+    }
+
+    // ── Floating shape data captured during layout ────────────────────────────────────────────────
+    // Stores everything needed to draw a floating shape in Render() without re-touching the model.
+
+    private sealed class FloatingShapeData
+    {
+        public Rect Rect;           // page-space bounding rect
+        public bool BehindText;     // true → draw before body text; false → draw after
+        public int ZOrder;
+
+        // Geometry
+        public ShapeKind Kind;
+        public CustomGeometry? CustomGeo;  // non-null for freeform shapes (overrides Kind)
+
+        // Fill
+        public IBrush? FillBrush;          // null → no fill
+
+        // Outline
+        public Pen? OutlinePen;             // null → no stroke
+
+        // Text (optional)
+        public string? Text;               // plain text to centre inside the shape
+
+        // Rotation / flip (in degrees; 0 → no rotation)
+        public double RotationAngle;
+        public bool FlipH;
+        public bool FlipV;
     }
 }
