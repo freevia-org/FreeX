@@ -271,6 +271,15 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.zoom-in",           new RelayCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new RelayCommand(() => callbacks.ApplyZoom(null, -0.1)));
         r.Register("freew.zoom-100",          new RelayCommand(() => callbacks.ApplyZoom(1.0, 0)));
+        // AV-VIEW: Zoom dialog (presets + custom %) and layout gridlines / ruler toggles.
+        // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
+        // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
+        r.Register("freew.zoom-dialog",       new RelayCommand(callbacks.OpenZoomDialog ?? (() => { })));
+        r.Register("freew.view-gridlines",    new RelayCommand(() => editor.ShowGridlines = !editor.ShowGridlines));
+        r.Register("freew.view-ruler",        new RelayCommand(() => editor.ShowRuler = !editor.ShowRuler));
+        // AV-VIEW: Window group — new window + split (shell callbacks; may note "deferred" in the status bar).
+        r.Register("freew.new-window",        new RelayCommand(callbacks.NewWindow ?? (() => { })));
+        r.Register("freew.split",             new RelayCommand(callbacks.ToggleSplit ?? (() => { })));
 
         // ── Review ───────────────────────────────────────────────────────────
         r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));

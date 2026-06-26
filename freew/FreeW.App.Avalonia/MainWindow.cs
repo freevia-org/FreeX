@@ -265,6 +265,58 @@ public sealed class MainWindow : Window
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
     /// <summary>
+    /// AV-VIEW: Opens the Zoom dialog (modal). Pre-selects the preset matching the current zoom (or the
+    /// custom box), and on OK applies the chosen scale through the same <see cref="ApplyZoom(double)"/>
+    /// path as the quick zoom commands. Wired to <c>freew.zoom-dialog</c> (View → Zoom group).
+    /// </summary>
+    private async Task OpenZoomDialogAsync()
+    {
+        var dialog = new ZoomDialog(_zoomScale);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is { } scale)
+        {
+            ApplyZoom(scale);
+            _editor.Focus();
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Window → New Window. Opens a second top-level window showing the same document content.
+    /// The document is round-tripped through the in-memory docx serializer so the second window edits an
+    /// independent copy (TextDocument has no deep-clone), matching the spirit of Word's "new window on the
+    /// same document". Wired to <c>freew.new-window</c>.
+    /// </summary>
+    private void OpenNewWindow()
+    {
+        try
+        {
+            using var buffer = new MemoryStream();
+            DocxWriter.Write(_editor.Document, buffer);
+            buffer.Position = 0;
+            var copy = DocxReader.Read(buffer);
+
+            var second = new MainWindow();
+            second.LoadDocumentContent(copy);
+            second.Title = Title + " : 2";
+            second.Show();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"New window failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// AV-VIEW: Window → Split. A true split-pane (two scroll regions over one document) is a larger
+    /// surface than this wave; the command is wired and discoverable but reports the feature as deferred
+    /// in the status bar rather than pretending to act. Wired to <c>freew.split</c>.
+    /// </summary>
+    private void ToggleSplit()
+    {
+        _status.Text = "Split view is not yet available in the Avalonia shell (deferred).";
+    }
+
+    /// <summary>
     /// Toggle the document orientation between Portrait and Landscape (AV-PAGE).
     /// Wired to <c>freew.page-orientation</c>.
     /// </summary>
@@ -379,7 +431,10 @@ public sealed class MainWindow : Window
             {
                 var newScale = absolute.HasValue ? absolute.Value : _zoomScale + delta;
                 ApplyZoom(newScale);
-            });
+            },
+            OpenZoomDialog: () => _ = OpenZoomDialogAsync(),
+            NewWindow:       OpenNewWindow,
+            ToggleSplit:     ToggleSplit);
 
         var registry = FreeWRibbon.BuildRegistry(_editor, callbacks);
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
