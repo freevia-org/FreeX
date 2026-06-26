@@ -583,6 +583,301 @@ public sealed class MotionPathControllerTests
 }
 
 /// <summary>
+/// U2 regression: trigger-target shapes must NOT be hidden at slide entry.
+/// PrepareAnimationOverlay previously added every Entrance/Motion-animated shape to
+/// _entranceShapeIds regardless of whether the animation is interactive (TriggerShapeId != null).
+/// The fix filters out trigger animations so trigger-target shapes remain visible.
+/// These tests exercise the controller/model seam that drives PrepareAnimationOverlay.
+/// </summary>
+public sealed class TriggerTargetVisibilityTests
+{
+    private static Slide MakeSlide(
+        uint mainShapeId, uint triggerButtonId, uint triggerTargetId)
+    {
+        var slide = new Slide();
+
+        // Main-sequence entrance: shape should be hidden until clicked.
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId        = mainShapeId,
+            Kind           = AnimationKind.Entrance,
+            Preset         = AnimationPreset.Appear,
+            Trigger        = AnimationTrigger.OnClick,
+            DurationMs     = 500,
+        });
+
+        // Interactive trigger: clicking triggerButtonId reveals triggerTargetId.
+        // The TARGET shape must be VISIBLE at slide entry (not hidden).
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId        = triggerTargetId,
+            Kind           = AnimationKind.Entrance,
+            Preset         = AnimationPreset.Fade,
+            Trigger        = AnimationTrigger.OnClick,
+            DurationMs     = 300,
+            TriggerShapeId = triggerButtonId,
+        });
+
+        return slide;
+    }
+
+    [Fact]
+    public void TriggerTargetShape_IsNotInMainSteps_SoNotHiddenAtEntry()
+    {
+        // The main-sequence BuildSteps must NOT include the trigger-target shape —
+        // that is the seam which drives what PrepareAnimationOverlay hides.
+        var slide = MakeSlide(mainShapeId: 1u, triggerButtonId: 2u, triggerTargetId: 3u);
+
+        var steps = SlideShowController.BuildSteps(slide);
+
+        // Only the main-sequence shape forms a step.
+        steps.Should().HaveCount(1);
+        steps[0].Animations.Should().HaveCount(1);
+        steps[0].Animations[0].ShapeId.Should().Be(1u,
+            "trigger-target shape must NOT appear in the main advance chain");
+    }
+
+    [Fact]
+    public void TriggerOnlySlide_MainSteps_AreEmpty_NothingHiddenAtEntry()
+    {
+        // A slide whose ONLY animations are interactive triggers: no shapes should be
+        // hidden at slide entry (all main steps are empty).
+        var slide = new Slide();
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId        = 5,
+            Kind           = AnimationKind.Entrance,
+            Preset         = AnimationPreset.Appear,
+            Trigger        = AnimationTrigger.OnClick,
+            DurationMs     = 400,
+            TriggerShapeId = 1u,
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+        steps.Should().BeEmpty("no main-sequence animations → nothing is hidden at entry");
+    }
+
+    [Fact]
+    public void MotionTrigger_TargetShape_NotHiddenAtEntry()
+    {
+        // A Motion animation that is an interactive trigger: the mover shape must be
+        // visible at slide entry (it moves when clicked, not disappears).
+        var slide = new Slide();
+        var mp = new MotionPath();
+        mp.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        mp.Segments.Add(MotionPathSegment.LineTo(0.3, 0));
+
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId        = 7,
+            Kind           = AnimationKind.Motion,
+            Trigger        = AnimationTrigger.OnClick,
+            DurationMs     = 800,
+            Motion         = mp,
+            TriggerShapeId = 2u,  // interactive trigger
+        });
+
+        var steps = SlideShowController.BuildSteps(slide);
+        steps.Should().BeEmpty("motion trigger animation is not in the main advance chain");
+    }
+
+    [Fact]
+    public void MixedSlide_EntranceShapeIds_OnlyContainsMainSequenceShapes()
+    {
+        // Simulate the filter that PrepareAnimationOverlay applies:
+        // only Entrance/Motion animations with TriggerShapeId == null count.
+        var slide = MakeSlide(mainShapeId: 10u, triggerButtonId: 20u, triggerTargetId: 30u);
+
+        var hiddenAtEntry = slide.Animations
+            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                        && a.TriggerShapeId == null)
+            .Select(a => a.ShapeId)
+            .Distinct()
+            .ToList();
+
+        hiddenAtEntry.Should().ContainSingle()
+            .Which.Should().Be(10u, "only the main-sequence shape is hidden at entry");
+        hiddenAtEntry.Should().NotContain(30u,
+            "trigger-target shape must remain visible at slide entry");
+    }
+}
+
+/// <summary>
+/// U3 regression: interactive trigger sequences must advance ONE step per click,
+/// not fire all steps simultaneously.  Tests cover SlideShowController.AdvanceTrigger,
+/// which mirrors the PendingStepIndex pattern for per-trigger cursors.
+/// </summary>
+public sealed class TriggerStepCursorTests
+{
+    private static SlideShowController MakeControllerWithMultiStepTrigger(
+        uint triggerButtonId, out int stepCount)
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+
+        // Three OnClick steps for the same trigger button (each step = one click).
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 10, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = triggerButtonId,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 11, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = triggerButtonId,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 12, Kind = AnimationKind.Entrance, Preset = AnimationPreset.FlyIn,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = triggerButtonId,
+        });
+
+        stepCount = 3;
+        return new SlideShowController(pres.Slides, 0);
+    }
+
+    [Fact]
+    public void AdvanceTrigger_FirstClick_ReturnsFirstStep()
+    {
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        var step = ctrl.AdvanceTrigger(1u);
+
+        step.Should().NotBeNull("first click must return the first step");
+        step!.Animations.Should().HaveCount(1);
+        step.Animations[0].ShapeId.Should().Be(10u);
+    }
+
+    [Fact]
+    public void AdvanceTrigger_SecondClick_ReturnsSecondStep()
+    {
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        ctrl.AdvanceTrigger(1u);                  // click 1
+        var step = ctrl.AdvanceTrigger(1u);       // click 2
+
+        step.Should().NotBeNull();
+        step!.Animations[0].ShapeId.Should().Be(11u);
+    }
+
+    [Fact]
+    public void AdvanceTrigger_ThirdClick_ReturnsThirdStep()
+    {
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        ctrl.AdvanceTrigger(1u);
+        ctrl.AdvanceTrigger(1u);
+        var step = ctrl.AdvanceTrigger(1u);       // click 3
+
+        step.Should().NotBeNull();
+        step!.Animations[0].ShapeId.Should().Be(12u);
+    }
+
+    [Fact]
+    public void AdvanceTrigger_BeyondLastStep_ReturnsNull()
+    {
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        ctrl.AdvanceTrigger(1u);
+        ctrl.AdvanceTrigger(1u);
+        ctrl.AdvanceTrigger(1u);
+        var step = ctrl.AdvanceTrigger(1u);       // click 4 — exhausted
+
+        step.Should().BeNull("subsequent clicks after all steps done must be silent no-ops");
+    }
+
+    [Fact]
+    public void AdvanceTrigger_UnknownTrigger_ReturnsNull()
+    {
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        var step = ctrl.AdvanceTrigger(999u);
+
+        step.Should().BeNull("unknown trigger shape returns null, no crash");
+    }
+
+    [Fact]
+    public void AdvanceTrigger_CursorsArePerTrigger_Independent()
+    {
+        // Two different trigger shapes, each with its own independent cursor.
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 20, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = 1u,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 21, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = 1u,
+        });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 30, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Zoom,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = 2u,
+        });
+
+        var ctrl = new SlideShowController(pres.Slides, 0);
+
+        // Advance trigger 1 once.
+        var t1step1 = ctrl.AdvanceTrigger(1u);
+        t1step1!.Animations[0].ShapeId.Should().Be(20u);
+
+        // Advance trigger 2 once — independent from trigger 1's cursor.
+        var t2step1 = ctrl.AdvanceTrigger(2u);
+        t2step1!.Animations[0].ShapeId.Should().Be(30u,
+            "trigger 2's cursor is independent of trigger 1");
+
+        // Advance trigger 1 again — should give its second step, not trigger 2's.
+        var t1step2 = ctrl.AdvanceTrigger(1u);
+        t1step2!.Animations[0].ShapeId.Should().Be(21u);
+    }
+
+    [Fact]
+    public void AdvanceTrigger_CursorResets_OnSlideChange()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides.Add(new Slide { Title = "S2" });
+        var slide = pres.Slides[0];
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 5, Kind = AnimationKind.Entrance, Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick, DurationMs = 300, TriggerShapeId = 1u,
+        });
+
+        var ctrl = new SlideShowController(pres.Slides, 0);
+
+        ctrl.AdvanceTrigger(1u);   // exhausts the single step
+
+        // Navigate away and back.
+        ctrl.GoToSlide(1);
+        ctrl.GoToSlide(0);
+
+        // Cursor must be reset — first click plays the step again.
+        var step = ctrl.AdvanceTrigger(1u);
+        step.Should().NotBeNull("cursor resets when slide is re-entered");
+        step!.Animations[0].ShapeId.Should().Be(5u);
+    }
+
+    [Fact]
+    public void FireTrigger_StillReturnsAllSteps_Unchanged()
+    {
+        // FireTrigger is a pure query — AdvanceTrigger should not affect it.
+        var ctrl = MakeControllerWithMultiStepTrigger(1u, out _);
+
+        ctrl.AdvanceTrigger(1u);   // advance cursor past step 0
+        ctrl.AdvanceTrigger(1u);   // advance cursor past step 1
+
+        var allSteps = ctrl.FireTrigger(1u);
+
+        allSteps.Should().HaveCount(3,
+            "FireTrigger returns all steps regardless of cursor position");
+    }
+}
+
+/// <summary>
 /// Wave 8A: Fixture round-trip — reads 10-motionpath.pptx (hand-built) and verifies
 /// that motion-path animations survive a reader → writer → reader cycle.
 /// </summary>

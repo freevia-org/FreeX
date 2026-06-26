@@ -1757,6 +1757,22 @@ public static class PptxPackageReader
         if (cTnDur != null && int.TryParse(cTnDur, out var d) && d > 0)
             durationMs = d;
 
+        // Delay: read from the outer buildPar cTn/stCondLst/cond/@delay, mirroring
+        // ReadBuildItem. The writer emits the delay there for non-OnClick timing.
+        int delayMs = 0;
+        var outerStCondLst = buildPar.Element(P + "cTn")?.Element(P + "stCondLst");
+        if (outerStCondLst is not null)
+        {
+            var delayCond = outerStCondLst.Element(P + "cond");
+            var delayVal = delayCond?.Attribute("delay")?.Value;
+            if (delayVal != null && delayVal != "indefinite" && int.TryParse(delayVal, out var delayParsed))
+            {
+                delayMs = delayParsed;
+                if (trigger != AnimationTrigger.OnClick)
+                    trigger = delayParsed == 0 ? AnimationTrigger.WithPrevious : AnimationTrigger.AfterPrevious;
+            }
+        }
+
         var motion = ParseMotionPath(pathStr, origin, ptsTypes);
 
         return new ShapeAnimation
@@ -1765,6 +1781,7 @@ public static class PptxPackageReader
             Kind           = AnimationKind.Motion,
             Preset         = AnimationPreset.Appear, // unused for motion
             Trigger        = trigger,
+            DelayMs        = delayMs,
             DurationMs     = durationMs,
             Motion         = motion,
             TriggerShapeId = triggerShapeId,
@@ -1773,29 +1790,53 @@ public static class PptxPackageReader
 
     /// <summary>
     /// Parses the OOXML motion-path mini-language into a <see cref="MotionPath"/>.
-    /// Grammar: (M x,y | L x,y | C x1,y1 x2,y2 x,y | Z)*
+    /// Grammar: (M x,y | L x,y | C x1,y1 x2,y2 x,y | Z | E)*
     /// Coordinates are fractions of slide size (0..1), origin at shape center.
+    /// Handles both spaced ("M 0 0") and packed ("M0 0") PowerPoint output.
     /// </summary>
     private static MotionPath ParseMotionPath(string pathStr, string origin, string? ptsTypes)
     {
         var mp = new MotionPath { Origin = origin, PtsTypes = ptsTypes };
         if (string.IsNullOrWhiteSpace(pathStr)) return mp;
 
-        // Tokenise: split on whitespace + commas, keeping the command letters.
-        // The path string looks like: "M 0 0 L 0.5 0.3 C 0.6 0.1 0.7 0.2 1 0 E" or similar.
-        var tokens = pathStr
+        // Tokenise: split on whitespace + commas, then further split any token that
+        // starts with a command letter immediately followed by a digit/sign (packed
+        // form like "M0" → ["M", "0"] or "L-0.5" → ["L", "-0.5"]).
+        // PowerPoint emits both spaced and packed strings depending on version.
+        var rawTokens = pathStr
             .Replace(',', ' ')
             .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
+        var tokenList = new List<string>(rawTokens.Length * 2);
+        foreach (var raw in rawTokens)
+        {
+            // A command letter is one of: M L C Z E (case-insensitive).
+            // If the first char is a letter and is followed by more chars, split it off.
+            if (raw.Length > 1 && char.IsLetter(raw[0]))
+            {
+                tokenList.Add(raw[0].ToString());
+                var rest = raw.Substring(1);
+                if (!string.IsNullOrEmpty(rest))
+                    tokenList.Add(rest);
+            }
+            else
+            {
+                tokenList.Add(raw);
+            }
+        }
+
+        var tokens = tokenList;
+        int count = tokens.Count;
+
         int i = 0;
-        while (i < tokens.Length)
+        while (i < count)
         {
             var cmd = tokens[i++];
             switch (cmd.ToUpperInvariant())
             {
                 case "M":
                 {
-                    if (i + 1 >= tokens.Length) break;
+                    if (i + 1 >= count) break;
                     double x = ParsePathDouble(tokens[i++]);
                     double y = ParsePathDouble(tokens[i++]);
                     mp.Segments.Add(MotionPathSegment.MoveTo(x, y));
@@ -1803,7 +1844,7 @@ public static class PptxPackageReader
                 }
                 case "L":
                 {
-                    if (i + 1 >= tokens.Length) break;
+                    if (i + 1 >= count) break;
                     double x = ParsePathDouble(tokens[i++]);
                     double y = ParsePathDouble(tokens[i++]);
                     mp.Segments.Add(MotionPathSegment.LineTo(x, y));
@@ -1811,7 +1852,7 @@ public static class PptxPackageReader
                 }
                 case "C":
                 {
-                    if (i + 5 >= tokens.Length) break;
+                    if (i + 5 >= count) break;
                     double x1 = ParsePathDouble(tokens[i++]);
                     double y1 = ParsePathDouble(tokens[i++]);
                     double x2 = ParsePathDouble(tokens[i++]);
