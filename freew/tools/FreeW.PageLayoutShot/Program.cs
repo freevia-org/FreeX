@@ -63,6 +63,7 @@ static int RenderAll(string outDir)
     var printPath = Path.GetFullPath(Path.Combine(outDir, "freew_print_layout.png"));
     var webPath   = Path.GetFullPath(Path.Combine(outDir, "freew_web_layout.png"));
     var draftPath = Path.GetFullPath(Path.Combine(outDir, "freew_draft_layout.png"));
+    var floatPath = Path.GetFullPath(Path.Combine(outDir, "freew_floating_image.png"));
 
     var rc = RenderMode(DocumentViewMode.PrintLayout, printPath,
         width: 960, height: 3300,
@@ -77,7 +78,132 @@ static int RenderAll(string outDir)
     rc = RenderMode(DocumentViewMode.Draft, draftPath,
         width: 960, height: 2400,
         label: "Draft");
+    if (rc != 0) return rc;
+
+    // ── FO1: Floating-image render capture ──────────────────────────────────────────────────────────
+    rc = RenderFloatingImageScene(floatPath);
     return rc;
+}
+
+/// <summary>
+/// Renders a document containing three floating images (behind-text, in-front, and square-wrap)
+/// to verify the FO1 floating-image render path: correct placement, z-order, and image pixel output.
+/// </summary>
+static int RenderFloatingImageScene(string outPath)
+{
+    var doc = BuildFloatingImageDocument();
+    var view = new DocumentView();
+    view.LoadDocument(doc);
+    view.ViewMode = DocumentViewMode.PrintLayout;
+    view.Measure(new Size(816, 1400));
+    view.Arrange(new Rect(0, 0, 816, 1400));
+    view.UpdateLayout();
+    Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+    var bitmap = new RenderTargetBitmap(new PixelSize(816, 1400), new Vector(96, 96));
+    bitmap.Render(view);
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)) ?? ".");
+    using var stream = new MemoryStream();
+    bitmap.Save(stream);
+    var bytes = stream.ToArray();
+
+    if (bytes.Length > 0)
+    {
+        File.WriteAllBytes(outPath, bytes);
+        Console.WriteLine($"[PageLayoutShot] Floating Image: {bytes.Length:N0} bytes → {outPath}");
+        return 0;
+    }
+
+    Console.Error.WriteLine("[PageLayoutShot] Floating Image: encoding produced 0 bytes.");
+    return 2;
+}
+
+/// <summary>
+/// Builds a document with body text + three floating images to exercise the full FO1 path:
+/// • InFront image  (Square wrap, zOrder=10) — rendered after text, visible on top
+/// • Behind  image  (Behind wrap, zOrder=1)  — rendered before text, behind body
+/// • TopAndBottom   (Square wrap, zOrder=5)  — in-front bucket, medium z-order
+/// </summary>
+static TextDocument BuildFloatingImageDocument()
+{
+    var doc = TextDocument.CreateEmpty();
+    doc.Blocks.Clear();
+
+    var bodyFmt = RunFormatting.Default with { FontSizePt = 12 };
+
+    // Tiny 4x4 orange PNG (validates that a real bitmap is drawn, not just placeholder).
+    static byte[] TinyPng()
+    {
+        using var bmp = new SkiaSharp.SKBitmap(40, 30, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul);
+        bmp.Erase(new SkiaSharp.SKColor(255, 128, 0)); // orange fill
+        using var img  = SkiaSharp.SKImage.FromBitmap(bmp);
+        using var data = img.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90);
+        return data.ToArray();
+    }
+
+    // Anchor paragraph: has body text AND a floating image (InFront, Square wrap).
+    var anchorPara = new Paragraph();
+    anchorPara.Runs.Add(new Run(
+        "This paragraph has a floating image anchored to it (Square wrap, in-front). " +
+        "The orange rectangle should appear on top of this text.", bodyFmt));
+    var imgInFront = new InlineImage(TinyPng(), 144, 72)
+    {
+        Wrapping           = ImageWrapping.InFront,
+        HorizontalOffsetPt = 72,   // 1 in from column left
+        VerticalOffsetPt   = 24,   // 1/3 in below paragraph top
+        HorizontalAnchor   = HorizontalAnchor.Column,
+        VerticalAnchor     = VerticalAnchor.Paragraph,
+        ZOrderIndex        = 10,
+    };
+    anchorPara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = imgInFront });
+    doc.Blocks.Add(anchorPara);
+
+    // Second paragraph: behind-text image (should render below text).
+    var behindPara = new Paragraph();
+    behindPara.Runs.Add(new Run(
+        "This paragraph has a behind-text floating image. The orange rectangle should " +
+        "appear BEHIND this text (text drawn on top of the image).", bodyFmt));
+    var imgBehind = new InlineImage(TinyPng(), 180, 80)
+    {
+        Wrapping           = ImageWrapping.Behind,
+        HorizontalOffsetPt = 36,
+        VerticalOffsetPt   = 0,
+        HorizontalAnchor   = HorizontalAnchor.Column,
+        VerticalAnchor     = VerticalAnchor.Paragraph,
+        ZOrderIndex        = 1,
+    };
+    behindPara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = imgBehind });
+    doc.Blocks.Add(behindPara);
+
+    // Third paragraph: page-anchor image (VerticalAnchor.Page).
+    var pagePara = new Paragraph();
+    pagePara.Runs.Add(new Run(
+        "This paragraph has a page-anchored floating image (absolute position on the page). " +
+        "The orange rectangle should appear at a fixed position from the page top.", bodyFmt));
+    var imgPage = new InlineImage(TinyPng(), 100, 60)
+    {
+        Wrapping           = ImageWrapping.TopAndBottom,
+        HorizontalOffsetPt = 400,
+        VerticalOffsetPt   = 200,
+        HorizontalAnchor   = HorizontalAnchor.Page,
+        VerticalAnchor     = VerticalAnchor.Page,
+        ZOrderIndex        = 5,
+    };
+    pagePara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Image = imgPage });
+    doc.Blocks.Add(pagePara);
+
+    // More body text so the page has content around the floats.
+    for (var i = 1; i <= 8; i++)
+    {
+        var p = new Paragraph();
+        p.Runs.Add(new Run(
+            $"Body paragraph {i}: lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+            "The quick brown fox jumps over the lazy dog.", bodyFmt));
+        doc.Blocks.Add(p);
+    }
+
+    return doc;
 }
 
 static int RenderMode(DocumentViewMode mode, string outPath, int width, int height, string label)
