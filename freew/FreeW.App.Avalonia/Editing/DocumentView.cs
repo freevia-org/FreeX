@@ -106,6 +106,13 @@ public sealed class DocumentView : Control
     private readonly List<(Rect Rect, ImageWrapping Wrapping)> _wrapExclusions = new();
     // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
     private readonly List<HfRenderItem> _headerFooterItems = new();
+    // AV-NOTERENDER: pre-computed footnote/endnote text render items (rebuilt in Relayout when PrintLayout).
+    // Footnotes land in the bottom margin band of the page that hosts their reference; endnotes are
+    // stacked in a synthetic section after the last body page. Separator rules are stored alongside.
+    private readonly List<NoteRenderItem> _noteItems = new();
+    private readonly List<(double X1, double X2, double Y)> _noteSeparators = new();
+    // AV-NOTERENDER: extra page-space height reserved below the last body page for the endnotes section.
+    private double _endnoteExtentDip;
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -1657,6 +1664,38 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── AV-NOTERENDER: footnote/endnote render introspection for tests ───────────────────────────────
+
+    /// <summary>
+    /// Snapshot of pre-computed footnote/endnote render items from the last layout pass.
+    /// Each entry: (Text, PageSpaceX, PageSpaceY, IsNumberMarker). The number-marker items carry the
+    /// note's number (a superscript-formatted prefix); the remaining items are the wrapped note text.
+    /// Tests verify the numbered text appears at the right page-space position and matches the body
+    /// reference numbers.
+    /// </summary>
+    internal IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)> NoteRenderItems
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _noteItems
+                .Select(i => (i.Text, i.X, i.Y, i.Fmt.VerticalAlign == VerticalAlign.Superscript))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Snapshot of the footnote-band / endnotes-heading separator rules: (X1, X2, PageSpaceY).
+    /// </summary>
+    internal IReadOnlyList<(double X1, double X2, double Y)> NoteSeparators
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _noteSeparators.ToList();
+        }
+    }
+
     // ── AV-POLISH: chart annotation introspection for tests ──────────────────────────────────────────
 
     /// <summary>
@@ -1854,6 +1893,9 @@ public sealed class DocumentView : Control
         _inlineSmartArts.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
+        _noteItems.Clear();           // AV-NOTERENDER
+        _noteSeparators.Clear();      // AV-NOTERENDER
+        _endnoteExtentDip = 0;        // AV-NOTERENDER
         _tabLeaderSpans.Clear(); // AV-TAB
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -2070,7 +2112,15 @@ public sealed class DocumentView : Control
         _laidOutWidth = width;
 
         if (_viewMode == DocumentViewMode.PrintLayout)
+        {
             BuildHeaderFooterItems();
+            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
+            // reference; endnotes render in a synthetic section after the last body page. Endnotes
+            // extend the scrollable content height, so add their measured extent afterwards.
+            BuildFootnoteItems();
+            BuildEndnoteItems();
+            _contentHeight += _endnoteExtentDip;
+        }
     }
 
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
@@ -2470,6 +2520,206 @@ public sealed class DocumentView : Control
 
         // Not a field run — caller should use run.Text.
         return null;
+    }
+
+    // ── AV-NOTERENDER: footnote / endnote content rendering ───────────────────────────────────────────
+
+    /// <summary>Default font size (pt) for footnote / endnote body text. Word uses 10pt; we use 9pt.</summary>
+    private const double NoteFontSizePt = 9.0;
+
+    /// <summary>
+    /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
+    /// Locates the body run carrying <paramref name="footnote"/>'s matching <see cref="Run.FootnoteId"/>
+    /// (or <see cref="Run.EndnoteId"/>), computes its first character's cell offset within the host
+    /// paragraph, then reads the page of the matching <see cref="PlacedChar"/>. Returns the last body
+    /// page when no placed glyph is found (an acceptable approximation when a marker glyph was not laid
+    /// out, e.g. a zero-width run).
+    /// </summary>
+    private int ResolveNoteReferencePage(int id, bool footnote)
+    {
+        var blocks = _doc.Blocks;
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            if (blocks[b] is not Paragraph para) continue;
+            var offset = 0;
+            foreach (var run in para.Runs)
+            {
+                var isMatch = footnote ? run.FootnoteId == id : run.EndnoteId == id;
+                if (isMatch && run.Text.Length > 0)
+                {
+                    // Find the placed glyph for this paragraph at the run's first char offset.
+                    foreach (var pc in _placed)
+                    {
+                        if (pc.Sentinel || pc.Block != b) continue;
+                        if (pc.Offset == offset)
+                            return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                    }
+                    // Run matched but no placed glyph at that offset — fall back to any glyph on the block.
+                    foreach (var pc in _placed)
+                    {
+                        if (pc.Sentinel || pc.Block != b) continue;
+                        return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                    }
+                }
+                offset += run.Text.Length;
+            }
+        }
+        // No reference glyph found — group on the last body page (documented approximation).
+        return Math.Max(0, _pageCount - 1);
+    }
+
+    /// <summary>
+    /// Lays out a single note's content (number + paragraph text) into <see cref="_noteItems"/> starting
+    /// at page-space (<paramref name="x"/>, <paramref name="y"/>), wrapping within <paramref name="availWidth"/>.
+    /// Reuses the body <see cref="Build"/> glyph metrics at <see cref="NoteFontSizePt"/>. The number prefix
+    /// ("<c>n </c>") is emitted as a superscript-styled lead item; the note text follows as wrapped lines.
+    /// Returns the page-space Y just past the laid-out content (the next free line).
+    /// </summary>
+    private double LayoutNoteContent(string number, IReadOnlyList<Paragraph> content, double x, double y, double availWidth)
+    {
+        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
+        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
+
+        var lineH = Math.Max(1, Build("Ag", noteFmt).Height);
+
+        // Emit the number marker first (superscript), then the text flows after it on the same line.
+        var numText = number + " ";
+        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
+
+        var textLeft = x + numWidth;
+        var lineLeft = textLeft;
+        var penX = textLeft;
+        var lineY = y;
+
+        // Flatten the note's paragraphs into a single wrapped flow (note content is usually one paragraph).
+        var first = true;
+        foreach (var para in content)
+        {
+            if (!first)
+            {
+                // New paragraph in the note: break to a fresh line at the text-left indent.
+                lineY += lineH;
+                penX = textLeft;
+                lineLeft = textLeft;
+            }
+            first = false;
+
+            var words = para.PlainText.Split(' ');
+            for (var wi = 0; wi < words.Length; wi++)
+            {
+                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
+                if (word.Length == 0) continue;
+                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
+                // Wrap when the word would overflow the available width (but always place at least one word).
+                if (penX + w > x + availWidth && penX > lineLeft)
+                {
+                    lineY += lineH;
+                    penX = textLeft;
+                    lineLeft = textLeft;
+                }
+                _noteItems.Add(new NoteRenderItem { Text = word, Fmt = noteFmt, X = penX, Y = lineY });
+                penX += w;
+            }
+        }
+
+        return lineY + lineH;
+    }
+
+    /// <summary>
+    /// AV-NOTERENDER (footnotes): for each page in PrintLayout, renders a short separator rule then the
+    /// footnotes whose body reference lands on that page, stacked as "<c>n note text</c>" at
+    /// <see cref="NoteFontSizePt"/>. The band occupies the bottom margin area, above the footer.
+    /// Page assignment uses <see cref="ResolveNoteReferencePage"/>; footnotes with no locatable reference
+    /// glyph fall back to the last body page (documented approximation).
+    /// </summary>
+    private void BuildFootnoteItems()
+    {
+        if (_doc.Footnotes.Count == 0) return;
+
+        const double DefaultHfDistancePt = 36.0;
+
+        // Group footnote ids by the page hosting their reference, preserving id order.
+        var byPage = new Dictionary<int, List<int>>();
+        foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
+        {
+            var pg = ResolveNoteReferencePage(id, footnote: true);
+            if (!byPage.TryGetValue(pg, out var list))
+                byPage[pg] = list = new List<int>();
+            list.Add(id);
+        }
+
+        var footerDistPt = _doc.Page.FooterDistancePt > 0 ? _doc.Page.FooterDistancePt : DefaultHfDistancePt;
+        var footerDistDip = footerDistPt * PxPerPoint;
+
+        var noteLineH = Math.Max(1, Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height);
+
+        foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
+        {
+            var pageTop = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageBottom = pageTop + _pageHeightPx;
+            // Body text area bottom (page-space).
+            var bodyBottom = pageTop + _marginTopDip + _layoutTextAreaHeight;
+            // Footer top (where the footer line begins).
+            var footerTop = pageBottom - footerDistDip;
+
+            // Estimate the total height needed (separator + one line per note minimum) and anchor the band
+            // so it sits just above the footer, but never above the body text area bottom.
+            var estHeight = 6 + ids.Count * noteLineH;
+            var bandTop = Math.Max(bodyBottom + 2, Math.Min(footerTop - estHeight - 2, pageBottom - _marginBottomDip * 0.5));
+            // Guarantee the band stays on-page even for short pages.
+            bandTop = Math.Min(bandTop, footerTop - noteLineH);
+
+            // Separator rule: a short line (~1.5") at the left of the content column.
+            var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);
+            _noteSeparators.Add((_contentLeft, _contentLeft + sepWidth, bandTop));
+
+            var y = bandTop + 4;
+            foreach (var id in ids)
+            {
+                var note = _doc.Footnotes[id];
+                y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
+                    _contentLeft, y, _contentWidth);
+            }
+        }
+    }
+
+    /// <summary>
+    /// AV-NOTERENDER (endnotes): renders an "Endnotes" heading + separator, then the numbered endnote
+    /// texts, in a synthetic section after the last body page. The section's vertical extent is recorded
+    /// in <see cref="_endnoteExtentDip"/> so the scrollable content height reserves room for it.
+    /// </summary>
+    private void BuildEndnoteItems()
+    {
+        if (_doc.Endnotes.Count == 0) return;
+
+        // Start just below the last body page (in page-space). The last page's bottom edge:
+        var lastPageBottom = DeskPadding + (_pageCount - 1) * (_pageHeightPx + PageGap) + _pageHeightPx;
+        var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
+
+        var headingFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt + 2, Bold = true };
+        var headingH = Math.Max(1, Build("Endnotes", headingFmt).Height);
+
+        // Heading.
+        _noteItems.Add(new NoteRenderItem { Text = "Endnotes", Fmt = headingFmt, X = _contentLeft, Y = startY });
+        var y = startY + headingH + 2;
+
+        // Separator rule beneath the heading.
+        _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, y));
+        y += 6;
+
+        foreach (var id in _doc.Endnotes.Keys.OrderBy(k => k))
+        {
+            var note = _doc.Endnotes[id];
+            y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
+                _contentLeft, y, _contentWidth);
+            y += 2; // small gap between endnotes
+        }
+
+        // Record how far past the last body page the endnotes section extends.
+        _endnoteExtentDip = Math.Max(0, y - lastPageBottom) + DeskPadding;
     }
 
     // Layout-pass mutable state for paged layout (reset at start of Relayout).
@@ -4117,6 +4367,8 @@ public sealed class DocumentView : Control
     private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
     // AV-COL: thin gray rule drawn in each inter-column gap when ColumnsLineBetween is set.
     private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
+    // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
+    private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -4406,6 +4658,26 @@ public sealed class DocumentView : Control
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
                 context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
+            }
+
+            // AV-NOTERENDER: footnote-band separators + footnote/endnote text (pre-computed in
+            // BuildFootnoteItems / BuildEndnoteItems). Separators draw first so the text sits below them.
+            foreach (var (x1, x2, sy) in _noteSeparators)
+                context.DrawLine(NoteSeparatorPen, new Point(x1, sy), new Point(x2, sy));
+
+            foreach (var note in _noteItems)
+            {
+                if (string.IsNullOrEmpty(note.Text)) continue;
+                var drawFmt = note.Fmt;
+                var drawY = note.Y;
+                // Render the superscript number prefix smaller + raised, mirroring the body super/subscript draw.
+                if (note.Fmt.VerticalAlign == VerticalAlign.Superscript)
+                {
+                    var sz = (drawFmt.FontSizePt ?? NoteFontSizePt) * SuperSubScale;
+                    drawFmt = drawFmt with { FontSizePt = sz };
+                    drawY = note.Y - (note.Fmt.FontSizePt ?? NoteFontSizePt) * PxPerPoint * 0.15;
+                }
+                context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
         }
 
@@ -8248,6 +8520,21 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+    }
+
+    // ── AV-NOTERENDER: footnote / endnote render item ─────────────────────────────────────────────────
+
+    /// <summary>One pre-computed footnote/endnote text fragment to draw (absolute page-space position).</summary>
+    private sealed class NoteRenderItem
+    {
+        /// <summary>Text to draw (note number prefix or a wrapped word/segment).</summary>
+        public string Text = string.Empty;
+        /// <summary>Run formatting (note body ~9pt, or superscript for the number prefix).</summary>
+        public RunFormatting Fmt = RunFormatting.Default;
+        /// <summary>Top-left X in page-space coordinates.</summary>
+        public double X;
+        /// <summary>Top Y in page-space coordinates.</summary>
+        public double Y;
     }
 
     // ── Floating shape data captured during layout ────────────────────────────────────────────────
