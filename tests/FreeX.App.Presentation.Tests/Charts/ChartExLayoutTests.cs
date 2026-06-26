@@ -34,9 +34,10 @@ public sealed class ChartExLayoutTests
 
     [Theory]
     [InlineData(ChartType.Surface)]
-    public void IsSupported_ReturnsFalseForUnportedTypes(ChartType type)
+    [InlineData(ChartType.ThreeDSurface)]
+    public void IsSupported_ReturnsTrueForSurfaceHeatmapTypes(ChartType type)
     {
-        ChartLayoutEngine.IsSupported(type).Should().BeFalse();
+        ChartLayoutEngine.IsSupported(type).Should().BeTrue($"{type} is now laid out as a 2D heatmap grid");
     }
 
     // ── Existing types still supported ────────────────────────────────────────
