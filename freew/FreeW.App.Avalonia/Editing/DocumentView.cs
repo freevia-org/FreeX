@@ -7028,6 +7028,101 @@ public sealed class DocumentView : Control
             f => f with { FontSizePt = fontSizePoints, Bold = bold }));
     }
 
+    /// <summary>
+    /// AV-STYLES: apply a named built-in style to the current selection / paragraph, model-backed and
+    /// undoable. The style is seeded from <see cref="BuiltInStyles"/> if the document's catalog lacks it,
+    /// so a freshly-loaded document still resolves the look.
+    ///
+    /// <para>
+    /// <b>Paragraph styles</b> (Normal, Heading 1–4, Title, Subtitle, Quote, Intense Quote, No Spacing,
+    /// List Paragraph) set each spanned paragraph's <see cref="Paragraph.StyleId"/> through the reversible
+    /// <see cref="SetParagraphStyleCommand"/> (one undo group), so the style's run + paragraph formatting
+    /// resolves through <see cref="ResolveRunFmt"/>/<see cref="ResolveParagraphFmt"/> on the next render.
+    /// </para>
+    /// <para>
+    /// <b>Character styles</b> (Strong, Emphasis, Subtle/Intense Emphasis) carry no run-level style id in the
+    /// model, so they apply as direct run formatting — the style's set fields are overlaid onto the selected
+    /// runs (Word's character-style semantics). With a collapsed caret the format is stored as the pending
+    /// run format for the next typed character, mirroring direct character formatting.
+    /// </para>
+    /// No-op for an unknown style id. Returns the resolved style id (or null when unknown / not applied).
+    /// </summary>
+    public string? ApplyNamedStyle(string styleId)
+    {
+        if (string.IsNullOrEmpty(styleId))
+            return null;
+
+        // Seed from the built-in catalog when the document does not already define the style, so the
+        // StyleId link resolves to real formatting. An existing (possibly customised) definition wins.
+        BuiltInStyles.EnsureSeeded(_doc, styleId);
+        if (!_doc.Styles.TryGetValue(styleId, out var style))
+            return null;
+
+        if (style.Type == StyleType.Character)
+        {
+            // Character style → overlay the style's run formatting onto the selection's runs.
+            ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            return styleId;
+        }
+
+        // Paragraph style → set StyleId on every spanned paragraph (one undoable group).
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return null;
+
+        if (indices.Count == 1)
+        {
+            _bus.Execute(new SetParagraphStyleCommand(indices[0], styleId));
+        }
+        else
+        {
+            _bus.BeginUndoGroup();
+            foreach (var idx in indices)
+                _bus.Execute(new SetParagraphStyleCommand(idx, styleId));
+            _bus.CommitUndoGroup("Apply Style");
+        }
+        return styleId;
+    }
+
+    /// <summary>
+    /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document
+    /// default — Word's "Clear Formatting" / "Normal" reset at the paragraph level), model-backed and
+    /// undoable. Equivalent to applying the empty (null) style id via <see cref="SetParagraphStyleCommand"/>.
+    /// </summary>
+    public void ClearParagraphStyle()
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        if (indices.Count == 1)
+        {
+            _bus.Execute(new SetParagraphStyleCommand(indices[0], null));
+            return;
+        }
+
+        _bus.BeginUndoGroup();
+        foreach (var idx in indices)
+            _bus.Execute(new SetParagraphStyleCommand(idx, null));
+        _bus.CommitUndoGroup("Clear Style");
+    }
+
+    // Overlay a character style's run formatting onto a run's existing formatting: only the style's
+    // *set* fields win (toggles OR in, optional values override when the style provides one), so a
+    // Strong run keeps its font/size/colour and merely turns bold. Mirrors the style-resolution overlay.
+    private static RunFormatting OverlayCharacterStyle(RunFormatting baseRun, RunFormatting styleRun) => baseRun with
+    {
+        Bold          = baseRun.Bold || styleRun.Bold,
+        Italic        = baseRun.Italic || styleRun.Italic,
+        Underline     = baseRun.Underline || styleRun.Underline,
+        Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
+        SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
+        AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
+        FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
+        FontSizePt    = styleRun.FontSizePt ?? baseRun.FontSizePt,
+        ColorHex      = styleRun.ColorHex ?? baseRun.ColorHex,
+    };
+
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
 

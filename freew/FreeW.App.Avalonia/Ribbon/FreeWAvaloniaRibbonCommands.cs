@@ -130,12 +130,22 @@ internal static class FreeWAvaloniaRibbonCommands
         // Paragraph dialog launcher.
         r.Register("freew.paragraph-dialog",  new RelayCommand(callbacks.OpenParagraphDialog));
 
-        // ── Styles ───────────────────────────────────────────────────────────
-        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
-        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyQuickStyle(16, bold: true)));
-        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyQuickStyle(14, bold: true)));
-        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyQuickStyle(12, bold: true)));
-        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyQuickStyle(24, bold: true)));
+        // ── Styles (AV-STYLES) ────────────────────────────────────────────────
+        // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
+        // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
+        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyNamedStyle("Normal")));
+        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyNamedStyle("Heading1")));
+        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyNamedStyle("Heading2")));
+        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyNamedStyle("Heading3")));
+        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyNamedStyle("Title")));
+
+        // Styles gallery dropdown — opener no-op; one freew.style.<id> command per built-in style applies
+        // that named style (paragraph styles set StyleId; character styles overlay run formatting).
+        r.Register("freew.styles-gallery", new RelayCommand(() => { /* dropdown opener */ }));
+        RegisterStyleGalleryCommands(r, editor);
+
+        // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
+        r.Register("freew.style-clear", new RelayCommand(editor.ClearParagraphStyle));
 
         // ── Editing ──────────────────────────────────────────────────────────
         r.Register("freew.undo",              new RelayCommand(editor.Undo));
@@ -311,6 +321,28 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.font-color.dark-blue", "#00008B");
         Add(r, editor, "freew.font-color.purple",    "#7030A0");
         Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+    }
+
+    /// <summary>
+    /// AV-STYLES: the command-id prefix for a built-in gallery style. The Styles gallery dropdown item and
+    /// its registry command both use <c>freew.style.&lt;id&gt;</c> (e.g. <c>freew.style.Heading1</c>), so the
+    /// ribbon definition and the registry agree on the id.
+    /// </summary>
+    internal static string StyleCommandId(string styleId) => $"freew.style.{styleId}";
+
+    /// <summary>
+    /// Registers one <c>freew.style.&lt;id&gt;</c> command per built-in gallery style (see
+    /// <see cref="BuiltInStyles.Gallery"/>). Each applies that named style to the current selection /
+    /// paragraph via <see cref="DocumentView.ApplyNamedStyle"/> — paragraph styles set the paragraph
+    /// StyleId, character styles overlay run formatting — model-backed and undoable.
+    /// </summary>
+    private static void RegisterStyleGalleryCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        foreach (var descriptor in BuiltInStyles.Gallery)
+        {
+            var id = descriptor.Id;
+            r.Register(StyleCommandId(id), new RelayCommand(() => editor.ApplyNamedStyle(id)));
+        }
     }
 
     /// <summary>

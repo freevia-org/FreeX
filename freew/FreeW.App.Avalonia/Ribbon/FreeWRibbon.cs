@@ -1,4 +1,5 @@
 using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
 namespace FreeW.App.Avalonia.Ribbon;
@@ -113,6 +114,18 @@ internal static class FreeWRibbon
             new("Table",  new RibbonCommandId("freew.insert-caption.table")),
         });
 
+    /// <summary>
+    /// AV-STYLES: Home &gt; Styles gallery dropdown — the full built-in style set (paragraph and character
+    /// styles), one item per <see cref="BuiltInStyles.Gallery"/> entry. Each item's command id is
+    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FreeWAvaloniaRibbonCommands.StyleCommandId"/>).
+    /// </summary>
+    private static RibbonMenu BuildStylesMenu() =>
+        new(BuiltInStyles.Gallery
+            .Select(d => new RibbonMenuItem(
+                d.Type == StyleType.Character ? $"{d.Name}  (a)" : d.Name,
+                new RibbonCommandId(FreeWAvaloniaRibbonCommands.StyleCommandId(d.Id))))
+            .ToArray());
+
     /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
     private static RibbonMenu BuildSymbolMenu() =>
         new(FreeWAvaloniaRibbonCommands.Symbols
@@ -176,11 +189,15 @@ internal static class FreeWRibbon
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
                 {
+                    // Quick-style buttons (kept from the A1 wave; now model-backed via ApplyNamedStyle).
                     g.Button("freew.style-normal",   "Normal");
                     g.Button("freew.style-heading1", "Heading 1");
                     g.Button("freew.style-heading2", "Heading 2");
                     g.Button("freew.style-heading3", "Heading 3");
                     g.Button("freew.style-title",    "Title");
+                    // AV-STYLES: full built-in style gallery dropdown + clear-style.
+                    g.Dropdown("freew.styles-gallery", "Styles", BuildStylesMenu());
+                    g.Button("freew.style-clear", "Clear Style");
                 });
                 tab.Group("editing", "Editing", null, 70, g =>
                 {
