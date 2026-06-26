@@ -93,6 +93,10 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
+    // AV-WRAP: unified list of wrap-exclusion zones (Square/Tight/TopAndBottom only).
+    // Populated during Collect* calls; consulted by EmitLinePaged and LayoutParagraphPaged.
+    // Each entry is a page-space rect + the wrapping mode (Behind/InFront entries are never added).
+    private readonly List<(Rect Rect, ImageWrapping Wrapping)> _wrapExclusions = new();
     // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
     private readonly List<HfRenderItem> _headerFooterItems = new();
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
@@ -606,6 +610,27 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── AV-WRAP: wrap-exclusion introspection for tests ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of wrap-exclusion zones registered in the current layout pass.
+    /// Only Square/Tight/TopAndBottom floats contribute; Behind/InFront are excluded.
+    /// </summary>
+    internal int WrapExclusionCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _wrapExclusions.Count; }
+    }
+
+    /// <summary>Snapshot of wrap-exclusion zones (page-space rect + wrapping mode) for tests.</summary>
+    internal IReadOnlyList<(Rect Rect, ImageWrapping Wrapping)> WrapExclusionZones
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _wrapExclusions.ToList();
+        }
+    }
+
     // ── XX1 draw-order introspection (tests only) ────────────────────────────────────────────────────
 
     /// <summary>Merged BehindText floating-object draw order (ZOrder, type) — verifies XX1 interleave.</summary>
@@ -819,6 +844,7 @@ public sealed class DocumentView : Control
         _floatingWordArts.Clear();
         _floatingSmartArts.Clear();
         _floatingGroups.Clear();
+        _wrapExclusions.Clear();
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
@@ -1395,6 +1421,153 @@ public sealed class DocumentView : Control
         return _layoutContentY;
     }
 
+    // ── AV-WRAP: wrap-exclusion helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Small horizontal gap (DIP) added between text and the edge of a Square/Tight-wrapped float.
+    /// Matches Word's default wrap distance (approximately 9pt = 12 DIP).
+    /// </summary>
+    private const double WrapGap = 9.0;
+
+    /// <summary>
+    /// Registers a page-space rect as a text-wrap exclusion zone for the given wrapping mode.
+    /// Behind and InFront objects are silently ignored (they never push text aside).
+    /// </summary>
+    private void AddWrapExclusion(Rect pageSpaceRect, ImageWrapping wrapping)
+    {
+        if (wrapping is ImageWrapping.Square or ImageWrapping.Tight or ImageWrapping.TopAndBottom)
+            _wrapExclusions.Add((pageSpaceRect, wrapping));
+    }
+
+    /// <summary>
+    /// For a line whose top is at <paramref name="lineTopY"/> (page-space) and whose height is
+    /// <paramref name="lineHeight"/>, computes the adjusted left offset and available width
+    /// after applying all registered exclusion zones for the column band
+    /// [<paramref name="colLeft"/>, <paramref name="colLeft"/> + <paramref name="colW"/>).
+    /// </summary>
+    /// <remarks>
+    /// Square/Tight floats narrowing the line: the float is classified as left or right of the
+    /// line's centre point.  A float on the left pushes the left start inward; a float on the
+    /// right narrows the right edge.  If two floats are present (left + right simultaneously)
+    /// both adjustments are applied.  If a float spans the full column width it is treated as
+    /// TopAndBottom (handled separately in <see cref="LayoutParagraphPaged"/>).
+    /// </remarks>
+    /// <returns>
+    /// <c>leftDelta</c>: amount to ADD to the line's left start (≥ 0).<br/>
+    /// <c>rightShrink</c>: amount to SUBTRACT from the line's available width (≥ 0).<br/>
+    /// Neither value will make the line degenerate (minimum 20 DIP usable width is guaranteed).
+    /// </returns>
+    private (double LeftDelta, double RightShrink) ComputeSquareTightExclusion(
+        double lineTopY, double lineHeight, double colLeft, double colW)
+    {
+        var lineBottomY = lineTopY + lineHeight;
+        var colRight    = colLeft + colW;
+
+        var maxLeftDelta  = 0.0;
+        var maxRightShrink = 0.0;
+
+        foreach (var (rect, wrapping) in _wrapExclusions)
+        {
+            // Only Square/Tight in this helper; TopAndBottom is handled in the paragraph loop.
+            if (wrapping == ImageWrapping.TopAndBottom)
+                continue;
+
+            // Vertical overlap check.
+            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY)
+                continue;
+
+            // Horizontal overlap with the column band?
+            if (rect.Right <= colLeft || rect.Left >= colRight)
+                continue;
+
+            // Is the float on the left or right half of the column?
+            var floatCentreX = rect.Left + rect.Width / 2;
+            var colCentreX   = colLeft + colW / 2;
+
+            if (floatCentreX <= colCentreX)
+            {
+                // Float is on the LEFT — push the line start rightward.
+                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
+                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
+            }
+            else
+            {
+                // Float is on the RIGHT — reduce the available width.
+                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
+                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
+            }
+        }
+
+        // Ensure the combined adjustment doesn't make width < 20 DIP.
+        var totalShrink = maxLeftDelta + maxRightShrink;
+        if (totalShrink > colW - 20)
+        {
+            // Scale back proportionally so at least 20 DIP remain.
+            var scale = (colW - 20) / totalShrink;
+            maxLeftDelta   *= scale;
+            maxRightShrink *= scale;
+        }
+
+        return (maxLeftDelta, maxRightShrink);
+    }
+
+    /// <summary>
+    /// Returns the page-space Y of the bottom edge of the lowest TopAndBottom exclusion zone that
+    /// intersects the vertical band [<paramref name="lineTopY"/>, <paramref name="lineTopY"/> +
+    /// <paramref name="lineHeight"/>), or −1 if none does.  The caller should advance
+    /// <c>_layoutContentY</c> past this bottom so the line lands below the float.
+    /// </summary>
+    private double TopAndBottomExclusionBottom(double lineTopY, double lineHeight)
+    {
+        var lineBottomY = lineTopY + lineHeight;
+        var maxBottom   = -1.0;
+        foreach (var (rect, wrapping) in _wrapExclusions)
+        {
+            if (wrapping != ImageWrapping.TopAndBottom) continue;
+            if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY) continue;
+            if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+        }
+        return maxBottom;
+    }
+
+    /// <summary>
+    /// Advances <c>_layoutContentY</c> past any TopAndBottom exclusion zones that would overlap
+    /// a line of <paramref name="estimatedLineHeight"/> at the current position.
+    /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
+    /// for pathological documents.
+    /// Only active when there are TopAndBottom exclusions registered.
+    /// </summary>
+    private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight)
+    {
+        if (_wrapExclusions.Count == 0) return;
+        for (var guard = 0; guard < 200; guard++)
+        {
+            var peekContentY  = PeekFirstLineContentY(estimatedLineHeight);
+            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
+            var exclusionBottom = TopAndBottomExclusionBottom(peekPageSpaceY, estimatedLineHeight);
+            if (exclusionBottom < 0) break; // no overlap → done
+
+            // Convert the exclusion bottom (page-space) back to content-space and advance past it.
+            // Content Y = slot * textAreaHeight + offsetWithinPage.
+            // For the simple case: advance _layoutContentY so that PeekFirstLineContentY would land
+            // below exclusionBottom. We find the content Y that would produce a page-space Y of
+            // exclusionBottom by inverting ContentYToPageSpaceY.
+            // PageSpaceY = DeskPadding + pageIndex*(pageHeight+gap) + marginTopDip + offsetWithinPage
+            // We read the page index from the current slot, then:
+            // offsetWithinPage = exclusionBottom - DeskPadding - pageIndex*(pageHeight+gap) - marginTopDip
+            var slot          = (int)(peekContentY / _layoutTextAreaHeight);
+            var pageIndex     = _colCount > 1 ? slot / _colCount : slot;
+            var pageTop       = _viewMode == DocumentViewMode.PrintLayout
+                                    ? DeskPadding + pageIndex * (_pageHeightPx + PageGap)
+                                    : 0;
+            var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
+            var targetContentY = slot * _layoutTextAreaHeight + Math.Max(0, offsetInPage);
+            if (targetContentY <= _layoutContentY)
+                break; // safety: do not regress
+            _layoutContentY = targetContentY;
+        }
+    }
+
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
@@ -1483,6 +1656,28 @@ public sealed class DocumentView : Control
         }
 
         var lineIndex = 0;
+
+        // AV-WRAP: pre-compute the column geometry for exclusion queries.
+        // These are the same values used in EmitLinePaged to identify the column.
+        var wrapColW = _colCount > 1 ? _colWidth : _contentWidth;
+
+        // AV-WRAP: Helper that peeks the page-space Y of the CURRENT line-being-built, then
+        // queries Square/Tight exclusions to get the adjusted wrap budget for that line.
+        // This mirrors the values EmitLinePaged will compute when actually emitting the line.
+        // estimatedH: estimated line height (max of heights[lineStart..i)).
+        double PeekLineAvail(double estimatedH, int fromIdx, double baseAlignWidth)
+        {
+            if (_wrapExclusions.Count == 0) return baseAlignWidth;
+            var peekContentY   = PeekFirstLineContentY(estimatedH);
+            var peekPageSpaceY = ContentYToPageSpaceY(peekContentY);
+            // Peek the column for the line (mirrors EmitLinePaged slot logic).
+            var slot       = _layoutTextAreaHeight > 0 ? (int)(peekContentY / _layoutTextAreaHeight) : 0;
+            var colIdx     = slot % _colCount;
+            var cLeft      = _contentLeft + colIdx * (_colWidth + _colGap);
+            var (ld, rs)   = ComputeSquareTightExclusion(peekPageSpaceY, estimatedH, cLeft, wrapColW);
+            return Math.Max(20, baseAlignWidth - ld - rs);
+        }
+
         while (i < cells.Count)
         {
             if (cells[i].Ch == ' ')
@@ -1501,11 +1696,18 @@ public sealed class DocumentView : Control
             // Effective alignment / wrap width for this line so the right edge always lands at
             // the right margin regardless of indent variant.
             var lineAlignWidth = availableWidth - lineExtraInset;
-            var lineAvail = lineAlignWidth; // same value: width available for text on this line
+            // AV-WRAP: reduce lineAvail further for any Square/Tight exclusion zones.
+            var lineH2 = DefaultFontSizePt * PxPerPoint * 1.3;
+            for (var c2 = lineStart; c2 <= i && c2 < heights.Length; c2++)
+                if (heights[c2] > lineH2) lineH2 = heights[c2];
+            var lineAvail = PeekLineAvail(lineH2, lineStart, lineAlignWidth);
 
             if (lineWidth + measured[i] > lineAvail && i > lineStart)
             {
                 var breakAt = lastBreak >= lineStart ? lastBreak + 1 : i;
+                // AV-WRAP: push past any TopAndBottom exclusion zones before emitting.
+                if (_wrapExclusions.Count > 0)
+                    AdvancePastTopAndBottomExclusions(lineH2);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
                     lineAlignWidth, paraLeftInset + lineExtraInset, pf);
                 lineIndex++;
@@ -1525,6 +1727,14 @@ public sealed class DocumentView : Control
             var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
             var lineAlignWidth = availableWidth - lineExtraInset;
+            // AV-WRAP: push past any TopAndBottom exclusion zones before emitting the last line.
+            if (_wrapExclusions.Count > 0)
+            {
+                var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
+                for (var c2 = lineStart; c2 < cells.Count; c2++)
+                    if (heights[c2] > lineH) lineH = heights[c2];
+                AdvancePastTopAndBottomExclusions(lineH);
+            }
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
                 lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
         }
@@ -1603,8 +1813,18 @@ public sealed class DocumentView : Control
         var lineSlot     = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
         var lineColIndex = lineSlot % _colCount;
         var colLeft      = _contentLeft + lineColIndex * (_colWidth + _colGap);
+        var colW         = _colCount > 1 ? _colWidth : _contentWidth;
 
-        var x = colLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
+        // AV-WRAP: apply Square/Tight exclusion zones for this line.
+        // TopAndBottom is handled in LayoutParagraphPaged (advances _layoutContentY before we arrive here).
+        var (wrapLeftDelta, wrapRightShrink) = _wrapExclusions.Count > 0
+            ? ComputeSquareTightExclusion(pageSpaceY, lineHeight, colLeft, colW)
+            : (0.0, 0.0);
+        var effectiveLeftInset = leftInset + wrapLeftDelta;
+        var effectiveWidth     = availableWidth - wrapLeftDelta - wrapRightShrink;
+        if (effectiveWidth < 20) effectiveWidth = 20; // safety floor
+
+        var x = colLeft + effectiveLeftInset + AlignmentOffset(alignment, effectiveWidth, lineWidth, isLast);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -2101,6 +2321,8 @@ public sealed class DocumentView : Control
             var rect = new Rect(x, y, imgW, imgH);
             var behindText = img.Wrapping == ImageWrapping.Behind;
             _floatingImages.Add((rect, DecodeBitmap(img), behindText, img.ZOrderIndex));
+            // AV-WRAP: register exclusion zone for text-flow wrapping (Square/Tight/TopAndBottom only).
+            AddWrapExclusion(rect, img.Wrapping);
         }
     }
 
@@ -2209,6 +2431,8 @@ public sealed class DocumentView : Control
                 FlipH         = shape.FlipH,
                 FlipV         = shape.FlipV,
             });
+            // AV-WRAP: register exclusion zone.
+            AddWrapExclusion(rect, pl.Wrapping);
         }
     }
 
@@ -4069,9 +4293,10 @@ public sealed class DocumentView : Control
             var (x, y) = ResolveFloatingPos(pl, anchorContentY);
 
             var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
+            var chartRect = new Rect(x, y, w, h);
             _floatingCharts.Add(new FloatingChartData
             {
-                Rect       = new Rect(x, y, w, h),
+                Rect       = chartRect,
                 BehindText = pl.Wrapping == ImageWrapping.Behind,
                 ZOrder     = pl.ZOrderIndex,
                 Kind       = chart.Kind,
@@ -4079,6 +4304,8 @@ public sealed class DocumentView : Control
                 Categories = new List<string>(chart.Categories),
                 Series     = series,
             });
+            // AV-WRAP: register exclusion zone.
+            AddWrapExclusion(chartRect, pl.Wrapping);
         }
     }
 
@@ -4096,9 +4323,10 @@ public sealed class DocumentView : Control
             var h = Math.Max(40, wa.FontSizePt * 1.6) * PxPerPoint;
             var (x, y) = ResolveFloatingPos(pl, anchorContentY);
 
+            var waRect = new Rect(x, y, w, h);
             _floatingWordArts.Add(new FloatingWordArtData
             {
-                Rect       = new Rect(x, y, w, h),
+                Rect       = waRect,
                 BehindText = pl.Wrapping == ImageWrapping.Behind,
                 ZOrder     = pl.ZOrderIndex,
                 Text       = wa.Text,
@@ -4106,6 +4334,8 @@ public sealed class DocumentView : Control
                 FontSizePt = wa.FontSizePt,
                 Warp       = wa.Warp,
             });
+            // AV-WRAP: register exclusion zone.
+            AddWrapExclusion(waRect, pl.Wrapping);
         }
     }
 
@@ -4134,14 +4364,17 @@ public sealed class DocumentView : Control
             }
             FlattenNodes(sa.Nodes, texts);
 
+            var saRect = new Rect(x, y, w, h);
             _floatingSmartArts.Add(new FloatingSmartArtData
             {
-                Rect       = new Rect(x, y, w, h),
+                Rect       = saRect,
                 BehindText = pl.Wrapping == ImageWrapping.Behind,
                 ZOrder     = pl.ZOrderIndex,
                 Kind       = sa.Kind,
                 NodeTexts  = texts,
             });
+            // AV-WRAP: register exclusion zone.
+            AddWrapExclusion(saRect, pl.Wrapping);
         }
     }
 
@@ -4281,6 +4514,8 @@ public sealed class DocumentView : Control
                 ZOrder     = pl.ZOrderIndex,
                 Children   = children,
             });
+            // AV-WRAP: register exclusion zone using the group's overall bounding rect.
+            AddWrapExclusion(groupRect, pl.Wrapping);
         }
     }
 
