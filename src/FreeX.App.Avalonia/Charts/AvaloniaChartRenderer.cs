@@ -23,41 +23,52 @@ namespace FreeX.App.Avalonia.Charts;
 /// positioning math is already done by the layout engine; this class is purely a painter mapping
 /// geometry (<see cref="SeriesBar"/>, <see cref="SeriesPoint"/>, <see cref="SeriesSlice"/>, axes,
 /// legend, data labels) onto shapes/text. Series colors come from the chart model's
-/// <see cref="ChartModel.SeriesFormats"/>, falling back to a default Excel-like accent palette.
+/// <see cref="ChartModel.SeriesFormats"/>, falling back to a theme-derived Excel accent palette that
+/// mirrors the WPF renderer's BuildExcelSeriesPalette (Accent1–6 × five tint rounds).
 /// </summary>
 public sealed class AvaloniaChartRenderer
 {
     private const double MarkerRadius = 3.5;
     private const double AxisLabelFontSize = 10;
-    private const double LegendFontSize = 11;
+    private const double DefaultLegendFontSize = 11;
+    private const double DefaultDataLabelFontSize = 10;
     private const double TickLength = 4;
+
+    // Title reserve: when a chart title is present we shift the plot area down by this many points.
+    private const double TitleAreaHeight = 28;
 
     private static readonly IBrush AxisBrush = SolidBrush(0x59, 0x59, 0x59);
     private static readonly IBrush AxisLabelBrush = SolidBrush(0x40, 0x40, 0x40);
-    private static readonly IBrush PlotBackground = SolidBrush(0xFF, 0xFF, 0xFF);
-    private static readonly IBrush PlotBorderBrush = SolidBrush(0xD9, 0xD9, 0xD9);
-    private static readonly IBrush DataLabelBrush = SolidBrush(0x40, 0x40, 0x40);
+    private static readonly IBrush DefaultPlotBackground = SolidBrush(0xFF, 0xFF, 0xFF);
+    private static readonly IBrush DefaultPlotBorderBrush = SolidBrush(0xD9, 0xD9, 0xD9);
+    private static readonly IBrush DefaultDataLabelBrush = SolidBrush(0x40, 0x40, 0x40);
 
-    // Excel default accent palette (Office theme Accent1..Accent6) used when a series has no explicit
-    // format color.
-    private static readonly CellColor[] DefaultPalette =
+    // Accent tint schedule mirrors WPF ChartRenderer.AccentTintSchedule.
+    private static readonly double[] AccentTintSchedule = [0.0, 0.4, -0.25, 0.6, -0.5];
+
+    private static readonly WorkbookThemeColorSlot[] AccentSlots =
     [
-        new(0x15, 0x60, 0x82),
-        new(0xC0, 0x50, 0x4D),
-        new(0x9B, 0xBB, 0x59),
-        new(0x80, 0x64, 0xA2),
-        new(0x4B, 0xAC, 0xC6),
-        new(0xF7, 0x96, 0x46),
+        WorkbookThemeColorSlot.Accent1,
+        WorkbookThemeColorSlot.Accent2,
+        WorkbookThemeColorSlot.Accent3,
+        WorkbookThemeColorSlot.Accent4,
+        WorkbookThemeColorSlot.Accent5,
+        WorkbookThemeColorSlot.Accent6,
     ];
 
     private readonly ChartModel _chart;
     private readonly WorkbookTheme _theme;
+
+    // Lazily-built theme-derived palette (same algorithm as WPF BuildExcelSeriesPalette).
+    private CellColor[]? _themePalette;
 
     public AvaloniaChartRenderer(ChartModel chart, WorkbookTheme theme)
     {
         _chart = chart ?? throw new ArgumentNullException(nameof(chart));
         _theme = theme ?? throw new ArgumentNullException(nameof(theme));
     }
+
+    // ── Public entry point ───────────────────────────────────────────────────
 
     /// <summary>
     /// Renders <paramref name="layout"/> into a fresh <see cref="Canvas"/> sized to
@@ -67,14 +78,26 @@ public sealed class AvaloniaChartRenderer
     {
         ArgumentNullException.ThrowIfNull(layout);
 
+        // Resolve chart-area fill (canvas background).
+        IBrush canvasBackground = _chart.ResolveChartAreaFillColor(_theme) is { } chartFill
+            ? SolidBrush(chartFill)
+            : SolidBrush(0xFF, 0xFF, 0xFF);
+
         var canvas = new Canvas
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, height),
-            Background = SolidBrush(0xFF, 0xFF, 0xFF),
+            Background = canvasBackground,
             ClipToBounds = true,
             IsHitTestVisible = false,
         };
+
+        // Chart-area border (on top of background, under everything else).
+        AddChartAreaBorder(canvas, width, height);
+
+        // Chart title — rendered above the plot, centered horizontally.
+        if (!string.IsNullOrWhiteSpace(_chart.Title))
+            AddChartTitle(canvas, width);
 
         var isPie = layout.Series.Any(s => s.Kind == SeriesGeometryKind.PieSlices);
         if (!isPie)
@@ -92,18 +115,85 @@ public sealed class AvaloniaChartRenderer
         return canvas;
     }
 
-    private static void AddPlotBackground(Canvas canvas, LayoutRect plot)
+    // ── Chart-area border ────────────────────────────────────────────────────
+
+    private void AddChartAreaBorder(Canvas canvas, double width, double height)
+    {
+        var borderColor = _chart.ResolveChartAreaBorderColor(_theme);
+        var thickness = _chart.ChartAreaBorderThickness ?? 0;
+        if (borderColor is null || thickness <= 0)
+            return;
+
+        var rect = new AvaloniaRectangle
+        {
+            Width = Math.Max(1, width),
+            Height = Math.Max(1, height),
+            Fill = Brushes.Transparent,
+            Stroke = SolidBrush(borderColor.Value),
+            StrokeThickness = thickness,
+        };
+        Canvas.SetLeft(rect, 0);
+        Canvas.SetTop(rect, 0);
+        canvas.Children.Add(rect);
+    }
+
+    // ── Chart title ──────────────────────────────────────────────────────────
+
+    private void AddChartTitle(Canvas canvas, double canvasWidth)
+    {
+        var title = _chart.Title;
+        if (string.IsNullOrWhiteSpace(title))
+            return;
+
+        var fontSize = _chart.ChartTitleFontSize > 0 ? _chart.ChartTitleFontSize : 16;
+        IBrush foreground = _chart.ResolveChartTitleTextColor(_theme) is { } titleColor
+            ? SolidBrush(titleColor)
+            : SolidBrush(0x26, 0x26, 0x26);
+
+        var tb = new TextBlock
+        {
+            Text = title,
+            FontSize = fontSize,
+            FontWeight = FontWeight.Bold,
+            Foreground = foreground,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+
+        // Measure so we can center it properly even without layout pass.
+        tb.Measure(new Size(canvasWidth, double.PositiveInfinity));
+        var labelWidth = tb.DesiredSize.Width > 0 ? tb.DesiredSize.Width : canvasWidth * 0.8;
+
+        Canvas.SetLeft(tb, (canvasWidth - labelWidth) / 2);
+        Canvas.SetTop(tb, 4);
+        canvas.Children.Add(tb);
+    }
+
+    // ── Plot-area background + border ────────────────────────────────────────
+
+    private void AddPlotBackground(Canvas canvas, LayoutRect plot)
     {
         if (plot.Width <= 0 || plot.Height <= 0)
             return;
+
+        IBrush fill = _chart.ResolvePlotAreaFillColor(_theme) is { } plotFill
+            ? SolidBrush(plotFill)
+            : DefaultPlotBackground;
+
+        IBrush borderBrush = _chart.ResolvePlotAreaBorderColor(_theme) is { } plotBorder
+            ? SolidBrush(plotBorder)
+            : DefaultPlotBorderBrush;
+
+        double borderThickness = _chart.PlotAreaBorderThickness;
 
         var rect = new AvaloniaRectangle
         {
             Width = plot.Width,
             Height = plot.Height,
-            Fill = PlotBackground,
-            Stroke = PlotBorderBrush,
-            StrokeThickness = 1,
+            Fill = fill,
+            Stroke = borderBrush,
+            StrokeThickness = borderThickness,
         };
         Canvas.SetLeft(rect, plot.Left);
         Canvas.SetTop(rect, plot.Top);
@@ -510,6 +600,39 @@ public sealed class AvaloniaChartRenderer
         if (legend.Position == ChartLegendPosition.None || legend.Entries.Count == 0)
             return;
 
+        // Legend background + border (when set).
+        var legendBounds = legend.Bounds;
+        if (legendBounds.Width > 0 && legendBounds.Height > 0)
+        {
+            IBrush? legendFill = _chart.ResolveLegendFillColor(_theme) is { } lFill
+                ? SolidBrush(lFill)
+                : null;
+            IBrush? legendBorder = _chart.ResolveLegendBorderColor(_theme) is { } lBorder
+                ? SolidBrush(lBorder)
+                : null;
+            double legendBorderThickness = _chart.LegendBorderThickness;
+
+            if (legendFill is not null || (legendBorder is not null && legendBorderThickness > 0))
+            {
+                var bg = new AvaloniaRectangle
+                {
+                    Width = legendBounds.Width,
+                    Height = legendBounds.Height,
+                    Fill = legendFill ?? Brushes.Transparent,
+                    Stroke = legendBorder,
+                    StrokeThickness = legendBorder is not null ? legendBorderThickness : 0,
+                };
+                Canvas.SetLeft(bg, legendBounds.Left);
+                Canvas.SetTop(bg, legendBounds.Top);
+                canvas.Children.Add(bg);
+            }
+        }
+
+        var fontSize = _chart.LegendFontSize > 0 ? _chart.LegendFontSize : DefaultLegendFontSize;
+        IBrush legendTextBrush = _chart.ResolveLegendTextColor(_theme) is { } lTextColor
+            ? SolidBrush(lTextColor)
+            : AxisLabelBrush;
+
         var isPie = _chart.Type is ModelChartType.Pie or ModelChartType.ThreeDPie or ModelChartType.Doughnut;
         foreach (var entry in legend.Entries)
         {
@@ -530,8 +653,8 @@ public sealed class AvaloniaChartRenderer
             var label = new TextBlock
             {
                 Text = entry.Label,
-                FontSize = LegendFontSize,
-                Foreground = AxisLabelBrush,
+                FontSize = fontSize,
+                Foreground = legendTextBrush,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
             Canvas.SetLeft(label, entry.LabelRect.Left);
@@ -542,18 +665,51 @@ public sealed class AvaloniaChartRenderer
 
     // ── Data labels ───────────────────────────────────────────────────────────
 
-    private static void RenderDataLabels(Canvas canvas, IReadOnlyList<DataLabelBox> labels)
+    private void RenderDataLabels(Canvas canvas, IReadOnlyList<DataLabelBox> labels)
     {
+        if (labels.Count == 0)
+            return;
+
+        var fontSize = _chart.DataLabelFontSize > 0 ? _chart.DataLabelFontSize : DefaultDataLabelFontSize;
+        IBrush textBrush = _chart.ResolveDataLabelTextColor(_theme) is { } dlTextColor
+            ? SolidBrush(dlTextColor)
+            : DefaultDataLabelBrush;
+
+        // Resolve optional fill/border for label boxes.
+        IBrush? dlFill = _chart.ResolveDataLabelFillColor(_theme) is { } dlFillColor
+            ? SolidBrush(dlFillColor)
+            : null;
+        IBrush? dlBorder = _chart.ResolveDataLabelBorderColor(_theme) is { } dlBorderColor
+            ? SolidBrush(dlBorderColor)
+            : null;
+        double dlBorderThickness = _chart.DataLabelBorderThickness;
+
         foreach (var box in labels)
         {
             if (string.IsNullOrEmpty(box.Text))
                 continue;
 
+            // Draw label background box when fill or border is set.
+            if (dlFill is not null || (dlBorder is not null && dlBorderThickness > 0))
+            {
+                var bg = new AvaloniaRectangle
+                {
+                    Width = Math.Max(1, box.Bounds.Width),
+                    Height = Math.Max(1, box.Bounds.Height),
+                    Fill = dlFill ?? Brushes.Transparent,
+                    Stroke = dlBorder,
+                    StrokeThickness = dlBorder is not null ? dlBorderThickness : 0,
+                };
+                Canvas.SetLeft(bg, box.Bounds.Left);
+                Canvas.SetTop(bg, box.Bounds.Top);
+                canvas.Children.Add(bg);
+            }
+
             var label = new TextBlock
             {
                 Text = box.Text,
-                FontSize = AxisLabelFontSize,
-                Foreground = DataLabelBrush,
+                FontSize = fontSize,
+                Foreground = textBrush,
                 TextAlignment = TextAlignment.Center,
             };
             Canvas.SetLeft(label, box.Bounds.Left);
@@ -569,7 +725,7 @@ public sealed class AvaloniaChartRenderer
         var format = FindSeriesFormat(seriesIndex);
         var color = format?.ResolveFillColor(_theme)
             ?? format?.ResolveStrokeColor(_theme)
-            ?? PaletteColor(seriesIndex);
+            ?? ThemePaletteColor(seriesIndex);
         return SolidBrush(color.R, color.G, color.B, alpha);
     }
 
@@ -578,11 +734,11 @@ public sealed class AvaloniaChartRenderer
         var format = FindSeriesFormat(seriesIndex);
         var color = format?.ResolveStrokeColor(_theme)
             ?? format?.ResolveFillColor(_theme)
-            ?? PaletteColor(seriesIndex);
+            ?? ThemePaletteColor(seriesIndex);
         return SolidBrush(color.R, color.G, color.B);
     }
 
-    private IBrush PaletteFill(int index) => SolidBrush(PaletteColor(index));
+    private IBrush PaletteFill(int index) => SolidBrush(ThemePaletteColor(index));
 
     private ChartSeriesFormat? FindSeriesFormat(int seriesIndex)
     {
@@ -595,10 +751,34 @@ public sealed class AvaloniaChartRenderer
         return null;
     }
 
-    private static CellColor PaletteColor(int index)
+    /// <summary>
+    /// Returns a color from the theme-derived Excel series palette. The palette is built once per
+    /// renderer instance from Accent1–6 × five tint rounds (30 entries), mirroring the WPF
+    /// ChartRenderer.BuildExcelSeriesPalette algorithm. Index wraps within the palette.
+    /// </summary>
+    private CellColor ThemePaletteColor(int index)
     {
+        _themePalette ??= BuildThemePalette(_theme);
         var i = index < 0 ? 0 : index;
-        return DefaultPalette[i % DefaultPalette.Length];
+        return _themePalette[i % _themePalette.Length];
+    }
+
+    /// <summary>
+    /// Builds a 30-entry palette: Accent1–6 base colors (tint 0), then four more tint rounds
+    /// (+0.4, -0.25, +0.6, -0.5), exactly as WPF's BuildExcelSeriesPalette.
+    /// </summary>
+    internal static CellColor[] BuildThemePalette(WorkbookTheme theme)
+    {
+        var palette = new CellColor[AccentSlots.Length * AccentTintSchedule.Length];
+        var idx = 0;
+        foreach (var tint in AccentTintSchedule)
+        {
+            foreach (var slot in AccentSlots)
+            {
+                palette[idx++] = theme.ResolveColor(slot, tint);
+            }
+        }
+        return palette;
     }
 
     private static IBrush SolidBrush(CellColor color) => SolidBrush(color.R, color.G, color.B);
