@@ -1,5 +1,67 @@
 namespace FreeP.Core.Model;
 
+// ── SmartArt live-layout data model (Theme 17) ────────────────────────────────────────────────
+
+/// <summary>
+/// SmartArt diagram family — classifies the layout uniqueId into a rendering strategy.
+/// The live layout engine supports the four common families; Unknown falls back to cached drawing.
+/// </summary>
+public enum SmartArtFamily
+{
+    Unknown   = 0,
+    Process   = 1,   // horizontal row of boxes + arrow connectors
+    List      = 2,   // vertical (or horizontal) stack of boxes
+    Cycle     = 3,   // boxes on a circle with arrow connectors
+    Hierarchy = 4    // tree (root top, children below, connector lines)
+}
+
+/// <summary>
+/// One logical node in the SmartArt data model (maps to a dgm:pt type="node" or "asst").
+/// Children are built from the parOf connection graph in data1.xml.
+/// </summary>
+public sealed class SmartArtNode
+{
+    /// <summary>dgm:pt @modelId (a GUID string used in cxnLst to wire the tree).</summary>
+    public string ModelId { get; set; } = string.Empty;
+
+    /// <summary>Display text assembled from dgm:t/a:p/a:r/a:t, new-line per paragraph.</summary>
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>Zero-based depth level (root = 0).</summary>
+    public int Level { get; set; }
+
+    /// <summary>Ordered child nodes.</summary>
+    public List<SmartArtNode> Children { get; } = new();
+
+    /// <summary>True when the node is typed "asst" (assistant box in org-chart).</summary>
+    public bool IsAssistant { get; set; }
+}
+
+/// <summary>
+/// Parsed result of data1.xml + layout1.xml — the logical content the live layout engine
+/// needs to build positioned shapes.
+/// Stored on <see cref="SmartArtShape"/> alongside the verbatim part bytes.
+/// </summary>
+public sealed class SmartArtData
+{
+    /// <summary>
+    /// The SmartArt layout family determined from the layout1.xml uniqueId.
+    /// </summary>
+    public SmartArtFamily Family { get; set; } = SmartArtFamily.Unknown;
+
+    /// <summary>
+    /// Raw uniqueId from the layoutDef/@uniqueId attribute (preserved for diagnostics).
+    /// </summary>
+    public string LayoutUniqueId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Root-level nodes of the diagram tree.  For flat families (List, Process, Cycle)
+    /// all visible nodes sit at Level 0 here.  For Hierarchy the root is Nodes[0] with
+    /// its children nested inside it.
+    /// </summary>
+    public List<SmartArtNode> Nodes { get; } = new();
+}
+
 /// <summary>
 /// Raw diagram part bytes for one diagram OPC part (data, layout, quickStyle, colors, or drawing).
 /// Stored verbatim so the writer can round-trip the parts without understanding their XML schemas.
@@ -29,6 +91,16 @@ public sealed class DiagramPart
 /// </summary>
 public sealed class SmartArtShape
 {
+    // ── Live layout data (Theme 17) ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parsed data model — node tree + family classification — built from data1.xml + layout1.xml.
+    /// Null when neither part was loadable (e.g. in legacy archives or the parts were missing).
+    /// When non-null and <see cref="SmartArtData.Family"/> is a supported family, the compositor
+    /// runs the <see cref="SmartArtLayoutEngine"/> instead of the cached drawing.
+    /// </summary>
+    public SmartArtData? Data { get; set; }
+
     // ── Fallback rendering ─────────────────────────────────────────────────────────
 
     /// <summary>
