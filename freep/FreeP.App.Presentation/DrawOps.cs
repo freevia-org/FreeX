@@ -75,18 +75,78 @@ public abstract class ResolvedFill
         public Solid(SrgbColor color) => Color = color;
     }
 
-    /// <summary>Two-stop linear gradient.</summary>
+    /// <summary>A single resolved gradient stop with concrete sRGB color + position.</summary>
+    public sealed class ResolvedGradientStop
+    {
+        /// <summary>Stop position in [0, 1].</summary>
+        public double Position { get; }
+        public SrgbColor Color { get; }
+        public ResolvedGradientStop(double position, SrgbColor color)
+        {
+            Position = position;
+            Color = color;
+        }
+    }
+
+    /// <summary>Multi-stop gradient (linear or radial) with resolved colors.</summary>
     public sealed class Gradient : ResolvedFill
     {
-        public SrgbColor StartColor { get; }
-        public SrgbColor EndColor { get; }
-        /// <summary>Angle in degrees (0 = left->right, 90 = top->bottom).</summary>
+        /// <summary>All gradient stops in position order (positions in [0,1]).</summary>
+        public IReadOnlyList<ResolvedGradientStop> Stops { get; }
+
+        /// <summary>Gradient kind (Linear or Radial).</summary>
+        public GradientKind Kind { get; }
+
+        /// <summary>Angle in degrees (0 = left->right, 90 = top->bottom). Linear only.</summary>
         public double AngleDegrees { get; }
-        public Gradient(SrgbColor startColor, SrgbColor endColor, double angleDegrees)
+
+        // ── Back-compat 2-stop accessors ────────────────────────────────────────────
+        public SrgbColor StartColor => Stops.Count > 0 ? Stops[0].Color : SrgbColor.Black;
+        public SrgbColor EndColor   => Stops.Count > 0 ? Stops[^1].Color : SrgbColor.White;
+
+        public Gradient(IReadOnlyList<ResolvedGradientStop> stops, GradientKind kind, double angleDegrees)
         {
-            StartColor = startColor;
-            EndColor = endColor;
+            Stops = stops;
+            Kind = kind;
             AngleDegrees = angleDegrees;
+        }
+
+        /// <summary>Back-compat 2-stop linear constructor.</summary>
+        public Gradient(SrgbColor startColor, SrgbColor endColor, double angleDegrees)
+            : this(new[]
+            {
+                new ResolvedGradientStop(0.0, startColor),
+                new ResolvedGradientStop(1.0, endColor)
+            }, GradientKind.Linear, angleDegrees)
+        {
+        }
+    }
+
+    /// <summary>Picture (blip) fill with resolved image bytes.</summary>
+    public sealed class Picture : ResolvedFill
+    {
+        public byte[] ImageBytes { get; }
+        public string ContentType { get; }
+        public bool Tile { get; }
+        public Picture(byte[] imageBytes, string contentType, bool tile = false)
+        {
+            ImageBytes = imageBytes;
+            ContentType = contentType;
+            Tile = tile;
+        }
+    }
+
+    /// <summary>Pattern (hatch) fill with resolved fg/bg colors and preset name.</summary>
+    public sealed class PatternFill : ResolvedFill
+    {
+        public string Preset { get; }
+        public SrgbColor ForegroundColor { get; }
+        public SrgbColor BackgroundColor { get; }
+        public PatternFill(string preset, SrgbColor foregroundColor, SrgbColor backgroundColor)
+        {
+            Preset = preset;
+            ForegroundColor = foregroundColor;
+            BackgroundColor = backgroundColor;
         }
     }
 }
