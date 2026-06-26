@@ -593,8 +593,8 @@ public sealed partial class MainWindow
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var header = new StackPanel { Spacing = 2 };
-            header.Children.Add(new TextBlock { Text = title, FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
-            header.Children.Add(new TextBlock { Text = helpText, FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(title), FontSize = 12, FontFamily = FormulaBarFontFamily, FontWeight = FontWeight.SemiBold });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(helpText), FontSize = 11, FontFamily = FormulaBarFontFamily, Foreground = Brush(96, 96, 96), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
             grid.Children.Add(header);
 
             Grid.SetRow(list, 1);

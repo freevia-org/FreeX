@@ -70,15 +70,15 @@ public sealed partial class MainWindow
             positionChoices.FirstOrDefault(c => c.Position == current.Position)
             ?? (positionChoices.Count > 0 ? positionChoices[0] : null);
 
-        var valueCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Value"), IsChecked = current.ShowValue };
+        var valueCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_Value")), IsChecked = current.ShowValue };
         AutomationProperties.SetAutomationId(valueCheck, "ChartDataLabelsValueCheck");
-        var categoryCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_CategoryName"), IsChecked = current.ShowCategoryName };
+        var categoryCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_CategoryName")), IsChecked = current.ShowCategoryName };
         AutomationProperties.SetAutomationId(categoryCheck, "ChartDataLabelsCategoryCheck");
-        var seriesCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_SeriesName"), IsChecked = current.ShowSeriesName };
+        var seriesCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_SeriesName")), IsChecked = current.ShowSeriesName };
         AutomationProperties.SetAutomationId(seriesCheck, "ChartDataLabelsSeriesCheck");
-        var percentCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_Percentage"), IsChecked = current.ShowPercentage };
+        var percentCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_Percentage")), IsChecked = current.ShowPercentage };
         AutomationProperties.SetAutomationId(percentCheck, "ChartDataLabelsPercentageCheck");
-        var legendKeyCheck = new CheckBox { Content = UiText.Get("ChartDataLabels_LegendKey"), IsChecked = current.ShowLegendKey };
+        var legendKeyCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartDataLabels_LegendKey")), IsChecked = current.ShowLegendKey };
         AutomationProperties.SetAutomationId(legendKeyCheck, "ChartDataLabelsLegendKeyCheck");
 
         var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
@@ -590,7 +590,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(valueBox, "ChartErrorBarsValueBox");
         ApplyChartTextBoxChrome(valueBox);
 
-        var endCapsCheck = new CheckBox { Content = UiText.Get("ChartErrorBars_EndCaps"), IsChecked = current.EndCaps };
+        var endCapsCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ChartErrorBars_EndCaps")), IsChecked = current.EndCaps };
         AutomationProperties.SetAutomationId(endCapsCheck, "ChartErrorBarsEndCapsCheck");
 
         var dialog = NewChartDialog(UiText.Get("ChartErrorBars_Title"), "ChartErrorBarsDialog");

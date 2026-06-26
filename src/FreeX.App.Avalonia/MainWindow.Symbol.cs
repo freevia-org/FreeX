@@ -349,7 +349,7 @@ public sealed partial class MainWindow
     {
         var labelControl = new TextBlock
         {
-            Text = label,
+            Text = StripDisplayMnemonic(label),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = VerticalAlignment.Center,

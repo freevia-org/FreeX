@@ -826,6 +826,7 @@ public sealed partial class MainWindow
 
     private static void ApplyCfCheckBoxChrome(CheckBox cb)
     {
+        StripContentMnemonic(cb);
         cb.FontSize = 12;
         cb.FontFamily = FormulaBarFontFamily;
         cb.MinHeight = 20;

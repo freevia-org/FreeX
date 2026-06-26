@@ -107,7 +107,7 @@ public sealed partial class MainWindow
 
         var showDataTable = new CheckBox
         {
-            Content = UiText.Get("PivotChartOptions_ShowDataTable"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotChartOptions_ShowDataTable")),
             IsChecked = chart.DataTable is not null,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -130,7 +130,7 @@ public sealed partial class MainWindow
 
         var roundedCorners = new CheckBox
         {
-            Content = UiText.Get("PivotChartOptions_RoundedCorners"),
+            Content = StripDisplayMnemonic(UiText.Get("PivotChartOptions_RoundedCorners")),
             IsChecked = chart.RoundedCorners,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,

@@ -593,7 +593,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = label, Width = 64, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock { Text = StripDisplayMnemonic(label), Width = 64, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 box,
             },
         };

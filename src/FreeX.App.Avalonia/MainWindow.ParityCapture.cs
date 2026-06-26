@@ -321,16 +321,16 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, ExportOptionsDialogSurfacePlanner.DialogAutomationId);
 
-        var activeSheetButton = new RadioButton { Content = UiText.Get("ExportOptions_ActiveSheetS"), IsChecked = true };
-        var selectionButton = new RadioButton { Content = UiText.Get("ExportOptions_SelectedRange") };
-        var workbookButton = new RadioButton { Content = UiText.Get("ExportOptions_Workbook") };
-        var allPagesButton = new RadioButton { Content = UiText.Get("ExportOptions_All"), GroupName = "PageRange", IsChecked = true };
-        var pagesButton = new RadioButton { Content = UiText.Get("ExportOptions_Pages"), GroupName = "PageRange" };
+        var activeSheetButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_ActiveSheetS")), IsChecked = true };
+        var selectionButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_SelectedRange")) };
+        var workbookButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Workbook")) };
+        var allPagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_All")), GroupName = "PageRange", IsChecked = true };
+        var pagesButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Pages")), GroupName = "PageRange" };
         var fromPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
         var toPageBox = new TextBox { Width = 56, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), IsEnabled = false };
-        var documentPropertiesBox = new CheckBox { Content = UiText.Get("ExportOptions_IncludeDocumentProperties") };
-        var ignorePrintAreasBox = new CheckBox { Content = UiText.Get("ExportOptions_IgnorePrintAreas") };
-        var bookmarksBox = new CheckBox { Content = UiText.Get("ExportOptions_CreatePdfBookmarks") };
+        var documentPropertiesBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IncludeDocumentProperties")) };
+        var ignorePrintAreasBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_IgnorePrintAreas")) };
+        var bookmarksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_CreatePdfBookmarks")) };
         var bookmarkModeBox = new ComboBox { Width = 180, Height = 24, MinHeight = 24, IsEnabled = false };
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_SheetNames"));
         bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
@@ -350,14 +350,14 @@ public sealed partial class MainWindow
         var pdfLanguageBox = new TextBox { Width = 88, Height = 24, MinHeight = 24, Padding = new Thickness(4, 2, 4, 2), Text = "en-US", IsEnabled = availability.PdfLanguageEnabled };
         var bitmapTextBox = new CheckBox
         {
-            Content = UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded"),
+            Content = StripDisplayMnemonic(UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded")),
             IsEnabled = availability.PdfBitmapTextEnabled,
         };
-        var pdfABox = new CheckBox { Content = UiText.Get("ExportOptions_PdfACompliantNotSupported"), IsEnabled = false };
-        var structureTagsBox = new CheckBox { Content = UiText.Get("ExportOptions_DocumentStructureTagsNotSupported"), IsEnabled = false };
-        var standardQualityButton = new RadioButton { Content = UiText.Get("ExportOptions_Standard"), IsChecked = true };
-        var minimumSizeButton = new RadioButton { Content = UiText.Get("ExportOptions_MinimumSize"), IsEnabled = availability.MinimumSizeEnabled };
-        var openAfterPublishBox = new CheckBox { Content = UiText.Get("ExportOptions_OpenAfterPublishing"), Margin = new Thickness(0, 8, 0, 0) };
+        var pdfABox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_PdfACompliantNotSupported")), IsEnabled = false };
+        var structureTagsBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_DocumentStructureTagsNotSupported")), IsEnabled = false };
+        var standardQualityButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_Standard")), IsChecked = true };
+        var minimumSizeButton = new RadioButton { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_MinimumSize")), IsEnabled = availability.MinimumSizeEnabled };
+        var openAfterPublishBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_OpenAfterPublishing")), Margin = new Thickness(0, 8, 0, 0) };
 
         bookmarksBox.IsEnabled = availability.PdfBookmarksEnabled;
         bookmarksBox.IsCheckedChanged += (_, _) => bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
@@ -378,9 +378,9 @@ public sealed partial class MainWindow
 
         var pageRangePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0), Spacing = 6 };
         pageRangePanel.Children.Add(pagesButton);
-        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_From"), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_From")), Target = fromPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
         pageRangePanel.Children.Add(fromPageBox);
-        pageRangePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_To"), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
+        pageRangePanel.Children.Add(new Label { Content = StripDisplayMnemonic(UiText.Get("ExportOptions_To")), Target = toPageBox, VerticalAlignment = AvaloniaVerticalAlignment.Center });
         pageRangePanel.Children.Add(toPageBox);
         stack.Children.Add(pageRangePanel);
 
@@ -433,7 +433,7 @@ public sealed partial class MainWindow
     private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
         new()
         {
-            Text = UiText.Get(resourceKey),
+            Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, topMargin, 0, 4),
         };
@@ -446,7 +446,7 @@ public sealed partial class MainWindow
             Spacing = 6,
             Children =
             {
-                new Label { Content = UiText.Get(resourceKey), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new Label { Content = StripDisplayMnemonic(UiText.Get(resourceKey)), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
                 control,
             },
         };
@@ -1204,6 +1204,20 @@ public sealed partial class MainWindow
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
         RefreshShell("Ready");
+
+        // The WPF capture activates the last inserted sheet and brings it into view, so its overflow
+        // surface shows the TAIL of the strip (Sheet12–Sheet20). Avalonia's scroller does not auto-scroll
+        // to the active tab on rebuild, so without this it would show the HEAD (Demo–Sheet10). Force the
+        // scroller to its end after a layout pass so both shells frame the same overflowed sheet range.
+        LayoutWindow();
+        ScrollSheetTabsToEndForParityCapture();
+        LayoutWindow();
+    }
+
+    private void ScrollSheetTabsToEndForParityCapture()
+    {
+        var maxOffsetX = Math.Max(0, _sheetTabsScroller.Extent.Width - _sheetTabsScroller.Viewport.Width);
+        _sheetTabsScroller.Offset = new Vector(maxOffsetX, _sheetTabsScroller.Offset.Y);
     }
 
     private static (string SurfaceId, string TabId)[] BuildStaticRibbonTabSurfaces()
@@ -2074,16 +2088,22 @@ public sealed partial class MainWindow
     }
 
     private static Control CreateParityCapturedBackstageBackArrowGlyph() =>
+        // Render the arrow at the geometry's natural ~14px size (Stretch.None) instead of stretching it
+        // to fill an 18px box — the uniform stretch also scaled the 1.25 stroke up, making the Linux
+        // arrow read much larger/heavier than the thin ~16px back arrow on the Windows backstage rail
+        // (backstage.Account.win.png / backstage.Info.win.png). No stretch keeps the stroke crisp + thin.
         new global::Avalonia.Controls.Shapes.Path
         {
             Data = Geometry.Parse("M12,4 L5,11 L12,18 M6,11 L19,11"),
-            Width = 18,
-            Height = 18,
+            Width = 16,
+            Height = 16,
             Stroke = Brushes.White,
-            StrokeThickness = 1.25,
+            StrokeThickness = 1.1,
             StrokeLineCap = PenLineCap.Round,
             StrokeJoin = PenLineJoin.Round,
-            Stretch = Stretch.Uniform,
+            Stretch = Stretch.None,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
 
     private static Control CreateParityCapturedBackstageRailButton(RibbonCommandIconKind iconKind, string text, string commandName, bool isSelected)
@@ -2177,12 +2197,6 @@ public sealed partial class MainWindow
             Foreground = new SolidColorBrush(Color.FromRgb(31, 31, 31)),
         }, 40, 98);
         PlaceBackstage(canvas, CreateParityCapturedBlankWorkbookTile(), 44, 126);
-        PlaceBackstage(canvas, new TextBlock
-        {
-            Text = "More templates (Excluded) ->",
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 96, 128)),
-        }, 692, 100);
 
         var recentHeader = new AvaloniaGrid
         {

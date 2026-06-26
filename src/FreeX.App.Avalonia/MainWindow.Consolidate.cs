@@ -422,6 +422,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyDataOpsCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
         checkBox.FontSize = 12;
@@ -434,6 +435,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplyDataOpsRadioButtonChrome(RadioButton radioButton)
     {
+        StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
         radioButton.MaxHeight = 20;
         radioButton.FontSize = 12;

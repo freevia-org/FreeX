@@ -271,7 +271,7 @@ public sealed partial class MainWindow
     }
 
     private static TextBlock PageSetupLabel(string text) =>
-        new() { Text = text, VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        new() { Text = StripDisplayMnemonic(text), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily };
 
     private static void ApplyPageLayoutButtonChrome(Button button, double minWidth, bool isDefault = false)
     {
@@ -317,6 +317,7 @@ public sealed partial class MainWindow
 
     private static void ApplyPageLayoutCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.MinHeight = 20;
         checkBox.MaxHeight = 20;
         checkBox.FontSize = 12;
@@ -325,6 +326,7 @@ public sealed partial class MainWindow
 
     private static void ApplyPageLayoutRadioButtonChrome(RadioButton radioButton)
     {
+        StripContentMnemonic(radioButton);
         radioButton.MinHeight = 20;
         radioButton.FontSize = 12;
         radioButton.FontFamily = FormulaBarFontFamily;
@@ -740,7 +742,7 @@ public sealed partial class MainWindow
 
         var pageTab = new TabItem
         {
-            Header = UiText.Get("PageSetup_PageTab"),
+            Header = StripDisplayMnemonic(UiText.Get("PageSetup_PageTab")),
             Content = new ScrollViewer
             {
                 Content = new StackPanel
@@ -767,7 +769,7 @@ public sealed partial class MainWindow
 
         var marginsTab = new TabItem
         {
-            Header = UiText.Get("PageSetup_MarginsTab"),
+            Header = StripDisplayMnemonic(UiText.Get("PageSetup_MarginsTab")),
             Content = new ScrollViewer
             {
                 Content = new StackPanel
@@ -792,7 +794,7 @@ public sealed partial class MainWindow
 
         var headerFooterTab = new TabItem
         {
-            Header = UiText.Get("PageSetup_HeaderFooterTab"),
+            Header = StripDisplayMnemonic(UiText.Get("PageSetup_HeaderFooterTab")),
             Content = new ScrollViewer
             {
                 Content = new StackPanel
@@ -830,7 +832,7 @@ public sealed partial class MainWindow
 
         var sheetTab = new TabItem
         {
-            Header = UiText.Get("PageSetup_SheetTab"),
+            Header = StripDisplayMnemonic(UiText.Get("PageSetup_SheetTab")),
             Content = new ScrollViewer
             {
                 Content = new StackPanel

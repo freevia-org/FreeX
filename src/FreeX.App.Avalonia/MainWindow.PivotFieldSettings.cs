@@ -211,9 +211,9 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
             Items =
             {
-                new TabItem { Header = UiText.Get("PivotValueFieldSettings_SummarizeValuesBy"), Content = summarizePanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotValueFieldSettings_ShowValuesAs"), Content = showValuesAsPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new TabItem { Header = UiText.Get("PivotValueFieldSettings_NumberFormat"), Content = numberFormatPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_SummarizeValuesBy")), Content = summarizePanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_ShowValuesAs")), Content = showValuesAsPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TabItem { Header = StripDisplayMnemonic(UiText.Get("PivotValueFieldSettings_NumberFormat")), Content = numberFormatPanel, FontSize = 12, FontFamily = FormulaBarFontFamily },
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotValueFieldSettingsTabs");

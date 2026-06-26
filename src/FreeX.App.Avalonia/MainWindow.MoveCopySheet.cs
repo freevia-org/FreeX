@@ -205,6 +205,7 @@ public sealed partial class MainWindow
     /// </summary>
     private static void ApplySheetCheckBoxChrome(CheckBox checkBox)
     {
+        StripContentMnemonic(checkBox);
         checkBox.FontSize = 12;
         checkBox.FontFamily = FormulaBarFontFamily;
         checkBox.MinHeight = 20;
