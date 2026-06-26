@@ -1159,4 +1159,191 @@ public sealed class SlideCompositorTests
         var fill1 = table.ComputeEffectiveFill(1, 0, table.Rows[1].Cells[0]);
         fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
     }
+
+    // ─── II3: slidenum field always shows correct slide number ────────────────
+
+    /// <summary>
+    /// A 3-slide deck with a slidenum field on each slide: compositing slide at
+    /// index 2 (0-based) must render "3", not "1".
+    /// Regression guard for the EnsureOps bug that left slideIndex=0 (default).
+    /// </summary>
+    [Fact]
+    public void Compose_SlidenuFieldOnThirdSlide_RendersThree()
+    {
+        // Arrange: 3-slide presentation; each slide has a slidenum field.
+        var p = new PresentationModel();
+        p.Theme = PresentationTheme.CreateDefault();
+
+        for (int i = 0; i < 3; i++)
+        {
+            var slide = new Slide();
+            var para  = new Paragraph();
+            para.Runs.Add(new Run
+            {
+                Text  = (i + 1).ToString(),
+                Field = new FieldRun { FieldType = "slidenum", CachedText = (i + 1).ToString() }
+            });
+            var body = new TextBody();
+            body.Paragraphs.Add(para);
+            slide.Shapes.Add(new SlideShape
+            {
+                Id          = (uint)(i + 1),
+                Kind        = SlideShapeKind.AutoShape,
+                OffsetXEmu  = 914400,
+                OffsetYEmu  = 6400000,
+                ExtentCxEmu = 4572000,
+                ExtentCyEmu = 457200,
+                TextBody    = body
+            });
+            p.Slides.Add(slide);
+        }
+
+        // Act: compose slide at 0-based index 2 (third slide).
+        var thirdSlide = p.Slides[2];
+        var ops        = SlideCompositor.Compose(p, thirdSlide, slideIndex: 2);
+        var shapeOp    = ops.OfType<DrawOp.Shape>().Single();
+
+        // Assert: rendered text must be "3", not "1".
+        var runText = string.Concat(shapeOp.Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+        runText.Should().Be("3",
+            "slidenum field on slide index 2 must render slide number 3");
+    }
+
+    [Fact]
+    public void Compose_SlidenuField_IndexZeroGivesOne_IndexTwoGivesThree()
+    {
+        // Confirm that the slideIndex parameter is the only difference between
+        // "shows 1" (old bug: always index 0) and "shows 3" (correct: index 2).
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "?",
+            Field = new FieldRun { FieldType = "slidenum", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        string TextAt(int idx) =>
+            string.Concat(SlideCompositor.Compose(p, slide, idx)
+                .OfType<DrawOp.Shape>().Single()
+                .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        TextAt(0).Should().Be("1", "index 0 → slide 1");
+        TextAt(2).Should().Be("3", "index 2 → slide 3");
+    }
+
+    // ─── II6: empty-cache field fallback ─────────────────────────────────────
+
+    [Fact]
+    public void ResolveField_DatetimeEmptyCache_RendersDateString_NotTypeToken()
+    {
+        // A datetime field with no cached text must NOT render the literal token
+        // "datetime1" — it should render something date-like.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "datetime1", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops    = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().NotBe("datetime1",
+            "empty-cache datetime field must not render the raw field-type token");
+        runText.Should().MatchRegex(@"\d",
+            "empty-cache datetime field should contain at least one digit (a date)");
+    }
+
+    [Fact]
+    public void ResolveField_FooterEmptyCache_RendersEmpty_NotTypeToken()
+    {
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "",
+            Field = new FieldRun { FieldType = "footer", CachedText = "" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().BeEmpty(
+            "empty-cache footer field must render empty, not the raw type token 'footer'");
+    }
+
+    [Fact]
+    public void ResolveField_WithCachedText_AlwaysUsesCacheOverFallback()
+    {
+        // A field that HAS cached text must always render the cache, regardless of type.
+        var p     = new PresentationModel();
+        p.Theme   = PresentationTheme.CreateDefault();
+        var slide = new Slide();
+
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text  = "Custom Footer",
+            Field = new FieldRun { FieldType = "footer", CachedText = "Custom Footer" }
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(para);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 0, OffsetYEmu = 0,
+            ExtentCxEmu = 914400, ExtentCyEmu = 457200,
+            TextBody = body
+        });
+        p.Slides.Add(slide);
+
+        var ops     = SlideCompositor.Compose(p, slide, slideIndex: 0);
+        var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
+            .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
+
+        runText.Should().Be("Custom Footer",
+            "fields with non-empty cached text must always render the cache");
+    }
 }

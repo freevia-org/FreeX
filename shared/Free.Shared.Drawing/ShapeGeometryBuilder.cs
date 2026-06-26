@@ -89,6 +89,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.LineCallout => LineCallout(rect),
             DrawingShapeKind.Chevron => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1), (0.24, 0.5)]),
             DrawingShapeKind.HomePlate => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1)]),
+            DrawingShapeKind.Cylinder => CylinderShape(rect),
             _ => Rectangle(rect)
         };
     }
@@ -254,14 +255,69 @@ public static class ShapeGeometryBuilder
     private static ShapeGeometry ElbowPath(LayoutRect rect) =>
         OpenPath(rect, [(0, 0), (0.5, 0), (0.5, 1), (1, 1)]);
 
+    /// <summary>
+    /// Renders a <see cref="DrawingShapeKind.CurvedConnector"/> as a single smooth cubic Bézier
+    /// from the top-left corner of the bounding box to the bottom-right corner.  Control points
+    /// produce a classic S-curve that is faithful to how Excel draws curvedConnector3 by default.
+    /// The host renderer applies flip/rotation for other orientations.
+    /// </summary>
     private static ShapeGeometry CurvedConnector(LayoutRect rect)
     {
-        var start = P(rect, 0.05, 0.18);
+        // S-curve: start at top-left (0,0), end at bottom-right (1,1).
+        // Control points at (0, 0.5) and (1, 0.5) produce a smooth horizontal-bias S.
+        var start = P(rect, 0, 0);
         ShapeSegment[] segments =
         [
-            ShapeSegment.BezierTo(P(rect, 0.36, 0.04), P(rect, 0.52, 0.88), P(rect, 0.95, 0.82))
+            ShapeSegment.BezierTo(P(rect, 0, 0.5), P(rect, 1, 0.5), P(rect, 1, 1))
         ];
         return Single(new ShapeContour(start, segments, Closed: false, Filled: false));
+    }
+
+    /// <summary>
+    /// Renders a <see cref="DrawingShapeKind.Cylinder"/> (the OOXML "can" preset) as two contours:
+    /// <list type="bullet">
+    ///   <item>The body: a rectangle with an open-arc bottom representing the can's base.</item>
+    ///   <item>The top ellipse cap: a full ellipse whose height is ~25 % of the shape height.</item>
+    /// </list>
+    /// This produces the classic database/storage "can" symbol.  Excel's default adjust ratio puts
+    /// the top ellipse at roughly 25 % of the total shape height.
+    /// </summary>
+    private static ShapeGeometry CylinderShape(LayoutRect rect)
+    {
+        // Top ellipse height is 25% of total shape height (Excel default adj ratio).
+        const double EllipseHeightFraction = 0.25;
+        var ew = rect.Width;
+        var eh = rect.Height * EllipseHeightFraction;
+        var rx = ew / 2;
+        var ry = eh / 2;
+        var cx = rect.Left + rx;
+        var bodyTop = rect.Top + ry;   // body starts at the ellipse's vertical center
+        var bodyBottom = rect.Bottom;
+
+        // ── Contour 1: body outline ─────────────────────────────────────────────
+        // Draw the body: left side down, bottom half-ellipse arc (convex outward at bottom),
+        // right side up, then the top half-ellipse arc (convex outward at top) to close.
+
+        var leftAtTop = new LayoutPoint(cx - rx, bodyTop);
+        var leftAtBottom = new LayoutPoint(cx - rx, bodyBottom);
+        var rightAtBottom = new LayoutPoint(cx + rx, bodyBottom);
+        var rightAtTop = new LayoutPoint(cx + rx, bodyTop);
+
+        ShapeSegment[] bodySegments =
+        [
+            ShapeSegment.LineTo(leftAtBottom),
+            ShapeSegment.ArcTo(rightAtBottom, rx, ry, sweepClockwise: true),
+            ShapeSegment.LineTo(rightAtTop),
+            ShapeSegment.ArcTo(leftAtTop, rx, ry, sweepClockwise: false)
+        ];
+        var bodyContour = new ShapeContour(leftAtTop, bodySegments, Closed: true, Filled: true);
+
+        // ── Contour 2: full top ellipse cap ────────────────────────────────────
+        // A complete ellipse at (left, top, ew, eh) drawn on top of the body to give the
+        // cylinder a visible "lid".  EllipseContour draws two clockwise half-arcs.
+        var topCapContour = EllipseContour(rect.Left, rect.Top, ew, eh);
+
+        return new ShapeGeometry([bodyContour, topCapContour]);
     }
 
     private static ShapeGeometry Plus(LayoutRect rect) =>

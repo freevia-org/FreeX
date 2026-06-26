@@ -1814,6 +1814,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         _slideWidthDip = presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = presentation.SlideSizeCyEmu / 9525.0;
-        _cachedOps = SlideCompositor.Compose(presentation, slide);
+        int slideIndex = presentation.Slides.IndexOf(slide);
+        _cachedOps = SlideCompositor.Compose(presentation, slide, slideIndex < 0 ? 0 : slideIndex);
     }
 }

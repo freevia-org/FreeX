@@ -730,11 +730,17 @@ public static class SlideCompositor
         if (t.Contains("slidenum") || t == "\\slidenum" || t == "ppslidenum")
             return (slideIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        // DateTime: use cached text as the deterministic value — DO NOT call DateTime.Now here.
-        // Footer: fall through to cached text as well.
-        return string.IsNullOrEmpty(field.CachedText)
-            ? field.FieldType   // last-resort: show type string
-            : field.CachedText;
+        // For cached text always use it (cached text is PowerPoint's baked-in value).
+        if (!string.IsNullOrEmpty(field.CachedText))
+            return field.CachedText;
+
+        // No cached text — render a sensible fallback instead of the raw type token.
+        // datetime / datetime1‥datetime13 → format current date in a readable form.
+        if (t.StartsWith("datetime", StringComparison.Ordinal) || t == "date" || t == "time")
+            return DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+        // footer / header / slidename with no cache → render empty (not the type token).
+        return string.Empty;
     }
 
     private static ResolvedTextLayout ResolveTextLayout(

@@ -115,6 +115,20 @@ public static class PptxPackageWriter
                     var ct = shape.Picture.ContentType ?? "image/png";
                     mediaExtensions.Add(ContentTypeToExtension(ct));
                 }
+
+                // HH1: also register picture-fill images so their extension gets a Default
+                if (shape.Fill is ShapeFill.Picture picFill && picFill.ImageBytes.Length > 0)
+                {
+                    var ct = picFill.ContentType ?? "image/png";
+                    mediaExtensions.Add(ContentTypeToExtension(ct));
+                }
+
+                // II1: register audio/video file extensions for Media shapes
+                if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
+                {
+                    var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
+                    mediaExtensions.Add(mediaExt);
+                }
             }
         }
 
@@ -370,6 +384,15 @@ public static class PptxPackageWriter
             ["svg"]  = "image/svg+xml",
             ["wmf"]  = "image/x-wmf",
             ["emf"]  = "image/x-emf",
+            // Audio/video types (II1: required so media parts have a declared content type)
+            ["mp4"]  = "video/mp4",
+            ["mov"]  = "video/quicktime",
+            ["avi"]  = "video/x-msvideo",
+            ["wmv"]  = "video/x-ms-wmv",
+            ["mp3"]  = "audio/mpeg",
+            ["m4a"]  = "audio/mp4",
+            ["wav"]  = "audio/wav",
+            ["wma"]  = "audio/x-ms-wma",
         };
 
     private static XDocument BuildContentTypesXml(
@@ -608,12 +631,11 @@ public static class PptxPackageWriter
                         slide.Shapes
                             .Select(s => BuildShapeEl(s, scheme, mediaById, smartArtRelIdRemap, hlinkRelIds, allSlides, fillBlipById))
                             .OfType<XElement>())),
-                slide.HfVisibility is not null
-                    ? new XElement(P + "hf",
-                        new XAttribute("ftr",    slide.HfVisibility.ShowFooter   ? "1" : "0"),
-                        new XAttribute("dt",     slide.HfVisibility.ShowDate     ? "1" : "0"),
-                        new XAttribute("sldNum", slide.HfVisibility.ShowSlideNum ? "1" : "0"))
-                    : null,
+                // II2: p:hf is NOT valid on p:sld (CT_Slide schema has no hf element);
+                // it is only valid on slideMaster/slideLayout/handoutMaster/notesMaster.
+                // We intentionally do NOT emit p:hf here to avoid PowerPoint repair.
+                // HfVisibility is preserved on the model for read-back from real .pptx files
+                // that carry it on the master/layout (which the reader already handles).
                 BuildTransitionEl(slide.Transition),
                 BuildTimingEl(slide.Animations)));
     }
@@ -1412,7 +1434,9 @@ public static class PptxPackageWriter
     {
         // Poster image rel id (written by WriteSlideMedia with the shape's Id key)
         mediaById.TryGetValue(shape.Id, out var posterRelId);
-        posterRelId ??= "rIdMedia1";
+        // II4: do NOT fall back to a hard-coded "rIdMedia1" — that would emit a dangling
+        // r:embed reference when no poster was written for this shape, causing repair.
+        // If no real poster rel exists, omit the blipFill entirely.
 
         // Media file rel id (written by WriteSlideMediaFiles using shape.Id | 0x80000000 key)
         mediaById.TryGetValue(shape.Id | 0x80000000u, out var mediaFileRelId);
@@ -1423,15 +1447,20 @@ public static class PptxPackageWriter
             ? new XElement(A + "videoFile", new XAttribute(R + "link", mediaFileRelId))
             : new XElement(A + "audioFile", new XAttribute(R + "link", mediaFileRelId));
 
+        // Only emit blipFill when we have a real poster relationship (II4)
+        XElement? blipFillEl = posterRelId is not null
+            ? new XElement(P + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect")))
+            : null;
+
         return new XElement(P + "pic",
             new XElement(P + "nvPicPr",
                 CnvPr(shape.Id, shape.Name),
                 new XElement(P + "cNvPicPr"),
                 new XElement(P + "nvPr",
                     mediaFileEl)),
-            new XElement(P + "blipFill",
-                new XElement(A + "blip", new XAttribute(R + "embed", posterRelId)),
-                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+            blipFillEl,
             BuildSpPrEl(shape, PresentationColorScheme.CreateDefault(), forcePrst: "rect"));
     }
 
@@ -1983,9 +2012,31 @@ public static class PptxPackageWriter
 
     private static XElement BuildGradFillEl(ShapeFill.Gradient g)
     {
-        // Emit all N stops
+        // HH2: stops MUST be in ascending position order per OOXML CT_GradientStopList.
+        // HH3: a:gsLst requires at least 2 stops; synthesise when model has fewer.
+        var stops = g.Stops.OrderBy(s => s.Position).ToList();
+        if (stops.Count == 0)
+        {
+            // No stops at all: emit white@0 → black@100k
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, ThemeAwareColor.White),
+                new GradientStop(1.0, ThemeAwareColor.Black),
+            };
+        }
+        else if (stops.Count == 1)
+        {
+            // Duplicate the single stop at position 0 and 100000
+            var singleColor = stops[0].Color;
+            stops = new List<GradientStop>
+            {
+                new GradientStop(0.0, singleColor),
+                new GradientStop(1.0, singleColor),
+            };
+        }
+
         var gsLst = new XElement(A + "gsLst");
-        foreach (var stop in g.Stops)
+        foreach (var stop in stops)
         {
             int pos = (int)Math.Round(stop.Position * 100000);
             gsLst.Add(new XElement(A + "gs",
@@ -2729,6 +2780,21 @@ public static class PptxPackageWriter
             "image/x-wmf" or "image/wmf" => "wmf",
             "image/x-emf" or "image/emf" => "emf",
             _ => "png"
+        };
+
+    // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
+    private static string MediaContentTypeToExtension(string ct) =>
+        ct.ToLowerInvariant() switch
+        {
+            "video/mp4"       => "mp4",
+            "video/quicktime" => "mov",
+            "video/x-msvideo" => "avi",
+            "video/x-ms-wmv"  => "wmv",
+            "audio/mpeg"      => "mp3",
+            "audio/mp4"       => "m4a",
+            "audio/wav"       => "wav",
+            "audio/x-ms-wma"  => "wma",
+            _                 => "mp4"
         };
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>

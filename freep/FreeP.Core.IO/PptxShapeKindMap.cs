@@ -54,6 +54,7 @@ internal static class PptxShapeKindMap
             "linecallout1" or "linecallout2" or "linecallout3" or "linecallout4" => DrawingShapeKind.LineCallout,
             "chevron" => DrawingShapeKind.Chevron,
             "homeplate" => DrawingShapeKind.HomePlate,
+            "can" => DrawingShapeKind.Cylinder,
             // connector presets
             "bentconnector2" or "bentconnector3" or "bentconnector4" or "bentconnector5"
                 => DrawingShapeKind.ElbowConnector,
@@ -109,6 +110,7 @@ internal static class PptxShapeKindMap
             DrawingShapeKind.LineCallout => "lineCallout1",
             DrawingShapeKind.Chevron => "chevron",
             DrawingShapeKind.HomePlate => "homePlate",
+            DrawingShapeKind.Cylinder => "can",
             DrawingShapeKind.ElbowConnector => "bentConnector2",
             DrawingShapeKind.CurvedConnector => "curvedConnector2",
             _ => "rect"
