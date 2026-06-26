@@ -871,8 +871,9 @@ public static class PptxPackageWriter
 
         var attrs = new List<object>();
 
-        // spd attribute
+        // spd attribute (legacy compat) + precise dur for exact round-trip
         attrs.Add(new XAttribute("spd", PptxAnimationMap.DurationToSpd(transition.DurationMs)));
+        attrs.Add(new XAttribute("dur", transition.DurationMs));
 
         // advClick: omit (default is true); only write if false
         if (!transition.AdvanceOnClick)

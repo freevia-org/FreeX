@@ -706,22 +706,21 @@ public sealed class DocumentViewInlineFO4Tests
         }
     }
 
-    // ── YY3: inline object sentinel Y is at the baseline (bottom of object box) ─────────────────────
+    // ── ZZ1 (was YY3): full-height inline-object sentinel for correct hit-test reach ─────────────────
 
     /// <summary>
-    /// YY3: Verifies that the caret sentinel placed for an inline chart has its Y at the BOTTOM of
-    /// the inline chart's line box (baseline-aligned) rather than the TOP.
-    /// WPF uses BaselineAlignment.Bottom for inline charts, so the caret cursor appears at the
-    /// object's bottom.  After the YY3 fix, sentinelY = pageSpaceY + height - caretLineH,
-    /// so sentinel.Y + sentinel.LineHeight == pageSpaceY + height (the object bottom).
+    /// ZZ1 / YY3-revert: After the ZZ1 fix the caret sentinel for an inline chart uses the FULL
+    /// object box as its hit-test band: Y == chartRectTop and LineHeight == chartHeight.
+    /// The YY3 baseline cosmetic (shrunken band at the bottom) is reverted because PlacedChar has no
+    /// separate caret-draw Y field, so navigation correctness takes priority over the cosmetic.
     /// </summary>
     [Fact]
-    public async Task YY3_inline_chart_sentinel_Y_is_at_baseline_not_top()
+    public async Task ZZ1_inline_chart_sentinel_covers_full_object_height_for_hit_test()
     {
         double sentinelY = double.MinValue;
         double sentinelLineH = 0;
         double chartRectTop = double.MaxValue;
-        double chartRectBottom = double.MaxValue;
+        double chartRectHeight = 0;
 
         var ran = await OnUiThread(() =>
         {
@@ -746,27 +745,136 @@ public sealed class DocumentViewInlineFO4Tests
             if (chartRects.Count > 0)
             {
                 chartRectTop    = chartRects[0].Rect.Top;
-                chartRectBottom = chartRects[0].Rect.Bottom;
+                chartRectHeight = chartRects[0].Rect.Height;
             }
         });
 
         if (!ran) return;
         if (sentinelY < double.MinValue + 1 || chartRectTop >= double.MaxValue) return; // couldn't introspect
 
-        // The sentinel bottom (Y + LineHeight) must equal the chart rect bottom (baseline).
-        var sentinelBottom = sentinelY + sentinelLineH;
-        var delta = Math.Abs(sentinelBottom - chartRectBottom);
-        delta.Should().BeLessThanOrEqualTo(2.0,
-            $"YY3: sentinel bottom ({sentinelBottom:F1}) should equal chart rect bottom ({chartRectBottom:F1}) " +
-            "— the caret must sit at the object baseline (WPF BaselineAlignment.Bottom).");
+        // The sentinel Y must be at the chart rect TOP (full-height band, not shrunk to baseline).
+        var topDelta = Math.Abs(sentinelY - chartRectTop);
+        topDelta.Should().BeLessThanOrEqualTo(2.0,
+            $"ZZ1: sentinel Y ({sentinelY:F1}) should equal chart rect top ({chartRectTop:F1}) — " +
+            "full-height sentinel required so TryHitTest can reach the object from above.");
 
-        // The sentinel Y must be BELOW the chart rect top (not top-aligned).
-        if (chartRectBottom - chartRectTop > 4)
+        // The sentinel LineHeight must equal the full chart height.
+        var heightDelta = Math.Abs(sentinelLineH - chartRectHeight);
+        heightDelta.Should().BeLessThanOrEqualTo(2.0,
+            $"ZZ1: sentinel LineHeight ({sentinelLineH:F1}) should equal chart height ({chartRectHeight:F1}) — " +
+            "the full object box is the hit-test band.");
+    }
+
+    // ── ZZ1: Down-arrow from text-line above enters tall inline chart ─────────────────────────────────
+
+    /// <summary>
+    /// ZZ1: A document with a text paragraph immediately above a tall inline chart (216pt = 288 DIP).
+    /// Caret starts on the text line (block 0).  Press Down → caret must move to the chart paragraph
+    /// (block 1, offset 0) rather than staying on block 0.
+    ///
+    /// Before the fix: YY3 shrunk the sentinel to [bottom-19, bottom], so targetY (near chartTop)
+    /// was ~269 DIP away from the 19-px band → text line won the score → Down was stuck.
+    /// After the fix: sentinel band = [chartTop, chartTop+288] → targetY is inside → chart wins.
+    /// </summary>
+    [Fact]
+    public async Task ZZ1_Down_from_text_above_enters_tall_inline_chart()
+    {
+        (int Block, int Offset) caretAfterDown = (-1, -1);
+
+        var ran = await OnUiThread(() =>
         {
-            sentinelY.Should().BeGreaterThan(chartRectTop,
-                $"YY3: sentinel Y ({sentinelY:F1}) must be below chart top ({chartRectTop:F1}) — " +
-                "before the fix the sentinel was top-aligned (Y == chartTop).");
-        }
+            // Doc: paragraph 0 = "Hello" text; paragraph 1 = inline chart 216pt tall.
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var textPara = new Paragraph();
+            textPara.Runs.Add(new Run("Hello", RunFormatting.Default));
+            doc.Blocks.Add(textPara);
+
+            var chartPara = new Paragraph();
+            var chart = Chart.Create(ChartKind.Column,
+                new[] { "A", "B", "C" }, new[] { 10.0, 25.0, 15.0 }, "S1");
+            chart.WidthPt  = 240;
+            chart.HeightPt = 216; // 216pt → ~288 DIP: tall enough to expose the regression
+            chartPara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(chartPara);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            // Caret starts at block 0, offset 0 (the text paragraph).
+            // Press Down → MoveCaretVertical(+1).
+            view.TestMoveCaretVertical(+1);
+            caretAfterDown = view.CaretPosition;
+        });
+
+        if (!ran) return;
+        caretAfterDown.Block.Should().Be(1,
+            "ZZ1: Down from a text line should move the caret into the inline-chart paragraph (block 1), " +
+            "not stay stuck on block 0.  Before the fix the shrunk sentinel band [bottom-19, bottom] " +
+            "scored worse than the text line, keeping the caret on block 0.");
+    }
+
+    /// <summary>
+    /// ZZ1: A click in the upper portion (~25% from top) of a tall inline chart (216pt = 288 DIP)
+    /// should resolve to the chart paragraph rather than the text line above.
+    ///
+    /// Before the fix: the sentinel band was only the bottom ~19px, so a click at the chart's
+    /// upper quarter was closer to the text line above → TryHitTest returned the text block.
+    /// After the fix: sentinel band = full height → click anywhere in the chart → chart wins.
+    /// </summary>
+    [Fact]
+    public async Task ZZ1_Click_in_upper_portion_of_tall_inline_chart_hits_chart_block()
+    {
+        (int Block, int Offset)? hitResult = null;
+        double chartRectTop = 0;
+        double chartRectHeight = 0;
+
+        var ran = await OnUiThread(() =>
+        {
+            // Doc: paragraph 0 = "Hello" text; paragraph 1 = inline chart 216pt tall.
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var textPara = new Paragraph();
+            textPara.Runs.Add(new Run("Hello", RunFormatting.Default));
+            doc.Blocks.Add(textPara);
+
+            var chartPara = new Paragraph();
+            var chart = Chart.Create(ChartKind.Column,
+                new[] { "A", "B", "C" }, new[] { 10.0, 25.0, 15.0 }, "S1");
+            chart.WidthPt  = 240;
+            chart.HeightPt = 216; // 288 DIP tall
+            chartPara.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(chartPara);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+
+            var chartRects = view.InlineChartRects;
+            if (chartRects.Count > 0)
+            {
+                chartRectTop    = chartRects[0].Rect.Top;
+                chartRectHeight = chartRects[0].Rect.Height;
+            }
+
+            // Click at 25% down from the chart's top edge — well inside the upper portion.
+            var clickY = chartRectTop + chartRectHeight * 0.25;
+            var clickX = chartRects.Count > 0 ? chartRects[0].Rect.Left + 10 : 100;
+            hitResult = view.TestHitTest(new Point(clickX, clickY));
+        });
+
+        if (!ran) return;
+        if (chartRectHeight < 4) return; // couldn't introspect layout — skip gracefully
+
+        hitResult.Should().NotBeNull(
+            "ZZ1: TestHitTest should resolve a click inside the chart's bounding box");
+        hitResult!.Value.Block.Should().Be(1,
+            $"ZZ1: A click at 25% into the chart's height (Y ≈ chartTop + {chartRectHeight * 0.25:F0}px) " +
+            "should hit the chart paragraph (block 1).  Before the fix the sentinel band was only " +
+            "the bottom ~19px so this click landed on the text paragraph above (block 0).");
     }
 
     // ── PNG encoder ───────────────────────────────────────────────────────────────────────────────

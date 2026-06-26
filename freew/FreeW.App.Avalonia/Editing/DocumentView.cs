@@ -362,6 +362,27 @@ public sealed class DocumentView : Control
                 .ToList();
 
     /// <summary>
+    /// Returns the current caret position as (Block, Offset).
+    /// Exposed internally for navigation regression tests (ZZ1 and similar).
+    /// </summary>
+    internal (int Block, int Offset) CaretPosition => (_caret.Block, _caret.Offset);
+
+    /// <summary>
+    /// Simulates pressing Down (+1) or Up (-1) arrow from the current caret position.
+    /// Exposed internally so regression tests can assert that vertical navigation reaches
+    /// a tall inline object (ZZ1).
+    /// </summary>
+    internal void TestMoveCaretVertical(int direction) => MoveCaretVertical(direction, extend: false);
+
+    /// <summary>
+    /// Simulates a pointer click at <paramref name="point"/> and returns the resolved
+    /// (Block, Offset) if TryHitTest finds a match, or null if not.
+    /// Exposed internally for hit-test regression tests (ZZ1).
+    /// </summary>
+    internal (int Block, int Offset)? TestHitTest(Point point) =>
+        TryHitTest(point, out var pos) ? (pos.Block, pos.Offset) : null;
+
+    /// <summary>
     /// Number of floating images collected during the last layout pass.
     /// Tests use this to verify that floating images are tracked separately from inline images.
     /// </summary>
@@ -1661,13 +1682,6 @@ public sealed class DocumentView : Control
             ? _placed.Max(p => p.Block == blockIndex ? p.Offset : -1) + 1
             : 0;
 
-        // YY3: caret line height for baseline-aligned sentinels.
-        // WPF uses BaselineAlignment.Bottom for inline charts/SmartArt/images (and .Center for WordArt).
-        // We mirror this by placing the PlacedChar sentinel at (pageSpaceY + height - caretLineH) so
-        // the caret cursor sits at the bottom (baseline) of the inline object rather than its top.
-        // The visual Rect for the object is unchanged; only the caret probe position moves to baseline.
-        var caretLineH = DefaultFontSizePt * PxPerPoint * 1.3;
-
         foreach (var run in paragraph.Runs)
         {
             // ── Inline chart ─────────────────────────────────────────────────────────
@@ -1695,12 +1709,12 @@ public sealed class DocumentView : Control
                     Series     = series,
                 });
 
-                // YY3: emit sentinel at the baseline (bottom of the object box) so the caret cursor
-                // appears at the object's bottom, matching WPF's BaselineAlignment.Bottom behaviour.
-                // Named objSentH/objSentY to avoid CS0136 conflict with the method-level sentinelY below.
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
+                // can reach a tall inline chart from above (pressing Down) or via a click in the upper
+                // portion.  PlacedChar has no separate caret-draw Y field, so navigation correctness
+                // takes priority; the YY3 baseline-cosmetic is dropped (it was LOW value, caused a MED
+                // regression).  Y = pageSpaceY and LineHeight = height → band is [top, bottom].
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1731,11 +1745,8 @@ public sealed class DocumentView : Control
                     Warp       = wa.Warp,
                 });
 
-                // YY3: WordArt uses Center alignment in WPF; approximate here with bottom-align too
-                // (simpler, low-risk — exact centre would need half-height offset into the object).
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;
@@ -1771,10 +1782,8 @@ public sealed class DocumentView : Control
                     NodeTexts  = texts,
                 });
 
-                // YY3: baseline-aligned sentinel (bottom of object box).
-                var objSentH = Math.Min(caretLineH, height);
-                var objSentY = pageSpaceY + height - objSentH;
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, objSentY, 0, objSentH,
+                // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
                 _layoutContentY = contentY + height + gap;

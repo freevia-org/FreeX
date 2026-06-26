@@ -134,8 +134,56 @@ public class TransitionAnimationTests
         Assert.Equal(AnimationKind.Entrance, anims[0].Kind);
         Assert.Equal(AnimationPreset.FlyIn,  anims[0].Preset);
         Assert.Equal(slide.Shapes[0].Id,      anims[0].ShapeId);
+        Assert.Equal(1000, anims[0].DurationMs); // AB1: preset animation DurationMs must survive round-trip
         // Animation 2: we wrote it as AfterPrevious so it should come back as AfterPrevious or similar
         Assert.Equal(2u, anims[1].ShapeId);
+        Assert.Equal(750, anims[1].DurationMs);  // AB1: second preset animation DurationMs must survive round-trip
+    }
+
+    /// <summary>AB1 regression: preset animation DurationMs was silently reset to 500ms default.</summary>
+    [Fact]
+    public void RoundTrip_PresetAnimation_DurationMs_IsExact()
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId    = slide.Shapes[0].Id,
+            Kind       = AnimationKind.Entrance,
+            Preset     = AnimationPreset.Appear,
+            Trigger    = AnimationTrigger.OnClick,
+            DurationMs = 2000, // non-default value that must survive round-trip
+        });
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        Assert.Single(loaded.Slides[0].Animations);
+        Assert.Equal(2000, loaded.Slides[0].Animations[0].DurationMs);
+    }
+
+    /// <summary>AB2 regression: transition DurationMs was quantized to slow/med/fast bucket (e.g. 800→750).</summary>
+    [Fact]
+    public void RoundTrip_Transition_DurationMs_IsExact()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind       = TransitionKind.Fade,
+            DurationMs = 800, // mid-bucket value that previously rounded to 750 (spd="med")
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Fade, t.Kind);
+        Assert.Equal(800, t.DurationMs);
     }
 
     [Fact]

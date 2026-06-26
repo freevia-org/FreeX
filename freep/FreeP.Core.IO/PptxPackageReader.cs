@@ -2238,10 +2238,25 @@ public static class PptxPackageReader
         var cTn = buildPar.Element(P + "cTn");
         if (cTn is null) return null;
 
-        // Duration from p:cTn dur attribute
+        // Duration: prefer outer p:cTn/@dur if present; otherwise fall through to the
+        // nested animCTn that carries the real duration for preset effects (PowerPoint
+        // puts the duration on the inner behavior cTn, not on the outer par/cTn).
         int durationMs = 500;
         if (int.TryParse(cTn.Attribute("dur")?.Value, out var d) && d > 0)
             durationMs = d;
+        else
+        {
+            // Walk the nested p:cTn elements to find one that has a dur attribute.
+            // Exclude the setEl's inner cTn (dur="1") by requiring dur > 1.
+            var nestedDurCTn = buildPar
+                .Descendants(P + "cTn")
+                .Skip(1) // skip the outer cTn itself
+                .FirstOrDefault(el =>
+                    int.TryParse(el.Attribute("dur")?.Value, out var nd) && nd > 1);
+            if (nestedDurCTn is not null &&
+                int.TryParse(nestedDurCTn.Attribute("dur")?.Value, out var nd2) && nd2 > 1)
+                durationMs = nd2;
+        }
 
         // Delay and inner trigger
         int delayMs = 0;
