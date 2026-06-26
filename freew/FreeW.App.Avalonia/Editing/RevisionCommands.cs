@@ -155,9 +155,10 @@ internal sealed class RejectOneRevisionCommand(int revisionIndex) : RevisionReso
 /// <summary>
 /// Undoable command that marks the runs covering a character range of one body paragraph as a tracked
 /// change of a given <see cref="RevisionKind"/> (insertion or deletion), splitting partially-covered runs
-/// at the boundaries so the mark is exact. Ports the WPF host's MarkRevisionRange. This is how the
-/// Track-Changes toggle turns an existing selection into a recorded revision (live keystroke-level
-/// recording on type/delete is deferred — see <see cref="DocumentView.MarkSelectionAsRevision"/>).
+/// at the boundaries so the mark is exact. Ports the WPF host's MarkRevisionRange. This is how
+/// <see cref="DocumentView.MarkSelectionAsRevision"/> turns an existing selection into a recorded revision.
+/// (Live keystroke-level recording on type/delete is handled directly in the edit pipeline — AV-TRACKEDIT —
+/// by stamping the revision mark onto the inserted/deleted cells through the normal ReplaceParagraphRuns path.)
 /// The covered paragraph's run list is snapshotted (deep clone of marks) so Undo restores it exactly.
 /// </summary>
 internal sealed class MarkRevisionRangeCommand(
