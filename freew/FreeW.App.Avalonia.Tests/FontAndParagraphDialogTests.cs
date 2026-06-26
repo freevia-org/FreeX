@@ -49,6 +49,8 @@ public sealed class FontAndParagraphDialogTests
             ToggleOrientation:   () => { },
             ApplyMarginPreset:   _ => { },
             ApplyPaperSize:      _ => { },
+            InsertPicture:       () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Launcher command ids resolve in the registry ──────────────────────────

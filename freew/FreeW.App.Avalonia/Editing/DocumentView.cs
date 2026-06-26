@@ -106,6 +106,13 @@ public sealed class DocumentView : Control
     private readonly List<(Rect Rect, ImageWrapping Wrapping)> _wrapExclusions = new();
     // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
     private readonly List<HfRenderItem> _headerFooterItems = new();
+    // AV-NOTERENDER: pre-computed footnote/endnote text render items (rebuilt in Relayout when PrintLayout).
+    // Footnotes land in the bottom margin band of the page that hosts their reference; endnotes are
+    // stacked in a synthetic section after the last body page. Separator rules are stored alongside.
+    private readonly List<NoteRenderItem> _noteItems = new();
+    private readonly List<(double X1, double X2, double Y)> _noteSeparators = new();
+    // AV-NOTERENDER: extra page-space height reserved below the last body page for the endnotes section.
+    private double _endnoteExtentDip;
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -184,6 +191,35 @@ public sealed class DocumentView : Control
 
     /// <summary>Raised when the caret moves (key navigation, click, find) so the shell can update the page indicator.</summary>
     public event Action? CaretMoved;
+
+    /// <summary>
+    /// AV-PICTAB: Raised when the floating-object selection IDENTITY changes — i.e. a different
+    /// float (block+run) is selected, or the selection is cleared. Does NOT fire on pure
+    /// rect/geometry refreshes of the same object (drag-move, size update). The ribbon's
+    /// <c>FloatingRibbonContextSource</c> subscribes to this to show/hide the Picture / Drawing
+    /// Format contextual tabs.
+    /// </summary>
+    public event Action? FloatingSelectionChanged;
+
+    /// <summary>
+    /// AV-PICTAB: Last (block,run) identity for which <see cref="FloatingSelectionChanged"/> was raised.
+    /// Used to suppress duplicate notifications when only the selection rect changes.
+    /// </summary>
+    private (int BlockIndex, int RunIndex)? _lastSignaledFloating;
+
+    /// <summary>
+    /// AV-PICTAB: Fire <see cref="FloatingSelectionChanged"/> iff the selected float's identity
+    /// (block+run) differs from the last signalled value. Call after every assignment to
+    /// <see cref="_selectedFloating"/>.
+    /// </summary>
+    private void RaiseFloatingSelectionChangedIfIdentityChanged()
+    {
+        var identity = _selectedFloating is { } sel ? (sel.BlockIndex, sel.RunIndex) : ((int, int)?)null;
+        if (identity == _lastSignaledFloating)
+            return;
+        _lastSignaledFloating = identity;
+        FloatingSelectionChanged?.Invoke();
+    }
 
     /// <summary>
     /// Raised when a table cell double-click is received and no in-place caret placement is possible
@@ -266,6 +302,9 @@ public sealed class DocumentView : Control
         _selectionAnchor = null;
         _cellCaret = null; // AV-TBL: clear cell state on document load
         _cellAnchor = null;
+        _selectedFloating = null; // AV-PICTAB: clear float selection on document load
+        _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
     }
@@ -1187,6 +1226,12 @@ public sealed class DocumentView : Control
     /// </summary>
     internal void InsertParagraphBreakPublic() => InsertParagraphBreak();
 
+    /// <summary>Trigger a Backspace programmatically. Exposed for AV-TRACKEDIT unit tests.</summary>
+    internal void BackspacePublic() => Backspace();
+
+    /// <summary>Trigger a forward Delete programmatically. Exposed for AV-TRACKEDIT unit tests.</summary>
+    internal void DeleteForwardPublic() => DeleteForward();
+
     /// <summary>
     /// Invoke the list Tab/Shift-Tab handler and return whether it consumed the key.
     /// Exposed for AV-LIST unit tests.
@@ -1619,6 +1664,38 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── AV-NOTERENDER: footnote/endnote render introspection for tests ───────────────────────────────
+
+    /// <summary>
+    /// Snapshot of pre-computed footnote/endnote render items from the last layout pass.
+    /// Each entry: (Text, PageSpaceX, PageSpaceY, IsNumberMarker). The number-marker items carry the
+    /// note's number (a superscript-formatted prefix); the remaining items are the wrapped note text.
+    /// Tests verify the numbered text appears at the right page-space position and matches the body
+    /// reference numbers.
+    /// </summary>
+    internal IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)> NoteRenderItems
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _noteItems
+                .Select(i => (i.Text, i.X, i.Y, i.Fmt.VerticalAlign == VerticalAlign.Superscript))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Snapshot of the footnote-band / endnotes-heading separator rules: (X1, X2, PageSpaceY).
+    /// </summary>
+    internal IReadOnlyList<(double X1, double X2, double Y)> NoteSeparators
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _noteSeparators.ToList();
+        }
+    }
+
     // ── AV-POLISH: chart annotation introspection for tests ──────────────────────────────────────────
 
     /// <summary>
@@ -1816,6 +1893,9 @@ public sealed class DocumentView : Control
         _inlineSmartArts.Clear();
         _cellHits.Clear();
         _headerFooterItems.Clear();
+        _noteItems.Clear();           // AV-NOTERENDER
+        _noteSeparators.Clear();      // AV-NOTERENDER
+        _endnoteExtentDip = 0;        // AV-NOTERENDER
         _tabLeaderSpans.Clear(); // AV-TAB
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -2032,7 +2112,15 @@ public sealed class DocumentView : Control
         _laidOutWidth = width;
 
         if (_viewMode == DocumentViewMode.PrintLayout)
+        {
             BuildHeaderFooterItems();
+            // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
+            // reference; endnotes render in a synthetic section after the last body page. Endnotes
+            // extend the scrollable content height, so add their measured extent afterwards.
+            BuildFootnoteItems();
+            BuildEndnoteItems();
+            _contentHeight += _endnoteExtentDip;
+        }
     }
 
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
@@ -2432,6 +2520,206 @@ public sealed class DocumentView : Control
 
         // Not a field run — caller should use run.Text.
         return null;
+    }
+
+    // ── AV-NOTERENDER: footnote / endnote content rendering ───────────────────────────────────────────
+
+    /// <summary>Default font size (pt) for footnote / endnote body text. Word uses 10pt; we use 9pt.</summary>
+    private const double NoteFontSizePt = 9.0;
+
+    /// <summary>
+    /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
+    /// Locates the body run carrying <paramref name="footnote"/>'s matching <see cref="Run.FootnoteId"/>
+    /// (or <see cref="Run.EndnoteId"/>), computes its first character's cell offset within the host
+    /// paragraph, then reads the page of the matching <see cref="PlacedChar"/>. Returns the last body
+    /// page when no placed glyph is found (an acceptable approximation when a marker glyph was not laid
+    /// out, e.g. a zero-width run).
+    /// </summary>
+    private int ResolveNoteReferencePage(int id, bool footnote)
+    {
+        var blocks = _doc.Blocks;
+        for (var b = 0; b < blocks.Count; b++)
+        {
+            if (blocks[b] is not Paragraph para) continue;
+            var offset = 0;
+            foreach (var run in para.Runs)
+            {
+                var isMatch = footnote ? run.FootnoteId == id : run.EndnoteId == id;
+                if (isMatch && run.Text.Length > 0)
+                {
+                    // Find the placed glyph for this paragraph at the run's first char offset.
+                    foreach (var pc in _placed)
+                    {
+                        if (pc.Sentinel || pc.Block != b) continue;
+                        if (pc.Offset == offset)
+                            return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                    }
+                    // Run matched but no placed glyph at that offset — fall back to any glyph on the block.
+                    foreach (var pc in _placed)
+                    {
+                        if (pc.Sentinel || pc.Block != b) continue;
+                        return Math.Clamp(PageIndexFromPageSpaceY(pc.Y), 0, Math.Max(0, _pageCount - 1));
+                    }
+                }
+                offset += run.Text.Length;
+            }
+        }
+        // No reference glyph found — group on the last body page (documented approximation).
+        return Math.Max(0, _pageCount - 1);
+    }
+
+    /// <summary>
+    /// Lays out a single note's content (number + paragraph text) into <see cref="_noteItems"/> starting
+    /// at page-space (<paramref name="x"/>, <paramref name="y"/>), wrapping within <paramref name="availWidth"/>.
+    /// Reuses the body <see cref="Build"/> glyph metrics at <see cref="NoteFontSizePt"/>. The number prefix
+    /// ("<c>n </c>") is emitted as a superscript-styled lead item; the note text follows as wrapped lines.
+    /// Returns the page-space Y just past the laid-out content (the next free line).
+    /// </summary>
+    private double LayoutNoteContent(string number, IReadOnlyList<Paragraph> content, double x, double y, double availWidth)
+    {
+        var noteFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt };
+        var numFmt  = noteFmt with { VerticalAlign = VerticalAlign.Superscript };
+
+        var lineH = Math.Max(1, Build("Ag", noteFmt).Height);
+
+        // Emit the number marker first (superscript), then the text flows after it on the same line.
+        var numText = number + " ";
+        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
+
+        var textLeft = x + numWidth;
+        var lineLeft = textLeft;
+        var penX = textLeft;
+        var lineY = y;
+
+        // Flatten the note's paragraphs into a single wrapped flow (note content is usually one paragraph).
+        var first = true;
+        foreach (var para in content)
+        {
+            if (!first)
+            {
+                // New paragraph in the note: break to a fresh line at the text-left indent.
+                lineY += lineH;
+                penX = textLeft;
+                lineLeft = textLeft;
+            }
+            first = false;
+
+            var words = para.PlainText.Split(' ');
+            for (var wi = 0; wi < words.Length; wi++)
+            {
+                var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
+                if (word.Length == 0) continue;
+                var w = Build(word, noteFmt).WidthIncludingTrailingWhitespace;
+                // Wrap when the word would overflow the available width (but always place at least one word).
+                if (penX + w > x + availWidth && penX > lineLeft)
+                {
+                    lineY += lineH;
+                    penX = textLeft;
+                    lineLeft = textLeft;
+                }
+                _noteItems.Add(new NoteRenderItem { Text = word, Fmt = noteFmt, X = penX, Y = lineY });
+                penX += w;
+            }
+        }
+
+        return lineY + lineH;
+    }
+
+    /// <summary>
+    /// AV-NOTERENDER (footnotes): for each page in PrintLayout, renders a short separator rule then the
+    /// footnotes whose body reference lands on that page, stacked as "<c>n note text</c>" at
+    /// <see cref="NoteFontSizePt"/>. The band occupies the bottom margin area, above the footer.
+    /// Page assignment uses <see cref="ResolveNoteReferencePage"/>; footnotes with no locatable reference
+    /// glyph fall back to the last body page (documented approximation).
+    /// </summary>
+    private void BuildFootnoteItems()
+    {
+        if (_doc.Footnotes.Count == 0) return;
+
+        const double DefaultHfDistancePt = 36.0;
+
+        // Group footnote ids by the page hosting their reference, preserving id order.
+        var byPage = new Dictionary<int, List<int>>();
+        foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
+        {
+            var pg = ResolveNoteReferencePage(id, footnote: true);
+            if (!byPage.TryGetValue(pg, out var list))
+                byPage[pg] = list = new List<int>();
+            list.Add(id);
+        }
+
+        var footerDistPt = _doc.Page.FooterDistancePt > 0 ? _doc.Page.FooterDistancePt : DefaultHfDistancePt;
+        var footerDistDip = footerDistPt * PxPerPoint;
+
+        var noteLineH = Math.Max(1, Build("Ag", RunFormatting.Default with { FontSizePt = NoteFontSizePt }).Height);
+
+        foreach (var (pg, ids) in byPage.OrderBy(kv => kv.Key))
+        {
+            var pageTop = DeskPadding + pg * (_pageHeightPx + PageGap);
+            var pageBottom = pageTop + _pageHeightPx;
+            // Body text area bottom (page-space).
+            var bodyBottom = pageTop + _marginTopDip + _layoutTextAreaHeight;
+            // Footer top (where the footer line begins).
+            var footerTop = pageBottom - footerDistDip;
+
+            // Estimate the total height needed (separator + one line per note minimum) and anchor the band
+            // so it sits just above the footer, but never above the body text area bottom.
+            var estHeight = 6 + ids.Count * noteLineH;
+            var bandTop = Math.Max(bodyBottom + 2, Math.Min(footerTop - estHeight - 2, pageBottom - _marginBottomDip * 0.5));
+            // Guarantee the band stays on-page even for short pages.
+            bandTop = Math.Min(bandTop, footerTop - noteLineH);
+
+            // Separator rule: a short line (~1.5") at the left of the content column.
+            var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);
+            _noteSeparators.Add((_contentLeft, _contentLeft + sepWidth, bandTop));
+
+            var y = bandTop + 4;
+            foreach (var id in ids)
+            {
+                var note = _doc.Footnotes[id];
+                y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
+                    _contentLeft, y, _contentWidth);
+            }
+        }
+    }
+
+    /// <summary>
+    /// AV-NOTERENDER (endnotes): renders an "Endnotes" heading + separator, then the numbered endnote
+    /// texts, in a synthetic section after the last body page. The section's vertical extent is recorded
+    /// in <see cref="_endnoteExtentDip"/> so the scrollable content height reserves room for it.
+    /// </summary>
+    private void BuildEndnoteItems()
+    {
+        if (_doc.Endnotes.Count == 0) return;
+
+        // Start just below the last body page (in page-space). The last page's bottom edge:
+        var lastPageBottom = DeskPadding + (_pageCount - 1) * (_pageHeightPx + PageGap) + _pageHeightPx;
+        var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
+
+        var headingFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt + 2, Bold = true };
+        var headingH = Math.Max(1, Build("Endnotes", headingFmt).Height);
+
+        // Heading.
+        _noteItems.Add(new NoteRenderItem { Text = "Endnotes", Fmt = headingFmt, X = _contentLeft, Y = startY });
+        var y = startY + headingH + 2;
+
+        // Separator rule beneath the heading.
+        _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, y));
+        y += 6;
+
+        foreach (var id in _doc.Endnotes.Keys.OrderBy(k => k))
+        {
+            var note = _doc.Endnotes[id];
+            y = LayoutNoteContent(id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                note.Content.Count > 0 ? note.Content : new List<Paragraph> { new Paragraph(string.Empty) },
+                _contentLeft, y, _contentWidth);
+            y += 2; // small gap between endnotes
+        }
+
+        // Record how far past the last body page the endnotes section extends.
+        _endnoteExtentDip = Math.Max(0, y - lastPageBottom) + DeskPadding;
     }
 
     // Layout-pass mutable state for paged layout (reset at start of Relayout).
@@ -3072,12 +3360,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -4079,6 +4367,8 @@ public sealed class DocumentView : Control
     private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
     // AV-COL: thin gray rule drawn in each inter-column gap when ColumnsLineBetween is set.
     private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
+    // AV-NOTERENDER: thin separator rule above the footnote band / under the Endnotes heading.
+    private static Pen    NoteSeparatorPen { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.75);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -4244,6 +4534,15 @@ public sealed class DocumentView : Control
                 context.FillRectangle(hlBrush, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
             }
 
+            // AV-COMMENT: a subtle amber background tint behind glyphs anchored by a review comment, so
+            // the commented range reads as one region (the underline + margin marker are drawn after the
+            // glyph loop). Resolved threads tint muted/grey to match Word's de-emphasised resolved state.
+            if (pc.CommentId is { } commentTintId)
+            {
+                var tint = IsCommentResolved(commentTintId) ? ResolvedCommentTintBrush : CommentTintBrush;
+                context.FillRectangle(tint, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
+            }
+
             // Superscript/subscript: draw at a smaller size + vertical offset.
             // Word approximation: ~58% of the font size, raised/lowered by ~33% of line height.
             var drawFmt = pc.Fmt;
@@ -4261,6 +4560,11 @@ public sealed class DocumentView : Control
                 drawY   = pc.Y + pc.LineHeight * SubYLowerFraction;
             }
 
+            // AV-TRACKEDIT: tracked insertions/deletions draw in the revision colour; insertions are also
+            // underlined and deletions struck through (the marks layered on top of any run decorations below).
+            if (pc.Revision != RevisionKind.None)
+                drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+
             // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
             if (pc.Ch == '\t')
             {
@@ -4269,6 +4573,7 @@ public sealed class DocumentView : Control
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
                 if (pc.Fmt.Strikethrough)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+                DrawRevisionDecoration(context, pc);
                 continue;
             }
 
@@ -4279,10 +4584,16 @@ public sealed class DocumentView : Control
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82);
             if (pc.Fmt.Strikethrough)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5);
+            DrawRevisionDecoration(context, pc);
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
             context.DrawText(Build(text, fmt), new Point(mx, my));
+
+        // AV-COMMENT: draw the comment-anchor decorations on top of the text — an amber underline under
+        // every commented glyph (the in-text anchor mark) plus, for each anchor line, a minimal marker in
+        // the right margin (a balloon glyph + the author's initial) aligned to that line.
+        DrawCommentAnchors(context);
 
         // Paragraph marks (¶) rendered faintly at the end-sentinel of each block when enabled.
         if (_showParagraphMarks)
@@ -4347,6 +4658,26 @@ public sealed class DocumentView : Control
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
                 context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
+            }
+
+            // AV-NOTERENDER: footnote-band separators + footnote/endnote text (pre-computed in
+            // BuildFootnoteItems / BuildEndnoteItems). Separators draw first so the text sits below them.
+            foreach (var (x1, x2, sy) in _noteSeparators)
+                context.DrawLine(NoteSeparatorPen, new Point(x1, sy), new Point(x2, sy));
+
+            foreach (var note in _noteItems)
+            {
+                if (string.IsNullOrEmpty(note.Text)) continue;
+                var drawFmt = note.Fmt;
+                var drawY = note.Y;
+                // Render the superscript number prefix smaller + raised, mirroring the body super/subscript draw.
+                if (note.Fmt.VerticalAlign == VerticalAlign.Superscript)
+                {
+                    var sz = (drawFmt.FontSizePt ?? NoteFontSizePt) * SuperSubScale;
+                    drawFmt = drawFmt with { FontSizePt = sz };
+                    drawY = note.Y - (note.Fmt.FontSizePt ?? NoteFontSizePt) * PxPerPoint * 0.15;
+                }
+                context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
         }
 
@@ -4574,6 +4905,91 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Draws the AV-COMMENT anchor decorations over the laid-out text: an amber underline beneath every
+    /// commented glyph (the in-text anchor mark), and one minimal marker in the right margin per
+    /// (comment, line) — a small balloon bracket plus the author's initial — aligned to that line. The
+    /// margin marker only renders when there is room to the right of the content column (PrintLayout has
+    /// a page margin there); otherwise the in-text underline alone marks the anchor. Resolved threads draw
+    /// muted/grey to mirror Word's de-emphasised resolved state.
+    /// </summary>
+    private void DrawCommentAnchors(DrawingContext context)
+    {
+        if (_doc.Comments.Count == 0)
+            return;
+
+        // Right-margin x: just right of the content column. Available when the page extends past content
+        // (the right page margin). Fall back to the control's right edge in non-paged modes.
+        var pageRight = _pageWidth > 0 ? _pageLeft + _pageWidth : _laidOutWidth;
+        var marginX = _contentLeft + _contentWidth + 6;
+        var hasMargin = pageRight - (_contentLeft + _contentWidth) > 14;
+
+        // Track, per (comment id, line top Y), whether we've already drawn a margin marker for that line
+        // (one marker per anchor line, not one per glyph).
+        var markedLines = new HashSet<(int Id, long Y)>();
+
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || pc.CommentId is not { } id)
+                continue;
+
+            var resolved = IsCommentResolved(id);
+
+            // In-text anchor mark: amber underline just below the glyph baseline band.
+            var underlineY = pc.Y + pc.LineHeight * 0.90;
+            var pen = resolved ? ResolvedCommentUnderlinePen : CommentUnderlinePen;
+            context.DrawLine(pen, new Point(pc.X, underlineY), new Point(pc.X + Math.Max(1, pc.W), underlineY));
+
+            // Right-margin marker: one per anchor line.
+            if (!hasMargin)
+                continue;
+            var lineKey = (id, (long)Math.Round(pc.Y));
+            if (!markedLines.Add(lineKey))
+                continue;
+
+            DrawCommentMarginMarker(context, marginX, pc.Y, pc.LineHeight, id, resolved);
+        }
+    }
+
+    /// <summary>
+    /// Draws a single minimal comment marker in the right margin aligned to an anchor line: a small
+    /// rounded balloon filled in the comment colour, with the author's initial drawn inside it.
+    /// </summary>
+    private void DrawCommentMarginMarker(DrawingContext context, double x, double lineY, double lineHeight, int id, bool resolved)
+    {
+        const double size = 14;
+        var top = lineY + Math.Max(0, (lineHeight - size) / 2);
+        var balloon = new Rect(x, top, size, size);
+        var fill = resolved ? ResolvedCommentMarkerBrush : CommentMarkerBrush;
+        context.DrawRectangle(fill, null, new RoundedRect(balloon, 3));
+
+        var initial = CommentInitial(id);
+        if (string.IsNullOrEmpty(initial))
+            return;
+        var ft = Build(initial, new RunFormatting { FontSizePt = 8, ColorHex = "#FFFFFF", Bold = true });
+        context.DrawText(ft, new Point(x + (size - ft.Width) / 2, top + (size - ft.Height) / 2));
+    }
+
+    /// <summary>True when the top-level comment thread anchoring <paramref name="commentId"/> is resolved.</summary>
+    private bool IsCommentResolved(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        return _doc.Comments.TryGetValue(topId, out var comment) && comment.Resolved;
+    }
+
+    /// <summary>The author's initial (or 'C') for the comment thread anchoring <paramref name="commentId"/>.</summary>
+    private string CommentInitial(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.TryGetValue(topId, out var comment))
+            return string.Empty;
+        if (!string.IsNullOrWhiteSpace(comment.Initials))
+            return comment.Initials.Trim()[..1].ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(comment.Author))
+            return comment.Author.Trim()[..1].ToUpperInvariant();
+        return "C";
+    }
+
+    /// <summary>
     /// Hit-tests <paramref name="point"/> against all floating objects (images, shapes, charts,
     /// WordArts, SmartArts, groups). Returns the topmost (highest z-order; in-front preferred
     /// over behind-text) object that contains the point, or false if none.
@@ -4708,6 +5124,7 @@ public sealed class DocumentView : Control
             _selectedFloating = (blockIndex, runIndex, kind, found.Value);
         else
             _selectedFloating = null; // object was deleted / moved out of view
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
 
@@ -4727,6 +5144,7 @@ public sealed class DocumentView : Control
         if (_selectedFloating is null) return;
         _selectedFloating = null;
         _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateVisual();
     }
 
@@ -4818,6 +5236,44 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-PICTAB: Returns the selected floating object's model size in points (width, height),
+    /// or null when nothing is selected (or the kind carries no editable size).
+    /// </summary>
+    public (double WidthPt, double HeightPt)? GetSelectedFloatingSize()
+    {
+        if (_selectedFloating is not { } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        var run = para.Runs[sel.RunIndex];
+        if (run.Image is { IsFloating: true } img) return (img.WidthPt, img.HeightPt);
+        if (run.Shape is { } shape)    return (shape.WidthPt, shape.HeightPt);
+        if (run.Chart is { } chart)    return (chart.WidthPt, chart.HeightPt);
+        if (run.SmartArt is { } sa)    return (sa.WidthPt, sa.HeightPt);
+        if (run.DrawingGroup is { } g) return (g.WidthPt, g.HeightPt);
+        return null;
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Set just the width of the selected floating object, preserving its current height.
+    /// No-op when nothing is selected. Undoable.
+    /// </summary>
+    public void SetFloatingWidth(double widthPt)
+    {
+        if (GetSelectedFloatingSize() is not { } size || widthPt <= 0) return;
+        SetFloatingSize(widthPt, size.HeightPt);
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Set just the height of the selected floating object, preserving its current width.
+    /// No-op when nothing is selected. Undoable.
+    /// </summary>
+    public void SetFloatingHeight(double heightPt)
+    {
+        if (GetSelectedFloatingSize() is not { } size || heightPt <= 0) return;
+        SetFloatingSize(size.WidthPt, heightPt);
+    }
+
+    /// <summary>
     /// Rotate/flip the selected floating object (Images and Shapes only; other kinds are no-ops).
     /// Undoable. No-op when nothing is selected.
     /// </summary>
@@ -4878,6 +5334,7 @@ public sealed class DocumentView : Control
         _bus.Execute(new RemoveFloatingRunCommand(sel.BlockIndex, sel.RunIndex));
         _selectedFloating = null;
         _floatDragState   = null;
+        RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
     }
 
@@ -4885,6 +5342,27 @@ public sealed class DocumentView : Control
     {
         var pen = new Pen(BrushFor(pc.Fmt.ColorHex), Math.Max(1, FontSizePx(pc.Fmt) / 14));
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
+    }
+
+    /// <summary>
+    /// AV-TRACKEDIT: draw the tracked-change mark for a glyph — a revision-coloured underline under a tracked
+    /// insertion (Word's w:ins decoration) or a revision-coloured strikethrough across a tracked deletion
+    /// (w:del). A no-op for ordinary (un-tracked) glyphs.
+    /// </summary>
+    private static void DrawRevisionDecoration(DrawingContext context, PlacedChar pc)
+    {
+        if (pc.W <= 0)
+            return;
+        if (pc.IsInsertedRevision)
+        {
+            var y = pc.Y + pc.LineHeight * 0.86;
+            context.DrawLine(RevisionInsertUnderlinePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        }
+        else if (pc.IsDeletedRevision)
+        {
+            var y = pc.Y + pc.LineHeight * 0.5;
+            context.DrawLine(RevisionDeleteStrikePen, new Point(pc.X, y), new Point(pc.X + pc.W, y));
+        }
     }
 
     /// <summary>
@@ -5000,6 +5478,7 @@ public sealed class DocumentView : Control
                 // New selection.
                 _selectedFloating = floatHit;
                 _floatDragState   = (point, floatHit.Rect);
+                RaiseFloatingSelectionChangedIfIdentityChanged();
             }
             InvalidateVisual();
             e.Handled = true;
@@ -5011,6 +5490,7 @@ public sealed class DocumentView : Control
         {
             _selectedFloating = null;
             _floatDragState   = null;
+            RaiseFloatingSelectionChangedIfIdentityChanged();
             InvalidateVisual();
         }
 
@@ -5152,6 +5632,7 @@ public sealed class DocumentView : Control
                 case Key.Escape:
                     _selectedFloating = null;
                     _floatDragState   = null;
+                    RaiseFloatingSelectionChangedIfIdentityChanged();
                     InvalidateVisual();
                     e.Handled = true;
                     return;
@@ -5238,13 +5719,17 @@ public sealed class DocumentView : Control
                 return;
             var offset = cc.Offset;
             var fmt = ActiveFormatting(para, offset);
+            // AV-TRACKEDIT: record cell typing as a tracked insertion too when Track Changes is on.
+            var cellInsRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
+            var cellInsAuthor = TrackChangesEnabled ? RevisionAuthor : null;
+            var cellInsDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
                 var chars = ParaCells(p);
                 // BE4: insert at incrementing position so multi-char paste/IME inserts in order.
                 var at = Math.Clamp(offset, 0, chars.Count);
                 foreach (var ch in text)
-                    chars.Insert(at++, new Cell(ch, fmt));
+                    chars.Insert(at++, new Cell(ch, fmt, null, cellInsRevision, cellInsAuthor, cellInsDate));
                 SetRuns(p, chars);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
@@ -5267,11 +5752,20 @@ public sealed class DocumentView : Control
         var pendingFmt = _pendingRunFmt;
         _pendingRunFmt = null; // consume immediately so only the next typed char gets it
         var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
+        // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
+        // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
+        var insRevision = TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None;
+        var insAuthor = TrackChangesEnabled ? RevisionAuthor : null;
+        var insDate = TrackChangesEnabled ? CurrentRevisionDateXml() : null;
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
+            // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
+            // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
+            // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
+            var at = Math.Clamp(bodyOffset, 0, cells.Count);
             foreach (var ch in text)
-                cells.Insert(Math.Clamp(bodyOffset, 0, cells.Count), new Cell(ch, bodyFmt));
+                cells.Insert(at++, new Cell(ch, bodyFmt, null, insRevision, insAuthor, insDate));
             SetRuns(p, cells);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -5291,6 +5785,12 @@ public sealed class DocumentView : Control
                 var offset = cc.Offset;
                 _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
                 {
+                    if (TrackChangesEnabled)
+                    {
+                        var (marked, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
+                        SetRuns(p, marked);
+                        return;
+                    }
                     var chars = ParaCells(p);
                     if (offset - 1 < chars.Count)
                         chars.RemoveAt(offset - 1);
@@ -5317,13 +5817,26 @@ public sealed class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                if (offset - 1 < cells.Count)
-                    cells.RemoveAt(offset - 1);
-                SetRuns(p, cells);
-            }));
+                // AV-TRACKEDIT: a tracked deletion keeps the character (struck) unless it is this author's own
+                // still-pending insertion, which is removed outright. MarkCellsDeleted applies that rule.
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset - 1, offset);
+                    SetRuns(p, cells);
+                }));
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    if (offset - 1 < cells.Count)
+                        cells.RemoveAt(offset - 1);
+                    SetRuns(p, cells);
+                }));
+            }
             _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
@@ -5348,14 +5861,37 @@ public sealed class DocumentView : Control
             if (cc.Offset < len)
             {
                 var offset = cc.Offset;
-                _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                if (TrackChangesEnabled)
                 {
-                    var chars = ParaCells(p);
-                    if (offset < chars.Count)
-                        chars.RemoveAt(offset);
-                    SetRuns(p, chars);
-                }));
-                // Caret stays at same offset (now pointing at the next char).
+                    var before = ParaCells(para);
+                    var ownInsertion = offset < before.Count
+                        && before[offset].Revision == RevisionKind.Inserted
+                        && string.Equals(before[offset].RevisionAuthor, RevisionAuthor, StringComparison.Ordinal);
+                    _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                    {
+                        var (marked, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
+                        SetRuns(p, marked);
+                    }));
+                    // Advance past a kept-struck char so repeated Delete progresses; stay put if it collapsed.
+                    if (!ownInsertion)
+                    {
+                        _cellCaret = cc with { Offset = offset + 1 };
+                        _cellAnchor = _cellCaret;
+                        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, offset + 1));
+                        _selectionAnchor = _caret;
+                    }
+                }
+                else
+                {
+                    _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+                    {
+                        var chars = ParaCells(p);
+                        if (offset < chars.Count)
+                            chars.RemoveAt(offset);
+                        SetRuns(p, chars);
+                    }));
+                    // Caret stays at same offset (now pointing at the next char).
+                }
             }
             // else at end of paragraph → delete paragraph break (join with next paragraph in cell)
             else
@@ -5384,13 +5920,37 @@ public sealed class DocumentView : Control
         {
             var block = _caret.Block;
             var offset = _caret.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                if (offset < cells.Count)
-                    cells.RemoveAt(offset);
-                SetRuns(p, cells);
-            }));
+                // AV-TRACKEDIT: forward-delete records a tracked deletion (keeps the struck char) unless it is
+                // this author's own pending insertion (removed outright). When kept-struck, advance the caret
+                // past the struck character so a repeated Delete keeps progressing (Word behaviour); when the
+                // char collapsed away, leave the caret in place (the next char shifted into its position).
+                var before = ParaCells(paragraph);
+                var ownInsertion = offset < before.Count
+                    && before[offset].Revision == RevisionKind.Inserted
+                    && string.Equals(before[offset].RevisionAuthor, RevisionAuthor, StringComparison.Ordinal);
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), offset, offset + 1);
+                    SetRuns(p, cells);
+                }));
+                if (!ownInsertion)
+                {
+                    _caret = new DocPosition(block, offset + 1);
+                    _selectionAnchor = _caret;
+                }
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    if (offset < cells.Count)
+                        cells.RemoveAt(offset);
+                    SetRuns(p, cells);
+                }));
+            }
         }
     }
 
@@ -5517,6 +6077,14 @@ public sealed class DocumentView : Control
         var hi = Math.Max(anchor.Offset, cc.Offset);
         _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
         {
+            if (TrackChangesEnabled)
+            {
+                // AV-TRACKEDIT: mark the in-cell selection as a tracked deletion (keep struck) rather than
+                // removing it; own pending insertions collapse away (handled inside MarkCellsDeleted).
+                var (marked, _) = MarkCellsDeleted(ParaCells(p), lo, hi);
+                SetRuns(p, marked);
+                return;
+            }
             var chars = ParaCells(p);
             var clo = Math.Clamp(lo, 0, chars.Count);
             var chi = Math.Clamp(hi, 0, chars.Count);
@@ -5549,15 +6117,28 @@ public sealed class DocumentView : Control
                 _selectionAnchor = _caret;
                 return;
             }
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            if (TrackChangesEnabled)
             {
-                var cells = ParaCells(p);
-                var lo = Math.Clamp(a, 0, cells.Count);
-                var hi = Math.Clamp(b, 0, cells.Count);
-                cells.RemoveRange(lo, Math.Max(0, hi - lo));
-                SetRuns(p, cells);
-            }));
-            _caret = new DocPosition(block, a);
+                // AV-TRACKEDIT: a tracked deletion keeps the selected text (struck), except this author's own
+                // pending insertions which are removed outright. Caret collapses to the selection start.
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var (cells, _) = MarkCellsDeleted(ParaCells(p), Math.Min(a, b), Math.Max(a, b));
+                    SetRuns(p, cells);
+                }));
+            }
+            else
+            {
+                _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+                {
+                    var cells = ParaCells(p);
+                    var lo = Math.Clamp(a, 0, cells.Count);
+                    var hi = Math.Clamp(b, 0, cells.Count);
+                    cells.RemoveRange(lo, Math.Max(0, hi - lo));
+                    SetRuns(p, cells);
+                }));
+            }
+            _caret = new DocPosition(block, Math.Min(a, b));
         }
         else if (_doc.Blocks[sel.Start.Block] is Paragraph startPara && _doc.Blocks[sel.End.Block] is Paragraph endPara)
         {
@@ -5605,6 +6186,371 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHighlightColor(string? colorHex) =>
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
+    // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
+    // DocumentCommandBus so they are undoable, mirroring the WPF host's InsertComment / DeleteComment /
+    // ToggleResolve behaviour but reusing the portable model directly (no ribbon wiring this wave).
+
+    /// <summary>
+    /// Anchors a new review comment over the current selection (or, when the selection is empty or spans
+    /// multiple blocks, the whole caret paragraph). Allocates the next comment id, marks the covered body
+    /// runs with it + appends a reference anchor, and stores the <see cref="Comment"/> (author/initials/
+    /// text/date) in the model. Undoable; re-renders so the anchor highlight + margin marker appear.
+    /// Returns the new comment id, or null when there was nothing textual to anchor to.
+    /// </summary>
+    public int? AddComment(string text, string author = "", string initials = "")
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        // Resolve the anchor block + char range. A single-block non-empty selection anchors to that range;
+        // an empty or cross-block selection anchors to the whole caret paragraph (mirrors WPF InsertComment).
+        var sel = NormalizedSelection();
+        int block, startOffset, endOffset;
+        if (sel is { } s && s.Start.Block == s.End.Block && s.Start.Offset != s.End.Offset)
+        {
+            block = s.Start.Block;
+            startOffset = s.Start.Offset;
+            endOffset = s.End.Offset;
+        }
+        else
+        {
+            block = _caret.Block;
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsEditable(paragraph))
+            return null;
+
+        // Nothing to anchor to (empty paragraph) → no comment.
+        if (ParaCells(paragraph).Count == 0)
+            return null;
+
+        var id = _doc.NextCommentId();
+        var comment = new Comment(id)
+        {
+            Author = author,
+            Initials = initials,
+            // W3CDTF (UTC, second precision) — matches the docx writer's w:date expectation.
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        };
+        comment.Content.Add(new Paragraph(text));
+
+        _bus.Execute(new AddCommentCommand(block, startOffset, endOffset, id, comment));
+        // The command no-ops (and leaves Comments unchanged) when the range covers no text.
+        return _doc.Comments.ContainsKey(id) ? id : (int?)null;
+    }
+
+    /// <summary>
+    /// Deletes the comment thread with <paramref name="commentId"/> (and its replies), clearing the body
+    /// anchor marks + reference run(s). Undoable. Returns true when a comment was removed.
+    /// </summary>
+    public bool DeleteComment(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.ContainsKey(topId))
+            return false;
+        _bus.Execute(new DeleteCommentCommand(topId));
+        return true;
+    }
+
+    /// <summary>Deletes the comment thread covering the caret/selection. Returns true when one was removed.</summary>
+    public bool DeleteCommentAtCaret() =>
+        CommentIdAtCaret() is { } id && DeleteComment(id);
+
+    /// <summary>
+    /// Sets the resolved/done flag on the comment thread with <paramref name="commentId"/>. Undoable.
+    /// Returns true when the comment exists (flag was set/cleared), false otherwise.
+    /// </summary>
+    public bool SetCommentResolved(int commentId, bool resolved)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.ContainsKey(topId))
+            return false;
+        _bus.Execute(new SetCommentResolvedCommand(topId, resolved));
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles the resolved flag of the comment thread covering the caret/selection. Returns the new
+    /// resolved state, or null when the caret is not inside a comment.
+    /// </summary>
+    public bool? ToggleResolveCommentAtCaret()
+    {
+        if (CommentIdAtCaret() is not { } id || !_doc.Comments.TryGetValue(id, out var comment))
+            return null;
+        var newState = !comment.Resolved;
+        SetCommentResolved(id, newState);
+        return newState;
+    }
+
+    /// <summary>All top-level review comments in the document, in id order. Replies live on each thread.</summary>
+    public IReadOnlyList<Comment> AllComments =>
+        _doc.Comments.Values.OrderBy(c => c.Id).ToList();
+
+    /// <summary>
+    /// The top-level comment threads whose anchored range covers the caret (or selection start), in id
+    /// order. Empty when the caret is not inside any comment.
+    /// </summary>
+    public IReadOnlyList<Comment> CommentsAtCaret =>
+        CommentIdAtCaret() is { } id && _doc.Comments.TryGetValue(id, out var comment)
+            ? new[] { comment }
+            : System.Array.Empty<Comment>();
+
+    /// <summary>
+    /// The id of the top-level comment whose anchored range covers the caret (or selection start), or
+    /// null when the caret is not inside a comment. Resolved from the model run carrying CommentId at the
+    /// caret offset; a reply's id is mapped up to its owning top-level comment.
+    /// </summary>
+    private int? CommentIdAtCaret()
+    {
+        if (_caret.Block < 0 || _caret.Block >= _doc.Blocks.Count || _doc.Blocks[_caret.Block] is not Paragraph paragraph)
+            return null;
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+        // Probe the cell just before the caret (the char the caret sits after), then the one at the caret.
+        foreach (var probe in new[] { _caret.Offset - 1, _caret.Offset })
+        {
+            if (probe < 0 || probe >= cells.Count)
+                continue;
+            if (cells[probe].CommentId is { } cid)
+                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+        }
+        // Fallback: any commented run in the paragraph (caret placed loosely inside the range).
+        foreach (var cell in cells)
+            if (cell.CommentId is { } cid)
+                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+        return null;
+    }
+
+    /// <summary>
+    /// Test/introspection hook: the page-space rectangles of every laid-out glyph currently marked by a
+    /// review comment, paired with the anchoring top-level comment id. Non-empty exactly when a comment's
+    /// anchored range maps onto rendered glyphs. Reflects the last layout pass (call after Measure).
+    /// </summary>
+    internal IReadOnlyList<(int CommentId, Rect Rect)> CommentAnchorGlyphs()
+    {
+        // Force a fresh layout so the result always reflects the current model (introspection/test hook).
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        return _placed
+            .Where(p => !p.Sentinel && p.CommentId is not null)
+            .Select(p => (DeleteCommentCommand.ResolveTopLevel(_doc, p.CommentId!.Value),
+                          new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
+            .ToList();
+    }
+
+    // ── AV-REVIEW: Review-tab tracked-changes + comments + word count wiring ──────────────────────────
+    // Accept/reject ride the shared DocumentCommandBus (undoable), mirroring the WPF host's accept/reject
+    // but reusing the portable TrackChanges/RevisionList model directly. Comments reuse the AV-COMMENT
+    // infra (AddComment/DeleteComment). Word count reads DocumentStatistics from the model.
+
+    /// <summary>
+    /// When true, the editor is in Track Changes mode and the edit pipeline records edits as revisions
+    /// (AV-TRACKEDIT): typing inserts text marked as a tracked insertion (current <see cref="RevisionAuthor"/>
+    /// + date), and Backspace/Delete/selection-delete mark the affected text as a tracked deletion (the text
+    /// is kept and struck, per Word) rather than removing it — except deleting one's own still-pending tracked
+    /// insertion, which is removed outright. Accept/Reject of existing revisions work regardless of this flag.
+    /// </summary>
+    public bool TrackChangesEnabled { get; private set; }
+
+    /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
+    public string RevisionAuthor { get; set; } = "FreeW User";
+
+    /// <summary>The W3CDTF (UTC) timestamp stamped on revisions recorded right now.</summary>
+    private static string CurrentRevisionDateXml() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// AV-TRACKEDIT: mark the cell range [lo, hi) of <paramref name="cells"/> as a tracked deletion (per Word:
+    /// the characters are KEPT and struck, not removed) and return the resulting list together with the caret
+    /// offset that should follow the operation. Characters that are an unaccepted tracked insertion <em>by the
+    /// same author</em> are removed outright instead (Word behaviour: deleting your own pending insertion just
+    /// takes it back). Characters already marked deleted are left as-is. The returned caret offset is the start
+    /// of the range when anything was kept-struck, otherwise <paramref name="lo"/> (the run collapsed away).
+    /// </summary>
+    private (List<Cell> Cells, int Caret) MarkCellsDeleted(List<Cell> cells, int lo, int hi)
+    {
+        lo = Math.Clamp(lo, 0, cells.Count);
+        hi = Math.Clamp(hi, 0, cells.Count);
+        if (hi <= lo)
+            return (cells, lo);
+
+        var result = new List<Cell>(cells.Count);
+        result.AddRange(cells.Take(lo));
+        for (var k = lo; k < hi; k++)
+        {
+            var cell = cells[k];
+            // Deleting one's own still-pending insertion removes it outright (Word: it never "existed").
+            if (cell.Revision == RevisionKind.Inserted &&
+                string.Equals(cell.RevisionAuthor, RevisionAuthor, StringComparison.Ordinal))
+                continue;
+            // Already a tracked deletion → keep as-is (deleting struck text is a no-op).
+            if (cell.Revision == RevisionKind.Deleted)
+            {
+                result.Add(cell);
+                continue;
+            }
+            // Otherwise mark the (ordinary, or other-author-inserted) character as a tracked deletion: keep it.
+            result.Add(cell with
+            {
+                Revision = RevisionKind.Deleted,
+                RevisionAuthor = RevisionAuthor,
+                RevisionDateXml = CurrentRevisionDateXml(),
+            });
+        }
+        result.AddRange(cells.Skip(hi));
+        return (result, lo);
+    }
+
+    /// <summary>
+    /// Toggles <see cref="TrackChangesEnabled"/> and returns the new state. Re-renders so any change-bar /
+    /// markup adorners that depend on the mode update. While on, subsequent edits are recorded as tracked
+    /// revisions — see <see cref="TrackChangesEnabled"/>.
+    /// </summary>
+    public bool ToggleTrackChanges()
+    {
+        TrackChangesEnabled = !TrackChangesEnabled;
+        InvalidateVisual();
+        DocumentChanged?.Invoke();
+        return TrackChangesEnabled;
+    }
+
+    /// <summary>
+    /// Marks the current selection (or, when empty, the whole caret paragraph) as a tracked change of
+    /// <paramref name="kind"/> (insertion or deletion) by <see cref="RevisionAuthor"/>. Undoable; re-renders
+    /// so the revision colour/decoration appears and the marks round-trip on save. Returns true when a run
+    /// was marked. A no-op for <see cref="RevisionKind.None"/> or when there is nothing textual to mark.
+    /// </summary>
+    public bool MarkSelectionAsRevision(RevisionKind kind)
+    {
+        if (kind == RevisionKind.None)
+            return false;
+
+        var sel = NormalizedSelection();
+        int block, startOffset, endOffset;
+        if (sel is { } s && s.Start.Block == s.End.Block && s.Start.Offset != s.End.Offset)
+        {
+            block = s.Start.Block;
+            startOffset = s.Start.Offset;
+            endOffset = s.End.Offset;
+        }
+        else
+        {
+            block = _caret.Block;
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsEditable(paragraph))
+            return false;
+        if (ParaCells(paragraph).Count == 0)
+            return false;
+
+        var dateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        _bus.Execute(new MarkRevisionRangeCommand(block, startOffset, endOffset, kind, RevisionAuthor, dateXml));
+        return TrackChanges.HasRevisions(_doc);
+    }
+
+    /// <summary>Every tracked change in the committed document, in reading order — drives Previous/Next.</summary>
+    public IReadOnlyList<RevisionEntry> Revisions => RevisionList.Enumerate(_doc);
+
+    /// <summary>True when the document carries any tracked change (insertion/deletion/formatting).</summary>
+    public bool HasRevisions => TrackChanges.HasRevisions(_doc);
+
+    /// <summary>
+    /// Accept exactly one tracked change — the one at or after the caret, falling back to the first revision
+    /// in reading order. Undoable; re-renders. Returns true when a revision was resolved.
+    /// </summary>
+    public bool AcceptCurrentRevision() => ResolveCurrentRevision(accept: true);
+
+    /// <summary>
+    /// Reject exactly one tracked change — the one at or after the caret, falling back to the first revision
+    /// in reading order. Undoable; re-renders. Returns true when a revision was resolved.
+    /// </summary>
+    public bool RejectCurrentRevision() => ResolveCurrentRevision(accept: false);
+
+    private bool ResolveCurrentRevision(bool accept)
+    {
+        var entries = RevisionList.Enumerate(_doc);
+        if (entries.Count == 0)
+            return false;
+
+        // Prefer the first revision whose owning block index is at/after the caret block; else the first.
+        var caretBlock = _caret.Block;
+        var index = -1;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].BlockIndex >= caretBlock)
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0)
+            index = 0;
+
+        _bus.Execute(accept ? new AcceptOneRevisionCommand(index) : new RejectOneRevisionCommand(index));
+        return true;
+    }
+
+    /// <summary>
+    /// Accept every tracked change: insertions become ordinary text, deletions are removed. Undoable as a
+    /// single step; re-renders. Returns true when there was anything to resolve.
+    /// </summary>
+    public bool AcceptAllRevisions()
+    {
+        if (!TrackChanges.HasRevisions(_doc))
+            return false;
+        _bus.Execute(new AcceptAllRevisionsCommand());
+        return true;
+    }
+
+    /// <summary>
+    /// Reject every tracked change: insertions are removed, deletions become ordinary text. Undoable as a
+    /// single step; re-renders. Returns true when there was anything to resolve.
+    /// </summary>
+    public bool RejectAllRevisions()
+    {
+        if (!TrackChanges.HasRevisions(_doc))
+            return false;
+        _bus.Execute(new RejectAllRevisionsCommand());
+        return true;
+    }
+
+    /// <summary>
+    /// Adds a review comment over the current selection using <see cref="RevisionAuthor"/> as the author
+    /// (initials derived from it). Reuses the AV-COMMENT <see cref="AddComment(string,string,string)"/>
+    /// infra. Returns the new comment id, or null when there was nothing textual to anchor to.
+    /// Wired to <c>freew.new-comment</c>.
+    /// </summary>
+    public int? NewComment(string text = "New comment")
+    {
+        var initials = DeriveInitials(RevisionAuthor);
+        return AddComment(text, RevisionAuthor, initials);
+    }
+
+    /// <summary>Derives up-to-two-letter initials from an author name (e.g. "Ann Reviewer" → "AR").</summary>
+    private static string DeriveInitials(string? author)
+    {
+        if (string.IsNullOrWhiteSpace(author))
+            return "";
+        var parts = author.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant(),
+        };
+    }
+
+    /// <summary>
+    /// Full word/character/paragraph statistics for the document, computed from the model via
+    /// <see cref="DocumentStatistics.Compute(TextDocument)"/>. Drives the Word Count dialog.
+    /// </summary>
+    public DocumentStatistics ComputeStatistics() => DocumentStatistics.Compute(_doc);
 
     /// <summary>
     /// Set the paragraph space-before (in points) for the current paragraph.
@@ -5887,6 +6833,345 @@ public sealed class DocumentView : Control
         _bus.Execute(new InsertBlockCommand(insertAt, table));
     }
 
+    // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
+
+    /// <summary>
+    /// Insert a page break at the caret: an empty paragraph that forces a page break before it,
+    /// placed after the caret's block. Routed through the undo/redo bus, so a single undo removes it.
+    /// Mirrors the WPF host's <c>DocumentView.InsertPageBreak</c>.
+    /// </summary>
+    public void InsertPageBreak()
+    {
+        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+    }
+
+    /// <summary>
+    /// Insert an inline image at the caret's paragraph (AV-INSERT). The image is appended as a textless
+    /// object run to the caret's body paragraph (mirroring the WPF host, which adds the image container to
+    /// the caret paragraph's inlines). Undoable. When the caret is not in a body paragraph the image is
+    /// appended to the nearest editable paragraph (or a new one is created when the body has none).
+    /// </summary>
+    /// <param name="bytes">Raw image bytes (stored verbatim; never transcoded).</param>
+    /// <param name="widthPt">Display width in points.</param>
+    /// <param name="heightPt">Display height in points.</param>
+    /// <param name="format">Binary format; auto-detected from <paramref name="bytes"/> when null.</param>
+    public void InsertInlineImage(byte[] bytes, double widthPt, double heightPt, ImageFormat? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        var fmt = format ?? InlineImage.DetectFormat(bytes);
+        var image = new InlineImage(bytes, Math.Max(1, widthPt), Math.Max(1, heightPt), fmt)
+        {
+            Wrapping = ImageWrapping.Inline,
+        };
+        InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Image = image });
+    }
+
+    /// <summary>
+    /// Insert a shape at the caret as a floating object (AV-INSERT). The shape is appended as a textless
+    /// object run to the caret's body paragraph; its <see cref="Shape.Placement"/> is set so it floats
+    /// (square wrap) over the text, matching the WPF host's drawing inserts. Undoable.
+    /// </summary>
+    public void InsertShape(Shape shape)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        // Make the shape floating (square wrap) so it renders on the floating-object overlay lane.
+        shape.Placement ??= new FloatingPlacement();
+        if (shape.Placement.Wrapping == ImageWrapping.Inline)
+            shape.Placement.Wrapping = ImageWrapping.Square;
+        InsertObjectRun(new Run(string.Empty, RunFormatting.Default) { Shape = shape });
+    }
+
+    /// <summary>
+    /// Insert a default rectangle shape at the caret (AV-INSERT). Convenience over
+    /// <see cref="InsertShape(Shape)"/> wired to the <c>freew.shape</c> ribbon command.
+    /// </summary>
+    public void InsertShape() =>
+        InsertShape(Shape.Preset(ShapeKind.Rectangle, widthPt: 120, heightPt: 80, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert a floating text box at the caret (AV-INSERT). Wired to the <c>freew.text-box</c> ribbon
+    /// command. The text box carries a single placeholder paragraph and floats over the body text.
+    /// </summary>
+    public void InsertTextBox() =>
+        InsertShape(Shape.TextBoxWith("Text Box", widthPt: 180, heightPt: 90, fillColorHex: "#DCE6F1"));
+
+    /// <summary>
+    /// Insert a symbol / special character at the caret as ordinary text (AV-INSERT). Flows through the
+    /// normal text-edit/undo path (<see cref="InsertText"/>), so it works inside table cells too.
+    /// Wired to the <c>freew.symbol</c> ribbon command's per-glyph sub-commands.
+    /// </summary>
+    public void InsertSymbol(string symbol)
+    {
+        if (!string.IsNullOrEmpty(symbol))
+            InsertText(symbol);
+    }
+
+    /// <summary>
+    /// Enable (create) the document header region if missing/empty so it renders in the top page-margin
+    /// region (AV-INSERT). Undoable. Wired to the <c>freew.header</c> ribbon command. In-region caret
+    /// editing of the header is a separate UI surface (deferred); this readies the region.
+    /// </summary>
+    public void EnsureHeader() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: false));
+
+    /// <summary>
+    /// Enable (create) the document footer region if missing/empty so it renders in the bottom
+    /// page-margin region (AV-INSERT). Undoable. Wired to the <c>freew.footer</c> ribbon command.
+    /// </summary>
+    public void EnsureFooter() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: true));
+
+    // ── AV-REF: References-tab inserts (footnote / endnote / TOC / caption / cross-reference / citation) ──
+
+    /// <summary>
+    /// AV-REF: Insert a footnote at the caret. Allocates the next footnote id, stores
+    /// <paramref name="text"/> as the note's content in <see cref="TextDocument.Footnotes"/>, and appends a
+    /// superscript reference run (carrying <see cref="Run.FootnoteId"/>) to the caret's body paragraph.
+    /// Both the note-store mutation and the marker insert run in a single undo group so one Ctrl+Z reverts
+    /// the whole insert. Mirrors the WPF host's <c>DocumentView.InsertFootnote</c>.
+    /// </summary>
+    public void InsertFootnote(string text = "") => InsertNote(text, footnote: true);
+
+    /// <summary>
+    /// AV-REF: Insert an endnote at the caret. Mirrors <see cref="InsertFootnote"/> but stores the content
+    /// in <see cref="TextDocument.Endnotes"/> (collected at the document end) and the marker carries
+    /// <see cref="Run.EndnoteId"/>.
+    /// </summary>
+    public void InsertEndnote(string text = "") => InsertNote(text, footnote: false);
+
+    // Shared footnote/endnote insert: create the note in the model store and append the matching
+    // reference run to the caret's host paragraph, grouped for a single undo.
+    private void InsertNote(string text, bool footnote)
+    {
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0)
+            return;
+
+        _bus.BeginUndoGroup();
+        var id = footnote ? _doc.NextFootnoteId() : _doc.NextEndnoteId();
+        // Seed the note's content store (an empty note when no text is supplied, ready for the user to type).
+        _bus.Execute(new AddNoteCommand(id, text ?? string.Empty, footnote));
+        var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
+        _bus.Execute(new InsertObjectRunCommand(hostIndex, marker));
+        _bus.CommitUndoGroup(footnote ? "Insert Footnote" : "Insert Endnote");
+
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a Table of Contents generated from the document's heading outline at (before) the
+    /// caret's block — front-matter placement, matching Word. The TOC is built by
+    /// <see cref="TableOfContents.Build"/> from Heading-styled paragraphs; each entry paragraph is inserted
+    /// through the undo/redo bus (grouped) so the whole TOC reverts in one undo. Mirrors the WPF host's
+    /// <c>DocumentView.InsertTableOfContents</c>.
+    /// </summary>
+    public void InsertTableOfContents()
+    {
+        TableOfContents.EnsureStyles(_doc);
+        var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
+        InsertTocAt(at, "Insert Table of Contents");
+    }
+
+    /// <summary>
+    /// AV-REF: Rebuild the Table of Contents — remove the previously inserted TOC region (paragraphs
+    /// carrying a TOC style, see <see cref="TableOfContents.IsTocParagraph"/>) and re-insert a freshly
+    /// generated TOC at the same position. With no existing TOC this behaves like
+    /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
+    /// </summary>
+    public void UpdateTableOfContents()
+    {
+        TableOfContents.EnsureStyles(_doc);
+
+        // Collect the existing TOC paragraphs (the marker region). The first anchors the re-insert point.
+        var tocIndices = new List<int>();
+        for (var i = 0; i < _doc.Blocks.Count; i++)
+            if (TableOfContents.IsTocParagraph(_doc.Blocks[i]))
+                tocIndices.Add(i);
+
+        var insertAt = tocIndices.Count > 0 ? tocIndices[0] : 0;
+
+        _bus.BeginUndoGroup();
+        // Remove from the end so earlier indices stay valid.
+        for (var i = tocIndices.Count - 1; i >= 0; i--)
+            _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in TableOfContents.Build(_doc))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup("Update Table of Contents");
+    }
+
+    // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
+    private void InsertTocAt(int at, string label)
+    {
+        _bus.BeginUndoGroup();
+        var index = Math.Clamp(at, 0, _doc.Blocks.Count);
+        foreach (var paragraph in TableOfContents.Build(_doc))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an auto-numbered caption paragraph (e.g. "Figure 1: My diagram") of
+    /// <paramref name="label"/> with the given <paramref name="text"/> after the caret's block, so it reads
+    /// under the selected image/table. The next ordinal is computed by
+    /// <see cref="Captions.NextCaptionNumber"/>; the caption is a single <c>Caption</c>-styled paragraph
+    /// routed through the undo/redo bus. Mirrors the WPF host's <c>DocumentView.InsertCaption</c>.
+    /// </summary>
+    public void InsertCaption(CaptionLabel label, string text = "")
+    {
+        Captions.EnsureStyles(_doc);
+        var number = Captions.NextCaptionNumber(_doc, label);
+        var caption = Captions.BuildCaption(label, number, text);
+        var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertParagraphCommand(index, caption));
+        _caret = new DocPosition(index, BlockLength(index));
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a cross-reference field at the caret pointing at <paramref name="target"/> of
+    /// <paramref name="type"/>, showing <paramref name="insertAs"/> and optionally as a clickable
+    /// hyperlink. For a body target lacking a bookmark anchor, a hidden <c>_Ref…</c> bookmark is added to
+    /// the target paragraph so the resulting REF/PAGEREF field resolves (Word auto-bookmarks the same way).
+    /// The inserted run carries a cached resolved value so it renders before the next update. Grouped into
+    /// one undo. Mirrors the WPF host's <c>DocumentView.InsertCrossReference</c>.
+    /// </summary>
+    public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
+    {
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0)
+            return;
+
+        var sourceBlock = _caret.Block;
+        var resolved = target;
+        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+
+        _bus.BeginUndoGroup();
+
+        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
+        if (fieldKind != CrossRefFieldKind.NoteRef
+            && string.IsNullOrEmpty(resolved.Anchor)
+            && resolved.BlockIndex is { } targetBlock
+            && targetBlock >= 0 && targetBlock < _doc.Blocks.Count
+            && _doc.Blocks[targetBlock] is Paragraph)
+        {
+            var anchor = EnsureCrossReferenceAnchor(targetBlock);
+            resolved = resolved with { Anchor = anchor };
+        }
+
+        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
+        var cached = CrossReferences.ResolveText(_doc, type, resolved, insertAs, sourceBlock);
+        var run = Run.CrossReferenceFieldRun(field, cached);
+        _bus.Execute(new InsertObjectRunCommand(hostIndex, run));
+        _bus.CommitUndoGroup("Insert Cross-reference");
+
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _selectionAnchor = _caret;
+    }
+
+    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
+    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
+    private string EnsureCrossReferenceAnchor(int blockIndex)
+    {
+        if (_doc.Blocks[blockIndex] is not Paragraph paragraph)
+            return string.Empty;
+        if (paragraph.BookmarkName is { Length: > 0 } existing)
+            return existing;
+
+        var used = new HashSet<string>(
+            _doc.Blocks.OfType<Paragraph>()
+                .Select(p => p.BookmarkName)
+                .Where(n => n is { Length: > 0 })!,
+            StringComparer.Ordinal);
+        var index = 1;
+        string name;
+        do
+        {
+            name = "_Ref" + index.ToString(CultureInfo.InvariantCulture);
+            index++;
+        }
+        while (used.Contains(name));
+
+        _bus.Execute(new SetBookmarkNameCommand(blockIndex, name));
+        return name;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an in-text citation for <paramref name="source"/> at the caret, formatted in the
+    /// document's active <see cref="TextDocument.BibliographyStyle"/> (e.g. APA "(Author, Year)"). Flows
+    /// through the ordinary text-edit/undo path (<see cref="InsertText"/>). Mirrors the WPF host's
+    /// <c>DocumentView.InsertCitation</c>.
+    /// </summary>
+    public void InsertCitation(Source source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        InsertText(Citations.FormatInText(source, _doc.BibliographyStyle));
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a bibliography generated from the document's <see cref="TextDocument.Sources"/> at
+    /// (before) the caret's block, else at the document end. The paragraphs carry dedicated bibliography
+    /// styles (registered via <see cref="Citations.EnsureStyles"/>). Grouped into one undo. Mirrors the
+    /// WPF host's <c>DocumentView.InsertBibliography</c>.
+    /// </summary>
+    public void InsertBibliography()
+    {
+        Citations.EnsureStyles(_doc);
+        var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
+
+        _bus.BeginUndoGroup();
+        var index = at;
+        foreach (var paragraph in Citations.BuildBibliography(_doc, _doc.BibliographyStyle))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup("Insert Bibliography");
+    }
+
+    // Resolve the body paragraph that should host a reference marker (footnote/endnote/cross-ref). Prefer
+    // the caret's block when it is an editable body paragraph; otherwise the first editable body paragraph;
+    // otherwise append a fresh empty paragraph and host it there. Returns -1 only when no paragraph can be
+    // created (never, since a fresh one is appended) — defensive.
+    private int ResolveReferenceHostBlock()
+    {
+        var index = _caret.Block;
+        if (index >= 0 && index < _doc.Blocks.Count && _doc.Blocks[index] is Paragraph)
+            return index;
+        index = FirstEditableBlock();
+        if (index >= 0)
+            return index;
+        index = _doc.Blocks.Count;
+        _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
+        return index;
+    }
+
+    /// <summary>
+    /// Append an object-carrying run to the caret's paragraph (or the nearest editable body paragraph),
+    /// routed through the undo/redo bus. Shared by the picture/shape/text-box inserts. Updates the caret
+    /// to sit just after the host paragraph's text so subsequent typing lands sensibly.
+    /// </summary>
+    private void InsertObjectRun(Run run)
+    {
+        // Resolve a body paragraph to host the object. Prefer the caret's block; otherwise the first
+        // editable body paragraph; otherwise append a fresh empty paragraph and target that.
+        var index = _caret.Block;
+        if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
+        {
+            index = FirstEditableBlock();
+            if (index < 0)
+            {
+                index = _doc.Blocks.Count;
+                _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
+            }
+        }
+
+        _bus.Execute(new InsertObjectRunCommand(index, run));
+        // Park the caret at the end of the host paragraph's text (object runs carry no text offset).
+        _cellCaret = null;
+        _caret = new DocPosition(index, BlockLength(index));
+        _selectionAnchor = _caret;
+    }
+
     /// <summary>Toggle the current paragraph's list kind (bullet/number); re-applying the same kind clears it.</summary>
     public void ToggleList(ListKind kind)
     {
@@ -6014,6 +7299,101 @@ public sealed class DocumentView : Control
             _caret.Block,
             f => f with { FontSizePt = fontSizePoints, Bold = bold }));
     }
+
+    /// <summary>
+    /// AV-STYLES: apply a named built-in style to the current selection / paragraph, model-backed and
+    /// undoable. The style is seeded from <see cref="BuiltInStyles"/> if the document's catalog lacks it,
+    /// so a freshly-loaded document still resolves the look.
+    ///
+    /// <para>
+    /// <b>Paragraph styles</b> (Normal, Heading 1–4, Title, Subtitle, Quote, Intense Quote, No Spacing,
+    /// List Paragraph) set each spanned paragraph's <see cref="Paragraph.StyleId"/> through the reversible
+    /// <see cref="SetParagraphStyleCommand"/> (one undo group), so the style's run + paragraph formatting
+    /// resolves through <see cref="ResolveRunFmt"/>/<see cref="ResolveParagraphFmt"/> on the next render.
+    /// </para>
+    /// <para>
+    /// <b>Character styles</b> (Strong, Emphasis, Subtle/Intense Emphasis) carry no run-level style id in the
+    /// model, so they apply as direct run formatting — the style's set fields are overlaid onto the selected
+    /// runs (Word's character-style semantics). With a collapsed caret the format is stored as the pending
+    /// run format for the next typed character, mirroring direct character formatting.
+    /// </para>
+    /// No-op for an unknown style id. Returns the resolved style id (or null when unknown / not applied).
+    /// </summary>
+    public string? ApplyNamedStyle(string styleId)
+    {
+        if (string.IsNullOrEmpty(styleId))
+            return null;
+
+        // Seed from the built-in catalog when the document does not already define the style, so the
+        // StyleId link resolves to real formatting. An existing (possibly customised) definition wins.
+        BuiltInStyles.EnsureSeeded(_doc, styleId);
+        if (!_doc.Styles.TryGetValue(styleId, out var style))
+            return null;
+
+        if (style.Type == StyleType.Character)
+        {
+            // Character style → overlay the style's run formatting onto the selection's runs.
+            ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            return styleId;
+        }
+
+        // Paragraph style → set StyleId on every spanned paragraph (one undoable group).
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return null;
+
+        if (indices.Count == 1)
+        {
+            _bus.Execute(new SetParagraphStyleCommand(indices[0], styleId));
+        }
+        else
+        {
+            _bus.BeginUndoGroup();
+            foreach (var idx in indices)
+                _bus.Execute(new SetParagraphStyleCommand(idx, styleId));
+            _bus.CommitUndoGroup("Apply Style");
+        }
+        return styleId;
+    }
+
+    /// <summary>
+    /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document
+    /// default — Word's "Clear Formatting" / "Normal" reset at the paragraph level), model-backed and
+    /// undoable. Equivalent to applying the empty (null) style id via <see cref="SetParagraphStyleCommand"/>.
+    /// </summary>
+    public void ClearParagraphStyle()
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        if (indices.Count == 1)
+        {
+            _bus.Execute(new SetParagraphStyleCommand(indices[0], null));
+            return;
+        }
+
+        _bus.BeginUndoGroup();
+        foreach (var idx in indices)
+            _bus.Execute(new SetParagraphStyleCommand(idx, null));
+        _bus.CommitUndoGroup("Clear Style");
+    }
+
+    // Overlay a character style's run formatting onto a run's existing formatting: only the style's
+    // *set* fields win (toggles OR in, optional values override when the style provides one), so a
+    // Strong run keeps its font/size/colour and merely turns bold. Mirrors the style-resolution overlay.
+    private static RunFormatting OverlayCharacterStyle(RunFormatting baseRun, RunFormatting styleRun) => baseRun with
+    {
+        Bold          = baseRun.Bold || styleRun.Bold,
+        Italic        = baseRun.Italic || styleRun.Italic,
+        Underline     = baseRun.Underline || styleRun.Underline,
+        Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
+        SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
+        AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
+        FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
+        FontSizePt    = styleRun.FontSizePt ?? baseRun.FontSizePt,
+        ColorHex      = styleRun.ColorHex ?? baseRun.ColorHex,
+    };
 
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
@@ -6912,15 +8292,23 @@ public sealed class DocumentView : Control
 
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
     private static bool IsEditable(Paragraph paragraph) =>
+        // AV-COMMENT: a CommentId is a soft run mark (like a hyperlink) — it must NOT make the paragraph
+        // non-editable, or its glyphs would fall back to FallbackCells (which drops the comment id and the
+        // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
+        // empty text and contributes no cells, so it does not affect editability either.
         paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.FootnoteId is null && r.EndnoteId is null && r.CommentId is null && r.Control is null);
+            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
 
     private static List<Cell> ParaCells(Paragraph paragraph)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
             foreach (var ch in run.Text)
-                cells.Add(new Cell(ch, run.Formatting));
+                // AV-COMMENT: carry the run's CommentId so commented ranges survive the cell round-trip
+                // (layout + edit). Textless comment-reference runs contribute no cells, as before.
+                // AV-TRACKEDIT: also carry the run's tracked-change mark so recorded revisions survive the
+                // round-trip (and SetRuns can re-segment runs on a revision boundary).
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor, run.RevisionDateXml));
         return cells;
     }
 
@@ -6934,16 +8322,57 @@ public sealed class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
+        // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
+        // cell round-trip would otherwise drop them). Re-emitted after the run is last anchored below so the
+        // w:commentReference survives an edit inside a commented paragraph.
+        var referencedComments = paragraph.Runs
+            .Where(r => r.IsCommentReference && r.CommentId is not null)
+            .Select(r => r.CommentId!.Value)
+            .ToHashSet();
+
         paragraph.Runs.Clear();
+        var lastAnchorIndexFor = new Dictionary<int, int>();
         var i = 0;
         while (i < cells.Count)
         {
             var fmt = cells[i].Fmt;
+            // AV-COMMENT: also break runs on a comment-id boundary so the anchoring CommentId is preserved
+            // across edits (a run is one contiguous run of equal Fmt AND equal CommentId).
+            var commentId = cells[i].CommentId;
+            // AV-TRACKEDIT: a run is also broken on a tracked-change boundary so recorded insertions /
+            // deletions (and their author/date) survive the cell round-trip (a run is one contiguous run of
+            // equal Fmt AND CommentId AND Revision mark).
+            var revision = cells[i].Revision;
+            var revisionAuthor = cells[i].RevisionAuthor;
+            var revisionDateXml = cells[i].RevisionDateXml;
             var start = i;
-            while (i < cells.Count && cells[i].Fmt.Equals(fmt))
+            while (i < cells.Count
+                   && cells[i].Fmt.Equals(fmt)
+                   && cells[i].CommentId == commentId
+                   && cells[i].Revision == revision
+                   && cells[i].RevisionAuthor == revisionAuthor
+                   && cells[i].RevisionDateXml == revisionDateXml)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
-            paragraph.Runs.Add(new Run(text, fmt));
+            paragraph.Runs.Add(new Run(text, fmt)
+            {
+                CommentId = commentId,
+                Revision = revision,
+                RevisionAuthor = revisionAuthor,
+                RevisionDateXml = revisionDateXml,
+            });
+            if (commentId is { } cid)
+                lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
+        }
+
+        // Re-append a comment-reference run just after each comment's last anchored run, for every comment
+        // that still has anchored text and previously carried a reference. Insert from the rightmost anchor
+        // first so earlier insert positions stay valid.
+        foreach (var cid in referencedComments
+                     .Where(lastAnchorIndexFor.ContainsKey)
+                     .OrderByDescending(cid => lastAnchorIndexFor[cid]))
+        {
+            paragraph.Runs.Insert(lastAnchorIndexFor[cid] + 1, Run.CommentReference(cid));
         }
     }
 
@@ -7090,10 +8519,43 @@ public sealed class DocumentView : Control
 
     private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
 
+    // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
+    // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
+    private static IBrush CommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
+    private static IBrush ResolvedCommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
+    // Amber underline drawn under commented glyphs — the in-text anchor mark.
+    private static readonly Pen CommentUnderlinePen =
+        new(new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
+    private static readonly Pen ResolvedCommentUnderlinePen =
+        new(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
+    // Right-margin comment marker fill (balloon) — amber bracket aligned to the anchor line.
+    private static IBrush CommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
+    private static IBrush ResolvedCommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
+
     // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
     private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
-    private readonly record struct Cell(char Ch, RunFormatting Fmt);
+    // ── AV-TRACKEDIT: tracked-change render assets ────────────────────────────────────────────────
+    // Word's default single-author revision colour is a deep red/maroon. Tracked insertions draw in this
+    // colour and underlined; tracked deletions draw in this colour and struck through.
+    private static Color RevisionColor { get; } = Color.FromRgb(0xC0, 0x00, 0x4B);
+    private const string RevisionColorHex = "#C0004B";
+    private static IBrush RevisionBrush { get; } = new SolidColorBrush(RevisionColor);
+    private static readonly Pen RevisionInsertUnderlinePen = new(RevisionBrush, 1.0);
+    private static readonly Pen RevisionDeleteStrikePen = new(RevisionBrush, 1.0);
+
+    // AV-COMMENT: CommentId carries the anchoring review-comment id (null = not commented) so the
+    // glyph layout can mark commented ranges. Defaulted so existing Cell(ch, fmt) construction is unchanged.
+    // AV-TRACKEDIT: Revision/RevisionAuthor/RevisionDateXml carry a per-character tracked-change mark so
+    // recorded insertions/deletions survive the cell round-trip (ParaCells → edit → SetRuns). Defaulted to
+    // an un-tracked character so all existing Cell(ch, fmt[, commentId]) construction is unchanged.
+    private readonly record struct Cell(
+        char Ch,
+        RunFormatting Fmt,
+        int? CommentId = null,
+        RevisionKind Revision = RevisionKind.None,
+        string? RevisionAuthor = null,
+        string? RevisionDateXml = null);
 
     private readonly record struct DocPosition(int Block, int Offset);
 
@@ -7111,10 +8573,24 @@ public sealed class DocumentView : Control
         int CellRow = -1,
         int CellCol = -1,
         int CellParaIdx = -1,
-        int CellParaOffset = -1)
+        int CellParaOffset = -1,
+        // AV-COMMENT: anchoring review-comment id (null = this glyph is not inside a comment range).
+        int? CommentId = null,
+        // AV-TRACKEDIT: tracked-change mark on this glyph so the render can colour/underline insertions and
+        // strike deletions. None for ordinary text.
+        RevisionKind Revision = RevisionKind.None)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
+
+        /// <summary>True when this glyph is covered by a review comment's anchored range.</summary>
+        public bool IsCommented => CommentId is not null;
+
+        /// <summary>True when this glyph is part of a tracked insertion.</summary>
+        public bool IsInsertedRevision => Revision == RevisionKind.Inserted;
+
+        /// <summary>True when this glyph is part of a tracked deletion (kept and struck).</summary>
+        public bool IsDeletedRevision => Revision == RevisionKind.Deleted;
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
@@ -7139,6 +8615,21 @@ public sealed class DocumentView : Control
         public double AvailableWidth;
         /// <summary>Paragraph alignment for this line.</summary>
         public TextAlignment Alignment;
+    }
+
+    // ── AV-NOTERENDER: footnote / endnote render item ─────────────────────────────────────────────────
+
+    /// <summary>One pre-computed footnote/endnote text fragment to draw (absolute page-space position).</summary>
+    private sealed class NoteRenderItem
+    {
+        /// <summary>Text to draw (note number prefix or a wrapped word/segment).</summary>
+        public string Text = string.Empty;
+        /// <summary>Run formatting (note body ~9pt, or superscript for the number prefix).</summary>
+        public RunFormatting Fmt = RunFormatting.Default;
+        /// <summary>Top-left X in page-space coordinates.</summary>
+        public double X;
+        /// <summary>Top Y in page-space coordinates.</summary>
+        public double Y;
     }
 
     // ── Floating shape data captured during layout ────────────────────────────────────────────────

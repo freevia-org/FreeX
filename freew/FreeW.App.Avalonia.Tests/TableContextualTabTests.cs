@@ -47,6 +47,8 @@ public sealed class TableContextualTabTests
             ToggleOrientation:   () => { },
             ApplyMarginPreset:   _ => { },
             ApplyPaperSize:      _ => { },
+            InsertPicture:       () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Registry completeness ─────────────────────────────────────────────────

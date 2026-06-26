@@ -1,4 +1,5 @@
 using FreeW.App.Avalonia.Editing;
+using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
 namespace FreeW.App.Avalonia.Ribbon;
@@ -21,6 +22,13 @@ internal static class FreeWRibbon
 
     public static readonly string[] FontFamilies =
         ["Calibri", "Arial", "Times New Roman", "Inter", "Verdana", "Georgia", "Courier New"];
+
+    /// <summary>
+    /// AV-PICTAB: preset point sizes offered by the Picture / Drawing Format Size combos.
+    /// The user can also type an arbitrary value; the combo's free-text is parsed in the command.
+    /// </summary>
+    public static readonly string[] FloatSizes =
+        ["36", "54", "72", "90", "108", "144", "180", "216", "288", "360", "432"];
 
     /// <summary>
     /// Standard colour palette offered by the Font Color dropdown.
@@ -49,6 +57,31 @@ internal static class FreeWRibbon
             .Select(fc => new RibbonMenuItem(fc.Label, new RibbonCommandId(fc.CommandId)))
             .ToArray());
 
+    // AV-PICTAB: wrap-mode menu shared by the Picture / Drawing Format "Wrap Text" dropdown.
+    // <paramref name="prefix"/> is "image" or "shape" so the command ids match the WPF host
+    // (freew.image-wrap-* / freew.shape-wrap-*).
+    private static RibbonMenu BuildWrapMenu(string prefix) =>
+        new(new RibbonMenuItem[]
+        {
+            new("In Line with Text", new RibbonCommandId($"freew.{prefix}-wrap-inline")),
+            new("Square",            new RibbonCommandId($"freew.{prefix}-wrap-square")),
+            new("Tight",             new RibbonCommandId($"freew.{prefix}-wrap-tight")),
+            new("Top and Bottom",    new RibbonCommandId($"freew.{prefix}-wrap-top-bottom")),
+            new("Behind Text",       new RibbonCommandId($"freew.{prefix}-wrap-behind")),
+            new("In Front of Text",  new RibbonCommandId($"freew.{prefix}-wrap-front")),
+        });
+
+    // AV-PICTAB: rotate/flip menu shared by Picture / Drawing Format "Rotate" dropdown.
+    private static RibbonMenu BuildRotateMenu(string prefix) =>
+        new(new RibbonMenuItem[]
+        {
+            new("Rotate Right 90°", new RibbonCommandId($"freew.{prefix}-rotate-right90")),
+            new("Rotate Left 90°",  new RibbonCommandId($"freew.{prefix}-rotate-left90")),
+            RibbonMenuItem.Separator(),
+            new("Flip Vertical",    new RibbonCommandId($"freew.{prefix}-flip-vertical")),
+            new("Flip Horizontal",  new RibbonCommandId($"freew.{prefix}-flip-horizontal")),
+        });
+
     private static RibbonMenu BuildTableBordersMenu() =>
         new(new RibbonMenuItem[]
         {
@@ -62,6 +95,42 @@ internal static class FreeWRibbon
             new("Left Border",      new RibbonCommandId("freew.table-borders.left")),
             new("Right Border",     new RibbonCommandId("freew.table-borders.right")),
         });
+
+    /// <summary>AV-INSERT: Insert &gt; Table dropdown — common row×column size presets.</summary>
+    private static RibbonMenu BuildTableSizeMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("2 × 2 Table",       new RibbonCommandId("freew.table-2x2")),
+            new("3 × 3 Table",       new RibbonCommandId("freew.table-3x3")),
+            new("4 × 4 Table",       new RibbonCommandId("freew.table-4x4")),
+            new("5 × 2 Table",       new RibbonCommandId("freew.table-5x2")),
+        });
+
+    /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
+    private static RibbonMenu BuildCaptionMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Figure", new RibbonCommandId("freew.insert-caption.figure")),
+            new("Table",  new RibbonCommandId("freew.insert-caption.table")),
+        });
+
+    /// <summary>
+    /// AV-STYLES: Home &gt; Styles gallery dropdown — the full built-in style set (paragraph and character
+    /// styles), one item per <see cref="BuiltInStyles.Gallery"/> entry. Each item's command id is
+    /// <c>freew.style.&lt;id&gt;</c> (matching <see cref="FreeWAvaloniaRibbonCommands.StyleCommandId"/>).
+    /// </summary>
+    private static RibbonMenu BuildStylesMenu() =>
+        new(BuiltInStyles.Gallery
+            .Select(d => new RibbonMenuItem(
+                d.Type == StyleType.Character ? $"{d.Name}  (a)" : d.Name,
+                new RibbonCommandId(FreeWAvaloniaRibbonCommands.StyleCommandId(d.Id))))
+            .ToArray());
+
+    /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
+    private static RibbonMenu BuildSymbolMenu() =>
+        new(FreeWAvaloniaRibbonCommands.Symbols
+            .Select(s => new RibbonMenuItem($"{s.Glyph}   {s.Label}", new RibbonCommandId(s.Id)))
+            .ToArray());
 
     public static RibbonDefinition BuildDefinition() =>
         new RibbonDefinitionBuilder()
@@ -120,11 +189,15 @@ internal static class FreeWRibbon
                 });
                 tab.Group("styles", "Styles", null, 75, g =>
                 {
+                    // Quick-style buttons (kept from the A1 wave; now model-backed via ApplyNamedStyle).
                     g.Button("freew.style-normal",   "Normal");
                     g.Button("freew.style-heading1", "Heading 1");
                     g.Button("freew.style-heading2", "Heading 2");
                     g.Button("freew.style-heading3", "Heading 3");
                     g.Button("freew.style-title",    "Title");
+                    // AV-STYLES: full built-in style gallery dropdown + clear-style.
+                    g.Dropdown("freew.styles-gallery", "Styles", BuildStylesMenu());
+                    g.Button("freew.style-clear", "Clear Style");
                 });
                 tab.Group("editing", "Editing", null, 70, g =>
                 {
@@ -135,10 +208,33 @@ internal static class FreeWRibbon
                 });
             })
             .Tab("insert", "Insert", "I", tab =>
-                tab.Group("tables", "Tables", null, 100, g =>
+            {
+                // AV-INSERT: Insert-tab depth.
+                tab.Group("pages", "Pages", null, 100, g =>
+                {
+                    g.Button("freew.page-break", "Page Break");
+                });
+                tab.Group("tables", "Tables", null, 98, g =>
                 {
                     g.Button("freew.insert-table", "Table");
-                }))
+                    g.Dropdown("freew.table", "Table…", BuildTableSizeMenu());
+                });
+                tab.Group("illustrations", "Illustrations", null, 96, g =>
+                {
+                    g.Button("freew.picture",  "Picture");
+                    g.Button("freew.shape",    "Shape");
+                    g.Button("freew.text-box", "Text Box");
+                });
+                tab.Group("header-footer", "Header & Footer", null, 94, g =>
+                {
+                    g.Button("freew.header", "Header");
+                    g.Button("freew.footer", "Footer");
+                });
+                tab.Group("symbols", "Symbols", null, 92, g =>
+                {
+                    g.Dropdown("freew.symbol", "Symbol", BuildSymbolMenu());
+                });
+            })
             .Tab("layout", "Layout", "L", tab =>
             {
                 // AV-PAGE: page-setup group — dialog launcher + quick orientation/margins/size.
@@ -174,10 +270,57 @@ internal static class FreeWRibbon
                 });
             })
             .Tab("review", "Review", "R", tab =>
-                tab.Group("tracking", "Tracking", null, 100, g =>
+            {
+                // AV-REVIEW: Proofing group — word count dialog.
+                tab.Group("proofing", "Proofing", null, 110, g =>
                 {
+                    g.Button("freew.word-count", "Word Count");
+                });
+                // AV-REVIEW: Comments group — new / delete review comment.
+                tab.Group("comments", "Comments", null, 100, g =>
+                {
+                    g.Button("freew.new-comment",    "New Comment");
+                    g.Button("freew.delete-comment", "Delete");
+                });
+                // AV-REVIEW: Tracking group — Track Changes toggle + reviewing pane.
+                tab.Group("tracking", "Tracking", null, 90, g =>
+                {
+                    g.Toggle("freew.track-changes", "Track Changes");
                     g.Toggle("freew.reviewingpane", "Reviewing Pane");
-                }))
+                });
+                // AV-REVIEW: Changes group — accept / reject (current + all).
+                tab.Group("changes", "Changes", null, 80, g =>
+                {
+                    g.Button("freew.accept-change", "Accept");
+                    g.Button("freew.accept-all",    "Accept All");
+                    g.Button("freew.reject-change", "Reject");
+                    g.Button("freew.reject-all",    "Reject All");
+                });
+            })
+            .Tab("references", "References", "S", tab =>
+            {
+                // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
+                tab.Group("toc", "Table of Contents", null, 110, g =>
+                {
+                    g.Button("freew.insert-toc", "Table of Contents");
+                    g.Button("freew.update-toc", "Update Table");
+                });
+                tab.Group("footnotes", "Footnotes", null, 100, g =>
+                {
+                    g.Button("freew.insert-footnote", "Insert Footnote");
+                    g.Button("freew.insert-endnote",  "Insert Endnote");
+                });
+                tab.Group("citations", "Citations & Bibliography", null, 90, g =>
+                {
+                    g.Button("freew.insert-citation", "Insert Citation");
+                    g.Button("freew.bibliography",    "Bibliography");
+                });
+                tab.Group("captions", "Captions", null, 80, g =>
+                {
+                    g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.cross-reference",  "Cross-reference");
+                });
+            })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────
             .ContextualTab("table-design", "Table Design",
                 new RibbonTabContext(TableRibbonContextSource.TableContextKey, "Table Tools", RibbonContextColor.Teal),
@@ -235,6 +378,53 @@ internal static class FreeWRibbon
                         g.Button("freew.cell-align-bottom-right",  "Bottom Right");
                     });
                 })
+            // ── AV-PICTAB: Picture Format contextual tab (shown when a floating IMAGE is selected) ──
+            .ContextualTab("picture-format", "Picture Format",
+                new RibbonTabContext(FloatingRibbonContextSource.PictureContextKey, "Picture Tools", RibbonContextColor.Orange),
+                tab =>
+                {
+                    tab.Group("picture-arrange", "Arrange", null, 100, g =>
+                    {
+                        g.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
+                        g.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
+                        g.Button("freew.image-bring-to-front", "Bring to Front");
+                        g.Button("freew.image-send-to-back",   "Send to Back");
+                        g.Button("freew.image-bring-forward",  "Bring Forward");
+                        g.Button("freew.image-send-backward",  "Send Backward");
+                    });
+                    tab.Group("picture-size", "Size", null, 90, g =>
+                    {
+                        g.ComboBox("freew.image-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.image-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                    });
+                })
+            // ── AV-PICTAB: Drawing Format contextual tab (shown when a non-image float is selected) ──
+            .ContextualTab("drawing-format", "Drawing Format",
+                new RibbonTabContext(FloatingRibbonContextSource.DrawingContextKey, "Drawing Tools", RibbonContextColor.Purple),
+                tab =>
+                {
+                    // Shape Styles — fill/outline editing has no DocumentView setter yet (deferred);
+                    // the opener buttons are wired as safe no-ops so the registry stays complete.
+                    tab.Group("drawing-styles", "Shape Styles", null, 100, g =>
+                    {
+                        g.Button("freew.shape-fill",    "Shape Fill");
+                        g.Button("freew.shape-outline", "Shape Outline");
+                    });
+                    tab.Group("drawing-arrange", "Arrange", null, 90, g =>
+                    {
+                        g.Dropdown("freew.shape-wrap", "Wrap Text", BuildWrapMenu("shape"));
+                        g.Dropdown("freew.shape-rotate", "Rotate", BuildRotateMenu("shape"));
+                        g.Button("freew.shape-bring-to-front", "Bring to Front");
+                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                        g.Button("freew.shape-bring-forward",  "Bring Forward");
+                        g.Button("freew.shape-send-backward",  "Send Backward");
+                    });
+                    tab.Group("drawing-size", "Size", null, 80, g =>
+                    {
+                        g.ComboBox("freew.shape-width",  "Width",  c => c with { Items = FloatSizes, Width = 72 });
+                        g.ComboBox("freew.shape-height", "Height", c => c with { Items = FloatSizes, Width = 72 });
+                    });
+                })
             .Build();
 
     /// <summary>
@@ -276,6 +466,10 @@ internal sealed record RibbonHostCallbacks(
     Action<string> ApplyMarginPreset,
     /// <summary>Quick paper-size switch: "letter" (US Letter 8.5×11) or "a4" (210×297 mm).</summary>
     Action<string> ApplyPaperSize,
+    /// <summary>Insert &gt; Picture: open a file picker, load the image, insert it at the caret (AV-INSERT).</summary>
+    Action InsertPicture,
+    /// <summary>Opens the Word Count dialog (modal) showing words/characters/paragraphs from the model.</summary>
+    Action OpenWordCountDialog,
     /// <summary>
     /// Adjust zoom. Pass <paramref name="absolute"/> to set zoom to that scale; pass
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.

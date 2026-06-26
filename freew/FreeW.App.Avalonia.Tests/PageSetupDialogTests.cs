@@ -48,6 +48,8 @@ public sealed class PageSetupDialogTests
             ToggleOrientation: () => { },
             ApplyMarginPreset: _ => { },
             ApplyPaperSize: _ => { },
+            InsertPicture: () => { },
+            OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
     // ── Command registry ──────────────────────────────────────────────────────

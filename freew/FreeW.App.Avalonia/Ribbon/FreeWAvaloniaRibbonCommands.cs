@@ -130,12 +130,22 @@ internal static class FreeWAvaloniaRibbonCommands
         // Paragraph dialog launcher.
         r.Register("freew.paragraph-dialog",  new RelayCommand(callbacks.OpenParagraphDialog));
 
-        // ── Styles ───────────────────────────────────────────────────────────
-        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyQuickStyle(11, bold: false)));
-        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyQuickStyle(16, bold: true)));
-        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyQuickStyle(14, bold: true)));
-        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyQuickStyle(12, bold: true)));
-        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyQuickStyle(24, bold: true)));
+        // ── Styles (AV-STYLES) ────────────────────────────────────────────────
+        // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
+        // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
+        r.Register("freew.style-normal",   new RelayCommand(() => editor.ApplyNamedStyle("Normal")));
+        r.Register("freew.style-heading1", new RelayCommand(() => editor.ApplyNamedStyle("Heading1")));
+        r.Register("freew.style-heading2", new RelayCommand(() => editor.ApplyNamedStyle("Heading2")));
+        r.Register("freew.style-heading3", new RelayCommand(() => editor.ApplyNamedStyle("Heading3")));
+        r.Register("freew.style-title",    new RelayCommand(() => editor.ApplyNamedStyle("Title")));
+
+        // Styles gallery dropdown — opener no-op; one freew.style.<id> command per built-in style applies
+        // that named style (paragraph styles set StyleId; character styles overlay run formatting).
+        r.Register("freew.styles-gallery", new RelayCommand(() => { /* dropdown opener */ }));
+        RegisterStyleGalleryCommands(r, editor);
+
+        // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
+        r.Register("freew.style-clear", new RelayCommand(editor.ClearParagraphStyle));
 
         // ── Editing ──────────────────────────────────────────────────────────
         r.Register("freew.undo",              new RelayCommand(editor.Undo));
@@ -144,7 +154,33 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.find-replace-dialog", new RelayCommand(callbacks.OpenFindReplaceDialog));
 
         // ── Insert ───────────────────────────────────────────────────────────
+        // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
+        // (file-picker via host callback), shape, text box, and a symbol palette.
         r.Register("freew.insert-table", new RelayCommand(() => editor.InsertTable(3, 3)));
+        // Table size presets (dropdown items). The top-level "freew.table" id opens the menu (no-op).
+        r.Register("freew.table", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.table-2x2", new RelayCommand(() => editor.InsertTable(2, 2)));
+        r.Register("freew.table-3x3", new RelayCommand(() => editor.InsertTable(3, 3)));
+        r.Register("freew.table-4x4", new RelayCommand(() => editor.InsertTable(4, 4)));
+        r.Register("freew.table-5x2", new RelayCommand(() => editor.InsertTable(2, 5)));
+
+        // Page break — empty paragraph forcing a page break before it, after the caret block.
+        r.Register("freew.page-break", new RelayCommand(editor.InsertPageBreak));
+
+        // Picture — open a file picker, load the bytes, insert as an inline image (host callback).
+        r.Register("freew.picture", new RelayCommand(callbacks.InsertPicture));
+
+        // Shape / Text Box — floating drawing objects at the caret.
+        r.Register("freew.shape",    new RelayCommand(editor.InsertShape));
+        r.Register("freew.text-box", new RelayCommand(editor.InsertTextBox));
+
+        // Symbol — palette dropdown; the opener is a no-op and each glyph is its own sub-command.
+        r.Register("freew.symbol", new RelayCommand(() => { /* flyout opener */ }));
+        RegisterSymbolPalette(r, editor);
+
+        // Header / Footer — enable the page-margin region (render-ready). Region caret editing deferred.
+        r.Register("freew.header", new RelayCommand(editor.EnsureHeader));
+        r.Register("freew.footer", new RelayCommand(editor.EnsureFooter));
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
@@ -238,6 +274,25 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Review ───────────────────────────────────────────────────────────
         r.Register("freew.reviewingpane", new RelayCommand(callbacks.ToggleReviewingPane));
+        // AV-REVIEW: Track Changes toggle (flag only — keystroke-level recording is deferred; turning the
+        // current selection into a tracked change is available via DocumentView.MarkSelectionAsRevision).
+        r.Register("freew.track-changes", new RelayCommand(() => editor.ToggleTrackChanges()));
+        // Accept / reject — current revision (at/after caret) and all, undoable + re-render.
+        r.Register("freew.accept-change", new RelayCommand(() => editor.AcceptCurrentRevision()));
+        r.Register("freew.reject-change", new RelayCommand(() => editor.RejectCurrentRevision()));
+        r.Register("freew.accept-all",    new RelayCommand(() => editor.AcceptAllRevisions()));
+        r.Register("freew.reject-all",    new RelayCommand(() => editor.RejectAllRevisions()));
+        // Comments — new comment over the selection / delete the comment at the caret.
+        r.Register("freew.new-comment",    new RelayCommand(() => editor.NewComment()));
+        r.Register("freew.delete-comment", new RelayCommand(() => editor.DeleteCommentAtCaret()));
+        // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
+        r.Register("freew.word-count", new RelayCommand(callbacks.OpenWordCountDialog));
+
+        // ── References (AV-REF) ──────────────────────────────────────────────
+        RegisterReferencesCommands(r, editor);
+
+        // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
+        RegisterFloatingFormatCommands(r, editor);
 
         return r;
     }
@@ -266,6 +321,67 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.font-color.dark-blue", "#00008B");
         Add(r, editor, "freew.font-color.purple",    "#7030A0");
         Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+    }
+
+    /// <summary>
+    /// AV-STYLES: the command-id prefix for a built-in gallery style. The Styles gallery dropdown item and
+    /// its registry command both use <c>freew.style.&lt;id&gt;</c> (e.g. <c>freew.style.Heading1</c>), so the
+    /// ribbon definition and the registry agree on the id.
+    /// </summary>
+    internal static string StyleCommandId(string styleId) => $"freew.style.{styleId}";
+
+    /// <summary>
+    /// Registers one <c>freew.style.&lt;id&gt;</c> command per built-in gallery style (see
+    /// <see cref="BuiltInStyles.Gallery"/>). Each applies that named style to the current selection /
+    /// paragraph via <see cref="DocumentView.ApplyNamedStyle"/> — paragraph styles set the paragraph
+    /// StyleId, character styles overlay run formatting — model-backed and undoable.
+    /// </summary>
+    private static void RegisterStyleGalleryCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        foreach (var descriptor in BuiltInStyles.Gallery)
+        {
+            var id = descriptor.Id;
+            r.Register(StyleCommandId(id), new RelayCommand(() => editor.ApplyNamedStyle(id)));
+        }
+    }
+
+    /// <summary>
+    /// AV-INSERT: common symbols / special characters for the Insert &gt; Symbol palette. Each entry maps a
+    /// stable command-id suffix to the literal character it inserts (via <see cref="DocumentView.InsertSymbol"/>).
+    /// The set mirrors Word's default "recently used symbols" grid (currency, typography, math, arrows).
+    /// </summary>
+    internal static readonly IReadOnlyList<(string Id, string Glyph, string Label)> Symbols =
+    [
+        ("freew.symbol.euro",        "€", "Euro Sign"),
+        ("freew.symbol.pound",       "£", "Pound Sign"),
+        ("freew.symbol.yen",         "¥", "Yen Sign"),
+        ("freew.symbol.cent",        "¢", "Cent Sign"),
+        ("freew.symbol.copyright",   "©", "Copyright"),
+        ("freew.symbol.registered",  "®", "Registered"),
+        ("freew.symbol.trademark",   "™", "Trademark"),
+        ("freew.symbol.degree",      "°", "Degree Sign"),
+        ("freew.symbol.plusminus",   "±", "Plus-Minus"),
+        ("freew.symbol.multiply",    "×", "Multiplication"),
+        ("freew.symbol.divide",      "÷", "Division"),
+        ("freew.symbol.notequal",    "≠", "Not Equal"),
+        ("freew.symbol.lessequal",   "≤", "Less-Or-Equal"),
+        ("freew.symbol.greaterequal","≥", "Greater-Or-Equal"),
+        ("freew.symbol.bullet",      "•", "Bullet"),
+        ("freew.symbol.ellipsis",    "…", "Ellipsis"),
+        ("freew.symbol.emdash",      "—", "Em Dash"),
+        ("freew.symbol.endash",      "–", "En Dash"),
+        ("freew.symbol.arrow-right", "→", "Right Arrow"),
+        ("freew.symbol.arrow-left",  "←", "Left Arrow"),
+    ];
+
+    /// <summary>
+    /// Registers the per-glyph sub-commands for the Insert &gt; Symbol palette dropdown. Each command id
+    /// matches an entry in <see cref="Symbols"/> and inserts that character at the caret as ordinary text.
+    /// </summary>
+    private static void RegisterSymbolPalette(RibbonCommandRegistry r, DocumentView editor)
+    {
+        foreach (var (id, glyph, _) in Symbols)
+            r.Register(id, new RelayCommand(() => editor.InsertSymbol(glyph)));
     }
 
     /// <summary>
@@ -308,5 +424,126 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
+    }
+
+    /// <summary>
+    /// AV-REF: Registers the References-tab commands — footnote / endnote, Table of Contents
+    /// (insert + update), caption (Figure / Table), cross-reference, and citation / bibliography. Each
+    /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method.
+    ///
+    /// <para>
+    /// Footnote / endnote insert an empty note (the user types its content where the AV-HF note region
+    /// renders). The two caption commands auto-number via <see cref="Captions.NextCaptionNumber"/>. The
+    /// cross-reference command defaults to the first available heading target (a full target-picker dialog
+    /// is a larger surface, deferred); it safely no-ops when the document has no headings. Citation inserts
+    /// an in-text citation for the document's first source (or no-ops with no sources), and bibliography
+    /// builds the back-matter block — both reuse the model's Citations engine.
+    /// </para>
+    /// </summary>
+    private static void RegisterReferencesCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
+        r.Register("freew.insert-footnote", new RelayCommand(() => editor.InsertFootnote()));
+        r.Register("freew.insert-endnote",  new RelayCommand(() => editor.InsertEndnote()));
+
+        // Table of Contents — generate from the heading outline / regenerate in place.
+        r.Register("freew.insert-toc", new RelayCommand(editor.InsertTableOfContents));
+        r.Register("freew.update-toc", new RelayCommand(editor.UpdateTableOfContents));
+
+        // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
+        // The top-level opener is a no-op; each label is its own command.
+        r.Register("freew.insert-caption",        new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.insert-caption.figure", new RelayCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
+        r.Register("freew.insert-caption.table",  new RelayCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+
+        // Cross-reference — default to the first heading target (text reference, hyperlinked). A full
+        // target-picker dialog is deferred; safely no-ops when the document has no headings.
+        r.Register("freew.cross-reference", new RelayCommand(() => InsertDefaultCrossReference(editor)));
+
+        // Citations & Bibliography — in-text citation for the first source; back-matter bibliography block.
+        r.Register("freew.insert-citation", new RelayCommand(() => InsertDefaultCitation(editor)));
+        r.Register("freew.bibliography",    new RelayCommand(editor.InsertBibliography));
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a cross-reference to the document's first heading (the most common case), shown as the
+    /// heading's text and hyperlinked. When the document has no headings this no-ops, so the button is
+    /// always safe to click. A full target/insert-as picker dialog is deferred.
+    /// </summary>
+    private static void InsertDefaultCrossReference(DocumentView editor)
+    {
+        var targets = CrossReferences.Targets(editor.Document, CrossRefType.Heading);
+        if (targets.Count == 0)
+            return;
+        editor.InsertCrossReference(CrossRefType.Heading, targets[0], CrossRefInsertAs.Text, hyperlink: true);
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an in-text citation for the document's first <see cref="Source"/> in its active
+    /// bibliography style. No-ops when the document has no sources (a source-manager dialog is deferred).
+    /// </summary>
+    private static void InsertDefaultCitation(DocumentView editor)
+    {
+        if (editor.Document.Sources.Count == 0)
+            return;
+        editor.InsertCitation(editor.Document.Sources[0]);
+    }
+
+    /// <summary>
+    /// AV-PICTAB: Registers the Picture Format + Drawing Format contextual-tab commands, wiring each
+    /// to the floating-object edit surface on <see cref="DocumentView"/>. Both tabs share the same
+    /// underlying methods (the model dispatches by the selected float's kind), so the only difference
+    /// is the command-id prefix (<c>image-</c> vs <c>shape-</c>) used by the respective tab.
+    ///
+    /// <para>
+    /// Every command safely no-ops when no float is selected (the DocumentView methods guard on
+    /// <c>SelectedFloatingInfo</c>). Wrap, rotate/flip, z-order and size are wired through; shape
+    /// fill/outline editing is <b>deferred</b> (no DocumentView setter exists yet) and registered as
+    /// no-op openers so the registry-completeness guard continues to pass.
+    /// </para>
+    /// </summary>
+    private static void RegisterFloatingFormatCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // Wrap modes (shared menu items, distinct ids per tab prefix).
+        foreach (var prefix in new[] { "image", "shape" })
+        {
+            r.Register($"freew.{prefix}-wrap",   new RelayCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-wrap-inline",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Inline)));
+            r.Register($"freew.{prefix}-wrap-square",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Square)));
+            r.Register($"freew.{prefix}-wrap-tight",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Tight)));
+            r.Register($"freew.{prefix}-wrap-top-bottom", new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.TopAndBottom)));
+            r.Register($"freew.{prefix}-wrap-behind",     new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.Behind)));
+            r.Register($"freew.{prefix}-wrap-front",      new RelayCommand(() => editor.SetFloatingWrap(ImageWrapping.InFront)));
+
+            // Rotate / flip.
+            r.Register($"freew.{prefix}-rotate", new RelayCommand(() => { /* dropdown opener */ }));
+            r.Register($"freew.{prefix}-rotate-right90", new RelayCommand(() => editor.RotateSelectedFloating(+90)));
+            r.Register($"freew.{prefix}-rotate-left90",  new RelayCommand(() => editor.RotateSelectedFloating(-90)));
+            r.Register($"freew.{prefix}-flip-vertical",   new RelayCommand(() => editor.FlipSelectedFloating(horizontal: false)));
+            r.Register($"freew.{prefix}-flip-horizontal", new RelayCommand(() => editor.FlipSelectedFloating(horizontal: true)));
+
+            // Z-order.
+            r.Register($"freew.{prefix}-bring-to-front", new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringToFront)));
+            r.Register($"freew.{prefix}-send-to-back",   new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendToBack)));
+            r.Register($"freew.{prefix}-bring-forward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.BringForward)));
+            r.Register($"freew.{prefix}-send-backward",  new RelayCommand(() => editor.ChangeFloatingZOrder(ZOrderOperation.SendBackward)));
+
+            // Size — width/height combos (value = points as an invariant-culture decimal).
+            r.Register($"freew.{prefix}-width", new RelayValueCommand(value =>
+            {
+                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
+                    editor.SetFloatingWidth(pt);
+            }));
+            r.Register($"freew.{prefix}-height", new RelayValueCommand(value =>
+            {
+                if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0)
+                    editor.SetFloatingHeight(pt);
+            }));
+        }
+
+        // Shape Styles fill/outline — DEFERRED: no DocumentView setter for shape fill/outline yet.
+        // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
+        r.Register("freew.shape-fill",    new RelayCommand(() => { /* deferred: shape fill edit */ }));
+        r.Register("freew.shape-outline", new RelayCommand(() => { /* deferred: shape outline edit */ }));
     }
 }

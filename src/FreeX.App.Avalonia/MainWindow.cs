@@ -11717,9 +11717,17 @@ public sealed partial class MainWindow : Window
         // The color chosen in an edge's color picker, falling back to the shared Line color when unset.
         CellColor EdgeColor(FormatCellsColorPicker box) =>
             box.SelectedColor ?? SelectedBorderLineColor();
-        // Compose this edge's per-edge value: a CellBorder when the style box is a real style, else null.
-        CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox) =>
-            EdgeStyle(styleBox) is { } style ? new CellBorder(style, EdgeColor(colorBox)) : null;
+        // Compose this edge's per-edge value. Returns null (no change) while the edge still matches the
+        // value the dialog seeded from the cell's current border, so an untouched edge never re-applies
+        // the active cell's border across a mixed-border range; an explicit edit applies its style+colour.
+        CellBorder? ReadBorderSide(ComboBox styleBox, FormatCellsColorPicker colorBox, (BorderStyle? Style, CellColor Color) seeded)
+        {
+            var style = EdgeStyle(styleBox);
+            var color = EdgeColor(colorBox);
+            if (style == seeded.Style && (style is null || color == seeded.Color))
+                return null;
+            return style is { } s ? new CellBorder(s, color) : null;
+        }
 
         // Select the "None"/style entry in an edge's style box by BorderStyle (null => None).
         void SetEdgeStyle(ComboBox box, BorderStyle? style)
@@ -11903,6 +11911,44 @@ public sealed partial class MainWindow : Window
         borderRightColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
         borderStyleBox.SelectionChanged += (_, _) => RenderBorderPreview();
         borderColorBox.SelectionChanged += (_, _) => RenderBorderPreview();
+
+        // Seed the per-edge controls from the active cell's current borders (matching the WPF host) so
+        // opening Format Cells shows the existing borders. Guarded by borderSyncing so the two-way
+        // toggle/style handlers don't fight while seeding; the seeded values are captured so an
+        // untouched edge reads back as "no change" (see ReadBorderSide).
+        void SeedBorderEdge(ComboBox styleBox, FormatCellsColorPicker colorBox, ToggleButton toggle, CellBorder? border)
+        {
+            if (border is { } b && b.Style != BorderStyle.None)
+            {
+                SetEdgeStyle(styleBox, b.Style);
+                colorBox.SelectColor(b.Color);
+                toggle.IsChecked = true;
+            }
+            else
+            {
+                SetEdgeStyle(styleBox, null);
+                toggle.IsChecked = false;
+            }
+        }
+
+        borderSyncing = true;
+        try
+        {
+            SeedBorderEdge(borderTopStyleBox, borderTopColorBox, borderTopToggle, currentStyle.BorderTop);
+            SeedBorderEdge(borderRightStyleBox, borderRightColorBox, borderRightToggle, currentStyle.BorderRight);
+            SeedBorderEdge(borderBottomStyleBox, borderBottomColorBox, borderBottomToggle, currentStyle.BorderBottom);
+            SeedBorderEdge(borderLeftStyleBox, borderLeftColorBox, borderLeftToggle, currentStyle.BorderLeft);
+        }
+        finally
+        {
+            borderSyncing = false;
+        }
+
+        var seededTopBorder = (EdgeStyle(borderTopStyleBox), EdgeColor(borderTopColorBox));
+        var seededRightBorder = (EdgeStyle(borderRightStyleBox), EdgeColor(borderRightColorBox));
+        var seededBottomBorder = (EdgeStyle(borderBottomStyleBox), EdgeColor(borderBottomColorBox));
+        var seededLeftBorder = (EdgeStyle(borderLeftStyleBox), EdgeColor(borderLeftColorBox));
+
         RenderBorderPreview();
 
         var lockedBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Locked"), "FormatCellsLockedBox", currentLocked);
@@ -11986,10 +12032,10 @@ public sealed partial class MainWindow : Window
                 ? selectedBorderStyle
                 : BorderStyle.Thin;
             var borderColor = (borderColorBox.SelectedItem as FormatCellsColorChoice)?.Color;
-            var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox);
-            var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox);
-            var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox);
-            var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox);
+            var borderTopSide = ReadBorderSide(borderTopStyleBox, borderTopColorBox, seededTopBorder);
+            var borderBottomSide = ReadBorderSide(borderBottomStyleBox, borderBottomColorBox, seededBottomBorder);
+            var borderLeftSide = ReadBorderSide(borderLeftStyleBox, borderLeftColorBox, seededLeftBorder);
+            var borderRightSide = ReadBorderSide(borderRightStyleBox, borderRightColorBox, seededRightBorder);
             // Inner horizontal/vertical edges aren't single-cell StyleDiff edges; carry them via
             // the shared Inside preset (applied per-cell by the session) when no explicit preset
             // was chosen in the preset combo.
