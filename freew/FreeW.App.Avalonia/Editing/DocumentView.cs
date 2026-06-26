@@ -120,6 +120,16 @@ public sealed class DocumentView : Control
     // Number of discrete pages after the last layout pass.
     private int _pageCount = 1;
 
+    // ── AV-COL: multi-column body text layout fields ────────────────────────────────────────────────
+    // Number of body-text columns for the current layout (1 = single-column, the default).
+    private int    _colCount     = 1;
+    // Width of each equal column in DIP (0 when single-column).
+    private double _colWidth     = 0;
+    // Gap between adjacent columns in DIP (0 when single-column).
+    private double _colGap       = 0;
+    // Whether to draw a vertical rule line in each inter-column gap.
+    private bool   _colLineBetween = false;
+
     public DocumentView()
     {
         Focusable = true;
@@ -360,6 +370,46 @@ public sealed class DocumentView : Control
                 .Select(p => (p.Ch, p.X, p.W, p.Y, p.LineHeight,
                               p.Fmt.VerticalAlign == VerticalAlign.Subscript))
                 .ToList();
+
+    // ── AV-COL: column layout introspection for tests ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Number of body-text columns used in the current layout.
+    /// 1 when single-column or in Web/Draft modes; matches PageSettings.ColumnCount for multi-column.
+    /// </summary>
+    internal int LayoutColumnCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colCount; }
+    }
+
+    /// <summary>
+    /// Width of each equal column in the current layout, in DIP.
+    /// Equal to _contentWidth when single-column.
+    /// </summary>
+    internal double LayoutColumnWidth
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colWidth; }
+    }
+
+    /// <summary>
+    /// Gap between adjacent columns in the current layout, in DIP.
+    /// Zero when single-column.
+    /// </summary>
+    internal double LayoutColumnGap
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _colGap; }
+    }
+
+    /// <summary>
+    /// Returns the X-band [left, left+width) for the given 0-based column index in the current layout.
+    /// Used by tests to verify that each glyph's X coordinate falls within the correct column band.
+    /// </summary>
+    internal (double Left, double Width) LayoutColumnBand(int colIndex)
+    {
+        if (_laidOutWidth < 0) Relayout(FallbackWidth);
+        var left = _contentLeft + colIndex * (_colWidth + _colGap);
+        return (left, _colWidth);
+    }
 
     /// <summary>
     /// Returns the current caret position as (Block, Offset).
@@ -815,7 +865,43 @@ public sealed class DocumentView : Control
             _contentWidth = Math.Max(120, width - DraftInset * 2);
         }
 
-        var textWidth = _contentWidth;
+        // AV-COL: compute multi-column geometry from PageSettings.
+        // Only active in PrintLayout mode — Web/Draft always use a single column.
+        {
+            var pageColCount = _viewMode == DocumentViewMode.PrintLayout
+                ? Math.Max(1, _doc.Page.ColumnCount)
+                : 1;
+            if (pageColCount > 1)
+            {
+                var gapDip = Math.Max(0, _doc.Page.ColumnSpacingPt * PxPerPoint);
+                double colWidthDip;
+                if (_doc.Page.ColumnWidthsPt is { Count: > 1 } explicitWidths
+                    && explicitWidths.Count == pageColCount)
+                {
+                    // Unequal layout: use the narrowest column to guarantee all N columns fit.
+                    colWidthDip = explicitWidths.Min() * PxPerPoint;
+                }
+                else
+                {
+                    colWidthDip = (_contentWidth - (pageColCount - 1) * gapDip) / pageColCount;
+                }
+                colWidthDip = Math.Max(1, colWidthDip);
+                _colCount       = pageColCount;
+                _colWidth       = colWidthDip;
+                _colGap         = gapDip;
+                _colLineBetween = _doc.Page.ColumnsLineBetween;
+            }
+            else
+            {
+                _colCount       = 1;
+                _colWidth       = _contentWidth;
+                _colGap         = 0;
+                _colLineBetween = false;
+            }
+        }
+
+        // Body text layout uses _colWidth as the per-column wrap width.
+        var textWidth = _colWidth;
         // Available text-area height per page (between top and bottom margin).
         // For Web/Draft this is effectively infinite so ReserveContentY never paginates.
         var textAreaHeight = _viewMode == DocumentViewMode.PrintLayout
@@ -907,9 +993,11 @@ public sealed class DocumentView : Control
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            // The number of pages = pageIndex of the last content Y + 1.
-            var lastPageIndex = (int)(_layoutContentY / _layoutTextAreaHeight);
-            _pageCount = Math.Max(1, lastPageIndex + 1);
+            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
+            // Number of pages = ceil(slots / colCount).
+            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var totalSlots = lastSlot + 1;
+            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
             // Total scroll height: N pages * (pageHeight + gap) + initial DeskPadding + trailing bottom margin.
             _contentHeight = _pageCount * (_pageHeightPx + PageGap) + DeskPadding + _marginBottomDip;
         }
@@ -1152,8 +1240,13 @@ public sealed class DocumentView : Control
         if (_viewMode != DocumentViewMode.PrintLayout)
             return _marginTopDip + contentY;
 
-        var pageIndex = (int)(contentY / _layoutTextAreaHeight);
-        var offsetWithinPage = contentY - pageIndex * _layoutTextAreaHeight;
+        // AV-COL: with multi-column layout each "slot" is one column's worth of content.
+        // slot = the index of the column being filled (0 = page0/col0, 1 = page0/col1, ...).
+        // pageIndex = slot / _colCount  (multiple columns fill the same page).
+        // offsetWithinPage = contentY mod textAreaHeight  (within the column's vertical span).
+        var slot      = (int)(contentY / _layoutTextAreaHeight);
+        var pageIndex = slot / _colCount;
+        var offsetWithinPage = contentY - slot * _layoutTextAreaHeight;
         return DeskPadding + pageIndex * (_pageHeightPx + PageGap) + _marginTopDip + offsetWithinPage;
     }
 
@@ -1270,7 +1363,11 @@ public sealed class DocumentView : Control
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
             // Place the marker at the current content-space Y converted to page-space.
             var markerY = ContentYToPageSpaceY(_layoutContentY);
-            _markers.Add((_contentLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
+            // AV-COL: resolve column X for the list marker (same column as the paragraph's first line).
+            var markerSlot     = _layoutTextAreaHeight > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+            var markerColIndex = markerSlot % _colCount;
+            var markerColLeft  = _contentLeft + markerColIndex * (_colWidth + _colGap);
+            _markers.Add((markerColLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.
@@ -1403,7 +1500,13 @@ public sealed class DocumentView : Control
             }
         }
 
-        var x = _contentLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
+        // AV-COL: compute the left edge of the column this line lands in.
+        // slot = which column-slot (0-based across all pages); colIndex = slot % _colCount.
+        var lineSlot     = _layoutTextAreaHeight > 0 ? (int)(contentY / _layoutTextAreaHeight) : 0;
+        var lineColIndex = lineSlot % _colCount;
+        var colLeft      = _contentLeft + lineColIndex * (_colWidth + _colGap);
+
+        var x = colLeft + leftInset + AlignmentOffset(alignment, availableWidth, lineWidth, isLast);
         for (var c = from; c < to; c++)
         {
             _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
@@ -2225,6 +2328,8 @@ public sealed class DocumentView : Control
     private static IBrush PageDeskBrush   { get; } = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
     private static IBrush PageShadowBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x00, 0x00, 0x00));
     private static Pen    PageBorderPen   { get; } = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 0.5);
+    // AV-COL: thin gray rule drawn in each inter-column gap when ColumnsLineBetween is set.
+    private static Pen    ColumnRulePen   { get; } = new Pen(new SolidColorBrush(Colors.Gray), 1.0);
 
     // ---- Render ---------------------------------------------------------------------------------
 
@@ -2262,6 +2367,24 @@ public sealed class DocumentView : Control
                 context.FillRectangle(fill, rect);
             if (border)
                 context.DrawRectangle(null, TableBorderPen, rect);
+        }
+
+        // AV-COL: draw column rules (vertical divider lines in each inter-column gap) when enabled.
+        // One rule per gap, centred horizontally, running the full text-area height on each page.
+        if (_viewMode == DocumentViewMode.PrintLayout && _colCount > 1 && _colLineBetween)
+        {
+            for (var pi = 0; pi < _pageCount; pi++)
+            {
+                var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+                var ruleTop    = pageTop + _marginTopDip;
+                var ruleBottom = pageTop + _pageHeightPx - _marginBottomDip;
+                for (var ci = 0; ci < _colCount - 1; ci++)
+                {
+                    // Gap centre X = left edge of next column minus half gap.
+                    var gapCentreX = _contentLeft + (ci + 1) * (_colWidth + _colGap) - _colGap / 2;
+                    context.DrawLine(ColumnRulePen, new Point(gapCentreX, ruleTop), new Point(gapCentreX, ruleBottom));
+                }
+            }
         }
 
         // Behind-text pass: merge ALL six floating types into ONE list sorted by ZOrderIndex.
