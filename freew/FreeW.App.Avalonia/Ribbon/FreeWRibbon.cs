@@ -105,6 +105,14 @@ internal static class FreeWRibbon
             new("5 × 2 Table",       new RibbonCommandId("freew.table-5x2")),
         });
 
+    /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
+    private static RibbonMenu BuildCaptionMenu() =>
+        new(new RibbonMenuItem[]
+        {
+            new("Figure", new RibbonCommandId("freew.insert-caption.figure")),
+            new("Table",  new RibbonCommandId("freew.insert-caption.table")),
+        });
+
     /// <summary>AV-INSERT: Insert &gt; Symbol palette — common special characters.</summary>
     private static RibbonMenu BuildSymbolMenu() =>
         new(FreeWAvaloniaRibbonCommands.Symbols
@@ -270,6 +278,30 @@ internal static class FreeWRibbon
                     g.Button("freew.accept-all",    "Accept All");
                     g.Button("freew.reject-change", "Reject");
                     g.Button("freew.reject-all",    "Reject All");
+                });
+            })
+            .Tab("references", "References", "S", tab =>
+            {
+                // AV-REF: References-tab depth — TOC, footnotes/endnotes, captions, cross-ref, citations.
+                tab.Group("toc", "Table of Contents", null, 110, g =>
+                {
+                    g.Button("freew.insert-toc", "Table of Contents");
+                    g.Button("freew.update-toc", "Update Table");
+                });
+                tab.Group("footnotes", "Footnotes", null, 100, g =>
+                {
+                    g.Button("freew.insert-footnote", "Insert Footnote");
+                    g.Button("freew.insert-endnote",  "Insert Endnote");
+                });
+                tab.Group("citations", "Citations & Bibliography", null, 90, g =>
+                {
+                    g.Button("freew.insert-citation", "Insert Citation");
+                    g.Button("freew.bibliography",    "Bibliography");
+                });
+                tab.Group("captions", "Captions", null, 80, g =>
+                {
+                    g.Dropdown("freew.insert-caption", "Insert Caption", BuildCaptionMenu());
+                    g.Button("freew.cross-reference",  "Cross-reference");
                 });
             })
             // ── Table contextual tabs (shown only when caret is in a table cell) ─────────────

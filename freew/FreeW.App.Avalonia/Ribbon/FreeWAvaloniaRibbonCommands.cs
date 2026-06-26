@@ -278,6 +278,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // Word Count — opens the modal stats dialog (shell callback; reads DocumentStatistics).
         r.Register("freew.word-count", new RelayCommand(callbacks.OpenWordCountDialog));
 
+        // ── References (AV-REF) ──────────────────────────────────────────────
+        RegisterReferencesCommands(r, editor);
+
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);
 
@@ -389,6 +392,69 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, "freew.cell-align-bottom-left",    TableCellVerticalAlignment.Bottom, TextAlignment.Left);
         Add(r, editor, "freew.cell-align-bottom-center",  TableCellVerticalAlignment.Bottom, TextAlignment.Center);
         Add(r, editor, "freew.cell-align-bottom-right",   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
+    }
+
+    /// <summary>
+    /// AV-REF: Registers the References-tab commands — footnote / endnote, Table of Contents
+    /// (insert + update), caption (Figure / Table), cross-reference, and citation / bibliography. Each
+    /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method.
+    ///
+    /// <para>
+    /// Footnote / endnote insert an empty note (the user types its content where the AV-HF note region
+    /// renders). The two caption commands auto-number via <see cref="Captions.NextCaptionNumber"/>. The
+    /// cross-reference command defaults to the first available heading target (a full target-picker dialog
+    /// is a larger surface, deferred); it safely no-ops when the document has no headings. Citation inserts
+    /// an in-text citation for the document's first source (or no-ops with no sources), and bibliography
+    /// builds the back-matter block — both reuse the model's Citations engine.
+    /// </para>
+    /// </summary>
+    private static void RegisterReferencesCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
+        r.Register("freew.insert-footnote", new RelayCommand(() => editor.InsertFootnote()));
+        r.Register("freew.insert-endnote",  new RelayCommand(() => editor.InsertEndnote()));
+
+        // Table of Contents — generate from the heading outline / regenerate in place.
+        r.Register("freew.insert-toc", new RelayCommand(editor.InsertTableOfContents));
+        r.Register("freew.update-toc", new RelayCommand(editor.UpdateTableOfContents));
+
+        // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
+        // The top-level opener is a no-op; each label is its own command.
+        r.Register("freew.insert-caption",        new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.insert-caption.figure", new RelayCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
+        r.Register("freew.insert-caption.table",  new RelayCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+
+        // Cross-reference — default to the first heading target (text reference, hyperlinked). A full
+        // target-picker dialog is deferred; safely no-ops when the document has no headings.
+        r.Register("freew.cross-reference", new RelayCommand(() => InsertDefaultCrossReference(editor)));
+
+        // Citations & Bibliography — in-text citation for the first source; back-matter bibliography block.
+        r.Register("freew.insert-citation", new RelayCommand(() => InsertDefaultCitation(editor)));
+        r.Register("freew.bibliography",    new RelayCommand(editor.InsertBibliography));
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a cross-reference to the document's first heading (the most common case), shown as the
+    /// heading's text and hyperlinked. When the document has no headings this no-ops, so the button is
+    /// always safe to click. A full target/insert-as picker dialog is deferred.
+    /// </summary>
+    private static void InsertDefaultCrossReference(DocumentView editor)
+    {
+        var targets = CrossReferences.Targets(editor.Document, CrossRefType.Heading);
+        if (targets.Count == 0)
+            return;
+        editor.InsertCrossReference(CrossRefType.Heading, targets[0], CrossRefInsertAs.Text, hyperlink: true);
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an in-text citation for the document's first <see cref="Source"/> in its active
+    /// bibliography style. No-ops when the document has no sources (a source-manager dialog is deferred).
+    /// </summary>
+    private static void InsertDefaultCitation(DocumentView editor)
+    {
+        if (editor.Document.Sources.Count == 0)
+            return;
+        editor.InsertCitation(editor.Document.Sources[0]);
     }
 
     /// <summary>

@@ -5445,8 +5445,11 @@ public sealed class DocumentView : Control
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
+            // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
+            // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
+            var at = Math.Clamp(bodyOffset, 0, cells.Count);
             foreach (var ch in text)
-                cells.Insert(Math.Clamp(bodyOffset, 0, cells.Count), new Cell(ch, bodyFmt));
+                cells.Insert(at++, new Cell(ch, bodyFmt));
             SetRuns(p, cells);
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
@@ -6467,6 +6470,231 @@ public sealed class DocumentView : Control
     /// page-margin region (AV-INSERT). Undoable. Wired to the <c>freew.footer</c> ribbon command.
     /// </summary>
     public void EnsureFooter() => _bus.Execute(new EnsureHeaderFooterCommand(isFooter: true));
+
+    // ── AV-REF: References-tab inserts (footnote / endnote / TOC / caption / cross-reference / citation) ──
+
+    /// <summary>
+    /// AV-REF: Insert a footnote at the caret. Allocates the next footnote id, stores
+    /// <paramref name="text"/> as the note's content in <see cref="TextDocument.Footnotes"/>, and appends a
+    /// superscript reference run (carrying <see cref="Run.FootnoteId"/>) to the caret's body paragraph.
+    /// Both the note-store mutation and the marker insert run in a single undo group so one Ctrl+Z reverts
+    /// the whole insert. Mirrors the WPF host's <c>DocumentView.InsertFootnote</c>.
+    /// </summary>
+    public void InsertFootnote(string text = "") => InsertNote(text, footnote: true);
+
+    /// <summary>
+    /// AV-REF: Insert an endnote at the caret. Mirrors <see cref="InsertFootnote"/> but stores the content
+    /// in <see cref="TextDocument.Endnotes"/> (collected at the document end) and the marker carries
+    /// <see cref="Run.EndnoteId"/>.
+    /// </summary>
+    public void InsertEndnote(string text = "") => InsertNote(text, footnote: false);
+
+    // Shared footnote/endnote insert: create the note in the model store and append the matching
+    // reference run to the caret's host paragraph, grouped for a single undo.
+    private void InsertNote(string text, bool footnote)
+    {
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0)
+            return;
+
+        _bus.BeginUndoGroup();
+        var id = footnote ? _doc.NextFootnoteId() : _doc.NextEndnoteId();
+        // Seed the note's content store (an empty note when no text is supplied, ready for the user to type).
+        _bus.Execute(new AddNoteCommand(id, text ?? string.Empty, footnote));
+        var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
+        _bus.Execute(new InsertObjectRunCommand(hostIndex, marker));
+        _bus.CommitUndoGroup(footnote ? "Insert Footnote" : "Insert Endnote");
+
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a Table of Contents generated from the document's heading outline at (before) the
+    /// caret's block — front-matter placement, matching Word. The TOC is built by
+    /// <see cref="TableOfContents.Build"/> from Heading-styled paragraphs; each entry paragraph is inserted
+    /// through the undo/redo bus (grouped) so the whole TOC reverts in one undo. Mirrors the WPF host's
+    /// <c>DocumentView.InsertTableOfContents</c>.
+    /// </summary>
+    public void InsertTableOfContents()
+    {
+        TableOfContents.EnsureStyles(_doc);
+        var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
+        InsertTocAt(at, "Insert Table of Contents");
+    }
+
+    /// <summary>
+    /// AV-REF: Rebuild the Table of Contents — remove the previously inserted TOC region (paragraphs
+    /// carrying a TOC style, see <see cref="TableOfContents.IsTocParagraph"/>) and re-insert a freshly
+    /// generated TOC at the same position. With no existing TOC this behaves like
+    /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
+    /// </summary>
+    public void UpdateTableOfContents()
+    {
+        TableOfContents.EnsureStyles(_doc);
+
+        // Collect the existing TOC paragraphs (the marker region). The first anchors the re-insert point.
+        var tocIndices = new List<int>();
+        for (var i = 0; i < _doc.Blocks.Count; i++)
+            if (TableOfContents.IsTocParagraph(_doc.Blocks[i]))
+                tocIndices.Add(i);
+
+        var insertAt = tocIndices.Count > 0 ? tocIndices[0] : 0;
+
+        _bus.BeginUndoGroup();
+        // Remove from the end so earlier indices stay valid.
+        for (var i = tocIndices.Count - 1; i >= 0; i--)
+            _bus.Execute(new DeleteParagraphCommand(tocIndices[i]));
+        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
+        foreach (var paragraph in TableOfContents.Build(_doc))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup("Update Table of Contents");
+    }
+
+    // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
+    private void InsertTocAt(int at, string label)
+    {
+        _bus.BeginUndoGroup();
+        var index = Math.Clamp(at, 0, _doc.Blocks.Count);
+        foreach (var paragraph in TableOfContents.Build(_doc))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup(label);
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an auto-numbered caption paragraph (e.g. "Figure 1: My diagram") of
+    /// <paramref name="label"/> with the given <paramref name="text"/> after the caret's block, so it reads
+    /// under the selected image/table. The next ordinal is computed by
+    /// <see cref="Captions.NextCaptionNumber"/>; the caption is a single <c>Caption</c>-styled paragraph
+    /// routed through the undo/redo bus. Mirrors the WPF host's <c>DocumentView.InsertCaption</c>.
+    /// </summary>
+    public void InsertCaption(CaptionLabel label, string text = "")
+    {
+        Captions.EnsureStyles(_doc);
+        var number = Captions.NextCaptionNumber(_doc, label);
+        var caption = Captions.BuildCaption(label, number, text);
+        var index = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
+        _bus.Execute(new InsertParagraphCommand(index, caption));
+        _caret = new DocPosition(index, BlockLength(index));
+        _selectionAnchor = _caret;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a cross-reference field at the caret pointing at <paramref name="target"/> of
+    /// <paramref name="type"/>, showing <paramref name="insertAs"/> and optionally as a clickable
+    /// hyperlink. For a body target lacking a bookmark anchor, a hidden <c>_Ref…</c> bookmark is added to
+    /// the target paragraph so the resulting REF/PAGEREF field resolves (Word auto-bookmarks the same way).
+    /// The inserted run carries a cached resolved value so it renders before the next update. Grouped into
+    /// one undo. Mirrors the WPF host's <c>DocumentView.InsertCrossReference</c>.
+    /// </summary>
+    public void InsertCrossReference(CrossRefType type, CrossRefTarget target, CrossRefInsertAs insertAs, bool hyperlink)
+    {
+        var hostIndex = ResolveReferenceHostBlock();
+        if (hostIndex < 0)
+            return;
+
+        var sourceBlock = _caret.Block;
+        var resolved = target;
+        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+
+        _bus.BeginUndoGroup();
+
+        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
+        if (fieldKind != CrossRefFieldKind.NoteRef
+            && string.IsNullOrEmpty(resolved.Anchor)
+            && resolved.BlockIndex is { } targetBlock
+            && targetBlock >= 0 && targetBlock < _doc.Blocks.Count
+            && _doc.Blocks[targetBlock] is Paragraph)
+        {
+            var anchor = EnsureCrossReferenceAnchor(targetBlock);
+            resolved = resolved with { Anchor = anchor };
+        }
+
+        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
+        var cached = CrossReferences.ResolveText(_doc, type, resolved, insertAs, sourceBlock);
+        var run = Run.CrossReferenceFieldRun(field, cached);
+        _bus.Execute(new InsertObjectRunCommand(hostIndex, run));
+        _bus.CommitUndoGroup("Insert Cross-reference");
+
+        _cellCaret = null;
+        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _selectionAnchor = _caret;
+    }
+
+    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
+    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
+    private string EnsureCrossReferenceAnchor(int blockIndex)
+    {
+        if (_doc.Blocks[blockIndex] is not Paragraph paragraph)
+            return string.Empty;
+        if (paragraph.BookmarkName is { Length: > 0 } existing)
+            return existing;
+
+        var used = new HashSet<string>(
+            _doc.Blocks.OfType<Paragraph>()
+                .Select(p => p.BookmarkName)
+                .Where(n => n is { Length: > 0 })!,
+            StringComparer.Ordinal);
+        var index = 1;
+        string name;
+        do
+        {
+            name = "_Ref" + index.ToString(CultureInfo.InvariantCulture);
+            index++;
+        }
+        while (used.Contains(name));
+
+        _bus.Execute(new SetBookmarkNameCommand(blockIndex, name));
+        return name;
+    }
+
+    /// <summary>
+    /// AV-REF: Insert an in-text citation for <paramref name="source"/> at the caret, formatted in the
+    /// document's active <see cref="TextDocument.BibliographyStyle"/> (e.g. APA "(Author, Year)"). Flows
+    /// through the ordinary text-edit/undo path (<see cref="InsertText"/>). Mirrors the WPF host's
+    /// <c>DocumentView.InsertCitation</c>.
+    /// </summary>
+    public void InsertCitation(Source source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        InsertText(Citations.FormatInText(source, _doc.BibliographyStyle));
+    }
+
+    /// <summary>
+    /// AV-REF: Insert a bibliography generated from the document's <see cref="TextDocument.Sources"/> at
+    /// (before) the caret's block, else at the document end. The paragraphs carry dedicated bibliography
+    /// styles (registered via <see cref="Citations.EnsureStyles"/>). Grouped into one undo. Mirrors the
+    /// WPF host's <c>DocumentView.InsertBibliography</c>.
+    /// </summary>
+    public void InsertBibliography()
+    {
+        Citations.EnsureStyles(_doc);
+        var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
+
+        _bus.BeginUndoGroup();
+        var index = at;
+        foreach (var paragraph in Citations.BuildBibliography(_doc, _doc.BibliographyStyle))
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
+        _bus.CommitUndoGroup("Insert Bibliography");
+    }
+
+    // Resolve the body paragraph that should host a reference marker (footnote/endnote/cross-ref). Prefer
+    // the caret's block when it is an editable body paragraph; otherwise the first editable body paragraph;
+    // otherwise append a fresh empty paragraph and host it there. Returns -1 only when no paragraph can be
+    // created (never, since a fresh one is appended) — defensive.
+    private int ResolveReferenceHostBlock()
+    {
+        var index = _caret.Block;
+        if (index >= 0 && index < _doc.Blocks.Count && _doc.Blocks[index] is Paragraph)
+            return index;
+        index = FirstEditableBlock();
+        if (index >= 0)
+            return index;
+        index = _doc.Blocks.Count;
+        _bus.Execute(new InsertBlockCommand(index, new Paragraph()));
+        return index;
+    }
 
     /// <summary>
     /// Append an object-carrying run to the caret's paragraph (or the nearest editable body paragraph),
