@@ -103,6 +103,10 @@ public static class SlideCloner
             WarpPreset        = tb.WarpPreset,       // Wave 16A
         };
 
+        // BA4: deep-copy warp adjust guides
+        foreach (var adj in tb.WarpAdjusts)
+            copy.WarpAdjusts.Add(adj);
+
         foreach (var para in tb.Paragraphs)
             copy.Paragraphs.Add(CloneParagraph(para));
 

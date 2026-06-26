@@ -231,6 +231,14 @@ public sealed class TextBody
     /// Null means no warp (flat text).
     /// </summary>
     public string? WarpPreset { get; set; }
+
+    /// <summary>
+    /// Adjust guide values for the warp preset geometry, from
+    /// <c>a:prstTxWarp/a:avLst/a:gd</c>.  Each entry is a (name, formula) pair,
+    /// e.g. ("adj1", "val 30000").  Empty when no custom guides are present.
+    /// Round-trips the avLst so non-default warp shapes are preserved.
+    /// </summary>
+    public List<(string Name, string Formula)> WarpAdjusts { get; } = new();
 }
 
 /// <summary>Vertical anchor (alignment) of a text body within its bounding box.</summary>

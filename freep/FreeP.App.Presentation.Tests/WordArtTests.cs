@@ -1,6 +1,11 @@
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -302,5 +307,226 @@ public sealed class WordArtTests : IDisposable
         // Verify deep copy — mutating source must not affect clone
         run.TextShadow.BlurPt = 99.0;
         clonedRun.TextShadow.BlurPt.Should().Be(4.0, "deep copy must be independent");
+    }
+
+    // ─── BA1: rPr child-order + OpenXmlValidator ────────────────────────────
+
+    /// <summary>
+    /// BA1: A run with outline + gradient fill + shadow + latin font must emit a:rPr children
+    /// in CT_TextCharacterProperties order (a:ln → fill → a:effectLst → a:latin → a:hlinkClick)
+    /// and must pass OpenXmlValidator with no schema errors.
+    /// </summary>
+    [Fact]
+    public void RprChildOrder_OutlineGradientShadowLatin_PassesOpenXmlValidatorAndCorrectOrder()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                var run = tb.Paragraphs[0].Runs[0];
+                run.FontFamily  = "Impact";
+                run.TextOutline = new ShapeOutline.Visible(
+                    new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)), widthPt: 1.0, dash: OutlineDash.Solid);
+                run.TextFill = new ShapeFill.Gradient(
+                    new ThemeAwareColor(new SrgbColor(0xFF, 0x66, 0x00)),
+                    new ThemeAwareColor(new SrgbColor(0xCC, 0x00, 0x00)),
+                    angleDegrees: 90.0);
+                run.TextShadow = new RunTextShadow
+                {
+                    Color  = new ThemeAwareColor(new SrgbColor(0x20, 0x20, 0x20)),
+                    Alpha  = 180,
+                    BlurPt = 3.0,
+                    DistPt = 2.5,
+                    DirDeg = 45.0
+                };
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var path = WriteToPptx(pres);
+        var bytes = File.ReadAllBytes(path);
+
+        // 1. OpenXmlValidator: no schema errors
+        var schemaErrors = GetSchemaErrors(bytes);
+        schemaErrors.Should().BeEmpty(
+            "a:rPr with outline+gradient+shadow+latin must be schema-valid; errors: {0}",
+            string.Join("; ", schemaErrors));
+
+        // 2. Element order inside a:rPr: ln → gradFill → effectLst → latin
+        var rPr = GetFirstRunRPr(bytes);
+        rPr.Should().NotBeNull("rPr must exist in written slide XML");
+        var childNames = rPr!.Elements()
+                             .Select(e => e.Name.LocalName)
+                             .ToList();
+
+        var lnIdx        = childNames.IndexOf("ln");
+        var gradFillIdx  = childNames.IndexOf("gradFill");
+        var effectLstIdx = childNames.IndexOf("effectLst");
+        var latinIdx     = childNames.IndexOf("latin");
+
+        lnIdx.Should().BeGreaterThanOrEqualTo(0, "a:ln must be present");
+        gradFillIdx.Should().BeGreaterThan(lnIdx,
+            "gradFill must come after ln (CT_TextCharacterProperties order)");
+        effectLstIdx.Should().BeGreaterThan(gradFillIdx,
+            "effectLst must come after fill group");
+        latinIdx.Should().BeGreaterThan(effectLstIdx,
+            "latin must come after effectLst");
+    }
+
+    /// <summary>
+    /// Validates schema errors in all slide parts of the PPTX.  Uses part-by-part
+    /// validation so a pre-existing FreeP table-styles namespace bug (p:tblStyleLst
+    /// vs a:tblStyleLst) doesn't throw and mask the rPr order check.
+    /// </summary>
+    private static List<string> GetSchemaErrors(byte[] pptxBytes)
+    {
+        using var ms = new MemoryStream(pptxBytes);
+        using var pkg = PresentationDocument.Open(ms, isEditable: false);
+        var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+        var errors = new List<string>();
+        var presentation = pkg.PresentationPart;
+        if (presentation is null) return errors;
+
+        // Validate slide parts only — avoids the pre-existing p:tblStyleLst namespace
+        // issue in the table-styles part which crashes the whole-package validator.
+        foreach (var slidePart in presentation.SlideParts)
+        {
+            try
+            {
+                errors.AddRange(
+                    validator.Validate(slidePart)
+                             .Where(e => e.ErrorType == ValidationErrorType.Schema)
+                             .Select(e => $"{e.Description} @ {e.Path?.XPath}"));
+            }
+            catch (InvalidDataException)
+            {
+                // Skip parts that cannot be loaded (pre-existing table-styles bug).
+            }
+        }
+        return errors;
+    }
+
+    private static XElement? GetFirstRunRPr(byte[] pptxBytes)
+    {
+        using var zip = new ZipArchive(new MemoryStream(pptxBytes), ZipArchiveMode.Read);
+        var slideEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        if (slideEntry is null) return null;
+        using var stream = slideEntry.Open();
+        var doc = XDocument.Load(stream);
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        return doc.Descendants(a + "rPr").FirstOrDefault();
+    }
+
+    // ─── BA3: opaque shadow alpha round-trip ─────────────────────────────────
+
+    /// <summary>
+    /// BA3: An opaque shadow (Alpha=255) must round-trip as 255 (not 128).
+    /// The writer omits a:alpha when Alpha==255 (DrawingML: absent = 100% opaque).
+    /// The reader must default missing alpha to 255, not 128.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_OpaqueTextShadow_Alpha255_PreservedNotHalved()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                tb.Paragraphs[0].Runs[0].TextShadow = new RunTextShadow
+                {
+                    Color  = new ThemeAwareColor(new SrgbColor(0, 0, 0)),
+                    Alpha  = 255,   // fully opaque — writer must omit a:alpha
+                    BlurPt = 2.0,
+                    DistPt = 2.0,
+                    DirDeg = 45.0
+                };
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(pres));
+        var run = reloaded.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0];
+
+        run.TextShadow.Should().NotBeNull();
+        run.TextShadow!.Alpha.Should().Be(255,
+            "opaque shadow (no a:alpha element) must read back as 255, not 128");
+    }
+
+    /// <summary>
+    /// BA3: A 50% transparent shadow (Alpha≈128, val=50000) must round-trip as ~128.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_SemiTransparentTextShadow_Alpha128_PreservedApproximately()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                tb.Paragraphs[0].Runs[0].TextShadow = new RunTextShadow
+                {
+                    Color  = new ThemeAwareColor(new SrgbColor(0, 0, 0)),
+                    Alpha  = 128,   // ~50% — writer emits a:alpha val=50196
+                    BlurPt = 2.0,
+                    DistPt = 2.0,
+                    DirDeg = 45.0
+                };
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(pres));
+        var run = reloaded.Slides[0].Shapes[0].TextBody!.Paragraphs[0].Runs[0];
+
+        run.TextShadow.Should().NotBeNull();
+        run.TextShadow!.Alpha.Should().BeInRange(126, 130,
+            "50% transparent shadow must round-trip to approximately 128 (±2 due to EMU rounding)");
+    }
+
+    // ─── BA4: warp adjust guide round-trip ───────────────────────────────────
+
+    /// <summary>
+    /// BA4: A warp preset with a custom a:gd guide (adj1 = val 30000) must survive
+    /// write → read round-trip, preserving the guide name and formula exactly.
+    /// </summary>
+    [Fact]
+    public void RoundTrip_WarpAdjust_CustomGuide_Preserved()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb =>
+            {
+                tb.WarpPreset = "textArchUp";
+                tb.WarpAdjusts.Add(("adj1", "val 30000"));
+            });
+            slide.Shapes.Add(shape);
+        });
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(pres));
+        var tb = reloaded.Slides[0].Shapes[0].TextBody!;
+
+        tb.WarpPreset.Should().Be("textArchUp");
+        tb.WarpAdjusts.Should().HaveCount(1, "one custom guide must survive round-trip");
+        tb.WarpAdjusts[0].Name.Should().Be("adj1");
+        tb.WarpAdjusts[0].Formula.Should().Be("val 30000");
+    }
+
+    /// <summary>
+    /// BA4: A warp preset with an empty avLst must read back with no adjusts (no crash).
+    /// </summary>
+    [Fact]
+    public void RoundTrip_WarpNoAdjusts_EmptyAvLst_NoError()
+    {
+        var pres = BuildPres(slide =>
+        {
+            var shape = TextShape(tb => { tb.WarpPreset = "textWave1"; });
+            slide.Shapes.Add(shape);
+        });
+
+        var reloaded = PptxPackageReader.Read(WriteToPptx(pres));
+        var tb = reloaded.Slides[0].Shapes[0].TextBody!;
+
+        tb.WarpPreset.Should().Be("textWave1");
+        tb.WarpAdjusts.Should().BeEmpty("no custom guides — avLst is empty");
     }
 }

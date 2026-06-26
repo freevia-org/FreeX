@@ -43,6 +43,7 @@ public sealed class AvaloniaCanvasGestureHandler
     // ── Resize ─────────────────────────────────────────────────────────────────
     private uint                              _resizeShapeId;
     private long                              _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
+    private double                            _resizeOrigRotationDeg;
     private SelectionAdornerLayer.HandleKind  _resizeHandle;
 
     // ── Rotate ─────────────────────────────────────────────────────────────────
@@ -409,15 +410,16 @@ public sealed class AvaloniaCanvasGestureHandler
     {
         var s = slide.Shapes.FirstOrDefault(sh => sh.Id == shapeId);
         if (s is null) return;
-        _gesture         = GestureKind.Resize;
-        _dragStartScreen = screenPt;
-        _dragStarted     = false;
-        _resizeShapeId   = shapeId;
-        _resizeOrigX     = s.OffsetXEmu;
-        _resizeOrigY     = s.OffsetYEmu;
-        _resizeOrigCx    = s.ExtentCxEmu;
-        _resizeOrigCy    = s.ExtentCyEmu;
-        _resizeHandle    = handle;
+        _gesture                = GestureKind.Resize;
+        _dragStartScreen        = screenPt;
+        _dragStarted            = false;
+        _resizeShapeId          = shapeId;
+        _resizeOrigX            = s.OffsetXEmu;
+        _resizeOrigY            = s.OffsetYEmu;
+        _resizeOrigCx           = s.ExtentCxEmu;
+        _resizeOrigCy           = s.ExtentCyEmu;
+        _resizeOrigRotationDeg  = s.RotationDeg;
+        _resizeHandle           = handle;
         pointer.Capture(_canvas);
     }
 
@@ -461,10 +463,18 @@ public sealed class AvaloniaCanvasGestureHandler
         double dxDip     = xf.ScaleScreenToDip(dxPx);
         double dyDip     = xf.ScaleScreenToDip(dyPx);
 
+        // AD3: Un-rotate the drag delta from world (screen-aligned) space into the shape's
+        // local frame so that dragging a handle moves the correct local edge regardless of
+        // rotation.  For a 0° shape this is an exact no-op.
+        double rot = _resizeOrigRotationDeg;
+        if (rot != 0)
+            (dxDip, dyDip) = SlideTransformCore.UnRotateDelta(dxDip, dyDip, rot);
+
         // Alt key disables snapping (PowerPoint convention), matching WPF CanvasGestureHandler.
         bool altHeld     = (modifiers & KeyModifiers.Alt) != 0;
         bool snapEnabled = (SnapToGrid || SnapToShapes) && !altHeld;
 
+        // Snapping is applied in the UN-ROTATED (local) frame — the dragged local edge position.
         if (snapEnabled && _editor.CurrentSlide is not null)
         {
             var slide      = _editor.CurrentSlide;
@@ -567,6 +577,110 @@ public sealed class AvaloniaCanvasGestureHandler
                 x = _resizeOrigX + ddx;  cx = Math.Max(MinEmu, _resizeOrigCx - ddx);
                 cy = Math.Max(MinEmu, _resizeOrigCy + ddy); break;
         }
+
+        // AD3: Anchor-fixed correction for rotated shapes.
+        // The bounds x,y,cx,cy are computed in the shape's LOCAL (un-rotated) frame.
+        // After rotation, the anchor corner (opposite to the dragged handle) must stay at
+        // the same WORLD position it occupied before the drag began.
+        // We fix this by computing where the anchor corner is in world space before and
+        // after the resize and translating the new origin accordingly.
+        if (rot != 0)
+        {
+            // Anchor corner in original LOCAL frame (the corner that must NOT move).
+            (double anchorLocalX, double anchorLocalY) = _resizeHandle switch
+            {
+                // Dragging SE → anchor is NW (top-left)
+                SelectionAdornerLayer.HandleKind.ResizeSE =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX),
+                     SlideTransformCore.EmuToDip(_resizeOrigY)),
+                // Dragging NW → anchor is SE (bottom-right)
+                SelectionAdornerLayer.HandleKind.ResizeNW =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX + _resizeOrigCx),
+                     SlideTransformCore.EmuToDip(_resizeOrigY + _resizeOrigCy)),
+                // Dragging NE → anchor is SW (bottom-left)
+                SelectionAdornerLayer.HandleKind.ResizeNE =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX),
+                     SlideTransformCore.EmuToDip(_resizeOrigY + _resizeOrigCy)),
+                // Dragging SW → anchor is NE (top-right)
+                SelectionAdornerLayer.HandleKind.ResizeSW =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX + _resizeOrigCx),
+                     SlideTransformCore.EmuToDip(_resizeOrigY)),
+                // Dragging N → anchor is S mid-edge
+                SelectionAdornerLayer.HandleKind.ResizeN =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
+                     SlideTransformCore.EmuToDip(_resizeOrigY + _resizeOrigCy)),
+                // Dragging S → anchor is N mid-edge
+                SelectionAdornerLayer.HandleKind.ResizeS =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX + _resizeOrigCx / 2),
+                     SlideTransformCore.EmuToDip(_resizeOrigY)),
+                // Dragging W → anchor is E mid-edge
+                SelectionAdornerLayer.HandleKind.ResizeW =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX + _resizeOrigCx),
+                     SlideTransformCore.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
+                // Dragging E → anchor is W mid-edge
+                SelectionAdornerLayer.HandleKind.ResizeE =>
+                    (SlideTransformCore.EmuToDip(_resizeOrigX),
+                     SlideTransformCore.EmuToDip(_resizeOrigY + _resizeOrigCy / 2)),
+                _ => (SlideTransformCore.EmuToDip(_resizeOrigX),
+                      SlideTransformCore.EmuToDip(_resizeOrigY))
+            };
+
+            // Original shape centre in DIP.
+            double origCx = SlideTransformCore.EmuToDip(_resizeOrigX) + SlideTransformCore.EmuToDip(_resizeOrigCx) / 2.0;
+            double origCy = SlideTransformCore.EmuToDip(_resizeOrigY) + SlideTransformCore.EmuToDip(_resizeOrigCy) / 2.0;
+
+            // World position of the anchor corner BEFORE resize (rotate local → world).
+            var (anchorWorldX, anchorWorldY) =
+                SlideTransformCore.RotatePoint(anchorLocalX, anchorLocalY, origCx, origCy, rot);
+
+            // New bounds in local frame (in DIP).
+            double newXDip  = SlideTransformCore.EmuToDip(x);
+            double newYDip  = SlideTransformCore.EmuToDip(y);
+            double newCxDip = SlideTransformCore.EmuToDip(cx);
+            double newCyDip = SlideTransformCore.EmuToDip(cy);
+
+            // New shape centre in local frame — the local-frame anchor corner's counterpart
+            // in the new (resized) bounding box.
+            (double newAnchorLocalX, double newAnchorLocalY) = _resizeHandle switch
+            {
+                SelectionAdornerLayer.HandleKind.ResizeSE =>
+                    (newXDip, newYDip),
+                SelectionAdornerLayer.HandleKind.ResizeNW =>
+                    (newXDip + newCxDip, newYDip + newCyDip),
+                SelectionAdornerLayer.HandleKind.ResizeNE =>
+                    (newXDip, newYDip + newCyDip),
+                SelectionAdornerLayer.HandleKind.ResizeSW =>
+                    (newXDip + newCxDip, newYDip),
+                SelectionAdornerLayer.HandleKind.ResizeN =>
+                    (newXDip + newCxDip / 2, newYDip + newCyDip),
+                SelectionAdornerLayer.HandleKind.ResizeS =>
+                    (newXDip + newCxDip / 2, newYDip),
+                SelectionAdornerLayer.HandleKind.ResizeW =>
+                    (newXDip + newCxDip, newYDip + newCyDip / 2),
+                SelectionAdornerLayer.HandleKind.ResizeE =>
+                    (newXDip, newYDip + newCyDip / 2),
+                _ => (newXDip, newYDip)
+            };
+
+            // New shape centre in local frame.
+            double newCenLocalX = newXDip + newCxDip / 2.0;
+            double newCenLocalY = newYDip + newCyDip / 2.0;
+
+            // The rotation centre is the new shape centre in world space.
+            // In world space the new anchor corner position = rotate(newAnchorLocal about newCenLocal).
+            var (newAnchorWorldX, newAnchorWorldY) =
+                SlideTransformCore.RotatePoint(newAnchorLocalX, newAnchorLocalY,
+                                               newCenLocalX, newCenLocalY, rot);
+
+            // Translate the shape's origin so the anchor corner lands on its original world position.
+            double shiftX = anchorWorldX - newAnchorWorldX;
+            double shiftY = anchorWorldY - newAnchorWorldY;
+
+            x = SlideTransformCore.DipToEmu(newXDip + shiftX);
+            y = SlideTransformCore.DipToEmu(newYDip + shiftY);
+            // cx/cy are unchanged — only the position moves.
+        }
+
         return (x, y, cx, cy);
     }
 
@@ -755,15 +869,16 @@ public sealed class AvaloniaCanvasGestureHandler
     /// </summary>
     internal void SeedResizeState(Point startScreen, SlideShape shape, SelectionAdornerLayer.HandleKind handle)
     {
-        _dragStartScreen = startScreen;
-        _dragStarted     = true;
-        _resizeShapeId   = shape.Id;
-        _resizeOrigX     = shape.OffsetXEmu;
-        _resizeOrigY     = shape.OffsetYEmu;
-        _resizeOrigCx    = shape.ExtentCxEmu;
-        _resizeOrigCy    = shape.ExtentCyEmu;
-        _resizeHandle    = handle;
-        _gesture         = GestureKind.Resize;
+        _dragStartScreen       = startScreen;
+        _dragStarted           = true;
+        _resizeShapeId         = shape.Id;
+        _resizeOrigX           = shape.OffsetXEmu;
+        _resizeOrigY           = shape.OffsetYEmu;
+        _resizeOrigCx          = shape.ExtentCxEmu;
+        _resizeOrigCy          = shape.ExtentCyEmu;
+        _resizeOrigRotationDeg = shape.RotationDeg;
+        _resizeHandle          = handle;
+        _gesture               = GestureKind.Resize;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

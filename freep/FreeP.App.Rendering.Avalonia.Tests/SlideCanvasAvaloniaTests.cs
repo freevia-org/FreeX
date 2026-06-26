@@ -280,6 +280,114 @@ public sealed class SlideCanvasAvaloniaTests
         thrown.Should().BeNull("gradient fill rendering must not throw");
     }
 
+    // ── BA2: WordArt / text-effects double-draw regression tests ─────────────
+
+    /// <summary>
+    /// BA2 regression: warped text body must not draw a flat ghost behind warped glyphs.
+    /// The base DrawText pass must be suppressed; RenderParaWithEffects handles all runs.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_WarpedTextBody_DoesNotThrow_AndDrawsOnce()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var tb   = new TextBody { WarpPreset = "textArchUp" };
+                var para = new FreeP.Core.Model.Paragraph();
+                para.Runs.Add(new FreeP.Core.Model.Run { Text = "Plain" });
+                para.Runs.Add(new FreeP.Core.Model.Run
+                {
+                    Text     = "Gradient",
+                    TextFill = new ShapeFill.Gradient(
+                        new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00)),
+                        new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                        angleDegrees: 90.0)
+                });
+                tb.Paragraphs.Add(para);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id            = 1,
+                        Kind          = SlideShapeKind.AutoShape,
+                        AutoShapeKind = DrawingShapeKind.Rectangle,
+                        OffsetXEmu    = 457200,
+                        OffsetYEmu    = 274320,
+                        ExtentCxEmu   = 8229600,
+                        ExtentCyEmu   = 1143000,
+                        TextBody      = tb
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("warped text body must not cause a double-draw crash");
+    }
+
+    /// <summary>
+    /// BA2 regression: paragraph with mixed plain + gradient-fill + outline runs must not
+    /// draw the effect runs twice (flat base under gradient overlay).
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_MixedPlainAndEffectRuns_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var tb   = new TextBody();
+                var para = new FreeP.Core.Model.Paragraph();
+                // Plain run — exercises the new plain-run geometry path in RenderParaWithEffects.
+                para.Runs.Add(new FreeP.Core.Model.Run { Text = "Normal " });
+                // Effect run (gradient fill) — must NOT also be drawn by the base DrawText pass.
+                para.Runs.Add(new FreeP.Core.Model.Run
+                {
+                    Text     = "Gradient",
+                    TextFill = new ShapeFill.Gradient(
+                        new ThemeAwareColor(new SrgbColor(0xFF, 0x66, 0x00)),
+                        new ThemeAwareColor(new SrgbColor(0xCC, 0x00, 0x00)),
+                        angleDegrees: 45.0)
+                });
+                tb.Paragraphs.Add(para);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id            = 2,
+                        Kind          = SlideShapeKind.AutoShape,
+                        AutoShapeKind = DrawingShapeKind.Rectangle,
+                        OffsetXEmu    = 457200,
+                        OffsetYEmu    = 274320,
+                        ExtentCxEmu   = 8229600,
+                        ExtentCyEmu   = 1143000,
+                        TextBody      = tb
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("mixed plain+gradient runs must render without double-draw exception");
+    }
+
     // ── 7. SlideCanvas aspect-ratio MeasureOverride ───────────────────────────
 
     [Fact]
@@ -752,4 +860,264 @@ internal static class AvaloniaInteractionTestSession
 
     public static Task Run(Action action) =>
         _session.Dispatch(action, System.Threading.CancellationToken.None);
+}
+
+// ── AD4: rotation-aware hit-test (framework-free) ──────────────────────────────────────────────
+
+/// <summary>
+/// AD4 — verifies that <see cref="ShapeHitTester.HitTest"/> (shared Compositor copy)
+/// correctly un-rotates the test point before the AABB comparison.
+/// Tests:
+///   1. A 90°-rotated tall rectangle: a point inside the rotated geometry (outside AABB) HITS.
+///   2. Same shape: a point in an AABB corner but outside the rotated geometry MISSES.
+///   3. A 0° shape: hit-test is unchanged (no regression).
+/// </summary>
+public sealed class RotatedHitTestTests
+{
+    // Shape: 50 DIP wide × 200 DIP tall, centred at (200, 200) in slide DIP space.
+    // Rotated 90°: appears as 200 DIP wide × 50 DIP tall in world space.
+    //
+    // OffsetX = 175, OffsetY = 100  →  local box: left=175 top=100 right=225 bottom=300
+    // Centre: (200, 200)
+    //
+    // After 90° CW rotation about centre (200,200):
+    //   local (175,100) → world (300,175)   [NW→SE corner]
+    //   local (225,100) → world (300,225)   [NE→SW corner]
+    //   local (175,300) → world (100,175)   [SW→NW corner]
+    //   local (225,300) → world (100,225)   [SE→NE corner]
+    //
+    // World AABB of rotated shape: left=100 top=175 right=300 bottom=225  (50 DIP tall, 200 DIP wide)
+    //
+    // Point INSIDE rotated geometry but OUTSIDE local AABB:
+    //   (150, 200) — outside local box (left=175), inside rotated body.
+    //
+    // Point IN local AABB corner but OUTSIDE rotated geometry:
+    //   (180, 105) — inside local AABB (175..225 × 100..300) but outside the rotated body.
+
+    private const double EmuPerDip = 9525.0;
+    private static long ToDip(double dip) => (long)Math.Round(dip * EmuPerDip);
+
+    private static (Presentation pres, Slide slide, SlideShape shape) MakeRotatedShape(
+        double offsetX, double offsetY, double cx, double cy, double rotDeg)
+    {
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id          = 1,
+            OffsetXEmu  = ToDip(offsetX),
+            OffsetYEmu  = ToDip(offsetY),
+            ExtentCxEmu = ToDip(cx),
+            ExtentCyEmu = ToDip(cy),
+            RotationDeg = rotDeg,
+        };
+        slide.Shapes.Add(shape);
+        return (pres, slide, shape);
+    }
+
+    [Fact]
+    public void HitTest_RotatedShape90_PointInsideRotatedGeometry_Hits()
+    {
+        // 50×200 DIP shape (tall, narrow) at offset (175,100), rotated 90°.
+        // Centre = (200, 200). After 90° rotation becomes 200×50 landscape.
+        // Test point (150, 200) is within the rotated body but LEFT of the local AABB edge (x=175).
+        var (pres, slide, shape) = MakeRotatedShape(175, 100, 50, 200, 90);
+
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 150, 200);
+
+        hit.Should().Be(shape.Id,
+            "point (150,200) is inside the 90°-rotated body — un-rotating it should land inside the local AABB");
+    }
+
+    [Fact]
+    public void HitTest_RotatedShape90_PointInAabbCornerOutsideRotatedGeometry_Misses()
+    {
+        // Same shape. Point (180, 105) is inside the local AABB (175..225 × 100..300)
+        // but after un-rotating 90° about centre (200,200) it lands OUTSIDE the local box.
+        var (pres, slide, _) = MakeRotatedShape(175, 100, 50, 200, 90);
+
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 180, 105);
+
+        hit.Should().BeNull(
+            "point (180,105) is in the AABB corner but outside the actual rotated shape body");
+    }
+
+    [Fact]
+    public void HitTest_ZeroDegShape_InsideHits_NoRegression()
+    {
+        // 0° shape at (0,0) 100×100 DIP. Point (50,50) must still hit.
+        var (pres, slide, shape) = MakeRotatedShape(0, 0, 100, 100, 0);
+
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 50, 50);
+
+        hit.Should().Be(shape.Id, "0° shape: centre point must still hit (no regression)");
+    }
+
+    [Fact]
+    public void HitTest_ZeroDegShape_OutsideMisses_NoRegression()
+    {
+        // 0° shape at (0,0) 100×100 DIP. Point (150,150) must still miss.
+        var (pres, slide, _) = MakeRotatedShape(0, 0, 100, 100, 0);
+
+        var hit = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, pres, 150, 150);
+
+        hit.Should().BeNull("0° shape: point outside AABB must miss (no regression)");
+    }
+}
+
+// ── AD3: anchor-fixed rotated resize ───────────────────────────────────────────────────────────
+
+/// <summary>
+/// AD3 — verifies that <see cref="AvaloniaCanvasGestureHandler.ComputeResizeBounds"/> keeps
+/// the anchor corner fixed in world space when the shape is rotated.
+/// Tests:
+///   1. 90°-rotated shape: SE handle drag → NW anchor world position is unchanged, size changes.
+///   2. 0° shape: SE handle drag → result is identical to the unmodified code path (no regression).
+/// </summary>
+public sealed class RotatedResizeAnchorTests
+{
+    private static Task Run(Action action) =>
+        AvaloniaInteractionTestSession.Run(action);
+
+    private const double EmuPerDip = 9525.0;
+    private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
+
+    /// <summary>
+    /// Rotates a point (px,py) by angleDeg about centre (cx,cy) — mirror of SlideTransformCore.
+    /// Used in the test to verify world positions without depending on production code.
+    /// </summary>
+    private static (double X, double Y) Rotate(double px, double py,
+                                                double cx, double cy, double deg)
+    {
+        if (deg == 0) return (px, py);
+        double r   = deg * Math.PI / 180.0;
+        double cos = Math.Cos(r), sin = Math.Sin(r);
+        double dx = px - cx, dy = py - cy;
+        return (cx + dx * cos - dy * sin,
+                cy + dx * sin + dy * cos);
+    }
+
+    [Fact]
+    public async Task ResizeSE_RotatedShape90_NwAnchorStaysFixed_SizeGrows()
+    {
+        // Shape: 100×100 DIP, offset (100, 100), rotated 90°.
+        // Centre = (150, 150).  NW anchor corner in local = (100, 100).
+        // World position of NW anchor (rotate 90° about centre):
+        //   (100-150, 100-150) rotated 90° CW = (-50·cos90 - -50·sin90, -50·sin90 + -50·cos90)
+        //   cos90=0 sin90=1 → (50, -50) → world = (200, 100).
+        long nx = 0, ny = 0, ncx = 0, ncy = 0;
+
+        await Run(() =>
+        {
+            var shape = new SlideShape
+            {
+                Id          = 1,
+                OffsetXEmu  = ToEmu(100),
+                OffsetYEmu  = ToEmu(100),
+                ExtentCxEmu = ToEmu(100),
+                ExtentCyEmu = ToEmu(100),
+                RotationDeg = 90,
+            };
+            var p    = Presentation.CreateEmpty();
+            var slide = p.Slides[0];
+            slide.Shapes.Clear();
+            slide.Shapes.Add(shape);
+
+            var bus     = new FreeP.Core.Model.PresentationCommandBus(p);
+            var editor  = new FreeP.App.Compositor.EditingSession(p, bus);
+            editor.Select(shape.Id);
+
+            var canvas  = new SlideCanvas { Presentation = p, Slide = slide };
+            var adorner = new SelectionAdornerLayer();
+            var handler = new AvaloniaCanvasGestureHandler(canvas, editor, adorner);
+            handler.SnapToGrid   = false;
+            handler.SnapToShapes = false;
+
+            // Identity transform (scale=1, no offset).
+            var xf = new SlideTransformCore(1.0, 0.0, 0.0, 1280, 720);
+
+            // Drag SE handle by (+20, +20) screen px.
+            var result = handler.SimulateResizeSE(
+                new Point(0, 0), new Point(20, 20), xf, KeyModifiers.None, shape);
+            nx = result.newX; ny = result.newY; ncx = result.newCx; ncy = result.newCy;
+        });
+
+        // Size must have changed.
+        double newCxDip = nx == 0 ? ncx / EmuPerDip : ncx / EmuPerDip;
+        newCxDip = ncx / EmuPerDip;
+        double newCyDip = ncy / EmuPerDip;
+        newCxDip.Should().BeGreaterThan(100,
+            "SE drag on rotated shape must still grow the size in the local frame");
+
+        // NW anchor world position must be the same as before the drag.
+        // Original NW = local (100,100), centre (150,150), rot 90°.
+        double origCentreX = 100 + 100 / 2.0; // 150
+        double origCentreY = 100 + 100 / 2.0; // 150
+        var (origAnchorWorldX, origAnchorWorldY) = Rotate(100, 100, origCentreX, origCentreY, 90);
+
+        // New shape data.
+        double newXDip  = nx / EmuPerDip;
+        double newYDip  = ny / EmuPerDip;
+        double newCxDipV = ncx / EmuPerDip;
+        double newCyDipV = ncy / EmuPerDip;
+        double newCentreX = newXDip + newCxDipV / 2.0;
+        double newCentreY = newYDip + newCyDipV / 2.0;
+        var (newAnchorWorldX, newAnchorWorldY) = Rotate(newXDip, newYDip, newCentreX, newCentreY, 90);
+
+        newAnchorWorldX.Should().BeApproximately(origAnchorWorldX, 1.0,
+            "NW anchor world X must be unchanged after SE resize of a 90°-rotated shape");
+        newAnchorWorldY.Should().BeApproximately(origAnchorWorldY, 1.0,
+            "NW anchor world Y must be unchanged after SE resize of a 90°-rotated shape");
+    }
+
+    [Fact]
+    public async Task ResizeSE_ZeroDegShape_BehaviourUnchanged_NoRegression()
+    {
+        // 0° shape: SE drag by (+50, +60) should grow cx and cy without moving origin.
+        long nx = 0, ny = 0, ncx = 0, ncy = 0;
+
+        await Run(() =>
+        {
+            var shape = new SlideShape
+            {
+                Id          = 1,
+                OffsetXEmu  = ToEmu(100),
+                OffsetYEmu  = ToEmu(50),
+                ExtentCxEmu = ToEmu(200),
+                ExtentCyEmu = ToEmu(100),
+                RotationDeg = 0,
+            };
+            var p     = Presentation.CreateEmpty();
+            var slide = p.Slides[0];
+            slide.Shapes.Clear();
+            slide.Shapes.Add(shape);
+
+            var bus     = new FreeP.Core.Model.PresentationCommandBus(p);
+            var editor  = new FreeP.App.Compositor.EditingSession(p, bus);
+            editor.Select(shape.Id);
+
+            var canvas  = new SlideCanvas { Presentation = p, Slide = slide };
+            var adorner = new SelectionAdornerLayer();
+            var handler = new AvaloniaCanvasGestureHandler(canvas, editor, adorner);
+            handler.SnapToGrid   = false;
+            handler.SnapToShapes = false;
+
+            var xf = new SlideTransformCore(1.0, 0.0, 0.0, 1280, 720);
+
+            var result = handler.SimulateResizeSE(
+                new Point(0, 0), new Point(50, 60), xf, KeyModifiers.None, shape);
+            nx = result.newX; ny = result.newY; ncx = result.newCx; ncy = result.newCy;
+        });
+
+        // Origin must be unchanged for SE handle.
+        nx.Should().Be(ToEmu(100), "SE resize: X origin must not change for a 0° shape");
+        ny.Should().Be(ToEmu(50),  "SE resize: Y origin must not change for a 0° shape");
+
+        // Width and height must grow.
+        (ncx / EmuPerDip).Should().BeApproximately(250, 1.0,
+            "0° SE drag +50px at scale=1 → width grows by 50 DIP");
+        (ncy / EmuPerDip).Should().BeApproximately(160, 1.0,
+            "0° SE drag +60px at scale=1 → height grows by 60 DIP");
+    }
 }

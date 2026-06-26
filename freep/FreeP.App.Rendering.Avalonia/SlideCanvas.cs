@@ -1027,10 +1027,13 @@ public sealed class SlideCanvas : Control
             curY += para.SpaceBeforePt * (96.0 / 72.0);
 
             // Wave 16A: use geometry-based rendering when any run has text effects or warp is active.
+            // BA2 fix: when effects/warp are active, skip the flat DrawText base pass entirely and
+            // let RenderParaWithEffects draw ALL runs (plain ones at their flat baseline, effect/warp
+            // ones with the appropriate transforms). This prevents each effect/warp run being drawn
+            // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
             if (hasEffects)
             {
-                dc.DrawText(ft, new Point(textX, curY)); // draw base
                 RenderParaWithEffects(dc, para, textX, curY, bounds, text.WarpPreset);
             }
             else
@@ -1199,11 +1202,27 @@ public sealed class SlideCanvas : Control
         foreach (var run in para.Runs)
         {
             bool hasEffects = run.TextFill is not null || run.TextOutline is not null || run.TextShadow is not null;
-            if (!hasEffects && warpYOffset is null) { pos += run.Text.Length; continue; }
 
             double runOffX = ComputeRunOffsetX(para, pos);
             double drawX = x + runOffX;
             double drawY = y;
+
+            // BA2 fix: plain runs are no longer drawn by an outer DrawText pass, so draw them here
+            // at their flat baseline (no warp, solid-color fill, no outline).
+            if (!hasEffects && warpYOffset is null)
+            {
+                var plainFt  = BuildSingleRunFormattedText(run);
+                var plainGeo = plainFt.BuildGeometry(new Point(drawX, drawY));
+                if (plainGeo is not null)
+                {
+                    IBrush plainBrush = new SolidColorBrush(
+                        Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
+                    dc.DrawGeometry(plainBrush, null, plainGeo);
+                }
+                pos += run.Text.Length;
+                continue;
+            }
+
             if (warpYOffset is not null)
                 drawY += warpYOffset(shapeBounds.Width > 0 ? (drawX - shapeBounds.X) / shapeBounds.Width : 0,
                                      shapeBounds.Height);

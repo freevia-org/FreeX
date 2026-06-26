@@ -898,6 +898,244 @@ public sealed class DocumentViewFloatingFO3Tests
         Console.WriteLine($"[FO3Capture] Visual inspection: {outPath}");
     }
 
+    // ── BC1: Axis labels present in chart data ────────────────────────────────────────────────────
+    // These tests verify that the chart builds a FloatingChartData with non-empty Categories
+    // (which are the source for X-axis labels) and that the data round-trips from the model.
+
+    [Fact]
+    public async Task BC1_column_chart_categories_are_present_for_axis_labels()
+    {
+        int catCount = 0;
+        string? firstCat = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Column, ImageWrapping.InFront, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var snaps = view.FloatingChartDataSnapshots;
+            if (snaps.Count > 0)
+            {
+                catCount = snaps[0].Categories.Count;
+                firstCat = snaps[0].Categories.Count > 0 ? snaps[0].Categories[0] : null;
+            }
+        });
+
+        if (!ran) return;
+        catCount.Should().Be(3, "BC1: chart has 3 categories A/B/C — all must be present for X-axis labels");
+        firstCat.Should().Be("A", "BC1: first category label must be 'A'");
+    }
+
+    [Fact]
+    public async Task BC1_line_chart_categories_are_present_for_axis_labels()
+    {
+        int catCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingChart(ChartKind.Line, ImageWrapping.InFront, 0, 0);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var snaps = view.FloatingChartDataSnapshots;
+            if (snaps.Count > 0)
+                catCount = snaps[0].Categories.Count;
+        });
+
+        if (!ran) return;
+        catCount.Should().Be(3, "BC1: line chart categories must be present for X-axis labels");
+    }
+
+    [Fact]
+    public async Task BC1_chart_render_does_not_crash_with_categories()
+    {
+        // Verify the render path (DrawFloatingChart) completes without exception
+        // when categories are present (which triggers the new X-axis label drawing code).
+        bool completed = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor.", RunFormatting.Default));
+
+            var chart = Chart.Create(ChartKind.Column,
+                new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun" },
+                new[] { 10.0, 25.0, 15.0, 30.0, 20.0, 35.0 },
+                "Revenue", "Monthly Sales");
+            chart.ShowLegend = true;
+            // Use QuickLayoutId=5 (ShowDataLabels=true per ChartLayoutPreset) to exercise data labels.
+            chart.QuickLayoutId = 5;
+            chart.WidthPt  = 300;
+            chart.HeightPt = 200;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            // Simply measuring triggers the full chart drawing path.
+            completed = true;
+        });
+
+        if (!ran) return;
+        completed.Should().BeTrue("BC1: chart render with categories/legend/datalabels must not throw");
+    }
+
+    // ── BC2: Legend includes all series with fallback names ───────────────────────────────────────
+
+    [Fact]
+    public async Task BC2_all_series_present_in_chart_including_unnamed()
+    {
+        int seriesCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Anchor.", RunFormatting.Default));
+
+            // Two series: one named, one unnamed.
+            var chart = new Chart { Kind = ChartKind.Column };
+            chart.Categories.AddRange(new[] { "A", "B", "C" });
+            chart.Series.Add(new ChartSeries("Named S1", new[] { 1.0, 2.0, 3.0 }));
+            chart.Series.Add(new ChartSeries(string.Empty, new[] { 4.0, 5.0, 6.0 })); // no name
+            chart.ShowLegend = true;
+            chart.WidthPt  = 200;
+            chart.HeightPt = 130;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var snaps = view.FloatingChartDataSnapshots;
+            if (snaps.Count > 0)
+                seriesCount = snaps[0].SeriesCount;
+        });
+
+        if (!ran) return;
+        seriesCount.Should().Be(2, "BC2: both series (named and unnamed) must be preserved in FloatingChartData");
+    }
+
+    // ── BC3: Negative-value chart renders without crash ───────────────────────────────────────────
+
+    [Fact]
+    public async Task BC3_chart_with_negative_values_renders_without_crash()
+    {
+        bool completed = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Negative chart.", RunFormatting.Default));
+
+            var chart = new Chart { Kind = ChartKind.Column, QuickLayoutId = 5 }; // QuickLayoutId=5 → ShowDataLabels
+            chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4" });
+            chart.Series.Add(new ChartSeries("Profit", new[] { 10.0, -5.0, 8.0, -3.0 }));
+            chart.WidthPt  = 250;
+            chart.HeightPt = 160;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            completed = true;
+        });
+
+        if (!ran) return;
+        completed.Should().BeTrue("BC3: chart with negative values must render without exception");
+    }
+
+    [Fact]
+    public async Task BC3_all_zero_chart_renders_without_crash()
+    {
+        bool completed = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("All-zero chart.", RunFormatting.Default));
+
+            var chart = new Chart { Kind = ChartKind.Line };
+            chart.Categories.AddRange(new[] { "A", "B", "C" });
+            chart.Series.Add(new ChartSeries("Zero", new[] { 0.0, 0.0, 0.0 }));
+            chart.WidthPt  = 200;
+            chart.HeightPt = 130;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            completed = true;
+        });
+
+        if (!ran) return;
+        completed.Should().BeTrue("BC3: all-zero data must not divide-by-zero; renders without exception");
+    }
+
+    [Fact]
+    public async Task BC3_negative_line_chart_renders_without_crash()
+    {
+        bool completed = false;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Negative line chart.", RunFormatting.Default));
+
+            var chart = new Chart { Kind = ChartKind.Line };
+            chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar", "Apr" });
+            chart.Series.Add(new ChartSeries("Delta", new[] { -10.0, 5.0, -3.0, 8.0 }));
+            chart.WidthPt  = 250;
+            chart.HeightPt = 160;
+            chart.Placement = new FloatingPlacement
+            {
+                Wrapping         = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Column,
+                VerticalAnchor   = VerticalAnchor.Paragraph,
+            };
+            para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            doc.Blocks.Add(para);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            completed = true;
+        });
+
+        if (!ran) return;
+        completed.Should().BeTrue("BC3: line chart with negative values must render without exception");
+    }
+
     // ── PNG encoder ───────────────────────────────────────────────────────────────────────────────
 
     private static byte[] WriteableBitmapToPng(WriteableBitmap bitmap)

@@ -561,6 +561,23 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Extended snapshot of floating chart data for tests — includes Categories and Series count.
+    /// (Rect, BehindText, ZOrder, Kind, Title, Categories, SeriesCount)
+    /// </summary>
+    public IReadOnlyList<(Rect Rect, bool BehindText, int ZOrder, ChartKind Kind, string? Title,
+        IReadOnlyList<string> Categories, int SeriesCount)> FloatingChartDataSnapshots
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingCharts.Select(c =>
+                (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title,
+                 (IReadOnlyList<string>)c.Categories.AsReadOnly(),
+                 c.Series.Count)).ToList();
+        }
+    }
+
     /// <summary>Number of floating WordArt objects collected during the last layout pass.</summary>
     public int FloatingWordArtCount
     {
@@ -1695,21 +1712,29 @@ public sealed class DocumentView : Control
             if (rect.Right <= colLeft || rect.Left >= colRight)
                 continue;
 
-            // Is the float on the left or right half of the column?
-            var floatCentreX = rect.Left + rect.Width / 2;
-            var colCentreX   = colLeft + colW / 2;
+            // BB1: Classify by which side of the column has MORE free room, not by float centre.
+            // A wide left-anchored float (>50% col width) had its centre past colCentre and was
+            // incorrectly classified as a RIGHT float, squeezing text into the float's own area.
+            var freeLeft  = rect.Left  - colLeft;   // gap on the left  side of the float
+            var freeRight = colRight   - rect.Right; // gap on the right side of the float
 
-            if (floatCentreX <= colCentreX)
+            // If neither side has enough room (< 20 DIP each), this float is handled as
+            // TopAndBottom by TopAndBottomExclusionBottom + AdvancePastTopAndBottomExclusions.
+            // Skip it here so we do not apply a lateral exclusion (which would leave text over the float).
+            if (freeLeft < 20 && freeRight < 20)
+                continue;
+
+            if (freeLeft >= freeRight)
             {
-                // Float is on the LEFT — push the line start rightward.
-                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
-                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
+                // Float is on the RIGHT side (more free space on the left) — reduce the available width.
+                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
+                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
             }
             else
             {
-                // Float is on the RIGHT — reduce the available width.
-                var shrinkTo = colRight - Math.Max(rect.Left - WrapGap, colLeft + 20);
-                if (shrinkTo > maxRightShrink) maxRightShrink = shrinkTo;
+                // Float is on the LEFT side (more free space on the right) — push the line start rightward.
+                var pushTo = Math.Min(rect.Right + WrapGap, colRight - 20) - colLeft;
+                if (pushTo > maxLeftDelta) maxLeftDelta = pushTo;
             }
         }
 
@@ -1731,16 +1756,31 @@ public sealed class DocumentView : Control
     /// intersects the vertical band [<paramref name="lineTopY"/>, <paramref name="lineTopY"/> +
     /// <paramref name="lineHeight"/>), or −1 if none does.  The caller should advance
     /// <c>_layoutContentY</c> past this bottom so the line lands below the float.
+    /// Also includes wide Square/Tight floats (BB1) that leave < 20 DIP free on BOTH sides,
+    /// as those behave like TopAndBottom — text must go below them rather than beside them.
     /// </summary>
     private double TopAndBottomExclusionBottom(double lineTopY, double lineHeight)
     {
         var lineBottomY = lineTopY + lineHeight;
+        var colW = _colCount > 1 ? _colWidth : _contentWidth;
         var maxBottom   = -1.0;
         foreach (var (rect, wrapping) in _wrapExclusions)
         {
-            if (wrapping != ImageWrapping.TopAndBottom) continue;
             if (rect.Bottom <= lineTopY || rect.Top >= lineBottomY) continue;
-            if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+            if (wrapping == ImageWrapping.TopAndBottom)
+            {
+                if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+            }
+            else
+            {
+                // BB1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
+                var freeLeft  = rect.Left  - _contentLeft;
+                var freeRight = (_contentLeft + colW) - rect.Right;
+                if (freeLeft < 20 && freeRight < 20)
+                {
+                    if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
+                }
+            }
         }
         return maxBottom;
     }
@@ -1751,6 +1791,8 @@ public sealed class DocumentView : Control
     /// Loops until no TopAndBottom zone overlaps, capping at 200 iterations to prevent infinite loops
     /// for pathological documents.
     /// Only active when there are TopAndBottom exclusions registered.
+    /// BB2: In multi-column layout a TopAndBottom float blocks the entire page-width Y-band, so we
+    /// advance to the LAST column on the affected page (making all columns skip past the float's Y-band).
     /// </summary>
     private void AdvancePastTopAndBottomExclusions(double estimatedLineHeight)
     {
@@ -1764,9 +1806,6 @@ public sealed class DocumentView : Control
 
             // Convert the exclusion bottom (page-space) back to content-space and advance past it.
             // Content Y = slot * textAreaHeight + offsetWithinPage.
-            // For the simple case: advance _layoutContentY so that PeekFirstLineContentY would land
-            // below exclusionBottom. We find the content Y that would produce a page-space Y of
-            // exclusionBottom by inverting ContentYToPageSpaceY.
             // PageSpaceY = DeskPadding + pageIndex*(pageHeight+gap) + marginTopDip + offsetWithinPage
             // We read the page index from the current slot, then:
             // offsetWithinPage = exclusionBottom - DeskPadding - pageIndex*(pageHeight+gap) - marginTopDip
@@ -1776,7 +1815,15 @@ public sealed class DocumentView : Control
                                     ? DeskPadding + pageIndex * (_pageHeightPx + PageGap)
                                     : 0;
             var offsetInPage  = exclusionBottom - pageTop - _marginTopDip;
-            var targetContentY = slot * _layoutTextAreaHeight + Math.Max(0, offsetInPage);
+            // Clamp offsetInPage so we never jump past this page's text area (wrong-page placement).
+            var clampedOffset = Math.Clamp(offsetInPage, 0, _layoutTextAreaHeight);
+
+            // BB2: A TopAndBottom float blocks ALL columns on this page. Advance to the last column
+            // slot of this page so that content does not flow into earlier sibling columns that share
+            // the same Y-band. lastSlotOnPage is the index of the rightmost column on pageIndex.
+            var lastSlotOnPage   = (pageIndex + 1) * _colCount - 1;
+            var targetContentY   = lastSlotOnPage * _layoutTextAreaHeight + clampedOffset;
+
             if (targetContentY <= _layoutContentY)
                 break; // safety: do not regress
             _layoutContentY = targetContentY;
@@ -5294,15 +5341,39 @@ public sealed class DocumentView : Control
 
         var annotFmt = new RunFormatting { FontSizePt = 7 };
 
-        // ── Legend geometry (right side, each series gets a swatch + name row) ──
-        // Reserve right strip for legend when ShowLegend and at least one named series exists.
-        var legendW = 0.0;
-        var namedSeries = cd.Series.Where(s => !string.IsNullOrEmpty(s.Name)).ToList();
-        if (cd.ShowLegend && namedSeries.Count > 0)
+        // BC2: Legend is placed at the BOTTOM (matches WPF). Build legend entries for ALL series
+        // with "Series N" fallback; for Pie/Doughnut use categories with "Item N" fallback.
+        var isPieFamily = cd.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        List<(string label, int colorIdx)> legendEntries = [];
+        if (cd.ShowLegend)
         {
-            var maxNameW = namedSeries.Max(s => Build(s.Name!, annotFmt).WidthIncludingTrailingWhitespace);
-            legendW = Math.Min(rect.Width * 0.30, maxNameW + 18); // swatch(10)+gap(4)+text+pad(4)
+            if (isPieFamily)
+            {
+                // Pie/doughnut: one entry per slice from Categories (or "Item N").
+                var sliceCount = cd.Series.Count > 0 ? cd.Series[0].Values.Count : cd.Categories.Count;
+                for (var i = 0; i < sliceCount; i++)
+                {
+                    var lbl = i < cd.Categories.Count && !string.IsNullOrEmpty(cd.Categories[i])
+                        ? cd.Categories[i] : $"Item {i + 1}";
+                    legendEntries.Add((lbl, i));
+                }
+            }
+            else
+            {
+                // Non-pie: one entry per series, "Series N" fallback.
+                for (var si = 0; si < cd.Series.Count; si++)
+                {
+                    var name = string.IsNullOrEmpty(cd.Series[si].Name) ? $"Series {si + 1}" : cd.Series[si].Name!;
+                    legendEntries.Add((name, si));
+                }
+            }
         }
+
+        // Legend height: reserve at bottom when entries exist.
+        const double legendRowH  = 11;
+        const double legendSwSz  = 8;
+        const double legendPad   = 2;
+        var legendH = legendEntries.Count > 0 ? legendRowH + legendPad * 2 : 0.0;
 
         // ── Value-axis (Y) title — left strip ──
         const double valAxisTitleW = 12; // width of rotated text strip
@@ -5316,22 +5387,38 @@ public sealed class DocumentView : Control
 
         // ── Plot area bounds after reserving annotation strips ──
         var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 8 : titleH + 4);
-        var plotBottom = rect.Bottom - 18 - catTitleH; // x-axis labels + optional cat title
+        var plotBottom = rect.Bottom - 18 - catTitleH - legendH; // x-axis labels + optional cat title + legend
         var plotLeft   = rect.X + 32 + valTitleW;      // y-axis labels + optional val title
-        var plotRight  = rect.Right - 8 - legendW;
+        var plotRight  = rect.Right - 8;
         var plotW      = Math.Max(10, plotRight - plotLeft);
         var plotH      = Math.Max(10, plotBottom - plotTop);
 
         if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
             return;
 
-        // ── Gridlines ──
+        // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
+        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
+        var zeroFraction = -axisMin / axisRange;
+
+        // ── Gridlines + BC1: Y-axis tick labels ──
         const int gridLines = 4;
         var gridPen = new Pen(ChartGridlineBrush, 0.5);
         for (var g = 0; g <= gridLines; g++)
         {
             var gy = plotBottom - g * plotH / gridLines;
             context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
+
+            // BC1: Draw value-axis tick label in the reserved left strip.
+            if (!isPieFamily)
+            {
+                var tickVal = axisMin + (g * axisRange / gridLines);
+                var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
+                var tickFt = Build(tickLabel, annotFmt);
+                var tx = plotLeft - tickFt.WidthIncludingTrailingWhitespace - 2;
+                var ty = gy - tickFt.Height / 2;
+                if (tx >= rect.X)
+                    context.DrawText(tickFt, new Point(tx, ty));
+            }
         }
 
         // ── Chart geometry ──
@@ -5359,6 +5446,62 @@ public sealed class DocumentView : Control
                 break;
         }
 
+        // BC1: Draw category-axis (X) labels under each bar/point group (mirrors WPF AddCategoryLabel).
+        if (!isPieFamily && cd.Categories.Count > 0)
+        {
+            var cats = cd.Categories.Count;
+            switch (cd.Kind)
+            {
+                case ChartKind.Column:
+                {
+                    var groupW = plotW / Math.Max(1, cats);
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var cx  = plotLeft + ci * groupW + groupW / 2;
+                        var tx  = cx - ft.WidthIncludingTrailingWhitespace / 2;
+                        var ty  = plotBottom + 2;
+                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
+                    }
+                    break;
+                }
+                case ChartKind.Bar:
+                {
+                    var groupH = plotH / Math.Max(1, cats);
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var cy  = plotTop + ci * groupH + groupH / 2;
+                        var ty  = cy - ft.Height / 2;
+                        // Label on the left side of the bar chart.
+                        var tx  = rect.X + 2;
+                        context.DrawText(ft, new Point(tx, ty));
+                    }
+                    break;
+                }
+                case ChartKind.Line:
+                case ChartKind.Scatter:
+                case ChartKind.Area:
+                {
+                    for (var ci = 0; ci < cats; ci++)
+                    {
+                        var cat = cd.Categories[ci];
+                        if (string.IsNullOrEmpty(cat)) continue;
+                        var ft  = Build(cat, annotFmt);
+                        var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
+                        var tx  = px - ft.WidthIncludingTrailingWhitespace / 2;
+                        var ty  = plotBottom + 2;
+                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
+                    }
+                    break;
+                }
+            }
+        }
+
         // ── Data labels ──
         if (cd.ShowDataLabels && cd.Series.Count > 0)
         {
@@ -5384,38 +5527,49 @@ public sealed class DocumentView : Control
         {
             var catTitleFt = Build(cd.CategoryAxisTitle!, annotFmt);
             var catTitleX = plotLeft + (plotW - catTitleFt.WidthIncludingTrailingWhitespace) / 2;
-            var catTitleY = rect.Bottom - catTitleFt.Height - 1;
+            var catTitleY = rect.Bottom - legendH - catTitleFt.Height - 1;
             context.DrawText(catTitleFt, new Point(Math.Max(rect.X + 2, catTitleX), catTitleY));
         }
 
-        // ── Legend (right strip) ──
-        if (cd.ShowLegend && namedSeries.Count > 0)
+        // BC2: Legend (BOTTOM, matches WPF) — all series with "Series N" fallback; pie uses categories.
+        if (legendEntries.Count > 0)
         {
-            const double swatchSz = 8;
-            const double rowH     = 11;
-            const double pad      = 4;
-            var legendX     = plotRight + pad;
-            var legendTotalH = namedSeries.Count * rowH;
-            var legendY     = (plotTop + plotBottom) / 2 - legendTotalH / 2;
+            const double swatchSz = legendSwSz;
+            const double rowH     = legendRowH;
+            const double pad      = legendPad;
+
+            // Lay the entries out horizontally centred, wrapping if needed.
+            var legendY  = rect.Bottom - legendH + pad;
+            var legendX0 = plotLeft;
+            var curX     = legendX0;
+            // Measure total width to centre.
+            var totalLegendW = 0.0;
+            foreach (var (lbl, _) in legendEntries)
+            {
+                var w = Build(lbl, annotFmt).WidthIncludingTrailingWhitespace;
+                totalLegendW += swatchSz + 3 + w + 12;
+            }
+            curX = plotLeft + Math.Max(0, (plotW - totalLegendW) / 2);
 
             // Semi-transparent background.
             context.FillRectangle(ChartLegendBg,
-                new Rect(legendX - 2, legendY - 2, legendW, legendTotalH + 4));
+                new Rect(rect.X, rect.Bottom - legendH, rect.Width, legendH));
 
-            for (var si = 0; si < namedSeries.Count; si++)
+            foreach (var (lbl, colorIdx) in legendEntries)
             {
-                var (name, _) = namedSeries[si];
-                var originalIdx = cd.Series.IndexOf(namedSeries[si]);
-                var color = ChartSeriesColors[(originalIdx >= 0 ? originalIdx : si) % ChartSeriesColors.Length];
+                var color = ChartSeriesColors[colorIdx % ChartSeriesColors.Length];
                 var brush = new SolidColorBrush(color);
-                var rowY = legendY + si * rowH;
+                var nameFt = Build(lbl, annotFmt);
+                var entryW = swatchSz + 3 + nameFt.WidthIncludingTrailingWhitespace + 12;
+
+                if (curX + entryW > plotRight)
+                    break; // stop if no room
 
                 // Swatch.
-                context.FillRectangle(brush, new Rect(legendX, rowY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
-
+                context.FillRectangle(brush, new Rect(curX, legendY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
                 // Name.
-                var nameFt = Build(name!, annotFmt);
-                context.DrawText(nameFt, new Point(legendX + swatchSz + 2, rowY + (rowH - nameFt.Height) / 2));
+                context.DrawText(nameFt, new Point(curX + swatchSz + 3, legendY + (rowH - nameFt.Height) / 2));
+                curX += entryW;
             }
         }
 
@@ -5432,14 +5586,35 @@ public sealed class DocumentView : Control
     /// For pie/doughnut: percentage text at the slice midpoint angle.
     /// Approximation: text is positioned geometrically; no collision avoidance.
     /// </summary>
+    /// <summary>
+    /// Shared helper: compute the axis [axisMin, axisMax] range for bar/line data labels and axis labels.
+    /// Ensures the range includes 0, guards degenerate all-zero data.
+    /// </summary>
+    private static (double axisMin, double axisMax, double axisRange) ComputeAxisRange(FloatingChartData cd)
+    {
+        var minVal = 0.0;
+        var maxVal = 0.0;
+        foreach (var (_, vals) in cd.Series)
+            foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+            }
+        var axisMin   = Math.Min(0, minVal);
+        var axisMax   = Math.Max(0, maxVal);
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        return (axisMin, axisMax, axisMax - axisMin);
+    }
+
     private void DrawChartDataLabels(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, double plotBottom,
         RunFormatting fmt)
     {
-        var maxVal = 1.0;
-        foreach (var (_, vals) in cd.Series)
-            foreach (var v in vals)
-                if (v > maxVal) maxVal = v;
+        // BC3: Use axis range that includes negative values.
+        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
+        var zeroFraction = -axisMin / axisRange;
+        var zeroY = plotBottom - zeroFraction * plotH;
+        var zeroX = plotLeft   + zeroFraction * plotW;
 
         switch (cd.Kind)
         {
@@ -5457,18 +5632,27 @@ public sealed class DocumentView : Control
                     var (_, vals) = cd.Series[si];
                     for (var ci = 0; ci < cats; ci++)
                     {
-                        var val   = ci < vals.Count ? vals[ci] : 0;
-                        var ratio = maxVal > 0 ? val / maxVal : 0;
-                        var bw    = Math.Max(1, seriesW - 1);
-                        var barH  = Math.Max(1, ratio * plotH);
-                        var bx    = plotLeft + barPad + ci * groupW + si * seriesW;
-                        var barTopY = plotBottom - barH;
+                        var val     = ci < vals.Count ? vals[ci] : 0;
+                        var bw      = Math.Max(1, seriesW - 1);
+                        var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
+                        var valFrac = val / axisRange;
+                        var barH    = Math.Abs(valFrac) * plotH;
+                        var barTopY = val >= 0 ? zeroY - barH : zeroY;
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
                         var lx = bx + (bw - ft.WidthIncludingTrailingWhitespace) / 2;
-                        var ly = barTopY - ft.Height - 1;
-                        if (ly < plotTop) ly = barTopY + 1; // flip inside bar if clipped
+                        double ly;
+                        if (val >= 0)
+                        {
+                            ly = barTopY - ft.Height - 1;
+                            if (ly < plotTop) ly = barTopY + 1;
+                        }
+                        else
+                        {
+                            ly = barTopY + barH + 1; // below the bar for negative
+                            if (ly + ft.Height > plotBottom) ly = barTopY - ft.Height - 1;
+                        }
                         context.DrawText(ft, new Point(Math.Max(plotLeft, lx), ly));
                     }
                 }
@@ -5490,15 +5674,15 @@ public sealed class DocumentView : Control
                     for (var ci = 0; ci < cats; ci++)
                     {
                         var val   = ci < vals.Count ? vals[ci] : 0;
-                        var ratio = maxVal > 0 ? val / maxVal : 0;
-                        var barW  = Math.Max(1, ratio * plotW);
+                        var barW  = Math.Abs(val / axisRange) * plotW;
+                        var bx    = val >= 0 ? zeroX : zeroX - barW;
                         var by    = plotTop + (ci * (barGroupH + 2 * barPad) + barPad + si * seriesH);
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
-                        var lx = plotLeft + barW + 1;
+                        var lx = val >= 0 ? bx + barW + 1 : bx - ft.WidthIncludingTrailingWhitespace - 1;
                         var ly = by + (Math.Max(1, seriesH - 1) - ft.Height) / 2;
-                        context.DrawText(ft, new Point(Math.Min(lx, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
+                        context.DrawText(ft, new Point(Math.Clamp(lx, plotLeft, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
                     }
                 }
                 break;
@@ -5516,7 +5700,7 @@ public sealed class DocumentView : Control
                     {
                         var val = vals[ci];
                         var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                        var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+                        var py  = plotBottom - ((val - axisMin) / axisRange * plotH);
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
@@ -5566,16 +5750,32 @@ public sealed class DocumentView : Control
         var nSeries = cd.Series.Count;
         var nBars   = cats;
 
-        // Find max value across all series.
-        var maxVal = 1.0;
+        // BC3: Compute axis range that includes negative values and anchors the zero baseline.
+        var minVal = 0.0;
+        var maxVal = 0.0;
         foreach (var (_, vals) in cd.Series)
             foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
                 if (v > maxVal) maxVal = v;
+            }
+        var axisMin = Math.Min(0, minVal);
+        var axisMax = Math.Max(0, maxVal);
+        // Guard degenerate all-zero data.
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        var axisRange = axisMax - axisMin;
 
-        var groupW = plotW / Math.Max(1, nBars);
-        var barPad = Math.Max(1, groupW * 0.1);
+        // Zero baseline position within the plot area.
+        // In vertical bars:  zeroY   = plotBottom - (0 - axisMin)/axisRange * plotH
+        // In horizontal bars: zeroX  = plotLeft   + (0 - axisMin)/axisRange * plotW
+        var zeroFraction = -axisMin / axisRange; // fraction of plotH/plotW at which y=0 lives
+        var zeroY = plotBottom - zeroFraction * plotH;
+        var zeroX = plotLeft   + zeroFraction * plotW;
+
+        var groupW    = plotW / Math.Max(1, nBars);
+        var barPad    = Math.Max(1, groupW * 0.1);
         var barGroupW = groupW - 2 * barPad;
-        var seriesW = barGroupW / Math.Max(1, nSeries);
+        var seriesW   = barGroupW / Math.Max(1, nSeries);
 
         for (var si = 0; si < nSeries; si++)
         {
@@ -5585,37 +5785,75 @@ public sealed class DocumentView : Control
 
             for (var ci = 0; ci < nBars; ci++)
             {
-                var val   = ci < vals.Count ? vals[ci] : 0;
-                var ratio = maxVal > 0 ? val / maxVal : 0;
+                var val = ci < vals.Count ? vals[ci] : 0;
 
                 if (horizontal)
                 {
-                    var bh     = Math.Max(1, seriesW - 1);
-                    var barH   = Math.Max(1, ratio * plotW);
-                    var by     = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
-                    var barRect = new Rect(plotLeft, by, barH, bh);
-                    context.FillRectangle(brush, barRect);
+                    var bh       = Math.Max(1, seriesW - 1);
+                    var by       = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
+                    var valFrac  = val / axisRange;
+                    var barW     = Math.Abs(valFrac) * plotW;
+                    double bx;
+                    if (val >= 0)
+                        bx = zeroX;
+                    else
+                    {
+                        bx   = zeroX - barW;
+                        barW = Math.Abs(barW);
+                    }
+                    if (barW < 1) barW = 1;
+                    context.FillRectangle(brush, new Rect(bx, by, barW, bh));
                 }
                 else
                 {
-                    var bw     = Math.Max(1, seriesW - 1);
-                    var barH   = Math.Max(1, ratio * plotH);
-                    var bx     = plotLeft + barPad + ci * groupW + si * seriesW;
-                    var barRect = new Rect(bx, plotBottom - barH, bw, barH);
-                    context.FillRectangle(brush, barRect);
+                    var bw      = Math.Max(1, seriesW - 1);
+                    var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
+                    var valFrac = val / axisRange;
+                    var barH    = Math.Abs(valFrac) * plotH;
+                    double barTop;
+                    if (val >= 0)
+                        barTop = zeroY - barH;
+                    else
+                        barTop = zeroY;
+                    if (barH < 1) barH = 1;
+                    context.FillRectangle(brush, new Rect(bx, barTop, bw, barH));
                 }
             }
         }
+
+        // Draw zero-baseline axis line.
+        var axisLinePen = new Pen(ChartGridlineBrush, 1.0);
+        if (!horizontal)
+            context.DrawLine(axisLinePen, new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
+        else
+            context.DrawLine(axisLinePen, new Point(zeroX, plotTop), new Point(zeroX, plotBottom));
     }
 
     private void DrawChartLines(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool fillArea)
     {
-        var cats   = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
-        var maxVal = 1.0;
+        var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
+
+        // BC3: Compute axis range including negative values.
+        var minVal = 0.0;
+        var maxVal = 0.0;
         foreach (var (_, vals) in cd.Series)
             foreach (var v in vals)
+            {
+                if (v < minVal) minVal = v;
                 if (v > maxVal) maxVal = v;
+            }
+        var axisMin   = Math.Min(0, minVal);
+        var axisMax   = Math.Max(0, maxVal);
+        if (axisMax <= axisMin) axisMax = axisMin + 1;
+        var axisRange = axisMax - axisMin;
+
+        // Zero baseline Y position within the plot.
+        var zeroFraction = -axisMin / axisRange;
+        var zeroY = plotBottom - zeroFraction * plotH;
+
+        // Map a data value to a pixel Y within the plot.
+        double ValToY(double v) => plotBottom - ((v - axisMin) / axisRange) * plotH;
 
         for (var si = 0; si < cd.Series.Count; si++)
         {
@@ -5630,7 +5868,7 @@ public sealed class DocumentView : Control
             {
                 var val = ci < vals.Count ? vals[ci] : 0;
                 var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                var py  = plotBottom - (maxVal > 0 ? val / maxVal * plotH : 0);
+                var py  = ValToY(val);
                 pts.Add(new Point(px, py));
             }
 
@@ -5641,13 +5879,17 @@ public sealed class DocumentView : Control
             {
                 var geo = new StreamGeometry();
                 using var ctx = geo.Open();
-                ctx.BeginFigure(new Point(pts[0].X, plotBottom), isFilled: true);
+                ctx.BeginFigure(new Point(pts[0].X, zeroY), isFilled: true);
                 foreach (var p in pts) ctx.LineTo(p);
-                ctx.LineTo(new Point(pts[^1].X, plotBottom));
+                ctx.LineTo(new Point(pts[^1].X, zeroY));
                 ctx.EndFigure(true);
                 context.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)), null, geo);
             }
         }
+
+        // Draw zero-baseline axis line.
+        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
+            new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
     }
 
     private static void DrawChartPie(DrawingContext context, FloatingChartData cd,
