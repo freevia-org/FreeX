@@ -135,6 +135,7 @@ public sealed class MainWindow : Window
         _editor.CaretMoved += UpdateStatus;
         _editor.ViewModeChanged += UpdateStatus;
         _editor.ViewModeChanged += UpdateViewModeButtons;
+        _editor.HyperlinkActivated += OpenExternalUri;
 
         // Wire view-mode buttons.
         _btnPrintLayout.Click += (_, _) => SetViewMode(DocumentViewMode.PrintLayout);
@@ -1253,4 +1254,13 @@ public sealed class MainWindow : Window
         if (path is not null)
             await SaveToPathAsync(path);
     }
+
+    // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
+    // Mirrors the WPF host's OnHyperlinkRequestNavigate: blocked schemes and launch failures are silently
+    // dropped so a bad URL never crashes the editor.
+    private static void OpenExternalUri(string url) =>
+        ExternalUriLauncher.Open(
+            url,
+            uri => System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
 }

@@ -74,9 +74,31 @@ public static class PptxPackageWriter
     private const string CommentAuthorsCT = "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml";
 
     // p14 section extension + mc:AlternateContent
-    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
-    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace P14  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private static readonly XNamespace P15  = "http://schemas.microsoft.com/office/powerpoint/2012/main";
+    private static readonly XNamespace P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+    private static readonly XNamespace MC   = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
+
+    // EB1/EB3: transition kinds that belong in the p14: namespace (not classic p: namespace).
+    // Classic p: kinds (ECMA-376 CT_SlideTransition schema): fade, cut, push, wipe, cover, uncover,
+    // split, blinds, dissolve, zoom, wheel, randomBar, strips, random.
+    // Everything else is a p14:/p159: extension — emitting them as p: causes PowerPoint repair.
+    private static readonly HashSet<TransitionKind> P14TransitionKinds = new()
+    {
+        TransitionKind.Flash, TransitionKind.Reveal,
+        TransitionKind.Cube, TransitionKind.Box, TransitionKind.Rotate, TransitionKind.Flip,
+        TransitionKind.Gallery, TransitionKind.Conveyor, TransitionKind.Ferris,
+        TransitionKind.Flythrough, TransitionKind.Switch, TransitionKind.Orbit,
+        TransitionKind.Doors, TransitionKind.Window, TransitionKind.Pan,
+        TransitionKind.Honeycomb, TransitionKind.Comb, TransitionKind.Glitter,
+        TransitionKind.Vortex, TransitionKind.Shred, TransitionKind.Wind,
+        TransitionKind.Ripple, TransitionKind.Warp, TransitionKind.Fracture,
+        TransitionKind.Crush, TransitionKind.PeelOff, TransitionKind.PageCurlDouble,
+        TransitionKind.PageCurlSingle, TransitionKind.Airplane, TransitionKind.Origami,
+        TransitionKind.Prism, TransitionKind.Curtains, TransitionKind.Drape,
+        TransitionKind.Prestige, TransitionKind.WheelReverse,
+    };
 
     // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -144,11 +166,50 @@ public static class PptxPackageWriter
                     var mediaExt = MediaContentTypeToExtension(shape.Media.ContentType);
                     mediaExtensions.Add(mediaExt);
                 }
+
+                // EA1: register the preserved-object fallback image extension so it gets a Default entry.
+                // Without this, the .png/.jpg etc. part has no content-type → PowerPoint repair.
+                if (shape.PreservedObject is not null && shape.Picture is { Bytes.Length: > 0 } prvPic)
+                {
+                    var prvExt = ContentTypeToExtension(prvPic.ContentType ?? "image/png");
+                    mediaExtensions.Add(prvExt);
+                }
+            }
+        }
+
+        // EA2: Pre-scan preserved parts to determine which paths will be reindexed by
+        // WriteSlidePreservedObjects, so BuildContentTypesXml can emit Overrides at the
+        // WRITTEN (possibly reindexed) path rather than the original path.
+        // This must run BEFORE BuildContentTypesXml since CT is written first.
+        var prvPartCtRemaps = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        {
+            var preScannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int prePartCounter  = 1;
+            int preSlideIdx     = 1;
+            foreach (var slide in presentation.Slides)
+            {
+                foreach (var shape in AllShapes(slide.Shapes))
+                {
+                    if (shape.PreservedObject is not { } prvInfo) continue;
+                    foreach (var kv in prvInfo.Parts)
+                    {
+                        var origPath = kv.Key;
+                        if (prvPartCtRemaps.ContainsKey(origPath)) continue; // already remapped from a prior shape
+                        var ext       = origPath.Contains('.') ? origPath[(origPath.LastIndexOf('.') + 1)..] : "bin";
+                        var freshPath = origPath;
+                        if (preScannedPaths.Contains(freshPath))
+                            freshPath = $"ppt/media/preserved_{preSlideIdx}_{prePartCounter++}.{ext}";
+                        preScannedPaths.Add(freshPath);
+                        if (!string.Equals(origPath, freshPath, StringComparison.OrdinalIgnoreCase))
+                            prvPartCtRemaps[origPath] = freshPath;
+                    }
+                }
+                preSlideIdx++;
             }
         }
 
         // --- 1. [Content_Types].xml ---
-        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions);
+        var ctXml = BuildContentTypesXml(presentation, masters, layouts, mediaExtensions, prvPartCtRemaps);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -469,11 +530,15 @@ public static class PptxPackageWriter
             ["m4a"]  = "audio/mp4",
             ["wav"]  = "audio/wav",
             ["wma"]  = "audio/x-ms-wma",
+            // EB4: ogg/aac must be present so transition sound parts get a content-type Default
+            ["ogg"]  = "audio/ogg",
+            ["aac"]  = "audio/aac",
         };
 
     private static XDocument BuildContentTypesXml(
         Presentation p, List<SlideMaster> masters, List<SlideLayout> layouts,
-        HashSet<string> mediaExtensions)
+        HashSet<string> mediaExtensions,
+        Dictionary<string, string>? prvPartPathRemaps = null)
     {
         var CT = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
 
@@ -595,6 +660,8 @@ public static class PptxPackageWriter
         }
 
         // Wave 25A: Preserved modern object part content types
+        // EA2: apply prvPartPathRemaps so Overrides are emitted at the WRITTEN (possibly reindexed)
+        // path, not the original path. Without this, a reindexed part has no Override → repair.
         var seenPrvParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var slide in p.Slides)
         {
@@ -604,12 +671,18 @@ public static class PptxPackageWriter
                 {
                     foreach (var kv in info.PartContentTypes)
                     {
-                        if (!string.IsNullOrEmpty(kv.Key) &&
-                            !string.IsNullOrEmpty(kv.Value) &&
-                            seenPrvParts.Add(kv.Key))
+                        if (string.IsNullOrEmpty(kv.Key) || string.IsNullOrEmpty(kv.Value))
+                            continue;
+
+                        // EA2: resolve the WRITTEN path (may differ from original if reindexed)
+                        var writtenPath = (prvPartPathRemaps is not null &&
+                                          prvPartPathRemaps.TryGetValue(kv.Key, out var rp))
+                            ? rp : kv.Key;
+
+                        if (seenPrvParts.Add(writtenPath))
                         {
                             overrides.Add(Override(CT,
-                                kv.Key.StartsWith('/') ? kv.Key : "/" + kv.Key,
+                                writtenPath.StartsWith('/') ? writtenPath : "/" + writtenPath,
                                 kv.Value));
                         }
                     }
@@ -1005,38 +1078,63 @@ public static class PptxPackageWriter
 
         var spd = PptxAnimationMap.DurationToSpd(transition.DurationMs);
 
-        // Effect child element (shared between Choice and Fallback)
+        // EB1/EB3: determine the namespace for the effect child element.
+        // Classic p: kinds are defined in CT_SlideTransition (ECMA-376 2006 schema).
+        // Extended kinds (p14:) and morph (p159:) use extension namespaces.
+        // Emitting extended kinds as p:-namespace children causes PowerPoint repair.
         var effectName = PptxAnimationMap.TransitionKindToElementName(transition.Kind);
         var dirAttr    = PptxAnimationMap.TransitionDirectionToAttr(transition.Direction);
 
-        XElement? BuildEffectEl()
+        bool isMorph    = transition.Kind == TransitionKind.Morph;
+        bool isP14Kind  = effectName is not null && P14TransitionKinds.Contains(transition.Kind);
+
+        // Build a classic p: effect element (for classic kinds or as fallback in mc:Fallback).
+        XElement? BuildClassicEffectEl()
         {
-            if (effectName is null) return null;
+            if (effectName is null || isMorph || isP14Kind) return null;
             var attrs = new List<object?>();
-            if (dirAttr is not null)
-                attrs.Add(new XAttribute("dir", dirAttr));
-            // Morph option
-            if (transition.Kind == TransitionKind.Morph && transition.MorphOption is not null)
-                attrs.Add(new XAttribute("option", transition.MorphOption));
+            if (dirAttr is not null) attrs.Add(new XAttribute("dir", dirAttr));
             return new XElement(P + effectName,
                 attrs.Where(x => x is not null).Cast<object>().ToArray());
         }
 
-        // Build a p:transition element with the given attrs + effect child + optional sound.
-        XElement BuildTransEl(IEnumerable<object?> extraAttrs)
+        // Build the p14:-namespace effect element (for P14TransitionKinds).
+        XElement? BuildP14EffectEl()
+        {
+            if (!isP14Kind || effectName is null) return null;
+            var attrs = new List<object?>();
+            if (dirAttr is not null) attrs.Add(new XAttribute("dir", dirAttr));
+            return new XElement(P14 + effectName,
+                attrs.Where(x => x is not null).Cast<object>().ToArray());
+        }
+
+        // Build the p159:-namespace morph element (EB3).
+        XElement? BuildMorphEl()
+        {
+            if (!isMorph) return null;
+            var attrs = new List<object?>();
+            if (transition.MorphOption is not null)
+                attrs.Add(new XAttribute("option", transition.MorphOption));
+            return new XElement(P159 + "morph",
+                attrs.Where(x => x is not null).Cast<object>().ToArray());
+        }
+
+        // Build a p:transition element with the given effect child (or fallback p:fade) + optional sound.
+        XElement BuildTransEl(IEnumerable<object?> extraAttrs, XElement? effectEl)
         {
             var ch = new List<object?>();
             ch.AddRange(extraAttrs);
-            var eff = BuildEffectEl();
-            if (eff is not null) ch.Add(eff);
-            // Sound: re-emit p:sndAc if we have a sound rel.
+            if (effectEl is not null) ch.Add(effectEl);
             if (soundRelId is not null)
                 ch.Add(BuildSndAcEl(soundRelId, transition.Sound));
             return new XElement(P + "transition",
                 ch.Where(x => x is not null).Cast<object>().ToArray());
         }
 
-        // Common non-duration attributes
+        // A classic p:fade is used as the mc:Fallback effect so old readers see SOMETHING.
+        var fadeEl = new XElement(P + "fade");
+
+        // Common non-duration attributes (spd, advClick, advTm)
         var commonAttrs = new List<object?>();
         commonAttrs.Add(new XAttribute("spd", spd));
         if (!transition.AdvanceOnClick)
@@ -1044,24 +1142,53 @@ public static class PptxPackageWriter
         if (transition.AdvanceAfterMs.HasValue)
             commonAttrs.Add(new XAttribute("advTm", transition.AdvanceAfterMs.Value));
 
-        // AC1: Emit precise duration as p14:dur inside mc:AlternateContent/mc:Choice Requires="p14".
+        if (isMorph)
+        {
+            // EB3: morph → p159:morph inside mc:Choice Requires="p159".
+            // Fallback uses p:fade so old readers degrade gracefully.
+            var choiceAttrs = new List<object?>(commonAttrs) { new XAttribute(P14 + "dur", transition.DurationMs) };
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",  MC.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "p159", P159.NamespaceName),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p159"),
+                    BuildTransEl(choiceAttrs, BuildMorphEl())),
+                new XElement(MC + "Fallback",
+                    BuildTransEl(commonAttrs, fadeEl)));
+        }
+
+        if (isP14Kind)
+        {
+            // EB1: p14 extended kinds → p14:effectName inside mc:Choice Requires="p14".
+            // Fallback uses p:fade so old readers degrade gracefully.
+            var choiceAttrs = new List<object?>(commonAttrs) { new XAttribute(P14 + "dur", transition.DurationMs) };
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",  MC.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p14"),
+                    BuildTransEl(choiceAttrs, BuildP14EffectEl())),
+                new XElement(MC + "Fallback",
+                    BuildTransEl(commonAttrs, fadeEl)));
+        }
+
+        // Classic p: kind (fade/cut/push/wipe/etc.) — AC1: wrap in mc:AlternateContent for p14:dur.
         // The mc:Fallback carries the legacy spd-only p:transition so old readers degrade gracefully.
         // This mirrors the pattern PowerPoint itself writes; bare "dur" on p:transition is invalid per
         // CT_SlideTransition (ECMA-376) and is flagged by OpenXmlValidator.
-        var choiceAttrs = new List<object?>(commonAttrs)
         {
-            new XAttribute(P14 + "dur", transition.DurationMs),
-        };
-        // In the Choice the spd is already present; p14:dur wins for modern readers.
-
-        return new XElement(MC + "AlternateContent",
-            new XAttribute(XNamespace.Xmlns + "mc", MC.NamespaceName),
-            new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
-            new XElement(MC + "Choice",
-                new XAttribute("Requires", "p14"),
-                BuildTransEl(choiceAttrs)),
-            new XElement(MC + "Fallback",
-                BuildTransEl(commonAttrs)));
+            var classicEff   = BuildClassicEffectEl();
+            var choiceAttrs  = new List<object?>(commonAttrs) { new XAttribute(P14 + "dur", transition.DurationMs) };
+            return new XElement(MC + "AlternateContent",
+                new XAttribute(XNamespace.Xmlns + "mc",  MC.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                new XElement(MC + "Choice",
+                    new XAttribute("Requires", "p14"),
+                    BuildTransEl(choiceAttrs, classicEff)),
+                new XElement(MC + "Fallback",
+                    BuildTransEl(commonAttrs, classicEff is not null ? new XElement(classicEff) : null)));
+        }
     }
 
     /// <summary>Builds a Fade mc:AlternateContent — used as last-resort fallback.</summary>
@@ -3420,16 +3547,27 @@ public static class PptxPackageWriter
                 attr.SetValue(newId);
         }
 
-        // Re-wrap in mc:AlternateContent if the original was wrapped
+        // EA3: Re-wrap in mc:AlternateContent if the original was wrapped.
+        // Use the original Requires token (+ its namespace URI) verbatim — do NOT hardcode "p14".
+        // XElement.ToString() drops xmlns declarations for prefixes that appear only in attribute
+        // values (like Requires="p14"), so we must explicitly declare xmlns:xxx on the wrapper.
         if (info.WasAlternateContent)
         {
             var clone = new XElement(el);   // deep clone for the Fallback branch
+            var requiresToken = info.McRequiresToken ?? "p14";
+            var requiresNsUri = info.McRequiresNsUri
+                ?? "http://schemas.microsoft.com/office/powerpoint/2010/main";
+
+            var choiceAttrs = new List<object>
+            {
+                new XAttribute("Requires", requiresToken),
+                new XAttribute(XNamespace.Xmlns + requiresToken, requiresNsUri),
+            };
+
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),
-                new XElement(MC + "Choice",
-                    new XAttribute("Requires", "p14"),
-                    el),
+                new XElement(MC + "Choice", choiceAttrs.Cast<object>().ToArray<object>().Concat(new object[] { el }).ToArray()),
                 new XElement(MC + "Fallback",
                     clone));
         }
@@ -3756,6 +3894,7 @@ public static class PptxPackageWriter
         };
 
     // II1: maps audio/video content types to their file extensions (mirrors WriteSlideMediaFiles switch)
+    // EB4: ogg/aac added here AND in ExtensionToContentType so they both stay consistent.
     private static string MediaContentTypeToExtension(string ct) =>
         ct.ToLowerInvariant() switch
         {
@@ -3763,10 +3902,14 @@ public static class PptxPackageWriter
             "video/quicktime" => "mov",
             "video/x-msvideo" => "avi",
             "video/x-ms-wmv"  => "wmv",
-            "audio/mpeg"      => "mp3",
+            "audio/mpeg" or "audio/mp3" => "mp3",
             "audio/mp4"       => "m4a",
             "audio/wav"       => "wav",
             "audio/x-ms-wma"  => "wma",
+            // EB4: ogg/aac were missing — WriteTransitionSoundPart mapped them but
+            // ExtensionToContentType had no entry, so the Default entry was never emitted.
+            "audio/ogg"       => "ogg",
+            "audio/aac"       => "aac",
             _                 => "mp4"
         };
 

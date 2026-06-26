@@ -43,8 +43,10 @@ public static class PptxPackageReader
     private const string MediaRelType         = "http://schemas.microsoft.com/office/2007/relationships/media";
 
     // p14 section extension + mc:AlternateContent namespace
-    private static readonly XNamespace P14 = "http://schemas.microsoft.com/office/powerpoint/2010/main";
-    private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace P14  = "http://schemas.microsoft.com/office/powerpoint/2010/main";
+    private static readonly XNamespace P15  = "http://schemas.microsoft.com/office/powerpoint/2012/main";
+    private static readonly XNamespace P159 = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+    private static readonly XNamespace MC   = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private const string SectionExtUri = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 
     // ── Public API ───────────────────────────────────────────────────────────────
@@ -764,10 +766,11 @@ public static class PptxPackageReader
             // modern elements that older PowerPoint cannot read).  We look for the first
             // recognisable element in mc:Choice; if none found we fall back to mc:Fallback.
             var effectiveEl = child;
+            XElement? mcChoiceEl = null;   // EA3: capture mc:Choice for Requires token
             if (child.Name == MC + "AlternateContent")
             {
-                var choiceEl = child.Element(MC + "Choice");
-                var choiceChild = choiceEl?.Elements().FirstOrDefault();
+                mcChoiceEl = child.Element(MC + "Choice");
+                var choiceChild = mcChoiceEl?.Elements().FirstOrDefault();
                 if (choiceChild is not null)
                     effectiveEl = choiceChild;
                 else
@@ -784,10 +787,11 @@ public static class PptxPackageReader
                 "pic"          => ReadPic(effectiveEl, archive, partPath, scheme),
                 "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
                 "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
+                // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
-                                      wasAlternateContent: child != effectiveEl),
+                                      wasAlternateContent: child != effectiveEl, mcChoiceEl: mcChoiceEl),
                 // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
-                "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath),
+                "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath, mcChoiceEl),
                 _ => null
             };
 
@@ -947,7 +951,7 @@ public static class PptxPackageReader
         XElement gfEl, ZipArchive archive, string partPath,
         PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles,
-        bool wasAlternateContent = false)
+        bool wasAlternateContent = false, XElement? mcChoiceEl = null)
     {
         var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
 
@@ -1060,8 +1064,9 @@ public static class PptxPackageReader
         }
 
         // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
+        // EA3: pass mcChoiceEl so ReadPreservedGraphicFrame can capture the Requires token.
         return ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
-            archive, partPath, wasAlternateContent);
+            archive, partPath, wasAlternateContent, mcChoiceEl);
     }
 
     // ── Wave 25A: Preserved modern objects (zoom / 3D / unknown graphicFrame) ─────────
@@ -1087,7 +1092,8 @@ public static class PptxPackageReader
     private static SlideShape ReadPreservedGraphicFrame(
         XElement gfEl, XElement graphicData, string? uri,
         XElement? cNvPr, long offX, long offY, long extCx, long extCy,
-        ZipArchive archive, string partPath, bool wasAlternateContent)
+        ZipArchive archive, string partPath, bool wasAlternateContent,
+        XElement? mcChoiceEl = null)
     {
         var kind = IsZoomUri(uri) ? PreservedObjectKind.Zoom
                  : Is3dModelUri(uri) ? PreservedObjectKind.Model3d
@@ -1100,11 +1106,27 @@ public static class PptxPackageReader
             _                           => SlideShapeKind.PreservedObject,
         };
 
+        // EA3: capture the original mc:Choice Requires token and its namespace URI so the writer
+        // can re-emit it verbatim (not hardcode "p14").
+        string? mcRequiresToken = null;
+        string? mcRequiresNsUri = null;
+        if (wasAlternateContent && mcChoiceEl is not null)
+        {
+            mcRequiresToken = mcChoiceEl.Attribute("Requires")?.Value;
+            if (mcRequiresToken is not null)
+            {
+                // Find the xmlns declaration for that prefix on the Choice element or its ancestors.
+                mcRequiresNsUri = mcChoiceEl.GetNamespaceOfPrefix(mcRequiresToken)?.NamespaceName;
+            }
+        }
+
         var info = new PreservedObjectInfo
         {
             ObjectKind          = kind,
             RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
             WasAlternateContent = wasAlternateContent,
+            McRequiresToken     = mcRequiresToken,
+            McRequiresNsUri     = mcRequiresNsUri,
         };
 
         // Capture all referenced parts via the slide's rels
@@ -1134,7 +1156,8 @@ public static class PptxPackageReader
     /// </summary>
     private static SlideShape? ReadContentPartInk(
         XElement originalEl, XElement contentPartEl,
-        ZipArchive archive, string partPath)
+        ZipArchive archive, string partPath,
+        XElement? mcChoiceEl = null)
     {
         // Extract cNvPr from nvContentPartPr if present
         var cNvPr = contentPartEl
@@ -1151,11 +1174,24 @@ public static class PptxPackageReader
 
         var slideRels2 = LoadRels(archive, GetRelsPath(partPath));
 
+        // EA3: capture original mc:Choice Requires token for round-trip fidelity.
+        bool wasAc = originalEl != contentPartEl;
+        string? mcRequiresToken = null;
+        string? mcRequiresNsUri = null;
+        if (wasAc && mcChoiceEl is not null)
+        {
+            mcRequiresToken = mcChoiceEl.Attribute("Requires")?.Value;
+            if (mcRequiresToken is not null)
+                mcRequiresNsUri = mcChoiceEl.GetNamespaceOfPrefix(mcRequiresToken)?.NamespaceName;
+        }
+
         var info = new PreservedObjectInfo
         {
             ObjectKind          = PreservedObjectKind.Ink,
             RawXml              = contentPartEl.ToString(SaveOptions.DisableFormatting),
-            WasAlternateContent = originalEl != contentPartEl,
+            WasAlternateContent = wasAc,
+            McRequiresToken     = mcRequiresToken,
+            McRequiresNsUri     = mcRequiresNsUri,
         };
 
         // Follow r:id to the InkML part and capture its bytes
@@ -3011,10 +3047,17 @@ public static class PptxPackageReader
         if (int.TryParse(transEl.Attribute("advTm")?.Value, out var advTm) && advTm > 0)
             t.AdvanceAfterMs = advTm;
 
-        // Find the effect child element: first P-namespace child that is NOT sndAc/extLst.
-        // (sndAc and extLst are also P-namespace children but are not the effect.)
+        // EB2: Find the effect child element across P, P14, and P159 namespaces.
+        // Real-PowerPoint extended transitions (p14:cube / p14:glitter / p159:morph) live inside
+        // mc:Choice as direct p:transition children (we're already inside the Choice p:transition
+        // when ReadTransition is called from ResolveTransitionEl). We search all non-sndAc/extLst
+        // children regardless of namespace so that p14:/p159: effects are not silently dropped.
+        // "sndAc" and "extLst" are the only legitimate non-effect P-namespace children.
         var effectEl = transEl.Elements()
-            .FirstOrDefault(e => e.Name.Namespace == P
+            .FirstOrDefault(e => (e.Name.Namespace == P ||
+                                  e.Name.Namespace == P14 ||
+                                  e.Name.Namespace == P15 ||
+                                  e.Name.Namespace == P159)
                                  && e.Name.LocalName != "sndAc"
                                  && e.Name.LocalName != "extLst");
 
@@ -3026,12 +3069,13 @@ public static class PptxPackageReader
             var dirAttr = effectEl.Attribute("dir")?.Value ?? effectEl.Attribute("orient")?.Value;
             t.Direction = PptxAnimationMap.AttrToTransitionDirection(dirAttr);
 
-            // Morph option
+            // Morph option (p159:morph carries option="byWord"/"byChar"/"byObject")
             if (t.Kind == TransitionKind.Morph)
                 t.MorphOption = effectEl.Attribute("option")?.Value;
 
             // For unrecognized (Other) transitions, capture the entire p:transition element verbatim
             // so the writer can re-emit it byte-faithfully — ensuring NO transition is silently dropped.
+            // EB2: also captures transitions with p14:/p159: effect children that fall through to Other.
             if (t.Kind == TransitionKind.Other)
                 t.RawXml = transEl.ToString(SaveOptions.DisableFormatting);
         }

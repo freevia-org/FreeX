@@ -221,6 +221,194 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             "payload must survive write/re-read round-trip");
     }
 
+    // ── EA1: preserved fallback image gets a content-type Default entry ──────────
+
+    [Fact]
+    public void EA1_PreservedFallbackImage_GetsContentTypeDefault()
+    {
+        // Bug EA1: the fallback image bytes written for a preserved object never had its file
+        // extension registered in mediaExtensions → no Default entry in [Content_Types].xml → repair.
+        const string unknownXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="50" name="EA1Test"/>
+                <p:cNvGraphicFramePr/><p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://example.com/test">
+                  <ex:data xmlns:ex="http://example.com/test" value="ea1"/>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        // Read a PPTX with this shape; the fallback image comes from the shape tree injection.
+        var pres1 = PptxPackageReader.Read(BuildPptxWithShapeXml(unknownXml));
+
+        // Manually set a PNG fallback on the shape to test EA1 (simulates what ExtractPreservedFallbackImage would set)
+        var shape = pres1.Slides[0].Shapes.FirstOrDefault(s => s.Kind == SlideShapeKind.PreservedObject);
+        Assert.NotNull(shape);
+        shape!.Picture = new ImagePart { Bytes = MinPng, ContentType = "image/png" };
+
+        // Write and verify [Content_Types].xml has a Default for "png"
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres1, ms);
+        ms.Position = 0;
+
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var ctEntry = zip.GetEntry("[Content_Types].xml");
+        Assert.NotNull(ctEntry);
+        string ctXml;
+        using (var sr = new StreamReader(ctEntry!.Open())) ctXml = sr.ReadToEnd();
+
+        // EA1 fix: "png" Default must be present because fallback image extension is registered
+        Assert.Contains("Extension=\"png\"", ctXml);
+        Assert.Contains("image/png", ctXml);
+    }
+
+    // ── EA2: reindexed preserved part gets correct Override ──────────────────────
+
+    [Fact]
+    public void EA2_ReindexedPreservedPart_GetsCorrectOverride()
+    {
+        // Bug EA2: when a preserved part path collides with an already-written path, it is
+        // reindexed to a fresh path but the content-type Override was keyed to the ORIGINAL
+        // path → the reindexed part had no Override → repair.
+        // We test this by creating two slides with the same OPC part path in their PreservedObjects.
+
+        var pres = new Presentation();
+
+        // Slide 1: a preserved object with a part at "ppt/media/3dModel.glb"
+        var slide1 = new Slide();
+        var shape1 = new SlideShape
+        {
+            Id   = 1,
+            Kind = SlideShapeKind.Model3d,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+            PreservedObject = new PreservedObjectInfo
+            {
+                ObjectKind          = PreservedObjectKind.Model3d,
+                RawXml              = "<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>",
+                WasAlternateContent = false,
+            },
+        };
+        var glbBytes = new byte[] { 0x67, 0x6C, 0x54, 0x46 }; // glTF magic
+        shape1.PreservedObject.Parts["ppt/media/3dModel.glb"]            = glbBytes;
+        shape1.PreservedObject.PartContentTypes["ppt/media/3dModel.glb"] = "model/gltf-binary";
+        shape1.PreservedObject.SlideRels["rId1"] =
+            ("http://schemas.microsoft.com/office/2017/06/relationships/model3d", "ppt/media/3dModel.glb");
+        slide1.Shapes.Add(shape1);
+        pres.Slides.Add(slide1);
+
+        // Slide 2: another preserved object that ALSO uses "ppt/media/3dModel.glb" — will be reindexed
+        var slide2 = new Slide();
+        var shape2 = new SlideShape
+        {
+            Id   = 2,
+            Kind = SlideShapeKind.Model3d,
+            ExtentCxEmu = 914400, ExtentCyEmu = 914400,
+            PreservedObject = new PreservedObjectInfo
+            {
+                ObjectKind          = PreservedObjectKind.Model3d,
+                RawXml              = "<p:graphicFrame xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"/>",
+                WasAlternateContent = false,
+            },
+        };
+        // Same path — will be reindexed to ppt/media/preserved_2_1.glb
+        shape2.PreservedObject.Parts["ppt/media/3dModel.glb"]            = glbBytes;
+        shape2.PreservedObject.PartContentTypes["ppt/media/3dModel.glb"] = "model/gltf-binary";
+        shape2.PreservedObject.SlideRels["rId1"] =
+            ("http://schemas.microsoft.com/office/2017/06/relationships/model3d", "ppt/media/3dModel.glb");
+        slide2.Shapes.Add(shape2);
+        pres.Slides.Add(slide2);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+
+        // Verify that [Content_Types].xml has an Override for the reindexed part path
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+        var ctEntry = zip.GetEntry("[Content_Types].xml");
+        Assert.NotNull(ctEntry);
+        string ctXml;
+        using (var sr = new StreamReader(ctEntry!.Open())) ctXml = sr.ReadToEnd();
+
+        // The reindexed part path (preserved_2_1.glb) must have a content-type Override
+        Assert.Contains("preserved_2_", ctXml); // EA2 fix: reindexed path in content types
+        Assert.Contains("model/gltf-binary", ctXml);
+    }
+
+    // ── EA3: mc:AlternateContent Requires token round-trips verbatim ──────────────
+
+    [Fact]
+    public void EA3_McRequiresToken_RoundTrips_Verbatim()
+    {
+        // Bug EA3: the preserved-object mc:AlternateContent re-wrap hardcoded Requires="p14",
+        // even when the original used "p15", "p159", or another prefix. This test verifies the
+        // token is captured on read and re-emitted verbatim on write.
+        const string shapeXml = """
+            <mc:AlternateContent
+                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/09/main">
+              <mc:Choice Requires="p159" xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/09/main">
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="60" name="EA3Test"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test">
+                      <ex:data xmlns:ex="http://example.com/test" value="ea3"/>
+                    </a:graphicData>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Choice>
+              <mc:Fallback>
+                <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                  <p:nvGraphicFramePr>
+                    <p:cNvPr id="60" name="EA3Test"/><p:cNvGraphicFramePr/><p:nvPr/>
+                  </p:nvGraphicFramePr>
+                  <p:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></p:xfrm>
+                  <a:graphic>
+                    <a:graphicData uri="http://example.com/test"/>
+                  </a:graphic>
+                </p:graphicFrame>
+              </mc:Fallback>
+            </mc:AlternateContent>
+            """;
+
+        var ms1 = BuildPptxWithShapeXml(shapeXml);
+        var pres1 = PptxPackageReader.Read(ms1);
+
+        var shape = pres1.Slides[0].Shapes.FirstOrDefault(s => s.Kind == SlideShapeKind.PreservedObject);
+        Assert.NotNull(shape);
+
+        // EA3: the token must be captured on read
+        Assert.True(shape!.PreservedObject!.WasAlternateContent, "WasAlternateContent must be set");
+        Assert.Equal("p159", shape.PreservedObject.McRequiresToken); // EA3 fix: captured
+
+        // Write and re-read
+        var ms2 = WritePptxToMemory(pres1);
+        ms2.Position = 0;
+
+        // Verify the re-emitted XML has Requires="p159", not "p14"
+        using var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true);
+        var slideEntry = zip.Entries.FirstOrDefault(e =>
+            e.FullName.StartsWith("ppt/slides/slide") && e.FullName.EndsWith(".xml"));
+        Assert.NotNull(slideEntry);
+        string slideXml;
+        using (var sr = new StreamReader(slideEntry!.Open())) slideXml = sr.ReadToEnd();
+
+        // EA3 fix: must contain the ORIGINAL Requires token "p159", not the hardcoded "p14"
+        Assert.Contains("Requires=\"p159\"", slideXml);
+        // EA3 fix: the prefix "p14" must NOT appear as the Requires token
+        Assert.DoesNotContain("Requires=\"p14\"", slideXml);
+    }
+
     // ── SlideCloner preserves modern object ───────────────────────────────────
 
     [Fact]

@@ -57,6 +57,23 @@ public sealed class PreservedObjectInfo
     /// </summary>
     public bool WasAlternateContent { get; set; }
 
+    /// <summary>
+    /// The original mc:Choice Requires token (e.g. "p14", "p15", "p159") captured from the
+    /// source file's mc:AlternateContent wrapper. The writer re-emits this verbatim so the
+    /// correct namespace prefix is declared on the Choice element.
+    /// Null when <see cref="WasAlternateContent"/> is false or when the token was not present.
+    /// EA3 fix: captures the original token instead of hardcoding "p14".
+    /// </summary>
+    public string? McRequiresToken { get; set; }
+
+    /// <summary>
+    /// The namespace URI corresponding to <see cref="McRequiresToken"/>, as declared on
+    /// the original mc:Choice element (e.g. "http://schemas.microsoft.com/office/powerpoint/2010/main"
+    /// for p14). Needed so the writer can declare the prefix as xmlns:xxx on the wrapper.
+    /// Null when <see cref="McRequiresToken"/> is null.
+    /// </summary>
+    public string? McRequiresNsUri { get; set; }
+
     // ── Referenced OPC parts ──────────────────────────────────────────────────────
 
     /// <summary>

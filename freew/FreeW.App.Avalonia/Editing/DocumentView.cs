@@ -539,6 +539,10 @@ public sealed class DocumentView : Control
     /// <summary>AV-LINK: the caret's current (Block, Offset) — exposed for navigation tests.</summary>
     internal (int Block, int Offset) CaretPositionForTest => (_caret.Block, _caret.Offset);
 
+    /// <summary>Fires <see cref="HyperlinkActivated"/> with <paramref name="url"/> so tests can
+    /// verify that hosts have subscribed without hitting real hyperlinks or Process.Start.</summary>
+    internal void SimulateHyperlinkActivatedForTest(string url) => HyperlinkActivated?.Invoke(url);
+
     // ── AV-TBL: cell editing public surface ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -9434,7 +9438,51 @@ public sealed class DocumentView : Control
         if (style.Type == StyleType.Character)
         {
             // Character style → overlay the style's run formatting onto the selection's runs.
-            ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            // For a CROSS-PARAGRAPH selection (Start.Block != End.Block) ApplyRunFormatting
+            // falls into the collapsed-caret branch and only stages a pending format — selected
+            // text across blocks is never touched.  Fix: iterate the spanned paragraphs
+            // (matching SelectedParagraphIndices) and apply the run transform to each block's
+            // SELECTED sub-range, wrapped in one undo group so a single Undo reverts all blocks.
+            var sel = NormalizedSelection();
+            if (sel is { } s && s.Start.Block != s.End.Block)
+            {
+                // Multi-paragraph character-style apply.
+                var styleRun = style.Run;
+                Func<RunFormatting, RunFormatting> transform = f => OverlayCharacterStyle(f, styleRun);
+
+                _bus.BeginUndoGroup();
+                for (var blockIdx = s.Start.Block; blockIdx <= s.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
+                {
+                    if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
+                        continue;
+
+                    // First block: from Start.Offset to the paragraph end.
+                    // Middle blocks: entire paragraph (0 to cell count).
+                    // Last block: from paragraph start (0) to End.Offset.
+                    var a = blockIdx == s.Start.Block ? s.Start.Offset : 0;
+                    var b = blockIdx == s.End.Block   ? s.End.Offset   : int.MaxValue;
+                    var capturedBlock = blockIdx;
+                    var capturedA = a;
+                    var capturedB = b;
+
+                    _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
+                    {
+                        var live = ParaCells(p);
+                        var lo = Math.Clamp(capturedA, 0, live.Count);
+                        var hi = Math.Clamp(capturedB, 0, live.Count);
+                        for (var i = lo; i < hi; i++)
+                            live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
+                        SetRuns(p, live);
+                    }));
+                }
+                _bus.CommitUndoGroup("Apply Character Style");
+            }
+            else
+            {
+                // Single-block selection or collapsed caret: delegate to ApplyRunFormatting which
+                // handles both the single-block run-range case and the pending-format caret case.
+                ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+            }
             return styleId;
         }
 

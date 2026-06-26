@@ -323,6 +323,101 @@ public sealed class StylesGalleryTests
         size.Should().Be(18, "character style must not clobber the run size");
     }
 
+    // ── ApplyNamedStyle – character style, multi-paragraph (DC1) ───────────────────────────────
+
+    /// <summary>
+    /// DC1: A character style (Strong) applied to a selection spanning 3 paragraphs must bold ALL
+    /// selected text in all 3 paragraphs, not just stage a pending format for the caret.
+    /// </summary>
+    [Fact]
+    public async Task ApplyNamedStyle_Strong_MultiParagraph_BoldsAllSelectedText()
+    {
+        bool p0Bold = false, p1Bold = false, p2Bold = false;
+        string? p0StyleId = "sentinel", p1StyleId = "sentinel", p2StyleId = "sentinel";
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("First"));
+            doc.Blocks.Add(new Paragraph("Middle"));
+            doc.Blocks.Add(new Paragraph("Third"));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+            // Select from the start of block 0 to the end of block 2 (3-para span).
+            view.SetSelectionRangePublic(0, 0, 2, 5);
+            view.ApplyNamedStyle("Strong");
+            var b0 = (Paragraph)doc.Blocks[0];
+            var b1 = (Paragraph)doc.Blocks[1];
+            var b2 = (Paragraph)doc.Blocks[2];
+            p0StyleId  = b0.StyleId;
+            p1StyleId  = b1.StyleId;
+            p2StyleId  = b2.StyleId;
+            p0Bold = b0.Runs.Count > 0 && b0.Runs.All(rn => rn.Formatting.Bold);
+            p1Bold = b1.Runs.Count > 0 && b1.Runs.All(rn => rn.Formatting.Bold);
+            p2Bold = b2.Runs.Count > 0 && b2.Runs.All(rn => rn.Formatting.Bold);
+        });
+        if (!ran) return;
+        // Character style must not change paragraph StyleId on any block.
+        p0StyleId.Should().BeNull("character style must not set paragraph StyleId on block 0");
+        p1StyleId.Should().BeNull("character style must not set paragraph StyleId on block 1");
+        p2StyleId.Should().BeNull("character style must not set paragraph StyleId on block 2");
+        // All three paragraphs must be bolded.
+        p0Bold.Should().BeTrue("Strong must bold the selected runs in paragraph 0 (DC1)");
+        p1Bold.Should().BeTrue("Strong must bold the selected runs in paragraph 1 (DC1)");
+        p2Bold.Should().BeTrue("Strong must bold the selected runs in paragraph 2 (DC1)");
+    }
+
+    /// <summary>
+    /// DC1: Single-paragraph character-style apply (existing behaviour) must remain unchanged.
+    /// </summary>
+    [Fact]
+    public async Task ApplyNamedStyle_Strong_SingleParagraph_StillWorks()
+    {
+        bool allBold = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Hello");
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+            view.ApplyNamedStyle("Strong");
+            allBold = ((Paragraph)doc.Blocks[0]).Runs.Count > 0
+                   && ((Paragraph)doc.Blocks[0]).Runs.All(rn => rn.Formatting.Bold);
+        });
+        if (!ran) return;
+        allBold.Should().BeTrue("single-block Strong apply must still bold the selection");
+    }
+
+    /// <summary>
+    /// DC1: A single Undo must revert the character-style application across all 3 paragraphs
+    /// (the multi-paragraph apply is wrapped in a single undo group).
+    /// </summary>
+    [Fact]
+    public async Task ApplyNamedStyle_Strong_MultiParagraph_SingleUndoRevertsAll()
+    {
+        int boldAfterUndo = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("First"));
+            doc.Blocks.Add(new Paragraph("Middle"));
+            doc.Blocks.Add(new Paragraph("Third"));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+            view.SetSelectionRangePublic(0, 0, 2, 5);
+            view.ApplyNamedStyle("Strong");
+            view.Undo();
+            // After one Undo, none of the paragraphs should have bold runs.
+            boldAfterUndo = doc.Blocks.OfType<Paragraph>()
+                               .SelectMany(p => p.Runs)
+                               .Count(rn => rn.Formatting.Bold);
+        });
+        if (!ran) return;
+        boldAfterUndo.Should().Be(0,
+            "a single Undo must revert the Strong character style from all 3 paragraphs (undo group)");
+    }
+
     // ── Clear style ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]

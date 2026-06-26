@@ -823,16 +823,23 @@ public sealed class SlideShowWindow : Window
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        foreach (var anim in step.Animations)
+        foreach (var entry in step.Entries)
         {
+            var anim = entry.Animation;
+            // DA4: use the accumulated start delay from the step entry rather than
+            // the animation's raw DelayMs.  For WithPrevious this equals DelayMs (simultaneous).
+            // For AfterPrevious this is DelayMs + all prior animations' durations in the chain,
+            // ensuring the animation begins only after the preceding animation completes.
+            int effectiveDelayMs = entry.StartDelayMs;
+
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                PlayFallbackAnimation(anim);
+                PlayFallbackAnimation(anim, effectiveDelayMs);
                 continue;
             }
 
             var shapeId = anim.ShapeId;
-            PlayShapeAnimation(element, anim, onReveal: () =>
+            PlayShapeAnimation(element, anim, effectiveDelayMs, onReveal: () =>
             {
                 // DA1: once the entrance animation finishes (or fires), hand off painting to
                 // the base canvas.  The overlay element stays in the tree at full opacity but
@@ -845,15 +852,21 @@ public sealed class SlideShowWindow : Window
         }
     }
 
+    /// <param name="effectiveDelayMs">
+    /// DA4: the computed start delay for this entry, which for AfterPrevious animations already
+    /// includes the accumulated duration of preceding animations in the chain.  Replaces the raw
+    /// <see cref="ShapeAnimation.DelayMs"/> so that AfterPrevious animations begin after their
+    /// predecessor completes rather than all firing simultaneously.
+    /// </param>
     /// <param name="onReveal">
     /// DA1: called once the animation finishes so the base canvas takes over painting the shape.
     /// For non-entrance (Emphasis/Exit) effects this callback is invoked at animation start
     /// because the shape is already visible in the base canvas.
     /// </param>
-    private void PlayShapeAnimation(Control element, ShapeAnimation anim, Action? onReveal = null)
+    private void PlayShapeAnimation(Control element, ShapeAnimation anim, int effectiveDelayMs, Action? onReveal = null)
     {
         int durationMs = Math.Max(50, anim.DurationMs);
-        int delayMs    = Math.Max(0,  anim.DelayMs);
+        int delayMs    = effectiveDelayMs;
 
         // Motion-path animation takes priority.
         if (anim.Kind == AnimationKind.Motion && anim.Motion is not null)
@@ -1191,12 +1204,12 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>Best-effort fallback for shapes without an overlay element.</summary>
-    private void PlayFallbackAnimation(ShapeAnimation anim)
+    private void PlayFallbackAnimation(ShapeAnimation anim, int effectiveDelayMs)
     {
         if (anim.Kind != AnimationKind.Emphasis) return;
 
         int ms = Math.Max(100, anim.DurationMs);
-        DelayedAction(anim.DelayMs, () =>
+        DelayedAction(effectiveDelayMs, () =>
         {
             AnimateOpacity(_slideCanvas, 1.0, 0.5, ms / 2, onComplete: () =>
                 AnimateOpacity(_slideCanvas, 0.5, 1.0, ms / 2));
