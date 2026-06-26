@@ -5320,6 +5320,94 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    // ── AV-CHARTTAB: Chart + SmartArt contextual-tab edit API ──────────────────────────────────────
+
+    /// <summary>
+    /// AV-CHARTTAB: Change the chart kind (column/bar/line/pie/scatter/area/doughnut) of the selected
+    /// floating chart. Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartType(ChartKind kind)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartKindCommand(sel.BlockIndex, sel.RunIndex, kind));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a chart style (1-based catalog id) to the selected floating chart.
+    /// Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartStyle(int styleId)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartStyleCommand(sel.BlockIndex, sel.RunIndex, styleId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a chart colour scheme (catalog id, e.g. "colorful1") to the selected floating
+    /// chart. Undoable + re-renders. No-op when the selected float is not a chart.
+    /// </summary>
+    public void SetChartColorScheme(string? colorSchemeId)
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return;
+        _bus.Execute(new SetChartColorSchemeCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Change the SmartArt layout family (List/Process/Hierarchy — Cycle maps to Process)
+    /// of the selected floating SmartArt. Undoable + re-renders. No-op when the float is not SmartArt.
+    /// </summary>
+    public void SetSmartArtLayout(SmartArtKind kind)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtLayoutCommand(sel.BlockIndex, sel.RunIndex, kind));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Apply a SmartArt colour scheme (catalog id) to the selected floating SmartArt.
+    /// Undoable + re-renders. No-op when the selected float is not SmartArt.
+    /// </summary>
+    public void SetSmartArtColor(string? colorSchemeId)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtColorCommand(sel.BlockIndex, sel.RunIndex, colorSchemeId));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Read the selected chart's current kind/style/colour-scheme, or null when the
+    /// selected float is not a chart. Used by tests and the contextual-tab live-state.
+    /// </summary>
+    public (ChartKind Kind, int StyleId, string? ColorSchemeId)? GetSelectedChartInfo()
+    {
+        if (_selectedFloating is not { Kind: "Chart" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].Chart is not { } chart) return null;
+        return (chart.Kind, chart.StyleId, chart.ColorSchemeId);
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Read the selected SmartArt's current kind/colour-scheme, or null when the selected
+    /// float is not SmartArt. Used by tests and the contextual-tab live-state.
+    /// </summary>
+    public (SmartArtKind Kind, string? ColorSchemeId)? GetSelectedSmartArtInfo()
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return null;
+        if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
+        if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
+        if (para.Runs[sel.RunIndex].SmartArt is not { } sa) return null;
+        return (sa.Kind, sa.ColorSchemeId);
+    }
+
     /// <summary>
     /// Delete the currently selected floating object. Removes the run from its paragraph.
     /// Undoable via the command bus. No-op when nothing is selected.
