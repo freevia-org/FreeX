@@ -1007,39 +1007,81 @@ public sealed class DocumentView : Control
     /// <summary>
     /// Return the sequential list number that would be rendered for block <paramref name="blockIdx"/>,
     /// by walking the document model the same way the layout loop does (render-time numbering).
+    /// For Number lists returns the per-level counter at the paragraph's level.
+    /// For MultiLevel lists returns the accumulated dotted level counter (e.g. 1 for "1.", 11 for "1.1.").
     /// Returns 0 for bullet or non-list paragraphs.
     /// Exposed for AV-LIST unit tests.
     /// </summary>
     internal int GetListNumberForBlockPublic(int blockIdx)
     {
+        var marker = GetListMarkerForBlockPublic(blockIdx);
+        if (marker is null) return 0;
+        // Extract the last numeric segment before the trailing dot (e.g. "1.2." → 2, "3." → 3).
+        var parts = marker.TrimEnd('.').Split('.');
+        return parts.Length > 0 && int.TryParse(parts[^1], out var n) ? n : 0;
+    }
+
+    /// <summary>
+    /// Return the full marker string that would be rendered for block <paramref name="blockIdx"/>,
+    /// using the same per-level counter logic as the layout loop.
+    /// Returns <c>null</c> for bullet or non-list paragraphs.
+    /// Exposed for AV-LIST unit tests (BS1/BS2/BS3).
+    /// </summary>
+    internal string? GetListMarkerForBlockPublic(int blockIdx)
+    {
         // Re-layout so _markers are fresh.
         if (_laidOutWidth < 0)
             Relayout(FallbackWidth);
 
-        int number = 0;
-        var prevKind = ListKind.None;
+        const int MaxListDepth = 9;
+        var levelCounters = new int[MaxListDepth];
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {
             if (_doc.Blocks[i] is not Paragraph p)
             {
-                number = 0;
-                prevKind = ListKind.None;
+                // Non-list block: reset all counters.
+                Array.Clear(levelCounters, 0, MaxListDepth);
                 continue;
             }
             var kind = p.Formatting.ListKind;
             if (kind is ListKind.Number or ListKind.MultiLevel)
             {
-                number = prevKind is ListKind.Number or ListKind.MultiLevel ? number + 1 : 1;
+                var level = Math.Clamp(p.Formatting.ListLevel, 0, MaxListDepth - 1);
+                levelCounters[level]++;
+                for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                    levelCounters[deeper] = 0;
+
                 if (i == blockIdx)
-                    return number;
+                {
+                    if (kind is ListKind.MultiLevel)
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        for (var ancestor = 0; ancestor <= level; ancestor++)
+                        {
+                            var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
+                            sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
+                        }
+                        return sb.ToString();
+                    }
+                    else
+                    {
+                        return $"{levelCounters[level]}.";
+                    }
+                }
+            }
+            else if (kind is ListKind.None)
+            {
+                // Non-list paragraph: the numbered run has ended, reset all counters.
+                Array.Clear(levelCounters, 0, MaxListDepth);
+                if (i == blockIdx) return null;
             }
             else
             {
-                number = 0;
+                // BS3: Bullet does NOT reset numbered level counters.
+                if (i == blockIdx) return null; // bullet paragraphs have no number marker
             }
-            prevKind = kind;
         }
-        return 0;
+        return null;
     }
 
     /// <summary>
@@ -1650,8 +1692,14 @@ public sealed class DocumentView : Control
         _layoutContentY = 0;
         _layoutTextAreaHeight = textAreaHeight;
 
-        var listNumber = 0;
-        var prevList = ListKind.None;
+        // BS1/BS2/BS3 fix: per-level counter array mirrors WPF MultiLevelMarkerSequence.
+        // levelCounters[k] tracks the current count at list depth k (0-based, max 9 levels).
+        // A Number/MultiLevel paragraph increments its level's counter and resets all deeper
+        // levels.  A Bullet paragraph does NOT reset numbered levels (BS3: continuation across
+        // interleaved sub-bullets).  Only a non-list (ListKind.None) paragraph resets all counters
+        // (the numbered list has genuinely ended).
+        const int MaxListDepth = 9;
+        var levelCounters = new int[MaxListDepth];
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
         {
             var block = _doc.Blocks[blockIndex];
@@ -1673,8 +1721,8 @@ public sealed class DocumentView : Control
                     {
                         // Mixed paragraph: inline image(s) present — use the image layout path which
                         // also calls CollectFloatingImages internally.
-                        listNumber = 0;
-                        prevList = ListKind.None;
+                        // Non-list paragraph: reset all counters (list run ended).
+                        Array.Clear(levelCounters, 0, MaxListDepth);
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
@@ -1685,8 +1733,8 @@ public sealed class DocumentView : Control
                 // FO4: route paragraphs with inline charts / SmartArt / WordArt to the dedicated path.
                 if (hasInlineChart || hasInlineWordArt || hasInlineSmArt)
                 {
-                    listNumber = 0;
-                    prevList = ListKind.None;
+                    // Non-list paragraph: reset all counters (list run ended).
+                    Array.Clear(levelCounters, 0, MaxListDepth);
                     LayoutInlineObjectParagraphPaged(blockIndex, paragraph, textWidth);
                     continue;
                 }
@@ -1696,25 +1744,47 @@ public sealed class DocumentView : Control
                 string? marker = null;
                 if (kind != ListKind.None)
                 {
-                    var level = Math.Max(0, paragraph.Formatting.ListLevel);
+                    var level = Math.Clamp(paragraph.Formatting.ListLevel, 0, MaxListDepth - 1);
                     inset = ListIndentStep * (level + 1);
                     if (kind is ListKind.Number or ListKind.MultiLevel)
                     {
-                        listNumber = prevList is ListKind.Number or ListKind.MultiLevel ? listNumber + 1 : 1;
-                        marker = $"{listNumber}.";
+                        // BS1: increment this level's counter, reset all deeper levels.
+                        levelCounters[level]++;
+                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
+                            levelCounters[deeper] = 0;
+
+                        // BS2: build the appropriate marker.
+                        if (kind is ListKind.MultiLevel)
+                        {
+                            // Accumulated dotted form: counters[0].counters[1]...counters[level].
+                            var sb = new System.Text.StringBuilder();
+                            for (var ancestor = 0; ancestor <= level; ancestor++)
+                            {
+                                // Ancestors not yet entered in this run show 1 (matches Word/WPF).
+                                var value = levelCounters[ancestor] == 0 ? 1 : levelCounters[ancestor];
+                                sb.Append(value.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('.');
+                            }
+                            marker = sb.ToString();
+                        }
+                        else
+                        {
+                            // Number: plain decimal marker for this level's counter.
+                            marker = $"{levelCounters[level]}.";
+                        }
                     }
                     else
                     {
+                        // BS3: Bullet does NOT reset numbered level counters.
+                        // The numbered list continues its sequence across interleaved sub-bullets.
                         marker = "•"; // bullet
-                        listNumber = 0;
                     }
                 }
                 else
                 {
-                    listNumber = 0;
+                    // Non-list paragraph: the numbered list run has ended, reset all counters.
+                    Array.Clear(levelCounters, 0, MaxListDepth);
                 }
 
-                prevList = kind;
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
             }
             else if (block is Table table)
