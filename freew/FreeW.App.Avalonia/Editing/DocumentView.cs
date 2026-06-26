@@ -93,6 +93,8 @@ public sealed class DocumentView : Control
     private readonly List<FloatingWordArtData>  _floatingWordArts  = new();
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
+    // HF: pre-computed header/footer render items (rebuilt in Relayout when PrintLayout).
+    private readonly List<HfRenderItem> _headerFooterItems = new();
     // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
@@ -533,6 +535,24 @@ public sealed class DocumentView : Control
         }
     }
 
+    // ── HF: header/footer render introspection for tests ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Snapshot of pre-computed header/footer render items from the last layout pass.
+    /// Each entry: (Text, PageSpaceY, Alignment). Tests use this to verify that items
+    /// appear in the correct margin bands and carry the right field-resolved text.
+    /// </summary>
+    internal IReadOnlyList<(string Text, double Y, TextAlignment Alignment)> HeaderFooterItems
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _headerFooterItems
+                .Select(i => (i.Text, i.Y, i.Alignment))
+                .ToList();
+        }
+    }
+
     // ---- PDF export ------------------------------------------------------------------------------
 
     /// <summary>
@@ -696,6 +716,7 @@ public sealed class DocumentView : Control
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
         _cellHits.Clear();
+        _headerFooterItems.Clear();
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
@@ -843,6 +864,215 @@ public sealed class DocumentView : Control
         }
 
         _laidOutWidth = width;
+
+        if (_viewMode == DocumentViewMode.PrintLayout)
+            BuildHeaderFooterItems();
+    }
+
+    // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pre-computes the header/footer render items for each page in PrintLayout mode.
+    /// Called once per Relayout pass after _pageCount is known. Each item carries a
+    /// field-resolved text string, run formatting, page-space position, and alignment so
+    /// Render() can draw them with zero model access.
+    /// </summary>
+    private void BuildHeaderFooterItems()
+    {
+        // Default fallback header/footer distance: Word default 0.5 in = 36 pt.
+        const double DefaultHfDistancePt = 36.0;
+
+        // Gather sections for per-page section mapping.
+        var sections = _doc.Sections;
+
+        // Document-level odd/even flag lives on _doc.Page.
+        var diffOddEven = _doc.Page.DifferentOddEvenPages;
+
+        for (var pi = 0; pi < _pageCount; pi++)
+        {
+            // Page-space top of this page.
+            var pageTop = DeskPadding + pi * (_pageHeightPx + PageGap);
+
+            // Derive which section owns this page (rough heuristic: map page index to section
+            // by distributing pages evenly across sections — matches WPF's PaginatedEditorPanel
+            // approach when a precise section-break paginator is not available).
+            var sectionIndex = sections.Count > 1
+                ? Math.Min((int)((double)pi / _pageCount * sections.Count), sections.Count - 1)
+                : 0;
+            var section = sections.Count > 0 ? sections[sectionIndex] : null;
+            var sectionPage = section?.Page ?? _doc.Page;
+            var sectionHf = section?.HeadersFooters ?? _doc.FinalSectionHeadersFooters;
+
+            // 1-based page number for this page (pi is 0-based).
+            var pageNumber = pi + 1;
+
+            // Resolve which header/footer variant applies.
+            var diffFirst = sectionPage.DifferentFirstPage;
+            var isFirstPage = pi == 0; // first page of section (approximation: pi==0 for first section)
+
+            HeaderFooter? header;
+            HeaderFooter? footer;
+
+            if (diffFirst && isFirstPage)
+            {
+                header = sectionHf.FirstHeader;
+                footer = sectionHf.FirstFooter;
+            }
+            else if (diffOddEven && pageNumber % 2 == 0)
+            {
+                // Even page (page numbers are 1-based; even = page 2, 4, 6, …).
+                header = sectionHf.EvenHeader ?? sectionHf.Header;
+                footer = sectionHf.EvenFooter ?? sectionHf.Footer;
+            }
+            else
+            {
+                header = sectionHf.Header;
+                footer = sectionHf.Footer;
+            }
+
+            // Header distance from page top (in DIP).
+            var headerDistPt = sectionPage.HeaderDistancePt > 0
+                ? sectionPage.HeaderDistancePt
+                : DefaultHfDistancePt;
+            var headerDistDip = headerDistPt * PxPerPoint;
+
+            // Footer distance from page bottom (in DIP).
+            var footerDistPt = sectionPage.FooterDistancePt > 0
+                ? sectionPage.FooterDistancePt
+                : DefaultHfDistancePt;
+            var footerDistDip = footerDistPt * PxPerPoint;
+
+            // Render-width = page content width (use same as body text area).
+            var hfWidth = _contentWidth;
+
+            // Emit header.
+            if (header is not null && !header.IsEmpty)
+            {
+                var hfY = pageTop + headerDistDip;
+                EmitHfParagraphs(header, hfY, hfWidth, pageNumber, _pageCount);
+            }
+
+            // Emit footer.
+            if (footer is not null && !footer.IsEmpty)
+            {
+                // Footer distance is from the BOTTOM of the page upward; the footer text
+                // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
+                var pageBottom = pageTop + _pageHeightPx;
+                var hfY = pageBottom - footerDistDip;
+                EmitHfParagraphs(footer, hfY, hfWidth, pageNumber, _pageCount);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Emits <see cref="HfRenderItem"/>s for each paragraph line of a header/footer slot.
+    /// Field runs (PAGE, NUMPAGES, DATE, FILENAME) are resolved to display strings here.
+    /// </summary>
+    private void EmitHfParagraphs(HeaderFooter hf, double startY, double availWidth, int pageNumber, int pageCount)
+    {
+        var y = startY;
+        foreach (var para in hf.Paragraphs)
+        {
+            var pf = ResolveParagraphFmt(para);
+            var alignment = pf.Alignment;
+
+            // Build one display string from the paragraph's runs, resolving field values.
+            // Tab characters in the text are preserved; simple tab-stop rendering is at the
+            // caller's discretion (we emit them as a space here — tab-stop precision is a follow-up).
+            var sb = new System.Text.StringBuilder();
+            RunFormatting runFmt = para.Runs.Count > 0 ? para.Runs[0].Formatting : RunFormatting.Default;
+            foreach (var run in para.Runs)
+            {
+                var fieldText = ResolveHfField(run, pageNumber, pageCount);
+                if (fieldText is not null)
+                {
+                    sb.Append(fieldText);
+                }
+                else
+                {
+                    // Replace tab with two spaces (tab-stop resolution is a follow-up).
+                    sb.Append(run.Text.Replace("\t", "  "));
+                }
+                if (run.Formatting.FontSizePt.HasValue)
+                    runFmt = run.Formatting;
+            }
+
+            var text = sb.ToString();
+            if (string.IsNullOrEmpty(text))
+            {
+                // Empty paragraph — still advances Y by a line height.
+                var emptyH = DefaultFontSizePt * PxPerPoint * 1.3;
+                y += emptyH;
+                continue;
+            }
+
+            var lineH = Build(text.Length > 1 ? text[..1] : text, runFmt).Height * 1.15;
+
+            _headerFooterItems.Add(new HfRenderItem
+            {
+                Text           = text,
+                Fmt            = runFmt,
+                X              = _contentLeft,
+                Y              = y,
+                AvailableWidth = availWidth,
+                Alignment      = alignment,
+            });
+
+            y += lineH;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a field run to its display string, or returns null when the run is plain text.
+    /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
+    /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
+    /// </summary>
+    private string? ResolveHfField(Run run, int pageNumber, int pageCount)
+    {
+        // Simple RunFieldKind fields.
+        switch (run.FieldKind)
+        {
+            case RunFieldKind.PageNumber:
+                return pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case RunFieldKind.NumPages:
+                return pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            case RunFieldKind.Date:
+            case RunFieldKind.Time:
+                return DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+            case RunFieldKind.FileName:
+                return string.Empty; // DocumentProperties has no FileName property
+            case RunFieldKind.Author:
+                return _doc.Properties.Author ?? string.Empty;
+            case RunFieldKind.Title:
+                return _doc.Properties.Title ?? string.Empty;
+            case RunFieldKind.Subject:
+                return _doc.Properties.Subject ?? string.Empty;
+            case RunFieldKind.Keywords:
+                return _doc.Properties.Keywords ?? string.Empty;
+            case RunFieldKind.DocComments:
+                return _doc.Properties.Comments ?? string.Empty;
+        }
+
+        // Complex fields: inspect the instruction keyword.
+        if (run.ComplexField is { } cf)
+        {
+            var instr = cf.Instruction?.Trim() ?? string.Empty;
+            var keyword = instr.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            return keyword.ToUpperInvariant() switch
+            {
+                "PAGE"     => pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "NUMPAGES" => pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "DATE"     => DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                "TIME"     => DateTime.Now.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
+                "FILENAME" => string.Empty, // DocumentProperties has no FileName property
+                "AUTHOR"   => _doc.Properties.Author ?? string.Empty,
+                "TITLE"    => _doc.Properties.Title ?? string.Empty,
+                _          => run.Text, // fall back to cached result text
+            };
+        }
+
+        // Not a field run — caller should use run.Text.
+        return null;
     }
 
     // Layout-pass mutable state for paged layout (reset at start of Relayout).
@@ -2055,6 +2285,20 @@ public sealed class DocumentView : Control
             DrawFloatingSmartArt(context, sd);
         foreach (var gd in _floatingGroups.Where(g => !g.BehindText).OrderBy(g => g.ZOrder))
             DrawFloatingGroup(context, gd);
+
+        // HF: draw header/footer items (pre-computed in BuildHeaderFooterItems).
+        if (_viewMode == DocumentViewMode.PrintLayout)
+        {
+            foreach (var item in _headerFooterItems)
+            {
+                if (string.IsNullOrEmpty(item.Text))
+                    continue;
+                var ft = Build(item.Text, item.Fmt);
+                var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
+                    ft.WidthIncludingTrailingWhitespace, isLast: true);
+                context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
+            }
+        }
 
         if (IsFocused && NormalizedSelection() is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
@@ -3311,6 +3555,25 @@ public sealed class DocumentView : Control
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._doc;
+    }
+
+    // ── HF: header/footer render item ─────────────────────────────────────────────────────────────
+
+    /// <summary>One pre-computed line to draw in a header or footer band.</summary>
+    private sealed class HfRenderItem
+    {
+        /// <summary>Text to draw (already field-resolved).</summary>
+        public string Text = string.Empty;
+        /// <summary>Run formatting for the text.</summary>
+        public RunFormatting Fmt = RunFormatting.Default;
+        /// <summary>Top-left X in page-space coordinates.</summary>
+        public double X;
+        /// <summary>Top Y in page-space coordinates.</summary>
+        public double Y;
+        /// <summary>Available width for alignment.</summary>
+        public double AvailableWidth;
+        /// <summary>Paragraph alignment for this line.</summary>
+        public TextAlignment Alignment;
     }
 
     // ── Floating shape data captured during layout ────────────────────────────────────────────────
