@@ -423,4 +423,110 @@ public sealed class SlideCanvasTests
         var act = () => canvas.Measure(new Size(1280, 720));
         act.Should().NotThrow("BO1: right/center/decimal tab alignment must not throw in WPF renderer");
     }
+
+    // ── BQ1: cross-run tab alignment (WPF) ──────────────────────────────────────
+
+    /// <summary>
+    /// BQ1 regression (WPF): when the tab character ends run1 and the aligned text is in run2,
+    /// the right/center alignment offset must be computed across BOTH runs' text segments
+    /// (run-agnostic forward scan), not just from the empty tail of run1.
+    /// Verified by: rendering must not throw, and a second Measure with a tiny shape (1 DIP wide)
+    /// must not throw either — the clamp (BQ2) handles the case where segment > gap.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_CrossRunRightTabAlignment_DoesNotThrow()
+    {
+        const long EmuPerDip = 9525L;
+
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        // run1 ends with '\t' (tab token has seg=""), run2 holds the value in bold.
+        // Pattern: "Chapter\t" (run1, normal) + "42" (run2, bold) — page-number style.
+        var tb   = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Chapter\t", Bold = false });
+        para.Runs.Add(new Run { Text = "42",        Bold = true  });
+        para.TabStops.Add(new TabStop
+        {
+            PositionEmu = 480 * EmuPerDip,      // 5-inch right stop
+            Alignment   = TabStopAlignment.Right
+        });
+        tb.Paragraphs.Add(para);
+
+        // Also test center cross-run: "Section\t" (run1) + "Title" (run2)
+        var tb2   = new TextBody();
+        var para2 = new Paragraph();
+        para2.Runs.Add(new Run { Text = "Section\t", Bold = false });
+        para2.Runs.Add(new Run { Text = "Title",     Bold = true  });
+        para2.TabStops.Add(new TabStop
+        {
+            PositionEmu = 384 * EmuPerDip,      // 4-inch center stop
+            Alignment   = TabStopAlignment.Center
+        });
+        tb2.Paragraphs.Add(para2);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            TextBody = tb
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 2, AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 1600000,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            TextBody = tb2
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow(
+            "BQ1: right/center tab alignment must work when aligned text is in a different run from the tab");
+    }
+
+    // ── BQ2: wide aligned segment — backward-clamp (WPF) ────────────────────────
+
+    /// <summary>
+    /// BQ2 regression (WPF): when the aligned segment is wider than the gap from the preceding
+    /// text to the tab stop, curX must be clamped to the prior pen position (not go negative
+    /// relative to it).  Verified by: rendering a very wide segment must not throw.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_WideSegment_BackwardClampDoesNotThrow()
+    {
+        const long EmuPerDip = 9525L;
+
+        var p     = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Shapes.Clear();
+
+        // Right stop at 1 inch (96 DIP).  Preceding text "LongPrecedingText" is already
+        // wider than that, so stopDip + alignOffset would be < prevCurX without the clamp.
+        var tb   = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "LongPrecedingText\tWideSegmentThatExceedsGap" });
+        para.TabStops.Add(new TabStop
+        {
+            PositionEmu = 96 * EmuPerDip,       // 1-inch right stop — narrow target
+            Alignment   = TabStopAlignment.Right
+        });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1, AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 457200, OffsetYEmu = 274320,
+            ExtentCxEmu = 8229600, ExtentCyEmu = 1143000,
+            TextBody = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        var act = () => canvas.Measure(new Size(1280, 720));
+        act.Should().NotThrow(
+            "BQ2: wide aligned segment must not cause curX to go behind the prior pen (backward clamp)");
+    }
 }

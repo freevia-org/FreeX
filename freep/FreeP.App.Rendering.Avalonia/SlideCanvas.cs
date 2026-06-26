@@ -1301,26 +1301,58 @@ public sealed class SlideCanvas : Control
                 if (!found)
                     stopDip = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
 
-                // BO1: compute alignment offset based on the NEXT segment's width.
+                // BQ1+BQ2: compute alignment offset by scanning the segment width ACROSS all
+                // following tokens up to the next tab (run-agnostic, mirrors FreeW EmitLinePaged).
+                // The aligned segment may span multiple runs (e.g. tab in run1, text in run2).
                 double alignOffset = 0;
                 TabStopAlignment align = matchedStop?.Alignment ?? TabStopAlignment.Left;
-                if (align != TabStopAlignment.Left && seg.Length > 0)
+                if (align != TabStopAlignment.Left)
                 {
-                    var nextFt = BuildSingleRunFormattedTextAt(run, seg);
-                    double segW = nextFt.Width;
-                    alignOffset = align switch
+                    // Forward-scan: collect the combined text and total width of consecutive
+                    // non-tab tokens starting from the CURRENT token (seg, which may be "") and
+                    // continuing into following tokens until we hit another tab token or end.
+                    var sbCombined = new System.Text.StringBuilder();
+                    double segW = 0;
+
+                    // Include the current (same-run) segment first.
+                    if (seg.Length > 0)
                     {
-                        TabStopAlignment.Right   => -segW,                // segment ends at stop
-                        TabStopAlignment.Center  => -segW / 2.0,          // segment centred on stop
-                        TabStopAlignment.Decimal =>                        // decimal pt at stop
-                            -(seg.Contains('.')
-                                ? BuildSingleRunFormattedTextAt(run, seg[..(seg.IndexOf('.') + 1)]).Width
-                                : segW),
-                        _ => 0
-                    };
+                        sbCombined.Append(seg);
+                        segW += BuildSingleRunFormattedTextAt(run, seg).Width;
+                    }
+                    // Then scan following tokens until the next isTab==true or end.
+                    for (int fwd = ti + 1; fwd < tokens.Count; fwd++)
+                    {
+                        var (fwdSeg, fwdRun, fwdIsTab) = tokens[fwd];
+                        if (fwdIsTab) break;           // next tab boundary — stop here
+                        if (fwdSeg.Length > 0)
+                        {
+                            sbCombined.Append(fwdSeg);
+                            segW += BuildSingleRunFormattedTextAt(fwdRun, fwdSeg).Width;
+                        }
+                    }
+
+                    if (segW > 0)
+                    {
+                        string combinedText = sbCombined.ToString();
+                        alignOffset = align switch
+                        {
+                            TabStopAlignment.Right   => -segW,            // segment ends at stop
+                            TabStopAlignment.Center  => -segW / 2.0,      // segment centred on stop
+                            TabStopAlignment.Decimal =>                    // decimal pt at stop
+                                -(combinedText.Contains('.')
+                                    ? BuildSingleRunFormattedTextAt(run,
+                                          combinedText[..(combinedText.IndexOf('.') + 1)]).Width
+                                    : segW),
+                            _ => 0
+                        };
+                    }
                 }
 
-                curX = startX + stopDip + alignOffset;
+                // BQ2: clamp — never start the aligned segment before the current pen position
+                // (prevents overlap when segment width > gap from prior text to stop).
+                double prevCurX = curX;
+                curX = Math.Max(prevCurX, startX + stopDip + alignOffset);
             }
 
             // Draw the segment.
