@@ -33,6 +33,60 @@ public enum RadarStyle { Standard, Marker, Filled }
 /// <summary>Position of the chart legend relative to the plot area.</summary>
 public enum LegendPosition { Right, Left, Top, Bottom }
 
+/// <summary>Position of data labels relative to the data point.</summary>
+public enum DataLabelPosition
+{
+    /// <summary>Best fit / auto-placed by the application.</summary>
+    BestFit,
+    /// <summary>Centered on the data point or bar.</summary>
+    Center,
+    /// <summary>Inside end of bar/column.</summary>
+    InsideEnd,
+    /// <summary>Outside end of bar/column (above column top, right of bar end).</summary>
+    OutsideEnd,
+    /// <summary>Inside base of bar/column.</summary>
+    InsideBase,
+    /// <summary>Above the data point (used for line/scatter).</summary>
+    Above,
+    /// <summary>Below the data point.</summary>
+    Below,
+    /// <summary>Left of the data point.</summary>
+    Left,
+    /// <summary>Right of the data point.</summary>
+    Right,
+}
+
+/// <summary>
+/// Data label configuration for a chart or series. Controls which label components are shown,
+/// where labels are placed, and how numeric values are formatted.
+/// </summary>
+public sealed class ChartDataLabels
+{
+    /// <summary>Show the numeric value of the data point.</summary>
+    public bool ShowValue { get; set; }
+
+    /// <summary>Show the slice percentage (primarily pie/doughnut charts).</summary>
+    public bool ShowPercent { get; set; }
+
+    /// <summary>Show the category name alongside the value.</summary>
+    public bool ShowCategoryName { get; set; }
+
+    /// <summary>Show the series name alongside the value.</summary>
+    public bool ShowSeriesName { get; set; }
+
+    /// <summary>Show the legend key (color swatch) next to the label.</summary>
+    public bool ShowLegendKey { get; set; }
+
+    /// <summary>Label placement relative to the data point. Null means use the default for the chart type.</summary>
+    public DataLabelPosition? Position { get; set; }
+
+    /// <summary>Number format code (e.g. "0.00", "#,##0", "0%"). Null or empty = General.</summary>
+    public string? NumberFormat { get; set; }
+
+    /// <summary>Returns true if any label component is enabled.</summary>
+    public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
+}
+
 /// <summary>A single data series within a <see cref="ChartShape"/>.</summary>
 public sealed class ChartSeries
 {
@@ -62,6 +116,12 @@ public sealed class ChartSeries
     /// Empty for non-bubble chart types.
     /// </summary>
     public List<double?> BubbleSizes { get; } = new();
+
+    /// <summary>Per-series data labels override. When null, the chart-level labels apply (if any).</summary>
+    public ChartDataLabels? DataLabels { get; set; }
+
+    /// <summary>True if this series plots against the secondary value axis (right axis).</summary>
+    public bool OnSecondaryAxis { get; set; }
 }
 
 /// <summary>Configuration for one chart axis (category or value).</summary>
@@ -129,4 +189,10 @@ public sealed class ChartShape
     /// Populated for Radar chart type.
     /// </summary>
     public RadarStyle RadarStyle { get; set; } = RadarStyle.Standard;
+
+    /// <summary>Chart-level data label configuration. Applies to all series unless overridden per-series.</summary>
+    public ChartDataLabels? DataLabels { get; set; }
+
+    /// <summary>Secondary value axis (right side for column/line; top for bar). Present when a combo chart has series on a second axis.</summary>
+    public ChartAxis? SecondaryValueAxis { get; set; }
 }

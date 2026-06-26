@@ -60,12 +60,66 @@ internal static class PptxChartReader
         DetectChartTypeAndSeries(plotArea, shape, scheme);
 
         // Axes (catAx / dateAx = category axis; valAx = value axis)
+        bool primaryValAxRead = false;
         foreach (var axEl in plotArea.Elements())
         {
             if (axEl.Name == C + "catAx" || axEl.Name == C + "dateAx")
                 ReadAxis(axEl, shape.CategoryAxis);
             else if (axEl.Name == C + "valAx")
-                ReadAxis(axEl, shape.ValueAxis);
+            {
+                if (!primaryValAxRead)
+                {
+                    ReadAxis(axEl, shape.ValueAxis);
+                    primaryValAxRead = true;
+                }
+                else
+                {
+                    shape.SecondaryValueAxis = new ChartAxis();
+                    ReadAxis(axEl, shape.SecondaryValueAxis);
+                }
+            }
+        }
+
+        // Chart-level data labels (c:plotArea/c:xxx/c:dLbls or chart-level)
+        // Per OOXML the dLbls lives inside each plot-type element, read it from the first chart type el.
+        var firstChartTypeEl = plotArea.Elements().FirstOrDefault(e =>
+            e.Name.LocalName is "barChart" or "lineChart" or "pieChart" or "doughnutChart"
+            or "areaChart" or "scatterChart" or "bubbleChart" or "radarChart"
+            or "bar3DChart" or "line3DChart" or "pie3DChart" or "area3DChart" or "ofPieChart"
+            or "stockChart" or "surfaceChart" or "surface3DChart");
+        shape.DataLabels = ReadDataLabels(firstChartTypeEl?.Element(C + "dLbls"));
+
+        // Secondary value axis detection
+        // Each plotType element has c:axId refs; if there's a second c:valAx, check which series use it.
+        var valAxIds = new List<int>();
+        foreach (var axEl in plotArea.Elements(C + "valAx"))
+        {
+            var axId = ParseInt(axEl.Element(C + "axId")?.Attribute("val")?.Value);
+            valAxIds.Add(axId);
+        }
+        // If we have 2+ valAx elements, the second one is the secondary axis.
+        if (valAxIds.Count >= 2)
+        {
+            int secondaryAxId = valAxIds[1]; // second valAx is secondary
+
+            // Now detect which series are on the secondary axis.
+            // A plot group element references its axes via c:axId children.
+            // If a plot group's second c:axId equals secondaryAxId, its series are on the secondary axis.
+            foreach (var plotEl in plotArea.Elements())
+            {
+                var axIds = plotEl.Elements(C + "axId").Select(a => ParseInt(a.Attribute("val")?.Value)).ToList();
+                if (axIds.Count >= 2 && axIds.Any(id => id == secondaryAxId))
+                {
+                    // All series in this plot group are on the secondary axis
+                    // Map them by their c:ser/c:idx to the correct ChartSeries
+                    foreach (var serEl in plotEl.Elements(C + "ser"))
+                    {
+                        int serIdx = ParseInt(serEl.Element(C + "idx")?.Attribute("val")?.Value);
+                        if (serIdx < shape.Series.Count)
+                            shape.Series[serIdx].OnSecondaryAxis = true;
+                    }
+                }
+            }
         }
 
         // Legend
@@ -296,6 +350,9 @@ internal static class PptxChartReader
                         : string.Empty);
             }
 
+            // Per-series data labels override
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
+
             shape.Series.Add(series);
             seriesIndex++;
         }
@@ -326,6 +383,9 @@ internal static class PptxChartReader
             var sizeEl = serEl.Element(C + "bubbleSize");
             if (sizeEl is not null)
                 ReadValues(sizeEl, series.BubbleSizes);
+
+            // Per-series data labels override
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
 
             shape.Series.Add(series);
             seriesIndex++;
@@ -449,6 +509,9 @@ internal static class PptxChartReader
                 }
             }
 
+            // Per-series data labels override
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
+
             shape.Series.Add(series);
             seriesIndex++;
         }
@@ -542,6 +605,58 @@ internal static class PptxChartReader
                 double.TryParse(maxStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var maxV))
                 axis.Max = maxV;
         }
+    }
+
+    // ── Data-label parsing ─────────────────────────────────────────────────────
+
+    private static ChartDataLabels? ReadDataLabels(XElement? dLblsEl)
+    {
+        if (dLblsEl is null) return null;
+
+        // Check if labels are explicitly turned off (c:showVal val="0" and nothing else)
+        bool showVal     = ParseBoolAttr(dLblsEl.Element(C + "showVal"));
+        bool showPct     = ParseBoolAttr(dLblsEl.Element(C + "showPercent"));
+        bool showCat     = ParseBoolAttr(dLblsEl.Element(C + "showCatName"));
+        bool showSer     = ParseBoolAttr(dLblsEl.Element(C + "showSerName"));
+        bool showLegend  = ParseBoolAttr(dLblsEl.Element(C + "showLegendKey"));
+
+        // If nothing is shown this is a no-op element — return null to keep model clean.
+        if (!showVal && !showPct && !showCat && !showSer && !showLegend)
+            return null;
+
+        var posStr = dLblsEl.Element(C + "dLblPos")?.Attribute("val")?.Value;
+        var numFmt = dLblsEl.Element(C + "numFmt")?.Attribute("formatCode")?.Value;
+
+        return new ChartDataLabels
+        {
+            ShowValue        = showVal,
+            ShowPercent      = showPct,
+            ShowCategoryName = showCat,
+            ShowSeriesName   = showSer,
+            ShowLegendKey    = showLegend,
+            NumberFormat     = string.IsNullOrEmpty(numFmt) ? null : numFmt,
+            Position         = posStr switch
+            {
+                "ctr"      => DataLabelPosition.Center,
+                "inEnd"    => DataLabelPosition.InsideEnd,
+                "outEnd"   => DataLabelPosition.OutsideEnd,
+                "inBase"   => DataLabelPosition.InsideBase,
+                "bestFit"  => DataLabelPosition.BestFit,
+                "t"        => DataLabelPosition.Above,
+                "b"        => DataLabelPosition.Below,
+                "l"        => DataLabelPosition.Left,
+                "r"        => DataLabelPosition.Right,
+                _          => (DataLabelPosition?)null
+            }
+        };
+    }
+
+    private static bool ParseBoolAttr(XElement? el)
+    {
+        if (el is null) return false;
+        var val = el.Attribute("val")?.Value;
+        // No val attribute = true (OOXML boolean element default)
+        return val is null || val == "1" || val == "true";
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

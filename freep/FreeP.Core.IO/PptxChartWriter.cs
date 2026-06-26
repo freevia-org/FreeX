@@ -128,6 +128,21 @@ internal static class PptxChartWriter
                 BuildBarChartEl(chart, seriesEls, isBar: false) // default fallback
         };
 
+        // Inject chart-level data labels into the plot-type element
+        if (chartTypeEl is not null)
+        {
+            var chartDlblsEl = BuildDataLabelsEl(chart.DataLabels);
+            if (chartDlblsEl is not null)
+            {
+                // Insert dLbls before the first c:axId child (or at end if none)
+                var firstAxId = chartTypeEl.Elements(C + "axId").FirstOrDefault();
+                if (firstAxId is not null)
+                    firstAxId.AddBeforeSelf(chartDlblsEl);
+                else
+                    chartTypeEl.Add(chartDlblsEl);
+            }
+        }
+
         bool noCatAx = chart.ChartType is ChartType.Pie or ChartType.Doughnut
                                        or ChartType.Unknown;
         var catAxEl = !noCatAx && !isScatterLike
@@ -141,11 +156,17 @@ internal static class PptxChartWriter
             ? BuildValAxEl(chart.CategoryAxis, 1, 2)   // X axis is also a valAx for scatter/bubble
             : null;
 
+        // Secondary value axis (right side)
+        var secValAxEl = (chart.SecondaryValueAxis is not null && !noCatAx && !isScatterLike)
+            ? BuildValAxEl(chart.SecondaryValueAxis, 3, 1, axPos: "r")
+            : null;
+
         return new XElement(C + "plotArea",
             chartTypeEl,
             xValAxEl,
             catAxEl,
-            valAxEl);
+            valAxEl,
+            secValAxEl);
     }
 
     private static XElement BuildBarChartEl(ChartShape chart, List<XElement> seriesEls, bool isBar)
@@ -224,6 +245,47 @@ internal static class PptxChartWriter
             new XElement(C + "axId", new XAttribute("val", "1")),
             new XElement(C + "axId", new XAttribute("val", "2")));
 
+    private static XElement? BuildDataLabelsEl(ChartDataLabels? labels)
+    {
+        if (labels is null || !labels.HasAny) return null;
+
+        var el = new XElement(C + "dLbls");
+
+        if (labels.ShowLegendKey)
+            el.Add(new XElement(C + "showLegendKey", new XAttribute("val", "1")));
+        if (labels.ShowValue)
+            el.Add(new XElement(C + "showVal", new XAttribute("val", "1")));
+        if (labels.ShowCategoryName)
+            el.Add(new XElement(C + "showCatName", new XAttribute("val", "1")));
+        if (labels.ShowSeriesName)
+            el.Add(new XElement(C + "showSerName", new XAttribute("val", "1")));
+        if (labels.ShowPercent)
+            el.Add(new XElement(C + "showPercent", new XAttribute("val", "1")));
+        if (!string.IsNullOrEmpty(labels.NumberFormat))
+            el.Add(new XElement(C + "numFmt",
+                new XAttribute("formatCode", labels.NumberFormat),
+                new XAttribute("sourceLinked", "0")));
+        if (labels.Position.HasValue)
+        {
+            string posVal = labels.Position.Value switch
+            {
+                DataLabelPosition.Center     => "ctr",
+                DataLabelPosition.InsideEnd  => "inEnd",
+                DataLabelPosition.OutsideEnd => "outEnd",
+                DataLabelPosition.InsideBase => "inBase",
+                DataLabelPosition.BestFit    => "bestFit",
+                DataLabelPosition.Above      => "t",
+                DataLabelPosition.Below      => "b",
+                DataLabelPosition.Left       => "l",
+                DataLabelPosition.Right      => "r",
+                _                            => "bestFit"
+            };
+            el.Add(new XElement(C + "dLblPos", new XAttribute("val", posVal)));
+        }
+
+        return el;
+    }
+
     // ── Scatter/bubble series element (uses xVal/yVal/bubbleSize instead of cat/val) ────
 
     private static XElement BuildScatterSeriesEl(ChartShape chart, ChartSeries series, int index)
@@ -245,6 +307,10 @@ internal static class PptxChartWriter
         if (series.FillColor is not null)
             el.Add(new XElement(C + "spPr",
                 new XElement(A + "solidFill", BuildColorEl(series.FillColor))));
+
+        // Per-series data labels
+        var serDlblsEl2 = BuildDataLabelsEl(series.DataLabels);
+        if (serDlblsEl2 is not null) el.Add(serDlblsEl2);
 
         // X values (c:xVal)
         if (series.XValues.Count > 0)
@@ -332,6 +398,10 @@ internal static class PptxChartWriter
                         BuildColorEl(color)))));
         }
 
+        // Per-series data labels
+        var serDlblsEl = BuildDataLabelsEl(series.DataLabels);
+        if (serDlblsEl is not null) el.Add(serDlblsEl);
+
         // Categories
         if (chart.Categories.Count > 0)
         {
@@ -383,7 +453,7 @@ internal static class PptxChartWriter
             axis.Title is not null ? BuildTitleEl(axis.Title) : null,
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
 
-    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId)
+    private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId, string axPos = "l")
     {
         var scalingEl = new XElement(C + "scaling",
             new XElement(C + "orientation", new XAttribute("val", "minMax")));
@@ -399,7 +469,7 @@ internal static class PptxChartWriter
             scalingEl,
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
-            new XElement(C + "axPos", new XAttribute("val", "l")),
+            new XElement(C + "axPos", new XAttribute("val", axPos)),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
