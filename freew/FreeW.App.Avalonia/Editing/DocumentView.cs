@@ -3104,12 +3104,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false));
+                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -4276,6 +4276,15 @@ public sealed class DocumentView : Control
                 context.FillRectangle(hlBrush, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
             }
 
+            // AV-COMMENT: a subtle amber background tint behind glyphs anchored by a review comment, so
+            // the commented range reads as one region (the underline + margin marker are drawn after the
+            // glyph loop). Resolved threads tint muted/grey to match Word's de-emphasised resolved state.
+            if (pc.CommentId is { } commentTintId)
+            {
+                var tint = IsCommentResolved(commentTintId) ? ResolvedCommentTintBrush : CommentTintBrush;
+                context.FillRectangle(tint, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
+            }
+
             // Superscript/subscript: draw at a smaller size + vertical offset.
             // Word approximation: ~58% of the font size, raised/lowered by ~33% of line height.
             var drawFmt = pc.Fmt;
@@ -4315,6 +4324,11 @@ public sealed class DocumentView : Control
 
         foreach (var (mx, my, text, fmt) in _markers)
             context.DrawText(Build(text, fmt), new Point(mx, my));
+
+        // AV-COMMENT: draw the comment-anchor decorations on top of the text — an amber underline under
+        // every commented glyph (the in-text anchor mark) plus, for each anchor line, a minimal marker in
+        // the right margin (a balloon glyph + the author's initial) aligned to that line.
+        DrawCommentAnchors(context);
 
         // Paragraph marks (¶) rendered faintly at the end-sentinel of each block when enabled.
         if (_showParagraphMarks)
@@ -4603,6 +4617,91 @@ public sealed class DocumentView : Control
                 context.DrawRectangle(null, FloatHandlePen, hRect);
             }
         }
+    }
+
+    /// <summary>
+    /// Draws the AV-COMMENT anchor decorations over the laid-out text: an amber underline beneath every
+    /// commented glyph (the in-text anchor mark), and one minimal marker in the right margin per
+    /// (comment, line) — a small balloon bracket plus the author's initial — aligned to that line. The
+    /// margin marker only renders when there is room to the right of the content column (PrintLayout has
+    /// a page margin there); otherwise the in-text underline alone marks the anchor. Resolved threads draw
+    /// muted/grey to mirror Word's de-emphasised resolved state.
+    /// </summary>
+    private void DrawCommentAnchors(DrawingContext context)
+    {
+        if (_doc.Comments.Count == 0)
+            return;
+
+        // Right-margin x: just right of the content column. Available when the page extends past content
+        // (the right page margin). Fall back to the control's right edge in non-paged modes.
+        var pageRight = _pageWidth > 0 ? _pageLeft + _pageWidth : _laidOutWidth;
+        var marginX = _contentLeft + _contentWidth + 6;
+        var hasMargin = pageRight - (_contentLeft + _contentWidth) > 14;
+
+        // Track, per (comment id, line top Y), whether we've already drawn a margin marker for that line
+        // (one marker per anchor line, not one per glyph).
+        var markedLines = new HashSet<(int Id, long Y)>();
+
+        foreach (var pc in _placed)
+        {
+            if (pc.Sentinel || pc.CommentId is not { } id)
+                continue;
+
+            var resolved = IsCommentResolved(id);
+
+            // In-text anchor mark: amber underline just below the glyph baseline band.
+            var underlineY = pc.Y + pc.LineHeight * 0.90;
+            var pen = resolved ? ResolvedCommentUnderlinePen : CommentUnderlinePen;
+            context.DrawLine(pen, new Point(pc.X, underlineY), new Point(pc.X + Math.Max(1, pc.W), underlineY));
+
+            // Right-margin marker: one per anchor line.
+            if (!hasMargin)
+                continue;
+            var lineKey = (id, (long)Math.Round(pc.Y));
+            if (!markedLines.Add(lineKey))
+                continue;
+
+            DrawCommentMarginMarker(context, marginX, pc.Y, pc.LineHeight, id, resolved);
+        }
+    }
+
+    /// <summary>
+    /// Draws a single minimal comment marker in the right margin aligned to an anchor line: a small
+    /// rounded balloon filled in the comment colour, with the author's initial drawn inside it.
+    /// </summary>
+    private void DrawCommentMarginMarker(DrawingContext context, double x, double lineY, double lineHeight, int id, bool resolved)
+    {
+        const double size = 14;
+        var top = lineY + Math.Max(0, (lineHeight - size) / 2);
+        var balloon = new Rect(x, top, size, size);
+        var fill = resolved ? ResolvedCommentMarkerBrush : CommentMarkerBrush;
+        context.DrawRectangle(fill, null, new RoundedRect(balloon, 3));
+
+        var initial = CommentInitial(id);
+        if (string.IsNullOrEmpty(initial))
+            return;
+        var ft = Build(initial, new RunFormatting { FontSizePt = 8, ColorHex = "#FFFFFF", Bold = true });
+        context.DrawText(ft, new Point(x + (size - ft.Width) / 2, top + (size - ft.Height) / 2));
+    }
+
+    /// <summary>True when the top-level comment thread anchoring <paramref name="commentId"/> is resolved.</summary>
+    private bool IsCommentResolved(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        return _doc.Comments.TryGetValue(topId, out var comment) && comment.Resolved;
+    }
+
+    /// <summary>The author's initial (or 'C') for the comment thread anchoring <paramref name="commentId"/>.</summary>
+    private string CommentInitial(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.TryGetValue(topId, out var comment))
+            return string.Empty;
+        if (!string.IsNullOrWhiteSpace(comment.Initials))
+            return comment.Initials.Trim()[..1].ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(comment.Author))
+            return comment.Author.Trim()[..1].ToUpperInvariant();
+        return "C";
     }
 
     /// <summary>
@@ -5681,6 +5780,161 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHighlightColor(string? colorHex) =>
         ApplyRunFormatting(f => f with { HighlightColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex });
+
+    // ── AV-COMMENT: review-comment insert / delete / resolve + introspection ──────────────────────
+    // Model-backed (comments already round-trip through Core.IO). All mutations ride the shared
+    // DocumentCommandBus so they are undoable, mirroring the WPF host's InsertComment / DeleteComment /
+    // ToggleResolve behaviour but reusing the portable model directly (no ribbon wiring this wave).
+
+    /// <summary>
+    /// Anchors a new review comment over the current selection (or, when the selection is empty or spans
+    /// multiple blocks, the whole caret paragraph). Allocates the next comment id, marks the covered body
+    /// runs with it + appends a reference anchor, and stores the <see cref="Comment"/> (author/initials/
+    /// text/date) in the model. Undoable; re-renders so the anchor highlight + margin marker appear.
+    /// Returns the new comment id, or null when there was nothing textual to anchor to.
+    /// </summary>
+    public int? AddComment(string text, string author = "", string initials = "")
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        // Resolve the anchor block + char range. A single-block non-empty selection anchors to that range;
+        // an empty or cross-block selection anchors to the whole caret paragraph (mirrors WPF InsertComment).
+        var sel = NormalizedSelection();
+        int block, startOffset, endOffset;
+        if (sel is { } s && s.Start.Block == s.End.Block && s.Start.Offset != s.End.Offset)
+        {
+            block = s.Start.Block;
+            startOffset = s.Start.Offset;
+            endOffset = s.End.Offset;
+        }
+        else
+        {
+            block = _caret.Block;
+            startOffset = 0;
+            endOffset = int.MaxValue;
+        }
+
+        if (block < 0 || block >= _doc.Blocks.Count || _doc.Blocks[block] is not Paragraph paragraph || !IsEditable(paragraph))
+            return null;
+
+        // Nothing to anchor to (empty paragraph) → no comment.
+        if (ParaCells(paragraph).Count == 0)
+            return null;
+
+        var id = _doc.NextCommentId();
+        var comment = new Comment(id)
+        {
+            Author = author,
+            Initials = initials,
+            // W3CDTF (UTC, second precision) — matches the docx writer's w:date expectation.
+            DateXml = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+        };
+        comment.Content.Add(new Paragraph(text));
+
+        _bus.Execute(new AddCommentCommand(block, startOffset, endOffset, id, comment));
+        // The command no-ops (and leaves Comments unchanged) when the range covers no text.
+        return _doc.Comments.ContainsKey(id) ? id : (int?)null;
+    }
+
+    /// <summary>
+    /// Deletes the comment thread with <paramref name="commentId"/> (and its replies), clearing the body
+    /// anchor marks + reference run(s). Undoable. Returns true when a comment was removed.
+    /// </summary>
+    public bool DeleteComment(int commentId)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.ContainsKey(topId))
+            return false;
+        _bus.Execute(new DeleteCommentCommand(topId));
+        return true;
+    }
+
+    /// <summary>Deletes the comment thread covering the caret/selection. Returns true when one was removed.</summary>
+    public bool DeleteCommentAtCaret() =>
+        CommentIdAtCaret() is { } id && DeleteComment(id);
+
+    /// <summary>
+    /// Sets the resolved/done flag on the comment thread with <paramref name="commentId"/>. Undoable.
+    /// Returns true when the comment exists (flag was set/cleared), false otherwise.
+    /// </summary>
+    public bool SetCommentResolved(int commentId, bool resolved)
+    {
+        var topId = DeleteCommentCommand.ResolveTopLevel(_doc, commentId);
+        if (!_doc.Comments.ContainsKey(topId))
+            return false;
+        _bus.Execute(new SetCommentResolvedCommand(topId, resolved));
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles the resolved flag of the comment thread covering the caret/selection. Returns the new
+    /// resolved state, or null when the caret is not inside a comment.
+    /// </summary>
+    public bool? ToggleResolveCommentAtCaret()
+    {
+        if (CommentIdAtCaret() is not { } id || !_doc.Comments.TryGetValue(id, out var comment))
+            return null;
+        var newState = !comment.Resolved;
+        SetCommentResolved(id, newState);
+        return newState;
+    }
+
+    /// <summary>All top-level review comments in the document, in id order. Replies live on each thread.</summary>
+    public IReadOnlyList<Comment> AllComments =>
+        _doc.Comments.Values.OrderBy(c => c.Id).ToList();
+
+    /// <summary>
+    /// The top-level comment threads whose anchored range covers the caret (or selection start), in id
+    /// order. Empty when the caret is not inside any comment.
+    /// </summary>
+    public IReadOnlyList<Comment> CommentsAtCaret =>
+        CommentIdAtCaret() is { } id && _doc.Comments.TryGetValue(id, out var comment)
+            ? new[] { comment }
+            : System.Array.Empty<Comment>();
+
+    /// <summary>
+    /// The id of the top-level comment whose anchored range covers the caret (or selection start), or
+    /// null when the caret is not inside a comment. Resolved from the model run carrying CommentId at the
+    /// caret offset; a reply's id is mapped up to its owning top-level comment.
+    /// </summary>
+    private int? CommentIdAtCaret()
+    {
+        if (_caret.Block < 0 || _caret.Block >= _doc.Blocks.Count || _doc.Blocks[_caret.Block] is not Paragraph paragraph)
+            return null;
+        var cells = ParaCells(paragraph);
+        if (cells.Count == 0)
+            return null;
+        // Probe the cell just before the caret (the char the caret sits after), then the one at the caret.
+        foreach (var probe in new[] { _caret.Offset - 1, _caret.Offset })
+        {
+            if (probe < 0 || probe >= cells.Count)
+                continue;
+            if (cells[probe].CommentId is { } cid)
+                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+        }
+        // Fallback: any commented run in the paragraph (caret placed loosely inside the range).
+        foreach (var cell in cells)
+            if (cell.CommentId is { } cid)
+                return DeleteCommentCommand.ResolveTopLevel(_doc, cid);
+        return null;
+    }
+
+    /// <summary>
+    /// Test/introspection hook: the page-space rectangles of every laid-out glyph currently marked by a
+    /// review comment, paired with the anchoring top-level comment id. Non-empty exactly when a comment's
+    /// anchored range maps onto rendered glyphs. Reflects the last layout pass (call after Measure).
+    /// </summary>
+    internal IReadOnlyList<(int CommentId, Rect Rect)> CommentAnchorGlyphs()
+    {
+        // Force a fresh layout so the result always reflects the current model (introspection/test hook).
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+        return _placed
+            .Where(p => !p.Sentinel && p.CommentId is not null)
+            .Select(p => (DeleteCommentCommand.ResolveTopLevel(_doc, p.CommentId!.Value),
+                          new Rect(p.X, p.Y, Math.Max(1, p.W), p.LineHeight)))
+            .ToList();
+    }
 
     /// <summary>
     /// Set the paragraph space-before (in points) for the current paragraph.
@@ -6988,15 +7242,21 @@ public sealed class DocumentView : Control
 
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
     private static bool IsEditable(Paragraph paragraph) =>
+        // AV-COMMENT: a CommentId is a soft run mark (like a hyperlink) — it must NOT make the paragraph
+        // non-editable, or its glyphs would fall back to FallbackCells (which drops the comment id and the
+        // anchor render). Word keeps commented text fully editable. The textless comment-reference run has
+        // empty text and contributes no cells, so it does not affect editability either.
         paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.FootnoteId is null && r.EndnoteId is null && r.CommentId is null && r.Control is null);
+            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null);
 
     private static List<Cell> ParaCells(Paragraph paragraph)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
             foreach (var ch in run.Text)
-                cells.Add(new Cell(ch, run.Formatting));
+                // AV-COMMENT: carry the run's CommentId so commented ranges survive the cell round-trip
+                // (layout + edit). Textless comment-reference runs contribute no cells, as before.
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId));
         return cells;
     }
 
@@ -7010,16 +7270,40 @@ public sealed class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
+        // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
+        // cell round-trip would otherwise drop them). Re-emitted after the run is last anchored below so the
+        // w:commentReference survives an edit inside a commented paragraph.
+        var referencedComments = paragraph.Runs
+            .Where(r => r.IsCommentReference && r.CommentId is not null)
+            .Select(r => r.CommentId!.Value)
+            .ToHashSet();
+
         paragraph.Runs.Clear();
+        var lastAnchorIndexFor = new Dictionary<int, int>();
         var i = 0;
         while (i < cells.Count)
         {
             var fmt = cells[i].Fmt;
+            // AV-COMMENT: also break runs on a comment-id boundary so the anchoring CommentId is preserved
+            // across edits (a run is one contiguous run of equal Fmt AND equal CommentId).
+            var commentId = cells[i].CommentId;
             var start = i;
-            while (i < cells.Count && cells[i].Fmt.Equals(fmt))
+            while (i < cells.Count && cells[i].Fmt.Equals(fmt) && cells[i].CommentId == commentId)
                 i++;
             var text = new string(cells.Skip(start).Take(i - start).Select(c => c.Ch).ToArray());
-            paragraph.Runs.Add(new Run(text, fmt));
+            paragraph.Runs.Add(new Run(text, fmt) { CommentId = commentId });
+            if (commentId is { } cid)
+                lastAnchorIndexFor[cid] = paragraph.Runs.Count - 1;
+        }
+
+        // Re-append a comment-reference run just after each comment's last anchored run, for every comment
+        // that still has anchored text and previously carried a reference. Insert from the rightmost anchor
+        // first so earlier insert positions stay valid.
+        foreach (var cid in referencedComments
+                     .Where(lastAnchorIndexFor.ContainsKey)
+                     .OrderByDescending(cid => lastAnchorIndexFor[cid]))
+        {
+            paragraph.Runs.Insert(lastAnchorIndexFor[cid] + 1, Run.CommentReference(cid));
         }
     }
 
@@ -7166,10 +7450,25 @@ public sealed class DocumentView : Control
 
     private static IBrush SelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x55, 0x33, 0x99, 0xFF));
 
+    // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
+    // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
+    private static IBrush CommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
+    private static IBrush ResolvedCommentTintBrush { get; } = new SolidColorBrush(Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E));
+    // Amber underline drawn under commented glyphs — the in-text anchor mark.
+    private static readonly Pen CommentUnderlinePen =
+        new(new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)), 1.5);
+    private static readonly Pen ResolvedCommentUnderlinePen =
+        new(new SolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E)), 1.0);
+    // Right-margin comment marker fill (balloon) — amber bracket aligned to the anchor line.
+    private static IBrush CommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
+    private static IBrush ResolvedCommentMarkerBrush { get; } = new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
+
     // AV-TBL2: overlay brush for rectangular cross-cell block selection (slightly deeper than glyph selection).
     private static IBrush CellBlockSelectionBrush { get; } = new SolidColorBrush(Color.FromArgb(0x66, 0x33, 0x99, 0xFF));
 
-    private readonly record struct Cell(char Ch, RunFormatting Fmt);
+    // AV-COMMENT: CommentId carries the anchoring review-comment id (null = not commented) so the
+    // glyph layout can mark commented ranges. Defaulted so existing Cell(ch, fmt) construction is unchanged.
+    private readonly record struct Cell(char Ch, RunFormatting Fmt, int? CommentId = null);
 
     private readonly record struct DocPosition(int Block, int Offset);
 
@@ -7187,10 +7486,15 @@ public sealed class DocumentView : Control
         int CellRow = -1,
         int CellCol = -1,
         int CellParaIdx = -1,
-        int CellParaOffset = -1)
+        int CellParaOffset = -1,
+        // AV-COMMENT: anchoring review-comment id (null = this glyph is not inside a comment range).
+        int? CommentId = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;
+
+        /// <summary>True when this glyph is covered by a review comment's anchored range.</summary>
+        public bool IsCommented => CommentId is not null;
     }
 
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
