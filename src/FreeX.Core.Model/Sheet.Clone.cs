@@ -120,6 +120,8 @@ public sealed partial class Sheet
             copy.Hyperlinks[RemapAddress(address, newId)] = hyperlink;
         foreach (var (address, metadata) in HyperlinkMetadata)
             copy.HyperlinkMetadata[RemapAddress(address, newId)] = metadata;
+        foreach (var (address, runs) in RichTextRuns)
+            copy.RichTextRuns[RemapAddress(address, newId)] = runs;
 
         // Allow-edit ranges (protection)
         copy.ProtectionPermissions.Clear();

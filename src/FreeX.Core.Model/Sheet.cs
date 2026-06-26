@@ -478,6 +478,15 @@ public sealed partial class Sheet
     /// <summary>Excel hyperlink metadata keyed by address.</summary>
     public Dictionary<CellAddress, HyperlinkMetadata> HyperlinkMetadata { get; } = [];
 
+    /// <summary>
+    /// Per-cell rich-text run sequences, keyed by cell address.
+    /// Only populated when a text cell has more than one run <em>or</em> a run deviates from the
+    /// cell's <see cref="CellStyle"/>.  The plain-text value in <c>Cell.Value</c> (a
+    /// <see cref="ScalarValue"/> <c>TextValue</c>) always remains the authoritative string for
+    /// formulas, search, and number-format — this map is a parallel decoration layer.
+    /// </summary>
+    public Dictionary<CellAddress, IReadOnlyList<CellTextRun>> RichTextRuns { get; } = [];
+
     /// <summary>True when the sheet is protected against edits.</summary>
     public bool IsProtected { get; set; }
 

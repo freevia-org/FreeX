@@ -278,6 +278,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     sheet.HyperlinkMetadata[hyperlink.Address] = hyperlink.Metadata;
                 }
             }
+            LoadRichTextRuns(sDto.RichTextRuns, sheet);
             foreach (var allowEditRange in sDto.AllowEditRanges ?? [])
             {
                 if (string.IsNullOrWhiteSpace(allowEditRange))

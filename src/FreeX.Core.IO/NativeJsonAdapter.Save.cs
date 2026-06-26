@@ -272,6 +272,7 @@ public sealed partial class NativeJsonAdapter
                     .Where(pair => IsValidAddressOnSheet(pair.Key, s.Id) && pair.Value is not null)
                     .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
+                RichTextRuns = ToRichTextRunDtos(s),
                 AllowEditRanges = s.AllowEditRanges
                     .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())

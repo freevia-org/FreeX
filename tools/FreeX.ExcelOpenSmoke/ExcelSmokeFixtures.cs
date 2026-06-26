@@ -166,6 +166,12 @@ internal static class ExcelSmokeFixtures
             return;
         }
 
+        if (fileName.StartsWith("Excel_native_richtext_", StringComparison.OrdinalIgnoreCase))
+        {
+            GenerateExcelNativeRichTextCorpusFixture(workbooks, outputPath, fileName);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -6229,6 +6235,116 @@ internal static class ExcelSmokeFixtures
         {
             ReleaseComObject(rowRange);
             ReleaseComObject(colRange);
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // Rich-text cell corpus fixtures
+    // =========================================================================
+
+    /// <summary>Returns output paths for all rich-text cell corpus fixtures.</summary>
+    public static IReadOnlyList<string> GetExcelRichTextCorpusFixturePaths(string outputDirectory)
+    {
+        Directory.CreateDirectory(outputDirectory);
+        return
+        [
+            Path.Combine(outputDirectory, "Excel_native_richtext_mixed_001.xlsx"),
+        ];
+    }
+
+    /// <summary>Per-file dispatch for rich-text cell corpus fixtures.</summary>
+    private static void GenerateExcelNativeRichTextCorpusFixture(dynamic workbooks, string outputPath, string fileName)
+    {
+        if (fileName.Contains("richtext_mixed_001", StringComparison.OrdinalIgnoreCase))
+            GenerateRichTextFixture_Mixed(workbooks, outputPath);
+        else
+            throw new ArgumentException($"Unknown rich-text corpus fixture: {fileName}");
+    }
+
+    // -------------------------------------------------------------------------
+    // case 001 — one workbook, four cells covering subscript, superscript,
+    //            bold+color, and mixed font sizes
+    // -------------------------------------------------------------------------
+    private static void GenerateRichTextFixture_Mixed(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? cell      = null;
+        object? chars     = null;
+        object? font      = null;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+
+            workbook  = workbooks.Add();
+            worksheet = ((dynamic)workbook).Worksheets[1];
+            ((dynamic)worksheet).Name = "RichText";
+
+            // --- A1: H₂O  (subscript "2") ---
+            cell = ((dynamic)worksheet).Cells[1, 1];
+            ((dynamic)cell).Value2 = "H2O";
+            chars = ((dynamic)cell).Characters(2, 1);   // "2" (1-based, length 1)
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Subscript = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A2: X² (superscript "2") ---
+            cell  = ((dynamic)worksheet).Cells[2, 1];
+            ((dynamic)cell).Value2 = "X2";
+            chars = ((dynamic)cell).Characters(2, 1);   // "2"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Superscript = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A3: "Hello" bold  +  " World" red ---
+            cell  = ((dynamic)worksheet).Cells[3, 1];
+            ((dynamic)cell).Value2 = "Hello World";
+            chars = ((dynamic)cell).Characters(1, 5);   // "Hello"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Bold = true;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+
+            chars = ((dynamic)cell).Characters(7, 5);   // "World" (offset 7 = space + "World"[0])
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Color = ToOleColor(255, 0, 0);  // red
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            // --- A4: "Big" size 18  +  "Small" size 8 ---
+            cell  = ((dynamic)worksheet).Cells[4, 1];
+            ((dynamic)cell).Value2 = "BigSmall";
+            chars = ((dynamic)cell).Characters(1, 3);   // "Big"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Size = 18;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+
+            chars = ((dynamic)cell).Characters(4, 5);   // "Small"
+            font  = ((dynamic)chars).Font;
+            ((dynamic)font).Size = 8;
+            ReleaseComObject(font);  font  = null;
+            ReleaseComObject(chars); chars = null;
+            ReleaseComObject(cell);  cell  = null;
+
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            ReleaseComObject(font);
+            ReleaseComObject(chars);
+            ReleaseComObject(cell);
             SafeCloseWorkbook(workbook);
             ReleaseComObject(worksheet);
             ReleaseComObject(workbook);

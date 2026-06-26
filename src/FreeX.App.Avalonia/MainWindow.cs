@@ -21,6 +21,7 @@ using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -6222,6 +6223,15 @@ public sealed partial class MainWindow : Window
         var dataBar = ConditionalFormatCellRenderPlanner.PlanDataBar(cell.ConditionalDataBar);
         var icon = ConditionalFormatCellRenderPlanner.PlanIcon(cell.ConditionalIcon);
 
+        // Per-run rich text: resolve raw runs (null props → cell style) via the shared planner.
+        // Only text cells with multiple character-level format variations carry entries here.
+        // Use CellStyle.Default when style is null so run props inherit sensible defaults.
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null;
+        if (_session.ActiveSheet.RichTextRuns.TryGetValue(address, out var rawRuns))
+        {
+            richRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
+        }
+
         return CreateInteractiveCellBorder(
             cell.DisplayText,
             background,
@@ -6247,7 +6257,8 @@ public sealed partial class MainWindow : Window
             dataBar,
             icon,
             sparklineLayer,
-            patternBrush: patternBrush);
+            patternBrush: patternBrush,
+            richRuns: richRuns);
     }
 
     private Border CreateInteractiveCellBorder(
@@ -6275,7 +6286,8 @@ public sealed partial class MainWindow : Window
         CfDataBarRenderInstruction? conditionalDataBar = null,
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
-        IBrush? patternBrush = null)
+        IBrush? patternBrush = null,
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
     {
         var border = CreateCellBorder(
             text,
@@ -6302,7 +6314,8 @@ public sealed partial class MainWindow : Window
             conditionalDataBar,
             conditionalIcon,
             sparklineLayer,
-            patternBrush: patternBrush);
+            patternBrush: patternBrush,
+            richRuns: richRuns);
         if (address == _session.SelectedRange.End)
             AddAutofillHandleAdorner(border, zoomFactor);
 
@@ -7020,7 +7033,8 @@ public sealed partial class MainWindow : Window
         CfIconRenderInstruction? conditionalIcon = null,
         Control? sparklineLayer = null,
         double horizontalPadding = 8,
-        IBrush? patternBrush = null)
+        IBrush? patternBrush = null,
+        IReadOnlyList<ResolvedCellTextRun>? richRuns = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -7028,8 +7042,22 @@ public sealed partial class MainWindow : Window
         var scaledHorizontalPadding = horizontalPadding * zoomFactor;
         var scaledIndentPadding = indentPadding * zoomFactor;
 
-        // Cell-level super/subscript: shrink font and shift baseline vertically.
-        CellSuperSubScript.Resolve(style, scaledFontSize, out var adjustedFontSize, out var superSubOffsetDip);
+        // Rich text runs override cell-level super/subscript — each run carries its own VertAlign
+        // and RenderedFontSize from the planner.  When runs are present the TextBlock uses Inlines
+        // rather than a single Text string, so cell-level super/sub adjustment is skipped.
+        double adjustedFontSize;
+        double superSubOffsetDip;
+        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            // For rich runs the TextBlock font acts as a fallback only; actual sizes come per Run.
+            adjustedFontSize  = scaledFontSize;
+            superSubOffsetDip = 0;
+        }
+        else
+        {
+            // Cell-level super/subscript: shrink font and shift baseline vertically.
+            CellSuperSubScript.Resolve(style, scaledFontSize, out adjustedFontSize, out superSubOffsetDip);
+        }
 
         // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
         // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
@@ -7049,11 +7077,9 @@ public sealed partial class MainWindow : Window
         var textMarginTop = superSubOffsetDip;  // negative = up (superscript), positive = down (subscript)
         var textBlock = new TextBlock
         {
-            Text = effectiveText,
             FontSize = adjustedFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
-            TextDecorations = textDecorations,
             Foreground = foreground,
             TextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment,
             TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
@@ -7063,6 +7089,23 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = verticalAlignment,
             Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
         };
+
+        // Per-run rich text: populate Inlines (one Run per resolved run) when present.
+        // Each Run carries its own font size, weight, style, color, decorations, and baseline
+        // alignment — the planner has already coalesced null props against the cell style.
+        // Otherwise fall back to a single plain-text string (existing path).
+        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        {
+            CellRichTextInlinesBuilder.Build(
+                richRuns!,
+                textBlock.Inlines!,
+                color => Brush(color));
+        }
+        else
+        {
+            textBlock.Text = effectiveText;
+            textBlock.TextDecorations = textDecorations;
+        }
 
         var content = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation)
             ? CreateOrientedCellContent(
