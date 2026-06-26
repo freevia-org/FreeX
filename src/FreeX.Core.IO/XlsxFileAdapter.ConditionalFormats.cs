@@ -376,12 +376,21 @@ public sealed partial class XlsxFileAdapter
             });
         }
 
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), workbookTheme, indexedColors, out var minColor))
+        if (XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(0), workbookTheme, indexedColors, out var minColor, out var minSource))
+        {
             format.MinColor = minColor;
-        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), workbookTheme, indexedColors, out var midColor))
+            format.MinColorSource = minSource;
+        }
+        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(1), workbookTheme, indexedColors, out var midColor, out var midSource))
+        {
             format.MidColor = midColor;
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), workbookTheme, indexedColors, out var maxColor))
+            format.MidColorSource = midSource;
+        }
+        if (XlsxColorReader.TryReadRgbColorWithSource(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), workbookTheme, indexedColors, out var maxColor, out var maxSource))
+        {
             format.MaxColor = maxColor;
+            format.MaxColorSource = maxSource;
+        }
 
         ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
         return format;
@@ -518,6 +527,9 @@ public sealed partial class XlsxFileAdapter
             MinColor = source.MinColor,
             MidColor = source.MidColor,
             MaxColor = source.MaxColor,
+            MinColorSource = source.MinColorSource,
+            MidColorSource = source.MidColorSource,
+            MaxColorSource = source.MaxColorSource,
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
             MinThresholdValue = source.MinThresholdValue,
