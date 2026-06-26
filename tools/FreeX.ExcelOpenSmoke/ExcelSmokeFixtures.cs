@@ -4805,6 +4805,7 @@ internal static class ExcelSmokeFixtures
     private const int MsoShapeExplosion1             = 89;
     private const int MsoShapeRectangularCallout     = 61;
     private const int MsoShapeOvalCallout            = 107;
+    private const int MsoShapeCan                    = 46;    // msoShapeCan (Office MsoAutoShapeType) — database/storage cylinder
 
     // MsoLineDashStyle
     private const int MsoLineSolid               = 1;
@@ -4829,6 +4830,7 @@ internal static class ExcelSmokeFixtures
             Path.Combine(outputDirectory, "Excel_native_shapes_line_conn_007.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_shapes_picture_008.xlsx"),
             Path.Combine(outputDirectory, "Excel_native_shapes_wordart_009.xlsx"),
+            Path.Combine(outputDirectory, "Excel_native_shapes_cylinder_conn_010.xlsx"),
         ];
     }
 
@@ -4853,6 +4855,8 @@ internal static class ExcelSmokeFixtures
             GenerateShapesFixture_Picture(workbooks, outputPath);
         else if (fileName.Contains("wordart_009", StringComparison.OrdinalIgnoreCase))
             GenerateShapesFixture_WordArt(workbooks, outputPath);
+        else if (fileName.Contains("cylinder_conn_010", StringComparison.OrdinalIgnoreCase))
+            GenerateShapesFixture_CylinderConn(workbooks, outputPath);
         else
             throw new ArgumentException($"Unknown shapes corpus fixture: {fileName}");
     }
@@ -5903,6 +5907,94 @@ internal static class ExcelSmokeFixtures
             finally
             {
                 ReleaseComObject(wa);
+                ReleaseComObject(shapes);
+            }
+
+            AnchorShapeUsedRange(worksheet);
+            SaveExcelWorkbook(workbook, outputPath);
+            workbook = null;
+        }
+        finally
+        {
+            SafeCloseWorkbook(workbook);
+            ReleaseComObject(worksheet);
+            ReleaseComObject(workbook);
+        }
+        Console.WriteLine($"Generated: {outputPath}");
+    }
+
+    // =========================================================================
+    // case 010 — Cylinder ("can") + curved connector
+    // =========================================================================
+    private static void GenerateShapesFixture_CylinderConn(dynamic workbooks, string outputPath)
+    {
+        object? workbook  = null;
+        object? worksheet = null;
+        object? shape     = null;
+        object? conn      = null;
+        try
+        {
+            workbook = OpenShapesWorkbook(workbooks, outputPath, "CylinderConn", out object ws);
+            worksheet = ws;
+
+            SetExcelCellValue(worksheet, 1, 1, "Cylinder + Curved Connector");
+
+            object? shapes = null;
+            try
+            {
+                shapes = ((dynamic)worksheet).Shapes;
+
+                // Cylinder (orange) — msoShapeCan = 46
+                try
+                {
+                    shape = ((dynamic)shapes).AddShape(MsoShapeCan, 10f, 36f, 100f, 120f);
+                    ((dynamic)shape).Name = "Cylinder";
+                    SetShapeSolidFill(shape, 0xED, 0x7D, 0x31);   // orange fill
+                    SetShapeOutline(shape, 0xC5, 0x5A, 0x11);      // dark orange outline
+                    ReleaseComObject(shape); shape = null;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddShape(msoShapeCan) failed: {ex.Message}. Generating placeholder.");
+                    try
+                    {
+                        shape = ((dynamic)shapes).AddShape(MsoShapeOval, 10f, 36f, 100f, 120f);
+                        ((dynamic)shape).Name = "CylinderPlaceholder";
+                        SetShapeSolidFill(shape, 0xED, 0x7D, 0x31);
+                        ReleaseComObject(shape); shape = null;
+                    }
+                    catch (Exception ex2)
+                    {
+                        Console.Error.WriteLine($"  COM note: placeholder also failed: {ex2.Message}");
+                    }
+                }
+
+                // Curved connector — msoConnectorCurve = 3
+                try
+                {
+                    conn = ((dynamic)shapes).AddConnector(3 /*msoConnectorCurve*/, 150f, 36f, 350f, 160f);
+                    ((dynamic)conn).Name = "CurvedConnector";
+                    {
+                        object? ln = null;
+                        try
+                        {
+                            ln = ((dynamic)conn).Line;
+                            ((dynamic)ln).ForeColor.RGB = ToOleColor(0x70, 0xAD, 0x47);  // green
+                            ((dynamic)ln).Weight = 2.5f;
+                            try { ((dynamic)ln).EndArrowheadStyle = 2; /* msoArrowheadOpen */ } catch { }
+                        }
+                        finally { ReleaseComObject(ln); }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  COM note: AddConnector(msoConnectorCurve) failed: {ex.Message}");
+                }
+            }
+            finally
+            {
+                ReleaseComObject(conn);
+                ReleaseComObject(shape);
                 ReleaseComObject(shapes);
             }
 
