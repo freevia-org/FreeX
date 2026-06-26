@@ -79,6 +79,21 @@ public sealed class Run
 
     public bool Bold { get; set; }
     public bool Italic { get; set; }
+
+    /// <summary>
+    /// True when <see cref="Bold"/> was read from an explicit <c>a:rPr @b</c> attribute
+    /// (including <c>b="0"</c>).  False means the attribute was absent — inherit from style chain.
+    /// Set by the reader and by bold-toggle editing commands.
+    /// </summary>
+    public bool BoldSet { get; set; }
+
+    /// <summary>
+    /// True when <see cref="Italic"/> was read from an explicit <c>a:rPr @i</c> attribute
+    /// (including <c>i="0"</c>).  False means the attribute was absent — inherit from style chain.
+    /// Set by the reader and by italic-toggle editing commands.
+    /// </summary>
+    public bool ItalicSet { get; set; }
+
     public bool Underline { get; set; }
     public bool Strikethrough { get; set; }
 

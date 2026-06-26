@@ -44,6 +44,12 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
 
     public string Label => "Set Timeline Range";
 
+    /// <summary>The start date string this command will apply (yyyy-MM-dd, or null for open-ended).</summary>
+    public string? SelectedStartDate => _selectedStartDate;
+
+    /// <summary>The end date string this command will apply (yyyy-MM-dd, or null for open-ended).</summary>
+    public string? SelectedEndDate => _selectedEndDate;
+
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);

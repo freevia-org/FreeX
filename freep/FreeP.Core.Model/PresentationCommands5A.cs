@@ -221,8 +221,8 @@ public sealed class ApplyFormatPainterCommand : IPresentationCommand
                 if (fmt.FontFamily is not null) run.FontFamily = fmt.FontFamily;
                 if (fmt.FontSizePt.HasValue)    run.FontSizePt = fmt.FontSizePt;
                 if (fmt.Color is not null)       run.Color      = fmt.Color;
-                if (fmt.Bold.HasValue)           run.Bold       = fmt.Bold.Value;
-                if (fmt.Italic.HasValue)         run.Italic     = fmt.Italic.Value;
+                if (fmt.Bold.HasValue)   { run.Bold   = fmt.Bold.Value;   run.BoldSet   = true; }
+                if (fmt.Italic.HasValue) { run.Italic = fmt.Italic.Value; run.ItalicSet = true; }
             }
         }
     }

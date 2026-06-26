@@ -145,8 +145,20 @@ public static class PptxPackageWriter
         // --- 3. Core properties ---
         WriteEntry(archive, "docProps/core.xml", BuildCorePropsXml(presentation.Properties));
 
-        // --- 4. Theme ---
-        WriteEntry(archive, "ppt/theme/theme1.xml", BuildThemeXml(presentation.Theme));
+        // --- 4. Theme(s) — one per master (MM4: multi-master theme fix) ---
+        // Build the per-master theme map: master index (0-based) → theme to write.
+        // A master uses its own SlideMaster.Theme if set; otherwise falls back to presentation.Theme.
+        // theme1.xml always exists (first master); theme2.xml etc. are added for additional masters.
+        // Single-master decks still produce exactly one theme1.xml — no regression.
+        var masterThemes = new Dictionary<int, PresentationTheme>(); // masterIdx → theme
+        for (int mi = 0; mi < masters.Count; mi++)
+            masterThemes[mi] = masters[mi].Theme ?? presentation.Theme;
+        // Write all theme parts before masters (masters rels reference theme paths).
+        for (int mi = 0; mi < masters.Count; mi++)
+        {
+            var themePath = $"ppt/theme/theme{mi + 1}.xml";
+            WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
+        }
 
         // --- 5. presProps, viewProps, tableStyles ---
         WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml());
@@ -162,13 +174,14 @@ public static class PptxPackageWriter
             var layoutPath = $"ppt/slideLayouts/slideLayout{li + 1}.xml";
             layoutPaths[layout.Id] = layoutPath;
 
-            // Find the master path for this layout's master
+            // Find the master for this layout, use its theme for color scheme resolution.
             var masterIdx = masters.FindIndex(m => m.Id == layout.MasterId);
             if (masterIdx < 0) masterIdx = 0;
             var masterPath = $"ppt/slideMasters/slideMaster{masterIdx + 1}.xml";
+            var layoutColorScheme = masterThemes[masterIdx].ColorScheme;
 
             // Layout xml
-            WriteEntry(archive, layoutPath, BuildSlideLayoutXml(layout, presentation.Theme.ColorScheme));
+            WriteEntry(archive, layoutPath, BuildSlideLayoutXml(layout, layoutColorScheme));
 
             // Layout rels: -> master
             var layoutRels = new RelsDoc();
@@ -193,11 +206,13 @@ public static class PptxPackageWriter
                 .Select((l, i) => ($"rId{i + 2}", layoutPaths.TryGetValue(l.Id, out var lp) ? lp : $"ppt/slideLayouts/slideLayout{i+1}.xml"))
                 .ToList();
 
-            WriteEntry(archive, masterPath, BuildSlideMasterXml(master, presentation.Theme.ColorScheme, layoutRelIds));
+            WriteEntry(archive, masterPath, BuildSlideMasterXml(master, masterThemes[mi].ColorScheme, layoutRelIds));
 
-            // Master rels: rId1=theme, rId2..=layouts
+            // Master rels: rId1=theme (points to THIS master's own theme part), rId2..=layouts
             var masterRels = new RelsDoc();
-            masterRels.Add("rId1", ThemeRelType, "../theme/theme1.xml");
+            // Each master references its own theme file (theme1.xml, theme2.xml, …).
+            var themeRelTarget = $"../theme/theme{mi + 1}.xml";
+            masterRels.Add("rId1", ThemeRelType, themeRelTarget);
             for (int li = 0; li < layoutRelIds.Count; li++)
             {
                 var (relId, layoutPath) = layoutRelIds[li];
@@ -237,9 +252,12 @@ public static class PptxPackageWriter
             var slidePath = $"ppt/slides/slide{si + 1}.xml";
             var slideRelId = $"rId{si + 2}";
 
-            // Find layout
+            // Find layout and its owning master's theme for color resolution.
             var layout = layouts.FirstOrDefault(l => l.Id == slide.LayoutId) ?? layouts[0];
             var layoutPath = layoutPaths.TryGetValue(layout.Id, out var lp2) ? lp2 : layoutPaths.Values.First();
+            var slideMasterIdx = masters.FindIndex(m => m.Id == layout.MasterId);
+            if (slideMasterIdx < 0) slideMasterIdx = 0;
+            var slideColorScheme = masterThemes[slideMasterIdx].ColorScheme;
 
             // Write media (images) into the archive, get back rel-id maps
             var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide, si + 1);
@@ -280,8 +298,8 @@ public static class PptxPackageWriter
             var hlinkRelEntries = new List<(string relId, string relType, string target, bool external)>();
             CollectHyperlinkRels(slide, presentation.Slides, si + 1, hlinkRelIds, hlinkRelEntries);
 
-            // Slide xml
-            WriteEntry(archive, slidePath, BuildSlideXml(slide, presentation.Theme.ColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
+            // Slide xml — use the owning master's theme color scheme for scheme-color pre-resolution.
+            WriteEntry(archive, slidePath, BuildSlideXml(slide, slideColorScheme, mediaById, smartArtRelIdRemap, hlinkRelIds, presentation.Slides, fillBlipById));
 
             // Slide rels: rId1=layout, images (picture shapes + fill blips), charts, SmartArt, optional notesSlide
             var slideRels = new RelsDoc();
@@ -419,12 +437,14 @@ public static class PptxPackageWriter
         var overrides = new List<XElement>
         {
             Override(CT, "/ppt/presentation.xml", PresentationCT),
-            Override(CT, "/ppt/theme/theme1.xml", ThemeCT),
             Override(CT, "/ppt/presProps.xml", PresPropsCT),
             Override(CT, "/ppt/viewProps.xml", ViewPropsCT),
             Override(CT, "/ppt/tableStyles.xml", TableStylesCT),
             Override(CT, "/docProps/core.xml", CorePropsCT),
         };
+        // MM4: one theme Override entry per master (theme1.xml, theme2.xml, …).
+        for (int mi = 0; mi < masters.Count; mi++)
+            overrides.Add(Override(CT, $"/ppt/theme/theme{mi + 1}.xml", ThemeCT));
 
         for (int mi = 0; mi < masters.Count; mi++)
             overrides.Add(Override(CT, $"/ppt/slideMasters/slideMaster{mi + 1}.xml", SlideMasterCT));
@@ -2271,8 +2291,10 @@ public static class PptxPackageWriter
             new XAttribute("lang", "en-US"),
             new XAttribute("dirty", "0"));
 
-        if (run.Bold) rPr.Add(new XAttribute("b", "1"));
-        if (run.Italic) rPr.Add(new XAttribute("i", "1"));
+        if (run.BoldSet)   rPr.Add(new XAttribute("b", run.Bold   ? "1" : "0"));
+        else if (run.Bold) rPr.Add(new XAttribute("b", "1"));
+        if (run.ItalicSet)   rPr.Add(new XAttribute("i", run.Italic ? "1" : "0"));
+        else if (run.Italic) rPr.Add(new XAttribute("i", "1"));
         if (run.Underline) rPr.Add(new XAttribute("u", "sng"));
         if (run.Strikethrough) rPr.Add(new XAttribute("strike", "sngStrike"));
         if (run.FontSizePt.HasValue)

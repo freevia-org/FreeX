@@ -52,7 +52,6 @@ public static class SlideCompositor
         ArgumentNullException.ThrowIfNull(slide);
 
         var ops = new List<DrawOp>();
-        var theme = presentation.Theme;
 
         // Compute the effective color map for this slide (ECMA-376 §19.3.1.20 / §14.2.9):
         //   slide.ColorMapOverride (from p:clrMapOvr/a:overrideClrMapping)
@@ -64,6 +63,12 @@ public static class SlideCompositor
         IReadOnlyDictionary<string, string>? effectiveClrMap =
             slide.ColorMapOverride as IReadOnlyDictionary<string, string>
             ?? master?.ColorMap as IReadOnlyDictionary<string, string>;
+
+        // MM4: use the OWNING master's theme for color/font resolution.
+        // Each master in a multi-master deck has its own theme (SlideMaster.Theme).
+        // Fall back to presentation.Theme for single-master decks or when master.Theme is null
+        // (degenerate packages that have no per-master theme part).
+        var theme = master?.Theme ?? presentation.Theme;
 
         // Slide bounds in DIP (origin at 0,0)
         double slideWidthDip = presentation.SlideSizeCxEmu / EmuPerDip;
@@ -936,16 +941,19 @@ public static class SlideCompositor
                     ?? inheritedStyle?.FontSizePt
                     ?? fallbackFontSizePt;
 
-                // Bold: explicit run overrides; inherited style fills in when run.Bold == false and no explicit.
-                // (run.Bold is a bool, false means "not set" in our model — treat inherited as additive)
-                bool bold = run.Bold
-                    || (run.Field?.Bold ?? false)
-                    || (inheritedStyle?.Bold ?? false);
+                // Bold: PP1 fix — explicit b="0" (BoldSet=true, Bold=false) must beat inherited bold.
+                // When BoldSet=true the run has a real a:rPr @b attribute (or was set by an editing
+                // command) and its value wins unconditionally.
+                // When BoldSet=false fall back to the original OR: run.Bold (programmatic/default)
+                // or field or inherited style — preserving existing behaviour for programmatic Runs.
+                bool bold = run.BoldSet
+                    ? run.Bold
+                    : (run.Bold || (run.Field?.Bold ?? false) || (inheritedStyle?.Bold ?? false));
 
-                // Italic: same pattern.
-                bool italic = run.Italic
-                    || (run.Field?.Italic ?? false)
-                    || (inheritedStyle?.Italic ?? false);
+                // Italic: same explicit-wins pattern.  PP1 fix.
+                bool italic = run.ItalicSet
+                    ? run.Italic
+                    : (run.Italic || (run.Field?.Italic ?? false) || (inheritedStyle?.Italic ?? false));
 
                 resolvedRuns.Add(new ResolvedRun
                 {
