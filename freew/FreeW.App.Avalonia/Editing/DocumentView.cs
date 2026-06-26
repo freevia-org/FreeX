@@ -480,6 +480,70 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
+    // ── AV-TBL3: cell merge / split ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Merge the rectangular block of cells in <see cref="SelectedCellRange"/> into a single cell.
+    /// When the selection spans only a single row the model-level horizontal merge command is used
+    /// (collapses GridSpan). When the selection spans only a single column a vertical merge is used
+    /// (sets VerticalMerge Restart/Continue flags). When the selection spans both rows and columns a
+    /// horizontal merge is applied to the first row as a best-effort approximation (same behaviour as
+    /// the WPF host). Requires an active cross-cell selection; no-op when only a point caret is active.
+    /// Undoable.
+    /// </summary>
+    public void MergeSelectedCells()
+    {
+        if (SelectedCellRange is not { } sel)
+            return;
+        var blockIdx = sel.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+
+        if (sel.MinRow == sel.MaxRow)
+        {
+            // Same row — horizontal merge.
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, sel.MinCol, sel.MaxCol));
+        }
+        else if (sel.MinCol == sel.MaxCol)
+        {
+            // Same column — vertical merge.
+            _bus.Execute(new MergeCellsVerticalCommand(blockIdx, sel.MinCol, sel.MinRow, sel.MaxRow));
+        }
+        else
+        {
+            // Mixed — best-effort: horizontal merge on the first row only.
+            _bus.Execute(new MergeCellsHorizontalCommand(blockIdx, sel.MinRow, sel.MinCol, sel.MaxCol));
+        }
+
+        // Clear block selection and place caret in the surviving top-left cell.
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
+        PlaceCaretInCell(blockIdx, sel.MinRow, sel.MinCol, 0, 0);
+        InvalidateLayoutAndVisual();
+    }
+
+    /// <summary>
+    /// Split the merged cell at the current caret position back into individual cells via
+    /// <see cref="SplitCellCommand"/>. Handles both horizontal merges (GridSpan &gt; 1) and vertical
+    /// merges (VerticalMerge = Restart). No-op when the caret is not in a table or the cell is not
+    /// merged. Undoable.
+    /// </summary>
+    /// <param name="rows">Reserved for future subdivision; currently ignored (model splits to 1×N or N×1).</param>
+    /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
+    public void SplitCurrentCell(int rows = 1, int cols = 1)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
+            return;
+
+        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, cc.Col));
+        // Re-place caret in the same cell (which is now split back to span=1).
+        PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
+        InvalidateLayoutAndVisual();
+    }
+
     // ── AV-TBL2: cross-cell rectangular selection ────────────────────────────────────────────────
 
     /// <summary>
@@ -3691,6 +3755,20 @@ public sealed class DocumentView : Control
             case Key.End: MoveToLineEdge(toStart: false, shift); e.Handled = true; break;
             case Key.Up: MoveCaretVertical(-1, shift); e.Handled = true; break;
             case Key.Down: MoveCaretVertical(+1, shift); e.Handled = true; break;
+            // AV-TBL3: Tab navigates between cells when the caret is in a table; outside a table
+            // it inserts a literal tab character (body-paragraph behaviour, same as before).
+            case Key.Tab:
+                if (_cellCaret is not null)
+                {
+                    TabNavigateCell(forward: !shift);
+                    e.Handled = true;
+                }
+                else if (!shift)
+                {
+                    InsertText("\t");
+                    e.Handled = true;
+                }
+                break;
         }
     }
 
@@ -4571,6 +4649,64 @@ public sealed class DocumentView : Control
         if (!extend) { _selectionAnchor = _caret; _cellAnchor = _cellCaret; }
         InvalidateVisual();
         CaretMoved?.Invoke();
+    }
+
+    // AV-TBL3: Tab / Shift-Tab cell navigation.
+    // Tab  → next cell (left→right, wrap to first cell of next row).
+    //         Tab in the last cell of the table appends a new row and moves into its first cell
+    //         (Word behaviour).
+    // Shift+Tab → previous cell.
+    // Never inserts a literal tab character when the caret is in a table.
+    private void TabNavigateCell(bool forward)
+    {
+        if (_cellCaret is not { } cc)
+            return;
+        if (_doc.Blocks.Count <= cc.TableBlock || _doc.Blocks[cc.TableBlock] is not Table table)
+            return;
+
+        // Build a flat reading-order list of (row, gridCol) entries, honouring GridSpan.
+        var cellOrder = new List<(int Row, int Col)>();
+        for (var ri = 0; ri < table.Rows.Count; ri++)
+        {
+            var col = 0;
+            foreach (var cell in table.Rows[ri].Cells)
+            {
+                cellOrder.Add((ri, col));
+                col += Math.Max(1, cell.GridSpan);
+            }
+        }
+
+        var currentIdx = cellOrder.FindIndex(c => c.Row == cc.Row && c.Col == cc.Col);
+        if (currentIdx < 0)
+            return;
+
+        var targetIdx = currentIdx + (forward ? 1 : -1);
+
+        if (forward && targetIdx >= cellOrder.Count)
+        {
+            // Tab in the last cell → append a new row (Word behaviour) and place caret in it.
+            _bus.Execute(new InsertTableRowCommand(cc.TableBlock, table.Rows.Count));
+            // After insert the table has grown; re-read to find the new last row.
+            if (_doc.Blocks[cc.TableBlock] is not Table updatedTable)
+                return;
+            var newRow = updatedTable.Rows.Count - 1;
+            _cellBlockAnchor = null;
+            _cellBlockFocus  = null;
+            InvalidateLayoutAndVisual();
+            PlaceCaretInCell(cc.TableBlock, newRow, 0, 0, 0);
+            return;
+        }
+
+        if (targetIdx < 0)
+        {
+            // Shift+Tab at the very first cell — stay put (no wrap before the table start).
+            return;
+        }
+
+        var (targetRow, targetCol) = cellOrder[targetIdx];
+        _cellBlockAnchor = null;
+        _cellBlockFocus  = null;
+        PlaceCaretInCell(cc.TableBlock, targetRow, targetCol, 0, 0);
     }
 
     private void MoveToLineEdge(bool toStart, bool extend)
