@@ -8553,6 +8553,85 @@ public sealed class DocumentView : Control
         _bus.Execute(new InsertBlockCommand(insertAt, table));
     }
 
+    // ── AV-TBLDLG: Table Properties dialog support ───────────────────────────────────────────────
+
+    /// <summary>
+    /// AV-TBLDLG: A snapshot of the caret table / row / cell properties used to pre-populate the Table
+    /// Properties dialog. <see cref="BlockIndex"/> is -1 when the caret is not inside a table (the ribbon
+    /// then no-ops the dialog). <see cref="RowIndex"/> / <see cref="ColumnIndex"/> are the caret's row and
+    /// cell-list column within the table.
+    /// </summary>
+    public readonly record struct TablePropertiesSnapshot(
+        int BlockIndex,
+        int RowIndex,
+        int ColumnIndex,
+        double? PreferredWidthPt,
+        TableAlignment Alignment,
+        bool TextWrapping,
+        bool RepeatHeaderRow,
+        double? RowHeightPt,
+        TableRowHeightRule RowHeightRule,
+        bool AllowRowBreak,
+        double? ColumnWidthPt,
+        double? CellPreferredWidthPt,
+        TableCellVerticalAlignment CellVerticalAlignment);
+
+    /// <summary>
+    /// AV-TBLDLG: Read the current caret table's properties for the Table Properties dialog. Returns null
+    /// when the caret is not inside a table. The column index is resolved from the caret's GRID column to a
+    /// cell-list index so the Column/Cell tabs reflect the actual cell at the caret.
+    /// </summary>
+    public TablePropertiesSnapshot? GetCaretTableProperties()
+    {
+        if (_cellCaret is not { } cc)
+            return null;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table table)
+            return null;
+        if (cc.Row < 0 || cc.Row >= table.Rows.Count)
+            return null;
+
+        var row = table.Rows[cc.Row];
+        var cellIdx = GridColumnToCellIndex(row, cc.Col);
+        TableCell? cell = cellIdx >= 0 && cellIdx < row.Cells.Count ? row.Cells[cellIdx] : null;
+
+        return new TablePropertiesSnapshot(
+            BlockIndex: blockIdx,
+            RowIndex: cc.Row,
+            ColumnIndex: cellIdx,
+            PreferredWidthPt: table.PreferredWidthPt,
+            Alignment: table.Alignment,
+            TextWrapping: table.TextWrapping,
+            RepeatHeaderRow: table.Formatting.RepeatHeaderRow,
+            RowHeightPt: row.HeightPt,
+            RowHeightRule: row.HeightRule,
+            AllowRowBreak: row.AllowBreakAcrossPages,
+            ColumnWidthPt: cell?.WidthPt,
+            CellPreferredWidthPt: cell?.WidthPt,
+            CellVerticalAlignment: cell?.VerticalAlignment ?? TableCellVerticalAlignment.Top);
+    }
+
+    /// <summary>
+    /// AV-TBLDLG: Apply the Table Properties dialog result onto the caret's table / row / column / cell in
+    /// one undoable step (<see cref="SetTablePropertiesCommand"/>). The caret's GRID column is converted to a
+    /// cell-list index so the Column/Cell tabs touch the right cell. No-op when the caret is not in a table.
+    /// </summary>
+    public void ApplyTableProperties(TablePropertiesValues values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        if (_cellCaret is not { } cc)
+            return;
+        var blockIdx = cc.TableBlock;
+        if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table table)
+            return;
+        if (cc.Row < 0 || cc.Row >= table.Rows.Count)
+            return;
+
+        var cellIdx = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
+        _bus.Execute(new SetTablePropertiesCommand(blockIdx, cc.Row, cellIdx, values));
+        InvalidateLayoutAndVisual();
+    }
+
     // ── AV-INSERT: Insert-tab inserts (page break / picture / shape / text box / symbol) ──────────
 
     /// <summary>

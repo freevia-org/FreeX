@@ -477,7 +477,10 @@ public sealed class MainWindow : Window
             ShowMailMergeInfo: msg => _status.Text = msg,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
-            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync());
+            OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
+            // AV-TBLDLG: Table Properties + Insert Table dialog launchers (optional callbacks).
+            OpenTablePropertiesDialog: () => _ = OpenTablePropertiesDialogAsync(),
+            OpenInsertTableDialog:     () => _ = OpenInsertTableDialogAsync());
 
         // AV-MAIL: capture the Mailings engine so the shell can drive its two dialog-bound commands
         // (Select Recipients / Insert Merge Field) with async Avalonia dialogs over the same session the
@@ -1052,6 +1055,26 @@ public sealed class MainWindow : Window
             _editor.InsertQuickPartText(text);
             _editor.Focus();
         }
+    }
+
+    /// <summary>
+    /// AV-TBLDLG: Table Layout &gt; Properties — open the Table Properties dialog over the caret's table and,
+    /// on OK, apply the result (one undoable step). No-op when the caret is not inside a table.
+    /// </summary>
+    private async Task OpenTablePropertiesDialogAsync()
+    {
+        await TablePropertiesDialog.ShowAndApplyAsync(this, _editor);
+        _editor.Focus();
+    }
+
+    /// <summary>
+    /// AV-TBLDLG: Insert &gt; Table &gt; Insert Table… — open the custom-dimensions dialog and, on OK, insert the
+    /// table at the caret.
+    /// </summary>
+    private async Task OpenInsertTableDialogAsync()
+    {
+        await InsertTableDialog.ShowAndApplyAsync(this, _editor);
+        _editor.Focus();
     }
 
     /// <summary>

@@ -2950,6 +2950,190 @@ public sealed class SetTableFormattingCommand(int blockIndex, TableFormatting ne
     }
 }
 
+// ─── AV-TBLDLG: Table Properties dialog apply command ────────────────────────────────────────────
+
+/// <summary>
+/// The set of values the Table Properties dialog produces, applied onto the caret's table / row / column /
+/// cell in one undoable step by <see cref="SetTablePropertiesCommand"/>. They map directly onto the model's
+/// table / row / cell properties, which round-trip via <c>w:tblPr</c> / <c>w:trPr</c> / <c>w:tcPr</c>.
+/// Mirrors the WPF host's <c>TablePropertiesValues</c>, restricted to the subset wired in the Avalonia shell.
+/// </summary>
+public sealed record TablePropertiesValues(
+    // Table tab.
+    double? PreferredWidthPt,
+    TableAlignment Alignment,
+    bool TextWrapping,
+    // Row tab.
+    double? RowHeightPt,
+    TableRowHeightRule RowHeightRule,
+    bool AllowRowBreak,
+    bool RepeatHeaderRow,
+    // Column tab.
+    double? ColumnWidthPt,
+    // Cell tab.
+    double? CellPreferredWidthPt,
+    TableCellVerticalAlignment CellVerticalAlignment);
+
+/// <summary>
+/// Apply a <see cref="TablePropertiesValues"/> onto the table at <paramref name="blockIndex"/> in a single
+/// undoable step, scoped to the caret's row (<paramref name="rowIndex"/>) and column
+/// (<paramref name="columnIndex"/>, a cell-list index). Snapshots every field it touches so
+/// <see cref="Revert"/> restores the table exactly.
+///
+/// <list type="bullet">
+///   <item>Table tab → table-level <see cref="Table.PreferredWidthPt"/> / <see cref="Table.Alignment"/> /
+///     <see cref="Table.TextWrapping"/>, plus the table-level <see cref="TableFormatting.RepeatHeaderRow"/>
+///     flag (which Word shows on the Row tab).</item>
+///   <item>Row tab → the caret row's <see cref="TableRow.HeightPt"/> / <see cref="TableRow.HeightRule"/> /
+///     <see cref="TableRow.AllowBreakAcrossPages"/>.</item>
+///   <item>Column tab → <see cref="TableCell.WidthPt"/> of every cell in the caret column (when supplied).</item>
+///   <item>Cell tab → the caret cell's <see cref="TableCell.WidthPt"/> (when supplied) and
+///     <see cref="TableCell.VerticalAlignment"/>.</item>
+/// </list>
+/// Out-of-range coordinates are clamped / skipped so the command no-ops safely.
+/// </summary>
+public sealed class SetTablePropertiesCommand(
+    int blockIndex,
+    int rowIndex,
+    int columnIndex,
+    TablePropertiesValues values) : IDocumentCommand
+{
+    // ── Undo snapshot ─────────────────────────────────────────────────────────
+    private bool _applied;
+    private double? _prevPreferredWidthPt;
+    private TableAlignment _prevAlignment;
+    private bool _prevTextWrapping;
+    private TableFormatting _prevFormatting = TableFormatting.Default;
+    private bool _rowTouched;
+    private double? _prevRowHeightPt;
+    private TableRowHeightRule _prevRowHeightRule;
+    private bool _prevAllowRowBreak;
+    private List<(int Row, double? Width)>? _prevColumnWidths;
+    private bool _cellTouched;
+    private double? _prevCellWidthPt;
+    private TableCellVerticalAlignment _prevCellVAlign;
+
+    public string Label => "Table Properties";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetTable(context, out var table)) return;
+
+        // Table tab.
+        _prevPreferredWidthPt = table.PreferredWidthPt;
+        _prevAlignment = table.Alignment;
+        _prevTextWrapping = table.TextWrapping;
+        _prevFormatting = table.Formatting;
+        table.PreferredWidthPt = values.PreferredWidthPt;
+        table.Alignment = values.Alignment;
+        table.TextWrapping = values.TextWrapping;
+        // "Repeat as header row" is a table-level flag in the model (Word shows it on the Row tab).
+        table.Formatting = table.Formatting with { RepeatHeaderRow = values.RepeatHeaderRow };
+
+        // Row tab → caret's row.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var row = table.Rows[rowIndex];
+            _rowTouched = true;
+            _prevRowHeightPt = row.HeightPt;
+            _prevRowHeightRule = row.HeightRule;
+            _prevAllowRowBreak = row.AllowBreakAcrossPages;
+            row.HeightPt = values.RowHeightPt;
+            row.HeightRule = values.RowHeightRule;
+            row.AllowBreakAcrossPages = values.AllowRowBreak;
+        }
+
+        // Column tab → preferred width of every cell in the caret's column.
+        if (values.ColumnWidthPt is { } columnWidthPt && columnIndex >= 0)
+        {
+            _prevColumnWidths = [];
+            for (var r = 0; r < table.Rows.Count; r++)
+            {
+                var cells = table.Rows[r].Cells;
+                if (columnIndex < cells.Count)
+                {
+                    _prevColumnWidths.Add((r, cells[columnIndex].WidthPt));
+                    cells[columnIndex].WidthPt = columnWidthPt;
+                }
+            }
+        }
+
+        // Cell tab → caret's cell.
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var cells = table.Rows[rowIndex].Cells;
+            if (columnIndex >= 0 && columnIndex < cells.Count)
+            {
+                var cell = cells[columnIndex];
+                _cellTouched = true;
+                _prevCellWidthPt = cell.WidthPt;
+                _prevCellVAlign = cell.VerticalAlignment;
+                if (values.CellPreferredWidthPt is { } cellWidthPt)
+                    cell.WidthPt = cellWidthPt;
+                cell.VerticalAlignment = values.CellVerticalAlignment;
+            }
+        }
+
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetTable(context, out var table)) return;
+
+        table.PreferredWidthPt = _prevPreferredWidthPt;
+        table.Alignment = _prevAlignment;
+        table.TextWrapping = _prevTextWrapping;
+        table.Formatting = _prevFormatting;
+
+        if (_rowTouched && rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var row = table.Rows[rowIndex];
+            row.HeightPt = _prevRowHeightPt;
+            row.HeightRule = _prevRowHeightRule;
+            row.AllowBreakAcrossPages = _prevAllowRowBreak;
+        }
+
+        // Restore the cell tab BEFORE the column widths: when the caret cell is also in the caret column
+        // its Apply-time snapshot captured the already-column-modified width, so the column revert (which
+        // holds the true original width) must run last to win for the overlapping cell.
+        if (_cellTouched && rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var cells = table.Rows[rowIndex].Cells;
+            if (columnIndex >= 0 && columnIndex < cells.Count)
+            {
+                var cell = cells[columnIndex];
+                cell.WidthPt = _prevCellWidthPt;
+                cell.VerticalAlignment = _prevCellVAlign;
+            }
+        }
+
+        if (_prevColumnWidths is not null)
+        {
+            foreach (var (r, width) in _prevColumnWidths)
+            {
+                if (r < table.Rows.Count)
+                {
+                    var cells = table.Rows[r].Cells;
+                    if (columnIndex >= 0 && columnIndex < cells.Count)
+                        cells[columnIndex].WidthPt = width;
+                }
+            }
+        }
+
+        _applied = false;
+    }
+
+    private bool TryGetTable(IDocumentCommandContext context, out Table table)
+    {
+        table = null!;
+        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count) return false;
+        if (context.Document.Blocks[blockIndex] is not Table t) return false;
+        table = t;
+        return true;
+    }
+}
+
 // ─── AV-CHARTTAB: Chart + SmartArt contextual-tab edit commands ──────────────────────────────────
 //
 // Each command mutates the Chart / SmartArt carried by the run at (paragraphIndex, runIndex), snapping

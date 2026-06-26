@@ -172,6 +172,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.table-3x3", new RelayCommand(() => editor.InsertTable(3, 3)));
         r.Register("freew.table-4x4", new RelayCommand(() => editor.InsertTable(4, 4)));
         r.Register("freew.table-5x2", new RelayCommand(() => editor.InsertTable(2, 5)));
+        // AV-TBLDLG: Insert Table… custom-dimensions dialog (optional callback; no-op when the shell
+        // didn't supply one, e.g. in headless tests).
+        r.Register("freew.insert-table-dialog", new RelayCommand(callbacks.OpenInsertTableDialog ?? (() => { })));
 
         // Page break — empty paragraph forcing a page break before it, after the caret block.
         r.Register("freew.page-break", new RelayCommand(editor.InsertPageBreak));
@@ -256,6 +259,10 @@ internal static class FreeWAvaloniaRibbonCommands
         // Merge / split.
         r.Register("freew.table-merge-cells", new RelayCommand(editor.MergeSelectedCells));
         r.Register("freew.table-split-cell",  new RelayCommand(() => editor.SplitCurrentCell()));
+
+        // AV-TBLDLG: Table Properties dialog launcher (optional callback; no-op when the shell didn't
+        // supply one).
+        r.Register("freew.table-properties", new RelayCommand(callbacks.OpenTablePropertiesDialog ?? (() => { })));
 
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).

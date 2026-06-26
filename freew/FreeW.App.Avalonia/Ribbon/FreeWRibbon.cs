@@ -104,6 +104,8 @@ internal static class FreeWRibbon
             new("3 × 3 Table",       new RibbonCommandId("freew.table-3x3")),
             new("4 × 4 Table",       new RibbonCommandId("freew.table-4x4")),
             new("5 × 2 Table",       new RibbonCommandId("freew.table-5x2")),
+            // AV-TBLDLG: custom-dimensions dialog (columns/rows + AutoFit).
+            new("Insert Table…",     new RibbonCommandId("freew.insert-table-dialog")),
         });
 
     /// <summary>AV-REF: References &gt; Insert Caption dropdown — Figure / Table caption labels.</summary>
@@ -597,6 +599,8 @@ internal static class FreeWRibbon
                         g.Button("freew.table-select-row",   "Select Row");
                         g.Button("freew.table-select-col",   "Select Column");
                         g.Button("freew.table-select-cell",  "Select Cell");
+                        // AV-TBLDLG: Table Properties dialog (Table/Row/Column/Cell tabs).
+                        g.Button("freew.table-properties",   "Properties");
                     });
                     tab.Group("table-rows-cols", "Rows & Columns", null, 100, g =>
                     {
@@ -847,7 +851,19 @@ internal sealed record RibbonHostCallbacks(
     /// and applies it via <see cref="DocumentView.SetWatermark"/>. Optional (default null); the registry
     /// no-ops when null.
     /// </summary>
-    Action? OpenWatermarkDialog = null);
+    Action? OpenWatermarkDialog = null,
+    /// <summary>
+    /// AV-TBLDLG: Table Layout &gt; Properties — opens the Table Properties dialog (Table/Row/Column/Cell tabs)
+    /// over the caret's table and applies the result via <see cref="DocumentView.ApplyTableProperties"/>.
+    /// Optional (default null); the registry no-ops when null (so test call sites and parallel waves compile).
+    /// </summary>
+    Action? OpenTablePropertiesDialog = null,
+    /// <summary>
+    /// AV-TBLDLG: Insert &gt; Table &gt; Insert Table… — opens the custom-dimensions dialog (columns/rows +
+    /// AutoFit) and inserts the table via <see cref="DocumentView.InsertTable"/>. Optional (default null);
+    /// the registry no-ops when null.
+    /// </summary>
+    Action? OpenInsertTableDialog = null);
 
 internal sealed class RelayCommand(Action execute) : IRibbonCommand
 {
