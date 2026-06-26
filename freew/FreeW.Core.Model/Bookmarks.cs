@@ -33,8 +33,14 @@ public static class Bookmarks
         var blocks = doc.Blocks;
         for (var i = 0; i < blocks.Count; i++)
         {
-            if (blocks[i] is Paragraph { BookmarkName: { Length: > 0 } name })
-                locations.Add(new BookmarkLocation(name, i));
+            if (blocks[i] is Paragraph paragraph)
+            {
+                foreach (var name in paragraph.BookmarkNames)
+                {
+                    if (!string.IsNullOrEmpty(name))
+                        locations.Add(new BookmarkLocation(name, i));
+                }
+            }
         }
         return locations;
     }
@@ -53,11 +59,8 @@ public static class Bookmarks
 
         foreach (var block in doc.Blocks)
         {
-            if (block is Paragraph paragraph
-                && string.Equals(paragraph.BookmarkName, name, StringComparison.Ordinal))
-            {
-                paragraph.BookmarkName = null;
-            }
+            if (block is Paragraph paragraph)
+                paragraph.BookmarkNames.RemoveAll(n => string.Equals(n, name, StringComparison.Ordinal));
         }
     }
 }

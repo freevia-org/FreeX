@@ -1679,8 +1679,8 @@ public static class DocxWriter
         {
             Formatting = paragraph.Formatting,
             StyleId = paragraph.StyleId,
-            BookmarkName = paragraph.BookmarkName
         };
+        copy.BookmarkNames.AddRange(paragraph.BookmarkNames);
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Chart is not null || run.EmbeddedObject is not null
@@ -1990,14 +1990,20 @@ public static class DocxWriter
         if (pPr is not null)
             p.Add(pPr);
 
-        // A bookmarked paragraph is bracketed by a w:bookmarkStart/w:bookmarkEnd pair (siblings of the
-        // runs) sharing one w:id; the start also carries the bookmark's w:name.
-        var bookmarkId = -1;
-        if (paragraph.BookmarkName is { Length: > 0 } bookmarkName)
+        // A bookmarked paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd pairs (siblings of the
+        // runs) sharing one w:id per pair; the start also carries the bookmark's w:name. A paragraph
+        // may carry multiple named bookmarks (e.g. a heading that is both a TOC target and a user
+        // bookmark); each gets its own distinct id so bookmarkStart and bookmarkEnd can be paired
+        // correctly. Ids are allocated from the per-write counter so they are globally unique across
+        // the document. All bookmark starts are emitted before the runs; all ends after.
+        var bookmarkIds = new System.Collections.Generic.List<int>(paragraph.BookmarkNames.Count);
+        foreach (var bookmarkName in paragraph.BookmarkNames)
         {
-            bookmarkId = drawings.Ids.NextBookmarkId();
+            if (string.IsNullOrEmpty(bookmarkName)) continue;
+            var bId = drawings.Ids.NextBookmarkId();
+            bookmarkIds.Add(bId);
             p.Add(new XElement(W + "bookmarkStart",
-                new XAttribute(W + "id", bookmarkId),
+                new XAttribute(W + "id", bId),
                 new XAttribute(W + "name", bookmarkName)));
         }
 
@@ -2153,8 +2159,8 @@ public static class DocxWriter
         if (openCommentId is { } trailing)
             p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
 
-        if (bookmarkId >= 0)
-            p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bookmarkId)));
+        foreach (var bId in bookmarkIds)
+            p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bId)));
 
         return p;
     }
@@ -5599,6 +5605,25 @@ public static class DocxWriter
     private static XDocument BuildStyles(TextDocument document, PreservedNumberingPlan? preservedNumbering = null)
     {
         var styles = new XElement(W + "styles", new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+
+        // w:docDefaults is the FIRST child of w:styles (schema order mandated by CT_Styles). It carries the
+        // document-level default run and paragraph properties — in particular the body font (e.g. Calibri
+        // 11pt) stored in w:rPrDefault/w:rPr. Without re-emitting this, Word falls back to Times New Roman
+        // after a round-trip because runs typically carry no explicit w:rFonts.
+        {
+            var ddRPr = BuildDocDefaultRunProperties(document.DefaultRun);
+            var ddPPr = BuildDocDefaultParagraphProperties(document.DefaultParagraph);
+            if (ddRPr is not null || ddPPr is not null)
+            {
+                var docDefaults = new XElement(W + "docDefaults");
+                if (ddRPr is not null)
+                    docDefaults.Add(new XElement(W + "rPrDefault", ddRPr));
+                if (ddPPr is not null)
+                    docDefaults.Add(new XElement(W + "pPrDefault", ddPPr));
+                styles.Add(docDefaults);
+            }
+        }
+
         foreach (var style in document.Styles.Values)
         {
             var element = new XElement(W + "style",
@@ -5750,6 +5775,74 @@ public static class DocxWriter
                 new XElement(W + "bCs")));
         }
         return pr;
+    }
+
+    /// <summary>
+    /// Builds the <c>w:rPr</c> inside <c>w:docDefaults/w:rPrDefault</c>. Emits only the core fields that
+    /// carry meaningful document-default run formatting (font family/size, colour, language, bold/italic).
+    /// Returns null when the default run is indistinguishable from a no-op so that documents with no
+    /// meaningful run defaults do not gain a spurious w:rPrDefault element.
+    /// </summary>
+    private static XElement? BuildDocDefaultRunProperties(RunFormatting f)
+    {
+        var rPr = new XElement(W + "rPr");
+        if (f.FontFamily is { Length: > 0 } family)
+            rPr.Add(new XElement(W + "rFonts",
+                new XAttribute(W + "ascii", family),
+                new XAttribute(W + "hAnsi", family),
+                new XAttribute(W + "eastAsia", family),
+                new XAttribute(W + "cs", family)));
+        if (f.Bold)
+            rPr.Add(new XElement(W + "b"));
+        if (f.Italic)
+            rPr.Add(new XElement(W + "i"));
+        if (f.ColorHex is { Length: > 0 } color)
+            rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.FontSizePt is { } size)
+        {
+            var halfPoints = PointsToHalfPoints(size);
+            rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
+            rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
+        }
+        if (f.LanguageTag is { Length: > 0 } lang)
+            rPr.Add(new XElement(W + "lang",
+                new XAttribute(W + "val", lang),
+                new XAttribute(W + "eastAsia", lang),
+                new XAttribute(W + "bidi", lang)));
+        return rPr.HasElements ? rPr : null;
+    }
+
+    /// <summary>
+    /// Builds the <c>w:pPr</c> inside <c>w:docDefaults/w:pPrDefault</c>. Emits the default paragraph
+    /// spacing when it deviates from the absolute minimum (zero before/after, 1.0 multiple line). Returns
+    /// null for documents where paragraph defaults are implicit so no spurious element is emitted.
+    /// </summary>
+    private static XElement? BuildDocDefaultParagraphProperties(ParagraphFormatting f)
+    {
+        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
+            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+        if (f.SpaceBeforePt <= 0 && f.SpaceAfterPt <= 0 && !hasLineSpacing)
+            return null;
+        var pPr = new XElement(W + "pPr");
+        var spacing = new XElement(W + "spacing");
+        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
+        {
+            spacing.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+            spacing.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
+        }
+        if (hasLineSpacing)
+        {
+            var (line, rule) = f.LineRule switch
+            {
+                LineSpacingRule.Exact => ((int)System.Math.Round(f.LineHeightPt * 20), "exact"),
+                LineSpacingRule.AtLeast => ((int)System.Math.Round(f.LineHeightPt * 20), "atLeast"),
+                _ => ((int)System.Math.Round(f.LineSpacing * 240), "auto")
+            };
+            spacing.Add(new XAttribute(W + "line", line));
+            spacing.Add(new XAttribute(W + "lineRule", rule));
+        }
+        pPr.Add(spacing);
+        return pPr;
     }
 
     /// <summary>
