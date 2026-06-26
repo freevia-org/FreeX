@@ -266,6 +266,9 @@ public sealed class AvaloniaChartRenderer
             case SeriesGeometryKind.TreemapTiles:
                 RenderTreemapTiles(canvas, series, extraLabels);
                 break;
+            case SeriesGeometryKind.SurfaceCells:
+                RenderSurfaceCells(canvas, series);
+                break;
         }
 
         // Fix 4: Trendlines — draw trendline overlay after the series geometry.
@@ -1144,6 +1147,28 @@ public sealed class AvaloniaChartRenderer
             Canvas.SetLeft(label, entry.LabelRect.Left);
             Canvas.SetTop(label, entry.LabelRect.Top);
             canvas.Children.Add(label);
+        }
+    }
+
+    // ── Surface / heatmap cells ──────────────────────────────────────────────
+
+    private static void RenderSurfaceCells(Canvas canvas, SeriesLayout series)
+    {
+        foreach (var cell in series.SurfaceCells)
+        {
+            if (cell.Rect.Width <= 0 || cell.Rect.Height <= 0)
+                continue;
+
+            var rect = new AvaloniaRectangle
+            {
+                Width  = cell.Rect.Width,
+                Height = cell.Rect.Height,
+                Fill   = SolidBrush(cell.FillColor),
+                Stroke = null,
+            };
+            Canvas.SetLeft(rect, cell.Rect.Left);
+            Canvas.SetTop(rect, cell.Rect.Top);
+            canvas.Children.Add(rect);
         }
     }
 

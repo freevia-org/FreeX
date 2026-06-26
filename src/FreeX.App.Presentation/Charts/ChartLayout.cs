@@ -39,6 +39,12 @@ public enum SeriesGeometryKind
     BoxWhiskers,
     /// <summary>Treemap tiles: solid colored rectangles with labels centered inside each tile.</summary>
     TreemapTiles,
+    /// <summary>
+    /// Surface/heatmap cells: a grid of solid colored rectangles where each cell's fill is mapped
+    /// from its z-value through a min→max color gradient (blue at minimum, yellow at maximum).
+    /// Rows correspond to series, columns to categories. Rendered by the shell renderers.
+    /// </summary>
+    SurfaceCells,
 }
 
 /// <summary>The fit a trendline overlay was computed with, so consumers can label/style it.</summary>
@@ -136,6 +142,9 @@ public sealed record SeriesLayout
     /// <summary>For area series, the baseline pixel Y the fill drops to (the zero line).</summary>
     public double AreaBaseline { get; init; }
 
+    /// <summary>For surface/heatmap series, the laid-out grid cells (row × col, each pre-colored). Empty otherwise.</summary>
+    public IReadOnlyList<SurfaceCell> SurfaceCells { get; init; } = [];
+
     /// <summary>
     /// The trendline overlay for this series, when the chart requests one and the fit is defined;
     /// otherwise null. Additive: existing series have no trendline.
@@ -155,6 +164,12 @@ public sealed record SeriesLayout
     /// </summary>
     public IReadOnlyList<(LayoutPoint Left, LayoutPoint Right)> WaterfallConnectors { get; init; } = [];
 }
+
+/// <summary>
+/// One laid-out surface/heatmap cell: the row (series) index, column (category) index, the source
+/// z-value, its pixel rectangle, and the pre-computed gradient fill color.
+/// </summary>
+public readonly record struct SurfaceCell(int Row, int Col, double Value, LayoutRect Rect, CellColor FillColor);
 
 /// <summary>A single laid-out legend entry: its swatch rectangle and its label box.</summary>
 public readonly record struct LegendEntry(int SeriesIndex, string Label, LayoutRect SwatchRect, LayoutRect LabelRect);

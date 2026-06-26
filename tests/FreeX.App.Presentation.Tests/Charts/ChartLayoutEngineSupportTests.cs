@@ -33,6 +33,9 @@ public sealed class ChartLayoutEngineSupportTests
     [InlineData(ChartType.BoxAndWhisker)]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
+    // surface types ported as 2D heatmap grid:
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.ThreeDSurface)]
     public void Supported_types_lay_out_without_throwing(ChartType type)
     {
         ChartLayoutEngine.IsSupported(type).Should().BeTrue();
@@ -42,7 +45,7 @@ public sealed class ChartLayoutEngineSupportTests
     }
 
     [Theory]
-    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Map)]
     public void Deferred_types_are_not_supported_and_throw(ChartType type)
     {
         ChartLayoutEngine.IsSupported(type).Should().BeFalse();

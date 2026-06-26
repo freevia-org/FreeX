@@ -142,7 +142,7 @@ public sealed class ChartLayoutRequestBuilderTests
     public void TryBuild_ReturnsNullForUnsupportedChartType()
     {
         var chart = ColumnChart();
-        chart.Type = ChartType.Surface; // Surface is the one remaining unsupported type.
+        chart.Type = ChartType.Map; // Map is an unsupported type with no portable layout.
 
         var request = ChartLayoutRequestBuilder.TryBuild(chart, Plot, BuildAccessor(), new FakeTextMeasurer());
 
