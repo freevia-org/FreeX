@@ -72,6 +72,14 @@ public sealed class SlideCanvas : Control
         set { SetAndRaise(SlideIndexProperty, ref _slideIndex, value); Refresh(); }
     }
 
+    // ── Current slide→screen transform (updated on every render pass) ───────────
+
+    /// <summary>
+    /// The current slide→screen transform.  Updated every time <see cref="Render"/> runs.
+    /// The gesture handler and adorner layer read this to map between coordinate spaces.
+    /// </summary>
+    public SlideTransformCore CurrentTransform { get; private set; } = SlideTransformCore.Identity;
+
     // ── Cached draw ops ──────────────────────────────────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;
@@ -119,6 +127,9 @@ public sealed class SlideCanvas : Control
         double scale   = Math.Min(renderW / _slideWidthDip, renderH / _slideHeightDip);
         double offsetX = (renderW - _slideWidthDip * scale) / 2;
         double offsetY = (renderH - _slideHeightDip * scale) / 2;
+
+        // Expose the slide→screen transform so the editing layer can use it.
+        CurrentTransform = new SlideTransformCore(scale, offsetX, offsetY, _slideWidthDip, _slideHeightDip);
 
         var matrix = Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(offsetX, offsetY);
         using var _ = context.PushTransform(matrix);
