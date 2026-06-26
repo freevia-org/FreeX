@@ -45,7 +45,8 @@ public enum DrawingShapeKind
     OvalCallout = 40,
     LineCallout = 41,
     Chevron = 42,
-    HomePlate = 43
+    HomePlate = 43,
+    Cylinder = 44
 }
 
 public enum DrawingShapeEffectPreset
