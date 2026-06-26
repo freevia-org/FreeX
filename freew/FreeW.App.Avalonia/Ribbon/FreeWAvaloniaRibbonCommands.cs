@@ -294,6 +294,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         RegisterFloatingFormatCommands(r, editor);
 
+        // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
+        RegisterChartSmartArtFormatCommands(r, editor);
+
         return r;
     }
 
@@ -545,5 +548,64 @@ internal static class FreeWAvaloniaRibbonCommands
         // Registered as safe no-op openers so the ribbon's registry-completeness guard passes.
         r.Register("freew.shape-fill",    new RelayCommand(() => { /* deferred: shape fill edit */ }));
         r.Register("freew.shape-outline", new RelayCommand(() => { /* deferred: shape outline edit */ }));
+    }
+
+    /// <summary>
+    /// AV-CHARTTAB: Registers the Chart Design + SmartArt Design contextual-tab commands, wiring each to
+    /// the chart/smartart edit surface on <see cref="DocumentView"/>. The Chart/SmartArt Format tabs reuse
+    /// the shared Arrange/Size <c>freew.shape-*</c> commands already registered by
+    /// <see cref="RegisterFloatingFormatCommands"/>, so only the Design-tab commands are added here.
+    ///
+    /// <para>
+    /// Every command safely no-ops when the corresponding kind is not the selected float (the DocumentView
+    /// methods guard on the selection kind). Chart type → <see cref="DocumentView.SetChartType"/>, chart
+    /// style → <see cref="DocumentView.SetChartStyle"/>, chart colours → <see cref="DocumentView.SetChartColorScheme"/>;
+    /// SmartArt layout → <see cref="DocumentView.SetSmartArtLayout"/>, SmartArt colours →
+    /// <see cref="DocumentView.SetSmartArtColor"/>.
+    /// </para>
+    /// </summary>
+    private static void RegisterChartSmartArtFormatCommands(RibbonCommandRegistry r, DocumentView editor)
+    {
+        // ── Chart Design ──────────────────────────────────────────────────────
+        // Change Chart Type — dropdown opener + one command per ChartKind.
+        r.Register("freew.chart-type", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (ChartKind kind in Enum.GetValues<ChartKind>())
+        {
+            var k = kind; // capture
+            r.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}",
+                new RelayCommand(() => editor.SetChartType(k)));
+        }
+
+        // Chart Styles — dropdown opener + one command per catalog style.
+        r.Register("freew.chart-style", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var style in ChartStyle.Catalog)
+        {
+            var s = style;
+            r.Register($"freew.chart-style-{s.Id}", new RelayCommand(() => editor.SetChartStyle(s.Id)));
+        }
+
+        // Change Colors — dropdown opener + one command per catalog colour scheme.
+        r.Register("freew.chart-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var scheme in ChartColorScheme.Catalog)
+        {
+            var sc = scheme;
+            r.Register($"freew.chart-colors-{sc.Id}", new RelayCommand(() => editor.SetChartColorScheme(sc.Id)));
+        }
+
+        // ── SmartArt Design ───────────────────────────────────────────────────
+        // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
+        r.Register("freew.smartart-layout", new RelayCommand(() => { /* dropdown opener */ }));
+        r.Register("freew.smartart-layout-list",      new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.List)));
+        r.Register("freew.smartart-layout-process",   new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
+        r.Register("freew.smartart-layout-cycle",     new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
+        r.Register("freew.smartart-layout-hierarchy", new RelayCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
+
+        // Change Colors — reuse the chart colour-scheme catalog ids.
+        r.Register("freew.smartart-colors", new RelayCommand(() => { /* dropdown opener */ }));
+        foreach (var scheme in ChartColorScheme.Catalog)
+        {
+            var sc = scheme;
+            r.Register($"freew.smartart-colors-{sc.Id}", new RelayCommand(() => editor.SetSmartArtColor(sc.Id)));
+        }
     }
 }
