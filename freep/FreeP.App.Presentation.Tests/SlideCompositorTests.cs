@@ -607,6 +607,124 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_MultiStopGradientFill_AllStopsResolved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00))),
+            new GradientStop(0.5, new ThemeAwareColor(new SrgbColor(0x00, 0xFF, 0x00))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF))),
+        };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Linear, angleDegrees: 90.0)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Gradient>();
+        var grad = (ResolvedFill.Gradient)shapeOp.Fill;
+        grad.Stops.Should().HaveCount(3, "all 3 stops must be resolved");
+        grad.Kind.Should().Be(GradientKind.Linear);
+        grad.Stops[0].Color.R.Should().Be(0xFF);
+        grad.Stops[1].Color.G.Should().Be(0xFF);
+        grad.Stops[2].Color.B.Should().Be(0xFF);
+        grad.Stops[0].Position.Should().BeApproximately(0.0, 0.001);
+        grad.Stops[1].Position.Should().BeApproximately(0.5, 0.001);
+        grad.Stops[2].Position.Should().BeApproximately(1.0, 0.001);
+    }
+
+    [Fact]
+    public void Compose_RadialGradientFill_KindPreserved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var stops = new[]
+        {
+            new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF))),
+            new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00))),
+        };
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Gradient(stops, GradientKind.Radial, angleDegrees: 0.0)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Gradient>();
+        var grad = (ResolvedFill.Gradient)shapeOp.Fill;
+        grad.Kind.Should().Be(GradientKind.Radial);
+        grad.Stops.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Compose_PictureFill_BytesPassedThrough()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // fake PNG header
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Picture(imageBytes, "image/png", tile: false)
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.Picture>();
+        var pic = (ResolvedFill.Picture)shapeOp.Fill;
+        pic.ImageBytes.Should().BeEquivalentTo(imageBytes);
+        pic.Tile.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Compose_PatternFill_ColorsAndPresetResolved()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000, OffsetYEmu = 100000,
+            ExtentCxEmu = 900000, ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Pattern(
+                "cross",
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF)))
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var ops = SlideCompositor.Compose(p, FirstSlide(p));
+        var shapeOp = ops.OfType<DrawOp.Shape>().Single();
+
+        shapeOp.Fill.Should().BeOfType<ResolvedFill.PatternFill>();
+        var pat = (ResolvedFill.PatternFill)shapeOp.Fill;
+        pat.Preset.Should().Be("cross");
+        pat.ForegroundColor.B.Should().Be(0xFF);
+        pat.BackgroundColor.R.Should().Be(0xFF);
+    }
+
+    [Fact]
     public void Compose_VisibleOutline_ResolvedCorrectly()
     {
         var p = MakePresentation();
