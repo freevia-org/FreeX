@@ -238,7 +238,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
     private Sheet? _removedSheet;
     private int _removedIndex;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private Dictionary<string, string>? _namedFormulaSnapshot;
+    private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => "Delete Sheet";
@@ -259,11 +261,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
         for (int i = 0; i < sheets.Count; i++)
             if (sheets[i].Id == _sheetId) { _removedIndex = i; break; }
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
+        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         foreach (var (name, range) in ctx.Workbook.NamedRanges.ToList())
         {
             if (range.Start.Sheet == _sheetId)
                 ctx.Workbook.RemoveNamedRange(name);
         }
+        // Capture scoped named formulas BEFORE RemoveSheet purges them.
+        _scopedNamedFormulaSnapshot = ctx.Workbook.ScopedNamedFormulas
+            .ToDictionary(p => p.Key, p => p.Value);
         var deletedSheetName = sheet.Name;
         ctx.Workbook.RemoveSheet(_sheetId);
         _formulaSnapshot.Clear();
@@ -282,7 +288,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             ctx.Workbook.InsertSheet(_removedIndex, _removedSheet);
             RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
+            RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
             RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot);
+            RestoreScopedNamedFormulas(ctx.Workbook, _scopedNamedFormulaSnapshot);
         }
     }
 
@@ -315,6 +323,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand
 
         foreach (var (name, original) in snapshot)
             workbook.NamedFormulas[name] = original;
+    }
+
+    private static void RestoreScopedNamedFormulas(
+        Workbook workbook,
+        Dictionary<(string Name, SheetId Sheet), string>? snapshot)
+    {
+        if (snapshot is null)
+            return;
+
+        foreach (var ((name, sheetId), formulaText) in snapshot)
+            workbook.DefineNamedFormula(name, formulaText, sheetId);
     }
 }
 

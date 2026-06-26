@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Model.Tests;
@@ -253,6 +254,64 @@ public sealed class HyperlinkCommandTests
         outcome.Success.Should().BeTrue();
         sheet.GetValue(addr).Should().Be(new TextValue("Example"));
         sheet.Hyperlinks[addr].Should().Be("https://example.com");
+    }
+
+    // ── V5 regression: in-document hyperlink Bookmark shifted on row insert ───
+
+    [Fact]
+    public void InsertRows_ShiftsInDocumentHyperlinkBookmark_AndUndoRestores()
+    {
+        // A PlaceInThisDocument hyperlink at B1 targets Sheet1!A10.
+        // Inserting 5 rows above row 10 must shift the Bookmark to Sheet1!A15.
+        // Undo must restore Bookmark to Sheet1!A10.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceAddr = new CellAddress(sheet.Id, 1, 2); // B1 — source cell
+        var metadata = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Go to A10",
+            "Sheet1!A10");
+        sheet.Hyperlinks[sourceAddr] = "Sheet1!A10";
+        sheet.HyperlinkMetadata[sourceAddr] = metadata;
+
+        var cmd = new InsertRowsCommand(sheet.Id, beforeRow: 5, count: 5);
+        cmd.Apply(ctx);
+
+        // Source cell key is above the inserted rows (row 1), so it stays at row 1.
+        // The Bookmark target A10 is at or below row 5, so it shifts to A15.
+        sheet.HyperlinkMetadata[sourceAddr].Bookmark.Should().Be("Sheet1!A15",
+            because: "inserting 5 rows before row 5 pushes A10 down to A15");
+
+        cmd.Revert(ctx);
+
+        sheet.HyperlinkMetadata[sourceAddr].Bookmark.Should().Be("Sheet1!A10",
+            because: "undo must restore the original bookmark target");
+    }
+
+    [Fact]
+    public void InsertRows_ExternalHyperlinkBookmark_Unchanged()
+    {
+        // An ExistingFileOrWebPage hyperlink should NOT have its Bookmark shifted.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+
+        var sourceAddr = new CellAddress(sheet.Id, 1, 1);
+        var metadata = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Visit site",
+            "https://example.com");
+        sheet.Hyperlinks[sourceAddr] = "https://example.com";
+        sheet.HyperlinkMetadata[sourceAddr] = metadata;
+
+        new InsertRowsCommand(sheet.Id, beforeRow: 1, count: 3).Apply(ctx);
+
+        // External bookmarks must be left untouched.
+        sheet.HyperlinkMetadata[new CellAddress(sheet.Id, 4, 1)].Bookmark
+            .Should().Be("https://example.com",
+                because: "external hyperlink bookmarks are not cell references and must not be shifted");
     }
 
 }

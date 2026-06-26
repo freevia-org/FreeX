@@ -183,6 +183,26 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("ClearSelectedRangeContents();");
     }
 
+    [Fact]
+    public void AddArrowheadOverlays_PassesNoFlipToLineEndpoints_BecauseContainerTransformAlreadyFlips()
+    {
+        // Regression guard for the double-flip arrowhead bug:
+        // ApplyDrawingObjectTransform sets a ScaleTransform on the arrowhead overlay container,
+        // which already mirrors all child Paths. LineEndpoints must therefore receive
+        // flipHorizontal: false / flipVertical: false so the outer transform is the ONLY flip
+        // applied. If these are ever changed back to d.FlipHorizontal / d.FlipVertical, arrowheads
+        // will land at the wrong corners and point the wrong way on flipped connectors.
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+
+        // The call in AddArrowheadOverlays must pass literal false for both flip arguments.
+        source.Should().Contain("flipHorizontal: false, flipVertical: false, kind)",
+            because: "AddArrowheadOverlays must not pre-flip endpoints — the container ScaleTransform already handles the flip");
+
+        // The outer transform method that applies the flip to the container must still exist.
+        source.Should().Contain("ApplyDrawingObjectTransform(",
+            because: "the container-level flip transform that makes passing false correct must remain in place");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

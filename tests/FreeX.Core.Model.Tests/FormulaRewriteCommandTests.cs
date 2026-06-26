@@ -491,4 +491,39 @@ public class FormulaRewriteCommandTests
         sheet1.GetCell(1, 1)!.FormulaText.Should().Be("Sheet3!A1", "formula referencing Sheet3 must be unchanged");
     }
 
+    // ── V3 regression: scoped named ranges + formulas survive RemoveSheet undo ──
+
+    [Fact]
+    public void RemoveSheet_ScopedNamedRangeAndFormula_RestoredOnUndo()
+    {
+        // Sheet 'Data' has a sheet-scoped named range 'MyRange' and a sheet-scoped
+        // named formula 'MyFormula'.  Deleting the sheet then undoing must restore
+        // both scoped names exactly (data-loss-on-undo regression V3).
+        var wb = new Workbook("test");
+        wb.AddSheet("Keep");
+        var data = wb.AddSheet("Data");
+        var ctx = new TestCommandContext(wb);
+
+        var scopedRange = new GridRange(
+            new CellAddress(data.Id, 1, 1),
+            new CellAddress(data.Id, 3, 1));
+        wb.DefineNamedRange("MyRange", scopedRange, null, data.Id);
+        wb.DefineNamedFormula("MyFormula", "Data!A1+1", data.Id);
+
+        var cmd = new RemoveSheetCommand(data.Id);
+        cmd.Apply(ctx);
+
+        // After deletion the scoped names for the removed sheet are gone.
+        wb.ScopedNamedRanges.Should().NotContainKey(("MyRange", data.Id));
+        wb.ScopedNamedFormulas.Should().NotContainKey(("MyFormula", data.Id));
+
+        cmd.Revert(ctx);
+
+        // Undo must restore both scoped names.
+        wb.ScopedNamedRanges.Should().ContainKey(("MyRange", data.Id));
+        wb.ScopedNamedRanges[("MyRange", data.Id)].Should().Be(scopedRange);
+        wb.ScopedNamedFormulas.Should().ContainKey(("MyFormula", data.Id));
+        wb.ScopedNamedFormulas[("MyFormula", data.Id)].Should().Be("Data!A1+1");
+    }
+
 }
