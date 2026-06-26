@@ -1165,6 +1165,21 @@ public sealed class EditingSession
     /// <summary>
     /// Replaces the entire data payload of the selected chart in one undoable batch command.
     /// Used by <c>ChartDataDialog</c> so all grid edits become a single undo step.
+    /// Gap points should be passed as null; they are preserved verbatim in the model.
+    /// </summary>
+    public void ReplaceChartData(
+        IEnumerable<string>               categories,
+        IEnumerable<string>               seriesNames,
+        IEnumerable<IEnumerable<double?>> values)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new ReplaceChartDataCommand(
+            _currentSlideIndex, _selectedShapeIds[0],
+            categories, seriesNames, values));
+    }
+
+    /// <summary>
+    /// Non-nullable overload for callers that already work with <c>double</c> sequences (no gaps).
     /// </summary>
     public void ReplaceChartData(
         IEnumerable<string>              categories,

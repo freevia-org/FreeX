@@ -1022,9 +1022,13 @@ public partial class GridView
             ? shape.OutlineWidthPoints * PtToDip
             : 1.5;
 
+        // Pass flipHorizontal/flipVertical as false here: PushDrawingObjectTransform already pushed
+        // a ScaleTransform onto the DrawingContext that flips the entire drawing context, including
+        // these arrowheads. Passing the flip flags to LineEndpoints would mirror the endpoints a
+        // second time, landing them at the wrong corners and pointing the wrong way.
         var (startPt, endPt, dirStartToEnd) = ArrowheadGeometry.LineEndpoints(
             rect.Left, rect.Top, rect.Width, rect.Height,
-            flipHorizontal, flipVertical, shape.Kind);
+            flipHorizontal: false, flipVertical: false, shape.Kind);
 
         var arrowBrush = GetDrawingObjectBrush(255, lineColor);
 

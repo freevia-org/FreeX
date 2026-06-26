@@ -23,6 +23,46 @@ namespace FreeP.Core.Model;
 
 // ── shared file-local helpers ────────────────────────────────────────────────
 
+file static class TableGridHelper
+{
+    /// <summary>
+    /// Maps a target GRID-column index to the Cells list index for <paramref name="row"/>,
+    /// accounting for each preceding cell's GridSpan.  Returns the cell-list index of the
+    /// first cell whose cumulative span covers <paramref name="targetGridCol"/>, or -1 if the
+    /// target is beyond the row's total grid width.
+    /// </summary>
+    internal static int GridColumnToCellIndex(TableRow row, int targetGridCol)
+    {
+        int gridPos = 0;
+        for (int i = 0; i < row.Cells.Count; i++)
+        {
+            int span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridCol < gridPos + span)
+                return i;
+            gridPos += span;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Returns the grid-column start position of the cell at cell-list index
+    /// <paramref name="cellIdx"/> within <paramref name="row"/>.
+    /// </summary>
+    internal static int CellGridStart(TableRow row, int cellIdx)
+    {
+        int gridPos = 0;
+        for (int i = 0; i < cellIdx && i < row.Cells.Count; i++)
+            gridPos += Math.Max(1, row.Cells[i].GridSpan);
+        return gridPos;
+    }
+
+    /// <summary>
+    /// Total grid-column count for a row (sum of all cell GridSpans).
+    /// </summary>
+    internal static int RowGridWidth(TableRow row) =>
+        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+}
+
 file static class TableCommandHelper
 {
     internal static TableShape? FindTable(Presentation p, int slideIndex, uint shapeId)
@@ -232,9 +272,37 @@ public sealed class InsertTableRowCommand : IPresentationCommand
             ? table.Rows[idx - 1].HeightEmu
             : (table.Rows.Count > 0 ? table.Rows[0].HeightEmu : 457200L);
 
+        // W5: In FreeP, row.Cells[c] is the cell for grid column c.
+        // For each grid column c, check if the insertion row falls STRICTLY INSIDE a vertical
+        // span anchored in a row above (anchorRow < idx <= anchorRow + RowSpan - 1).
+        // If so, insert a VMerge continuation for that column and widen the anchor's RowSpan.
+        // Otherwise insert an independent blank cell.
         var newRow = new TableRow { HeightEmu = height };
         for (int c = 0; c < cols; c++)
-            newRow.Cells.Add(new TableCell());
+        {
+            bool insideVSpan = false;
+            // Walk upward from idx-1 to find the nearest non-VMerge cell in column c.
+            for (int r = idx - 1; r >= 0; r--)
+            {
+                var candidateRow = table.Rows[r];
+                if (c >= candidateRow.Cells.Count) break;
+                var candidateCell = candidateRow.Cells[c];
+                if (candidateCell.VMerge)
+                    continue; // this row is itself a continuation — keep scanning upward
+                // Found the anchor (or independent cell) for column c.
+                if (candidateCell.RowSpan > 1 && r + candidateCell.RowSpan - 1 >= idx)
+                {
+                    // Insertion is strictly inside this anchor's vertical span — widen it.
+                    candidateCell.RowSpan++;
+                    insideVSpan = true;
+                }
+                break;
+            }
+            var newCell = new TableCell();
+            if (insideVSpan)
+                newCell.VMerge = true;
+            newRow.Cells.Add(newCell);
+        }
 
         table.Rows.Insert(idx, newRow);
     }
@@ -279,6 +347,56 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
         if (_atRow < 0 || _atRow >= table.Rows.Count) return;
 
         _snapshot = TableCommandHelper.CloneTable(table);
+
+        int gridCols = table.ColumnWidthsEmu.Count;
+        var deletedRow = table.Rows[_atRow];
+
+        // W3: In FreeP, row.Cells[c] is the cell for grid column c.
+        // For each grid column, examine the deleted row's cell:
+        //   • Anchor (RowSpan>1, not VMerge): promote the next row's cell in the same column to
+        //     the new anchor (clear VMerge, adopt RowSpan-1 and content).
+        //   • VMerge continuation: find the anchor above and decrement its RowSpan.
+        //   • Independent cell: nothing to adjust.
+        for (int c = 0; c < gridCols; c++)
+        {
+            if (c >= deletedRow.Cells.Count) continue;
+            var cell = deletedRow.Cells[c];
+
+            if (!cell.VMerge && cell.RowSpan > 1)
+            {
+                // Anchor being deleted: push anchor role down to the next row's same column.
+                if (_atRow + 1 < table.Rows.Count)
+                {
+                    var nextRow = table.Rows[_atRow + 1];
+                    if (c < nextRow.Cells.Count)
+                    {
+                        var nextCell = nextRow.Cells[c];
+                        nextCell.VMerge   = false;
+                        nextCell.RowSpan  = cell.RowSpan - 1;
+                        nextCell.GridSpan = cell.GridSpan;
+                        if (nextCell.TextBody is null && cell.TextBody is not null)
+                            nextCell.TextBody = TableCommandHelper.CloneTextBody(cell.TextBody);
+                    }
+                }
+            }
+            else if (cell.VMerge)
+            {
+                // VMerge continuation: find the anchor above and decrement its RowSpan.
+                for (int r = _atRow - 1; r >= 0; r--)
+                {
+                    var candidateRow = table.Rows[r];
+                    if (c >= candidateRow.Cells.Count) break;
+                    var anchorCandidate = candidateRow.Cells[c];
+                    if (!anchorCandidate.VMerge)
+                    {
+                        if (anchorCandidate.RowSpan > 1)
+                            anchorCandidate.RowSpan--;
+                        break;
+                    }
+                }
+            }
+        }
+
         table.Rows.RemoveAt(_atRow);
     }
 
@@ -330,11 +448,40 @@ public sealed class InsertTableColumnCommand : IPresentationCommand
 
         table.ColumnWidthsEmu.Insert(idx, width);
 
-        // Insert a blank cell in each row at the same column index.
+        // W4: In FreeP, row.Cells[gridCol] is always the cell for that grid column (one cell
+        // per grid column, HMerge cells stay in the list).
+        //
+        // If the cell at idx is an HMerge continuation, the insertion falls STRICTLY INSIDE
+        // the anchor's horizontal span → find the anchor, widen its GridSpan, and insert a new
+        // HMerge continuation immediately after the anchor slot.
+        //
+        // Otherwise (the cell at idx is an anchor or independent cell, i.e. not HMerge), the
+        // insertion is at a span boundary → insert an independent new cell at idx.
         foreach (var row in table.Rows)
         {
-            int cellIdx = Math.Clamp(idx, 0, row.Cells.Count);
-            row.Cells.Insert(cellIdx, new TableCell());
+            if (idx >= row.Cells.Count)
+            {
+                // Inserting at or beyond the end of the row — append an independent cell.
+                row.Cells.Add(new TableCell());
+                continue;
+            }
+
+            if (row.Cells[idx].HMerge)
+            {
+                // Inside an HMerge span.  Walk left to find the anchor.
+                int ai = idx - 1;
+                while (ai >= 0 && row.Cells[ai].HMerge)
+                    ai--;
+                // ai is now the anchor's cell-list index.
+                row.Cells[ai].GridSpan = Math.Max(1, row.Cells[ai].GridSpan) + 1;
+                // Insert a new HMerge continuation immediately after the anchor slot.
+                row.Cells.Insert(ai + 1, new TableCell { HMerge = true });
+            }
+            else
+            {
+                // Span boundary — insert an independent cell at idx.
+                row.Cells.Insert(idx, new TableCell());
+            }
         }
     }
 
@@ -380,10 +527,50 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
         _snapshot = TableCommandHelper.CloneTable(table);
         table.ColumnWidthsEmu.RemoveAt(_atCol);
 
+        // W2: In FreeP, row.Cells[_atCol] is always the cell for grid column _atCol.
+        //
+        // Case 1: The cell at _atCol is an HMerge continuation → find its anchor (scan left),
+        //         decrement the anchor's GridSpan, then remove the continuation.
+        // Case 2: The cell at _atCol is an anchor with GridSpan>1 (it spans multiple columns) →
+        //         promote the next cell (HMerge continuation) to become the new anchor
+        //         (clear HMerge, adopt RowSpan and content), then remove the anchor slot.
+        // Case 3: Independent cell (GridSpan==1, not HMerge) → just remove it.
         foreach (var row in table.Rows)
         {
-            if (_atCol < row.Cells.Count)
+            if (_atCol >= row.Cells.Count) continue;
+            var cell = row.Cells[_atCol];
+
+            if (cell.HMerge)
+            {
+                // HMerge continuation: decrement the owning anchor's GridSpan.
+                for (int ai = _atCol - 1; ai >= 0; ai--)
+                {
+                    if (!row.Cells[ai].HMerge)
+                    {
+                        if (row.Cells[ai].GridSpan > 1)
+                            row.Cells[ai].GridSpan--;
+                        break;
+                    }
+                }
                 row.Cells.RemoveAt(_atCol);
+            }
+            else if (cell.GridSpan > 1)
+            {
+                // Anchor being deleted — promote its first HMerge continuation to become
+                // the new anchor so the remaining span is preserved.
+                var nextCell = row.Cells[_atCol + 1]; // must exist since GridSpan > 1
+                nextCell.HMerge   = false;
+                nextCell.GridSpan = cell.GridSpan - 1;
+                nextCell.RowSpan  = cell.RowSpan;
+                if (nextCell.TextBody is null && cell.TextBody is not null)
+                    nextCell.TextBody = TableCommandHelper.CloneTextBody(cell.TextBody);
+                row.Cells.RemoveAt(_atCol); // remove the old anchor
+            }
+            else
+            {
+                // Independent single-column cell.
+                row.Cells.RemoveAt(_atCol);
+            }
         }
     }
 

@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Avalonia.Pivot;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Backstage;
@@ -112,6 +113,16 @@ public sealed partial class MainWindow
         foreach (var (surfaceId, opener) in dialogOpeners)
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
 
+        // ── Multi-tab / multi-category dialogs: open once, render the default surface plus one
+        //    PNG per tab/category (`<surfaceId>.<TabName>`) so the comparison runner pairs each
+        //    tab against the matching WPF tab. ──
+        var tabDialogs = ParityTabDialogOpeners();
+        if (maxDialogSurfaces is not null)
+            tabDialogs = [];
+
+        foreach (var (surfaceId, opener, tabNames) in tabDialogs)
+            results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
+
         foreach (var surfaceId in ParityBackstageSurfaces)
             results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
 
@@ -121,8 +132,6 @@ public sealed partial class MainWindow
     /// <summary>The canonical dialog surfaces and the shell method that opens each. Ordered for stable output.</summary>
     private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityDialogOpeners() =>
     [
-        ("dialog.FormatCells", () => ShowFormatCellsDialogAsync()),
-        ("dialog.FindReplace", () => ShowFindDialogAsync()),
         ("dialog.GoTo", () => ShowGoToDialogAsync()),
         ("dialog.GoToSpecial", () => ShowGoToSpecialDialogAsync()),
         ("dialog.CreateTable", () => ShowCreateTableParityDialogAsync()),
@@ -163,9 +172,6 @@ public sealed partial class MainWindow
         ("dialog.SaveAsWorkbook", () => ShowWorkbookFileDialogParitySurfaceAsync(CreateSaveAsWorkbookDialogSurfacePlan())),
         ("dialog.ExportOptions", () => ShowExportOptionsParityDialogAsync()),
         ("dialog.SelectionPane", () => ShowSelectionPaneParityDialogAsync()),
-        ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync()),
-        ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync()),
-        ("dialog.PivotValueFieldSettings", () => ShowPivotValueFieldSettingsParityDialogAsync()),
         ("dialog.InsertSlicer", () => ShowInsertSlicerParityDialogAsync()),
         ("dialog.InsertTimeline", () => ShowInsertTimelineParityDialogAsync()),
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
@@ -174,9 +180,37 @@ public sealed partial class MainWindow
         ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
-        ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsDialogAsync()),
+        ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
+        // PageSetup is captured as a single default surface (not per-tab): the WPF dialog has 3 tabs
+        // (Page/Margins/Sheet) while the Avalonia dialog has 4 (adds Header/Footer), so an index-based
+        // per-tab pairing would mismatch. See ParityTabDialogOpeners for the per-tab dialogs.
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync()),
-        ("dialog.Options", () => ShowOptionsDialogAsync()),
+    ];
+
+    /// <summary>
+    /// The multi-tab / multi-category dialog surfaces: each opens once and is rendered per tab
+    /// (<c>dialog.&lt;Name&gt;.&lt;TabName&gt;</c>) plus its default <c>dialog.&lt;Name&gt;</c> surface.
+    /// The tab-name lists are stable, English, position-ordered identifiers that match the WPF
+    /// capture's per-tab surface ids one-for-one (the renderer drives <c>SelectedIndex = i</c>, not
+    /// the localized header text, so the names here only need to agree across the two shells).
+    /// </summary>
+    private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>
+    [
+        ("dialog.FormatCells", () => ShowFormatCellsDialogAsync(),
+            ["Number", "Alignment", "Font", "Fill", "Border", "Protection"]),
+        ("dialog.FindReplace", () => ShowFindDialogAsync(),
+            ["Find", "Replace"]),
+        ("dialog.PivotTableOptions", () => ShowPivotTableOptionsParityDialogAsync(),
+            ["LayoutAndFormat", "TotalsAndFilters", "Display", "Printing", "Data", "AltText"]),
+        ("dialog.PivotFieldFilter", () => ShowPivotFieldFilterParityDialogAsync(),
+            ["SelectItems", "LabelFilters", "ValueFilters"]),
+        ("dialog.PivotValueFieldSettings", () => ShowPivotValueFieldSettingsParityDialogAsync(),
+            ["SummarizeValuesBy", "ShowValuesAs", "NumberFormat"]),
+        ("dialog.Options", () => ShowOptionsDialogAsync(),
+            [
+                "General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
+                "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
+            ]),
     ];
 
     private Task ShowPrintPreviewParityDialogAsync()
@@ -948,6 +982,52 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
+    /// <summary>
+    /// Seeds a few conditional-format rules onto the demo sheet (over a range that overlaps the capture
+    /// selection, so the manager's default "current selection" scope lists them) before opening the Manage
+    /// Conditional Formats dialog — otherwise its rules list renders empty and there is nothing to compare.
+    /// </summary>
+    private async Task ShowManageConditionalFormatsParityDialogAsync()
+    {
+        var sheet = _session.Workbook.Sheets.Count > 0 ? _session.Workbook.Sheets[0] : _session.ActiveSheet;
+        var ruleRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 4),
+            new CellAddress(sheet.Id, 5, 4));
+
+        // Apply 3 example rules so the manager has rows. Each commits through the same apply-command path the
+        // ribbon uses; the demo workbook starts with no rules, so this is idempotent enough for a single run.
+        foreach (var preset in new[]
+                 {
+                     ConditionalFormatPreset.DataBar,
+                     ConditionalFormatPreset.ColorScale,
+                     ConditionalFormatPreset.HighlightGreaterThan,
+                 })
+        {
+            _session.ExecuteReviewCommand(
+                ConditionalFormatPresetFactory.BuildApplyCommand(preset, sheet.Id, ruleRange, value: "100"));
+        }
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        var previousSheetId = _session.ActiveSheet.Id;
+        if (!previousSheetId.Equals(sheet.Id))
+            _session.SelectSheet(sheet.Id);
+        var previousSelection = _session.SelectedRange;
+        _session.SelectRange(ruleRange);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await ShowManageConditionalFormatsDialogAsync();
+        }
+        finally
+        {
+            if (!previousSheetId.Equals(_session.ActiveSheet.Id))
+                _session.SelectSheet(previousSheetId);
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
     private async Task ShowCustomViewsParityDialogAsync()
     {
         _session.Workbook.CustomViews.Clear();
@@ -1359,6 +1439,122 @@ public sealed partial class MainWindow
 
         return result;
     }
+
+    /// <summary>
+    /// Like <see cref="CaptureModalSurfaceAsync"/>, but for a multi-tab / multi-category dialog: opens the
+    /// dialog once, renders the default surface as <c>&lt;surfaceId&gt;.png</c>, then for each tab index sets
+    /// the relevant <see cref="TabControl"/>'s <c>SelectedIndex</c> (or invokes the category-list selector
+    /// for dialogs whose categories are not a <see cref="TabControl"/>, e.g. Options), pumps a layout pass so
+    /// the swapped pane re-renders, and writes <c>&lt;surfaceId&gt;.&lt;tabName&gt;.png</c>. The dialog is
+    /// closed once at the end. Returns one <see cref="ParitySurfaceResult"/> per emitted PNG.
+    /// </summary>
+    private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(
+        string outputDirectory,
+        string surfaceId,
+        ParitySurfaceKind kind,
+        Func<Task> opener,
+        string[] tabNames)
+    {
+        var results = new List<ParitySurfaceResult>();
+        var defaultPng = surfaceId + ".png";
+        var preexisting = OwnedWindows.ToHashSet();
+
+        Task openerTask;
+        try
+        {
+            openerTask = RunParityModalOpenerAsync(opener);
+        }
+        catch (Exception ex)
+        {
+            results.Add(new ParitySurfaceResult(surfaceId, kind, defaultPng, Captured: false, $"Opener threw: {ex.GetType().Name}: {ex.Message}"));
+            return results;
+        }
+
+        var dialog = await WaitForOwnedDialogAsync(preexisting);
+        if (dialog is null)
+        {
+            await AwaitOpenerQuietlyAsync(openerTask);
+            results.Add(new ParitySurfaceResult(surfaceId, kind, defaultPng, Captured: false, "Dialog window did not open within the wait window (guard or unavailable surface)."));
+            return results;
+        }
+
+        try
+        {
+            // Default surface first (whatever tab the dialog opens on).
+            results.Add(RenderParityDialogTab(outputDirectory, dialog, surfaceId, defaultPng, kind));
+
+            // A real TabControl drives selection via SelectedIndex; the Options dialog instead carries an
+            // Action<int> category selector on the category list's Tag (its categories are Border rows in a
+            // StackPanel, not a TabControl). Prefer the TabControl when present.
+            var tabControl = dialog.GetVisualDescendants().OfType<TabControl>().FirstOrDefault();
+            var categorySelector = tabControl is null ? FindParityCategorySelector(dialog) : null;
+
+            for (var i = 0; i < tabNames.Length; i++)
+            {
+                var pngName = $"{surfaceId}.{tabNames[i]}.png";
+                if (tabControl is not null)
+                {
+                    if (i >= tabControl.ItemCount)
+                    {
+                        results.Add(new ParitySurfaceResult($"{surfaceId}.{tabNames[i]}", kind, pngName, Captured: false, $"Tab index {i} is out of range (dialog has {tabControl.ItemCount} tabs)."));
+                        continue;
+                    }
+                    tabControl.SelectedIndex = i;
+                }
+                else if (categorySelector is not null)
+                {
+                    categorySelector(i);
+                }
+                else
+                {
+                    results.Add(new ParitySurfaceResult($"{surfaceId}.{tabNames[i]}", kind, pngName, Captured: false, "No TabControl or category selector found in the dialog visual tree."));
+                    continue;
+                }
+
+                // Pump a layout pass so the newly-selected tab's pane is measured/arranged before render.
+                await Task.Delay(ParityCaptureDialogPollMilliseconds);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+                try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                results.Add(RenderParityDialogTab(outputDirectory, dialog, $"{surfaceId}.{tabNames[i]}", pngName, kind));
+            }
+        }
+        finally
+        {
+            try { dialog.Close(); } catch { /* closing best-effort */ }
+            await AwaitOpenerQuietlyAsync(openerTask);
+        }
+
+        return results;
+    }
+
+    private static ParitySurfaceResult RenderParityDialogTab(
+        string outputDirectory, Window dialog, string surfaceId, string pngName, ParitySurfaceKind kind)
+    {
+        try
+        {
+            var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
+            var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
+            RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
+            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: true, "");
+        }
+        catch (Exception ex)
+        {
+            return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Returns the Options-style category selector — an <c>Action&lt;int&gt;</c> stashed on the category list's
+    /// <c>Tag</c> by the Options dialog — so the capture can switch left-list categories that are not backed by
+    /// a <see cref="TabControl"/>. Returns <c>null</c> when no such selector is present.
+    /// </summary>
+    private static Action<int>? FindParityCategorySelector(Window dialog) =>
+        dialog.GetVisualDescendants()
+            .OfType<Control>()
+            .Select(control => control.Tag as Action<int>)
+            .FirstOrDefault(selector => selector is not null);
 
     private static Task RunParityModalOpenerAsync(Func<Task> opener)
     {

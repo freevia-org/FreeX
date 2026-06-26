@@ -25,6 +25,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
+    private List<RowColumnShiftHelpers.ChartVerbatimSnapshot?>? _chartVerbatimSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
@@ -72,6 +73,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Hyperlinks, _beforeRow, _count);
         _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
+        RowColumnShiftHelpers.ShiftHyperlinkBookmarks(sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsUp(sheet, _beforeRow, _count);
@@ -83,7 +85,9 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
+        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(sheet);
         RowColumnShiftHelpers.ShiftChartRowsUp(sheet, _sheetId, _beforeRow, _count);
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
         RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -149,6 +153,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(sheet, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 

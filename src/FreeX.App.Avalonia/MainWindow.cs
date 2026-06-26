@@ -4599,9 +4599,13 @@ public sealed partial class MainWindow : Window
         const double PtToDip = 96.0 / 72.0;
         var strokeDip = d.OutlineWidthPoints > 0 ? d.OutlineWidthPoints * PtToDip : 1.5;
 
+        // Pass flipHorizontal/flipVertical as false here: ApplyDrawingObjectTransform sets a
+        // ScaleTransform on the container visual that already flips the entire overlay (and its
+        // arrowhead Path children). Passing the flip flags to LineEndpoints would mirror the
+        // endpoints a second time, landing them at the wrong corners and pointing the wrong way.
         var (startPt, endPt, dirStartToEnd) = ArrowheadGeometry.LineEndpoints(
             0, 0, w, h,
-            d.FlipHorizontal, d.FlipVertical, kind);
+            flipHorizontal: false, flipVertical: false, kind);
 
         // HeadEnd = start of line, points backward (opposite of travel direction)
         if (d.HeadArrowhead?.IsPresent == true)
