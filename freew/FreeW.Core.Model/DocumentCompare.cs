@@ -216,8 +216,8 @@ public static class DocumentCompare
         {
             Formatting = revised.Formatting,
             StyleId = revised.StyleId,
-            BookmarkName = revised.BookmarkName
         };
+        result.BookmarkNames.AddRange(revised.BookmarkNames);
 
         var originalTokens = Tokenize(original.PlainText);
         var revisedTokens = Tokenize(revised.PlainText);
@@ -297,8 +297,8 @@ public static class DocumentCompare
         {
             Formatting = source.Formatting,
             StyleId = source.StyleId,
-            BookmarkName = source.BookmarkName
         };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
         // An empty paragraph (no runs) still needs to register as inserted/deleted; the paragraph stays
         // empty in the result but is otherwise carried so block ordering is preserved.
         foreach (var run in source.Runs)
@@ -411,8 +411,8 @@ public static class DocumentCompare
         {
             Formatting = source.Formatting,
             StyleId = source.StyleId,
-            BookmarkName = source.BookmarkName
         };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
         return clone;

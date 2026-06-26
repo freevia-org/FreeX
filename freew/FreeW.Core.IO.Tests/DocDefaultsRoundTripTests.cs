@@ -1,0 +1,160 @@
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Text;
+using System.Xml.Linq;
+using FreeW.Core.Model;
+
+namespace FreeW.Core.IO.Tests;
+
+/// <summary>
+/// Round-trip coverage for <c>w:docDefaults/w:rPrDefault/w:rPr</c> — the document-default run
+/// properties (body font family + size). Without this fix, the document default font (e.g. Calibri 11pt)
+/// stored only in docDefaults was silently dropped on save; Word then fell back to Times New Roman.
+/// </summary>
+public class DocDefaultsRoundTripTests
+{
+    private const string Wns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private static readonly XNamespace W = Wns;
+
+    private static void AddPart(ZipArchive zip, string path, string xml)
+    {
+        var e = zip.CreateEntry(path);
+        using var w = new StreamWriter(e.Open(), new UTF8Encoding(false));
+        w.Write(xml);
+    }
+
+    /// <summary>
+    /// Reads a docx whose styles.xml has the given rPrDefault and pPrDefault XML fragments inside
+    /// w:docDefaults. Pass null for either to omit it.
+    /// </summary>
+    private static TextDocument Read(string? rPrDefaultXml, string? pPrDefaultXml = null)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddPart(zip, "word/document.xml",
+                $"<w:document xmlns:w=\"{Wns}\"><w:body><w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>");
+
+            var rPrPart = rPrDefaultXml is null ? "" : $"<w:rPrDefault>{rPrDefaultXml}</w:rPrDefault>";
+            var pPrPart = pPrDefaultXml is null ? "" : $"<w:pPrDefault>{pPrDefaultXml}</w:pPrDefault>";
+            AddPart(zip, "word/styles.xml",
+                $"<w:styles xmlns:w=\"{Wns}\"><w:docDefaults>{rPrPart}{pPrPart}</w:docDefaults></w:styles>");
+        }
+        ms.Position = 0;
+        return DocxReader.Read(ms);
+    }
+
+    /// <summary>
+    /// Writes a document and extracts its styles.xml as an XDocument so tests can assert on the raw XML.
+    /// </summary>
+    private static XDocument WriteStylesXml(TextDocument document)
+    {
+        using var ms = new MemoryStream();
+        DocxWriter.Write(document, ms);
+        ms.Position = 0;
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/styles.xml")!.Open();
+        return XDocument.Load(entry);
+    }
+
+    /// <summary>
+    /// The canonical round-trip: a docx whose only font specification is in w:docDefaults (Calibri, 22
+    /// half-points = 11 pt) must survive a FreeW read→write cycle with docDefaults intact: same font name,
+    /// same size value, and docDefaults must be the FIRST child of w:styles (schema order).
+    /// </summary>
+    [Fact]
+    public void DocDefaults_FontAndSize_RoundTrip()
+    {
+        // ARRANGE — docDefaults with Calibri 11pt (22 half-points)
+        var doc = Read("<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/><w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/></w:rPr>");
+
+        // The reader must populate DefaultRun correctly.
+        doc.DefaultRun.FontFamily.Should().Be("Calibri");
+        doc.DefaultRun.FontSizePt.Should().Be(11);
+
+        // WRITE and inspect styles.xml
+        var stylesXml = WriteStylesXml(doc);
+        var root = stylesXml.Root!;
+
+        // docDefaults MUST be the first child of w:styles
+        root.Elements().First().Name.Should().Be(W + "docDefaults",
+            "w:docDefaults must precede all w:style elements (CT_Styles schema order)");
+
+        var docDefaults = root.Element(W + "docDefaults");
+        docDefaults.Should().NotBeNull("docDefaults must be emitted");
+
+        var rPr = docDefaults!.Element(W + "rPrDefault")?.Element(W + "rPr");
+        rPr.Should().NotBeNull("w:rPrDefault/w:rPr must be present");
+
+        // Font family
+        var rFonts = rPr!.Element(W + "rFonts");
+        rFonts.Should().NotBeNull("w:rFonts must be emitted for the default font");
+        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
+        rFonts.Attribute(W + "hAnsi")?.Value.Should().Be("Calibri");
+
+        // Size — w:sz val should be 22 (half-points for 11pt)
+        rPr.Element(W + "sz")?.Attribute(W + "val")?.Value.Should().Be("22",
+            "11pt = 22 half-points in w:sz/@w:val");
+    }
+
+    /// <summary>
+    /// Aptos 12pt (24 half-points) — the default body font for newer Word documents. Ensures the fix is not
+    /// Calibri-specific.
+    /// </summary>
+    [Fact]
+    public void DocDefaults_Aptos12pt_RoundTrip()
+    {
+        var doc = Read("<w:rPr><w:rFonts w:ascii=\"Aptos\" w:hAnsi=\"Aptos\"/><w:sz w:val=\"24\"/><w:szCs w:val=\"24\"/></w:rPr>");
+
+        doc.DefaultRun.FontFamily.Should().Be("Aptos");
+        doc.DefaultRun.FontSizePt.Should().Be(12);
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Element(W + "rFonts")!.Attribute(W + "ascii")!.Value.Should().Be("Aptos");
+        rPr.Element(W + "sz")!.Attribute(W + "val")!.Value.Should().Be("24");
+    }
+
+    /// <summary>
+    /// A document built by FreeW from scratch (no read, just DefaultRun = Calibri 11pt) must also emit
+    /// docDefaults on write so the body font is preserved for Word.
+    /// </summary>
+    [Fact]
+    public void NewDocument_DefaultRun_IsEmittedAsDocDefaults()
+    {
+        var doc = new TextDocument();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.Blocks.Add(new Paragraph("hello"));
+
+        var stylesXml = WriteStylesXml(doc);
+        var docDefaults = stylesXml.Root?.Element(W + "docDefaults");
+        docDefaults.Should().NotBeNull("NewDocument with non-trivial DefaultRun must emit docDefaults");
+
+        var rFonts = docDefaults!
+            .Element(W + "rPrDefault")?.Element(W + "rPr")?.Element(W + "rFonts");
+        rFonts.Should().NotBeNull();
+        rFonts!.Attribute(W + "ascii")?.Value.Should().Be("Calibri");
+    }
+
+    /// <summary>
+    /// Full read→write→read cycle: the document re-read after saving must still have the same DefaultRun.
+    /// </summary>
+    [Fact]
+    public void DocDefaults_ReadWriteRead_Stable()
+    {
+        var doc1 = Read("<w:rPr><w:rFonts w:ascii=\"Calibri\" w:hAnsi=\"Calibri\"/><w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/></w:rPr>");
+
+        using var ms = new MemoryStream();
+        DocxWriter.Write(doc1, ms);
+        ms.Position = 0;
+        var doc2 = DocxReader.Read(ms);
+
+        doc2.DefaultRun.FontFamily.Should().Be("Calibri");
+        doc2.DefaultRun.FontSizePt.Should().Be(11);
+    }
+}

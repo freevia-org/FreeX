@@ -564,15 +564,21 @@ public sealed class RichTextEditorTests
         runs[0].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
             "Z2 (b): A1 starts at offset 0, inside original A → accent1");
 
-        // A2 (offset 2) is still inside original A [0,3) → accent1 (NOT accent2).
-        runs[1].Color.Should().NotBeNull();
-        runs[1].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
-            "Z2 (b): A2 starts at offset 2, still inside original A → accent1, not accent2");
+        // A2 ("xA") is in the DISTURBED MIDDLE under prefix/suffix matching:
+        // prefix=0 (text "AA" ≠ original "AAA"), suffix=1 (BBB=BBB).
+        // The AA1 fail-safe rule: middle runs NEVER carry a scheme color ref from an original run.
+        // If A2 has a locally-set Foreground brush, WpfInlineToModelRun synthesizes a plain sRGB
+        // (no SchemeColor) — that is acceptable (the sRGB is correct, only the scheme ref is lost).
+        // The WRONG outcome would be A2 getting accent1's SchemeColor ref from the wrong original.
+        var a2SchemeSlot = runs[1].Color?.SchemeColor?.Slot;
+        a2SchemeSlot.Should().BeNull(
+            "Z2 (b): A2 is in the disturbed middle → must NOT carry any scheme color ref " +
+            "(fail-safe: never contaminate with wrong original run's scheme ref)");
 
-        // B (offset 4, which is within original B [3,6)) → accent2.
+        // B (suffix match: text "BBB" == original B "BBB") → accent2.
         runs[2].Color.Should().NotBeNull();
         runs[2].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent2,
-            "Z2 (b): B starts at offset 4, inside original B → accent2");
+            "Z2 (b): B is in the unchanged suffix → accent2 preserved");
     }
 
     /// <summary>
@@ -657,6 +663,229 @@ public sealed class RichTextEditorTests
         // NEW: offset 3, beyond original length (3..3) → no matching original run → null (inherit).
         runs[1].Color.Should().BeNull(
             "Z2 (d): new text beyond original length must inherit (null), not carry accent1 or any color");
+    }
+
+    // ─── AA1: prefix/suffix fail-safe (delete-shift, insert-shift, suffix-preserve, append) ─
+
+    /// <summary>
+    /// AA1 (a) — DELETE-SHIFT: the core AA1 bug case.
+    /// Original: A[0,5)(accent1, locally-set Foreground), B[5,10)(Color=null, inherits).
+    /// User deletes 3 chars from A: edited inlines become A'("AB", 2 chars) + B("FGHIJ", 5 chars).
+    /// Under prefix/suffix: A'.Text="AB" ≠ orig A.Text="ABCDE" → prefix=0.
+    ///                       B.Text="FGHIJ" == orig B.Text="FGHIJ" → suffix=1.
+    /// B is in the suffix, matched to original B whose Color=null → reconstructed B.Color must be NULL.
+    /// </summary>
+    [StaFact]
+    public void AA1_DeleteShift_RunB_ColorIsNull_NotAccent1()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+
+        // Original: A(5 chars, accent1, local Foreground) + B(5 chars, Color=null inherit).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "ABCDE", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        para.Runs.Add(new ModelRun { Text = "FGHIJ", Color = null });   // Color=null: INHERIT
+        body.Paragraphs.Add(para);
+
+        // Build post-edit FlowDocument: A'("AB", locally-set accent1 brush) + B("FGHIJ", no foreground).
+        // This mirrors what the RichTextBox produces after the user deletes 3 chars from A.
+        var doc = new FlowDocument();
+        var wp  = new WpfParagraph();
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+
+        var wrA = new WpfRun("AB") { Foreground = accent1Brush };      // locally set
+        var wrB = new WpfRun("FGHIJ");                                   // no local foreground (inherit)
+        wp.Inlines.Add(wrA);
+        wp.Inlines.Add(wrB);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        var runs = restored.Paragraphs[0].Runs;
+
+        runs.Should().HaveCount(2);
+
+        // A' is in the DISTURBED MIDDLE (text "AB" ≠ orig "ABCDE" → prefix=0).
+        // Its local Foreground matches accent1 but the prefix check failed → it still gets
+        // the locally-set sRGB (synthesized, not the scheme ref). That is acceptable degradation.
+        // (We don't assert its exact Color here — the key assertion is about B.)
+
+        // B MUST be null (inherit), NOT accent1.
+        // Suffix match: B.Text "FGHIJ" == orig B.Text "FGHIJ" → matches orig B (Color=null).
+        runs[1].Color.Should().BeNull(
+            "AA1 (a): B's Color=null (inherit) must survive — must NOT be contaminated with A's accent1 " +
+            "even though 3 chars were deleted from A shifting B's character offset");
+    }
+
+    /// <summary>
+    /// AA1 (b) — INSERT-SHIFT: inserting chars before B shifts B's offset but its text stays the same.
+    /// B should still inherit (null), not get A's color.
+    /// </summary>
+    [StaFact]
+    public void AA1_InsertShift_RunB_ColorIsNull_NotAccent1()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+
+        // Original: A(3 chars, accent1) + B(3 chars, Color=null inherit).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color });
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = null });
+        body.Paragraphs.Add(para);
+
+        // Post-edit: user inserted "XX" inside A → A is now "XAAXAA" or "AAX" or similar.
+        // The important thing: A has different text, B has the SAME text "BBB".
+        var doc = new FlowDocument();
+        var wp  = new WpfParagraph();
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+
+        var wrA = new WpfRun("AAAXX") { Foreground = accent1Brush };   // A now longer, locally set
+        var wrB = new WpfRun("BBB");                                     // B unchanged, no local foreground
+        wp.Inlines.Add(wrA);
+        wp.Inlines.Add(wrB);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+
+        // A: text "AAAXX" ≠ orig "AAA" → prefix=0, A is in middle → null or synthesized sRGB.
+        // B: suffix match "BBB"=="BBB" → matched to orig B (Color=null).
+        runs[1].Color.Should().BeNull(
+            "AA1 (b): B Color=null must survive an insert in A — B is in the suffix, matched to orig B");
+    }
+
+    /// <summary>
+    /// AA1 (c) — TRAILING-UNCHANGED: edit run A, leave B and C untouched at the end.
+    /// B and C must retain their scheme colors (suffix match).
+    /// </summary>
+    [StaFact]
+    public void AA1_TrailingUnchangedRuns_KeepSchemeColors()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+        var accent2Color = new ThemeAwareColor(
+            new SrgbColor(0xED, 0x7D, 0x31),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2 });
+
+        // Original: A(accent1, "AAA") + B(accent2, "BBB") + C(null, "CCC").
+        // C has no color (inherit).
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color });
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = accent2Color });
+        para.Runs.Add(new ModelRun { Text = "CCC", Color = null });
+        body.Paragraphs.Add(para);
+
+        // Simulate user edited A (now "ZZZ"), B and C unchanged.
+        var doc = new FlowDocument();
+        var wp  = new WpfParagraph();
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+        var accent2Brush = new SolidColorBrush(Color.FromRgb(0xED, 0x7D, 0x31));
+
+        var wrA = new WpfRun("ZZZ") { Foreground = accent1Brush };
+        var wrB = new WpfRun("BBB") { Foreground = accent2Brush };
+        var wrC = new WpfRun("CCC");                                   // no local foreground
+        wp.Inlines.Add(wrA);
+        wp.Inlines.Add(wrB);
+        wp.Inlines.Add(wrC);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(3);
+
+        // A: "ZZZ" ≠ orig "AAA" → prefix=0, A in middle → no scheme ref (acceptable).
+        // Suffix: C "CCC"=="CCC" (suffixLen≥1), then B "BBB"=="BBB" (suffixLen≥2) → suffixLen=2.
+        // B matched to orig B (accent2), C matched to orig C (null).
+
+        runs[1].Color.Should().NotBeNull("B is in the suffix, matched to orig B (accent2)");
+        runs[1].Color!.SchemeColor.Should().NotBeNull("B's scheme ref must be preserved");
+        runs[1].Color!.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent2,
+            "AA1 (c): B is trailing-unchanged → must keep accent2");
+
+        runs[2].Color.Should().BeNull(
+            "AA1 (c): C is trailing-unchanged with Color=null → must stay null");
+    }
+
+    /// <summary>
+    /// AA1 (d) — APPEND-NEW-TEXT: appending a new run at the end must NOT carry the last original run's color.
+    /// </summary>
+    [StaFact]
+    public void AA1_AppendNewRun_NewRunInheritsNull()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+
+        // Original: A(accent1, "Hello").
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "Hello", Color = accent1Color });
+        body.Paragraphs.Add(para);
+
+        // Post-edit: A unchanged, NEW appended.
+        // A Foreground locally set (accent1 brush), NEW has no foreground.
+        var doc = new FlowDocument();
+        var wp  = new WpfParagraph();
+        var accent1Brush = new SolidColorBrush(Color.FromRgb(0x44, 0x72, 0xC4));
+
+        var wrA   = new WpfRun("Hello") { Foreground = accent1Brush };
+        var wrNew = new WpfRun(" world!");   // new text, no foreground set
+        wp.Inlines.Add(wrA);
+        wp.Inlines.Add(wrNew);
+        doc.Blocks.Add(wp);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2);
+
+        // Prefix: "Hello"=="Hello" → prefixLen=1. A matched to orig A (accent1).
+        runs[0].Color.Should().NotBeNull("A is unchanged (prefix match) → accent1 preserved");
+        runs[0].Color!.SchemeColor?.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "AA1 (d): A's scheme ref must be preserved when it's in the unchanged prefix");
+
+        // NEW: prefixLen=1, suffixLen=0 (only 1 orig run, already consumed by prefix).
+        // NEW is in the middle → null.
+        runs[1].Color.Should().BeNull(
+            "AA1 (d): newly appended run has no original counterpart → must inherit (null), not carry accent1");
+    }
+
+    /// <summary>
+    /// AA1 (e) — NO-EDIT full prefix: original [A(accent1), B(accent2)], no edit at all.
+    /// Both scheme refs must be preserved via prefix match (all runs match → full prefix, suffix=0).
+    /// </summary>
+    [StaFact]
+    public void AA1_NoEdit_TwoSchemeRuns_BothPreservedViaPrefix()
+    {
+        var accent1Color = new ThemeAwareColor(
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent1 });
+        var accent2Color = new ThemeAwareColor(
+            new SrgbColor(0xED, 0x7D, 0x31),
+            new SchemeColorRef { Slot = ThemeColorSlot.Accent2 });
+
+        var body = new TextBody { Wrap = true };
+        var para = new ModelParagraph { Align = TextAlign.Left };
+        para.Runs.Add(new ModelRun { Text = "AAA", Color = accent1Color, FontFamily = "Calibri", FontSizePt = 12 });
+        para.Runs.Add(new ModelRun { Text = "BBB", Color = accent2Color, FontFamily = "Calibri", FontSizePt = 12 });
+        body.Paragraphs.Add(para);
+
+        // No edit: round-trip via ToFlowDocument / FromFlowDocument.
+        var doc      = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
+
+        var runs = restored.Paragraphs[0].Runs;
+        runs.Should().HaveCount(2, "no edit → same run count");
+
+        runs[0].Color!.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent1,
+            "AA1 (e): A in unchanged prefix → accent1 preserved");
+        runs[1].Color!.SchemeColor!.Slot.Should().Be(ThemeColorSlot.Accent2,
+            "AA1 (e): B in unchanged prefix → accent2 preserved");
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

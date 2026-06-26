@@ -171,74 +171,95 @@ internal static class TextBodyFlowDocumentConverter
                 // Collect the original paragraph's runs (if available) so we can pass
                 // each original run to WpfInlineToModelRun for Y2 scheme-color preservation.
                 //
-                // Z2 fix: match reconstructed inlines to original runs by CHARACTER OFFSET,
-                // not by ordinal index.  When the user edits text the FlowDocument's leaf
-                // inline count/order diverges from the original run list:
-                //   - typing mid-run splits one run into multiple inlines,
-                //   - applying bold/color to a sub-range produces extra inlines,
-                //   - a soft break (LineBreak = "\n") is an extra leaf inline.
-                // Matching by index therefore carries the WRONG original run's scheme-color
-                // (or drops it when out of range).  Matching by offset is correct: a
-                // reconstructed inline whose start offset falls within original run [s,e)
-                // definitely came from that original run, so it inherits that run's color.
+                // AA1 fix (3rd attempt) — FAIL-SAFE prefix/suffix pairing:
                 //
-                // Build a cumulative offset table for the original runs once, then walk the
-                // reconstructed inlines accumulating offset.  A LineBreak counts as 1
-                // character ("\n") consistent with how the model stores soft breaks (Y5).
+                // Previous attempt (Z2) matched by CHARACTER OFFSET: the reconstructed
+                // inline's start offset was looked up in the original run's [start,end) span.
+                // That breaks on ANY delete before a run: deleting 3 chars from run A shifts
+                // run B's reconstructed start offset left, so it falls inside A's original span
+                // and gets A's scheme-color — visible corruption.
+                //
+                // INVARIANT: a reconstructed run must carry an original run's inherited
+                // Color/font ONLY when that run is PROVABLY UNCHANGED.  On ANY doubt: null.
+                //   • null (inherit) → the run re-inherits the placeholder/theme color — safe.
+                //   • wrong color carried over → visible wrong color on screen — the bug.
+                //
+                // ALGORITHM — longest common PREFIX + longest common SUFFIX by TEXT equality:
+                //   1. Materialise all leaf inlines into a list (we need indexed access).
+                //   2. Find prefix length P: smallest i where leaf[i].Text ≠ origRun[i].Text
+                //      (stop at min(leafCount, origCount)).
+                //   3. Find suffix length S: walk from both ends while texts match, stopping
+                //      before the already-matched prefix (so P+S ≤ min counts).
+                //   4. Leaf index i < P        → origRuns[i]            (unchanged prefix)
+                //      Leaf index i ≥ leafCount-S → origRuns[n - (leafCount-i)] (unchanged suffix)
+                //      Leaf index otherwise    → null                   (disturbed middle)
+                //
+                // Guarantee: a run can NEVER be matched to a misaligned original run, because
+                // matching requires TEXT equality at every step.  The wrong-color AA1 case is
+                // structurally impossible: after a deletion the first mismatched text stops the
+                // prefix, and B (now at a lower index) only enters the suffix match where its
+                // text must equal the original's text at that suffix position.
                 IReadOnlyList<ModelRun>? origRuns = null;
                 if (originalBody is not null && modelParaIndex < originalBody.Paragraphs.Count)
                     origRuns = originalBody.Paragraphs[modelParaIndex].Runs;
 
-                // origRunRanges[i] = (startOffset, exclusiveEndOffset) of origRuns[i].
-                // Built once; empty when origRuns is null or empty.
-                (int start, int end)[] origRunRanges = Array.Empty<(int, int)>();
-                if (origRuns is { Count: > 0 })
+                // Materialise leaf inlines so we can index them.
+                var leafList = EnumerateLeafInlines(wp2.Inlines).ToList();
+                int m = leafList.Count;   // reconstructed count
+                int n = origRuns?.Count ?? 0; // original count
+
+                // Helper: text of a leaf inline (mirrors the model convention).
+                static string LeafText(Inline leaf) => leaf switch
                 {
-                    origRunRanges = new (int, int)[origRuns.Count];
-                    int offset = 0;
-                    for (int i = 0; i < origRuns.Count; i++)
-                    {
-                        // A run whose Text is "\n" has length 1 (the soft-break character).
-                        int len = origRuns[i].Text?.Length ?? 0;
-                        origRunRanges[i] = (offset, offset + len);
-                        offset += len;
-                    }
+                    WpfRun wr   => wr.Text ?? string.Empty,
+                    LineBreak _ => "\n",
+                    _           => string.Empty
+                };
+
+                // Helper: text of an original run.
+                static string OrigText(ModelRun r) => r.Text ?? string.Empty;
+
+                // Step 2: longest common prefix (by text equality).
+                int prefixLen = 0;
+                int maxPrefix = Math.Min(m, n);
+                while (prefixLen < maxPrefix &&
+                       LeafText(leafList[prefixLen]) == OrigText(origRuns![prefixLen]))
+                {
+                    prefixLen++;
                 }
 
-                // Walk reconstructed leaf inlines, accumulating a character offset.
-                // For each inline, find the original run that contains its start offset.
-                int reconstructedOffset = 0;
-                foreach (var leaf in EnumerateLeafInlines(wp2.Inlines))
+                // Step 3: longest common suffix (by text equality), not overlapping prefix.
+                int suffixLen = 0;
+                int maxSuffix = Math.Min(m, n) - prefixLen;
+                while (suffixLen < maxSuffix &&
+                       LeafText(leafList[m - 1 - suffixLen]) == OrigText(origRuns![n - 1 - suffixLen]))
                 {
-                    // Determine the length of this leaf for offset accounting.
-                    int leafLen = leaf switch
-                    {
-                        WpfRun wr   => wr.Text?.Length ?? 0,
-                        LineBreak _ => 1,   // "\n" is 1 char in the model (Y5)
-                        _           => 0
-                    };
+                    suffixLen++;
+                }
 
-                    // Find the original run whose [start,end) span contains reconstructedOffset.
-                    // A new character typed beyond the original text won't fall in any range → null.
-                    ModelRun? origRun = null;
-                    if (origRunRanges.Length > 0)
+                // Step 4: walk the materialised list and assign origRun per the prefix/suffix map.
+                for (int li = 0; li < m; li++)
+                {
+                    ModelRun? origRun;
+                    if (li < prefixLen)
                     {
-                        for (int i = 0; i < origRunRanges.Length; i++)
-                        {
-                            var (s, e) = origRunRanges[i];
-                            // A zero-length original run (empty placeholder) matches only at its start.
-                            if (s == e ? reconstructedOffset == s
-                                       : reconstructedOffset >= s && reconstructedOffset < e)
-                            {
-                                origRun = origRuns![i];
-                                break;
-                            }
-                        }
+                        // Unchanged prefix: provably same run.
+                        origRun = origRuns![li];
+                    }
+                    else if (suffixLen > 0 && li >= m - suffixLen)
+                    {
+                        // Unchanged suffix: offset from the end.
+                        int suffixOffset = li - (m - suffixLen); // 0-based within suffix
+                        origRun = origRuns![n - suffixLen + suffixOffset];
+                    }
+                    else
+                    {
+                        // Disturbed middle — do NOT carry any original color/font.
+                        origRun = null;
                     }
 
-                    var mr = WpfInlineToModelRun(leaf, origRun);
+                    var mr = WpfInlineToModelRun(leafList[li], origRun);
                     mp.Runs.Add(mr);
-                    reconstructedOffset += leafLen;
                 }
             }
 

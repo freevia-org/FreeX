@@ -116,8 +116,8 @@ public static class DocumentCombine
         {
             Formatting = bParagraph.Formatting,
             StyleId = bParagraph.StyleId,
-            BookmarkName = bParagraph.BookmarkName
         };
+        merged.BookmarkNames.AddRange(bParagraph.BookmarkNames);
 
         var aRuns = aParagraph?.Runs ?? new List<Run>();
         var bRuns = bParagraph.Runs;
@@ -235,8 +235,8 @@ public static class DocumentCombine
         {
             Formatting = source.Formatting,
             StyleId = source.StyleId,
-            BookmarkName = source.BookmarkName
         };
+        clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
         return clone;

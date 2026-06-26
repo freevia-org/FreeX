@@ -1200,8 +1200,10 @@ public static class DocxReader
                 else
                 {
                     // After the separate: accumulate the cached result text and remember its formatting.
+                    // Include w:tab ("\t") and w:br ("\n") alongside w:t so that TOC entries whose
+                    // result contains a tab leader (heading … <tab> … page#) keep their structure.
                     fieldFormattingSource ??= child;
-                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                    AppendRunResultText(fieldResult, child);
                 }
             }
             else if (fieldDepth > 0 && child.Name == W + "hyperlink")
@@ -1247,7 +1249,7 @@ public static class DocxReader
                     else
                     {
                         fieldFormattingSource ??= hlRun;
-                        fieldResult.Append(string.Concat(hlRun.Elements(W + "t").Select(t => t.Value)));
+                        AppendRunResultText(fieldResult, hlRun);
                     }
                 }
             }
@@ -1281,6 +1283,29 @@ public static class DocxReader
         }
 
         return paragraph;
+    }
+
+    /// <summary>
+    /// Appends the text content of a field-result run element to <paramref name="sb"/>. Handles:
+    /// <list type="bullet">
+    /// <item><c>w:t</c> — literal run text (normal characters).</item>
+    /// <item><c>w:tab</c> — a tab character ('\t'). TOC entries use tabs between the heading title and
+    ///   the page number; without this the tab leader is lost in the cached result text.</item>
+    /// <item><c>w:br</c> — a line break ('\n'). Preserves soft return structure in multi-line fields.</item>
+    /// </list>
+    /// All other children (e.g. drawing runs, footnote references) are ignored in the result accumulation.
+    /// </summary>
+    private static void AppendRunResultText(System.Text.StringBuilder sb, XElement run)
+    {
+        foreach (var child in run.Elements())
+        {
+            if (child.Name == W + "t")
+                sb.Append(child.Value);
+            else if (child.Name == W + "tab")
+                sb.Append('\t');
+            else if (child.Name == W + "br")
+                sb.Append('\n');
+        }
     }
 
     private static void AddBodyBlock(
@@ -1502,11 +1527,13 @@ public static class DocxReader
         }
         else if (child.Name == W + "bookmarkStart")
         {
-            // Capture the first non-internal bookmark name on the paragraph. Word emits an
-            // implicit "_GoBack" bookmark on the document; skip it so it is not mistaken for a target.
+            // Capture every non-internal bookmark name on the paragraph. Word emits an implicit
+            // "_GoBack" bookmark on the document; skip it so it is not mistaken for a target. A
+            // paragraph with multiple bookmarks (e.g. a heading that is both a cross-ref target and
+            // a user bookmark) used to lose all but the first; now all are preserved.
             var name = child.Attribute(W + "name")?.Value;
-            if (paragraph.BookmarkName is null && name is { Length: > 0 } && name != "_GoBack")
-                paragraph.BookmarkName = name;
+            if (name is { Length: > 0 } && name != "_GoBack" && !paragraph.BookmarkNames.Contains(name))
+                paragraph.BookmarkNames.Add(name);
         }
     }
 
@@ -4603,9 +4630,32 @@ public static class DocxReader
         // w:docDefaults/w:pPrDefault/w:pPr is the document's default paragraph spacing, applied to any
         // paragraph that does not set its own (Word's cascade root). FreeW ignored it, so every paragraph
         // rendered at 0 space-after / 1.15 line regardless of the document — drifting vs Word down the page.
-        var ddPr = stylesXml.Root?.Element(W + "docDefaults")?.Element(W + "pPrDefault")?.Element(W + "pPr");
+        var docDefaults = stylesXml.Root?.Element(W + "docDefaults");
+        var ddPr = docDefaults?.Element(W + "pPrDefault")?.Element(W + "pPr");
         if (ddPr is not null)
             document.DefaultParagraph = ReadDocDefaultParagraph(ddPr);
+
+        // w:docDefaults/w:rPrDefault/w:rPr carries the document default run properties (default font
+        // family, size, color, language). Word blank documents store their body font (e.g. Calibri 11pt /
+        // Aptos 11pt) ONLY here; most runs carry no explicit w:rFonts. Without reading this, FreeW renders
+        // the correct font at display time (document.DefaultRun is used by the renderer) but loses it on
+        // save because the writer never re-emits w:docDefaults — causing Word to fall back to Times New
+        // Roman after a round-trip.
+        var ddRPr = docDefaults?.Element(W + "rPrDefault")?.Element(W + "rPr");
+        if (ddRPr is not null)
+        {
+            var defaultRun = ReadRunFormatting(ddRPr);
+            // Merge: keep the existing DefaultRun value for any field that docDefaults does not override.
+            document.DefaultRun = document.DefaultRun with
+            {
+                FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
+                FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
+                ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
+                LanguageTag = defaultRun.LanguageTag ?? document.DefaultRun.LanguageTag,
+                Bold = defaultRun.Bold,
+                Italic = defaultRun.Italic,
+            };
+        }
 
         var styles = stylesXml.Root?.Elements(W + "style");
         if (styles is null)

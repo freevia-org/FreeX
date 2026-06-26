@@ -1483,8 +1483,40 @@ public sealed class Paragraph : Block
     /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
     /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
     /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).
+    /// <para>
+    /// This is the primary (first) bookmark name for backward compatibility. A paragraph can carry
+    /// multiple bookmarks via <see cref="BookmarkNames"/>; setting this property is equivalent to
+    /// setting the first element of that list. If only one bookmark is needed, set this property
+    /// directly; for multi-bookmark paragraphs, use <see cref="BookmarkNames"/> directly.
+    /// </para>
     /// </summary>
-    public string? BookmarkName { get; set; }
+    public string? BookmarkName
+    {
+        get => BookmarkNames.Count > 0 ? BookmarkNames[0] : null;
+        set
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                // null / empty: clear ALL bookmarks on this paragraph (matches the pre-existing contract where
+                // setting BookmarkName = null removed the paragraph's single bookmark; callers that do
+                // paragraph.BookmarkName = null to remove bookmarks (e.g. RemoveBookmarks) still work).
+                BookmarkNames.Clear();
+            }
+            else if (BookmarkNames.Count > 0)
+                BookmarkNames[0] = value;
+            else
+                BookmarkNames.Add(value);
+        }
+    }
+
+    /// <summary>
+    /// All bookmarks attached to this paragraph, in document order. A paragraph may carry multiple
+    /// <c>w:bookmarkStart</c>/<c>w:bookmarkEnd</c> pairs (e.g. a heading that is both a TOC target and
+    /// a named user bookmark). On save, one <c>w:bookmarkStart</c>/<c>w:bookmarkEnd</c> pair is emitted
+    /// per name with a unique, consistent id. <see cref="BookmarkName"/> returns the first entry (or
+    /// null when empty) for backward compatibility.
+    /// </summary>
+    public List<string> BookmarkNames { get; } = [];
 
     /// <summary>
     /// Optional section break carried by this paragraph. When non-null this paragraph is the <em>last</em>

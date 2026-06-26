@@ -61,7 +61,7 @@ public static class DocumentInspector
         var properties = CountNonEmptyProperties(document.Properties);
 
         var bookmarks = EnumerateParagraphs(document)
-            .Count(p => !string.IsNullOrEmpty(p.BookmarkName));
+            .Sum(p => p.BookmarkNames.Count(n => !string.IsNullOrEmpty(n)));
 
         return new InspectionResult(comments, revisions, properties, bookmarks);
     }
@@ -143,7 +143,7 @@ public static class DocumentInspector
 
         foreach (var paragraph in EnumerateParagraphs(document))
         {
-            paragraph.BookmarkName = null;
+            paragraph.BookmarkNames.Clear();
             foreach (var run in paragraph.Runs)
             {
                 if (run.HyperlinkAnchor is not null)
