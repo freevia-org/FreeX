@@ -282,6 +282,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 /// <summary>
 /// Translates a shape by (<paramref name="dxEmu"/>, <paramref name="dyEmu"/>).
 /// Revert subtracts the same delta.
+/// Also re-routes any connectors whose start/end is attached to the moved shape (Wave 23).
 /// </summary>
 public sealed class MoveShapeCommand : IPresentationCommand
 {
@@ -289,6 +290,10 @@ public sealed class MoveShapeCommand : IPresentationCommand
     private readonly uint _shapeId;
     private readonly long _dx;
     private readonly long _dy;
+
+    // Captured reroute data: (connectorId, oldX, oldY, oldCx, oldCy, newX, newY, newCx, newCy)
+    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+        _rerouteCapture;
 
     public MoveShapeCommand(int slideIndex, uint shapeId, long dxEmu, long dyEmu)
     {
@@ -306,6 +311,9 @@ public sealed class MoveShapeCommand : IPresentationCommand
         if (s is null) return;
         s.OffsetXEmu += _dx;
         s.OffsetYEmu += _dy;
+
+        // Reroute attached connectors after the shape has moved.
+        _rerouteCapture = ApplyReroute(p, _slideIndex, _shapeId);
     }
 
     public void Revert(Presentation p)
@@ -314,11 +322,51 @@ public sealed class MoveShapeCommand : IPresentationCommand
         if (s is null) return;
         s.OffsetXEmu -= _dx;
         s.OffsetYEmu -= _dy;
+
+        // Restore connector bounds captured during Apply.
+        RevertReroute(p, _slideIndex, _rerouteCapture);
+    }
+
+    internal static List<(uint, long, long, long, long, long, long, long, long)> ApplyReroute(
+        Presentation p, int slideIndex, uint movedShapeId)
+    {
+        var captures = new List<(uint, long, long, long, long, long, long, long, long)>();
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count) return captures;
+
+        var slide = p.Slides[slideIndex];
+        foreach (var cmd in ConnectorRouter.BuildRerouteCommands(p, slideIndex, movedShapeId))
+        {
+            // Find the connector and capture old bounds before applying.
+            var c = slide.Shapes.FirstOrDefault(sh => sh.Id == cmd.ConnectorId);
+            if (c is null) continue;
+            long ox = c.OffsetXEmu, oy = c.OffsetYEmu, ocx = c.ExtentCxEmu, ocy = c.ExtentCyEmu;
+            cmd.Apply(p);
+            captures.Add((cmd.ConnectorId, ox, oy, ocx, ocy, cmd.NewX, cmd.NewY, cmd.NewCx, cmd.NewCy));
+        }
+        return captures;
+    }
+
+    internal static void RevertReroute(
+        Presentation p, int slideIndex,
+        List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>? captures)
+    {
+        if (captures is null || slideIndex < 0 || slideIndex >= p.Slides.Count) return;
+        var slide = p.Slides[slideIndex];
+        foreach (var (id, ox, oy, ocx, ocy, _, _, _, _) in captures)
+        {
+            var c = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            if (c is null) continue;
+            c.OffsetXEmu  = ox;
+            c.OffsetYEmu  = oy;
+            c.ExtentCxEmu = ocx;
+            c.ExtentCyEmu = ocy;
+        }
     }
 }
 
 /// <summary>
 /// Sets the absolute position and size of a shape, capturing prior values for undo.
+/// Also re-routes any connectors whose start/end is attached to the resized shape (Wave 23).
 /// </summary>
 public sealed class ResizeShapeCommand : IPresentationCommand
 {
@@ -329,6 +377,9 @@ public sealed class ResizeShapeCommand : IPresentationCommand
     private readonly long _newCx;
     private readonly long _newCy;
     private long _oldOffsetX, _oldOffsetY, _oldCx, _oldCy;
+
+    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+        _rerouteCapture;
 
     public ResizeShapeCommand(int slideIndex, uint shapeId, long newOffsetX, long newOffsetY, long newCx, long newCy)
     {
@@ -354,6 +405,8 @@ public sealed class ResizeShapeCommand : IPresentationCommand
         s.OffsetYEmu  = _newOffsetY;
         s.ExtentCxEmu = _newCx;
         s.ExtentCyEmu = _newCy;
+
+        _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
     }
 
     public void Revert(Presentation p)
@@ -364,16 +417,24 @@ public sealed class ResizeShapeCommand : IPresentationCommand
         s.OffsetYEmu  = _oldOffsetY;
         s.ExtentCxEmu = _oldCx;
         s.ExtentCyEmu = _oldCy;
+
+        MoveShapeCommand.RevertReroute(p, _slideIndex, _rerouteCapture);
     }
 }
 
-/// <summary>Sets the rotation of a shape; captures old rotation for undo.</summary>
+/// <summary>
+/// Sets the rotation of a shape; captures old rotation for undo.
+/// Also re-routes any connectors whose start/end is attached to the rotated shape (Wave 23).
+/// </summary>
 public sealed class RotateShapeCommand : IPresentationCommand
 {
     private readonly int    _slideIndex;
     private readonly uint   _shapeId;
     private readonly double _newRotationDeg;
     private double          _oldRotationDeg;
+
+    private List<(uint id, long ox, long oy, long ocx, long ocy, long nx, long ny, long ncx, long ncy)>?
+        _rerouteCapture;
 
     public RotateShapeCommand(int slideIndex, uint shapeId, double newRotationDeg)
     {
@@ -390,6 +451,8 @@ public sealed class RotateShapeCommand : IPresentationCommand
         if (s is null) return;
         _oldRotationDeg = s.RotationDeg;
         s.RotationDeg   = _newRotationDeg;
+
+        _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
     }
 
     public void Revert(Presentation p)
@@ -397,6 +460,8 @@ public sealed class RotateShapeCommand : IPresentationCommand
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
         s.RotationDeg = _oldRotationDeg;
+
+        MoveShapeCommand.RevertReroute(p, _slideIndex, _rerouteCapture);
     }
 }
 
