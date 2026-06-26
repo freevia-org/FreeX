@@ -441,6 +441,12 @@ public sealed partial class MainWindow
             // The highlight format only applies to the non-visual rule families.
             highlightField.IsVisible = ruleType
                 is not (CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale);
+            // The preset ("Format Style") selector only belongs to the visual "format all cells
+            // based on their values" family — Excel shows no preset row for Cell Value / text /
+            // rank / formula rules (those use the explicit Format picker instead). Gating it here
+            // removes the stray empty Preset dropdown that otherwise showed for every rule type.
+            presetField.IsVisible = ruleType
+                is CfRuleType.IconSet or CfRuleType.DataBar or CfRuleType.ColorScale;
             errorText.IsVisible = false;
         }
 
