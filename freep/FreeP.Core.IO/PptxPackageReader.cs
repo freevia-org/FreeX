@@ -446,7 +446,7 @@ public static class PptxPackageReader
 
         var scheme = theme?.ColorScheme ?? PresentationColorScheme.CreateDefault();
 
-        var bg = xml.Root.Element(P + "bg");
+        var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
         if (bg is not null) master.Background = ReadBackground(bg, scheme);
 
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
@@ -569,7 +569,7 @@ public static class PptxPackageReader
         layout.Name = xml.Root.Element(P + "cSld")?.Attribute("name")?.Value ?? string.Empty;
         layout.LayoutType = MapLayoutType(xml.Root.Attribute("type")?.Value);
 
-        var bg = xml.Root.Element(P + "bg");
+        var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
         if (bg is not null) layout.Background = ReadBackground(bg, scheme);
 
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
@@ -606,7 +606,7 @@ public static class PptxPackageReader
             slide.LayoutId = MatchLayoutIdByPath(layoutPath, layouts);
         }
 
-        var bg = xml.Root.Element(P + "bg");
+        var bg = xml.Root.Element(P + "cSld")?.Element(P + "bg");
         if (bg is not null) slide.Background = ReadBackground(bg, scheme);
 
         var slideDir = GetDirectory(slidePath);
@@ -2110,6 +2110,18 @@ public static class PptxPackageReader
             if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = bi / 12700.0;
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             body.AutoFit = bodyPr.Element(A + "normAutofit") is not null || bodyPr.Element(A + "spAutoFit") is not null;
+
+            // Wave 18B: text vertical orientation (a:bodyPr vert=)
+            body.VerticalType = bodyPr.Attribute("vert")?.Value switch
+            {
+                "vert"           => TextVerticalType.Vertical,
+                "vert270"        => TextVerticalType.Vertical270,
+                "eaVert"         => TextVerticalType.EastAsianVertical,
+                "wordArtVert"    => TextVerticalType.WordArtVertical,
+                "wordArtVertRtl" => TextVerticalType.WordArtVerticalRtl,
+                _                => TextVerticalType.Horizontal
+            };
+
             // Wave 16A: warp preset + adjust guides (BA4)
             var prstTxWarp = bodyPr.Element(A + "prstTxWarp");
             if (prstTxWarp is not null)
@@ -2200,6 +2212,24 @@ public static class PptxPackageReader
             var spcAft = pPr.Element(A + "spcAft")?.Element(A + "spcPts")?.Attribute("val")?.Value;
             if (!string.IsNullOrWhiteSpace(spcAft) && int.TryParse(spcAft, out var sa))
                 para.SpaceAfterPt = sa / 100.0;
+
+            // Wave 18B: tab stop list (a:tabLst)
+            var tabLst = pPr.Element(A + "tabLst");
+            if (tabLst is not null)
+            {
+                foreach (var tabEl in tabLst.Elements(A + "tab"))
+                {
+                    if (!long.TryParse(tabEl.Attribute("pos")?.Value, out var tabPos)) continue;
+                    var tabAlgn = tabEl.Attribute("algn")?.Value switch
+                    {
+                        "ctr"  => TabStopAlignment.Center,
+                        "r"    => TabStopAlignment.Right,
+                        "dec"  => TabStopAlignment.Decimal,
+                        _      => TabStopAlignment.Left
+                    };
+                    para.TabStops.Add(new TabStop { PositionEmu = tabPos, Alignment = tabAlgn });
+                }
+            }
         }
 
         foreach (var child in pEl.Elements())
@@ -2789,8 +2819,32 @@ public static class PptxPackageReader
 
     private static ShapeFill? ReadBackground(XElement bg, PresentationColorScheme scheme)
     {
+        // p:bgPr — explicit fill (solid/gradient/blip/pattern).
         var bgPr = bg.Element(P + "bgPr");
-        return bgPr is not null ? PptxColorReader.TryReadFill(bgPr, scheme) : null;
+        if (bgPr is not null)
+            return PptxColorReader.TryReadFill(bgPr, scheme);
+
+        // Wave 18B: p:bgRef — reference to a theme background-fill style.
+        // The idx attribute maps to theme fill-style-list entries (1001+ = background fills).
+        // We approximate it: read the color child (schemeClr or srgbClr) and return a solid fill.
+        var bgRef = bg.Element(P + "bgRef");
+        if (bgRef is not null)
+        {
+            var tac = PptxColorReader.TryReadColor(bgRef, scheme);
+            if (tac is not null)
+                return new ShapeFill.Solid(tac);
+            // No explicit color — use idx to approximate: idx 1001 = bg1, 1002+ = accent shades.
+            if (int.TryParse(bgRef.Attribute("idx")?.Value, out var idx))
+            {
+                // Approximate: use the theme background color (dk1 for odd indices, lt1 otherwise).
+                var approxColor = (idx % 2 == 0)
+                    ? scheme[ThemeColorSlot.Lt1]
+                    : scheme[ThemeColorSlot.Dk1];
+                return new ShapeFill.Solid(new ThemeAwareColor(approxColor));
+            }
+        }
+
+        return null;
     }
 
     // ── Placeholder ───────────────────────────────────────────────────────────────

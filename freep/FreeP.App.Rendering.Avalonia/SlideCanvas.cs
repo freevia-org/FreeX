@@ -1151,6 +1151,36 @@ public sealed class SlideCanvas : Control
 
     private static void RenderText(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
+        // Wave 18B: vertical text — rotate the text block around the shape center.
+        bool isVertical = text.VerticalType is TextVerticalType.Vertical
+                                            or TextVerticalType.EastAsianVertical
+                                            or TextVerticalType.WordArtVertical
+                                            or TextVerticalType.WordArtVerticalRtl;
+        bool isVert270  = text.VerticalType == TextVerticalType.Vertical270;
+
+        if (isVertical || isVert270)
+        {
+            double cx = bounds.X + bounds.Width  * 0.5;
+            double cy = bounds.Y + bounds.Height * 0.5;
+            double rad = isVert270 ? -Math.PI / 2.0 : Math.PI / 2.0;
+            using var rotScope = dc.PushTransform(
+                Matrix.CreateTranslation(-cx, -cy)
+                * Matrix.CreateRotation(rad)
+                * Matrix.CreateTranslation(cx, cy));
+            var rotatedBounds = new LayoutRect(
+                bounds.X + (bounds.Width - bounds.Height) * 0.5,
+                bounds.Y + (bounds.Height - bounds.Width) * 0.5,
+                bounds.Height,
+                bounds.Width);
+            RenderTextCore(dc, text, rotatedBounds);
+            return;
+        }
+
+        RenderTextCore(dc, text, bounds);
+    }
+
+    private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
+    {
         double insetLeft   = text.InsetLeftDip;
         double insetTop    = text.InsetTopDip;
         double insetRight  = text.InsetRightDip;
@@ -1190,9 +1220,17 @@ public sealed class SlideCanvas : Control
             // ones with the appropriate transforms). This prevents each effect/warp run being drawn
             // twice (flat ghost from DrawText + warped/overlaid copy from RenderParaWithEffects).
             bool hasEffects = ParaHasTextEffects(para) || text.WarpPreset is not null;
+
+            // Wave 18B: when the paragraph has explicit tab stops, render run-by-run.
+            bool hasTabs = para.TabStops.Count > 0 && para.Runs.Any(r => r.Text.Contains('\t'));
+
             if (hasEffects)
             {
                 RenderParaWithEffects(dc, para, textX, curY, bounds, text.WarpPreset);
+            }
+            else if (hasTabs)
+            {
+                RenderParaWithTabs(dc, para, textX, curY, para.TabStops);
             }
             else
             {
@@ -1202,6 +1240,71 @@ public sealed class SlideCanvas : Control
             curY += ft.Height + spaceAfterDip;
             paraIdx++;
         }
+    }
+
+    /// <summary>
+    /// Renders a paragraph run-by-run, expanding tab characters to the next tab stop position.
+    /// Default tab interval is 96 DIP (1 inch at 96 DPI) when tab stops are exhausted.
+    /// </summary>
+    private static void RenderParaWithTabs(
+        DrawingContext dc,
+        ResolvedParagraph para,
+        double startX,
+        double startY,
+        IReadOnlyList<ResolvedTabStop> tabStops)
+    {
+        const double DefaultTabDip = 96.0;
+        double curX = startX;
+
+        foreach (var run in para.Runs)
+        {
+            if (run.Text.Length == 0) continue;
+
+            var segments = run.Text.Split('\t');
+            for (int si = 0; si < segments.Length; si++)
+            {
+                var seg = segments[si];
+                if (seg.Length > 0)
+                {
+                    var segFt = BuildSingleRunFormattedTextAt(run, seg);
+                    dc.DrawText(segFt, new Point(curX, startY));
+                    curX += segFt.Width;
+                }
+
+                if (si < segments.Length - 1)
+                {
+                    double relX = curX - startX;
+                    double nextStop = DefaultTabDip;
+                    bool found = false;
+                    foreach (var ts in tabStops)
+                    {
+                        if (ts.PositionDip > relX + 0.5) { nextStop = ts.PositionDip; found = true; break; }
+                    }
+                    if (!found)
+                        nextStop = Math.Floor(relX / DefaultTabDip + 1.0) * DefaultTabDip;
+                    curX = startX + nextStop;
+                }
+            }
+        }
+    }
+
+    private static FormattedText BuildSingleRunFormattedTextAt(ResolvedRun run, string text)
+    {
+        string txt = text.Length == 0 ? " " : text;
+        var typeface = new Typeface(
+            run.FontFamily,
+            run.Italic ? FontStyle.Italic : FontStyle.Normal,
+            run.Bold   ? FontWeight.Bold  : FontWeight.Normal,
+            FontStretch.Normal);
+        double emPx = run.FontSizePt * (96.0 / 72.0);
+        var brush = new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B));
+        var ft = new FormattedText(txt,
+            System.Globalization.CultureInfo.CurrentUICulture,
+            FlowDirection.LeftToRight,
+            typeface, emPx, brush);
+        if (run.Underline)     ft.SetTextDecorations(TextDecorations.Underline, 0, txt.Length);
+        if (run.Strikethrough) ft.SetTextDecorations(TextDecorations.Strikethrough, 0, txt.Length);
+        return ft;
     }
 
     private static FormattedText BuildFormattedText(ResolvedParagraph para, double maxWidth, bool wrap)

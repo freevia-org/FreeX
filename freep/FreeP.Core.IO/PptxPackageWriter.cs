@@ -1207,18 +1207,27 @@ public static class PptxPackageWriter
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 new XAttribute("type", ToLayoutTypeStr(layout.LayoutType)),
                 new XAttribute("preserve", "1"),
-                layout.Name is { Length: > 0 }
-                    ? new XElement(P + "cSld",
-                        new XAttribute("name", layout.Name),
-                        new XElement(P + "spTree",
-                            GrpSpHeader(),
-                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>()))
-                    : new XElement(P + "cSld",
-                        new XElement(P + "spTree",
-                            GrpSpHeader(),
-                            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>())),
+                BuildLayoutCSlotEl(layout, scheme),
                 new XElement(P + "clrMapOvr",
                     new XElement(A + "masterClrMapping"))));
+
+    private static XElement BuildLayoutCSlotEl(SlideLayout layout, PresentationColorScheme scheme)
+    {
+        XElement? bgEl = layout.Background is not null
+            ? new XElement(P + "bg",
+                new XElement(P + "bgPr",
+                    BuildFillEl(layout.Background, scheme),
+                    new XElement(A + "effectLst")))
+            : null;
+
+        var spTree = new XElement(P + "spTree",
+            GrpSpHeader(),
+            layout.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>());
+
+        return layout.Name is { Length: > 0 }
+            ? new XElement(P + "cSld", new XAttribute("name", layout.Name), bgEl, spTree)
+            : new XElement(P + "cSld", bgEl, spTree);
+    }
 
     // ── slideMaster.xml ──────────────────────────────────────────────────────────
 
@@ -2293,6 +2302,21 @@ public static class PptxPackageWriter
             }));
         }
 
+        // Wave 18B: text vertical orientation (a:bodyPr vert=)
+        if (body.VerticalType != TextVerticalType.Horizontal)
+        {
+            var vertStr = body.VerticalType switch
+            {
+                TextVerticalType.Vertical           => "vert",
+                TextVerticalType.Vertical270        => "vert270",
+                TextVerticalType.EastAsianVertical  => "eaVert",
+                TextVerticalType.WordArtVertical    => "wordArtVert",
+                TextVerticalType.WordArtVerticalRtl => "wordArtVertRtl",
+                _                                   => "horz"
+            };
+            bodyPr.Add(new XAttribute("vert", vertStr));
+        }
+
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
         if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", (long)Math.Round(body.InsetLeftPt.Value * 12700)));
         if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", (long)Math.Round(body.InsetRightPt.Value * 12700)));
@@ -2362,6 +2386,27 @@ public static class PptxPackageWriter
         {
             pPr.Add(new XElement(A + "spcAft",
                 new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceAfterPt.Value * 100)))));
+            hasPPr = true;
+        }
+
+        // Wave 18B: tab stops (a:tabLst)
+        if (para.TabStops.Count > 0)
+        {
+            var tabLst = new XElement(A + "tabLst");
+            foreach (var tab in para.TabStops)
+            {
+                var algn = tab.Alignment switch
+                {
+                    TabStopAlignment.Center  => "ctr",
+                    TabStopAlignment.Right   => "r",
+                    TabStopAlignment.Decimal => "dec",
+                    _                        => "l"
+                };
+                tabLst.Add(new XElement(A + "tab",
+                    new XAttribute("pos", tab.PositionEmu),
+                    new XAttribute("algn", algn)));
+            }
+            pPr.Add(tabLst);
             hasPPr = true;
         }
 

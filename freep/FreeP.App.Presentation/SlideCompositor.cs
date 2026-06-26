@@ -1038,6 +1038,15 @@ public static class SlideCompositor
                 });
             }
 
+            // Wave 18B: resolve tab stops (EMU → DIP)
+            IReadOnlyList<ResolvedTabStop> resolvedTabStops = para.TabStops.Count > 0
+                ? para.TabStops.Select(t => new ResolvedTabStop
+                    {
+                        PositionDip = t.PositionEmu / EmuPerDip,
+                        Alignment   = t.Alignment
+                    }).ToList()
+                : Array.Empty<ResolvedTabStop>();
+
             resolvedParas.Add(new ResolvedParagraph
             {
                 Runs = resolvedRuns,
@@ -1047,7 +1056,8 @@ public static class SlideCompositor
                 BulletKind = para.BulletKind,
                 BulletChar = para.BulletChar,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
-                SpaceAfterPt = para.SpaceAfterPt ?? 0
+                SpaceAfterPt = para.SpaceAfterPt ?? 0,
+                TabStops = resolvedTabStops,  // Wave 18B
             });
         }
 
@@ -1062,6 +1072,7 @@ public static class SlideCompositor
             InsetBottomDip = body.InsetBottomPt.HasValue ? PointsToDip(body.InsetBottomPt.Value) : DefaultInsetVertDip,
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
+            VerticalType = body.VerticalType,  // Wave 18B
         };
     }
 
