@@ -682,10 +682,12 @@ public sealed class SlideCanvas : Control
 
         double titleAreaH = chart.Title is not null ? titleH + margin : 0;
         bool   hasLegend  = chart.Legend.HasValue;
-        bool   isPie      = chart.ChartType == ChartType.Pie;
+        bool   isPie      = chart.ChartType is ChartType.Pie or ChartType.Doughnut;
         bool   isBar      = chart.ChartType is ChartType.BarClustered
                                             or ChartType.BarStacked
                                             or ChartType.BarStacked100;
+        bool   isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
+        bool   isRadar    = chart.ChartType == ChartType.Radar;
 
         if (chart.Title is not null)
             DrawChartLabel(dc, chart.Title,
@@ -700,16 +702,16 @@ public sealed class SlideCanvas : Control
             else             legendAreaH = legendH + margin;
         }
 
-        double plotLeft   = bounds.X + margin + (isPie ? 0 : (isBar ? barCatLabelW : axisLabelW));
+        double plotLeft   = bounds.X + margin + (isPie || isRadar || isScatterLike ? 0 : (isBar ? barCatLabelW : axisLabelW));
         double plotTop    = bounds.Y + margin + titleAreaH;
         double plotRight  = bounds.X + bounds.Width  - margin - legendAreaW;
         double plotBottom = bounds.Y + bounds.Height - margin - legendAreaH
-                                     - (isPie ? 0 : (isBar ? axisLabelW : catLabelH));
+                                     - (isPie || isRadar || isScatterLike ? 0 : (isBar ? axisLabelW : catLabelH));
         double plotW      = plotRight  - plotLeft;
         double plotH      = plotBottom - plotTop;
         if (plotW <= 0 || plotH <= 0) return;
 
-        if (!isPie && chart.ValueAxis.HasMajorGridlines)
+        if (!isPie && !isRadar && !isScatterLike && chart.ValueAxis.HasMajorGridlines)
         {
             var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
             var (minG, maxG, muG) = ComputeNiceAxisRange(chart);
@@ -752,9 +754,21 @@ public sealed class SlideCanvas : Control
             case ChartType.Pie:
                 RenderPieChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
                 break;
+            case ChartType.Doughnut:
+                RenderDoughnutChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+                break;
             case ChartType.Area:
             case ChartType.AreaStacked:
                 RenderAreaChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+                break;
+            case ChartType.Scatter:
+                RenderScatterChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+                break;
+            case ChartType.Bubble:
+                RenderBubbleChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+                break;
+            case ChartType.Radar:
+                RenderRadarChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
                 break;
             default:
                 dc.FillRectangle(new SolidColorBrush(Color.FromArgb(30, 0, 0, 0)),
@@ -762,7 +776,7 @@ public sealed class SlideCanvas : Control
                 break;
         }
 
-        if (!isPie && chart.Categories.Count > 0)
+        if (!isPie && !isRadar && !isScatterLike && chart.Categories.Count > 0)
         {
             if (isBar)
             {
@@ -790,7 +804,7 @@ public sealed class SlideCanvas : Control
             }
         }
 
-        if (!isPie)
+        if (!isPie && !isRadar && !isScatterLike)
         {
             var (minV, maxV, mu) = ComputeNiceAxisRange(chart);
             double stepsV = (maxV - minV) / mu;
@@ -1078,6 +1092,291 @@ public sealed class SlideCanvas : Control
         }
     }
 
+    // ── Doughnut chart ───────────────────────────────────────────────────────
+
+    private static void RenderDoughnutChart(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        if (chart.Series.Count == 0) return;
+
+        double cx  = plotX + plotW / 2;
+        double cy  = plotY + plotH / 2;
+        double rOut = Math.Min(plotW, plotH) / 2 * 0.85;
+        double rIn  = rOut * Math.Clamp(chart.DoughnutHolePercent, 0, 90) / 100.0;
+
+        var borderPen = new Pen(Brushes.White, 0.8);
+        int serCount  = chart.Series.Count;
+        double ringGap = serCount > 1 ? rOut * 0.04 : 0;
+        double ringW   = serCount > 1 ? (rOut - rIn - (serCount - 1) * ringGap) / serCount : (rOut - rIn);
+
+        for (int si = 0; si < serCount; si++)
+        {
+            var series = chart.Series[si];
+            var values = series.Values.Where(v => v.HasValue && v.Value > 0).Select(v => v!.Value).ToList();
+            if (values.Count == 0) continue;
+            double total = values.Sum();
+            if (total <= 0) continue;
+
+            double outerR = rOut - si * (ringW + ringGap);
+            double innerR = Math.Max(0, outerR - ringW);
+            double startAngle = -Math.PI / 2;
+
+            for (int pi = 0; pi < values.Count; pi++)
+            {
+                double sweepAngle = values[pi] / total * 2 * Math.PI;
+                double endAngle   = startAngle + sweepAngle;
+                SrgbColor sc = pi < seriesColors.Count ? seriesColors[pi] : GetSeriesColor(chart, pi, 0, seriesColors);
+                var brush = new SolidColorBrush(Color.FromRgb(sc.R, sc.G, sc.B));
+                bool largeArc = sweepAngle > Math.PI;
+
+                var outerStart = new Point(cx + outerR * Math.Cos(startAngle), cy + outerR * Math.Sin(startAngle));
+                var outerEnd   = new Point(cx + outerR * Math.Cos(endAngle),   cy + outerR * Math.Sin(endAngle));
+                var innerEnd   = new Point(cx + innerR * Math.Cos(endAngle),   cy + innerR * Math.Sin(endAngle));
+                var innerStart = new Point(cx + innerR * Math.Cos(startAngle), cy + innerR * Math.Sin(startAngle));
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(outerStart, isFilled: true);
+                    ctx.ArcTo(outerEnd, new Size(outerR, outerR), 0, largeArc, SweepDirection.Clockwise);
+                    ctx.LineTo(innerEnd);
+                    ctx.ArcTo(innerStart, new Size(innerR, innerR), 0, largeArc, SweepDirection.CounterClockwise);
+                    ctx.EndFigure(isClosed: true);
+                }
+                dc.DrawGeometry(brush, borderPen, geo);
+                startAngle = endAngle;
+            }
+        }
+    }
+
+    // ── Scatter chart ────────────────────────────────────────────────────────
+
+    private static void RenderScatterChart(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        if (chart.Series.Count == 0) return;
+        var (xMin, xMax, xUnit) = ComputeNiceScatterAxisRange(chart, useX: true);
+        var (yMin, yMax, yUnit) = ComputeNiceAxisRange(chart);
+        double xRange = xMax - xMin; double yRange = yMax - yMin;
+        if (xRange <= 0 || yRange <= 0) return;
+
+        bool drawLines   = chart.ScatterStyle is ScatterStyle.Line or ScatterStyle.LineMarker
+                                               or ScatterStyle.Smooth or ScatterStyle.SmoothMarker;
+        bool drawMarkers = chart.ScatterStyle is ScatterStyle.Marker or ScatterStyle.LineMarker
+                                               or ScatterStyle.SmoothMarker;
+        if (!drawLines && !drawMarkers) drawMarkers = true;
+
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
+        double xSteps = xRange / xUnit, ySteps = yRange / yUnit;
+        for (int gi = 0; gi <= (int)Math.Round(xSteps); gi++)
+        {
+            double gx = plotX + plotW * gi / xSteps;
+            dc.DrawLine(gridPen, new Point(gx, plotY), new Point(gx, plotY + plotH));
+        }
+        for (int gi = 0; gi <= (int)Math.Round(ySteps); gi++)
+        {
+            double gy = plotY + plotH - plotH * gi / ySteps;
+            dc.DrawLine(gridPen, new Point(plotX, gy), new Point(plotX + plotW, gy));
+        }
+
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            var series = chart.Series[si];
+            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var pen    = drawLines ? new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5) : null;
+            int ptCount = Math.Max(series.XValues.Count, series.Values.Count);
+            Point? prev = null;
+            for (int pi = 0; pi < ptCount; pi++)
+            {
+                double? xv = pi < series.XValues.Count ? series.XValues[pi] : null;
+                double? yv = pi < series.Values.Count  ? series.Values[pi]  : null;
+                if (!xv.HasValue || !yv.HasValue) { prev = null; continue; }
+                double px = plotX + (xv.Value - xMin) / xRange * plotW;
+                double py = plotY + plotH - (yv.Value - yMin) / yRange * plotH;
+                var pt = new Point(px, py);
+                if (drawLines && pen is not null && prev.HasValue) dc.DrawLine(pen, prev.Value, pt);
+                if (drawMarkers) dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), null, pt, 3.5, 3.5);
+                prev = pt;
+            }
+        }
+
+        for (int ti = 0; ti <= (int)Math.Round(xSteps); ti++)
+        {
+            double val = xMin + xUnit * ti;
+            double vx  = plotX + plotW * ti / xSteps;
+            DrawChartLabel(dc, FormatAxisValue(val), new Rect(vx - 20, plotY + plotH + 2, 40, 12), false, 6.5, TextAlignment.Center);
+        }
+        for (int ti = 0; ti <= (int)Math.Round(ySteps); ti++)
+        {
+            double val = yMin + yUnit * ti;
+            double vy  = plotY + plotH - plotH * ti / ySteps;
+            DrawChartLabel(dc, FormatAxisValue(val), new Rect(plotX - 38, vy - 6, 36, 12), false, 6.5, TextAlignment.Right);
+        }
+    }
+
+    // ── Bubble chart ─────────────────────────────────────────────────────────
+
+    private static void RenderBubbleChart(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        if (chart.Series.Count == 0) return;
+        var (xMin, xMax, xUnit) = ComputeNiceScatterAxisRange(chart, useX: true);
+        var (yMin, yMax, yUnit) = ComputeNiceAxisRange(chart);
+        double xRange = xMax - xMin; double yRange = yMax - yMin;
+        if (xRange <= 0 || yRange <= 0) return;
+
+        double maxBubble = 0;
+        foreach (var s in chart.Series) foreach (var bv in s.BubbleSizes) if (bv.HasValue) maxBubble = Math.Max(maxBubble, bv.Value);
+        if (maxBubble <= 0) maxBubble = 1;
+        double maxBubbleRadius = Math.Min(plotW, plotH) / 8.0;
+
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
+        double xSteps = xRange / xUnit, ySteps = yRange / yUnit;
+        for (int gi = 0; gi <= (int)Math.Round(xSteps); gi++)
+        {
+            double gx = plotX + plotW * gi / xSteps;
+            dc.DrawLine(gridPen, new Point(gx, plotY), new Point(gx, plotY + plotH));
+        }
+        for (int gi = 0; gi <= (int)Math.Round(ySteps); gi++)
+        {
+            double gy = plotY + plotH - plotH * gi / ySteps;
+            dc.DrawLine(gridPen, new Point(plotX, gy), new Point(plotX + plotW, gy));
+        }
+
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            var series = chart.Series[si];
+            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var brush  = new SolidColorBrush(Color.FromArgb(180, color.R, color.G, color.B));
+            var outlinePen = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 0.8);
+            int ptCount = Math.Max(series.XValues.Count, series.Values.Count);
+            for (int pi = 0; pi < ptCount; pi++)
+            {
+                double? xv = pi < series.XValues.Count    ? series.XValues[pi]    : null;
+                double? yv = pi < series.Values.Count      ? series.Values[pi]     : null;
+                double? bv = pi < series.BubbleSizes.Count ? series.BubbleSizes[pi]: null;
+                if (!xv.HasValue || !yv.HasValue) continue;
+                double px = plotX + (xv.Value - xMin) / xRange * plotW;
+                double py = plotY + plotH - (yv.Value - yMin) / yRange * plotH;
+                double r  = bv.HasValue ? Math.Sqrt(bv.Value / maxBubble) * maxBubbleRadius : maxBubbleRadius * 0.3;
+                r = Math.Max(2, r);
+                dc.DrawEllipse(brush, outlinePen, new Point(px, py), r, r);
+            }
+        }
+
+        for (int ti = 0; ti <= (int)Math.Round(xSteps); ti++)
+        {
+            double val = xMin + xUnit * ti;
+            double vx  = plotX + plotW * ti / xSteps;
+            DrawChartLabel(dc, FormatAxisValue(val), new Rect(vx - 20, plotY + plotH + 2, 40, 12), false, 6.5, TextAlignment.Center);
+        }
+        for (int ti = 0; ti <= (int)Math.Round(ySteps); ti++)
+        {
+            double val = yMin + yUnit * ti;
+            double vy  = plotY + plotH - plotH * ti / ySteps;
+            DrawChartLabel(dc, FormatAxisValue(val), new Rect(plotX - 38, vy - 6, 36, 12), false, 6.5, TextAlignment.Right);
+        }
+    }
+
+    // ── Radar chart ──────────────────────────────────────────────────────────
+
+    private static void RenderRadarChart(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        if (chart.Series.Count == 0) return;
+        int catCount = Math.Max(3, chart.Categories.Count > 0 ? chart.Categories.Count
+            : (chart.Series[0].Values.Count > 0 ? chart.Series[0].Values.Count : 3));
+        double cx = plotX + plotW / 2;
+        double cy = plotY + plotH / 2;
+        double r  = Math.Min(plotW, plotH) / 2 * 0.75;
+
+        double dataMax = 0;
+        foreach (var s in chart.Series) foreach (var v in s.Values) if (v.HasValue) dataMax = Math.Max(dataMax, Math.Abs(v.Value));
+        if (dataMax <= 0) dataMax = 1;
+
+        // Gridline rings
+        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)), 0.5);
+        for (int ring = 1; ring <= 4; ring++)
+        {
+            double ringR = r * ring / 4;
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                for (int ci = 0; ci < catCount; ci++)
+                {
+                    double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
+                    var pt = new Point(cx + ringR * Math.Cos(angle), cy + ringR * Math.Sin(angle));
+                    if (ci == 0) ctx.BeginFigure(pt, isFilled: false);
+                    else         ctx.LineTo(pt);
+                }
+                ctx.EndFigure(isClosed: true);
+            }
+            dc.DrawGeometry(null, gridPen, geo);
+        }
+
+        // Spokes
+        var spokePen = new Pen(new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)), 0.5);
+        for (int ci = 0; ci < catCount; ci++)
+        {
+            double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
+            dc.DrawLine(spokePen, new Point(cx, cy),
+                new Point(cx + r * Math.Cos(angle), cy + r * Math.Sin(angle)));
+        }
+
+        // Category labels
+        for (int ci = 0; ci < chart.Categories.Count && ci < catCount; ci++)
+        {
+            double angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
+            double lx = cx + (r + 6) * Math.Cos(angle);
+            double ly = cy + (r + 6) * Math.Sin(angle);
+            DrawChartLabel(dc, chart.Categories[ci], new Rect(lx - 20, ly - 6, 40, 12), false, 6.5, TextAlignment.Center);
+        }
+
+        bool withMarkers = chart.RadarStyle == RadarStyle.Marker;
+        bool filled      = chart.RadarStyle == RadarStyle.Filled;
+
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            var series = chart.Series[si];
+            var color  = GetSeriesColor(chart, si, 0, seriesColors);
+            var pen    = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5);
+            IBrush? fillBrush = filled ? new SolidColorBrush(Color.FromArgb(80, color.R, color.G, color.B)) : null;
+
+            var polyGeo = new StreamGeometry();
+            using (var ctx = polyGeo.Open())
+            {
+                for (int ci = 0; ci < catCount; ci++)
+                {
+                    double? v = ci < series.Values.Count ? series.Values[ci] : null;
+                    double  frac = Math.Clamp((v ?? 0) / dataMax, 0, 1);
+                    double  angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
+                    var pt = new Point(cx + r * frac * Math.Cos(angle), cy + r * frac * Math.Sin(angle));
+                    if (ci == 0) ctx.BeginFigure(pt, isFilled: filled);
+                    else         ctx.LineTo(pt);
+                }
+                ctx.EndFigure(isClosed: true);
+            }
+            dc.DrawGeometry(fillBrush, pen, polyGeo);
+
+            if (withMarkers)
+            {
+                var markerBrush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+                for (int ci = 0; ci < catCount; ci++)
+                {
+                    double? v = ci < series.Values.Count ? series.Values[ci] : null;
+                    double  frac = Math.Clamp((v ?? 0) / dataMax, 0, 1);
+                    double  angle = -Math.PI / 2 + 2 * Math.PI * ci / catCount;
+                    dc.DrawEllipse(markerBrush, null,
+                        new Point(cx + r * frac * Math.Cos(angle), cy + r * frac * Math.Sin(angle)), 3, 3);
+                }
+            }
+        }
+    }
+
     // ── Chart helpers ────────────────────────────────────────────────────────
 
     private static SrgbColor GetSeriesColor(ChartShape chart, int si, int ci, IReadOnlyList<SrgbColor> colors)
@@ -1108,6 +1407,32 @@ public sealed class SlideCanvas : Control
         double norm    = rawUnit / mag;
         double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
         double mu      = niceMult * mag;
+        double niceMax = Math.Ceiling(max / mu) * mu;
+        double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
+        if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
+        return (niceMin, niceMax, mu);
+    }
+
+    internal static (double min, double max, double majorUnit) ComputeNiceScatterAxisRange(
+        ChartShape chart, bool useX)
+    {
+        double dataMin = 0, dataMax = 0;
+        foreach (var series in chart.Series)
+        {
+            var list = useX ? series.XValues : series.Values;
+            foreach (var v in list)
+                if (v.HasValue) { dataMin = Math.Min(dataMin, v.Value); dataMax = Math.Max(dataMax, v.Value); }
+        }
+        double min = dataMin >= 0 ? 0 : dataMin;
+        double max = dataMax;
+        if (max <= min) max = min + 1;
+        double range = max - min;
+        double rawUnit = range / 4.0;
+        if (rawUnit <= 0) rawUnit = 1;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawUnit)));
+        double norm = rawUnit / magnitude;
+        double niceMult = norm switch { < 1.5 => 1.0, < 2.25 => 2.0, < 3.75 => 2.5, < 7.5 => 5.0, _ => 10.0 };
+        double mu = niceMult * magnitude;
         double niceMax = Math.Ceiling(max / mu) * mu;
         double niceMin = min >= 0 ? 0 : Math.Floor(min / mu) * mu;
         if (Math.Abs(niceMax - max) < mu * 1e-9) niceMax += mu;
