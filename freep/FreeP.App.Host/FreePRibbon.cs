@@ -56,13 +56,15 @@ internal static class FreePRibbon
                     g.Medium("freep.insert-table-4x4", "4×4", RibbonCommandIconKind.Table, "4");
                     // NOTE: interactive row/col picker (hover-grid) is deferred to a later wave.
                 });
-                // Wave 5B: Charts group.
+                // Wave 5B: Charts group (9B: "Edit Data" button added).
                 tab.Group("charts", "Charts", "H", 93, g =>
                 {
-                    g.Medium("freep.insert-chart-column", "Column", RibbonCommandIconKind.ChartColumn, "C");
-                    g.Medium("freep.insert-chart-bar",    "Bar",    RibbonCommandIconKind.ChartColumn, "B");
-                    g.Medium("freep.insert-chart-line",   "Line",   RibbonCommandIconKind.ChartLine,   "L");
-                    g.Medium("freep.insert-chart-pie",    "Pie",    RibbonCommandIconKind.ChartPie,    "P");
+                    g.Medium("freep.insert-chart-column", "Column",    RibbonCommandIconKind.ChartColumn, "C");
+                    g.Medium("freep.insert-chart-bar",    "Bar",       RibbonCommandIconKind.ChartColumn, "B");
+                    g.Medium("freep.insert-chart-line",   "Line",      RibbonCommandIconKind.ChartLine,   "L");
+                    g.Medium("freep.insert-chart-pie",    "Pie",       RibbonCommandIconKind.ChartPie,    "P");
+                    // Wave 9B: Edit selected chart's data via grid dialog.
+                    g.Medium("freep.chart.edit-data",     "Edit Data", RibbonCommandIconKind.ChartTitle,  "E");
                 });
                 tab.Group("illustrations", "Illustrations", "I", 90, g =>
                 {
