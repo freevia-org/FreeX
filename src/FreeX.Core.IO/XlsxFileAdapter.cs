@@ -723,6 +723,17 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         InsertChartsheets(workbook, chartsheets, warnings);
 
+        // Load per-run rich-text into sheet.RichTextRuns (best-effort, separate XML pass).
+        try
+        {
+            packageStream.Position = 0;
+            XlsxRichRunLoader.Load(packageStream, workbook, workbookTheme, indexedColors);
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"[rich-text-runs]: {ex.Message}");
+        }
+
         ResolvePivotChartCacheBindings(workbook);
 
         // Load named ranges (best-effort; skip any we cannot map)

@@ -1,0 +1,206 @@
+using System.Globalization;
+using System.IO.Compression;
+using System.Xml.Linq;
+using FreeX.Core.Model;
+
+namespace FreeX.Core.IO;
+
+/// <summary>
+/// Reads per-run rich-text formatting from an XLSX package and populates
+/// <see cref="Sheet.RichTextRuns"/> for each sheet in the workbook.
+/// </summary>
+/// <remarks>
+/// Two sources are handled:
+/// <list type="bullet">
+///   <item>
+///     <b>Inline-string cells</b> (<c>t="inlineStr"</c>): the <c>&lt;is&gt;&lt;r&gt;…</c>
+///     elements live directly inside the worksheet XML.
+///   </item>
+///   <item>
+///     <b>Shared-string cells</b> (<c>t="s"</c>): the run formatting lives in
+///     <c>xl/sharedStrings.xml</c>; cells reference entries by zero-based index via
+///     their <c>&lt;v&gt;</c> value.
+///   </item>
+/// </list>
+/// This is a separate read-only pass over the package (not the ClosedXML object model)
+/// so it is invisible to formulas, calculations, and number-format.
+/// </remarks>
+internal static class XlsxRichRunLoader
+{
+    private const string SharedStringsPath = "xl/sharedStrings.xml";
+    private static readonly XNamespace WorkbookNs =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly XNamespace RelNs =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace PackageRelNs =
+        "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    /// <summary>
+    /// Loads rich-text runs from <paramref name="xlsxStream"/> and writes them into
+    /// the matching <see cref="Sheet.RichTextRuns"/> dictionaries of <paramref name="workbook"/>.
+    /// No-ops silently if the archive has no shared-string or no inline-string rich text.
+    /// </summary>
+    public static void Load(
+        Stream xlsxStream,
+        Workbook workbook,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
+    {
+        xlsxStream.Position = 0;
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+
+            // 1. Build SST rich-run map (index → runs | null).
+            var sstRuns = LoadSstRichRuns(archive, theme, indexedColors);
+
+            // 2. Resolve worksheet → sheet, then scan each worksheet XML.
+            var sheetByPath = BuildSheetPathMap(archive, workbook);
+
+            foreach (var (worksheetPath, sheet) in sheetByPath)
+                LoadWorksheetRichRuns(archive, worksheetPath, sheet, sstRuns, theme, indexedColors);
+        }
+        catch
+        {
+            // Rich-text load is best-effort: any failure leaves RichTextRuns empty.
+        }
+    }
+
+    // ── SST ─────────────────────────────────────────────────────────────────
+
+    private static IReadOnlyList<IReadOnlyList<CellTextRun>?>? LoadSstRichRuns(
+        ZipArchive archive,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
+    {
+        var entry = archive.GetEntry(SharedStringsPath);
+        if (entry is null) return null;
+
+        XDocument doc;
+        using (var stream = entry.Open())
+            doc = XDocument.Load(stream);
+
+        var root = doc.Root;
+        if (root is null) return null;
+
+        var siElements = root.Elements(WorkbookNs + "si").ToList();
+        if (siElements.Count == 0) return null;
+
+        var result = new List<IReadOnlyList<CellTextRun>?>(siElements.Count);
+        var anyRich = false;
+
+        foreach (var si in siElements)
+        {
+            var runs = XlsxRichRunReader.ReadRuns(si, WorkbookNs, theme, indexedColors);
+            result.Add(runs);
+            if (runs is not null)
+                anyRich = true;
+        }
+
+        return anyRich ? result : null;
+    }
+
+    // ── Sheet path resolution ────────────────────────────────────────────────
+
+    private static Dictionary<string, Sheet> BuildSheetPathMap(ZipArchive archive, Workbook workbook)
+    {
+        var map = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
+
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry     = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null) return map;
+
+        XDocument workbookXml, relsXml;
+        using (var s = workbookEntry.Open()) workbookXml = XDocument.Load(s);
+        using (var s = relsEntry.Open())     relsXml     = XDocument.Load(s);
+
+        var relTargets = XlsxRelationshipReader.ReadTargets(
+            relsXml,
+            PackageRelNs,
+            XlsxPackagePath.NormalizeWorkbookTarget);
+
+        foreach (var sheetElement in workbookXml.Root?.Element(WorkbookNs + "sheets")
+                     ?.Elements(WorkbookNs + "sheet") ?? [])
+        {
+            var name  = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(RelNs + "id")?.Value;
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(relId)) continue;
+            if (!relTargets.TryGetValue(relId, out var path)) continue;
+
+            var sheet = workbook.GetSheet(name);
+            if (sheet is null) continue;
+
+            map[path] = sheet;
+        }
+
+        return map;
+    }
+
+    // ── Per-worksheet pass ───────────────────────────────────────────────────
+
+    private static void LoadWorksheetRichRuns(
+        ZipArchive archive,
+        string worksheetPath,
+        Sheet sheet,
+        IReadOnlyList<IReadOnlyList<CellTextRun>?>? sstRuns,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors)
+    {
+        var entry = archive.GetEntry(worksheetPath);
+        if (entry is null) return;
+
+        XDocument doc;
+        using (var s = entry.Open()) doc = XDocument.Load(s);
+
+        var sheetData = doc.Root?.Element(WorkbookNs + "sheetData");
+        if (sheetData is null) return;
+
+        var rowName  = WorkbookNs + "row";
+        var cellName = WorkbookNs + "c";
+        var isName   = WorkbookNs + "is";
+        var vName    = WorkbookNs + "v";
+
+        foreach (var rowElement in sheetData.Elements(rowName))
+        {
+            if (!uint.TryParse(rowElement.Attribute("r")?.Value,
+                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNum))
+                continue;
+
+            foreach (var cellElement in rowElement.Elements(cellName))
+            {
+                var cellRef = cellElement.Attribute("r")?.Value;
+                if (string.IsNullOrWhiteSpace(cellRef) ||
+                    !CellAddress.TryParse(cellRef, sheet.Id, out var addr))
+                    continue;
+
+                var cellType = cellElement.Attribute("t")?.Value;
+
+                if (string.Equals(cellType, "inlineStr", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Inline-string: runs live directly in <is>.
+                    var isEl = cellElement.Element(isName);
+                    if (isEl is null) continue;
+
+                    var runs = XlsxRichRunReader.ReadRuns(isEl, WorkbookNs, theme, indexedColors);
+                    if (runs is not null)
+                        sheet.RichTextRuns[addr] = runs;
+                }
+                else if (string.Equals(cellType, "s", StringComparison.OrdinalIgnoreCase) &&
+                         sstRuns is not null)
+                {
+                    // Shared-string: look up the SST index.
+                    var vEl = cellElement.Element(vName);
+                    if (vEl is null) continue;
+                    if (!int.TryParse(vEl.Value, NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out var sstIndex) ||
+                        sstIndex < 0 || sstIndex >= sstRuns.Count)
+                        continue;
+
+                    var runs = sstRuns[sstIndex];
+                    if (runs is not null)
+                        sheet.RichTextRuns[addr] = runs;
+                }
+            }
+        }
+    }
+}
