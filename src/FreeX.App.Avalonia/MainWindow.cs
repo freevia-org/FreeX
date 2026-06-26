@@ -14926,6 +14926,12 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetAutomationId(cancelButton, "SubtotalCancelButton");
         AutomationProperties.SetHelpText(cancelButton, "Close Subtotal without applying changes.");
 
+        // Use the shared white-bordered dialog button chrome (OK = blue default border) so these match
+        // every other dialog instead of rendering as the default gray Fluent buttons.
+        ApplyDialogButtonChrome(okButton, 84, isDefault: true);
+        ApplyDialogButtonChrome(removeAllButton, 96);
+        ApplyDialogButtonChrome(cancelButton, 84);
+
         void Accept()
         {
             if (groupColumnBox.SelectedItem is not SubtotalColumnChoice groupColumn ||
