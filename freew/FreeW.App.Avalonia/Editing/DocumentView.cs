@@ -518,6 +518,21 @@ public sealed class DocumentView : Control
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Sets a cell selection anchor independently of the caret — used by tests to simulate
+    /// a drag selection inside a cell without pointer events. The anchor stays at
+    /// (anchorOffset) while the caret is separately at its current position.
+    /// </summary>
+    internal void SetCellSelectionAnchorForTest(int tableBlockIndex, int row, int col, int paraIdx, int anchorOffset)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        _cellAnchor = (tableBlockIndex, row, col, paraIdx, anchorOffset);
+        // Keep _selectionAnchor non-equal to _caret so NormalizedSelection returns non-null.
+        // Use an offset that differs from _caret so the body selection detection picks it up.
+        _selectionAnchor = new DocPosition(tableBlockIndex, anchorOffset);
+    }
+
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
 
     /// <summary>
@@ -531,6 +546,18 @@ public sealed class DocumentView : Control
                 .Where(p => p.Block == blockIndex && !p.Sentinel)
                 .Select(p => (p.Ch, p.X, p.W, p.Y, p.LineHeight,
                               p.Fmt.VerticalAlign == VerticalAlign.Subscript))
+                .ToList();
+
+    /// <summary>
+    /// Returns placed glyphs for a specific table cell and paragraph — including sentinels.
+    /// Suitable for BE1/BE2 layout tests. Only available to the test assembly.
+    /// Tuple: (Ch, X, Y, LineHeight, Sentinel, CellParaOffset).
+    /// </summary>
+    internal IReadOnlyList<(char Ch, double X, double Y, double LineHeight, bool Sentinel, int ParaOffset)>
+        GetCellPlaced(int blockIndex, int row, int col, int paraIdx) =>
+            _placed
+                .Where(p => p.Block == blockIndex && p.CellRow == row && p.CellCol == col && p.CellParaIdx == paraIdx)
+                .Select(p => (p.Ch, p.X, p.Y, p.LineHeight, p.Sentinel, p.CellParaOffset))
                 .ToList();
 
     // ── AV-COL: column layout introspection for tests ─────────────────────────────────────────────
@@ -1882,9 +1909,16 @@ public sealed class DocumentView : Control
             }
             else
             {
-                // BB1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
-                var freeLeft  = rect.Left  - _contentLeft;
-                var freeRight = (_contentLeft + colW) - rect.Right;
+                // BB1 / BD1: wide Square/Tight float with < 20 DIP free on both sides → treat as TopAndBottom.
+                // BD1: derive the float's own column so freeLeft/freeRight are measured against that
+                // column's band, not always column 0 (_contentLeft). A float in column 2+ would
+                // otherwise show inflated freeLeft (> 20) and never be promoted to push text below.
+                var colIndex = _colCount > 1
+                    ? Math.Clamp((int)Math.Round((rect.Left - _contentLeft) / (_colWidth + _colGap)), 0, _colCount - 1)
+                    : 0;
+                var colLeft  = _contentLeft + colIndex * (_colWidth + _colGap);
+                var freeLeft  = rect.Left  - colLeft;
+                var freeRight = (colLeft + colW) - rect.Right;
                 if (freeLeft < 20 && freeRight < 20)
                 {
                     if (rect.Bottom > maxBottom) maxBottom = rect.Bottom;
@@ -2315,7 +2349,8 @@ public sealed class DocumentView : Control
 
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
-            var measured = new List<(TableCell Cell, int StartCol, int Span, List<(double Height, List<(char Ch, double W)> Chars)> Lines, RunFormatting Fmt)>();
+            // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
+            var measured = new List<(TableCell Cell, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             foreach (var cell in row.Cells)
@@ -2333,12 +2368,18 @@ public sealed class DocumentView : Control
                 if (isHeader)
                     fmt = fmt with { Bold = true };
 
-                var lines = WrapCellLines(cell.PlainText, fmt, Math.Max(10, cellWidth - 2 * pad));
+                // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
+                // separate visual lines instead of collapsing onto one line via a '\n' glyph.
+                var innerW = Math.Max(10, cellWidth - 2 * pad);
+                var cellParas = cell.Paragraphs.Count > 0
+                    ? cell.Paragraphs.Select(p => WrapCellLines(p.PlainText, fmt, innerW)).ToList()
+                    : new List<List<(double Height, List<(char Ch, double W)> Chars)>> { WrapCellLines(string.Empty, fmt, innerW) };
+                var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
                 if (cellHeight > rowHeight)
                     rowHeight = cellHeight;
 
-                measured.Add((cell, col, span, lines, fmt));
+                measured.Add((cell, col, span, cellParas, fmt));
                 col += span;
             }
 
@@ -2349,7 +2390,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
             var rowColLeft = ColumnLeftFor(rowContentY);
 
-            foreach (var (cellModel, startCol, span, lines, fmt) in measured)
+            foreach (var (cellModel, startCol, span, cellParas, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
@@ -2361,71 +2402,44 @@ public sealed class DocumentView : Control
                 _cellHits.Add((rect, blockIndex, r, startCol));
 
                 var ty = rowPageSpaceY + pad;
-                // AV-TBL: walk paragraphs so each PlacedChar carries its paragraph index and
-                // character offset within that paragraph. WrapCellLines flattens all paragraphs
-                // via cell.PlainText which joins them with '\n'. We skip '\n' separator chars
-                // (they belong to neither paragraph) and advance the paragraph index after each.
-                var paraIdx = 0;
-                var paraCharOffset = 0; // char position within current paragraph
-                var parasLengths = cellModel.Paragraphs.Count > 0
-                    ? cellModel.Paragraphs.Select(p => p.PlainText.Length).ToList()
-                    : new List<int> { 0 };
-
-                foreach (var (lineHeight, chars) in lines)
+                // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
+                // on their own visual Y band, so multi-paragraph cells never collapse to one line.
+                // BE1: emit one sentinel PlacedChar per paragraph so the caret is findable at the
+                // end of every paragraph, not just the last one.
+                for (var pIdx = 0; pIdx < cellParas.Count; pIdx++)
                 {
-                    var tx = cellX + pad;
-                    foreach (var (ch, w) in chars)
+                    var paraLines = cellParas[pIdx];
+                    var paraCharOffset = 0;
+
+                    foreach (var (lineHeight, chars) in paraLines)
                     {
-                        // Skip '\n' separator: it joins paragraphs in cell.PlainText but is not
-                        // part of any paragraph's own text content.
-                        if (ch == '\n')
+                        var tx = cellX + pad;
+                        foreach (var (ch, w) in chars)
                         {
-                            if (paraIdx < parasLengths.Count - 1)
-                            {
-                                paraIdx++;
-                                paraCharOffset = 0;
-                            }
-                            // Do not emit a PlacedChar for the separator; skip it visually too.
-                            continue;
+                            _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
+                                Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
+                            glyphOffset++;
+                            paraCharOffset++;
+                            tx += w;
                         }
 
-                        // Advance paragraph index if we've consumed this paragraph's text (safety).
-                        while (paraIdx < parasLengths.Count - 1 && paraCharOffset >= parasLengths[paraIdx])
-                        {
-                            paraIdx++;
-                            paraCharOffset = 0;
-                        }
-                        _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
-                            Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: paraIdx, CellParaOffset: paraCharOffset));
-                        glyphOffset++;
-                        paraCharOffset++;
-                        tx += w;
+                        ty += lineHeight;
                     }
 
-                    ty += lineHeight;
+                    // BE1: sentinel at end of this paragraph (at the end of its last visual line).
+                    (double Height, List<(char Ch, double W)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
+                    var sentinelX = cellX + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
+                    var sentinelY = lastParaLine.HasValue
+                        ? ty - lastParaLine.Value.Height
+                        : rowPageSpaceY + pad;
+                    var sentinelH = lastParaLine.HasValue ? lastParaLine.Value.Height : Build("A", fmt).Height;
+                    var sentinelParaOffset = cellModel.Paragraphs.Count > pIdx
+                        ? cellModel.Paragraphs[pIdx].PlainText.Length
+                        : 0;
+                    _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
+                        Sentinel: true, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: sentinelParaOffset));
+                    glyphOffset++;
                 }
-
-                // Emit a sentinel glyph for each paragraph in the cell (at the end of last para, or after all text).
-                // This allows the caret to sit after the last character in the cell.
-                // We emit exactly one sentinel per cell paragraph so caret can land "after" each para.
-                var sentinelParaIdx = parasLengths.Count - 1;
-                var sentinelParaOffset = parasLengths.Count > 0 ? parasLengths[sentinelParaIdx] : 0;
-                // Position the sentinel at the right edge of the last text line, or at pad if no text.
-                var sentinelX = ty > rowPageSpaceY + pad
-                    ? cellX + pad  // start of next line
-                    : cellX + pad;
-                var sentinelY = lines.Count > 0 ? rowPageSpaceY + pad + lines.Sum(l => l.Height) - lines[^1].Height : rowPageSpaceY + pad;
-                var sentinelH = lines.Count > 0 ? lines[^1].Height : Build("A", fmt).Height;
-                // Advance sentinel X past last character on last line
-                if (lines.Count > 0)
-                {
-                    var lastLineChars = lines[^1].Chars;
-                    var lastX = cellX + pad + lastLineChars.Sum(c => c.W);
-                    sentinelX = lastX;
-                }
-                _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
-                    Sentinel: true, CellRow: r, CellCol: startCol, CellParaIdx: sentinelParaIdx, CellParaOffset: sentinelParaOffset));
-                glyphOffset++;
             }
 
             _layoutContentY = rowContentY + rowHeight;
@@ -3701,6 +3715,9 @@ public sealed class DocumentView : Control
         // AV-TBL: route into table cell when the caret is inside a cell.
         if (_cellCaret is { } cc)
         {
+            // BE3: replace active in-cell selection before inserting (mirrors body-text DeleteSelection path).
+            DeleteCellSelection(cc);
+            cc = _cellCaret!.Value; // re-read after potential selection delete
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
             if (para == null || !IsEditable(para))
                 return;
@@ -3709,8 +3726,10 @@ public sealed class DocumentView : Control
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
                 var chars = ParaCells(p);
+                // BE4: insert at incrementing position so multi-char paste/IME inserts in order.
+                var at = Math.Clamp(offset, 0, chars.Count);
                 foreach (var ch in text)
-                    chars.Insert(Math.Clamp(offset, 0, chars.Count), new Cell(ch, fmt));
+                    chars.Insert(at++, new Cell(ch, fmt));
                 SetRuns(p, chars);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
@@ -3745,6 +3764,9 @@ public sealed class DocumentView : Control
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
+            // BE3: if there is an in-cell selection, delete it and return (mirrors body NormalizedSelection path).
+            if (DeleteCellSelection(cc)) return;
+            cc = _cellCaret!.Value; // re-read in case anchor was updated
             if (cc.Offset > 0)
             {
                 var offset = cc.Offset;
@@ -3795,6 +3817,9 @@ public sealed class DocumentView : Control
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
+            // BE3: if there is an in-cell selection, delete it and return.
+            if (DeleteCellSelection(cc)) return;
+            cc = _cellCaret!.Value; // re-read after potential anchor update
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
             if (para == null || !IsEditable(para))
                 return;
@@ -3853,6 +3878,9 @@ public sealed class DocumentView : Control
         // AV-TBL: route into table cell.
         if (_cellCaret is { } cc)
         {
+            // BE3: delete active selection before splitting paragraph.
+            if (DeleteCellSelection(cc))
+                cc = _cellCaret!.Value;
             var para = GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx);
             if (para == null || !IsEditable(para))
                 return;
@@ -3924,6 +3952,37 @@ public sealed class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
+    // BE3: Delete the active in-cell selection (same-paragraph only) and collapse the caret to the
+    // selection start. Returns true if a selection was deleted, false if there was no selection or
+    // the anchors span different paragraphs (caller must decide what to do in that case).
+    private bool DeleteCellSelection((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
+    {
+        if (_cellAnchor is not { } anchor)
+            return false;
+        // Only handle same-paragraph cell selections (cross-paragraph cross-cell not supported here).
+        if (anchor.TableBlock != cc.TableBlock || anchor.Row != cc.Row || anchor.Col != cc.Col
+            || anchor.ParaIdx != cc.ParaIdx)
+            return false;
+        if (anchor.Offset == cc.Offset)
+            return false; // collapsed — nothing to delete
+
+        var lo = Math.Min(anchor.Offset, cc.Offset);
+        var hi = Math.Max(anchor.Offset, cc.Offset);
+        _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
+        {
+            var chars = ParaCells(p);
+            var clo = Math.Clamp(lo, 0, chars.Count);
+            var chi = Math.Clamp(hi, 0, chars.Count);
+            chars.RemoveRange(clo, Math.Max(0, chi - clo));
+            SetRuns(p, chars);
+        }));
+        _cellCaret = cc with { Offset = lo };
+        _cellAnchor = _cellCaret;
+        _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, lo));
+        _selectionAnchor = _caret;
+        return true;
+    }
+
     private void DeleteSelection()
     {
         if (NormalizedSelection() is not { } sel)
@@ -3934,6 +3993,15 @@ public sealed class DocumentView : Control
             var block = sel.Start.Block;
             var a = sel.Start.Offset;
             var b = sel.End.Offset;
+            // BE5: guard against DeleteSelection being called when the block is a Table (not a Paragraph).
+            // This can happen when _caret is positioned on a table block but _cellCaret is null (e.g.,
+            // a glyph-offset body selection that spans into a table block). Silently no-op to avoid an
+            // InvalidCastException in ReplaceParagraphRunsCommand's Apply.
+            if (_doc.Blocks[block] is not Paragraph)
+            {
+                _selectionAnchor = _caret;
+                return;
+            }
             _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
             {
                 var cells = ParaCells(p);
