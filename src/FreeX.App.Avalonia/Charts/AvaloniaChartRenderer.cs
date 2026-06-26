@@ -924,12 +924,14 @@ public sealed class AvaloniaChartRenderer
         else
             AddLine(canvas, axis.LinePosition, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis));
 
+        var labelAngle = axis.LabelAngle;
+
         foreach (var tick in axis.Ticks)
         {
             if (horizontal)
             {
                 AddLine(canvas, tick.Position, axis.LinePosition, tick.Position, axis.LinePosition + TickLength);
-                AddTickLabel(canvas, tick.Label, tick.Position, axis.LinePosition + TickLength + 1, centerHorizontally: true);
+                AddTickLabel(canvas, tick.Label, tick.Position, axis.LinePosition + TickLength + 1, centerHorizontally: true, angle: labelAngle);
             }
             else
             {
@@ -942,9 +944,9 @@ public sealed class AvaloniaChartRenderer
                 AddLine(canvas, tickX, tick.Position, tickEndX, tick.Position);
 
                 if (axis.Side == AxisSide.Right)
-                    AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position, centerHorizontally: false, rightAligned: false);
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition + TickLength + 1, tick.Position, centerHorizontally: false, rightAligned: false, angle: labelAngle);
                 else
-                    AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false);
+                    AddTickLabel(canvas, tick.Label, axis.LinePosition - TickLength - 1, tick.Position, centerHorizontally: false, angle: labelAngle);
             }
         }
     }
@@ -1040,7 +1042,8 @@ public sealed class AvaloniaChartRenderer
         double x,
         double y,
         bool centerHorizontally,
-        bool rightAligned = true)
+        bool rightAligned = true,
+        double angle = 0)
     {
         if (string.IsNullOrEmpty(text))
             return;
@@ -1052,18 +1055,53 @@ public sealed class AvaloniaChartRenderer
             Foreground = AxisLabelBrush,
         };
 
-        if (centerHorizontally)
+        label.Measure(Size.Infinity);
+        var w = label.DesiredSize.Width > 0 ? label.DesiredSize.Width : 40;
+        var h = label.DesiredSize.Height > 0 ? label.DesiredSize.Height : AxisLabelFontSize + 4;
+
+        if (Math.Abs(angle) < 0.5)
         {
-            label.TextAlignment = TextAlignment.Center;
-            label.Measure(Size.Infinity);
-            Canvas.SetLeft(label, x - (label.DesiredSize.Width / 2));
-            Canvas.SetTop(label, y);
+            // No rotation — fast path (matches existing behaviour exactly).
+            if (centerHorizontally)
+            {
+                label.TextAlignment = TextAlignment.Center;
+                Canvas.SetLeft(label, x - w / 2);
+                Canvas.SetTop(label, y);
+            }
+            else
+            {
+                Canvas.SetLeft(label, rightAligned ? x - w : x);
+                Canvas.SetTop(label, y - h / 2);
+            }
         }
         else
         {
-            label.Measure(Size.Infinity);
-            Canvas.SetLeft(label, rightAligned ? x - label.DesiredSize.Width : x);
-            Canvas.SetTop(label, y - (label.DesiredSize.Height / 2));
+            // Rotated label: anchor the rotation at the label's top-center (horizontal axis) or
+            // right-center (vertical axis), matching the source renderer's pivot convention.
+            // The label's Canvas position is its unrotated top-left; the transform rotates in place
+            // around the chosen anchor offset within the element.
+            label.RenderTransformOrigin = RelativePoint.TopLeft;
+            label.RenderTransform = new RotateTransform(angle);
+
+            if (centerHorizontally)
+            {
+                // Horizontal axis (bottom/top): pivot at the label's top-center so it fans out
+                // below the axis tick mark regardless of the rotation direction.
+                double pivotX = w / 2;   // offset from top-left to top-center
+                double pivotY = 0;
+                label.RenderTransformOrigin = new RelativePoint(pivotX / w, pivotY / h, RelativeUnit.Absolute);
+                Canvas.SetLeft(label, x - pivotX);
+                Canvas.SetTop(label, y);
+            }
+            else
+            {
+                // Vertical axis: pivot at the right-center of the label (the point closest to the axis).
+                double pivotX = rightAligned ? w : 0;
+                double pivotY = h / 2;
+                label.RenderTransformOrigin = new RelativePoint(pivotX / w, pivotY / h, RelativeUnit.Absolute);
+                Canvas.SetLeft(label, rightAligned ? x - w : x);
+                Canvas.SetTop(label, y - h / 2);
+            }
         }
 
         canvas.Children.Add(label);
