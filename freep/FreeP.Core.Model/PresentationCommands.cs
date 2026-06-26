@@ -592,25 +592,67 @@ public abstract class RunFormatCommandBase : IPresentationCommand
 }
 
 /// <summary>Toggles bold on a single run.</summary>
+/// <remarks>
+/// RR1 fix: Apply snapshots the run's prior (Bold, BoldSet) pair so that Revert can restore
+/// the exact prior state — including BoldSet=false (inherited) — rather than blindly
+/// re-toggling which would bake the run to explicit non-bold after undo.
+/// </remarks>
 public sealed class ToggleRunBoldCommand : RunFormatCommandBase
 {
+    private bool _priorBold;
+    private bool _priorBoldSet;
+
     public ToggleRunBoldCommand(int slideIndex, uint shapeId, int paragraphIndex, int runIndex)
         : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
 
     public override string Label => "Bold";
-    protected override void ApplyToRun(Run r)   { r.Bold = !r.Bold; r.BoldSet = true; }
-    protected override void RevertFromRun(Run r) { r.Bold = !r.Bold; r.BoldSet = true; }
+
+    protected override void ApplyToRun(Run r)
+    {
+        // Snapshot the prior (Bold, BoldSet) pair before mutating — may be inherited (BoldSet=false).
+        _priorBold    = r.Bold;
+        _priorBoldSet = r.BoldSet;
+        // Forward toggle: invert run.Bold and mark as explicit so the choice round-trips.
+        r.Bold    = !r.Bold;
+        r.BoldSet = true;
+    }
+
+    protected override void RevertFromRun(Run r)
+    {
+        // Restore the exact prior (Bold, BoldSet) pair — including inherited (BoldSet=false).
+        r.Bold    = _priorBold;
+        r.BoldSet = _priorBoldSet;
+    }
 }
 
 /// <summary>Toggles italic on a single run.</summary>
+/// <remarks>
+/// RR1 fix: mirrors the same prior-(Italic,ItalicSet) snapshot+restore pattern as
+/// <see cref="ToggleRunBoldCommand"/>.
+/// </remarks>
 public sealed class ToggleRunItalicCommand : RunFormatCommandBase
 {
+    private bool _priorItalic;
+    private bool _priorItalicSet;
+
     public ToggleRunItalicCommand(int slideIndex, uint shapeId, int paragraphIndex, int runIndex)
         : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
 
     public override string Label => "Italic";
-    protected override void ApplyToRun(Run r)   { r.Italic = !r.Italic; r.ItalicSet = true; }
-    protected override void RevertFromRun(Run r) { r.Italic = !r.Italic; r.ItalicSet = true; }
+
+    protected override void ApplyToRun(Run r)
+    {
+        _priorItalic    = r.Italic;
+        _priorItalicSet = r.ItalicSet;
+        r.Italic    = !r.Italic;
+        r.ItalicSet = true;
+    }
+
+    protected override void RevertFromRun(Run r)
+    {
+        r.Italic    = _priorItalic;
+        r.ItalicSet = _priorItalicSet;
+    }
 }
 
 /// <summary>Toggles underline on a single run.</summary>

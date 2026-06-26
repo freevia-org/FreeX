@@ -757,13 +757,24 @@ public sealed class DocumentView : Control
         return _layoutContentY;
     }
 
+    /// <summary>
+    /// Returns the content Y at which the next content of <paramref name="lineHeight"/> would start,
+    /// applying the same page-break logic as <see cref="ReserveContentY"/> but WITHOUT mutating
+    /// <c>_layoutContentY</c>.  Used to compute the post-break paragraph-anchor Y for floating images
+    /// before the layout loop has consumed any lines.
+    /// </summary>
+    private double PeekFirstLineContentY(double lineHeight = 1)
+    {
+        if (_layoutTextAreaHeight <= 0)
+            return _layoutContentY;
+        var posInPage = _layoutContentY % _layoutTextAreaHeight;
+        if (posInPage > 0 && posInPage + lineHeight > _layoutTextAreaHeight)
+            return _layoutContentY + (_layoutTextAreaHeight - posInPage);
+        return _layoutContentY;
+    }
+
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        // Collect floating images and shapes anchored to this paragraph at its current content Y.
-        // Must happen before SpaceBeforePt advances _layoutContentY so the anchor Y is accurate.
-        CollectFloatingImages(paragraph, _layoutContentY);
-        CollectFloatingShapes(paragraph, _layoutContentY);
-
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : FallbackCells(paragraph.PlainText);
         // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
         var cells = paragraph.StyleId is null
@@ -784,6 +795,15 @@ public sealed class DocumentView : Control
         var availableWidth = Math.Max(60, textWidth - leftInset - indentLeft - indentRight);
 
         _layoutContentY += pf.SpaceBeforePt * PxPerPoint;
+
+        // Collect floating images AND shapes AFTER the SpaceBeforePt advance, using the post-break
+        // first-line content Y so that VerticalAnchor.Paragraph floats are anchored to where the
+        // paragraph's first line ACTUALLY lands (correct page after any page-break, correct Y after
+        // SpaceBefore). PeekFirstLineContentY is non-mutating — it simulates ReserveContentY without
+        // side effects.
+        var anchorContentY = PeekFirstLineContentY();
+        CollectFloatingImages(paragraph, anchorContentY);
+        CollectFloatingShapes(paragraph, anchorContentY);
 
         if (marker is not null)
         {
@@ -1084,9 +1104,11 @@ public sealed class DocumentView : Control
         const double gap = 6;
         var alignment = paragraph.Formatting.Alignment;
 
-        // Collect floating images and shapes anchored to this paragraph before advancing _layoutContentY.
-        CollectFloatingImages(paragraph, _layoutContentY);
-        CollectFloatingShapes(paragraph, _layoutContentY);
+        // Collect floating images and shapes using the post-break first-line content Y so that
+        // VerticalAnchor.Paragraph floats land on the same page as the first inline image.
+        var anchorContentY = PeekFirstLineContentY();
+        CollectFloatingImages(paragraph, anchorContentY);
+        CollectFloatingShapes(paragraph, anchorContentY);
 
         foreach (var run in paragraph.Runs)
         {
