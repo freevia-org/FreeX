@@ -18,6 +18,33 @@ public interface IDocumentCommand
 }
 
 /// <summary>
+/// Groups several <see cref="IDocumentCommand"/> instances into a single undoable action.
+/// Applying executes the inner commands in order; reverting executes them in reverse order.
+/// This makes multi-property dialog applications (e.g. the Font dialog setting family +
+/// size + bold in one OK) appear as a single undo step.
+/// </summary>
+public sealed class CompositeDocumentCommand(string label, IReadOnlyList<IDocumentCommand> commands)
+    : IDocumentCommand
+{
+    public string Label => label;
+
+    public int EstimatedBytes =>
+        commands.Count == 0 ? 0 : commands.Sum(c => c.EstimatedBytes);
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        foreach (var cmd in commands)
+            cmd.Apply(context);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        for (var i = commands.Count - 1; i >= 0; i--)
+            commands[i].Revert(context);
+    }
+}
+
+/// <summary>
 /// FreeW's undo/redo command bus. The mechanics — paired stacks, depth/byte budget, redo
 /// invalidation — are the shared <see cref="UndoRedoStack{TCommand,TPayload}"/>; this bus only
 /// adds the document-command apply/revert and a change notification for the view to redraw.
@@ -30,6 +57,10 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     private readonly UndoRedoStack<IDocumentCommand, object?> _stack = new(MaxDepth, MaxBytes);
     private readonly IDocumentCommandContext _context = context;
 
+    // Batch / undo-group support: when non-null, Execute() collects into this list
+    // instead of pushing directly onto the undo stack.
+    private List<IDocumentCommand>? _batch;
+
     /// <summary>Raised after any execute/undo/redo so the view can refresh.</summary>
     public event Action? Changed;
 
@@ -39,8 +70,54 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     public void Execute(IDocumentCommand command)
     {
         command.Apply(_context);
-        _stack.Push(command, command.EstimatedBytes, null, command.Label);
+        if (_batch is not null)
+        {
+            _batch.Add(command);
+        }
+        else
+        {
+            _stack.Push(command, command.EstimatedBytes, null, command.Label);
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Begins collecting subsequent <see cref="Execute"/> calls into a single undo group.
+    /// Each call still applies its command immediately; the group is committed as a single
+    /// <see cref="CompositeDocumentCommand"/> when <see cref="CommitUndoGroup"/> is called.
+    /// Not reentrant — only one group may be open at a time.
+    /// </summary>
+    public void BeginUndoGroup()
+    {
+        if (_batch is not null)
+            throw new InvalidOperationException("An undo group is already open.");
+        _batch = new List<IDocumentCommand>();
+    }
+
+    /// <summary>
+    /// Closes the current undo group started by <see cref="BeginUndoGroup"/> and pushes the
+    /// collected commands as a single <see cref="CompositeDocumentCommand"/> onto the undo stack.
+    /// If no commands were collected, nothing is pushed.
+    /// </summary>
+    public void CommitUndoGroup(string label)
+    {
+        var batch = _batch ?? throw new InvalidOperationException("No undo group is open.");
+        _batch = null;
+        if (batch.Count == 0)
+            return;
+        var composite = new CompositeDocumentCommand(label, batch);
+        _stack.Push(composite, composite.EstimatedBytes, null, label);
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Closes and discards any open undo group without pushing anything onto the undo stack.
+    /// Any commands already applied are NOT reverted — use this only on error paths where
+    /// the caller will handle cleanup.
+    /// </summary>
+    public void AbortUndoGroup()
+    {
+        _batch = null;
     }
 
     public bool Undo()

@@ -2617,3 +2617,4 @@ public sealed class SetTableFormattingCommand(int blockIndex, TableFormatting ne
         return true;
     }
 }
+

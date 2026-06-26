@@ -268,38 +268,25 @@ public sealed class ParagraphDialog : Window
     // ── Static apply ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Apply <paramref name="result"/> to <paramref name="editor"/>, changing only properties that
-    /// differ from <paramref name="original"/>. Safe to call without showing the window (used by tests).
+    /// Apply <paramref name="result"/> to <paramref name="editor"/> across ALL paragraphs spanned
+    /// by the current selection (or just the caret paragraph when there is no selection). All
+    /// changes are issued as a single undoable action. Safe to call without showing the window
+    /// (used by tests).
     /// </summary>
     public static void ApplyResult(DocumentView editor, ParagraphDialogResult result, ParagraphFormatting original)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(result);
 
-        // Alignment.
-        if (result.Alignment != original.Alignment)
-            editor.SetAlignment(result.Alignment);
-
-        // Space before / after.
-        if (result.SpaceBeforePt != original.SpaceBeforePt)
-            editor.SetSpaceBefore(result.SpaceBeforePt);
-        if (result.SpaceAfterPt != original.SpaceAfterPt)
-            editor.SetSpaceAfter(result.SpaceAfterPt);
-
-        // Line spacing.
-        var lsChanged = result.LineRule != original.LineRule
-            || (result.LineRule == LineSpacingRule.Multiple && Math.Abs(result.LineSpacingValue - original.LineSpacing) > 0.001)
-            || (result.LineRule != LineSpacingRule.Multiple && Math.Abs(result.LineSpacingValue - original.LineHeightPt) > 0.001);
-        if (lsChanged)
-            editor.SetLineSpacing(result.LineRule, result.LineSpacingValue);
-
-        // Indents.
-        var indentChanged =
-            Math.Abs(result.IndentLeftPt      - original.IndentLeftPt)      > 0.01 ||
-            Math.Abs(result.IndentRightPt     - original.IndentRightPt)     > 0.01 ||
-            Math.Abs(result.FirstLineIndentPt - original.FirstLineIndentPt) > 0.01;
-        if (indentChanged)
-            editor.SetIndents(result.IndentLeftPt, result.IndentRightPt, result.FirstLineIndentPt);
+        // Delegate to the multi-paragraph apply on the editor.  It enumerates every paragraph
+        // block spanned by the selection and wraps the mutations in a single CompositeDocumentCommand
+        // so that a single Undo reverts all paragraphs at once — mirroring WPF's
+        // ApplyParagraphDialogFormatting / FormatSelectedModelParagraphs.
+        editor.ApplyParagraphDialogFormatting(
+            result.Alignment,
+            result.IndentLeftPt, result.IndentRightPt, result.FirstLineIndentPt,
+            result.SpaceBeforePt, result.SpaceAfterPt,
+            result.LineRule, result.LineSpacingValue);
     }
 
     // ── Static factory ────────────────────────────────────────────────────────

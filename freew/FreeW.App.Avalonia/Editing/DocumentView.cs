@@ -131,6 +131,10 @@ public sealed class DocumentView : Control
     private DocumentCommandBus _bus;
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
+    // BZ5: pending character formatting to be applied to the NEXT typed character when the caret
+    // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
+    // and cleared by the next InsertText call.
+    private RunFormatting? _pendingRunFmt;
     private double _laidOutWidth = -1;
     private double _contentHeight;
     private double _pageLeft;
@@ -208,6 +212,23 @@ public sealed class DocumentView : Control
     }
 
     public sealed record CellEditRequest(int Block, int Row, int Col, string Text);
+
+    /// <summary>
+    /// Extended run+paragraph formatting snapshot for the current selection, produced by
+    /// <see cref="GetSelectionFormatting"/>. The indeterminate flags indicate that the
+    /// corresponding property is non-uniform across the selection (mixed). When a flag is true
+    /// the dialog should show a blank/indeterminate state for that field and skip applying it
+    /// on OK unless the user explicitly changed it.
+    /// </summary>
+    public sealed record SelectionFormatting(
+        RunFormatting Run,
+        ParagraphFormatting Paragraph,
+        bool BoldIndeterminate          = false,
+        bool ItalicIndeterminate        = false,
+        bool UnderlineIndeterminate     = false,
+        bool StrikethroughIndeterminate = false,
+        bool FamilyIndeterminate        = false,
+        bool SizeIndeterminate          = false);
 
     public string GetCellText(int block, int row, int col)
     {
@@ -4668,7 +4689,11 @@ public sealed class DocumentView : Control
 
         var block = _caret.Block;
         var bodyOffset = _caret.Offset;
-        var bodyFmt = ActiveFormatting(paragraph, bodyOffset);
+        // BZ5: use pending format if set (from collapsed-caret Font dialog apply), otherwise
+        // inherit from the character at the caret position.
+        var pendingFmt = _pendingRunFmt;
+        _pendingRunFmt = null; // consume immediately so only the next typed char gets it
+        var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
         _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
         {
             var cells = ParaCells(p);
@@ -5175,6 +5200,98 @@ public sealed class DocumentView : Control
         _bus.Execute(new SetParagraphFormattingCommand(_caret.Block, paragraph.Formatting with { Alignment = alignment }));
     }
 
+    /// <summary>
+    /// Enumerate every paragraph block index spanned by the current selection (start block to end
+    /// block inclusive). When there is no selection the result is just the caret's block (if it is
+    /// an editable paragraph). Tables in the range are skipped (only paragraphs are returned),
+    /// mirroring the WPF FormatSelectedModelParagraphs behaviour.
+    /// </summary>
+    private IReadOnlyList<int> SelectedParagraphIndices()
+    {
+        var sel = NormalizedSelection();
+        int startBlock, endBlock;
+        if (sel is { } s)
+        {
+            startBlock = s.Start.Block;
+            endBlock   = s.End.Block;
+        }
+        else
+        {
+            startBlock = _caret.Block;
+            endBlock   = _caret.Block;
+        }
+
+        var result = new List<int>();
+        for (var i = startBlock; i <= endBlock && i < _doc.Blocks.Count; i++)
+        {
+            if (_doc.Blocks[i] is Paragraph p && IsEditable(p))
+                result.Add(i);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Apply <paramref name="transform"/> to the formatting of every paragraph spanned by the
+    /// current selection (or just the caret paragraph when there is no selection). All mutations
+    /// are wrapped in a single undo group so one Undo reverts them all atomically.
+    /// Mirrors the WPF DocumentView.FormatSelectedModelParagraphs.
+    /// </summary>
+    private void FormatSelectedParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
+    {
+        var indices = SelectedParagraphIndices();
+        if (indices.Count == 0)
+            return;
+
+        if (indices.Count == 1)
+        {
+            // Single paragraph: no group overhead needed.
+            var paragraph = (Paragraph)_doc.Blocks[indices[0]];
+            _bus.Execute(new SetParagraphFormattingCommand(indices[0], transform(paragraph.Formatting)));
+            return;
+        }
+
+        // Multiple paragraphs: group into a single undoable action.
+        _bus.BeginUndoGroup();
+        foreach (var idx in indices)
+        {
+            var paragraph = (Paragraph)_doc.Blocks[idx];
+            _bus.Execute(new SetParagraphFormattingCommand(idx, transform(paragraph.Formatting)));
+        }
+        _bus.CommitUndoGroup("Paragraph Formatting");
+    }
+
+    /// <summary>
+    /// Apply the complete set of paragraph-dialog fields (alignment, indents, spacing, line spacing)
+    /// to every paragraph spanned by the current selection. All changes are issued as one undoable
+    /// action (a single Undo reverts all paragraphs). Mirrors WPF ApplyParagraphDialogFormatting.
+    /// </summary>
+    public void ApplyParagraphDialogFormatting(
+        TextAlignment alignment,
+        double indentLeftPt, double indentRightPt, double firstLineIndentPt,
+        double spaceBeforePt, double spaceAfterPt,
+        LineSpacingRule lineRule, double lineSpacingValue)
+    {
+        FormatSelectedParagraphs(f =>
+        {
+            var fmt = f with
+            {
+                Alignment         = alignment,
+                IndentLeftPt      = Math.Max(0, indentLeftPt),
+                IndentRightPt     = Math.Max(0, indentRightPt),
+                FirstLineIndentPt = firstLineIndentPt,
+                SpaceBeforePt     = Math.Max(0, spaceBeforePt),
+                SpaceAfterPt      = Math.Max(0, spaceAfterPt),
+                SpaceBeforeIsSet  = true,
+                SpaceAfterIsSet   = true,
+                LineSpacingIsSet  = true,
+            };
+            fmt = lineRule == LineSpacingRule.Multiple
+                ? fmt with { LineRule = lineRule, LineSpacing  = Math.Max(0.5, lineSpacingValue) }
+                : fmt with { LineRule = lineRule, LineHeightPt = Math.Max(1,   lineSpacingValue) };
+            return fmt;
+        });
+    }
+
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
@@ -5291,6 +5408,81 @@ public sealed class DocumentView : Control
         var resolvedParagraph = ResolveParagraphFmt(paragraph);
         return (resolvedRun, resolvedParagraph);
     }
+
+    /// <summary>
+    /// Returns the effective run and paragraph formatting for the current selection, scanning ALL
+    /// selected cells to detect mixed (indeterminate) properties. Used by the Font dialog to show
+    /// indeterminate checkboxes and blank combos when the selection has mixed formatting, matching
+    /// Word / WPF parity.
+    /// <para>
+    /// When there is no selection, behaves identically to <see cref="GetCaretFormatting"/>
+    /// (single-cell read, no indeterminate flags).
+    /// </para>
+    /// </summary>
+    public SelectionFormatting GetSelectionFormatting()
+    {
+        var (run, paragraph) = GetCaretFormatting();
+
+        var sel = NormalizedSelection();
+        if (sel is not { } s || s.Start.Block != s.End.Block)
+            return new SelectionFormatting(run, paragraph); // no selection or multi-block — no indeterminate
+
+        if (_doc.Blocks[s.Start.Block] is not Paragraph selPara || !IsEditable(selPara))
+            return new SelectionFormatting(run, paragraph);
+
+        var allCells = ParaCells(selPara);
+        var a = Math.Clamp(s.Start.Offset, 0, allCells.Count);
+        var b = Math.Clamp(s.End.Offset, 0, allCells.Count);
+        if (b <= a)
+            return new SelectionFormatting(run, paragraph);
+
+        var selected = allCells.Skip(a).Take(b - a).ToList();
+
+        // Scan for uniformity.
+        var firstFmt = ResolveRunFmt(selected[0].Fmt, selPara);
+        var boldMixed       = false;
+        var italicMixed     = false;
+        var underlineMixed  = false;
+        var strikeMixed     = false;
+        var familyMixed     = false;
+        var sizeMixed       = false;
+
+        foreach (var cell in selected.Skip(1))
+        {
+            var fmt = ResolveRunFmt(cell.Fmt, selPara);
+            if (fmt.Bold        != firstFmt.Bold)        boldMixed      = true;
+            if (fmt.Italic      != firstFmt.Italic)      italicMixed    = true;
+            if (fmt.Underline   != firstFmt.Underline)   underlineMixed = true;
+            if (fmt.Strikethrough != firstFmt.Strikethrough) strikeMixed = true;
+            if (fmt.FontFamily  != firstFmt.FontFamily)  familyMixed    = true;
+            if (fmt.FontSizePt  != firstFmt.FontSizePt)  sizeMixed      = true;
+        }
+
+        return new SelectionFormatting(
+            run,
+            paragraph,
+            BoldIndeterminate:          boldMixed,
+            ItalicIndeterminate:        italicMixed,
+            UnderlineIndeterminate:     underlineMixed,
+            StrikethroughIndeterminate: strikeMixed,
+            FamilyIndeterminate:        familyMixed,
+            SizeIndeterminate:          sizeMixed);
+    }
+
+    // ── Undo-group pass-throughs (used by FontDialog to group all format steps) ─────────────────
+
+    /// <summary>
+    /// Begins collecting subsequent command-bus calls into a single undoable group.
+    /// Each command still applies immediately. Must be followed by
+    /// <see cref="CommitFontUndoGroup"/> or <see cref="AbortFontUndoGroup"/>.
+    /// </summary>
+    public void BeginFontUndoGroup() => _bus.BeginUndoGroup();
+
+    /// <summary>Commits the current undo group as a single undo step labelled <paramref name="label"/>.</summary>
+    public void CommitFontUndoGroup(string label) => _bus.CommitUndoGroup(label);
+
+    /// <summary>Discards the current undo group without pushing onto the undo stack.</summary>
+    public void AbortFontUndoGroup() => _bus.AbortUndoGroup();
 
     /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
     public string SelectedText
@@ -5461,7 +5653,13 @@ public sealed class DocumentView : Control
         }
         else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
         {
-            _bus.Execute(new FormatParagraphRunsCommand(_caret.Block, transform));
+            // BZ5: on a collapsed caret (no selection), store a pending format for the next
+            // typed character instead of reformatting every run in the paragraph. Word semantics:
+            // a format change at a collapsed caret only affects newly typed text.
+            var caretFmt = ActiveFormatting(paragraph, _caret.Offset);
+            var newFmt = transform(caretFmt);
+            _pendingRunFmt = newFmt;
+            // No _bus.Execute here — existing paragraph text is NOT changed.
         }
     }
 
@@ -5487,9 +5685,15 @@ public sealed class DocumentView : Control
         }
         else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
         {
+            // BZ5: on a collapsed caret, update the pending format for the next typed character
+            // instead of reformatting every run in the paragraph.
+            var caretFmt = _pendingRunFmt ?? ActiveFormatting(paragraph, _caret.Offset);
             var cells = ParaCells(paragraph);
-            var newValue = !AllSet(cells, 0, cells.Count, get);
-            _bus.Execute(new FormatParagraphRunsCommand(_caret.Block, f => set(f, newValue)));
+            // Toggle: if ALL existing cells plus pending have the flag set → clear; else → set.
+            var allSetNow = get(caretFmt) && AllSet(cells, 0, cells.Count, get);
+            var newValue = !allSetNow;
+            _pendingRunFmt = set(caretFmt, newValue);
+            // No _bus.Execute here — existing paragraph text is NOT changed.
         }
     }
 
@@ -5509,6 +5713,7 @@ public sealed class DocumentView : Control
 
     private void MoveCaret(int delta, bool extend)
     {
+        _pendingRunFmt = null; // BZ5: discard pending format on caret movement
         // AV-TBL: when caret is in a cell, navigate within the cell's paragraph, then cross to
         // adjacent cell paragraphs, then adjacent cells. Cross-row (up/down) navigation is handled
         // by MoveCaretVertical.
@@ -5738,6 +5943,7 @@ public sealed class DocumentView : Control
 
     private void MoveCaretVertical(int direction, bool extend)
     {
+        _pendingRunFmt = null; // BZ5: discard pending format on caret movement
         if (!TryGetCaretRect(out var rect))
             return;
         var targetY = rect.Y + (direction > 0 ? rect.Height * 1.5 : -rect.Height * 0.5);

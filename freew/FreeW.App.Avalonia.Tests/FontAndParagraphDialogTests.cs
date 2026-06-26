@@ -504,6 +504,166 @@ public sealed class FontAndParagraphDialogTests
             "space-before must not change when already matching");
     }
 
+    // ── ParagraphDialog.ApplyResult: multi-paragraph selection ───────────────
+
+    /// <summary>
+    /// Build a document with three editable body paragraphs and return it together with a DocumentView
+    /// that has ALL three paragraphs selected (SelectAll).
+    /// </summary>
+    private static (TextDocument Doc, DocumentView View) MakeThreeParaDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("First paragraph"));
+        doc.Blocks.Add(new Paragraph("Second paragraph"));
+        doc.Blocks.Add(new Paragraph("Third paragraph"));
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll(); // spans all three blocks
+        return (doc, view);
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_sets_alignment_on_all_selected_paragraphs()
+    {
+        var (doc, view) = MakeThreeParaDoc();
+
+        var original = ParagraphFormatting.Default; // Left
+        var result = new ParagraphDialog.ParagraphDialogResult(
+            Alignment: TextAlignment.Center,
+            IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
+            SpaceBeforePt: 0, SpaceAfterPt: 8,
+            LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
+
+        ParagraphDialog.ApplyResult(view, result, original);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var para = (Paragraph)doc.Blocks[i];
+            para.Formatting.Alignment.Should().Be(TextAlignment.Center,
+                $"paragraph {i} should have Center alignment after multi-paragraph apply");
+        }
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_sets_space_before_on_all_selected_paragraphs()
+    {
+        var (doc, view) = MakeThreeParaDoc();
+
+        var original = ParagraphFormatting.Default; // SpaceBeforePt = 0
+        var result = new ParagraphDialog.ParagraphDialogResult(
+            Alignment: TextAlignment.Left,
+            IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
+            SpaceBeforePt: 12, SpaceAfterPt: 8,
+            LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
+
+        ParagraphDialog.ApplyResult(view, result, original);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var para = (Paragraph)doc.Blocks[i];
+            para.Formatting.SpaceBeforePt.Should().Be(12,
+                $"paragraph {i} should have SpaceBeforePt=12 after multi-paragraph apply");
+        }
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_multi_paragraph_alignment_and_space_before_together()
+    {
+        // The main regression test: selecting 3 paragraphs then applying Center + SpaceBefore=12
+        // via the dialog must change ALL 3 paragraphs, not just the caret's paragraph.
+        var (doc, view) = MakeThreeParaDoc();
+
+        var original = ParagraphFormatting.Default;
+        var result = new ParagraphDialog.ParagraphDialogResult(
+            Alignment: TextAlignment.Center,
+            IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
+            SpaceBeforePt: 12, SpaceAfterPt: 8,
+            LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
+
+        ParagraphDialog.ApplyResult(view, result, original);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var para = (Paragraph)doc.Blocks[i];
+            para.Formatting.Alignment.Should().Be(TextAlignment.Center,
+                $"paragraph {i} alignment should be Center");
+            para.Formatting.SpaceBeforePt.Should().Be(12,
+                $"paragraph {i} SpaceBeforePt should be 12");
+        }
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_single_undo_reverts_all_selected_paragraphs()
+    {
+        // One Undo must revert all three paragraphs that were changed in a single apply.
+        var (doc, view) = MakeThreeParaDoc();
+
+        // Capture original alignment for all three paragraphs.
+        var originalAlignments = Enumerable.Range(0, 3)
+            .Select(i => ((Paragraph)doc.Blocks[i]).Formatting.Alignment)
+            .ToArray();
+
+        var original = ParagraphFormatting.Default;
+        var result = new ParagraphDialog.ParagraphDialogResult(
+            Alignment: TextAlignment.Right,
+            IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
+            SpaceBeforePt: 6, SpaceAfterPt: 8,
+            LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
+
+        ParagraphDialog.ApplyResult(view, result, original);
+
+        // Verify all three were changed.
+        for (var i = 0; i < 3; i++)
+            ((Paragraph)doc.Blocks[i]).Formatting.Alignment.Should().Be(TextAlignment.Right,
+                $"paragraph {i} should be Right after apply");
+
+        // A single Undo should revert all three.
+        view.CanUndo.Should().BeTrue("there should be a command to undo after apply");
+        view.Undo();
+
+        // All three should be reverted.
+        for (var i = 0; i < 3; i++)
+        {
+            var para = (Paragraph)doc.Blocks[i];
+            para.Formatting.Alignment.Should().Be(originalAlignments[i],
+                $"paragraph {i} alignment should be reverted after single Undo");
+        }
+
+        // Undo queue should be empty (one composite command was the only action).
+        view.CanUndo.Should().BeFalse("the single composite command should have been fully undone");
+    }
+
+    [Fact]
+    public void ParagraphDialog_apply_caret_only_still_formats_single_paragraph()
+    {
+        // When there is no selection (caret only), only the current paragraph is changed.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Para A"));
+        doc.Blocks.Add(new Paragraph("Para B"));
+        doc.Blocks.Add(new Paragraph("Para C"));
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        // No SelectAll → caret only at block 0.
+
+        var original = ParagraphFormatting.Default;
+        var result = new ParagraphDialog.ParagraphDialogResult(
+            Alignment: TextAlignment.Center,
+            IndentLeftPt: 0, IndentRightPt: 0, FirstLineIndentPt: 0,
+            SpaceBeforePt: 12, SpaceAfterPt: 8,
+            LineRule: LineSpacingRule.Multiple, LineSpacingValue: 1.15);
+
+        ParagraphDialog.ApplyResult(view, result, original);
+
+        ((Paragraph)doc.Blocks[0]).Formatting.Alignment.Should().Be(TextAlignment.Center,
+            "caret paragraph (block 0) should be changed");
+        ((Paragraph)doc.Blocks[1]).Formatting.Alignment.Should().Be(TextAlignment.Left,
+            "block 1 should be unchanged (caret-only apply)");
+        ((Paragraph)doc.Blocks[2]).Formatting.Alignment.Should().Be(TextAlignment.Left,
+            "block 2 should be unchanged (caret-only apply)");
+    }
+
     // ── GetCaretFormatting round-trip ─────────────────────────────────────────
 
     [Fact]
