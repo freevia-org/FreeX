@@ -5,6 +5,7 @@ namespace FreeP.App.Host;
 /// the same model that drives FreeX and FreeW, proving the ribbon library is app-neutral.
 ///
 /// Tabs: Home, Insert (Wave 3 + 5B), Design (Wave 5B), Transitions, Animations, Slide Show (Wave 4C).
+/// Wave 12A: Arrange group added to the Home tab (Group/Ungroup, z-order, Align).
 /// </summary>
 internal static class FreePRibbon
 {
@@ -40,6 +41,31 @@ internal static class FreePRibbon
                     g.IconToggle("freep.bold", "Bold", RibbonCommandIconKind.Bold, "1");
                     g.IconToggle("freep.italic", "Italic", RibbonCommandIconKind.Italic, "2");
                     g.IconToggle("freep.underline", "Underline", RibbonCommandIconKind.Underline, "3");
+                });
+                // ── Wave 12A: Arrange group ───────────────────────────────────────────────
+                tab.Group("arrange", "Arrange", "R", 70, g =>
+                {
+                    // Group / Ungroup
+                    g.Large("freep.arrange.group",   "Group",   RibbonCommandIconKind.Group,   "G");
+                    g.Medium("freep.arrange.ungroup", "Ungroup", RibbonCommandIconKind.Ungroup, "U");
+                    g.Separator();
+                    // Z-order
+                    g.Medium("freep.arrange.bring-to-front",  "Bring to Front",  RibbonCommandIconKind.ArrowUp,   "F");
+                    g.Medium("freep.arrange.bring-forward",   "Bring Forward",   RibbonCommandIconKind.ArrowUp,   "O");
+                    g.Medium("freep.arrange.send-backward",   "Send Backward",   RibbonCommandIconKind.ArrowDown, "K");
+                    g.Medium("freep.arrange.send-to-back",    "Send to Back",    RibbonCommandIconKind.ArrowDown, "B");
+                    g.Separator();
+                    // Align (six buttons — vertical reuse arrow/effects icons as fallback)
+                    g.Medium("freep.arrange.align-left",      "Align Left",     RibbonCommandIconKind.AlignLeft,    "L");
+                    g.Medium("freep.arrange.align-center-h",  "Center Horiz.",  RibbonCommandIconKind.AlignCenter,  "H");
+                    g.Medium("freep.arrange.align-right",     "Align Right",    RibbonCommandIconKind.AlignRight,   "R");
+                    g.Medium("freep.arrange.align-top",       "Align Top",      RibbonCommandIconKind.ArrowUp,      "T");
+                    g.Medium("freep.arrange.align-middle",    "Center Vert.",   RibbonCommandIconKind.Align,        "M");
+                    g.Medium("freep.arrange.align-bottom",    "Align Bottom",   RibbonCommandIconKind.ArrowDown,    "E");
+                    g.Separator();
+                    // Distribute
+                    g.Medium("freep.arrange.distribute-h",    "Distribute Horiz.", RibbonCommandIconKind.AlignCenter, "D");
+                    g.Medium("freep.arrange.distribute-v",    "Distribute Vert.",  RibbonCommandIconKind.Align,       "V");
                 });
             })
             .Tab("insert", "Insert", "N", tab =>

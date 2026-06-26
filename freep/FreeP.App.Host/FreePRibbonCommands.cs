@@ -421,6 +421,50 @@ internal static class FreePRibbonCommands
         registry.Register("freep.remove-link",
             new ActionCommand(() => editor.RemoveShapeHyperlink()));
 
+        // ── Wave 12A: Arrange — Group / Ungroup / Z-order / Align / Distribute ────
+
+        registry.Register("freep.arrange.group",
+            new ActionCommand(() => editor.GroupSelectedShapes()));
+
+        registry.Register("freep.arrange.ungroup",
+            new ActionCommand(() => editor.UngroupSelected()));
+
+        registry.Register("freep.arrange.bring-to-front",
+            new ActionCommand(() => editor.BringToFront()));
+
+        registry.Register("freep.arrange.bring-forward",
+            new ActionCommand(() => editor.BringForward()));
+
+        registry.Register("freep.arrange.send-backward",
+            new ActionCommand(() => editor.SendBackward()));
+
+        registry.Register("freep.arrange.send-to-back",
+            new ActionCommand(() => editor.SendToBack()));
+
+        registry.Register("freep.arrange.align-left",
+            new ActionCommand(() => editor.AlignLeft()));
+
+        registry.Register("freep.arrange.align-center-h",
+            new ActionCommand(() => editor.AlignCenterH()));
+
+        registry.Register("freep.arrange.align-right",
+            new ActionCommand(() => editor.AlignRight()));
+
+        registry.Register("freep.arrange.align-top",
+            new ActionCommand(() => editor.AlignTop()));
+
+        registry.Register("freep.arrange.align-middle",
+            new ActionCommand(() => editor.AlignMiddle()));
+
+        registry.Register("freep.arrange.align-bottom",
+            new ActionCommand(() => editor.AlignBottom()));
+
+        registry.Register("freep.arrange.distribute-h",
+            new ActionCommand(() => editor.DistributeHorizontally()));
+
+        registry.Register("freep.arrange.distribute-v",
+            new ActionCommand(() => editor.DistributeVertically()));
+
         return registry;
     }
 

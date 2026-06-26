@@ -1280,6 +1280,112 @@ public sealed class EditingSession
             categories, seriesNames, values));
     }
 
+    // ════════════════════════════════════════════════════════════════════════════════
+    // ARRANGE / GROUP / ALIGN / DISTRIBUTE  (Wave 12A)
+    //
+    // 12B must NOT touch this region.
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    // ── Z-order — BringToFront / SendToBack (BringForward/SendBackward remain in the original region above) ──
+
+    /// <summary>Brings the first selected shape to the very top of z-order.</summary>
+    public void BringToFront()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new BringToFrontCommand(_currentSlideIndex, _selectedShapeIds[0]));
+    }
+
+    /// <summary>Sends the first selected shape to the very bottom of z-order.</summary>
+    public void SendToBack()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new SendToBackCommand(_currentSlideIndex, _selectedShapeIds[0]));
+    }
+
+    // ── Group / Ungroup ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Wraps the selected shapes (≥2) into a new Group shape and selects the group.
+    /// Undoable in one step.
+    /// </summary>
+    public void GroupSelectedShapes()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 2) return;
+        var cmd = new GroupShapesCommand(_currentSlideIndex, _selectedShapeIds);
+        Bus.Execute(cmd);
+
+        // After grouping, select the new group (it is the last shape added
+        // at the lowest-z-index slot of the originals; find by Kind=Group + max Id).
+        var group = CurrentSlide.Shapes
+            .Where(s => s.Kind == SlideShapeKind.Group)
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefault();
+        if (group is not null)
+        {
+            _selectedShapeIds.Clear();
+            _selectedShapeIds.Add(group.Id);
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Ungroupsthe first selected shape if it is a Group, selects the freed children.
+    /// Undoable in one step.
+    /// </summary>
+    public void UngroupSelected()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        var id     = _selectedShapeIds[0];
+        var shape  = CurrentSlide.Shapes.FirstOrDefault(s => s.Id == id);
+        if (shape?.Kind != SlideShapeKind.Group) return;
+
+        var childIds = shape.Children.Select(c => c.Id).ToList();
+        Bus.Execute(new UngroupShapeCommand(_currentSlideIndex, id));
+
+        // Select the freed children.
+        _selectedShapeIds.Clear();
+        foreach (var cid in childIds)
+            _selectedShapeIds.Add(cid);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ── Align ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Aligns selected shapes' left edges. One undo step.</summary>
+    public void AlignLeft()         => ExecuteAlignCommand(AlignKind.Left);
+    /// <summary>Centers selected shapes horizontally. One undo step.</summary>
+    public void AlignCenterH()      => ExecuteAlignCommand(AlignKind.CenterH);
+    /// <summary>Aligns selected shapes' right edges. One undo step.</summary>
+    public void AlignRight()        => ExecuteAlignCommand(AlignKind.Right);
+    /// <summary>Aligns selected shapes' top edges. One undo step.</summary>
+    public void AlignTop()          => ExecuteAlignCommand(AlignKind.Top);
+    /// <summary>Centers selected shapes vertically. One undo step.</summary>
+    public void AlignMiddle()       => ExecuteAlignCommand(AlignKind.Middle);
+    /// <summary>Aligns selected shapes' bottom edges. One undo step.</summary>
+    public void AlignBottom()       => ExecuteAlignCommand(AlignKind.Bottom);
+
+    private void ExecuteAlignCommand(AlignKind kind)
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0) return;
+        Bus.Execute(new AlignShapesCommand(_currentSlideIndex, _selectedShapeIds, kind));
+    }
+
+    // ── Distribute ────────────────────────────────────────────────────────────────
+
+    /// <summary>Evenly spaces selected shapes horizontally (≥3 required). One undo step.</summary>
+    public void DistributeHorizontally()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 3) return;
+        Bus.Execute(new DistributeShapesCommand(_currentSlideIndex, _selectedShapeIds, DistributeKind.Horizontal));
+    }
+
+    /// <summary>Evenly spaces selected shapes vertically (≥3 required). One undo step.</summary>
+    public void DistributeVertically()
+    {
+        if (CurrentSlide is null || _selectedShapeIds.Count < 3) return;
+        Bus.Execute(new DistributeShapesCommand(_currentSlideIndex, _selectedShapeIds, DistributeKind.Vertical));
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────────
 
     private enum RunToggleKind { Bold, Italic, Underline }
