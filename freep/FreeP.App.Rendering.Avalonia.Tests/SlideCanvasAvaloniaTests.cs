@@ -1054,6 +1054,198 @@ public sealed class SlideCanvasAvaloniaTests
         thrown.Should().BeNull(
             "BQ2: wide aligned segment must not cause curX to go behind the prior pen (backward clamp)");
     }
+
+    // ── Wave 22A: gradient angle mapping (OOXML a:lin ang convention) ────────
+
+    /// <summary>
+    /// Wave 22A: OOXML gradient angle 90° (ang=5400000 / 60000 = 90°) must produce a top-to-bottom
+    /// gradient: Start=(0.5, 0), End=(0.5, 1). The old code produced Start=(0,0), End=(1,1) (diagonal).
+    /// </summary>
+    [Theory]
+    [InlineData(  0.0, 0.0, 0.5, 1.0, 0.5)]   //   0° east  → Start=(0,   0.5), End=(1,   0.5)
+    [InlineData( 90.0, 0.5, 0.0, 0.5, 1.0)]   //  90° south → Start=(0.5, 0  ), End=(0.5, 1  )
+    [InlineData(180.0, 1.0, 0.5, 0.0, 0.5)]   // 180° west  → Start=(1,   0.5), End=(0,   0.5)
+    [InlineData(270.0, 0.5, 1.0, 0.5, 0.0)]   // 270° north → Start=(0.5, 1  ), End=(0.5, 0  )
+    public void GradientAngle_OOXML_Convention_ProducesCorrectStartEnd(
+        double angleDeg,
+        double expectedStartX, double expectedStartY,
+        double expectedEndX,   double expectedEndY)
+    {
+        // Replicate the formula from MakeLinearGradientBrush:
+        // dx = cos(θ), dy = sin(θ)
+        // Start = (0.5 - 0.5*dx, 0.5 - 0.5*dy)
+        // End   = (0.5 + 0.5*dx, 0.5 + 0.5*dy)
+        double angleRad = angleDeg * Math.PI / 180.0;
+        double dx = Math.Cos(angleRad);
+        double dy = Math.Sin(angleRad);
+        double startX = 0.5 - 0.5 * dx;
+        double startY = 0.5 - 0.5 * dy;
+        double endX   = 0.5 + 0.5 * dx;
+        double endY   = 0.5 + 0.5 * dy;
+
+        startX.Should().BeApproximately(expectedStartX, 1e-9, $"startX at {angleDeg}°");
+        startY.Should().BeApproximately(expectedStartY, 1e-9, $"startY at {angleDeg}°");
+        endX  .Should().BeApproximately(expectedEndX,   1e-9, $"endX at {angleDeg}°");
+        endY  .Should().BeApproximately(expectedEndY,   1e-9, $"endY at {angleDeg}°");
+    }
+
+    /// <summary>
+    /// Wave 22A: a gradient-background slide with ang=90° (top-to-bottom) must render without throwing.
+    /// </summary>
+    [Fact]
+    public async Task GradientBackground_Angle90_TopToBottom_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Background = new ShapeFill.Gradient(
+                        new[]
+                        {
+                            new FreeP.Core.Model.GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x1F, 0x49, 0x7D))),
+                            new FreeP.Core.Model.GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0xFF, 0xFF, 0xFF)))
+                        },
+                        GradientKind.Linear,
+                        90.0);     // OOXML ang=5400000 → 90° → top-to-bottom
+                    pres.Slides[0].Shapes.Clear();
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("Wave 22A: 90° gradient background must render without throwing");
+    }
+
+    // ── Wave 22A: combo chart OverrideChartType rendering ─────────────────────
+
+    /// <summary>
+    /// Wave 22A: a combo chart where the secondary series has OverrideChartType = LineMarkers must
+    /// render without throwing; the override series must be dispatched to RenderComboOverrideSeries
+    /// rather than being drawn as a column bar.
+    /// </summary>
+    [Fact]
+    public async Task ComboChart_OverrideChartType_LineMarkers_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                // Primary: column bars (no override)
+                var bars = new ChartSeries { Name = "Revenue $K", OnSecondaryAxis = false };
+                bars.Values.AddRange(new double?[] { 120, 145, 98, 175 });
+
+                // Secondary: line override (set by IO reader in real PPTX, here manually)
+                var line = new ChartSeries
+                {
+                    Name              = "Units",
+                    OnSecondaryAxis   = true,
+                    OverrideChartType = ChartType.LineMarkers,
+                    DataLabels        = new ChartDataLabels { ShowValue = true },
+                };
+                line.Values.AddRange(new double?[] { 5200, 6100, 4800, 7400 });
+
+                var chart = new ChartShape
+                {
+                    ChartType          = ChartType.ColumnClustered,
+                    SecondaryValueAxis = new ChartAxis(),
+                };
+                chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar", "Apr" });
+                chart.Series.Add(bars);
+                chart.Series.Add(line);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id          = 1,
+                        Kind        = SlideShapeKind.Chart,
+                        OffsetXEmu  = 914400,
+                        OffsetYEmu  = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart       = chart,
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull(
+            "Wave 22A: combo chart with OverrideChartType=LineMarkers must render without throwing");
+    }
+
+    /// <summary>
+    /// Wave 22A: a series with OverrideChartType = Line (not LineMarkers) must also render without throwing.
+    /// </summary>
+    [Fact]
+    public async Task ComboChart_OverrideChartType_Line_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var bars = new ChartSeries { Name = "Sales", OnSecondaryAxis = false };
+                bars.Values.AddRange(new double?[] { 50, 80, 65, 90 });
+
+                var lineNoMarkers = new ChartSeries
+                {
+                    Name              = "Trend",
+                    OnSecondaryAxis   = true,
+                    OverrideChartType = ChartType.Line,   // no markers
+                };
+                lineNoMarkers.Values.AddRange(new double?[] { 1000, 1500, 1200, 1800 });
+
+                var chart = new ChartShape
+                {
+                    ChartType          = ChartType.ColumnClustered,
+                    SecondaryValueAxis = new ChartAxis(),
+                };
+                chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4" });
+                chart.Series.Add(bars);
+                chart.Series.Add(lineNoMarkers);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id          = 1,
+                        Kind        = SlideShapeKind.Chart,
+                        OffsetXEmu  = 914400,
+                        OffsetYEmu  = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart       = chart,
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull(
+            "Wave 22A: combo chart with OverrideChartType=Line (no markers) must render without throwing");
+    }
 }
 
 // ── Theme 15: Avalonia interaction layer tests ─────────────────────────────────────────────────

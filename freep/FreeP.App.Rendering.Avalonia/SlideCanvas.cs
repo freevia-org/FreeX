@@ -780,6 +780,13 @@ public sealed class SlideCanvas : Control
                 break;
         }
 
+        // ── Combo chart: render secondary-group series with their OverrideChartType ──
+        bool hasOverrideSeries = chart.Series.Any(s => s.OverrideChartType.HasValue);
+        if (hasOverrideSeries && !isPie && !isBar && !isRadar && !isScatterLike)
+        {
+            RenderComboOverrideSeries(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
+        }
+
         // ── Data labels ────────────────────────────────────────────────────────
         if (!isRadar && !isScatterLike)
         {
@@ -794,9 +801,18 @@ public sealed class SlideCanvas : Control
                                                     or ChartType.Area or ChartType.AreaStacked;
                 for (int si = 0; si < chart.Series.Count; si++)
                 {
-                    if (isLineOrArea)
+                    var serOverride = chart.Series[si].OverrideChartType;
+                    bool serIsLineOrArea = serOverride.HasValue
+                        ? serOverride.Value is ChartType.Line or ChartType.LineMarkers
+                                           or ChartType.Area or ChartType.AreaStacked
+                        : isLineOrArea;
+                    bool serIsBar = serOverride.HasValue
+                        ? serOverride.Value is ChartType.BarClustered or ChartType.BarStacked
+                                           or ChartType.BarStacked100
+                        : isBar;
+                    if (serIsLineOrArea)
                         RenderLineDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
-                    else if (isBar)
+                    else if (serIsBar)
                         RenderBarDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
                     else
                         RenderColumnDataLabels(dc, chart, si, plotLeft, plotTop, plotW, plotH, dlMin, dlMax);
@@ -957,6 +973,12 @@ public sealed class SlideCanvas : Control
             for (int si = 0; si < chart.Series.Count; si++)
             {
                 var series = chart.Series[si];
+                // Combo chart: skip series whose OverrideChartType is a line/scatter type.
+                if (series.OverrideChartType.HasValue &&
+                    series.OverrideChartType.Value is ChartType.Line or ChartType.LineMarkers
+                                                   or ChartType.Scatter or ChartType.Bubble)
+                    continue;
+
                 double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
                 if (rawVal is null) continue;
                 double val  = rawVal.Value;
@@ -980,6 +1002,56 @@ public sealed class SlideCanvas : Control
                     double barY = plotY + plotH - (val - effMin) / effRange * plotH;
                     dc.FillRectangle(brush, new Rect(barX, barY, drawW, barH));
                 }
+            }
+        }
+    }
+
+    // ── Combo-chart secondary series overlay ─────────────────────────────────
+    /// <summary>
+    /// Renders series that carry a per-series <see cref="ChartSeries.OverrideChartType"/>
+    /// (set by the IO reader for combo charts). Only Line / LineMarkers overrides
+    /// are handled here; others are silently skipped.
+    /// </summary>
+    private static void RenderComboOverrideSeries(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        int catCount = Math.Max(1, chart.Categories.Count);
+        var (secMin, secMax, _) = ComputeNiceSecondaryAxisRange(chart);
+        double secRange = secMax - secMin;
+        var (priMin, priMax, _) = ComputeNiceAxisRange(chart);
+        double priRange = priMax - priMin;
+        double stepX = catCount > 1 ? plotW / (catCount - 1) : plotW / 2;
+
+        for (int si = 0; si < chart.Series.Count; si++)
+        {
+            var series = chart.Series[si];
+            var overrideType = series.OverrideChartType;
+            if (!overrideType.HasValue) continue;
+            if (overrideType.Value is not (ChartType.Line or ChartType.LineMarkers)) continue;
+
+            bool withMarkers = overrideType.Value == ChartType.LineMarkers;
+            double effMin   = series.OnSecondaryAxis ? secMin   : priMin;
+            double effRange = series.OnSecondaryAxis ? secRange : priRange;
+            if (effRange <= 0) continue;
+
+            var color = GetSeriesColor(chart, si, 0, seriesColors);
+            var pen   = new Pen(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)), 1.5);
+
+            Point? prevPt = null;
+            for (int ci = 0; ci < catCount; ci++)
+            {
+                double? rawVal = ci < series.Values.Count ? series.Values[ci] : null;
+                if (rawVal is null) { prevPt = null; continue; }
+                double px = catCount == 1 ? plotX + plotW / 2 : plotX + ci * stepX;
+                double py = plotY + plotH - (rawVal.Value - effMin) / effRange * plotH;
+                var pt = new Point(px, py);
+                if (prevPt.HasValue)
+                    dc.DrawLine(pen, prevPt.Value, pt);
+                if (withMarkers)
+                    dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)),
+                        null, pt, 3, 3);
+                prevPt = pt;
             }
         }
     }
@@ -2495,13 +2567,19 @@ public sealed class SlideCanvas : Control
 
     private static IBrush MakeLinearGradientBrush(ResolvedFill.Gradient g)
     {
+        // OOXML a:lin ang convention (stored as AngleDegrees = ang/60000):
+        //   0°  = flows east  (left → right):   Start=(0, 0.5), End=(1, 0.5)
+        //  90°  = flows south (top  → bottom):  Start=(0.5, 0), End=(0.5, 1)
+        // 180°  = flows west  (right → left):   Start=(1, 0.5), End=(0, 0.5)
+        // 270°  = flows north (bottom → top):   Start=(0.5, 1), End=(0.5, 0)
+        // Direction vector in screen coords (x right, y down): d = (cos θ, sin θ).
         double angleRad = g.AngleDegrees * Math.PI / 180.0;
-        double cos = Math.Cos(angleRad);
-        double sin = Math.Sin(angleRad);
+        double dx = Math.Cos(angleRad);
+        double dy = Math.Sin(angleRad);
         return new LinearGradientBrush
         {
-            StartPoint    = new RelativePoint(cos >= 0 ? 0 : 1, sin >= 0 ? 0 : 1, RelativeUnit.Relative),
-            EndPoint      = new RelativePoint(cos >= 0 ? 1 : 0, sin >= 0 ? 1 : 0, RelativeUnit.Relative),
+            StartPoint    = new RelativePoint(0.5 - 0.5 * dx, 0.5 - 0.5 * dy, RelativeUnit.Relative),
+            EndPoint      = new RelativePoint(0.5 + 0.5 * dx, 0.5 + 0.5 * dy, RelativeUnit.Relative),
             GradientStops = BuildGradientStops(g)
         };
     }
